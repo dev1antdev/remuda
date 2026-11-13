@@ -6,6 +6,7 @@ import { fetchRecipes, type Recipe } from "@/features/recipes/api";
 import { draftOf, recipeOf, recipeWords } from "@/features/recipes/recipes";
 import RecipeMark from "@/features/recipes/RecipeMark";
 import RecipesDialog from "@/features/recipes/RecipesDialog";
+import { issueBranch } from "@/features/issues/prompt";
 import { readPref, writePref } from "@/lib/prefs";
 import { useQuery } from "@/lib/query";
 import { dirname } from "@/lib/text";
@@ -48,9 +49,9 @@ function AgentSelect({ agents, value, onChange }: { agents: AgentKind[]; value: 
 
 // useStart is the agent a dialog starts and the person's choices for it: the model last used for the kind comes back
 // from this device's prefs, a pick of another kind brings that kind's; what the create route takes comes out of options()
-export function useStart(initial: string) {
+export function useStart(initial: string, prompt = "") {
   const [agent, setAgent] = useState(initial);
-  const [draft, setDraft] = useState<Draft>(() => ({ ...EMPTY_DRAFT, ...choiceFor(initial, readPref(lastModelKey(initial), "")) }));
+  const [draft, setDraft] = useState<Draft>(() => ({ ...EMPTY_DRAFT, prompt, ...choiceFor(initial, readPref(lastModelKey(initial), "")) }));
   const pickAgent = (kind: string) => {
     setAgent(kind);
     setDraft((d) => ({ ...d, ...choiceFor(kind, readPref(lastModelKey(kind), "")) }));
@@ -73,7 +74,7 @@ export function useStart(initial: string) {
 // prompt (unless the dialog shows its own: prompt false), and at the fold's end the ways to save them as a recipe and to
 // manage the recipes; a shell keeps the pick alone. A model or mode being retired is said above the fold, folded or not.
 export function StartOptionsFields({ kind, draft, agents, machine = "", onChange, onRecipe, prompt = true }: { kind: string; draft: Draft; agents: AgentKind[]; machine?: string; onChange: (d: Draft) => void; onRecipe: (r: Recipe) => void; prompt?: boolean }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(() => draft.prompt !== ""); // a first prompt given to the dialog is shown, not folded away
   const [picked, setPicked] = useState("");
   const [managing, setManaging] = useState<{ initial?: Recipe } | null>(null);
   const recipes = useQuery(fetchRecipes, []);

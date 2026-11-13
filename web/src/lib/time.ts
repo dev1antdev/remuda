@@ -17,6 +17,21 @@ export function ago(d: When, now = Date.now()): string {
   return tn(Math.round(h / 24), "{n} day ago", "{n} days ago");
 }
 
+// agoWords says how long ago in whole words, as GitHub's lists do: "41 minutes ago", "3 hours ago", "yesterday",
+// "5 days ago", "2 months ago", "1 year ago".
+export function agoWords(d: When, now = Date.now()): string {
+  const s = (now - toDate(d).getTime()) / 1000;
+  if (s < 60) return t("just now");
+  if (s < 3600) return tn(Math.round(s / 60), "{n} minute ago", "{n} minutes ago");
+  if (s < 86400) return tn(Math.round(s / 3600), "{n} hour ago", "{n} hours ago");
+  const days = Math.floor(s / 86400);
+  if (days === 1) return t("yesterday");
+  if (days < 30) return tn(days, "{n} day ago", "{n} days ago");
+  const months = Math.floor(days / 30);
+  if (months < 12) return tn(months, "{n} month ago", "{n} months ago");
+  return tn(Math.floor(months / 12), "{n} year ago", "{n} years ago");
+}
+
 // elapsed says how long something has been going on: "40 s", "6 min", "1 h 12 min", "2 days".
 export function elapsed(since: When, now = Date.now()): string {
   const s = Math.max(0, Math.round((now - toDate(since).getTime()) / 1000));

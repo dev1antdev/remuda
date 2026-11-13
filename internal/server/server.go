@@ -31,6 +31,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/drift"
 	"github.com/dev1antdev/remuda/internal/feed"
 	"github.com/dev1antdev/remuda/internal/filetree"
+	"github.com/dev1antdev/remuda/internal/ghissues"
 	"github.com/dev1antdev/remuda/internal/gitops"
 	"github.com/dev1antdev/remuda/internal/gitstage"
 	"github.com/dev1antdev/remuda/internal/health"
@@ -134,6 +135,7 @@ type Server struct {
 	Ports      *ports.Tracker      // the ports the machines' processes listen on, matched to their workspaces
 	Resources  *resources.Service  // what the machines' herdr panes weigh on them, for the status bar
 	Sleep      *sleep.Service      // the workspaces put to sleep and woken at the person's press, and the resume switches
+	Issues     *ghissues.Service   // a GitHub repository's issues, read and written through gh on the machine as the person
 
 	streams   termStreams
 	relayed   relays           // the terminals piped to a machine's own remuda, which holds their attach
@@ -205,6 +207,7 @@ func (s *Server) Handler() http.Handler {
 	s.sceneRoutes(api)
 	s.gitRoutes(api)
 	s.sleepRoutes(api)
+	s.issueRoutes(api)
 	api.Handle("GET /", s.staticHandler())
 
 	// the only two routes outside the token guard

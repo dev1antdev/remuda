@@ -23,10 +23,14 @@ import { baseChoices, emptyWords, items, jumpFor, MODES, repositoriesOf, type It
 
 const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
 
-export default function NewWorktreeDialog({ machine, session, agents, onMade, onClose }: {
+export default function NewWorktreeDialog({ machine, session, agents, issue, title: issueTitle = "", prompt: issuePrompt, onMade, onClose }: {
   machine: Machine;
   session: Session; // a workspace of the repository it opens on
   agents: AgentKind[];
+  issue?: number; // the issues panel's Start: the dialog opens on its Issue tab with this issue picked
+  repo?: string; // that issue's repository, owner/repo
+  title?: string;
+  prompt?: string; // the first prompt the issues panel wrote for that issue, in place of the project's template
   onMade: (made: Made) => void;
   onClose: () => void;
 }) {
@@ -38,12 +42,12 @@ export default function NewWorktreeDialog({ machine, session, agents, onMade, on
   const src = answer.data?.source ?? null;
   const settings = answer.data?.settings ?? {};
   const lists = useQuery<Lists | null>(() => (src?.github ? fetchLists(machine.id, src.github) : Promise.resolve(null)), [machine.id, src?.github ?? ""]);
-  const [found, setFound] = useState<Found[]>([]);
+  const [found, setFound] = useState<Found[]>(() => (issue ? [{ kind: "issue", number: issue, title: issueTitle, state: "OPEN" }] : [])); // the issue asked for, listed even past the open list's first page
   const allLists = useMemo(() => withFound(lists.data, found), [lists.data, found]);
 
   const [savedMode, setSavedMode] = usePref<Mode>("worktree.mode", "new");
-  const [mode, setMode] = useState<Mode>(MODES.includes(savedMode) ? savedMode : "new");
-  const [query, setQuery] = useState("");
+  const [mode, setMode] = useState<Mode>(issue ? "issue" : MODES.includes(savedMode) ? savedMode : "new");
+  const [query, setQuery] = useState(issue ? `#${issue}` : "");
   const [at, setAt] = useState(0);
   const [pick, setPick] = useState<Pick>({ kind: "new" });
   const [branch, setBranch] = useState(suggestBranch);
@@ -87,7 +91,8 @@ export default function NewWorktreeDialog({ machine, session, agents, onMade, on
 
   const prefill = (next: Pick, nextBranch: string, title: string) => {
     const template = next.kind === "issue" ? settings.issue_prompt || DEFAULTS.issue_prompt : next.kind === "pr" ? settings.pr_prompt || DEFAULTS.pr_prompt : "";
-    const text = template && src?.github && next.number ? fill(template, next.number, title, src.github, nextBranch) : "";
+    const asked = issuePrompt && next.kind === "issue" && next.number === issue;
+    const text = asked ? issuePrompt : template && src?.github && next.number ? fill(template, next.number, title, src.github, nextBranch) : "";
     if (start.draft.prompt === filled.current || !start.draft.prompt.trim()) start.setDraft((d) => ({ ...d, prompt: text }));
     filled.current = text;
   };

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { setLang } from "./i18n";
-import { ago, clockOf, elapsed, fmtDateSpan, spent, took, whenAhead } from "./time";
+import { ago, agoWords, clockOf, elapsed, fmtDateSpan, spent, took, whenAhead } from "./time";
 
 afterEach(() => setLang("en"));
 
@@ -9,6 +9,27 @@ describe("fmtDateSpan", () => {
     const span = fmtDateSpan(new Date(2026, 11, 2, 12), new Date(2026, 11, 5, 12));
     expect(span).toMatch(/2.*5/);
     expect(span.match(/2026/g)).toHaveLength(1);
+  });
+});
+
+describe("agoWords", () => {
+  const now = Date.UTC(2026, 10, 13, 12, 0, 0);
+  const minutes = (n: number) => now - n * 60_000;
+  it("says it in whole words, as GitHub's lists do", () => {
+    expect(agoWords(minutes(0.5), now)).toBe("just now");
+    expect(agoWords(minutes(1), now)).toBe("1 minute ago");
+    expect(agoWords(minutes(41), now)).toBe("41 minutes ago");
+    expect(agoWords(minutes(3 * 60), now)).toBe("3 hours ago");
+    expect(agoWords(minutes(30 * 60), now)).toBe("yesterday");
+    expect(agoWords(minutes(5 * 1440), now)).toBe("5 days ago");
+    expect(agoWords(minutes(65 * 1440), now)).toBe("2 months ago");
+    expect(agoWords(minutes(400 * 1440), now)).toBe("1 year ago");
+  });
+  it("speaks Russian with its three forms", () => {
+    setLang("ru");
+    expect(agoWords(minutes(41), now)).toBe("41 минуту назад");
+    expect(agoWords(minutes(3 * 60), now)).toBe("3 часа назад");
+    expect(agoWords(minutes(30 * 60), now)).toBe("вчера");
   });
 });
 

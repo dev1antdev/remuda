@@ -114,6 +114,20 @@ func TestKeyAllowsTasksAndReadsOnly(t *testing.T) {
 	}
 }
 
+func TestTheGitHubIssuesAreThePersonsOnly(t *testing.T) {
+	tasks, viewer := Key{Scope: ScopeTasks}, Key{Scope: ScopeViewer}
+	for _, path := range []string{"/api/issues", "/api/issues/repos", "/api/issues/41", "/api/issues/41/comment", "/api/issues/41/close", "/api/issues/41/reopen", "/api/issues/41/assign"} {
+		for _, method := range []string{"GET", "POST"} {
+			if tasks.Allows(method, path) {
+				t.Errorf("an agent's key reaches %s %s", method, path)
+			}
+			if viewer.Allows(method, path) || ViewerAllows(method, path) {
+				t.Errorf("a viewer reaches %s %s", method, path)
+			}
+		}
+	}
+}
+
 // withKey asks a path with a bearer, through a guard whose handler names the caller.
 func withKey(h http.Handler, path, bearer string) (int, string) {
 	return withKeyMethod(h, "GET", path, bearer)
