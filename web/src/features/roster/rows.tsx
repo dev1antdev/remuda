@@ -9,6 +9,8 @@ import { FolderIcon, Icon, Menu, Tip, type MenuItem } from "@/ui";
 import { VENDOR_NAME } from "@/ui/brand";
 import type { Machine } from "./api";
 import { branchNamesIssue } from "@/features/jira/jira";
+import { CardBadges } from "./CardBadges";
+import { useCardHover } from "./CardHover";
 import { CollisionMark, usePeerName } from "./CollisionMark";
 import { gravest, markWords } from "./collide";
 import { IssueChip } from "./IssueChip";
@@ -205,10 +207,12 @@ function WorkspaceView({ machine: m, item, group, primary, compact, current, pre
         collision ? markWords(collision, peerName(collision, m.id).full) : "",
         folder,
       ].filter(Boolean).join("\n");
-  const sub = branch || primary || sync || words;
+  const card = useCardHover({ machine: m, session: s, leadPaneId: pane?.id, hidden, editable: !!editable, name: s.name, tip });
+  const badges = !!(card.details.note || card.details.ports.length || card.details.prs.length);
+  const sub = branch || primary || sync || words || badges;
   return (
     <div className={`ws-item is-${agent ? d : "shell"}${selected ? " on" : ""}${alert ? " is-alert" : ""}${limited(lead) ? " is-limit" : ""}${group ? " in-repo" : ""}`}>
-      <div className="ws-main" role="button" tabIndex={0} onClick={open} onKeyDown={(e) => rowKey(e, open)} title={tip}>
+      <div className="ws-main" role="button" tabIndex={0} onClick={open} onKeyDown={(e) => rowKey(e, open)} title={card.hoverable ? undefined : tip} {...card.trigger}>
         <span className="ws-line">
           {!agents && <span className="radar-mark">$</span>}
           <span className="ws-name">{title}</span>
@@ -247,8 +251,10 @@ function WorkspaceView({ machine: m, item, group, primary, compact, current, pre
             )}
             {!hidden && s.jira?.[0] && <IssueChip issue={s.jira[0]} />}
             {words && <span className="ws-words">{words}</span>}
+            <CardBadges machine={m} session={s} name={s.name} details={card.details} editable={!!editable} onDetails={card.ask} />
           </span>
         )}
+        {card.node}
       </div>
       <AgentLines
         rows={item.rows}

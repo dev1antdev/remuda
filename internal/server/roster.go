@@ -58,10 +58,13 @@ type rosterPane struct {
 	Serves *triggers.Offer `json:"serves,omitempty"`
 }
 
-// rosterPR is the request the agent named and, once gh on the machine read it, how it stands.
+// rosterPR is the request the agent named and, once gh on the machine read it, how it stands; whether a read is under
+// way and why the last one failed, so a hover card says how fresh the status is.
 type rosterPR struct {
 	transcript.Link
-	Status *prstatus.Status `json:"status,omitempty"`
+	Status  *prstatus.Status `json:"status,omitempty"`
+	Reading bool             `json:"reading,omitempty"`
+	Error   string           `json:"error,omitempty"`
 }
 
 type rosterTab struct {
@@ -98,6 +101,7 @@ type rosterSession struct {
 	Sync        *review.Sync    `json:"sync,omitempty"`   // that branch against its upstream as of the last fetch; none without an upstream
 	Folder      string          `json:"folder,omitempty"` // the folder the sidebar groups by: the repository's main checkout, else the workspace's own
 	Icon        *icons.Icon     `json:"icon,omitempty"`   // the folder's icon, an emoji or a stored picture's hash
+	Note        string          `json:"note,omitempty"`   // the person's note on this checkout, kept after the workspace closes
 	Review      *rosterReview   `json:"review,omitempty"`
 	Jira        []jira.Issue    `json:"jira,omitempty"`        // the Jira issues its branch and its agents name, as last read from the person's site
 	MutedUntil  *time.Time      `json:"muted_until,omitempty"` // the folder is silenced until then: no push, no webhook, no feed row
@@ -178,8 +182,8 @@ func (s *Server) sessionsFromSnapshot(machineID string, snap *herdr.Snapshot) []
 			entry.Said = s.Said.Line(machineID, pane.PaneID)
 			if link, ok := s.Said.Link(machineID, pane.PaneID); ok {
 				entry.PR = &rosterPR{Link: link}
-				if status, ok := s.PRs.Status(machineID, pane.PaneID); ok {
-					entry.PR.Status = &status
+				if seen, ok := s.PRs.Seen(machineID, pane.PaneID); ok {
+					entry.PR.Status, entry.PR.Reading, entry.PR.Error = seen.Status, seen.Reading, seen.Reason
 				}
 			}
 			if meter, ok := s.Usage.Display(machineID, pane.PaneID); ok {
@@ -249,6 +253,7 @@ func (s *Server) sessionsFromSnapshot(machineID string, snap *herdr.Snapshot) []
 			if sync, ok := s.Review.Sync(machineID, session.Dir); ok {
 				session.Sync = &sync
 			}
+			session.Note = s.Notes.Of(machineID, session.Dir)
 		}
 		session.Jira = s.issuesOf(machineID, session)
 		if session.Dir != "" {

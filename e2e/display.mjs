@@ -383,6 +383,7 @@ const iso = (ms) => new Date(ms).toISOString();
 const sessions = async () => (await api("GET", "/api/roster")).machines.find((m) => m.id === "local")?.sessions ?? [];
 let app, tree, notes, desk, inbox, drawTask, paneA1, paneN, paneDesk, paneTree, morningScene, eveningScene;
 let DRESS = {};
+const NOTE_TEXT = "Waiting on the API team for the new endpoint.\nDon't merge before Friday's release.";
 // the morning's first step lays its tab out as two panes, the agent on the left and a dev server on the right
 const SCENE_LAYOUT = { agent: 0, root: { type: "split", direction: "right", ratio: 0.6, first: { type: "pane" }, second: { type: "pane", dir: "src", command: ["npm", "run", "dev"] } } };
 
@@ -466,6 +467,9 @@ async function seed() {
     return a?.tabs.length >= 2 && b && n?.tabs[0]?.panes[0] && d?.tabs[0]?.panes[0] ? { a, b, n, d } : null;
   }, 20);
   if (!ready) throw new Error("the seeded workspaces did not reach the roster");
+  // the repository's checkout keeps a note, through the real route: the roster carries it to the card and its hover card
+  const kept = await api("PUT", "/api/notes", { machine: "local", dir: ready.a.dir, text: NOTE_TEXT });
+  if (kept.text !== NOTE_TEXT) failed(`the note was kept as ${JSON.stringify(kept)}`);
   paneA1 = ready.a.tabs[0].panes[0].id;
   paneN = ready.n.tabs[0].panes[0].id;
   paneDesk = ready.d.tabs[0].panes[0].id;
@@ -481,15 +485,23 @@ async function seed() {
       // three subagents at work, the two oldest by name: the sidebar's tree under the agent's line
       subagents: { working: 3, session: "0c7a6c1e-2a43-4c1a-9a5e-3c1f0b6f8a11", list: [{ id: "agent-a1", description: "explore · cart service", doing: "Read · service.go" }, { id: "agent-a2", description: "test-runner", doing: "Bash · go test ./..." }] },
       usage: { model: "claude-opus-4-5", name: "Opus 4.5", context: 124000, window: 200000, cost: 4.2, turns: 12, tokens: { input: 1200, output: 3400, cache_read: 98000, cache_write: 2100 } },
-      pr: { url: "https://github.com/example/app/pull/15", label: "PR #15", status: { state: "OPEN", draft: false, mergeable: "MERGEABLE", review: "REVIEW_REQUIRED", checks: { total: 3, pass: 2, fail: 1, pending: 0, skipped: 0 }, at: iso(now) } },
+      pr: { url: "https://github.com/example/app/pull/15", label: "PR #15", status: { title: "Draw every screen at two widths", state: "OPEN", draft: false, mergeable: "MERGEABLE", review: "REVIEW_REQUIRED", checks: { total: 3, pass: 2, fail: 1, pending: 0, skipped: 0 }, at: iso(now) } },
     },
-    [paneA2]: { agent: "codex", status: "input", title: "Check the build", radar: { state: "blocked", since: now - 60e3, last_active: now - 60e3 } },
+    // the card speaks for the agent asking, whose request is ready to merge and closes an issue; the other's is counted beside it
+    [paneA2]: {
+      agent: "codex",
+      status: "input",
+      title: "Check the build",
+      radar: { state: "blocked", since: now - 60e3, last_active: now - 60e3 },
+      pr: { url: "https://github.com/example/app/pull/16", label: "PR #16", status: { title: "Draw the card's badges", state: "OPEN", draft: false, mergeable: "MERGEABLE", merge_state: "CLEAN", review: "APPROVED", checks: { total: 2, pass: 2, fail: 0, pending: 0, skipped: 0 }, closes: [{ number: 9, url: "https://github.com/example/app/issues/9", repo: "example/app" }], at: iso(now - 4 * 60e3) } },
+    },
     [paneB]: {
       agent: "claude",
       status: "done",
       title: "Rename the flag everywhere it is read",
       radar: { state: "done", last_active: now - 10 * 60e3 },
       said: "The flag is renamed in all twelve places, the tests pass and the release notes say so.",
+      pr: { url: "https://github.com/example/app/pull/14", label: "PR #14", status: { title: "Rename the flag", state: "MERGED", draft: false, mergeable: "UNKNOWN", review: "APPROVED", checks: { total: 2, pass: 2, fail: 0, pending: 0, skipped: 0 }, at: iso(now - 30 * 60e3) } },
     },
     [paneDesk]: { agent: "claude", status: "idle", title: "concierge", radar: { state: "idle", last_active: now - 60e3 } },
   };
@@ -948,6 +960,11 @@ async function dressRoster({ requestId, responseStatusCode, responseHeaders = []
       if (session.id === app.id) {
         session.jira = [{ key: "APP-12", summary: "Draw every screen", status: "In Review", category: "indeterminate", url: "https://example.atlassian.net/browse/APP-12" }];
         session.sync = { ahead: 2, behind: 1 }; // the selected card says how far it stands from its upstream
+        // the ports its checkout serves, as the status bar's reading puts them on the roster: a plug on the card, a section of its hover card
+        session.ports = [
+          { port: 3000, process: "node", pid: 4121, address: "localhost:3000" },
+          { port: 5432, process: "postgres", pid: 812, address: "localhost:5432" },
+        ];
       }
       dressCollisions(session);
       for (const tab of session.tabs ?? []) for (const pane of tab.panes ?? []) Object.assign(pane, DRESS[pane.id] ?? {});
@@ -1123,6 +1140,69 @@ const mark = async (expression, attr) => {
   if (!found) throw new Error(`no ${attr} on the screen`);
   return `[data-e2e="${attr}"]`;
 };
+// cardScreens are a workspace card's badges — the note, the plug, the pull request in its state's colour and the ones
+// counted beside it — its hover card at a desk, its Details popover on a phone, and the Note dialog
+async function cardScreens() {
+  const card = (n) => `${folderHead("app")}?.parentElement.querySelectorAll('.ws-item')[${n}]`;
+  await screen("card-badges", {
+    open: async () => {
+      await sidebarOpen();
+      const badges = await evaluate(`(() => { const tail = ${card(0)}?.querySelector('.ws-tail'); return tail ? { note: !!tail.querySelector('.ws-note'), plug: !!tail.querySelector('.ws-ports'), pr: tail.querySelector('.ws-pr')?.className ?? "", num: tail.querySelector('.ws-pr-num')?.textContent ?? "", ready: !!tail.querySelector('.ws-pr-ready:not(.is-vacant)'), more: tail.querySelector('.ws-pr-more')?.textContent ?? "" } : null; })()`);
+      if (!badges) throw new Error("the repository's card has no badges");
+      check(badges.note && badges.plug, `the card shows no note or no plug: ${JSON.stringify(badges)}`);
+      check(/tone-green/.test(badges.pr) && badges.num === "#16" && badges.ready, `the asking agent's request is not green and ready: ${JSON.stringify(badges)}`);
+      check(badges.more === "+1", `the other request is not counted beside it: ${JSON.stringify(badges)}`);
+      check(/tone-violet/.test(await evaluate(`${card(1)}?.querySelector('.ws-pr')?.className ?? ""`)), "the worktree's merged request is not violet");
+    },
+    expect: [".ws-tail .ws-pr"],
+    close: async () => {},
+  });
+  if (!pass.phone)
+    await screen("card-hover", {
+      open: async () => {
+        await sidebarOpen();
+        const at = await centre(await mark(`${card(0)}?.querySelector('.ws-main')`, "hovered"));
+        await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: at[0] - 20, y: at[1] });
+        await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: at[0] - 10, y: at[1] });
+        if (!(await until(() => present(".hover-card .hc-note"), 4))) throw new Error("resting on the card opened no hover card");
+        const sections = await evaluate(`[...document.querySelectorAll('.hover-card .hc-label')].length`);
+        check(sections === 4, `the hover card has ${sections} sections, not the note, the requests, the issues and the ports`);
+        check((await count(".hover-card .hc-port")) === 2, "the hover card lists no live ports");
+        check(await evaluate(`document.querySelector('.hover-card .hc-note')?.textContent === ${JSON.stringify(NOTE_TEXT)}`), "the hover card's note is not the one kept");
+        check(await present(".hover-card .hc-foot"), "the hover card says nothing of how fresh the requests are");
+      },
+      expect: [".hover-card .hc-item .pr-state"],
+      close: async () => {
+        await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: pass.width - 5, y: pass.height - 5 });
+        if (!(await until(async () => !(await present(".hover-card")), 2))) failed("the hover card stays once the pointer left it");
+      },
+    });
+  else
+    await screen("card-details", {
+      open: async () => {
+        await sidebarOpen();
+        await tap(await mark(`${card(0)}?.querySelector('.ws-menu-btn')`, "card-menu"));
+        if (!(await until(() => present("[role=menu] [role=menuitem]"), 3))) throw new Error("the card's menu did not open");
+        await tap("[role=menu] [role=menuitem]"); // Details, the first row on a touch screen
+        if (!(await until(() => present(".hover-card .hc-note"), 4))) throw new Error("Details opened no popover");
+      },
+      expect: [".hover-card .hc-port", ".hover-card .hc-item"],
+      close: async () => {
+        await key("Escape", "Escape");
+        if (!(await until(async () => !(await present(".hover-card")), 2))) failed("Esc left the Details popover open");
+        await closeAll();
+      },
+    });
+  await screen("note-dialog", {
+    open: async () => {
+      await palette("note");
+      if (!(await until(() => present(".note-dialog textarea"), 4))) throw new Error("the palette's Note opened no dialog");
+      check(await evaluate(`document.querySelector('.note-dialog textarea')?.value === ${JSON.stringify(NOTE_TEXT)}`), "the dialog does not hold the note kept");
+    },
+    expect: [".note-dialog .note-where", ".note-dialog .btn.primary"],
+  });
+}
+
 // onAgents comes back to the Agents mode on the seeded agent's pane
 // sceneScreens are the Scenes dialog with the seeded morning and evening, each one's form, and a run of each: what it
 // will do first, then its outcome as the fake answers it
@@ -2018,6 +2098,7 @@ async function runPass() {
     },
     expect: ["[role=menu].menu"],
   });
+  await cardScreens();
   await screen("folder-menu", {
     open: async () => {
       await sidebarOpen();

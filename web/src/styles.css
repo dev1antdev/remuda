@@ -2344,6 +2344,384 @@ body.is-resizing iframe {
   color: var(--fg-faint);
 }
 
+/* ---- the card's badges and its hover card, after Orca (CardBadges.tsx, CardDetails.tsx) ---- */
+
+/* the right end of the second line: the note, a plug while ports listen, the pull request; the words before them give way */
+.ws-tail {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+/* a line with badges at its right gives the room first from its words, then from the Jira chip, whose status words go
+   (the dot keeps its colour, the tooltip and the hover card say them), then from the branch; with a branch, a chip and
+   badges all on it, the words go too — the hover card says them */
+.ws-sub:has(> .ws-tail) > .ws-words {
+  min-width: 2em;
+}
+
+.ws-sub:has(> .ws-tail) .jira-status {
+  display: none;
+}
+
+.ws-sub:has(> .ws-tail) > .jira-chip,
+.ws-sub:has(> .ws-tail) > .ws-branch {
+  min-width: 3em;
+  overflow: hidden;
+}
+
+.ws-sub:has(> .ws-tail) .jira-key {
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ws-sub:has(> .ws-tail):has(> .ws-branch):has(> .jira-chip) > .ws-words,
+.ws-item:has(> .ws-agents) .ws-sub:has(> .ws-tail) > .ws-words {
+  display: none; /* "2 agents" beside badges: the agents' own lines under the card say it */
+}
+
+.ws-note,
+.ws-ports {
+  display: inline-grid;
+  place-items: center;
+  height: 16px;
+  color: var(--fg-dim);
+}
+
+.linkish.ws-note {
+  padding: 0 1px;
+}
+
+.ws-pr-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.linkish.ws-pr {
+  gap: 3px;
+  height: 16px;
+  padding: 0 2px;
+  font-size: var(--fs-11);
+  font-variant-numeric: tabular-nums;
+}
+
+.ws-pr.tone-green,
+.ws-pr.tone-green:hover {
+  color: var(--green);
+}
+
+.ws-pr.tone-red,
+.ws-pr.tone-red:hover {
+  color: var(--red);
+}
+
+.ws-pr.tone-amber,
+.ws-pr.tone-amber:hover {
+  color: var(--amber);
+}
+
+.ws-pr.tone-violet,
+.ws-pr.tone-violet:hover {
+  color: var(--violet);
+}
+
+.ws-pr.tone-dim,
+.ws-pr.tone-dim:hover {
+  color: var(--fg-faint);
+}
+
+/* the ✓ of a request ready to merge keeps its room, so the number does not move when it comes */
+.ws-pr-ready.is-vacant {
+  visibility: hidden;
+}
+
+.ws-pr-more {
+  color: var(--fg-faint);
+  font-size: var(--fs-11);
+}
+
+.tip-line {
+  display: block;
+}
+
+/* the card's anchor is the card itself: the hover card hangs beside it, the anchor takes no pointer */
+.ws-main {
+  position: relative;
+}
+
+.hover-anchor {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.popover.hover-card {
+  width: 340px;
+  max-width: calc(100vw - 16px);
+  max-height: var(--radix-hover-card-content-available-height, 80vh);
+  padding: 5px;
+}
+
+.hc {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.hc-about {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 4px 8px 6px;
+  color: var(--fg-faint);
+  font-size: var(--fs-11);
+  line-height: 1.4;
+}
+
+.hc-about > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hc-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.hc > * + .hc-section,
+.hc > * + .hc-foot {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--line);
+}
+
+.hc-label {
+  margin: 0;
+  padding: 4px 8px 3px;
+  color: var(--fg-faint);
+  font-size: var(--fs-11);
+  font-weight: 500;
+}
+
+.linkish.hc-note,
+.hc-note {
+  display: block;
+  width: 100%;
+  max-height: 12em;
+  margin: 0;
+  padding: 5px 8px;
+  overflow-y: auto;
+  color: var(--fg);
+  font-size: var(--fs-12);
+  font-weight: 400;
+  line-height: 1.45;
+  text-align: left;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.hc-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 6px 8px;
+  border-radius: var(--r-md);
+}
+
+.hc-item:hover {
+  background: var(--bg-hover);
+}
+
+.hc-icon {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 14px;
+  height: 18px;
+  color: var(--fg-dim);
+}
+
+.hc .tone-green {
+  color: var(--green);
+}
+
+.hc .tone-red {
+  color: var(--red);
+}
+
+.hc .tone-amber {
+  color: var(--amber);
+}
+
+.hc .tone-violet {
+  color: var(--violet);
+}
+
+.hc .tone-dim {
+  color: var(--fg-faint);
+}
+
+.hc-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.hc-title {
+  overflow: hidden;
+  color: var(--fg);
+  font-size: var(--fs-13);
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hc-meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  color: var(--fg-faint);
+  font-size: var(--fs-11);
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.hc-meta > span + span::before {
+  content: "·";
+  margin-right: 5px;
+  color: var(--fg-faint);
+}
+
+.hc-where {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hc-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 3px;
+}
+
+.hc-links {
+  display: flex;
+  flex-shrink: 0;
+  gap: 1px;
+  margin: -3px -4px 0 0;
+}
+
+.hc-port {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: var(--r-md);
+  font-size: var(--fs-12);
+  line-height: 1.4;
+}
+
+.hc-port-dot {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--amber);
+}
+
+.hc-port-num {
+  flex-shrink: 0;
+  width: 44px;
+  color: var(--fg);
+  font-family: var(--mono);
+  font-weight: 500;
+}
+
+.hc-port-proc {
+  flex-shrink: 0;
+  color: var(--fg-dim);
+}
+
+.hc-port-addr {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--fg-faint);
+  font-size: var(--fs-11);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hc-foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px 3px;
+  color: var(--fg-faint);
+  font-size: var(--fs-11);
+}
+
+.hc-foot.is-failed {
+  color: var(--amber);
+}
+
+.hc-foot .spinner {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 11px;
+  height: 11px;
+  border: 2px solid var(--line-strong);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+
+/* the Note dialog (NoteDialog.tsx): the workspace beside the title, the keys and the size under the field */
+.note-dialog .note-where {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
+  font-weight: 400;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.note-dialog .note-text {
+  width: 100%;
+  min-height: 9em;
+  resize: vertical;
+}
+
+.note-hint {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: var(--fs-12);
+}
+
+.note-size {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.note-size.over {
+  color: var(--red);
+}
+
 /* a line per agent under its card, after Orca: its logo, its title (muted at rest), the time in its state, its shape */
 .ws-agents {
   display: flex;

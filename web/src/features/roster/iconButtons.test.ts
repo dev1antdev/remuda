@@ -11,6 +11,7 @@ import sourcePicker from "./worktree/SourcePicker.tsx?raw";
 import removeWorktree from "./worktree/RemoveWorktreeDialog.tsx?raw";
 import actionDialog from "./project/ActionDialog.tsx?raw";
 import projectSettings from "./project/ProjectSettingsDialog.tsx?raw";
+import cardDetails from "./CardDetails.tsx?raw";
 
 // openingTag is the `<button …>` starting at `from`, across lines, its braces (an arrow's `>` among them) skipped
 function openingTag(source: string, from: number): string {
@@ -36,7 +37,7 @@ function iconButtons(source: string): { tag: string; before: string[] }[] {
   return found;
 }
 
-const SOURCES = { agentLines, dialogs, folderPicker, healthButton, machineMenu, rows, sidebar, tabStrip, sourcePicker, removeWorktree, actionDialog, projectSettings };
+const SOURCES = { agentLines, dialogs, folderPicker, healthButton, machineMenu, rows, sidebar, tabStrip, sourcePicker, removeWorktree, actionDialog, projectSettings, cardDetails };
 
 describe("the sidebar's icon-only buttons", () => {
   it("say what they do through a Tip — their own, or their menu's or popover's — and an aria-label, never a title (AGENTS.md)", () => {

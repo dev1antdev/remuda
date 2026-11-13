@@ -83,6 +83,7 @@ func TraceScript(m Merge, job int64) string {
 }
 
 type glabMerge struct {
+	Title               string `json:"title"`
 	State               string `json:"state"` // opened, closed, locked, merged
 	Draft               bool   `json:"draft"`
 	WorkInProgress      bool   `json:"work_in_progress"`
@@ -166,12 +167,15 @@ func ParseMerge(out string, now time.Time) (Status, int64, error) {
 	if err := jsonAt(sections[0], "{", &mr); err != nil {
 		return Status{}, 0, err
 	}
-	status := Status{State: mergeState(mr.State), Draft: mr.Draft || mr.WorkInProgress, Mergeable: "UNKNOWN", At: now}
+	status := Status{Title: mr.Title, State: mergeState(mr.State), Draft: mr.Draft || mr.WorkInProgress, Mergeable: "UNKNOWN", At: now}
 	switch {
 	case mr.HasConflicts:
 		status.Mergeable = "CONFLICTING"
 	case mr.DetailedMergeStatus == "mergeable" || mr.MergeStatus == "can_be_merged":
 		status.Mergeable = "MERGEABLE"
+	}
+	if mr.DetailedMergeStatus == "mergeable" {
+		status.MergeState = "CLEAN" // GitLab's own word that nothing stands in the way, as GitHub's CLEAN is
 	}
 	var approvals glabApprovals
 	approvalsRead := len(sections) > 1 && jsonAt(sections[1], "{", &approvals) == nil

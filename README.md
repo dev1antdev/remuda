@@ -103,6 +103,23 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   the pane each tab says what it runs — the agent by its logo and name, a
   shell as "terminal" — and + opens a terminal in the workspace's folder
   at once, or an agent.
+- **The card's badges and hover card**, after Orca and munza's
+  better-sidebar — at the right of a card's second line: a note icon, a
+  plug while its checkout serves ports, and its pull request as one icon
+  and `#212` in its state's colour — green open, `#88 ✓` ready to merge,
+  grey draft, violet merged, red closed, failing or in conflict, amber
+  changes requested — with `+1` for another its agents opened; ⌘-click
+  opens it on GitHub, a click opens its menu (its failed checks or its
+  review handed to the agent). Rest the pointer on a card and its hover
+  card comes beside it: the note in full, each pull request with its
+  title, checks and review, the Jira issue and the GitHub issues the
+  request closes, the live ports, and how fresh it all is ("Refreshing
+  from GitHub…", "Updated 3 min ago", "Couldn't reach GitHub · from 5 min
+  ago") — opening it asks gh on the machine for the checks again. On a
+  phone, Details in the card's ⋯ menu (or a tap on its pull request) shows
+  the same. **Notes**: "Note…" in a card's or a folder's ⋯ menu, or the
+  palette, keeps a note on that checkout — whatever you want to remember
+  about it — that outlives the workspace; save it empty to remove it.
 - **Folder icons** — click a folder's icon (or "Folder icon…" in a
   workspace's ⋯ menu, or the palette) to give it a face: first the ones
   the project already has — its favicon, logo or app icon, found in the

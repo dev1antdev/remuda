@@ -46,6 +46,7 @@ export type AppDialog =
   | { kind: "undo-turn"; machineId: string; dir: string; turn?: string } // an agent's turn taken back in its folder: the newest one, or the one named
   | { kind: "teleport"; machineId: string; paneId: string; tabId: string; workspace: string; agent: string } // the pane's work moved to another machine, an agent carrying on there
   | { kind: "folder-icon"; machineId: string; folder: string; name: string; icon?: FolderIconRef } // a folder's icon: an emoji, a site's favicon or a picture
+  | { kind: "note"; machineId: string; dir: string; name: string; text: string } // a checkout's note, written or edited; saved empty, removed
   | { kind: "leftovers"; machineId: string } // the machine's worktrees no workspace has open, the clean ones to remove
   | { kind: "previews"; machineId: string; workspace?: string; name?: string } // what the machine's processes serve, the workspace's first, each opened on the cockpit
   | { kind: "triggers"; machineId?: string; dir?: string; workspace?: string; name?: string } // what a pane prints and what it sets off: the rules a folder sees, or every rule

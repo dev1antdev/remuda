@@ -51,18 +51,28 @@ export type LimitForecast = { runs_out_at?: string; lasts?: boolean; pace: numbe
 // MachineLimits is what a machine says of the plan limits: the windows read there, and whether Claude Code's status line is wrapped to report them
 export type MachineLimits = { windows?: LimitWindow[]; wrapped?: boolean };
 
-// PullRequest is the request the agent named and, for a GitHub one gh on the machine could read, how it stands
-export type PullRequest = { url: string; label: string; status?: PRStatus };
+// PullRequest is the request the agent named and, for a GitHub one gh on the machine could read, how it stands; reading
+// while gh reads it again, error why the last read failed (a status from before stands beside it)
+export type PullRequest = { url: string; label: string; status?: PRStatus; reading?: boolean; error?: string };
 
 export type PRStatus = {
+  title?: string;
   state: string; // OPEN | MERGED | CLOSED
   draft: boolean;
   mergeable: string; // MERGEABLE | CONFLICTING | UNKNOWN
+  merge_state?: string; // GitHub's mergeStateStatus: CLEAN merges now; DIRTY, BLOCKED, BEHIND, UNSTABLE
   review: string; // APPROVED | CHANGES_REQUESTED | REVIEW_REQUIRED | ""
   threads?: number; // a GitLab merge request's discussion threads still open
   checks: { total: number; pass: number; fail: number; pending: number; skipped: number };
+  closes?: ClosingIssue[]; // the GitHub issues the request closes once it merges
   at: string;
 };
+
+// ClosingIssue is an issue a pull request closes: its number, its address and its repository, owner/name
+export type ClosingIssue = { number: number; url: string; repo: string };
+
+// LivePort is a port a process of the workspace's checkout listens on, as the status bar reads them
+export type LivePort = { port: number; process: string; pid: number; address: string };
 
 export type PaneUsage = {
   model: string;
@@ -125,6 +135,8 @@ export type Session = {
   sync?: { ahead: number; behind: number }; // that branch against its upstream as of the last fetch; none without one
   folder?: string; // the folder the sidebar groups by: the repository's main folder for a checkout, else the workspace's
   icon?: FolderIconRef; // the folder's icon, the person's own
+  note?: string; // the person's note on this checkout, kept after the workspace closes
+  ports?: LivePort[]; // the ports its checkout's processes listen on, when the roster reads them
   review?: { changed: number; fresh: number; ready?: boolean; risk?: Risk }; // uncommitted files; fresh = moved since the reviewer looked; ready = rejected at the last look and the agent says it is ready for another; risk = how risky its review is, and why
   collisions?: Collision[]; // the other checkouts of its repository changing the same files against the main branch, the same lines first
   muted_until?: string; // the folder is silenced until then: no push, no webhook, no feed row

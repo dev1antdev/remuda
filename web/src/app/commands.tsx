@@ -19,6 +19,7 @@ import { DEFAULT_OPEN_LENS, OPEN_LENS_KEY, openLensOf, type OpenLens } from "./o
 import { lensOn, lensesOf } from "./paneLens";
 import { basename, errMsg } from "@/lib/text";
 import { folderOf as sessionFolder } from "@/features/roster/workspaces";
+import { noteDir } from "@/features/roster/cardFacts";
 import { canFork, forkLabel } from "@/features/chat/fork";
 import { forkPane } from "@/features/chat/forkPane";
 import { keyWords } from "@/features/terminal/float/float";
@@ -153,6 +154,9 @@ function useCommands(): (query: string) => Entry[] {
         command("rename-workspace", t("Rename workspace {workspace}…", { workspace: named }), () => actions.openDialog({ kind: "rename", machineId: machine.id, what: "workspace", id: session.id, label: session.name }), { icon: "tag" });
         const folder = sessionFolder(session);
         if (folder) command("folder-icon", t("Icon for the folder {folder}…", { folder: `“${basename(folder)}”` }), () => actions.openDialog({ kind: "folder-icon", machineId: machine.id, folder, name: basename(folder), icon: session.icon }), { hint: t("an emoji, a site's icon or a picture"), icon: "folder", keywords: ["emoji", "favicon", "logo", "picture"] });
+        const noteHere = noteDir(session);
+        if (noteHere && !share.sessionHidden(machine.id, session))
+          command("note", t("Note on {workspace}…", { workspace: named }), () => actions.openDialog({ kind: "note", machineId: machine.id, dir: noteHere, name: session.name, text: session.note ?? "" }), { hint: session.note?.split("\n", 1)[0] || t("anything to remember about this checkout"), icon: "note", keywords: ["note", "notes", "memo", "remember", "comment", "worktree"] });
         command("rename-tab", t("Rename tab {tab}…", { tab: tabName(tab, share.sessionHidden(machine.id, session)) }), () => actions.openDialog({ kind: "rename", machineId: machine.id, what: "tab", id: tab.id, label: tab.named ? tab.label : "" }), { icon: "tag" });
         if (current.pane.agent) command("restart-pane", t("Restart {agent} on its session…", { agent: agentTitle(current.pane.agent) }), () => askRestart(machine.id, current.pane.id, current.pane.agent), { hint: t("its own exit, then started again on the same conversation"), icon: "refresh-cw", keywords: ["restart", "resume", "stuck", "hung", "reload", "again"] });
         if ((session.worktree || session.branch) && session.folder) {

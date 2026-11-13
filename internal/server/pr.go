@@ -21,7 +21,36 @@ import (
 func (s *Server) prRoutes(api *http.ServeMux) {
 	api.HandleFunc("POST /api/pr/failure", s.prHandoff(prstatus.Failure))
 	api.HandleFunc("POST /api/pr/review", s.prHandoff(prstatus.ReviewComments))
+	api.HandleFunc("POST /api/pr/refresh", s.handlePRRefresh)
 	api.HandleFunc("DELETE /api/worktrees/{id}", s.handleWorktreeRemove)
+}
+
+// handlePRRefresh is POST {machine, panes}: a hover card opened on a workspace's requests, each read again on the
+// machine when its last read is prstatus.FreshFor old; the roster carries the read under way and what it came to.
+func (s *Server) handlePRRefresh(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Machine string   `json:"machine"`
+		Panes   []string `json:"panes"`
+	}
+	if !decode(w, r, &req) {
+		return
+	}
+	if len(req.Panes) == 0 || len(req.Panes) > 32 {
+		httpErr(w, 400, fmt.Errorf("one to 32 panes required"))
+		return
+	}
+	mc, err := s.machineFor(r, req.Machine)
+	if err != nil {
+		httpErr(w, 404, err)
+		return
+	}
+	reading := 0
+	for _, pane := range req.Panes {
+		if s.PRs.Fresh(mc.ID(), pane) {
+			reading++
+		}
+	}
+	writeJSON(w, map[string]any{"reading": reading})
 }
 
 // prHandoff is POST {machine, pane}: what gh (glab for a merge request) reads of the pane's request, composed by compose, sent to the pane's agent
