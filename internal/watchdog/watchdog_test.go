@@ -1,6 +1,7 @@
 package watchdog
 
 import (
+	"strconv"
 	"testing"
 	"time"
 
@@ -55,6 +56,16 @@ func TestQuietWorkingIsStuckOncePerEpisodeThenReminded(t *testing.T) {
 	w.Sweep()
 	if len(h.pushed) != 2 {
 		t.Fatalf("no reminder: %d", len(h.pushed))
+	}
+	// the tag names the episode: a reminder replaces the note it reminds of, a later episode's note is its own
+	if want := "m|p1|stuck|" + strconv.FormatInt(since.Unix(), 10); h.pushed[0].Tag != want || h.pushed[1].Tag != want {
+		t.Fatalf("tags %q, %q; want both %q", h.pushed[0].Tag, h.pushed[1].Tag, want)
+	}
+	h.episodes[0].Since = h.now
+	h.now = h.now.Add(25 * time.Minute)
+	w.Sweep()
+	if len(h.pushed) != 3 || h.pushed[2].Tag == h.pushed[0].Tag {
+		t.Fatalf("a later episode's note: %+v", h.pushed[len(h.pushed)-1])
 	}
 }
 

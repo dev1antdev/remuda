@@ -8,7 +8,6 @@ import { hiddenWords } from "@/features/roster/sharing";
 import { usePref } from "@/lib/prefs";
 import { newer } from "@/lib/version";
 import { episodeKey, remember, stoppedWords } from "@/features/roster/stopped";
-import { resumeStopped } from "@/features/updates/recover";
 import { reopen } from "@/features/reopen/offer";
 import { previewServed } from "@/features/triggers/offer";
 import { offersToShow, offerWords, rememberOffer } from "@/features/triggers/triggers";
@@ -19,6 +18,9 @@ import { useSharing } from "@/features/roster/useSharing";
 import type { ToastItem } from "@/ui";
 import { actions, app, type Panel } from "./store";
 import { viewerToasts } from "./viewOnly";
+import { reopenIssue } from "@/features/issues/api";
+import { issueClosedWords } from "@/features/issues/words";
+import { errMsg } from "@/lib/text";
 import { t } from "@/lib/i18n";
 
 // CLOSED_OFFER_MS is how long the toast after a close offers its agents back
@@ -45,6 +47,7 @@ export function useToasts(): ToastItem[] {
   const notice = app.use((s) => s.notice);
   const away = app.use((s) => s.away);
   const closedOffer = app.use((s) => s.closedOffer);
+  const issueClosed = app.use((s) => s.issueClosed);
   const alerts = app.use((s) => s.alerts);
   const share = useSharing();
   useAlertLinger(alerts);
@@ -63,8 +66,36 @@ export function useToasts(): ToastItem[] {
     const t = setTimeout(() => actions.setClosedOffer(null), CLOSED_OFFER_MS);
     return () => clearTimeout(t);
   }, [closedOffer]);
+  useEffect(() => {
+    if (!issueClosed) return;
+    const t = setTimeout(() => actions.setIssueClosed(null), CLOSED_OFFER_MS);
+    return () => clearTimeout(t);
+  }, [issueClosed]);
 
   const toasts: ToastItem[] = [];
+  // an issue just closed from the issues panel: said so, with Reopen for a close pressed by mistake
+  if (issueClosed)
+    toasts.push({
+      id: "issue-closed",
+      tone: "success",
+      text: issueClosedWords(issueClosed.repo, issueClosed.number, issueClosed.reason),
+      action: (
+        <button
+          type="button"
+          className="btn sm"
+          onClick={() => {
+            actions.setIssueClosed(null);
+            void reopenIssue(issueClosed.machineId, issueClosed.repo, issueClosed.number).then(
+              () => actions.notify(t("Reopened #{n}", { n: issueClosed.number }), { brief: true }),
+              (e: unknown) => actions.notify(errMsg(e), { error: true }),
+            );
+          }}
+        >
+          {t("Reopen")}
+        </button>
+      ),
+      onDismiss: () => actions.setIssueClosed(null),
+    });
   // a close just made through the page: its agents offered back on their sessions for a few seconds
   if (closedOffer)
     toasts.push({
@@ -141,10 +172,10 @@ export function useToasts(): ToastItem[] {
       ),
       onDismiss: () => setReleaseSeen(release),
     });
-  // the chats a reboot stopped: one toast per machine and episode, the same Resume as the ⓘ's
+  // the chats a reboot stopped: one toast per machine and episode, its button the same "Resume after restart" as the ⓘ's; none while they are being resumed
   for (const m of machines) {
     const stopped = m.stopped ?? [];
-    if (!stopped.length) continue;
+    if (!stopped.length || m.resuming) continue;
     const key = episodeKey(m.id, stopped);
     if (recoverSeen.includes(key)) continue;
     toasts.push({
@@ -157,10 +188,10 @@ export function useToasts(): ToastItem[] {
           className="btn sm primary"
           onClick={() => {
             setRecoverSeen(remember(recoverSeen, key));
-            void resumeStopped(m.id, stopped.length);
+            actions.openDialog({ kind: "resume-after-restart", machineId: m.id });
           }}
         >
-          {t("Resume")}
+          {t("Resume…")}
         </button>
       ),
       onDismiss: () => setRecoverSeen(remember(recoverSeen, key)),

@@ -14,6 +14,10 @@ import type { Subagent } from "./api";
 import Composer from "./Composer";
 import { useRoster } from "@/features/roster/useRoster";
 import { doing, type Doing } from "./doing";
+import { tokFine } from "@/features/usage/format";
+import { promptedAt, type LiveRead } from "./progress";
+import { useSpinner } from "./ProgressLine";
+import { TILE_SCREEN_EVERY, useScreenRead } from "./useScreenRead";
 import { counts, progressWords } from "./plan";
 import { QuestionCard } from "./QuestionCard";
 import { Ribbon, tailUnread } from "./ActivityRibbon";
@@ -51,14 +55,19 @@ const Tail = memo(function Tail({ machineId, paneId, status, dir, agent = "", wo
   const onOpenSubagent = useCallback((s: Subagent) => actions.openViewer({ machine: machineId, dir, session, subagent: { id: s.id, description: s.description || s.kind || s.id } }), [machineId, dir, session]);
   const plan = chat?.plan;
   const progress = useMemo(() => (plan && counts(plan).open > 0 ? progressWords(plan) : undefined), [plan]);
+  // while a Claude Code works, what its spinner says, read off its screen at a tile's pace
+  const working = status === "run" && agent === "claude";
+  const screen = useScreenRead(machineId, paneId, { enabled: active && working, working, every: TILE_SCREEN_EVERY });
+  const since = useMemo(() => promptedAt(turns), [turns]);
+  const spinner = useMemo<LiveRead | null>(() => (working && screen.read?.progress ? { progress: screen.read.progress, readAt: screen.read.at, since } : null), [working, screen.read, since]);
   return (
     <div className="chat tail">
-      <TileState words={words} doing={now} said={answered} plan={progress} subagents={subs} />
+      <TileState words={words} doing={now} said={answered} plan={progress} subagents={subs} spinner={spinner} />
       <Ribbon turns={turns} status={status} dir={dir} cut={turns.length >= TAIL_TURNS} unread={tailUnread(TAIL_TURNS)} className="tile-ribbon" />
       <div className="chat-log" ref={logRef} onScroll={follow.onScroll}>
         {turns.length === 0 && <div className="empty chat-empty">{chat === null ? t("Loading…") : t("No transcript yet.")}</div>}
         {turns.map((t, i) => (
-          <TurnView key={t.ids?.[0] || i} turn={t} machineId={machineId} onOpenFile={onOpenFile} subagents={subagents} onOpenSubagent={onOpenSubagent} />
+          <TurnView key={t.ids?.[0] || i} turn={t} machineId={machineId} onOpenFile={onOpenFile} subagents={subagents} onOpenSubagent={onOpenSubagent} live={status === "run" && i === turns.length - 1} />
         ))}
       </div>
       <TailAnswer machineId={machineId} paneId={paneId} status={status} dir={dir} agent={agent} active={active} error={fetchError || null} />
@@ -68,9 +77,11 @@ const Tail = memo(function Tail({ machineId, paneId, status, dir, agent = "", wo
 
 export default Tail;
 
-// TileState is the line under a tile's head: the state and how long, and while the agent works, what it does this second;
-// once it has finished, what it answered; while its plan has open items, how far it is; and how many subagents still work.
-export function TileState({ words, doing, said, plan, subagents }: { words: string; doing?: Doing | null; said?: string; plan?: string; subagents?: string }) {
+// TileState is the line under a tile's head: the state and how long, and while the agent works, what it does this second
+// — the call it runs, else what its spinner says ("Refactoring… 2 min 14 s · ↓ 6.8k"); once it has finished, what it
+// answered; while its plan has open items, how far it is; and how many subagents still work.
+export function TileState({ words, doing, said, plan, subagents, spinner }: { words: string; doing?: Doing | null; said?: string; plan?: string; subagents?: string; spinner?: LiveRead | null }) {
+  const tool = doing?.what === "tool";
   return (
     <div className="tile-state">
       <span className="tile-words">{words}</span>
@@ -93,14 +104,22 @@ export function TileState({ words, doing, said, plan, subagents }: { words: stri
             </>
           ) : doing.what === "subagents" ? (
             `${subagents || "waiting on a subagent"}…`
+          ) : spinner ? (
+            <Spinner live={spinner} />
           ) : (
             `${doing.what}…`
           )}
         </span>
       )}
+      {tool && spinner?.progress?.tokens ? <span className="tile-tokens">· ↓ {tokFine(spinner.progress.tokens)}</span> : null}
       {subagents && doing?.what !== "subagents" && <span className="tile-subs">· {subagents}</span>}
     </div>
   );
+}
+
+// Spinner is the spinner's words in a tile, a second at a time
+function Spinner({ live }: { live: LiveRead }) {
+  return <>{useSpinner(live)}</>;
 }
 
 // LONG_CALL is when a running call turns amber: a command going on past a minute deserves a look

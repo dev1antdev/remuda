@@ -15,8 +15,11 @@ export type RadarState = "working" | "blocked" | "done" | "idle" | "unknown";
 export type Tier = "fresh" | "normal" | "stale";
 export type Display = RadarState | "idle_fresh" | "idle_stale";
 
+// the sidebar's orders: folders by activity, workspaces flat by activity, herdr's own, sections by priority, by ticket prefix
+export type RadarOrder = "active" | "recent" | "herdr" | "priority" | "prefix";
+
 export type RadarPrefs = {
-  order: "active" | "recent" | "herdr";
+  order: RadarOrder;
   rowLabel: "title" | "tab" | "both";
   freshMinutes: number;
   staleMinutes: number;

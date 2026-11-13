@@ -47,7 +47,7 @@ export default function ConciergeChat({ machineId, pane, dir, setAside, onSessio
         )}
         {turns.length === 0 && chat === null && <div className="empty chat-empty">{t("Loading…")}</div>}
         {turns.map((turn, i) => (
-          <TurnView key={turn.ids?.[0] || i} turn={turn} machineId={machineId} onOpenFile={onOpenFile} />
+          <TurnView key={turn.ids?.[0] || i} turn={turn} machineId={machineId} onOpenFile={onOpenFile} live={pane.status === "run" && i === turns.length - 1} />
         ))}
       </div>
       {error && (

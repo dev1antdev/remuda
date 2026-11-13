@@ -102,7 +102,7 @@ export function TileView({ tile, view = "chat", radar, step, now, brief = false,
               <Menu
                 tip={t("{pr}: {status} · read with gh on the machine", { pr: pr.label, status: prWords(pr.status) })}
                 label={t("{pr} actions", { pr: pr.label })}
-                items={viewOnly ? viewerMenu(prMenuItems(machine.id, pane.id, pr)) : prMenuItems(machine.id, pane.id, pr)}
+                items={viewOnly ? viewerMenu(prMenuItems(machine.id, pane.id, pr)) : prMenuItems(machine.id, pane.id, pr, session.dir ?? pane.cwd)}
                 trigger={
                   <button type="button" className="linkish pr-chips" aria-label={t("{pr}: {status}. Open it, or hand its checks or review to the agent", { pr: pr.label, status: prWords(pr.status) })}>
                     <span className={`pr-state is-${checksTone(pr.status)}`}>

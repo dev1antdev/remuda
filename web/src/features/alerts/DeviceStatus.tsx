@@ -1,22 +1,19 @@
 // The alerts panel's word on this very device: which browser on which system, whether the site may notify, whether
 // this cockpit knows the browser's subscription and what it last handed the push service, what the browser last
-// received, where the system may still keep a notification from appearing — and the switch for a chime on the page.
+// received, and where the system may still keep a notification from appearing.
 
 import { useEffect, useState } from "react";
-import { usePref } from "@/lib/prefs";
 import { Notice } from "@/ui";
 import { t } from "@/lib/i18n";
 import { blockedHelp, browserOf, deliveryWords, receivedWords, systemHelp, systemOf, type Received } from "./device";
 import type { PushState } from "./push";
 import { fetchDevice, onPushed, readLastPush, type DeviceOnServer } from "./received";
-import { SOUND_KEY } from "./useOnPageAlerts";
 
 export default function DeviceStatus({ state, version }: { state: PushState; version: number }) {
   const browser = browserOf(navigator.userAgent);
   const system = systemOf(navigator.userAgent, navigator.maxTouchPoints);
   const [onServer, setOnServer] = useState<DeviceOnServer | null>(null);
   const [received, setReceived] = useState<Received | null>(null);
-  const [sound, setSound] = usePref<boolean>(SOUND_KEY, false);
   useEffect(() => {
     setOnServer(null);
     if (state.endpoint) void fetchDevice(state.endpoint).then(setOnServer, () => setOnServer(null));
@@ -50,12 +47,6 @@ export default function DeviceStatus({ state, version }: { state: PushState; ver
         <li>{t("While this page is in front, every alert below shows in its corner as well.")}</li>
       </ul>
       {state.permission === "granted" && <p className="modal-hint">{systemHelp(browser, system)}</p>}
-      <label className="alerts-opt">
-        <input type="checkbox" checked={sound} onChange={(e) => setSound(e.target.checked)} />
-        <span>
-          <b>{t("A chime")}</b> {t("with an alert shown on the page")}
-        </span>
-      </label>
     </div>
   );
 }

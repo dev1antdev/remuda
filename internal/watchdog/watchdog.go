@@ -123,7 +123,7 @@ func (w *Watchdog) Sweep() {
 		}
 		w.in.Notify(push.Payload{
 			Machine: ep.Machine, Pane: ep.Pane, Kind: kind,
-			Title: title, Body: agent + " " + body, Tag: ep.Machine + "|" + ep.Pane + "|" + kind,
+			Title: title, Body: agent + " " + body, Tag: key, // the episode's: its reminders replace it, a later episode's never does
 			Actions: actions,
 		})
 	}

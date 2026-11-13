@@ -19,3 +19,12 @@ export function nextKeyAsked(press: KeyPress, dialogOpen: boolean, mac: boolean)
   if (dialogOpen || press.target?.closest?.(".xterm, .screen-term")) return false;
   return !(mac && press.target?.closest?.(FIELDS));
 }
+
+// walkKeyAsked says which way Alt+] (1) or Alt+[ (-1) walks the sidebar's agents, 0 for neither: by key code, with
+// Alt+N's rules — never over the terminal, a dialog, or a field on a Mac, where Option+] and Option+[ type quotes
+export function walkKeyAsked(press: KeyPress, dialogOpen: boolean, mac: boolean): 1 | -1 | 0 {
+  const step = press.code === "BracketRight" ? 1 : press.code === "BracketLeft" ? -1 : 0;
+  if (!step || !press.altKey || press.metaKey || press.ctrlKey || press.shiftKey) return 0;
+  if (dialogOpen || press.target?.closest?.(".xterm, .screen-term")) return 0;
+  return mac && press.target?.closest?.(FIELDS) ? 0 : step;
+}

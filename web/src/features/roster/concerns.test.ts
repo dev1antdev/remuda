@@ -40,7 +40,7 @@ describe("concerns", () => {
     const list = concerns(health({ herdr: "0.9.1" }), { at: "", herdr: "0.9.5" }, "v0.9.0", false, [...stopped, { pane: "w2:p1", agent: "codex", title: "web" }]);
     expect(keys(list)).toEqual(["stopped", "herdr"]);
     expect(list[0]?.text).toBe("2 chats stopped with the reboot: Claude Code in api, Codex in web");
-    expect(updateLabel("recover")).toBe("Resume");
+    expect(updateLabel("recover")).toBe("Resume…");
   });
   it("compares a remote's remuda with this one, and both with the newest release", () => {
     const remote = concerns(health({ remuda: "v0.4.0" }), { at: "", remuda: "v0.5.0" }, "v0.5.0", true);

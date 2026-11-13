@@ -1,5 +1,5 @@
 // What this browser knows of its pushes: the last one the service worker received (kept in IndexedDB by public/sw.js,
-// told to the open windows as it lands), what the cockpit last handed its push service, and a short chime.
+// told to the open windows as it lands), and what the cockpit last handed its push service.
 
 import { sendJSON } from "@/lib/http";
 import type { Delivery, Received } from "./device";
@@ -42,26 +42,3 @@ export function onPushed(callback: (received: Received) => void): () => void {
 export type DeviceOnServer = { known: boolean; prefs?: Prefs; last?: Delivery | null };
 
 export const fetchDevice = (endpoint: string): Promise<DeviceOnServer> => sendJSON("POST", "/api/push/device", { endpoint });
-
-// chime is two soft notes through the browser's own audio, for an alert shown on the page; silent where audio is refused
-export function chime(): void {
-  try {
-    const audio = new AudioContext();
-    const notes = [660, 880];
-    notes.forEach((frequency, i) => {
-      const tone = audio.createOscillator();
-      const volume = audio.createGain();
-      const start = audio.currentTime + i * 0.12;
-      tone.frequency.value = frequency;
-      volume.gain.setValueAtTime(0.0001, start);
-      volume.gain.exponentialRampToValueAtTime(0.08, start + 0.02);
-      volume.gain.exponentialRampToValueAtTime(0.0001, start + 0.18);
-      tone.connect(volume).connect(audio.destination);
-      tone.start(start);
-      tone.stop(start + 0.2);
-    });
-    setTimeout(() => void audio.close(), 600);
-  } catch {
-    /* no audio here */
-  }
-}

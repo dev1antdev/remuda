@@ -1,4 +1,4 @@
-// The chat lens's tools: Find stays in the tab strip's slot as the one control; the timeline, the recap, the export,
+// The chat lens's tools: Find stays in the tab strip's slot as the one control; the timeline, the prompts list, the recap, the export,
 // the timelapse of the pane's screen, the pins and the handover to another agent are rows of the View menu
 // (useChatViewItems), for the pane's conversation and — but for the timelapse and the handover, which need a pane — for
 // a transcript on its own.
@@ -13,6 +13,7 @@ import { canFork, forkLabel } from "./fork";
 import { forkPane } from "./forkPane";
 import { FindTool } from "./FindBar";
 import { pinKey, type Pin } from "./pins";
+import { usePromptsShown } from "./PromptsList";
 import { useTimelineShown } from "./TimelineBar";
 import { useRibbonShown } from "./ActivityRibbon";
 import { timelapseRows } from "@/features/terminal/timelapse/row";
@@ -27,6 +28,7 @@ export function ChatTools() {
 // useChatViewItems is the chat's part of the View menu; a shell pane has no conversation, so its rows are disabled
 export function useChatViewItems(place: ChatPlace): MenuItem[] {
   const [timeline, setTimeline] = useTimelineShown();
+  const [prompts, setPrompts] = usePromptsShown();
   const [ribbonShown, setRibbonShown] = useRibbonShown();
   const { machineId, paneId, session, dir, agent, workspace, machine, model } = place;
   const chatLive = app.use((s) => s.chatLive);
@@ -36,6 +38,7 @@ export function useChatViewItems(place: ChatPlace): MenuItem[] {
   const save = () => void exportConversation(machineId, paneId, session, dir, { agent, workspace, machine }).catch((e) => actions.notify(errMsg(e), { error: true }));
   return [
     { label: t("Timeline"), icon: "clock", hint: t("every prompt and answer in time; the first error, the longest call, loops and questions marked"), checked: timeline, onSelect: () => setTimeline(!timeline) },
+    { label: t("Prompts"), icon: "list", hint: t("prompt by prompt, newest first: what each took, wrote and changed"), checked: prompts, onSelect: () => setPrompts(!prompts) },
     { label: t("Activity ribbon"), icon: "layers", hint: t("the last 30 minutes of the agent's work, coloured by what it did, here and on the Wall"), checked: ribbonShown, onSelect: () => setRibbonShown(!ribbonShown) },
     { sep: true },
     { label: t("Recap this conversation…"), icon: "sun", hint: t("prompts, answers, tools, files, cost"), disabled: !agent, onSelect: () => actions.openDialog({ kind: "recap", machineId, paneId, session, dir, title }) },

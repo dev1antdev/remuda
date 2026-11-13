@@ -56,3 +56,25 @@ func answerError(out string, run, parse error) error {
 	}
 	return parse
 }
+
+// FailureOfCheck is Failure for one failed check of a GitHub pull request, by its name: the panel's Fix with agent on
+// that check's row.
+func FailureOfCheck(host shell.Shell, label, url, name string) (string, error) {
+	out, err := shell.Text(host, ChecksScript(url), Timeout)
+	checks, perr := ParseChecks(out)
+	if perr != nil {
+		return "", answerError(out, err, perr)
+	}
+	var only []Check
+	for _, c := range checks {
+		if c.Name == name && c.Failed() {
+			only = append(only, c)
+		}
+	}
+	logs := map[string]string{}
+	for _, id := range FailedRuns(only) {
+		log, _ := shell.Text(host, LogScript(only[0].RunRepo(), id), LogTimeout)
+		logs[id] = log
+	}
+	return FailureMessage(label, url, only, logs)
+}

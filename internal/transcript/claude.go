@@ -23,11 +23,12 @@ import (
 
 // Part is one piece of a turn, a tagged union.
 type Part struct {
-	Type     string          `json:"type"` // text | thinking | tool
+	Type     string          `json:"type"` // text | thinking | tool | queued (a message sent while the agent worked)
 	Text     string          `json:"text,omitempty"`
+	From     string          `json:"from,omitempty"` // a queued message another agent sent, by its name; "" for the person's
 	ToolName string          `json:"tool_name,omitempty"`
 	ToolID   string          `json:"tool_id,omitempty"` // the tool_use id: what its result and a subagent's meta name
-	At       string          `json:"at,omitempty"`      // the record's timestamp: when a tool was called, when the agent wrote a text or a thought
+	At       string          `json:"at,omitempty"`      // the record's timestamp: when a tool was called, a queued message sent, or a text or a thought written
 	Took     float64         `json:"took,omitempty"`    // seconds from the call to its result, 0 while it runs
 	Input    json.RawMessage `json:"input,omitempty"`
 	Output   string          `json:"output,omitempty"`
@@ -43,6 +44,7 @@ type Turn struct {
 	Parts     []Part        `json:"parts"`
 	Took      float64       `json:"took,omitempty"`   // seconds from the person's prompt to the turn's last record
 	Tokens    int64         `json:"tokens,omitempty"` // input, output and cache tokens of its API responses, each once
+	Output    int64         `json:"output,omitempty"` // its output tokens alone: what the CLI counts as ↓
 	Cost      float64       `json:"cost,omitempty"`   // USD at API prices, set by usage.PriceTurns
 	Model     string        `json:"model,omitempty"`  // the model of its last response, set by usage.PriceTurns
 	Responses []UsageRecord `json:"-"`                // its API responses, one per message id, the last record of each
@@ -325,6 +327,7 @@ type record struct {
 	IsAPIError  bool            `json:"isApiErrorMessage"`
 	Timestamp   string          `json:"timestamp"`
 	Message     json.RawMessage `json:"message"`
+	Attachment  json.RawMessage `json:"attachment"`
 	AiTitle     string          `json:"aiTitle"`
 }
 
@@ -419,6 +422,10 @@ func parseRecords(r io.Reader, keepSidechain bool) ([]Turn, error) {
 			return
 		}
 		switch rec.Type {
+		case "attachment":
+			if text, from, ok := queuedOf(rec.Attachment); ok {
+				turns = sentMidTurn(turns, rec, text, from)
+			}
 		case "user":
 			var msg apiMessage
 			if json.Unmarshal(rec.Message, &msg) != nil {
@@ -515,21 +522,30 @@ func MatchLine(line []byte, q string) (Match, bool) {
 	if json.Unmarshal(line, &rec) != nil || rec.IsSidechain || rec.IsMeta || rec.IsAPIError {
 		return Match{}, false
 	}
-	if rec.Type != "user" && rec.Type != "assistant" {
-		return Match{}, false
-	}
-	var msg apiMessage
-	if json.Unmarshal(rec.Message, &msg) != nil {
-		return Match{}, false
-	}
+	role := rec.Type
 	var texts []string
-	if t := stringContent(msg.Content); t != "" {
-		texts = append(texts, t)
-	}
-	for _, b := range blocks(msg.Content) {
-		if b.Type == "text" || (b.Type == "" && b.Text != "") {
-			texts = append(texts, b.Text)
+	switch rec.Type {
+	case "attachment": // a message sent while the agent worked is the person's words too
+		text, _, ok := queuedOf(rec.Attachment)
+		if !ok {
+			return Match{}, false
 		}
+		role, texts = "user", []string{text}
+	case "user", "assistant":
+		var msg apiMessage
+		if json.Unmarshal(rec.Message, &msg) != nil {
+			return Match{}, false
+		}
+		if t := stringContent(msg.Content); t != "" {
+			texts = append(texts, t)
+		}
+		for _, b := range blocks(msg.Content) {
+			if b.Type == "text" || (b.Type == "" && b.Text != "") {
+				texts = append(texts, b.Text)
+			}
+		}
+	default:
+		return Match{}, false
 	}
 	needle := strings.ToLower(q)
 	for _, t := range texts {
@@ -548,7 +564,7 @@ func MatchLine(line []byte, q string) (Match, bool) {
 			t = folded
 		}
 		ts, _ := time.Parse(time.RFC3339Nano, rec.Timestamp)
-		return Match{UUID: rec.UUID, Ts: ts, Role: rec.Type, Cwd: rec.Cwd, Snippet: snippet(t, i, len(needle))}, true
+		return Match{UUID: rec.UUID, Ts: ts, Role: role, Cwd: rec.Cwd, Snippet: snippet(t, i, len(needle))}, true
 	}
 	return Match{}, false
 }

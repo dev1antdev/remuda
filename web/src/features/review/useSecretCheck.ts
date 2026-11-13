@@ -26,12 +26,13 @@ export function useSecretCheck(machineId: string, dir: string) {
       (failure: unknown): Answer => ({ round: asked, error: errMsg(failure) }),
     );
   const query = useQuery<Answer>(read, [machineId, dir, round?.push, asked], { enabled: !!round?.open, every: RECHECK });
-  // ask follows the dialog: an approval with a commit or a pull request asks, anything else (or the dialog gone) lets go
-  const ask = useCallback((what: VerdictAsk | null) => {
+  // ask follows the dialog: an approval with a commit or a pull request asks, anything else (or the dialog gone) lets go;
+  // renew reads the work afresh though the ask stands, once it changed (the commit box's, after a stage or a look)
+  const ask = useCallback((what: VerdictAsk | null, renew = false) => {
     setRound((before) => {
       if (what === null || what === "none") return before && { ...before, open: false };
       const push = asksPush(what);
-      return before?.open && before.push === push ? before : { push, id: Date.now(), open: true };
+      return before?.open && before.push === push && !renew ? before : { push, id: Date.now(), open: true };
     });
   }, []);
   const clear = useCallback(() => setRound(null), []);

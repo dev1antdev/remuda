@@ -25,9 +25,14 @@ export type Pane = {
   said?: string; // the first line of the agent's last answer, once it finished
   pr?: PullRequest; // the last pull or merge request the agent named, "PR #15" / "MR !9"
   limit?: PaneLimit; // a subscription limit the agent stopped on, and the person's booking to continue it after the reset
-  subagents?: { working?: number }; // how many of a Claude Code conversation's subagents work, for the zoo
+  subagents?: PaneSubagents; // the subagents a Claude Code conversation runs: the zoo's babies, the sidebar's tree
   serves?: ServeOffer; // a dev server the pane announced and the previews found listening, offered as a preview
 };
+
+// PaneSubagents is how many of a conversation's subagents work, the oldest few of them by name with the tool call each is
+// on, and the id of the conversation's file the transcript viewer opens one in
+export type PaneSubagents = { working?: number; session?: string; list?: WorkingSubagent[] };
+export type WorkingSubagent = { id: string; description: string; doing?: string };
 
 // ServeOffer is a dev server a pane announced: its port on the machine, the address as printed, what serves it, the
 // trigger that offered it when it was one of the person's, and when
@@ -46,18 +51,28 @@ export type LimitForecast = { runs_out_at?: string; lasts?: boolean; pace: numbe
 // MachineLimits is what a machine says of the plan limits: the windows read there, and whether Claude Code's status line is wrapped to report them
 export type MachineLimits = { windows?: LimitWindow[]; wrapped?: boolean };
 
-// PullRequest is the request the agent named and, for a GitHub one gh on the machine could read, how it stands
-export type PullRequest = { url: string; label: string; status?: PRStatus };
+// PullRequest is the request the agent named and, for a GitHub one gh on the machine could read, how it stands; reading
+// while gh reads it again, error why the last read failed (a status from before stands beside it)
+export type PullRequest = { url: string; label: string; status?: PRStatus; reading?: boolean; error?: string };
 
 export type PRStatus = {
+  title?: string;
   state: string; // OPEN | MERGED | CLOSED
   draft: boolean;
   mergeable: string; // MERGEABLE | CONFLICTING | UNKNOWN
+  merge_state?: string; // GitHub's mergeStateStatus: CLEAN merges now; DIRTY, BLOCKED, BEHIND, UNSTABLE
   review: string; // APPROVED | CHANGES_REQUESTED | REVIEW_REQUIRED | ""
   threads?: number; // a GitLab merge request's discussion threads still open
   checks: { total: number; pass: number; fail: number; pending: number; skipped: number };
+  closes?: ClosingIssue[]; // the GitHub issues the request closes once it merges
   at: string;
 };
+
+// ClosingIssue is an issue a pull request closes: its number, its address and its repository, owner/name
+export type ClosingIssue = { number: number; url: string; repo: string };
+
+// LivePort is a port a process of the workspace's checkout listens on, as the status bar reads them (ListeningPort)
+export type LivePort = ListeningPort;
 
 export type PaneUsage = {
   model: string;
@@ -117,16 +132,24 @@ export type Session = {
   worktree?: { repo_key: string; repo_name: string; linked: boolean; checkout_path: string };
   dir?: string;
   branch?: string; // the branch the folder has checked out, a short hash when detached; none outside git
+  sync?: { ahead: number; behind: number }; // that branch against its upstream as of the last fetch; none without one
   folder?: string; // the folder the sidebar groups by: the repository's main folder for a checkout, else the workspace's
   icon?: FolderIconRef; // the folder's icon, the person's own
+  note?: string; // the person's note on this checkout, kept after the workspace closes
   review?: { changed: number; fresh: number; ready?: boolean; risk?: Risk }; // uncommitted files; fresh = moved since the reviewer looked; ready = rejected at the last look and the agent says it is ready for another; risk = how risky its review is, and why
   collisions?: Collision[]; // the other checkouts of its repository changing the same files against the main branch, the same lines first
   muted_until?: string; // the folder is silenced until then: no push, no webhook, no feed row
   scratch?: boolean; // the floating terminal's own shell: the drawer shows it, the sidebar and the palette leave it out
   concierge?: boolean; // the concierge's own workspace: the roster provider takes it out of the machines, its place shows it
   jira?: JiraIssue[]; // the Jira issues its branch and its agents name, once the person set a site
+  ports?: ListeningPort[]; // the ports its processes listen on, as last read while a page looks (internal/ports)
+  asleep?: Asleep; // put to sleep by the person: its agents left, waking resumes them (features/sleep)
   tabs: Tab[];
 };
+
+// ListeningPort is a port a workspace's process listens on: its program, what it serves (vite, next…) when its arguments
+// say, its pid, and where it listens as a person writes it — localhost:5173, *:8080
+export type ListeningPort = { port: number; process: string; label?: string; pid: number; address: string };
 
 // a machine's vitals, read by internal/health a few minutes apart
 // one probe's load and the disk's free percentage
@@ -205,17 +228,22 @@ export type Machine = {
   mac?: string; // the address a wake-up packet names, when the person set one
   limits?: MachineLimits; // the agents' plan limits as the machine last reported them
   retiring?: RetiringHit[]; // what starts or runs there on a model or mode being retired
+  resuming?: boolean; // the stopped chats are being resumed there now, pressed or by themselves: no Resume offered meanwhile
 };
 
 // StoppedChat is a chat whose pane came back from a reboot as a bare shell: the agent it ran and the pane's title
-export type StoppedChat = { pane: string; agent: string; title: string };
+// dir and command: the folder it lived in and the command that brings it back, as "Resume after restart" shows them
+export type StoppedChat = { pane: string; agent: string; title: string; dir?: string; command?: string };
+
+// Asleep is a workspace the person put to sleep: since when, and how many agents wait to be woken
+export type Asleep = { at: string; agents: number };
 
 export type AgentKind = { id: string; label: string };
 
 // ServerHost is the host of a remuda serving the page only (remuda -server): no machine of the fleet, its vitals behind the Server place
 export type ServerHost = { id: string; label: string; health?: Health };
 
-export type Roster = { machines: Machine[]; agents: AgentKind[]; version?: string; latest?: Latest; tailscale?: Tailscale; feed?: number; budgets?: BudgetStatus[]; jira?: string; server?: ServerHost; retirements?: Retirement[]; offers?: string[] }; // feed: the newest activity entry's id; budgets: the spending limits with their spend so far; jira: the Jira site, when set; retirements: the models and modes being retired; offers: the plan limits' open offers, by id
+export type Roster = { machines: Machine[]; agents: AgentKind[]; version?: string; latest?: Latest; tailscale?: Tailscale; feed?: number; budgets?: BudgetStatus[]; jira?: string; server?: ServerHost; retirements?: Retirement[]; offers?: string[]; withdrawn?: string[] }; // feed: the newest activity entry's id; withdrawn: the tags of the notifications taken back within a day; budgets: the spending limits with their spend so far; jira: the Jira site, when set; retirements: the models and modes being retired; offers: the plan limits' open offers, by id
 
 // fetchRoster returns null when the roster is unchanged (304 via ETag); viewOnly says a viewer link signed this page in.
 export async function fetchRoster(etag: string | null): Promise<{ roster: Roster | null; etag: string | null; version: string | null; viewOnly: boolean }> {
