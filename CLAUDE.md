@@ -541,9 +541,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `file` ×≤4, 25MB each → `<pane dir>/.remuda/uploads/<time>-<tag>-<name>`,
   stem and extension sanitized separately, remote via `sshx.Conn.Put`).
   `.remuda/.gitignore` (`*`) is written alongside so uploads never reach
-  a commit. Uploads are one of the three things remuda writes into a project;
-  the others are a new worktree's `.worktreeinclude` files (`internal/worktrees`)
-  and an agent's turn undone at the person's word (`internal/undo`).
+  a commit. Uploads are one of the things remuda writes into a project;
+  the others are a new worktree's `.worktreeinclude` files (`internal/worktrees`),
+  an agent's turn undone at the person's word (`internal/undo`) and git's
+  writes on a checkout at the person's press (`internal/gitops`).
 - `web/src/features/chat/attachments.ts` — `useAttachments` (upload at
   once, chips with thumbnails); `lib/transfer.ts` has `filesFrom`
   (drop/paste → files; a pasted screenshot gets a name), `lib/text.ts`
@@ -639,10 +640,13 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   composer has the keyboard. The header is `[burger][title — takes the
   slack][usage pill][lens switch][pop-out][search]`: the lens group is
   anchored right, the pill grows leftwards into the title's slack, the
-  three lens buttons keep the room of the Changes count while there is
-  none (`.lens-badge.empty`), so a count widens nothing — equal at a desk,
-  as wide as their words on a phone — and
-  the Changes button is disabled (not removed) when there is no folder.
+  four lens buttons (Chat, Terminal, Changes, Git) keep the room of the
+  Changes count while there is none (`.lens-badge.empty`), so a count
+  widens nothing — equal at a desk, as wide as their words on a phone — and
+  the Changes button is disabled (not removed) when there is no folder, the
+  Git button when the folder is not a checkout (`features/git/checkout.ts`:
+  the roster's `session.branch` or herdr's `worktree`; a workspace made a
+  moment ago gets its button once the review's sweep has read its branch).
   **A shell has its terminal alone** (`app/paneLens.ts`, tested:
   `lensesOf(agent)`, `lensOn(asked, agent)`): a pane with no agent shows
   the terminal lens whatever the store asks — the store keeps the lens
@@ -650,7 +654,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `?lens=chat` link to a shell lands on its terminal, the address saying
   so — its lens switch keeps its room unseen (`.lens-switch.is-vacant`,
   inert) so the header moves nothing between the two, the palette offers
-  it no Show the chat, Show the changes or split, the View menu no files
+  it no Show the chat, Show the changes, Show the Git history or split, the View menu no files
   rail or split rows, and a shell popped out shows its screen, never a
   chat tail or a creature. An agent started at a shell's prompt (`claude`
   typed there) keeps the terminal in view rather than turning to the lens
@@ -683,8 +687,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `Resizer` between; both are `active`, the store's `lens` is the focused
   side — the lens switch, a click or a focus in either side set it — and
   only the focused one runs its find and gets the tab strip's tools
-  (`focused` on `Chat` and `TerminalLens`); the Changes lens replaces
-  both; the terminal is the same mounted lens, so it attaches once.
+  (`focused` on `Chat` and `TerminalLens`); the Changes lens and the Git
+  lens replace both; the terminal is the same mounted lens, so it attaches once.
 - `internal/health` — each machine's vitals (Claude Code / herdr /
   remuda versions, how Claude Code was installed, herdr's agent hooks
   that lag the installed herdr (`OutdatedHooks`, the shell behind
@@ -2125,6 +2129,127 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `onUndo`; never in the viewer or for a viewer link). The display suite
   fakes `/api/undo` (`fakeUndo`) and opens the dialog from the lens and
   from an answer's foot.
+- `internal/gitgraph/` + `internal/gitops/` + `web/src/features/git/` —
+  **the Git lens**, after git-graph (rabeeh-ta/herdr-git-graph, read for
+  its rows, labels, menus and dialogs; gitview's "N commits" head): a
+  fourth lens of an agent's pane, `?lens=git`, its button beside Changes
+  (disabled, not removed, with the reason when the folder is no checkout),
+  the palette's "Show the Git history" (`lens:git`, a viewer's too); a
+  shell keeps its terminal alone and the split gives way to it as to
+  Changes. **The reads** (`gitgraph`, tested on temp repositories: every
+  label kind, Current, the pages, a fingerprint an edit does not move and
+  a tag or a branch does, the index untouched, a folder outside git, a
+  repository with no commit, a detached HEAD, a merge stopped on a
+  conflict, a commit's files with a rename, the root commit, a patch):
+  one script per request, every git call through the shell function `g`
+  (`Read`: `--no-pager --no-optional-locks --literal-pathspecs -c
+  core.fsmonitor=false -c diff.autoRefreshIndex=false -c core.quotepath=off
+  -c color.ui=never`). `ReadState` is where the checkout stands — its top,
+  HEAD, the branch, a merge / rebase / cherry-pick / revert stopped in
+  progress (the per-worktree git dir's markers), the refs' fingerprint
+  (`cksum` of HEAD, the branch, the op and `for-each-ref` over heads,
+  tags and remotes), `git status --porcelain -z` counted (untracked
+  files too, `Dirty`; `Conflicts`) and its tracked entries named, at most
+  `MaxChanges` 200, for a hard reset's confirm. `ReadLog` is the state and
+  a page: `git log -z --date-order --decorate=full --skip -n<limit+1>` over
+  `--branches --tags [--remotes] --ignore-missing HEAD` (All branches) or
+  `HEAD` (Current) — never `--all`, other tools' private refs — seven
+  NUL-ended fields a commit, `%D` read into `Ref{kind branch | remote |
+  tag | head, head}` (a remote's label dropped when Remotes is off: git
+  decorates every ref), `More` from the commit past the page, git's own
+  words when the log fails, the local branches and the remotes; no log at
+  all before a first commit. `ReadCommit` is the body, committer and files
+  against the first parent (`diff-tree -r -M -z --numstat` and
+  `--name-status` joined by path, a rename's old path kept, at most
+  `MaxFiles` 500, the rest counted); `ReadPatch` one file's patch
+  (`--no-ext-diff --no-textconv -M` against the first parent, `show
+  --format=` for a root commit, the old path beside a rename's,
+  `MaxPatch` 600 KB). `HashOK` / `PathOK` guard every input. **The
+  writes** (`gitops`, tested on temp repositories: each op, a branch -d
+  refused as unmerged then -D, a merge stopped on a conflict and aborted,
+  an abort of another op refused, a reset drawn before a commit landed
+  refused, an op refused under an agent, the names and hashes git would
+  read otherwise): `Request{op, ref, name, sha, mode, message, checkout,
+  no_ff, force, head, branch, operation}` — `checkout` (`checkout <ref>
+  --`), `checkout-remote` (`checkout -b <name> --track refs/remotes/<ref>`),
+  `checkout-commit` (`--detach`), `branch-create` (optionally checked
+  out), `branch-rename`, `branch-delete` (`-d`, `-D` only with `force`),
+  `merge` (`--no-edit`, `--no-ff` when asked; a branch or a hash),
+  `rebase`, `cherry-pick` and `revert` (`-m 1` for a merge commit, the
+  script's own look), `reset --soft|mixed|hard`, `tag-add` (annotated
+  with a message), `tag-delete`, `abort` (`git <op> --abort` of the one
+  stopped); nothing fetches, pulls or pushes — that is
+  `internal/gitsync`'s — and nothing forces. `Validate` refuses before any
+  script (`nameOK`: `sessions.RefOK` and git's own ref rules; a hash by
+  `HashOK`; a known mode and op); `Inspect` reads the checkout's top,
+  HEAD, branch, stopped op and every worktree's top (`git worktree list`);
+  `Service.Busy` (`gitWrites` in `internal/app/gitops.go`, `checkoutOf`
+  tested: an agent pane working or asking whose workspace folder lies in
+  the checkout and in no worktree nested inside it, a local folder's
+  links resolved as git names the top, else `undo.Tracker.Going` on such
+  a folder) refuses with who; HEAD and the branch must be what the page
+  saw (`ErrStale`), checked again inside the script right before the
+  write; `w` runs it with `GIT_TERMINAL_PROMPT=0`, no editor and
+  `LC_ALL=C`; `Result{ok, output (git's last lines, no hints), operation,
+  conflicts, not_merged}`. Routes (`internal/server/gitgraph.go`, tested):
+  `GET /api/git/log?machine&dir&all&remotes&skip&limit`, `GET
+  /api/git/state`, `GET /api/git/commit?sha`, `GET /api/git/diff?sha&path&from`
+  — a viewer's within the workspaces' folders (`gitTarget` over
+  `viewerFolders`, `viewerRoutes`), an agent key's never — and `POST
+  /api/git/op {machine, dir, …Request}`, the person's alone (400 refused,
+  409 busy or stale, 404 no repository, 200 with git's refusal as
+  `{ok: false, output}`; then the folder's badge read again and the roster
+  moved). **The page** (`features/git/`): `GitLens.tsx` composes
+  `GitHeader.tsx` (All branches | Current and Remotes, pref `git.scope`
+  per device; the current-branch chip after them, accent tint, "detached
+  at <8>", "…" until read, so a checkout moves nothing beside it; "N
+  commits", "300+ commits" while more follow; a spinner's place kept;
+  Read the history again), `GitStopped` (`GitStates.tsx`: "A merge
+  stopped on conflicts in 3 files." with Open Changes to resolve and
+  Abort behind a confirm), `GraphTable.tsx` (the columns' heads, the rows,
+  Load 300 more; one set of handlers: a click picks a commit, the
+  uncommitted row opens Changes, a double-click on a branch's label
+  checks it out, a right-click — or a ⋯ at a touch screen's row end, or a
+  label tapped there — opens `MenuAt` (`ui/Menu.tsx`, a menu at a point,
+  its anchor portalled into the body) for what is under it; a viewer gets
+  none of those), `GraphRow.tsx` (memoised; rows 24 px; the lanes an SVG,
+  12 px apart, a fork or merge a cubic curve, the dot 8 px, HEAD and the
+  uncommitted row a ring; the column `min(lanes, 40%)`; labels after
+  `labels.ts` — the checked-out branch first, filled, ✓; a same-named
+  remote riding on its branch; a remote alone with its cloud; tags
+  amber; a detached HEAD filled accent; names cut at 22; merge commits
+  dim, HEAD's row tinted in its lane's colour; Date `now`/`12m`/`3h`/`6d`/
+  `Oct 3`, Author and Commit from 600 px of the lens, a container query),
+  `CommitDetails.tsx` (the log's hash, parents, author and date at once,
+  the body, committer and files with `+a −d` as they come, a loading
+  state shaped like rows; a file opens `CommitDiff.tsx`, the review's own
+  `hunks.ts` rows and its `Source` from `Hunk.tsx`, words marked and the
+  code coloured) and `OpDialog.tsx` (420 px, after git-graph's dialogs:
+  inputs, a mode as radio cards, a box to tick, the button `btn danger`
+  where it loses something, git's words kept in it when git refuses; a
+  branch -d refused as unmerged asks again in red; a merge left on
+  conflicts closes it with a toast). Pure and tested: `lanes.ts`
+  (`foldLanes`, after git-graph's `lanes.js`, carrying its state so the
+  next page goes on where the last ended), `history.ts` (`historyOf`,
+  `withPage` — null once the refs moved, the history read again —
+  `withUncommitted`, `rowCommit`), `labels.ts`, `menus.ts` (`menuFor`:
+  git-graph's rows minus push, pull, fetch, stash and a remote delete),
+  `ops.ts` (`specFor`, `asksFirst` — only a local checkout of a clean tree
+  runs at once — `requestOf`, `problemOf`, `dangerous`, `loseWords`,
+  `doneWords`), `words.ts` (`dateWords`, `stampWords`, `whereWords`,
+  `laneColors` — the theme's terminal sixteen as `ansiPalette` gives them,
+  blue, green, magenta, yellow, cyan, red, then the bright ones —
+  `commitsWords`, `stoppedWords`), `checkout.ts`. `useHistory.ts` reads
+  the pages shown in one request (at most 30 pages on a reread) and the
+  state every 4 s while the lens is on screen; a fingerprint that moved
+  reads the history again, once for each fingerprint, and the uncommitted
+  row follows the state at once. Russian in `lib/i18n/ru/gitgraph.ts`
+  (words other lenses may say otherwise go through `tc("git", …)`). The
+  e2e display suite opens the lens on the repository (two commits, a tag,
+  the linked worktree's branch, the work uncommitted) in every pass, a
+  commit's details, a file's diff with its words marked, a branch's menu
+  and its delete asked and cancelled, the branches checked to be as they
+  were.
 - `internal/opinion/` — **the second opinion** (tested): another agent asked
   to review what the Changes lens shows of a folder, without touching it.
   The lens head's **Second opinion** button opens `OpinionDialog.tsx` —
@@ -5171,7 +5296,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   icon pictures (`/api/icons/…`, `viewerPrefixes`), a pane's timelapses,
   one of them and the search over them (`/api/timelapse/recordings`,
   `…/recordings/{id}`, `/api/timelapse/search`: a screen as it was, as
-  the screen itself is — never the switch or a deletion), and the
+  the screen itself is — never the switch or a deletion), a checkout's
+  history in the Git lens (`/api/git/log`, `/api/git/state`,
+  `/api/git/commit`, `/api/git/diff`, a workspace's own folder only:
+  `gitTarget`), and the
   upgrade of `/ws/events` — or of the page itself and its files (anything outside
   `/api/`, `/ws/` and the code-server proxy `/code/`); never `/ws/pane`,
   a submit, a key, the tasks or any change: 403 "this link is for
@@ -5193,7 +5321,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   viewOnly` from that header, `app/viewOnly.ts` (`viewerPlaces`, tested)
   keeps the rail to Agents, Wall, Standup, Usage, Activity and a server's
   Server place (its panel hides Read again and the updates), the header
-  wears "Viewing only" and no search, Changes is shut, the terminal lens
+  wears "Viewing only" and no search, Changes is shut, the Git lens draws
+  its graph and opens no menu, the terminal lens
   is the Wall's screen view (`features/terminal/Screen.tsx`, no attach),
   the chat and the tiles have no composer, keys or question buttons, the
   tab strip no + or ×, the sidebar no menus and its ⓘ the vitals alone —
@@ -5618,7 +5747,23 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   nothing into the repository: a throwaway index and object folder in the
   machine's temp dir, the repository's objects only borrowed. The agent
   is told nothing. Uploads and a new worktree's `.worktreeinclude` files
-  are the other two writes.
+  are two other writes. **And git's writes on a checkout** (the person's
+  decision of 2026-11-13, `internal/gitops`): stage, unstage, discard,
+  commit, amend, checkout, a branch made, renamed or deleted, merge,
+  rebase, cherry-pick, revert, reset (soft, mixed, hard), a tag, fetch,
+  pull, push, a worktree removed — each runs only when the person presses
+  it on the page and, where it loses or rewrites anything, confirms it in
+  a dialog naming what happens (a hard reset names the files it
+  discards, a branch delete that git refuses as unmerged asks a second
+  time in red); never from a schedule, a queue, a trigger, an agent's key
+  or a viewer link (403); refused while an agent works, asks or a turn is
+  ending in that checkout (the watcher's snapshot and `undo.Tracker.Going`,
+  `gitWrites` in `internal/app`, the refusal naming who), and refused when
+  HEAD or the branch moved since the page drew them; never `--force` or
+  `--force-with-lease` on a push, never `git clean -fdx` past the one path
+  the person picked; git's own last lines shown when it fails; a secret
+  check (`review.ScanWork`) stands before a commit and a push as it does
+  before Approve & commit.
 - **Terminal bytes go over WS binary frames**, control messages over JSON
   text frames. The attach PTY paints the screen on start; late joiners get
   a repaint (see attach.go), never a byte replay.
