@@ -96,12 +96,16 @@ jobs:
           Restart-Service sshd
           "Host pc`n  HostName 127.0.0.1`n  User $env:USERNAME`n  IdentityFile $env:RUNNER_TEMP\k`n  StrictHostKeyChecking no`n  UserKnownHostsFile $env:RUNNER_TEMP\kh`n  BatchMode yes" | Set-Content -Encoding ascii $env:REMUDA_SSH_CONFIG
           & C:\Windows\System32\OpenSSH\ssh.exe -F $env:REMUDA_SSH_CONFIG pc 'uname -s'
+          # the same host for remuda setup -host pc, which runs plain ssh as a cockpit does
+          New-Item -ItemType Directory -Force "$HOME\.ssh" | Out-Null
+          (Get-Content $env:REMUDA_SSH_CONFIG) -replace '\\', '/' | Set-Content -Encoding ascii "$HOME\.ssh\config"
       - name: go test on Windows
         # one package at a time, herdr's first: its test starts the server the way a cockpit does
         shell: bash
         run: |
+          export PATH="/c/Windows/System32/OpenSSH:$PATH" # Windows' own ssh for remuda setup -host: Git's would refuse the key's permissions
           go test -count=1 ./internal/rpath/
-          go test -p 1 -count=1 -v -run '^TestOnWindows' ./internal/herdr/ ./internal/machines/ ./internal/health/ ./internal/awake/
+          go test -p 1 -count=1 -v -run '^TestOnWindows' ./internal/herdr/ ./internal/machines/ ./internal/health/ ./internal/awake/ ./internal/setup/ ./internal/updates/
       - uses: actions/upload-artifact@v7
         # the answers this Windows gave, the unit tests' fixtures
         if: always()

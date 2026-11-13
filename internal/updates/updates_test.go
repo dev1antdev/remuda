@@ -109,7 +109,7 @@ func TestAssetName(t *testing.T) {
 		{"darwin", "arm64", "remuda-darwin-arm64"},
 		{"Linux 6.8.0-45-generic", "amd64", "remuda-linux-amd64"},
 		{"linux", "arm64", "remuda-linux-arm64"},
-		{"Windows", "amd64", ""},
+		{"Windows 10.0.26100", "amd64", "remuda-windows-amd64.exe"}, {"Windows 10.0.26100", "arm64", "remuda-windows-arm64.exe"}, {"FreeBSD 14.1", "amd64", ""},
 		{"macOS 26.6.2", "", ""},
 		{"", "arm64", ""},
 	} {
@@ -196,7 +196,7 @@ func TestOfferedIncludesCodeServerWhenInstalled(t *testing.T) {
 			code = &u
 		}
 	}
-	if code == nil || !strings.Contains(code.Note, "4.139.0 → 4.140.0") || !strings.Contains(code.Command, `remuda" code install`) {
+	if code == nil || !strings.Contains(code.Note, "4.139.0 → 4.140.0") || !strings.Contains(code.Command, remudaThere+`"$r" code install`) {
 		t.Fatalf("code update = %+v", code)
 	}
 	if _, err := Plan("code", &health.Report{CodeServer: "4.140.0"}); err == nil {
@@ -217,7 +217,7 @@ func TestOfferedIncludesTheMCPRegistrationWhereRemudaIs(t *testing.T) {
 			mcp = &u
 		}
 	}
-	if mcp == nil || !strings.Contains(mcp.Command, `remuda" mcp install`) || !strings.Contains(mcp.Note, "claude mcp add") {
+	if mcp == nil || !strings.Contains(mcp.Command, remudaThere+`"$r" mcp install`) || !strings.Contains(mcp.Note, "claude mcp add") {
 		t.Fatalf("mcp row = %+v", mcp)
 	}
 	if _, err := Plan("mcp", &health.Report{}); err == nil {
