@@ -47,6 +47,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/radar"
 	"github.com/dev1antdev/remuda/internal/recap"
 	"github.com/dev1antdev/remuda/internal/recipes"
+	"github.com/dev1antdev/remuda/internal/repos"
 	"github.com/dev1antdev/remuda/internal/retire"
 	"github.com/dev1antdev/remuda/internal/review"
 	"github.com/dev1antdev/remuda/internal/said"
@@ -119,6 +120,7 @@ type Server struct {
 	Undo       *undo.Service       // the agents' turns kept to be undone, and the undo at the person's word
 	Concierge  *concierge.Service  // the Claude Code agent the person asks what the others are doing, on the machine they pick
 	Scenes     *scenes.Service     // the morning set-ups and the evening tidies, run at the person's press
+	Repos      *repos.Store        // each repository's project settings: worktree defaults, the setup script, the run actions
 
 	streams   termStreams
 	relayed   relays     // the terminals piped to a machine's own remuda, which holds their attach
@@ -172,6 +174,8 @@ func (s *Server) Handler() http.Handler {
 	s.jiraRoutes(api)
 	s.backupRoutes(api)
 	s.leftoverRoutes(api)
+	s.worktreeRoutes(api)
+	s.repoRoutes(api)
 	s.previewRoutes(api)
 	s.opinionRoutes(api)
 	s.scorecardRoutes(api)
