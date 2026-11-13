@@ -8,7 +8,8 @@
 // there, no console error. Every failure is collected and named by pass, screen and element; any one fails the run.
 import { execFileSync, spawn } from "node:child_process";
 import { createServer } from "node:net";
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { fakePullRequests, prScreens } from "./fake-pr.mjs";
 
 const base = process.env.E2E_URL;
 const cdp = process.env.E2E_CDP;
@@ -29,8 +30,8 @@ const ALL_PASSES = [
 ];
 // E2E_DISPLAY_PASSES=desk-en,phone-ru runs only those
 const PASSES = process.env.E2E_DISPLAY_PASSES ? ALL_PASSES.filter((p) => process.env.E2E_DISPLAY_PASSES.split(",").includes(p.name)) : ALL_PASSES;
-const OVERLAYS = ".menu, .popover, .row-menu, .modal, .toast, .sel-pop, .float-term, .palette, .fv";
-const CONTENT = ".pane-area, .wall, .tasks-main, .code-mode, .queue, .float-term";
+const OVERLAYS = ".menu, .popover, .row-menu, .modal, .toast, .sel-pop, .float-term, .palette, .fv, .tip-card";
+const CONTENT = ".pane-area, .wall, .tasks-main, .code-mode, .queue, .float-term, .status-bar";
 
 const say = (line) => console.log(`e2e display: ${line}`);
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -78,9 +79,12 @@ socket.onmessage = (message) => {
   if (msg.method === "Fetch.requestPaused") {
     const url = msg.params.request?.url ?? "";
     if (url.includes("/api/opinion")) void fakeOpinion(msg.params);
+    else if (url.includes("/api/pr/")) void fakePullRequests(msg.params, send);
     else if (url.includes("/api/concierge")) void fakeConcierge(msg.params);
     else if (url.includes("/api/scorecard")) void fakeScorecard(msg.params);
     else if (/\/api\/(scenes\/|scene-runs\/)/.test(url)) void fakeScenes(msg.params);
+    else if (url.includes("/api/review/conflict")) void fakeConflictRead(msg.params);
+    else if (/\/api\/review\?/.test(url)) void dressReview(msg.params);
     else if (url.includes("/api/review/secrets")) void fakeSecrets(msg.params);
     else if (url.includes("/api/timelapse/recordings") || url.includes("/api/timelapse/search")) void fakeTimelapse(msg.params);
     else if (url.includes("/api/standup")) void fakeStandup(msg.params);
@@ -88,6 +92,10 @@ socket.onmessage = (message) => {
     else if (url.includes("/api/fleet-setup")) void fakeFleet(msg.params);
     else if (url.includes("/api/undo")) void fakeUndo(msg.params);
     else if (url.includes("/api/limits/offers")) void fakeOffers(msg.params);
+    else if (url.includes("/api/question")) void fakeQuestion(msg.params);
+    else if (url.includes("/api/worktrees/github")) void fakeLists(msg.params);
+    else if (url.includes("/api/worktrees/source")) void dressSource(msg.params);
+    else if (/\/api\/(resources|ports)/.test(url)) void fakeMachineSide(msg.params);
     else if (/\/api\/feed/.test(url)) void dressFeed(msg.params);
     else if (/\/api\/chat\?/.test(url)) void dressChat(msg.params);
     else void dressRoster(msg.params);
@@ -327,6 +335,10 @@ writeFileSync(`${appDir}/README.md`, "# app\n");
 writeFileSync(`${appDir}/src/app.go`, goLines("hello", 41));
 writeFileSync(`${appDir}/docs/notes.md`, "# Notes\n\nThe first note.\n");
 writeFileSync(`${appDir}/old.txt`, "an old file\n");
+// for the project tree: a folder git ignores, a link, a file whose icon has a light theme's own
+writeFileSync(`${appDir}/.gitignore`, "build/\n");
+writeFileSync(`${appDir}/app.toml`, 'name = "app"\n');
+symlinkSync("README.md", `${appDir}/latest.md`);
 // Claude Code's own approvals committed by mistake, one of them carrying a token: the lens head warns of it. The token
 // is made here, its letters in another order, so no secret sits in this file
 const shuffledKey = (n) => Array.from({ length: n }, (_, i) => "Zq8vK2mWp4Lr7Tb9Xs3Nd6Hc1JyQe5Gu0"[(i * 7 + 3) % 33]).join("");
@@ -335,11 +347,23 @@ writeFileSync(`${appDir}/.claude/settings.local.json`, `${JSON.stringify({ permi
 git(appDir, "add", "-A");
 git(appDir, "add", "-f", ".claude/settings.local.json"); // past an excludes file that ignores it, as Claude Code sets one up
 git(appDir, "commit", "-q", "-m", "init");
+// a tag on the first commit, a bare origin it went to, and a second commit not pushed yet: the Git lens draws two
+// commits, labels and a line changed with its words marked; the Changes lens has its "not on origin/main" and its scope
+// against the base
+git(appDir, "tag", "v0.1.0");
+const originDir = `${tmp}/display/origin.git`;
+git(`${tmp}/display`, "init", "-q", "--bare", originDir);
+git(appDir, "remote", "add", "origin", originDir);
+git(appDir, "push", "-q", "-u", "origin", "main");
+writeFileSync(`${appDir}/README.md`, "# the app\n");
+git(appDir, "commit", "-q", "-am", "docs: name the app");
 writeFileSync(`${appDir}/src/app.go`, goLines("hello, world", 42));
 writeFileSync(`${appDir}/docs/notes.md`, "# Notes\n\nThe first note.\nA second note, staged.\n");
 git(appDir, "add", "docs/notes.md");
 git(appDir, "rm", "-q", "old.txt");
 writeFileSync(`${appDir}/src/new.ts`, 'export const fresh = "a new file";\n');
+mkdirSync(`${appDir}/build`, { recursive: true });
+writeFileSync(`${appDir}/build/out.txt`, "built\n");
 const CHANGED = ["docs/notes.md", "old.txt", "src/app.go", "src/new.ts"];
 // the "dev server" an agent would start in the repository, for the previews: python3's http.server on a free port
 const freePort = () =>
@@ -358,8 +382,9 @@ const made = [];
 const now = Date.now();
 const iso = (ms) => new Date(ms).toISOString();
 const sessions = async () => (await api("GET", "/api/roster")).machines.find((m) => m.id === "local")?.sessions ?? [];
-let app, tree, notes, desk, inbox, drawTask, paneA1, paneN, paneDesk, morningScene, eveningScene;
+let app, tree, notes, desk, inbox, drawTask, paneA1, paneA2, paneB, paneN, paneDesk, paneTree, morningScene, eveningScene;
 let DRESS = {};
+const NOTE_TEXT = "Waiting on the API team for the new endpoint.\nDon't merge before Friday's release.";
 // the morning's first step lays its tab out as two panes, the agent on the left and a dev server on the right
 const SCENE_LAYOUT = { agent: 0, root: { type: "split", direction: "right", ratio: 0.6, first: { type: "pane" }, second: { type: "pane", dir: "src", command: ["npm", "run", "dev"] } } };
 
@@ -443,27 +468,41 @@ async function seed() {
     return a?.tabs.length >= 2 && b && n?.tabs[0]?.panes[0] && d?.tabs[0]?.panes[0] ? { a, b, n, d } : null;
   }, 20);
   if (!ready) throw new Error("the seeded workspaces did not reach the roster");
+  // the repository's checkout keeps a note, through the real route: the roster carries it to the card and its hover card
+  const kept = await api("PUT", "/api/notes", { machine: "local", dir: ready.a.dir, text: NOTE_TEXT });
+  if (kept.text !== NOTE_TEXT) failed(`the note was kept as ${JSON.stringify(kept)}`);
   paneA1 = ready.a.tabs[0].panes[0].id;
   paneN = ready.n.tabs[0].panes[0].id;
   paneDesk = ready.d.tabs[0].panes[0].id;
-  const paneA2 = ready.a.tabs[1].panes[0].id;
-  const paneB = ready.b.tabs[0].panes[0].id;
+  paneA2 = ready.a.tabs[1].panes[0].id;
+  paneB = ready.b.tabs[0].panes[0].id;
+  paneTree = paneB;
   DRESS = {
     [paneA1]: {
       agent: "claude",
       status: "run",
       title: "Draw every screen of the page at two widths",
       radar: { state: "working", since: now - 3 * 60e3, last_active: now },
+      // three subagents at work, the two oldest by name: the sidebar's tree under the agent's line
+      subagents: { working: 3, session: "0c7a6c1e-2a43-4c1a-9a5e-3c1f0b6f8a11", list: [{ id: "agent-a1", description: "explore · cart service", doing: "Read · service.go" }, { id: "agent-a2", description: "test-runner", doing: "Bash · go test ./..." }] },
       usage: { model: "claude-opus-4-5", name: "Opus 4.5", context: 124000, window: 200000, cost: 4.2, turns: 12, tokens: { input: 1200, output: 3400, cache_read: 98000, cache_write: 2100 } },
-      pr: { url: "https://github.com/example/app/pull/15", label: "PR #15", status: { state: "OPEN", draft: false, mergeable: "MERGEABLE", review: "REVIEW_REQUIRED", checks: { total: 3, pass: 2, fail: 1, pending: 0, skipped: 0 }, at: iso(now) } },
+      pr: { url: "https://github.com/example/app/pull/15", label: "PR #15", status: { title: "Draw every screen at two widths", state: "OPEN", draft: false, mergeable: "MERGEABLE", review: "REVIEW_REQUIRED", checks: { total: 3, pass: 2, fail: 1, pending: 0, skipped: 0 }, at: iso(now) } },
     },
-    [paneA2]: { agent: "codex", status: "input", title: "Check the build", radar: { state: "blocked", since: now - 60e3, last_active: now - 60e3 } },
+    // the card speaks for the agent asking, whose request is ready to merge and closes an issue; the other's is counted beside it
+    [paneA2]: {
+      agent: "codex",
+      status: "input",
+      title: "Check the build",
+      radar: { state: "blocked", since: now - 60e3, last_active: now - 60e3 },
+      pr: { url: "https://github.com/example/app/pull/16", label: "PR #16", status: { title: "Draw the card's badges", state: "OPEN", draft: false, mergeable: "MERGEABLE", merge_state: "CLEAN", review: "APPROVED", checks: { total: 2, pass: 2, fail: 0, pending: 0, skipped: 0 }, closes: [{ number: 9, url: "https://github.com/example/app/issues/9", repo: "example/app" }], at: iso(now - 4 * 60e3) } },
+    },
     [paneB]: {
       agent: "claude",
       status: "done",
       title: "Rename the flag everywhere it is read",
       radar: { state: "done", last_active: now - 10 * 60e3 },
       said: "The flag is renamed in all twelve places, the tests pass and the release notes say so.",
+      pr: { url: "https://github.com/example/app/pull/14", label: "PR #14", status: { title: "Rename the flag", state: "MERGED", draft: false, mergeable: "UNKNOWN", review: "APPROVED", checks: { total: 2, pass: 2, fail: 0, pending: 0, skipped: 0 }, at: iso(now - 30 * 60e3) } },
     },
     [paneDesk]: { agent: "claude", status: "idle", title: "concierge", radar: { state: "idle", last_active: now - 60e3 } },
   };
@@ -541,6 +580,145 @@ async function fakeOpinion({ requestId, request }) {
 const PLAN_OFFER = { id: "e2e-offer-1", kind: "task", project: 1, task: 12, ref: "#12", title: "Draw every screen", machine: "local", from: "claude", to: "codex", why: "Claude's 5 h window is at 96 % until 16:50", window: "5h", used: 96, resets_at: iso(now + 2 * 3600e3), at: iso(now - 60e3) };
 let planOfferRuns = 0;
 
+// the status bar's machine as the browser is told it: the repository's agents at a third of the cores, the notes'
+// shell quiet, herdr's own beside them; the ports of the repository and its worktree, and a server outside both
+const MiB = 1024;
+const GiB = 1024 * 1024;
+const fakeLoad = () => ({
+  at: iso(Date.now()),
+  cores: 8,
+  mem_kb: 16 * GiB,
+  total: { cpu: 36.2, rss_kb: 3.9 * GiB },
+  cpu_known: true,
+  workspaces: [
+    { id: app.id, cpu: 33.5, rss_kb: 3.2 * GiB, top: { name: "node", rss_kb: 1.4 * GiB }, terminals: [{ pane: paneA1, cpu: 31, rss_kb: 2.6 * GiB, top: { name: "node", rss_kb: 1.4 * GiB } }, { pane: paneA2, cpu: 2.5, rss_kb: 0.6 * GiB, top: { name: "codex", rss_kb: 400 * MiB } }] },
+    { id: tree.id, cpu: 2.4, rss_kb: 520 * MiB, top: { name: "claude", rss_kb: 380 * MiB }, terminals: [{ pane: paneB, cpu: 2.4, rss_kb: 520 * MiB, top: { name: "claude", rss_kb: 380 * MiB } }] },
+    { id: notes.id, cpu: 0, rss_kb: 6 * MiB, top: { name: "zsh", rss_kb: 6 * MiB }, terminals: [{ pane: paneN, cpu: 0, rss_kb: 6 * MiB, top: { name: "zsh", rss_kb: 6 * MiB } }] },
+  ],
+  herdr: { cpu: 0.3, rss_kb: 42 * MiB },
+});
+const portsOfApp = () => [
+  { port: devPort, process: "python3", label: "http.server", pid: 4242, address: `localhost:${devPort}` },
+  { port: 5173, process: "node", label: "vite", pid: 4100, address: "localhost:5173" },
+];
+const portsOfTree = () => [{ port: 3000, process: "node", label: "next", pid: 4200, address: "*:3000" }];
+let portStops = 0;
+async function fakeMachineSide({ requestId, request }) {
+  let body;
+  if (request.url.includes("/api/resources")) body = fakeLoad();
+  else if (request.url.includes("/api/ports/stop")) {
+    portStops++;
+    body = { stopped: {} };
+  } else
+    body = {
+      at: iso(Date.now() - 4e3),
+      read: true,
+      ports: [...portsOfApp().map((p) => ({ ...p, workspace: app.id })), ...portsOfTree().map((p) => ({ ...p, workspace: tree.id })), { port: 8888, process: "jupyter", label: "jupyter", pid: 5100, address: "localhost:8888" }],
+    };
+  await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(body)).toString("base64") });
+}
+
+// statusBarScreens: the bar along the foot on a desk — the plan limits, the pane's place, the load and the ports — the
+// limits' hover card with its pace tick, the load's and the ports' popups, and a stop's confirm opened and cancelled;
+// on a phone no bar at all
+async function statusBarScreens() {
+  if (pass.phone) {
+    await onAgents();
+    check(!(await present(".status-bar")), "a phone draws the status bar where its rail lies");
+    return;
+  }
+  await screen("status-bar", {
+    open: async () => {
+      await onAgents();
+      if (!(await until(() => evaluate(`document.querySelector(".status-ports .status-num")?.textContent === "3"`), 8))) failed("the status bar does not count the workspaces' three ports");
+      check(await present(".status-bar .status-pr.is-green"), "the pane's pull request is not in the status bar in its state's colour");
+      check(await present(".status-bar .status-issue"), "the workspace's issue is not in the status bar");
+      check((await count(".status-limits .status-agent")) === 2, "the status bar does not show Claude's and Codex's limits apart");
+      check(await present(".status-limits .status-num.is-amber"), "the week at 86 % is not amber in the status bar");
+      check(await present(".status-load.is-amber"), "the load at a third of the cores is not amber");
+    },
+    expect: [".status-bar .status-limits .status-agent", ".status-bar .status-place", ".status-bar .status-load", ".status-bar .status-ports", ".status-bar .status-host"],
+  });
+  await screen("status-limits-card", {
+    open: async () => {
+      await hover(".status-limits .status-agent");
+      if (!(await until(() => present(".tip-card .limits-bar-tick"), 6))) failed("the limits' card has no pace tick");
+      check(await present(".tip-card .limits-verdict.is-ahead"), "the week used faster than its time passes is not told so");
+      check(await present(".tip-card .limits-row-forecast.is-amber"), "the 5 hours' early run-out is not in the card");
+    },
+    expect: [".tip-card .limits-row"],
+    close: async () => {
+      await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: Math.round(pass.width / 2), y: Math.round(pass.height / 2) });
+      await closeAll();
+    },
+  });
+  await screen("status-load", {
+    open: async () => {
+      await tap(".status-load");
+      if (!(await until(() => present(".load-pop .load-ws"), 6))) throw new Error("the load's popup did not open");
+      await tap(".load-pop .load-ws .icon-btn");
+      if (!(await until(() => present(".load-pop .load-row.is-terminal"), 4))) failed("a workspace's terminals do not unfold");
+    },
+    expect: [".load-pop .load-row.is-herdr", ".load-pop .load-foot"],
+  });
+  await screen("status-ports", {
+    open: async () => {
+      await tap(".status-ports");
+      if (!(await until(() => present(".ports-pop .port-row"), 6))) throw new Error("the ports' popup did not open");
+      await tap(".ports-pop .port-group.is-other .port-group-head");
+      if (!(await until(() => evaluate(`[...document.querySelectorAll(".ports-pop .port-number")].some((n) => n.textContent === "8888")`), 4))) failed("the other processes do not unfold");
+    },
+    expect: [".ports-pop .port-group-head", ".ports-pop .port-stop"],
+  });
+  await screen("status-port-stop", {
+    open: async () => {
+      if (!(await present(".ports-pop .port-stop"))) {
+        await tap(".status-ports");
+        await until(() => present(".ports-pop .port-stop"), 6);
+      }
+      await tap(".ports-pop .port-stop");
+    },
+    expect: [".modal"],
+    close: async () => {
+      check(await evaluate(`[...document.querySelectorAll(".modal")].some((m) => m.textContent.includes("PID 4100") && m.textContent.includes("5173") && m.textContent.includes("SIGTERM"))`), "the stop's confirm does not name the process and the signal");
+      const before = portStops;
+      await key("Escape", "Escape");
+      await sleep(300);
+      check(portStops === before && !(await present(".modal")), "the stop's confirm, cancelled, still stopped something");
+      await closeAll();
+    },
+  });
+}
+
+// portsFlow is the server's side on real processes: the e2e's dev server listed in its workspace on the roster and on
+// /api/ports, the load read off this machine's own process table, a stop refused for a pid that does not listen there,
+// and a server this run started stopped for real
+async function portsFlow() {
+  where = `${pass.name} › ports-flow`;
+  const listed = await until(async () => {
+    const reading = await api("GET", "/api/ports?machine=local");
+    return reading.ports?.some((p) => p.port === devPort) ? reading : null;
+  }, 20);
+  const mine = listed?.ports.find((p) => p.port === devPort);
+  check(mine?.workspace === app.id && mine?.label === "http.server", `the dev server is listed as ${JSON.stringify(mine)}`);
+  const onRoster = (await sessions()).find((s) => s.id === app.id)?.ports ?? [];
+  check(onRoster.some((p) => p.port === devPort), `the roster carries the app's ports as ${JSON.stringify(onRoster)}`);
+  const load = await api("GET", "/api/resources?machine=local");
+  check(load.cores > 0 && load.mem_kb > 0 && load.workspaces.some((w) => w.id === app.id && w.terminals.length > 0), `the load read ${JSON.stringify(load).slice(0, 300)}`);
+  const wrong = await fetch(`${base}/api/ports/stop`, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ machine: "local", port: devPort, pid: 1 }) });
+  check(wrong.status === 404, `a stop of a pid that does not listen there answered ${wrong.status}`);
+  const victimPort = await freePort();
+  const victim = spawn("python3", ["-m", "http.server", String(victimPort), "--bind", "127.0.0.1"], { cwd: notesDir, stdio: "ignore" });
+  const ended = new Promise((resolve) => victim.on("exit", resolve));
+  const seen = await until(async () => (await api("GET", "/api/ports?machine=local")).ports?.find((p) => p.port === victimPort), 20);
+  check(seen?.workspace === notes.id, `the notes' server is listed as ${JSON.stringify(seen)}`);
+  if (seen) await api("POST", "/api/ports/stop", { machine: "local", port: victimPort, pid: seen.pid });
+  const stopped = await Promise.race([ended.then(() => true), sleep(10_000).then(() => false)]);
+  check(stopped, "the stopped server is still running");
+  if (!stopped) victim.kill();
+  say(`ports flow: port ${devPort} on the app's roster, the load of ${load.workspaces?.length} workspaces, port ${victimPort} stopped`);
+}
+
 // fakeOffers answers the plan limits' offers: the one open, and its run, which the server would start on Codex
 async function fakeOffers({ requestId, request }) {
   let body = { offers: [PLAN_OFFER] };
@@ -605,6 +783,25 @@ async function fakeScenes({ requestId, request }) {
   else if (path.endsWith("/run")) body = run(path.split("/").at(-2), false);
   else body = run(path.split("/").at(-1).replace(/^run-/, ""), true);
   await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(body)).toString("base64") });
+}
+
+// fakeConflict is a screen asking for a conflict in the repository: dressReview adds src/clash.go, both sides edited,
+// to the lens's summary of it, and fakeConflictRead answers the file with its markers; nothing is merged anywhere
+let fakeConflict = false;
+const isApp = (request) => (new URL(request.url).searchParams.get("dir") ?? "").replace(/\/+$/, "").endsWith("/display/app");
+async function dressReview({ requestId, request, responseStatusCode }) {
+  const reply = await send("Fetch.getResponseBody", { requestId });
+  if (!fakeConflict || !isApp(request) || responseStatusCode !== 200 || !reply.result) {
+    await send("Fetch.continueRequest", { requestId });
+    return;
+  }
+  const summary = JSON.parse(reply.result.base64Encoded ? Buffer.from(reply.result.body, "base64").toString("utf8") : reply.result.body);
+  summary.files = [{ path: "src/clash.go", added: 0, removed: 0, fresh: true, conflict: "UU" }, ...(summary.files ?? [])];
+  await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(summary)).toString("base64") });
+}
+async function fakeConflictRead({ requestId }) {
+  const text = ["package main", "", "// greet says hello", "func greet() string {", "<<<<<<< HEAD", '\treturn "hello"', "=======", '\treturn "hello, world"', '\t// and to everyone', ">>>>>>> feature", "}", ""].join("\n");
+  await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify({ stages: "123", text })).toString("base64") });
 }
 
 // fakeSecrets answers the secret check for the repository with what it would find in work holding secrets: a token on
@@ -791,6 +988,44 @@ const UNDO_CHAT = [
   { role: "assistant", ts: iso(now - 11 * 60e3), ids: ["e2e-undo-answer"], parts: [{ type: "text", text: "Drew them, and committed the screens." }], took: 150 },
 ];
 let undoChat = false;
+// PROMPTS_CHAT is the dressed pane's conversation for the chat's own screens: an answer whose calls make one card — a
+// read, an edit with its change, a test that failed and passed again — then a turn under way, a message the person sent
+// while it worked inside it, its last call still running; the question route says what Claude Code's spinner says
+const PROMPTS_SESSION = "0e2e0000-7777-4000-8000-0000000000aa";
+const PROMPTS_CHAT = [
+  { role: "user", ts: iso(now - 14 * 60e3), ids: ["e2e-p1"], parts: [{ type: "text", text: "Draw the **prompts list** beside the chat, newest first." }] },
+  {
+    role: "assistant",
+    ts: iso(now - 14 * 60e3 + 3e3),
+    ids: ["e2e-p1a"],
+    took: 252,
+    tokens: 38000,
+    output: 9100,
+    cost: 0.42,
+    parts: [
+      { type: "text", text: "I'll start with the cards." },
+      { type: "tool", tool_name: "Read", tool_id: "toolu_e2e_p1", at: iso(now - 14 * 60e3 + 4e3), took: 0.2, input: { file_path: `${appDir}/src/app.go` }, output: "package main" },
+      { type: "tool", tool_name: "Edit", tool_id: "toolu_e2e_p2", at: iso(now - 14 * 60e3 + 9e3), took: 0.4, input: { file_path: `${appDir}/src/app.go`, old_string: 'fmt.Println("hello")', new_string: 'fmt.Println("hello, prompts")' }, output: "The file was updated." },
+      { type: "thinking", text: "The test should cover the newest-first order." },
+      { type: "tool", tool_name: "Bash", tool_id: "toolu_e2e_p3", at: iso(now - 13 * 60e3), took: 3.1, input: { command: "go test ./..." }, output: "--- FAIL: TestPrompts", is_error: true },
+      { type: "tool", tool_name: "Bash", tool_id: "toolu_e2e_p4", at: iso(now - 12 * 60e3), took: 2.7, input: { command: "go test ./..." }, output: "ok" },
+      { type: "text", text: "Drew the list and its sheet on a phone. The tests pass now; the card opens in place and the log jumps to its turn." },
+    ],
+  },
+  { role: "user", ts: iso(now - 6 * 60e3), ids: ["e2e-p2"], parts: [{ type: "text", text: "Now show the spinner's progress over the composer." }] },
+  {
+    role: "assistant",
+    ts: iso(now - 6 * 60e3 + 2e3),
+    ids: ["e2e-p2a", "e2e-p2m"],
+    output: 2100,
+    parts: [
+      { type: "tool", tool_name: "Read", tool_id: "toolu_e2e_p5", at: iso(now - 5 * 60e3), took: 0.1, input: { file_path: `${appDir}/README.md` }, output: "# app" },
+      { type: "queued", text: "Show it in the **wall tile** too.", at: iso(now - 4 * 60e3) },
+      { type: "tool", tool_name: "Bash", tool_id: "toolu_e2e_p6", at: iso(now - 20e3), input: { command: "npm test -- progress" } },
+    ],
+  },
+];
+let promptsChat = false;
 // windowsLocal plays the local machine as a Windows PC in the dressed roster, for the screen terminal's screen alone
 let windowsLocal = false;
 function fakeUndoTurn() {
@@ -808,6 +1043,24 @@ async function fakeUndo({ requestId, request }) {
   const [code, body] =
     request.method !== "GET" ? [403, { error: "the e2e undoes nothing" }] : path.endsWith("/plan") ? [200, { turn, uncommitted: 4, pushed: ["origin/main"], left_as_is: [] }] : [200, { turns: [turn, older].map((one) => ({ ...one, files: one.files.length })), recording: true }];
   await send("Fetch.fulfillRequest", { requestId, responseCode: code, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(body)).toString("base64") });
+}
+
+// ASKED is what the dressed Codex asks on its screen, which the sidebar's "Needs you" and the zoo's bubble quote
+const ASKED = "Bash command\ngo build ./...\nbuild the app\nDo you want to proceed?";
+
+// fakeQuestion answers a read of a pane's dialog: while the chat's own screens are up the dressed pane's screen shows
+// Claude Code's spinner; else the asking pane's dialog, none for the rest; an answer is passed on
+async function fakeQuestion({ requestId, request }) {
+  if (request.method !== "GET") {
+    await send("Fetch.continueRequest", { requestId });
+    return;
+  }
+  const pane = new URL(request.url).searchParams.get("pane");
+  const answer =
+    promptsChat && pane === paneA1
+      ? { question: null, mode: "acceptEdits", progress: { verb: "Refactoring", seconds: 134, tokens: 6800 } }
+      : { question: DRESS[pane]?.status === "input" ? { text: ASKED, options: [{ label: "Yes" }, { label: "No" }] } : null };
+  await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(answer)).toString("base64") });
 }
 
 async function dressRoster({ requestId, responseStatusCode, responseHeaders = [] }) {
@@ -846,8 +1099,16 @@ async function dressRoster({ requestId, responseStatusCode, responseHeaders = []
       if (session.id === desk?.id) session.concierge = true; // the page shows it in the concierge's place alone
       if (session.id === app.id) {
         session.jira = [{ key: "APP-12", summary: "Draw every screen", status: "In Review", category: "indeterminate", url: "https://example.atlassian.net/browse/APP-12" }];
+        session.sync = { ahead: 2, behind: 1 }; // the selected card says how far it stands from its upstream
+        // the ports its checkout serves, as the status bar's reading puts them on the roster: a plug on the card, a section of its hover card
+        session.ports = [
+          { port: 3000, process: "node", pid: 4121, address: "localhost:3000" },
+          { port: 5432, process: "postgres", pid: 812, address: "localhost:5432" },
+        ];
       }
       dressCollisions(session);
+      if (session.id === app.id) session.ports = portsOfApp(); // the status bar counts them, the sidebar card draws them
+      if (session.id === tree.id) session.ports = portsOfTree();
       for (const tab of session.tabs ?? []) for (const pane of tab.panes ?? []) Object.assign(pane, DRESS[pane.id] ?? {});
     }
   }
@@ -904,6 +1165,10 @@ async function dressChat({ requestId, request, responseStatusCode, responseHeade
   const chat = JSON.parse(reply.result.base64Encoded ? Buffer.from(reply.result.body, "base64").toString("utf8") : reply.result.body);
   chat.denied = DENIED;
   if (undoChat) chat.turns = [...(chat.turns ?? []), ...UNDO_CHAT];
+  if (promptsChat) {
+    chat.turns = PROMPTS_CHAT;
+    chat.session_id ||= PROMPTS_SESSION;
+  }
   const headers = responseHeaders.filter((h) => !/^(etag|content-length|content-encoding)$/i.test(h.name));
   await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: headers, body: Buffer.from(JSON.stringify(chat)).toString("base64") });
 }
@@ -1027,6 +1292,9 @@ const tapUntil = async (selector, opened) => {
   await tap(selector);
   await until(() => present(opened), 3);
 };
+// setPref writes a pref the way another tab of the page would, so every hook of it reads it again at once
+const setPref = (key, value) =>
+  evaluate(`(() => { localStorage.setItem(${JSON.stringify(`remuda.${key}`)}, ${JSON.stringify(JSON.stringify(value))}); dispatchEvent(new StorageEvent("storage", { key: ${JSON.stringify(`remuda.${key}`)} })); })()`);
 const folderHead = (name) => `[...document.querySelectorAll('.ws-folder-head')].find((h) => h.querySelector('.ws-folder-name')?.textContent === ${JSON.stringify(name)})`;
 const firstCardOf = (folder) => `${folderHead(folder)}?.parentElement.querySelector('.ws-item')`;
 const mark = async (expression, attr) => {
@@ -1034,6 +1302,69 @@ const mark = async (expression, attr) => {
   if (!found) throw new Error(`no ${attr} on the screen`);
   return `[data-e2e="${attr}"]`;
 };
+// cardScreens are a workspace card's badges — the note, the plug, the pull request in its state's colour and the ones
+// counted beside it — its hover card at a desk, its Details popover on a phone, and the Note dialog
+async function cardScreens() {
+  const card = (n) => `${folderHead("app")}?.parentElement.querySelectorAll('.ws-item')[${n}]`;
+  await screen("card-badges", {
+    open: async () => {
+      await sidebarOpen();
+      const badges = await evaluate(`(() => { const tail = ${card(0)}?.querySelector('.ws-tail'); return tail ? { note: !!tail.querySelector('.ws-note'), plug: !!tail.querySelector('.ws-ports'), pr: tail.querySelector('.ws-pr')?.className ?? "", num: tail.querySelector('.ws-pr-num')?.textContent ?? "", ready: !!tail.querySelector('.ws-pr-ready:not(.is-vacant)'), more: tail.querySelector('.ws-pr-more')?.textContent ?? "" } : null; })()`);
+      if (!badges) throw new Error("the repository's card has no badges");
+      check(badges.note && badges.plug, `the card shows no note or no plug: ${JSON.stringify(badges)}`);
+      check(/tone-green/.test(badges.pr) && badges.num === "#16" && badges.ready, `the asking agent's request is not green and ready: ${JSON.stringify(badges)}`);
+      check(badges.more === "+1", `the other request is not counted beside it: ${JSON.stringify(badges)}`);
+      check(/tone-violet/.test(await evaluate(`${card(1)}?.querySelector('.ws-pr')?.className ?? ""`)), "the worktree's merged request is not violet");
+    },
+    expect: [".ws-tail .ws-pr"],
+    close: async () => {},
+  });
+  if (!pass.phone)
+    await screen("card-hover", {
+      open: async () => {
+        await sidebarOpen();
+        const at = await centre(await mark(`${card(0)}?.querySelector('.ws-main')`, "hovered"));
+        await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: at[0] - 20, y: at[1] });
+        await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: at[0] - 10, y: at[1] });
+        if (!(await until(() => present(".hover-card .hc-note"), 4))) throw new Error("resting on the card opened no hover card");
+        const sections = await evaluate(`[...document.querySelectorAll('.hover-card .hc-label')].length`);
+        check(sections === 4, `the hover card has ${sections} sections, not the note, the requests, the issues and the ports`);
+        check((await count(".hover-card .hc-port")) === 2, "the hover card lists no live ports");
+        check(await evaluate(`document.querySelector('.hover-card .hc-note')?.textContent === ${JSON.stringify(NOTE_TEXT)}`), "the hover card's note is not the one kept");
+        check(await present(".hover-card .hc-foot"), "the hover card says nothing of how fresh the requests are");
+      },
+      expect: [".hover-card .hc-item .pr-state"],
+      close: async () => {
+        await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: pass.width - 5, y: pass.height - 5 });
+        if (!(await until(async () => !(await present(".hover-card")), 2))) failed("the hover card stays once the pointer left it");
+      },
+    });
+  else
+    await screen("card-details", {
+      open: async () => {
+        await sidebarOpen();
+        await tap(await mark(`${card(0)}?.querySelector('.ws-menu-btn')`, "card-menu"));
+        if (!(await until(() => present("[role=menu] [role=menuitem]"), 3))) throw new Error("the card's menu did not open");
+        await tap("[role=menu] [role=menuitem]"); // Details, the first row on a touch screen
+        if (!(await until(() => present(".hover-card .hc-note"), 4))) throw new Error("Details opened no popover");
+      },
+      expect: [".hover-card .hc-port", ".hover-card .hc-item"],
+      close: async () => {
+        await key("Escape", "Escape");
+        if (!(await until(async () => !(await present(".hover-card")), 2))) failed("Esc left the Details popover open");
+        await closeAll();
+      },
+    });
+  await screen("note-dialog", {
+    open: async () => {
+      await palette("note");
+      if (!(await until(() => present(".note-dialog textarea"), 4))) throw new Error("the palette's Note opened no dialog");
+      check(await evaluate(`document.querySelector('.note-dialog textarea')?.value === ${JSON.stringify(NOTE_TEXT)}`), "the dialog does not hold the note kept");
+    },
+    expect: [".note-dialog .note-where", ".note-dialog .btn.primary"],
+  });
+}
+
 // onAgents comes back to the Agents mode on the seeded agent's pane
 // sceneScreens are the Scenes dialog with the seeded morning and evening, each one's form, and a run of each: what it
 // will do first, then its outcome as the fake answers it
@@ -1128,8 +1459,15 @@ async function changesScreens() {
       check(JSON.stringify(paths) === JSON.stringify(CHANGED), `the lens lists ${paths.join(", ")}`);
       check((await count(`${LENS} .review-file.fresh`)) === CHANGED.length, "a file never looked at is not marked fresh");
       check(await evaluate(`(() => { const sub = document.querySelector('${LENS} .review-sub'); return !!sub && sub.scrollWidth <= sub.clientWidth + 1 && /4/.test(sub.textContent); })()`), "the line under the branch does not say the 4 files whole");
+      // git's groups: the staged edit and deletion, the edit not staged, the new file; the commit not on origin/main
+      const groups = { staged: await inGroup("staged"), unstaged: await inGroup("unstaged"), untracked: await inGroup("untracked") };
+      check(JSON.stringify(groups) === JSON.stringify({ staged: 2, unstaged: 1, untracked: 1 }), `the groups hold ${JSON.stringify(groups)}`);
+      check((await count(`${LENS} .review-group.is-outgoing .review-outgoing`)) === 1, "the commit not on origin/main is not listed");
+      // the agent dressed at work in the repository holds every write back, and the commit box says why
+      check(await evaluate(`(() => { const acts = [...document.querySelectorAll('${LENS} .review-act')]; return acts.length > 0 && acts.every((b) => b.getAttribute("aria-disabled") === "true"); })()`), "a write is offered while the agent works there");
+      check(/Claude Code/.test(await evaluate(`document.querySelector('${LENS} .commit-hint')?.textContent ?? ""`)), "the commit box does not name the agent at work");
     },
-    expect: [`${LENS} .review-head`, `${LENS} .review-collision`],
+    expect: [`${LENS} .review-head`, `${LENS} .review-collision`, `${LENS} .commit-box`],
     close: async () => {},
   });
   await screen("changes-diff", {
@@ -1145,12 +1483,12 @@ async function changesScreens() {
   });
   await screen("changes-columns", {
     open: async () => {
-      await tap(`${LENS} .review-head .icon-btn[aria-pressed]`);
+      await tap(`${LENS} .review-head .review-columns`);
       if (!(await until(async () => (await count(`${LENS} .review-diff.columns`)) === (pass.phone ? 1 : 0), 3))) failed("the columns switch did not switch");
     },
     expect: [`${LENS} .review-hunk`],
     close: async () => {
-      await tap(`${LENS} .review-head .icon-btn[aria-pressed]`);
+      await tap(`${LENS} .review-head .review-columns`);
       await sleep(200);
     },
   });
@@ -1257,7 +1595,7 @@ async function changesScreens() {
   });
   await screen("changes-file", {
     open: async () => {
-      await tap(await mark(`${fileHead("src/app.go")}?.parentElement.querySelector('.icon-btn')`, "open-file"));
+      await tap(await mark(`${fileHead("src/app.go")}?.parentElement.querySelector('.review-open')`, "open-file"));
       if (!(await until(async () => (await count(".fv .fv-code:not(.fv-diff) .hl-keyword")) > 0, 5))) failed("the file viewer does not colour the Go file");
     },
     expect: [".fv .fv-head"],
@@ -1275,7 +1613,213 @@ async function changesScreens() {
       if (!(await until(async () => !(await present(".fv")), 3))) failed("Esc did not close the file viewer");
     },
   });
+  await stagingScreens();
   await palette("lens:terminal");
+}
+
+// a row of a group by its key, its own button for an action, and the files a group lists
+const rowOf = (key) => `${LENS} .review-file[data-key=${JSON.stringify(key)}]`;
+const actionOf = (key, action) => `${rowOf(key)} .review-act.is-${action}`;
+const inGroup = (group) => count(`${LENS} .review-group.is-${group} .review-file`);
+const gitStatus = () => execFileSync("git", ["status", "--porcelain=v1"], { cwd: appDir, encoding: "utf8" });
+// pressRow presses a row's button: the pointer over the row first, where its counts give way to its buttons
+async function pressRow(key, action) {
+  await hover(`${rowOf(key)} .review-file-row`);
+  await tap(actionOf(key, action));
+}
+
+// stagingScreens are the lens as a client of the repository: the tree, the commits not on origin/main and the scope
+// against the base on the seeded work; then, with the agents in the repository dressed at rest, a file staged through
+// the lens and back (the e2e's own throwaway repository, put back each pass), the commit box held by the secret check,
+// and a conflict through a faked summary; the agents are dressed at work again afterwards
+async function stagingScreens() {
+  await screen("changes-tree", {
+    open: async () => {
+      await tap(`${LENS} .review-tree-toggle`);
+      if (!(await until(async () => (await count(`${LENS} .review-folder`)) === 3, 3))) failed(`the tree shows ${await count(`${LENS} .review-folder`)} folders, not docs/ and src/ twice`);
+      check((await count(`${LENS} .review-file`)) === CHANGED.length, "a folder of the tree hides its files");
+    },
+    expect: [`${LENS} .review-folder`],
+    close: async () => {
+      await tap(`${LENS} .review-tree-toggle`);
+      await until(async () => (await count(`${LENS} .review-folder`)) === 0, 3);
+    },
+  });
+  await screen("changes-outgoing", {
+    open: async () => {
+      check(/origin\/main/.test(await evaluate(`document.querySelector('${LENS} .review-group.is-outgoing .review-group-title')?.textContent ?? ""`)), "the group does not name origin/main");
+      await tap(`${LENS} .review-outgoing-head`);
+      if (!(await until(() => present(`${LENS} .review-outgoing.open .review-file`), 6))) throw new Error("the commit's files did not open");
+      await tap(`${LENS} .review-outgoing.open .review-file-head`);
+      if (!(await until(() => present(`${LENS} .review-outgoing.open .review-hunk`), 6))) failed("the commit's file did not open on its diff");
+    },
+    expect: [`${LENS} .review-outgoing.open .review-hunk`],
+    close: async () => {
+      await tap(`${LENS} .review-outgoing-head`);
+      await sleep(200);
+    },
+  });
+  await screen("changes-base", {
+    open: async () => {
+      await tap(`${LENS} .review-scope button:last-child`);
+      if (!(await until(async () => (await count(`${LENS} .review-group.is-base .review-file`)) === CHANGED.length + 1, 8))) failed(`vs base lists ${await count(`${LENS} .review-group.is-base .review-file`)} files, not ${CHANGED.length + 1}`);
+      check(/origin\/main/.test(await evaluate(`document.querySelector('${LENS} .review-base-line')?.textContent ?? ""`)), "the head does not name the base");
+      check(!(await present(`${LENS} .review-act`)) && !(await present(`${LENS} .commit-box`)), "the base scope offers a write");
+    },
+    expect: [`${LENS} .review-base-line`],
+    close: async () => {
+      await tap(`${LENS} .review-scope button:first-child`);
+      await until(() => present(`${LENS} .review-group.is-unstaged`), 5);
+    },
+  });
+  const atWork = { ...DRESS };
+  for (const paneId of Object.keys(DRESS)) if (DRESS[paneId].radar?.state === "working" || DRESS[paneId].radar?.state === "blocked") DRESS[paneId] = { ...DRESS[paneId], radar: { ...DRESS[paneId].radar, state: "idle" } };
+  try {
+    await screen("changes-stage", {
+      open: async () => {
+        await send("Page.navigate", { url: `${base}/?machine=local&pane=${encodeURIComponent(paneA1)}&lens=changes` });
+        if (!(await until(async () => (await inGroup("unstaged")) === 1, 15))) throw new Error("the lens did not come back on the repository's work");
+        if (!(await until(() => evaluate(`(() => { const button = document.querySelector(${JSON.stringify(actionOf("unstaged:src/app.go", "stage"))}); return !!button && button.getAttribute("aria-disabled") !== "true"; })()`), 6))) throw new Error("Stage is held back with no agent at work");
+        await pressRow("unstaged:src/app.go", "stage");
+        if (!(await until(async () => (await inGroup("staged")) === 3 && !(await present(`${LENS} .review-group.is-unstaged`)), 8))) failed("src/app.go did not move to Staged");
+        check(/^M {2}src\/app\.go$/m.test(gitStatus()), `git does not have src/app.go staged: ${gitStatus()}`);
+      },
+      expect: [`${LENS} .review-group.is-staged`],
+      close: async () => {
+        await pressRow("staged:src/app.go", "unstage");
+        if (!(await until(async () => (await inGroup("unstaged")) === 1, 8))) failed("Unstage did not put src/app.go back");
+      },
+    });
+    await screen("changes-commit", {
+      open: async () => {
+        await evaluate(`document.querySelector('${LENS} .commit-message')?.focus()`); // the toast of the stage just undone may still lie over the box on a phone
+        await send("Input.insertText", { text: "Say hello to the world" });
+        if (!(await until(() => present(`${LENS} .commit-box .secret-check.is-found`), 8))) failed("the secret check does not stand before the commit");
+        check(await evaluate(`document.querySelector('${LENS} .commit-go')?.disabled === true`), "Commit is not held back by the findings");
+        check(await present(`${LENS} .commit-anyway`), "no Commit anyway… beside the held button");
+        await evaluate(`document.querySelector('${LENS} .commit-box')?.scrollIntoView({ block: "center" })`);
+      },
+      expect: [`${LENS} .commit-box .secret-check`],
+      close: async () => {
+        // the message taken out again, so the next pass's box starts empty: React hears the field's own input event
+        await evaluate(`(() => { const box = document.querySelector('${LENS} .commit-message'); Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set.call(box, ""); box.dispatchEvent(new Event("input", { bubbles: true })); })()`);
+        await until(async () => !(await present(`${LENS} .commit-box .secret-check`)), 3);
+      },
+    });
+    await screen("changes-conflict", {
+      open: async () => {
+        fakeConflict = true;
+        await tap(`${LENS} .review-look-again`);
+        if (!(await until(() => present(`${LENS} .review-group.is-conflict .review-file`), 6))) throw new Error("the faked conflict is not listed apart");
+        check(await present(`${LENS} .review-group.is-conflict .review-conflict-kind`), "the conflict does not say its kind");
+        check(await evaluate(`document.querySelector('${LENS} .commit-go')?.disabled === true`), "Commit is offered over a conflict");
+        await tap(`${LENS} .review-group.is-conflict .review-file-head`);
+        if (!(await until(() => present(`${LENS} .conflict-view .fv-line.yours`), 6))) failed("the conflict's blocks are not drawn");
+        check(await present(`${LENS} .conflict-view .fv-line.marker`), "the markers are not on their band");
+        check((await count(`${LENS} .conflict-view.columns`)) === (pass.phone ? 0 : 1), "yours and incoming are not side by side at a desk");
+        await evaluate(`document.querySelector('${LENS} .conflict-view')?.scrollIntoView({ block: "center" })`);
+      },
+      expect: [`${LENS} .conflict-view`],
+      close: async () => {
+        fakeConflict = false;
+        await tap(`${LENS} .review-look-again`);
+        await until(async () => !(await present(`${LENS} .review-group.is-conflict`)), 5);
+      },
+    });
+  } finally {
+    DRESS = atWork;
+    await send("Page.navigate", { url: `${base}/?machine=local&pane=${encodeURIComponent(paneA1)}&lens=changes` });
+    await until(() => present(`${LENS} .review-head`), 15);
+  }
+}
+
+// ---- the project's files: the files rail's tree, a row's menu, the file viewer's changed lines ----
+
+const RAIL = ".footprint";
+const treeRow = (path) => `[...document.querySelectorAll('${RAIL} .tree-open')].find((b) => b.title.split("\\n")[0] === ${JSON.stringify(path)})?.closest('.tree-row')`;
+const treeMenu = async (path) => {
+  await hover(await mark(`${treeRow(path)}?.querySelector('.tree-open')`, "tree-row"));
+  await tap(await mark(`${treeRow(path)}?.querySelector('.tree-more')`, "tree-more"));
+  if (!(await until(() => present(".menu .menu-item"), 4))) throw new Error(`the menu of ${path} did not open`);
+};
+
+// filesScreens draws the Project tab of the files rail on the repository, with git's marks, a folder opened, a row's
+// menu, Send to agent (nothing sent) and the light theme's icons — the rail is a desk's — then, on every pass, the file
+// viewer's changed lines with the old ones shown in place, opened from the tree at a desk and from the Changes lens on a phone
+async function filesScreens() {
+  await onAgents();
+  if (!pass.phone) {
+    await screen("files-tree", {
+      open: async () => {
+        await palette("lens:chat");
+        await tap(`${RAIL} .footprint-tabs button:last-child`);
+        if (!(await until(() => evaluate(`!!(${treeRow("src")})`), 10))) throw new Error("the Project tab lists no src folder");
+        check(await evaluate(`!!${treeRow("src")}?.querySelector('.tree-dot.on')`), "src, holding changes, wears no dot");
+        check(await evaluate(`!!${treeRow("old.txt")}?.classList.contains('is-gone')`), "the deleted old.txt is not listed as gone");
+        check(await evaluate(`!!${treeRow("build")}?.classList.contains('is-ignored')`), "the ignored build folder is not dimmed");
+        check(await evaluate(`!!${treeRow("latest.md")}?.querySelector('.tree-link')`), "the link latest.md wears no link mark");
+        check((await count(`${RAIL} .file-icon[data-icon="folder-src"]`)) === 1, "src wears no src folder icon");
+      },
+      expect: [`${RAIL} .tree-row.tone-changed`],
+      close: async () => {},
+    });
+    await screen("files-tree-folder", {
+      open: async () => {
+        await tap(await mark(`${treeRow("src")}?.querySelector('.tree-open')`, "tree-src"));
+        if (!(await until(() => evaluate(`!!(${treeRow("src/app.go")})`), 6))) throw new Error("src did not open");
+        check(await evaluate(`!!${treeRow("src/app.go")}?.classList.contains('tone-changed') && !!${treeRow("src/new.ts")}?.classList.contains('tone-added')`), "src's files do not wear their marks");
+      },
+      expect: [`${RAIL} .tree-group.nested .tree-row`],
+      close: async () => {},
+    });
+    await screen("files-tree-menu", {
+      open: async () => {
+        await treeMenu("src/app.go");
+        check((await count(".menu .menu-item")) === 6, `the row's menu has ${await count(".menu .menu-item")} rows, not 6`);
+      },
+      expect: [".menu"],
+    });
+    await screen("files-tree-send", {
+      open: async () => {
+        await treeMenu("src/app.go");
+        await tap(await mark(`[...document.querySelectorAll(".menu .menu-item")].pop()`, "send-row"));
+        if (!(await until(() => present(".modal .send-about"), 4))) throw new Error("Send to agent did not open its dialog");
+        check(await evaluate(`document.querySelector(".modal .send-about")?.textContent.endsWith(${JSON.stringify(`${appDir}/src/app.go`)})`), "the dialog does not name the file's path");
+      },
+      expect: [".modal textarea", ".modal .send-about"],
+    });
+    await screen("files-tree-light", {
+      open: async () => {
+        await palette("theme-light");
+        if (!(await until(() => evaluate(`document.documentElement.dataset.theme === "light"`), 4))) throw new Error("the page did not turn light");
+        if (!(await until(async () => (await count(`${RAIL} .file-icon[data-icon="toml_light"]`)) === 1, 4))) failed("app.toml does not wear the light theme's icon");
+      },
+      expect: [`${RAIL} .tree-row`],
+      close: async () => {
+        await palette("theme-dark");
+        if (!(await until(() => evaluate(`document.documentElement.dataset.theme === "dark"`), 4))) failed("the page did not turn dark again");
+      },
+    });
+  }
+  await screen("file-lines", {
+    open: async () => {
+      if (pass.phone) {
+        await palette("lens:changes");
+        await until(async () => (await count(`${LENS} .review-file`)) > 0, 8);
+        await tap(await mark(`${fileHead("src/app.go")}?.parentElement.querySelector('.review-open')`, "open-file"));
+      } else await tap(await mark(`${treeRow("src/app.go")}?.querySelector('.tree-open')`, "tree-file"));
+      if (!(await until(() => present(".fv .fv-gutter .fv-line.is-changed"), 6))) throw new Error("the file viewer marks no changed line");
+      await tap(".fv .fv-toggle");
+      if (!(await until(() => evaluate(`[...document.querySelectorAll(".fv .fv-line.is-old")].some((l) => l.textContent.includes('"hello"'))`), 4))) failed("the old line does not show in place");
+    },
+    expect: [".fv .fv-line.is-old"],
+    close: async () => {
+      await key("Escape", "Escape");
+      if (!(await until(async () => !(await present(".fv")), 3))) failed("Esc did not close the file viewer");
+      if (!pass.phone) await tap(`${RAIL} .footprint-tabs button:first-child`);
+      await palette("lens:terminal");
+    },
+  });
 }
 
 // changesFlow runs once, after the passes: the Review mode lists the repository, Mark reviewed moves the baseline,
@@ -1287,7 +1831,7 @@ async function changesFlow() {
     if (!(await until(() => present(`${LENS} .review-head`), 15))) throw new Error("the Changes lens did not come up");
   };
   const lookAgain = async () => {
-    await tap(await mark(`document.querySelectorAll('${LENS} .review-head .icon-btn')[1]`, "look-again"));
+    await tap(await mark(`document.querySelector('${LENS} .review-head .review-look-again')`, "look-again"));
     await sleep(400);
   };
   const markReviewed = async () => {
@@ -1359,6 +1903,128 @@ async function previewFlow() {
   say(`preview flow: port ${devPort} listed in its workspace, opened on ${opened.local} for the signed-in caller only, shut`);
 }
 
+// fakeLists answers the New worktree dialog's open issues and pull requests, which gh would read on the machine: two
+// issues, one a pull request works on, and that pull request
+async function fakeLists({ requestId }) {
+  const body = {
+    issues: [{ number: 198, title: "Saved carts for signed-in shoppers" }, { number: 203, title: "Checkout redesign" }],
+    prs: [{ number: 212, title: "Add saved carts", head: "cart-saver", closes: [198] }],
+  };
+  await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(body)).toString("base64") });
+}
+
+// dressSource dresses the repository's read as one whose origin is on GitHub, so the Issue and PR tabs list; the server keeps its own
+async function dressSource({ requestId, responseStatusCode }) {
+  const reply = await send("Fetch.getResponseBody", { requestId });
+  if (responseStatusCode !== 200 || !reply.result) {
+    await send("Fetch.continueRequest", { requestId });
+    return;
+  }
+  const answer = JSON.parse(reply.result.base64Encoded ? Buffer.from(reply.result.body, "base64").toString("utf8") : reply.result.body);
+  answer.source.github = "example/app";
+  await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(answer)).toString("base64") });
+}
+
+// worktreeScreens open the New worktree dialog on each tab, project settings, the run button's menu and the remove
+// dialog (cancelled), on the repository's main checkout and its linked worktree
+async function worktreeScreens() {
+  const tab = (mode) => tap(`.new-worktree .nw-tabs [data-mode="${mode}"]`);
+  const openDialog = async () => {
+    await palette("worktree");
+    if (!(await until(() => present(".new-worktree .nw-details"), 6))) throw new Error("the New worktree dialog did not open");
+  };
+  await screen("worktree-new", {
+    open: async () => {
+      await openDialog();
+      await tab("new");
+      if (!(await until(() => evaluate(`(() => { const note = document.querySelector('.new-worktree .nw-note'); return !!note && !note.classList.contains('is-error') && /\\/app\\/worktree-/.test(note.textContent); })()`), 8))) failed("the New tab's note does not say where the new branch's worktree goes");
+      check(await present(".new-worktree .nw-base:not(.is-vacant) .sel"), "a new branch offers no base to start from");
+    },
+    expect: [".new-worktree .nw-details .nw-note"],
+  });
+  await screen("worktree-branch", {
+    open: async () => {
+      await openDialog();
+      await tab("branch");
+      if (!(await until(() => present('.new-worktree .nw-row[data-tag="Open"]'), 8))) throw new Error("the linked worktree's branch is not listed as open");
+      await tap('.new-worktree .nw-row[data-tag="Open"]');
+      if (!(await until(() => evaluate(`/feature-x/.test(document.querySelector('.new-worktree .nw-note')?.textContent ?? "")`), 4))) failed("the note does not say the branch is checked out at feature-x already");
+      check(await evaluate(`!!document.querySelector(".new-worktree .nw-base.is-vacant")`), "the base shows for a branch that is opened, not made"); // kept in its room unseen, so present() would not see it
+    },
+    expect: [".new-worktree .nw-row"],
+  });
+  await screen("worktree-issue", {
+    open: async () => {
+      await openDialog();
+      await tab("issue");
+      if (!(await until(async () => (await count('.new-worktree .nw-row[data-tag="Issue"]')) === 2, 8))) throw new Error(`the Issue tab lists ${await count('.new-worktree .nw-row[data-tag="Issue"]')} issues, not 2`);
+      if (!(await until(() => evaluate(`(document.querySelector('.new-worktree .nw-details input.mono')?.value ?? "") === "cart-saver"`), 4))) failed("the issue a pull request works on does not take that pull request's branch");
+      check(await evaluate(`/#198/.test(document.querySelector('.new-worktree .nw-details textarea')?.value ?? "")`), "the agent's first prompt is not the issue template's");
+    },
+    expect: [".new-worktree .nw-row"],
+  });
+  await screen("worktree-pr", {
+    open: async () => {
+      await openDialog();
+      await tab("pr");
+      if (!(await until(() => present('.new-worktree .nw-row[data-tag="PR"]'), 8))) throw new Error("the PR tab lists no pull request");
+    },
+    expect: [".new-worktree .nw-row"],
+  });
+  await screen("worktree-project-settings", {
+    open: async () => {
+      await palette("project-settings");
+      if (!(await until(() => present(".repo-settings .rs-section"), 8))) throw new Error("the project settings did not open");
+    },
+    expect: [".repo-settings .rs-vars", ".repo-settings .rs-actions"],
+  });
+  await screen("worktree-run-menu", {
+    open: async () => {
+      await closeAll();
+      await tap(".run-split .run-more");
+    },
+    expect: ["[role=menu].menu"],
+  });
+  await screen("worktree-remove", {
+    open: async () => {
+      await send("Page.navigate", { url: `${base}/?machine=local&pane=${encodeURIComponent(paneTree)}&lens=terminal` });
+      if (!(await until(() => present(".pane-area .tab"), 15))) throw new Error("the worktree's pane did not come up");
+      await palette("remove-worktree");
+      if (!(await until(() => present(".remove-worktree .rw-table"), 8))) throw new Error("the remove dialog did not open");
+      check((await count(".remove-worktree .rw-line")) === 2, "the remove dialog's table has not a folder and a branch");
+    },
+    expect: [".remove-worktree .rw-pill"],
+    close: async () => {
+      await closeAll();
+      await send("Page.navigate", { url: `${base}/?machine=local&pane=${encodeURIComponent(paneA1)}&lens=terminal` });
+      await until(() => present(".pane-area .tab"), 15);
+    },
+  });
+}
+
+// newWorktreeFlow makes a worktree the way the dialog asks for it, the project's setup script run first in its terminal,
+// then a run action's command typed into a split beside it, then the worktree, made dirty, removed as its look showed it
+async function newWorktreeFlow() {
+  where = `${pass.name} › new-worktree-flow`;
+  const screenOf = async (pane) => (await api("GET", `/api/screen?machine=local&pane=${encodeURIComponent(pane)}`).catch(() => ({ text: "" }))).text ?? "";
+  const settings = await api("PUT", "/api/repos/settings", { machine: "local", root: appDir, settings: { setup: "echo e2e-setup-ran", actions: [{ name: "Echo", command: "echo e2e-run-ok", place: "right" }] } });
+  const action = settings.settings.actions[0];
+  const created = await api("POST", "/api/worktrees", { machine: "local", workspace: app.id, root: appDir, branch: "e2e-made", base: "main", name: "e2e-made", agent: "shell", pick: { kind: "new" }, setup: "run" });
+  made.push(created.id);
+  check(created.action === "new" && created.setup === "first", `the create answered ${JSON.stringify(created)}`);
+  if (!(await until(async () => (await screenOf(created.pane)).includes("Setup finished."), 40))) failed(`the setup did not finish in the worktree's terminal: ${(await screenOf(created.pane)).slice(-300)}`);
+  check((await screenOf(created.pane)).includes("e2e-setup-ran"), "the project's setup script did not run");
+  const ran = await api("POST", "/api/run", { machine: "local", workspace: created.id, pane: created.pane, root: appDir, action: action.id });
+  if (!(await until(async () => (await screenOf(ran.pane)).includes("e2e-run-ok"), 30))) failed("the run action's command did not run in its split");
+  writeFileSync(`${created.path}/draft.txt`, "not committed\n");
+  const look = await api("GET", `/api/worktrees/${encodeURIComponent(created.id)}/removal?machine=local`);
+  check(look.dirty === 1 && look.branch === "e2e-made", `the look is ${JSON.stringify(look)}`);
+  const gone = await api("POST", `/api/worktrees/${encodeURIComponent(created.id)}/remove`, { machine: "local", delete_branch: true, stamp: look.stamp, keep_folder: false });
+  check(gone.worktree?.removed === true && !existsSync(created.path), `the removal answered ${JSON.stringify(gone)}`);
+  made.splice(made.indexOf(created.id), 1);
+  await api("PUT", "/api/repos/settings", { machine: "local", root: appDir, settings: {} });
+}
+
 async function worktreeFlow() {
   where = `${pass.name} › worktree-flow`;
   const worktreeOf = async (id) => (await sessions()).find((s) => s.id === id)?.worktree?.checkout_path ?? "";
@@ -1400,6 +2066,92 @@ async function worktreeFlow() {
   say("worktree flow: a clean close takes its worktree, a dirty one keeps it, the leftover goes once clean");
 }
 
+// ---- the Git lens on the repository's real history ----
+
+const GIT = ".lens-pane:not([hidden]) .git-lens";
+
+// menuOn opens the Git lens's menu for what is under a selector: a right-click at a desk, a tap on a label on a phone
+async function menuOn(selector) {
+  const at = await centre(selector);
+  if (!at) throw new Error(`nothing to open a menu on at ${selector}`);
+  if (pass.phone) await press(at);
+  else {
+    await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: at[0], y: at[1] });
+    await send("Input.dispatchMouseEvent", { type: "mousePressed", x: at[0], y: at[1], button: "right", clickCount: 1 });
+    await send("Input.dispatchMouseEvent", { type: "mouseReleased", x: at[0], y: at[1], button: "right", clickCount: 1 });
+  }
+  if (!(await until(() => present(".menu .menu-item"), 4))) throw new Error(`no menu opened on ${selector}`);
+}
+
+// gitScreens draws the Git lens on every pass: the graph with its uncommitted row, labels and HEAD, a commit's details,
+// a file's diff with its words marked, a branch's menu and its delete asked and cancelled — nothing is written
+async function gitScreens() {
+  await onAgents();
+  const branchesBefore = git(appDir, "branch", "--format=%(refname:short)").toString();
+  await screen("git-lens", {
+    open: async () => {
+      await palette("lens:git");
+      if (!(await until(async () => (await count(`${GIT} .git-row[data-index]`)) === 3, 10))) failed(`the graph draws ${await count(`${GIT} .git-row[data-index]`)} rows, not the uncommitted one and two commits`);
+      check(await present(`${GIT} .git-row.is-uncommitted`), "no Uncommitted changes row over HEAD");
+      check(await present(`${GIT} .git-row.is-head .git-label.is-current`), "HEAD's row does not carry the checked-out branch, filled");
+      check(await present(`${GIT} .git-label.is-tag`), "the tag v0.1.0 has no label");
+      check(/main/.test(await evaluate(`document.querySelector('${GIT} .git-where')?.textContent ?? ""`)), "the head's chip does not say main");
+      check(await evaluate(`[...document.querySelectorAll('${GIT} .git-row[data-index]')].every((r) => Math.round(r.getBoundingClientRect().height) === 24)`), "a row of the graph is not 24 px high");
+      // a phone widens its page to what overflows it, so the page's own width says whether the four lenses fit
+      check(await evaluate(`innerWidth === ${pass.width} && document.querySelector('.lens-switch').getBoundingClientRect().right <= innerWidth + 1`), "the header's four lenses run past the screen");
+    },
+    expect: [`${GIT} .git-head`, `${GIT} .git-lanes`],
+    close: async () => {},
+  });
+  await screen("git-details", {
+    open: async () => {
+      await tap(await mark(`[...document.querySelectorAll('${GIT} .git-row[data-index]')].find((r) => r.textContent.includes("docs: name the app"))?.querySelector('.git-subject')`, "git-commit"));
+      if (!(await until(() => present(`${GIT} .git-details .git-file`), 6))) throw new Error("the commit's files did not come");
+      check(/README\.md/.test(await evaluate(`document.querySelector('${GIT} .git-files')?.textContent ?? ""`)), "the commit's files do not name README.md");
+    },
+    expect: [`${GIT} .git-meta`, `${GIT} .git-files`],
+    close: async () => {},
+  });
+  await screen("git-diff", {
+    open: async () => {
+      await tap(`${GIT} .git-file`);
+      if (!(await until(() => present(`${GIT} .git-diff .fv-line.add`), 6))) throw new Error("the file's diff did not come");
+      check((await count(`${GIT} .git-diff .fv-mark`)) > 0, "the changed words are not marked");
+      check((await count(`${GIT} .git-diff .fv-line.del`)) === 1, "the removed line is not drawn");
+    },
+    expect: [`${GIT} .git-diff`],
+    close: async () => {
+      await tap(`${GIT} .git-details-head .icon-btn`);
+      await sleep(200);
+    },
+  });
+  await screen("git-branch-menu", {
+    open: async () => {
+      await menuOn(`${GIT} .git-label-part[data-ref-name="feature-x"]`);
+      const rows = await evaluate(`[...document.querySelectorAll('.menu .menu-item')].map((i) => i.textContent)`);
+      check(rows.length >= 5, `the branch's menu has ${rows.length} rows`);
+      check(!rows.some((r) => /push|pull|fetch/i.test(r)), "the branch's menu offers what reaches a remote");
+    },
+    expect: [".menu .menu-item.danger"],
+    close: async () => {},
+  });
+  await screen("git-delete-branch", {
+    open: async () => {
+      await evaluate(`document.querySelector('.menu .menu-item.danger')?.click()`);
+      if (!(await until(() => present(".modal.git-dialog"), 4))) throw new Error("Delete branch… asked nothing first");
+      check(await present(".modal.git-dialog button[type=submit].danger"), "the delete's button is not red");
+      check(/feature-x/.test(await evaluate(`document.querySelector('.git-dialog-detail')?.textContent ?? ""`)), "the dialog does not name the branch");
+    },
+    expect: [".modal.git-dialog .modal-actions"],
+    close: async () => {
+      await tap(".modal.git-dialog .modal-actions .btn:not(.danger)");
+      if (!(await until(async () => !(await present(".modal.git-dialog")), 3))) failed("Cancel did not close the dialog");
+      check(git(appDir, "branch", "--format=%(refname:short)").toString() === branchesBefore, "a cancelled delete changed the branches");
+    },
+  });
+  await palette("lens:terminal");
+}
+
 async function runPass() {
   await send("Emulation.setDeviceMetricsOverride", { width: pass.width, height: pass.height, deviceScaleFactor: 1, mobile: pass.phone });
   await send("Emulation.setTouchEmulationEnabled", { enabled: pass.phone, maxTouchPoints: pass.phone ? 5 : 0 });
@@ -1433,8 +2185,60 @@ async function runPass() {
       await sidebarOpen();
       await conciergeHidden(".sidebar");
     },
-    expect: [".ws-folder-head", ".ws-item", ".machine-head", ".ws-item .collide-mark.is-lines"],
+    expect: [".ws-folder-head", ".ws-item", ".machine-head", ".ws-item .collide-mark.is-lines", ".needs-you .inbox-row", ".ws-item .ws-agent-line", ".sidebar-foot"],
     close: async () => {},
+  });
+  // the sidebar's agents after Orca: "Needs you" with what the Codex asks on its screen, a line per agent under every
+  // card (two under the repository's), the subagents at work on their tree under the Claude Code, the main checkout's
+  // primary tag and the selected card's distance from its upstream, the foot's link to the one waiting
+  await screen("sidebar-agents", {
+    open: async () => {
+      await sidebarOpen();
+      if (!(await until(() => evaluate(`[...document.querySelectorAll(".needs-you .inbox-ask")].some((el) => el.textContent.includes("go build ./..."))`), 15))) failed("the inbox does not say what the Codex asks");
+      const lines = await evaluate(`${firstCardOf("app")}?.querySelectorAll(".ws-agent-line").length ?? 0`);
+      check(lines === 2, `the repository's card has ${lines} agent lines, not its two agents'`);
+      check(await evaluate(`!!${firstCardOf("app")}?.querySelector(".ws-agent-line.shape-asking .needs-pill")`), "the asking agent's line wears no Needs you pill");
+      check(await evaluate(`${firstCardOf("app")}?.querySelectorAll(".sub-tree .sub-line").length === 3`), "the Claude Code's subagents are not on their tree, two named and one more");
+      check(await evaluate(`!!${firstCardOf("app")}?.querySelector(".primary-tag")`), "the main checkout beside its worktree wears no primary tag");
+      check(await evaluate(`${firstCardOf("app")}?.querySelector(".ws-sync")?.textContent === "↑2 ↓1"`), "the selected card does not say how far it stands from its upstream");
+      check(await evaluate(`!!document.querySelector(".sidebar-foot .sidebar-foot-needs")`), "the foot does not link to the agent waiting");
+    },
+    expect: [".needs-you .inbox-row", ".sub-tree .sub-line", ".ws-agent-line.shape-working", ".ws-agent-line.shape-done"],
+    close: async () => {},
+  });
+  // an agent pinned from its line's pin (under the pointer at a desk, always there on a phone) stands in the pinned
+  // group; unpinned again, the group goes
+  await screen("sidebar-pinned", {
+    open: async () => {
+      await sidebarOpen();
+      const line = await mark(`${firstCardOf("app")}?.querySelector(".ws-agent-line.shape-working")`, "agent-line");
+      await hover(line);
+      await sleep(150);
+      await tap(`${line} .agent-pin`);
+      if (!(await until(() => present(".sidebar-group.pinned .ws-agent-line"), 4))) failed("the pinned agent is not in the pinned group");
+    },
+    expect: [".sidebar-group.pinned .ws-agent-line .agent-line-where"],
+    close: async () => {
+      await hover(".sidebar-group.pinned .ws-agent-line");
+      await sleep(150);
+      await tap(".sidebar-group.pinned .ws-agent-line .agent-pin");
+      if (!(await until(async () => !(await present(".sidebar-group.pinned")), 3))) failed("the pinned group stays once its agent is unpinned");
+    },
+  });
+  // the order by priority: sections for the ones that need you, the finished, the working and the idle, with counts
+  await screen("sidebar-priority", {
+    open: async () => {
+      await sidebarOpen();
+      await setPref("radar", { order: "priority", rowLabel: "title", freshMinutes: 15, staleMinutes: 120, shells: false });
+      if (!(await until(() => present(".ws-section.is-needs .ws-section-head .badge"), 4))) failed("the order by priority draws no Needs you section");
+      check(await evaluate(`!!document.querySelector(".ws-section.is-done")`), "the order by priority has no Done section for the finished worktree");
+      check(await evaluate(`!!document.querySelector(".ws-section.is-needs .ws-agent-line .agent-shape.is-asking-square")`), "under the Needs you heading a question is not the ! square");
+    },
+    expect: [".ws-section-head", ".ws-section .ws-item"],
+    close: async () => {
+      await setPref("radar", { order: "active", rowLabel: "title", freshMinutes: 15, staleMinutes: 120, shells: false });
+      await until(() => present(".ws-folder-head"), 3);
+    },
   });
   await screen("folder-folded", {
     open: async () => {
@@ -1456,6 +2260,7 @@ async function runPass() {
     },
     expect: ["[role=menu].menu"],
   });
+  await cardScreens();
   await screen("folder-menu", {
     open: async () => {
       await sidebarOpen();
@@ -1477,6 +2282,7 @@ async function runPass() {
     },
     expect: [".modal"],
   });
+  await worktreeScreens();
   await screen("machine-menu", {
     open: async () => {
       await sidebarOpen();
@@ -1568,6 +2374,7 @@ async function runPass() {
         if (!(await until(() => present(".pane-area .tab"), 15))) failed("the Agents page did not come back");
       },
     });
+  await statusBarScreens();
   await screen("new-tab-menu", { open: async () => tap(".tab-add"), expect: [".menu"] });
   await screen("view-menu", { open: async () => tap(".view-btn"), expect: [".menu"] });
   await screen("chat-lens", { open: async () => palette("lens:chat"), expect: [".lens-pane:not([hidden]) .chat-log, .lens-pane:not([hidden]) .composer"], close: async () => palette("lens:terminal") });
@@ -1592,6 +2399,37 @@ async function runPass() {
       await palette("lens:terminal");
     },
   });
+  // the chat's own: an answer's calls as one card, a message sent while the agent worked in its turn, its last call
+  // still running and the spinner's progress over the composer — then the prompts list beside the log (a sheet on a
+  // phone) with a card opened in place
+  await screen("chat-working", {
+    open: async () => {
+      promptsChat = true;
+      await palette("lens:chat");
+      if (!(await until(() => present(".lens-pane:not([hidden]) .part-sent"), 20))) throw new Error("the message sent while the agent worked is not in its turn");
+      await evaluate(`(() => { const log = document.querySelector(".lens-pane:not([hidden]) .chat-log"); if (log) log.scrollTop = log.scrollHeight; })()`);
+      if (!(await until(() => evaluate(`!!document.querySelector(".lens-pane:not([hidden]) .chat-progress")?.textContent.includes("Refactoring")`), 10))) failed("the progress line does not say what the spinner says");
+    },
+    expect: [".lens-pane:not([hidden]) .tool-card .tool-spin", ".lens-pane:not([hidden]) .part-sent .part-sent-mark", ".lens-pane:not([hidden]) .chat-progress"],
+    close: async () => {},
+  });
+  await screen("chat-prompts", {
+    open: async () => {
+      promptsChat = true;
+      if (!(await present(".lens-pane:not([hidden]) .chat-log"))) await palette("lens:chat"); // the screen before left it on
+      if (!(await until(() => present(".lens-pane:not([hidden]) .tool-card"), 20))) throw new Error("the answer's calls are not one card");
+      await palette("prompts");
+      if (!(await until(() => present(".prompts .prompt"), 10))) throw new Error("the prompts list did not open");
+      await tap(".prompts .prompt:nth-child(2) .prompt-head");
+      if (!(await until(() => present(".prompts .prompt.is-open .prompt-reply"), 5))) failed("a card of the prompts list did not open in place");
+    },
+    expect: [".lens-pane:not([hidden]) .tool-card .tool-mark.is-failed", ".prompts .prompt.is-live .prompt-working", ".prompts .prompt.is-open .prompt-reply"],
+    close: async () => {
+      if (await present(".prompts")) await palette("prompts");
+      promptsChat = false;
+      await palette("lens:terminal");
+    },
+  });
   if (!pass.phone)
     await screen("split-view", {
       open: async () => palette("split"),
@@ -1599,6 +2437,8 @@ async function runPass() {
       close: async () => palette("split"),
     });
   await changesScreens();
+  await gitScreens();
+  await filesScreens();
   await screen("previews", {
     open: async () => {
       await onAgents();
@@ -1618,6 +2458,7 @@ async function runPass() {
     expect: [".modal .trigger-form", ".modal .trigger-try"],
   });
   await sceneScreens();
+  await prScreens({ screen, palette, tap, present, until, evaluate, count, failed, check, onAgents, sleep });
   await screen("float-terminal", {
     open: async () => {
       await key("`", "Backquote", 2);
@@ -2014,13 +2855,21 @@ try {
       { urlPattern: "*/api/scenes/*", requestStage: "Request" },
       { urlPattern: "*/api/scene-runs/*", requestStage: "Request" },
       { urlPattern: "*/api/review/secrets*", requestStage: "Request" },
+      { urlPattern: "*/api/review?dir=*", requestStage: "Response" },
+      { urlPattern: "*/api/review/conflict*", requestStage: "Request" },
       { urlPattern: "*/api/timelapse/recordings*", requestStage: "Request" },
       { urlPattern: "*/api/standup*", requestStage: "Request" },
+      { urlPattern: "*/api/pr/*", requestStage: "Request" },
       { urlPattern: "*/api/recap*", requestStage: "Request" },
       { urlPattern: "*/api/timelapse/search*", requestStage: "Request" },
       { urlPattern: "*/api/fleet-setup*", requestStage: "Request" },
       { urlPattern: "*/api/undo*", requestStage: "Request" },
       { urlPattern: "*/api/limits/offers*", requestStage: "Request" },
+      { urlPattern: "*/api/question*", requestStage: "Request" },
+      { urlPattern: "*/api/worktrees/github*", requestStage: "Request" },
+      { urlPattern: "*/api/worktrees/source*", requestStage: "Response" },
+      { urlPattern: "*/api/resources*", requestStage: "Request" },
+      { urlPattern: "*/api/ports*", requestStage: "Request" },
     ],
   });
   await send("Page.navigate", { url: `${base}/?token=${encodeURIComponent(token)}&machine=local&pane=${encodeURIComponent(paneA1)}&lens=terminal` });
@@ -2028,8 +2877,10 @@ try {
   const started = Date.now();
   for (pass of PASSES) await runPass();
   await changesFlow().catch((error) => failed(`stopped: ${error.message}`));
+  await newWorktreeFlow().catch((error) => failed(`stopped: ${error.message}`));
   await worktreeFlow().catch((error) => failed(`stopped: ${error.message}`));
   await previewFlow().catch((error) => failed(`stopped: ${error.message}`));
+  await portsFlow().catch((error) => failed(`stopped: ${error.message}`));
   say(`${shots} screens in ${Math.round((Date.now() - started) / 1000)} s, screenshots in ${out}/display`);
 } catch (error) {
   failed(`stopped: ${error.message}`);

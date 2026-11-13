@@ -1,7 +1,7 @@
 // Package prstatus keeps the state of every pull or merge request an agent named — its checks, its review, whether it
 // merges — read on the pane's own machine as the person, a GitHub pull request with gh and a GitLab merge request with
-// glab (gitlab.go), so remuda itself asks neither anything. A request is read when the agent names it and then at most
-// every Every while the page keeps reading the roster.
+// glab (gitlab.go), so remuda itself asks neither anything. A request is read when the agent names it, then at most
+// every Every while the page keeps reading the roster, and at most every FreshFor while a hover card shows it.
 package prstatus
 
 import (
@@ -24,6 +24,8 @@ var (
 	Timeout = 20 * time.Second
 	// ComplainEvery spaces the log lines about a machine whose gh or glab cannot answer.
 	ComplainEvery = time.Hour
+	// FreshFor is how old a read may be before a hover card open on the request asks for another.
+	FreshFor = 20 * time.Second
 )
 
 // Checks counts a request's check runs and status contexts by how they stand.
@@ -37,13 +39,31 @@ type Checks struct {
 
 // Status is a pull request as gh reports it, or a merge request as glab does, in the same words.
 type Status struct {
-	State     string    `json:"state"` // OPEN, MERGED, CLOSED
-	Draft     bool      `json:"draft"`
-	Mergeable string    `json:"mergeable"`         // MERGEABLE, CONFLICTING, UNKNOWN
-	Review    string    `json:"review"`            // APPROVED, CHANGES_REQUESTED, REVIEW_REQUIRED, ""
-	Threads   int       `json:"threads,omitempty"` // a merge request's discussion threads still open
-	Checks    Checks    `json:"checks"`
-	At        time.Time `json:"at"`
+	Title      string    `json:"title,omitempty"`
+	State      string    `json:"state"` // OPEN, MERGED, CLOSED
+	Draft      bool      `json:"draft"`
+	Mergeable  string    `json:"mergeable"`             // MERGEABLE, CONFLICTING, UNKNOWN
+	MergeState string    `json:"merge_state,omitempty"` // GitHub's mergeStateStatus (CLEAN merges now; DIRTY, BLOCKED, BEHIND, UNSTABLE), CLEAN for a merge request GitLab calls mergeable
+	Review     string    `json:"review"`                // APPROVED, CHANGES_REQUESTED, REVIEW_REQUIRED, ""
+	Threads    int       `json:"threads,omitempty"`     // a merge request's discussion threads still open
+	Checks     Checks    `json:"checks"`
+	Closes     []Issue   `json:"closes,omitempty"` // the issues the request closes once it merges
+	At         time.Time `json:"at"`
+}
+
+// Issue is an issue a pull request closes, as gh names it: its number, its address and its repository, owner/name.
+type Issue struct {
+	Number int    `json:"number"`
+	URL    string `json:"url"`
+	Repo   string `json:"repo"`
+}
+
+// Seen is what the tracker holds of a pane's request: its status as last read, whether a read is under way, and why
+// the last read failed when it did — a status from before stands beside that reason.
+type Seen struct {
+	Status  *Status
+	Reading bool
+	Reason  string
 }
 
 // Hosts finds the shell of a machine; false when it is not connected.
@@ -55,13 +75,26 @@ type entry struct {
 	reason  string // why there is no status: gh or glab missing, not signed in, the machine away
 	readAt  time.Time
 	reading bool
+	etag    string    // the last probe's, for a GitHub pull request (probe.go)
+	fullAt  time.Time // when the request was last read in full
+}
+
+// reading is what one read came to: the status (nil and why when there is none), whether it was read in full, and the
+// probe's ETag to keep.
+type reading struct {
+	status *Status
+	reason string
+	full   bool
+	etag   string
 }
 
 // Tracker holds one request per pane and reads one at a time per machine.
 type Tracker struct {
 	hosts Hosts
 	// OnState hears a request's state on its first read and every move after it; the app puts it on the bus.
-	OnState    func(events.PullRequestState)
+	OnState func(events.PullRequestState)
+	// OnChange hears a read begin and end, so an open page shows it at once.
+	OnChange   func()
 	now        func() time.Time
 	mu         sync.Mutex
 	entries    map[events.PaneRef]*entry
@@ -129,6 +162,25 @@ func (t *Tracker) Status(machineID, paneID string) (Status, bool) {
 	return *e.status, true
 }
 
+// Seen is the pane's request as the tracker holds it, read or being read; false when the pane names none it can read.
+func (t *Tracker) Seen(machineID, paneID string) (Seen, bool) {
+	if t == nil {
+		return Seen{}, false
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	e := t.entries[events.PaneRef{Machine: machineID, Pane: paneID}]
+	if e == nil {
+		return Seen{}, false
+	}
+	seen := Seen{Reading: e.reading, Reason: e.reason}
+	if e.status != nil {
+		status := *e.status
+		seen.Status = &status
+	}
+	return seen, true
+}
+
 // Touch says the roster was just read: every request whose last read is Every old is read again, one per machine
 // at a time. Nothing is read for a page nobody looks at.
 func (t *Tracker) Touch() {
@@ -152,43 +204,60 @@ func (t *Tracker) Touch() {
 // TouchPane reads one pane's request again when its last read is Every old: the task watch asks it for the request a
 // live run names, so a merge moves the task with no page open.
 func (t *Tracker) TouchPane(machineID, paneID string) {
+	t.touchPane(machineID, paneID, Every)
+}
+
+// Fresh reads one pane's request again when its last read is FreshFor old: a hover card opened on it asks, so the card
+// shows the checks as they stand. It says whether a read began.
+func (t *Tracker) Fresh(machineID, paneID string) bool {
+	return t.touchPane(machineID, paneID, FreshFor)
+}
+
+func (t *Tracker) touchPane(machineID, paneID string, after time.Duration) bool {
 	if t == nil {
-		return
+		return false
 	}
 	ref := events.PaneRef{Machine: machineID, Pane: paneID}
 	t.mu.Lock()
 	e := t.entries[ref]
-	due := e != nil && !e.reading && t.now().Sub(e.readAt) >= Every
+	due := e != nil && !e.reading && t.now().Sub(e.readAt) >= after
 	t.mu.Unlock()
-	if due {
-		t.start(ref)
-	}
+	return due && t.start(ref)
 }
 
-// start reads one request in the background when its machine has no read under way.
-func (t *Tracker) start(ref events.PaneRef) {
+// start reads one request in the background when its machine has no read under way, and says whether it began.
+func (t *Tracker) start(ref events.PaneRef) bool {
 	t.mu.Lock()
 	e := t.entries[ref]
 	if e == nil || e.reading || t.inflight[ref.Machine] {
 		t.mu.Unlock()
-		return
+		return false
 	}
 	e.reading = true
 	t.inflight[ref.Machine] = true
 	url := e.url
 	t.mu.Unlock()
+	t.changed()
 	go t.read(ref, url)
+	return true
 }
 
 func (t *Tracker) read(ref events.PaneRef, url string) {
-	status, reason := t.fetch(ref.Machine, url)
-	if moved, ok := t.note(ref, url, status, reason); ok && t.OnState != nil {
+	moved, ok := t.note(ref, url, t.fetch(ref, url))
+	t.changed()
+	if ok && t.OnState != nil {
 		t.OnState(moved)
 	}
 }
 
+func (t *Tracker) changed() {
+	if t.OnChange != nil {
+		t.OnChange()
+	}
+}
+
 // note keeps what a read came to and says whether the request's state is news: its first read, or a move since.
-func (t *Tracker) note(ref events.PaneRef, url string, status *Status, reason string) (events.PullRequestState, bool) {
+func (t *Tracker) note(ref events.PaneRef, url string, got reading) (events.PullRequestState, bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	delete(t.inflight, ref.Machine)
@@ -196,9 +265,16 @@ func (t *Tracker) note(ref events.PaneRef, url string, status *Status, reason st
 	if e == nil || e.url != url {
 		return events.PullRequestState{}, false
 	}
+	status, reason := got.status, got.reason
 	e.reading = false
 	e.readAt = t.now()
 	e.reason = reason
+	if got.etag != "" {
+		e.etag = got.etag
+	}
+	if got.full && status != nil {
+		e.fullAt = t.now()
+	}
 	if reason != "" && t.now().Sub(t.complained[ref.Machine]) >= ComplainEvery {
 		t.complained[ref.Machine] = t.now()
 		log.Printf("prstatus: %s: %s cannot be read: %s", ref.Machine, url, reason)
@@ -217,17 +293,41 @@ func (t *Tracker) note(ref events.PaneRef, url string, status *Status, reason st
 	return events.PullRequestState{Pane: ref, URL: url, State: status.State, Was: was}, true
 }
 
-// fetch runs gh, or glab for a merge request, on the machine and parses its answer.
-func (t *Tracker) fetch(machineID, url string) (*Status, string) {
-	host, ok := t.hosts(machineID)
+// fetch reads the request on the machine: a GitHub pull request probed first, its last full read kept while the probe
+// says nothing moved and the read still stands (probe.go), else gh's (or glab's) answer parsed.
+func (t *Tracker) fetch(ref events.PaneRef, url string) reading {
+	host, ok := t.hosts(ref.Machine)
 	if !ok {
-		return nil, "the machine is not connected"
+		return reading{reason: "the machine is not connected"}
 	}
 	if GitLab(url) {
-		return fetchMerge(host, url, t.now())
+		status, reason := fetchMerge(host, url, t.now())
+		return reading{status: status, reason: reason, full: true}
 	}
+	t.mu.Lock()
+	var last *Status
+	var etag string
+	var fullAt time.Time
+	if e := t.entries[ref]; e != nil && e.url == url {
+		last, etag, fullAt = e.status, e.etag, e.fullAt
+	}
+	t.mu.Unlock()
+	code, tag := probe(host, url, etag)
+	if code == 304 && last != nil && t.now().Sub(fullAt) < standFor(last) {
+		kept := *last
+		return reading{status: &kept}
+	}
+	if code != 200 {
+		tag = ""
+	}
+	status, reason := fetchPull(host, url, t.now())
+	return reading{status: status, reason: reason, full: true, etag: tag}
+}
+
+// fetchPull runs gh pr view on the machine and parses its answer.
+func fetchPull(host shell.Shell, url string, now time.Time) (*Status, string) {
 	out, err := shell.Text(host, Script(url), Timeout)
-	status, perr := Parse(out, t.now())
+	status, perr := Parse(out, now)
 	if perr == nil {
 		return &status, ""
 	}
@@ -237,9 +337,17 @@ func (t *Tracker) fetch(machineID, url string) (*Status, string) {
 	return nil, perr.Error()
 }
 
-// Script is the gh call for a request, run on the pane's machine.
+// viewFields are what every gh names; viewMore adds the ones a gh from before closingIssuesReferences refuses whole.
+const (
+	viewFields = "state,isDraft,mergeable,reviewDecision,statusCheckRollup,title"
+	viewMore   = viewFields + ",mergeStateStatus,closingIssuesReferences"
+)
+
+// Script is the gh call for a request, run on the pane's machine: every field, or the ones any gh knows when it
+// answers that a field is unknown.
 func Script(url string) string {
-	return script.PATH + "\ngh pr view " + script.Quote(url) + " --json state,isDraft,mergeable,reviewDecision,statusCheckRollup 2>&1"
+	view := "gh pr view " + script.Quote(url) + " --json "
+	return script.PATH + "\nout=$(" + view + viewMore + " 2>&1)\ncase $out in *'Unknown JSON field'*) out=$(" + view + viewFields + " 2>&1) ;; esac\nprintf '%s\\n' \"$out\""
 }
 
 type rollupItem struct {
@@ -249,12 +357,26 @@ type rollupItem struct {
 	State      string `json:"state"`      // a status context: SUCCESS, PENDING, FAILURE, ERROR, EXPECTED
 }
 
+type ghIssue struct {
+	Number     int    `json:"number"`
+	URL        string `json:"url"`
+	Repository struct {
+		Name  string `json:"name"`
+		Owner struct {
+			Login string `json:"login"`
+		} `json:"owner"`
+	} `json:"repository"`
+}
+
 type ghView struct {
+	Title          string       `json:"title"`
 	State          string       `json:"state"`
 	IsDraft        bool         `json:"isDraft"`
 	Mergeable      string       `json:"mergeable"`
+	MergeState     string       `json:"mergeStateStatus"`
 	ReviewDecision string       `json:"reviewDecision"`
 	Rollup         []rollupItem `json:"statusCheckRollup"`
+	Closes         []ghIssue    `json:"closingIssuesReferences"`
 }
 
 // Parse reads gh's JSON; anything else — gh missing, not signed in, a refused request — is the error's text.
@@ -268,7 +390,14 @@ func Parse(out string, now time.Time) (Status, error) {
 	if err := json.Unmarshal([]byte(trimmed[at:]), &view); err != nil {
 		return Status{}, errors.New(firstLine(trimmed, err.Error()))
 	}
-	status := Status{State: view.State, Draft: view.IsDraft, Mergeable: view.Mergeable, Review: view.ReviewDecision, At: now}
+	status := Status{Title: view.Title, State: view.State, Draft: view.IsDraft, Mergeable: view.Mergeable, MergeState: view.MergeState, Review: view.ReviewDecision, At: now}
+	for _, issue := range view.Closes {
+		repo := ""
+		if issue.Repository.Owner.Login != "" && issue.Repository.Name != "" {
+			repo = issue.Repository.Owner.Login + "/" + issue.Repository.Name
+		}
+		status.Closes = append(status.Closes, Issue{Number: issue.Number, URL: issue.URL, Repo: repo})
+	}
 	for _, item := range view.Rollup {
 		status.Checks.Total++
 		switch stand(item) {

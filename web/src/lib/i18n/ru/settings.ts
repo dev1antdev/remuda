@@ -100,7 +100,7 @@ export const settings: Dictionary = {
   "Lavender": "Лавандовый",
   "The page's type scale; the terminal keeps its own size in its View menu": "Размер текста страницы; у терминала свой, в его меню «Вид»",
   "The ones installed on this device show in their own face; the rest fall back to the system's monospace": "Установленные на этом устройстве показаны своим начертанием; остальные подменяет системный моноширинный",
-  "The theme, the density, the code font, the sidebar, the wall, the review and the panels travel through this remuda; alerts, the text sizes and the prompt history stay on the device": "Тема, плотность, шрифт кода, боковая панель, стена, ревью и панели путешествуют через этот remuda; уведомления, размеры текста и история промптов остаются на устройстве",
+  "The theme, the density, the code font, the sidebar, the status bar, the wall, the review and the panels travel through this remuda; alerts, the text sizes and the prompt history stay on the device": "Тема, плотность, шрифт кода, боковая панель, строка состояния, стена, ревью и панели путешествуют через этот remuda; уведомления, размеры текста и история промптов остаются на устройстве",
   "A notification opens": "Уведомление открывает",
   "The pane a tapped notification, the Mac app's menu, an Activity row or Alt+N brings up shows this lens; the sidebar, the tabs and the Wall keep their own ways.": "Панель, в которую ведёт нажатое уведомление, меню приложения на Mac, строка Активности или Alt+N, открывается в этой линзе; боковая панель, вкладки и Стена ведут себя по-своему.",
   "the terminal": "терминал",

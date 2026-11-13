@@ -21,7 +21,7 @@ type Call struct {
 
 // Recap is what one conversation came to over a period.
 type Recap struct {
-	Prompts   int            `json:"prompts"`
+	Prompts   int            `json:"prompts"` // the person's prompts, and the messages they sent while the agent worked
 	Answers   int            `json:"answers"` // turns that ended in text
 	Took      float64        `json:"took"`    // seconds the answers took, from each prompt to the end of its answer
 	Tokens    int64          `json:"tokens"`
@@ -71,8 +71,17 @@ func Of(turns []transcript.Turn, since time.Time) Recap {
 		}
 		lastRole = t.Role
 		lastPart = nil
+		sentMidTurn := 0
+		for _, p := range t.Parts {
+			if p.Type == "queued" {
+				sentMidTurn++
+			}
+		}
+		r.Prompts += sentMidTurn // a message sent while the agent worked is a prompt of the person's too
 		if t.Role == "user" {
-			r.Prompts++
+			if sentMidTurn < len(t.Parts) {
+				r.Prompts++
+			}
 			continue
 		}
 		if answer := t.Answer(); answer != "" {

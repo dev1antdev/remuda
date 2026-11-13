@@ -175,7 +175,7 @@ func ReviewMessage(label, url string, review Review) (string, error) {
 			fmt.Fprintf(&b, "\n\n…and %d more on the request itself.", len(review.Comments)-MaxComments)
 		}
 	}
-	b.WriteString("\n\nWork on what is asked above, push the branch, and say when it is ready for another look.")
+	b.WriteString("\n\nWork on what is asked above, then say what you changed and what you would reply.\n\n" + GuardOf(url))
 	return b.String(), nil
 }
 
