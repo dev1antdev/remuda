@@ -2200,9 +2200,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   409 busy or stale, 404 no repository, 200 with git's refusal as
   `{ok: false, output}`; then the folder's badge read again and the roster
   moved). **The page** (`features/git/`): `GitLens.tsx` composes
-  `GitHeader.tsx` (the current-branch chip, accent tint, "detached at
-  <8>"; All branches | Current and Remotes, pref `git.scope` per device;
-  "N commits", "300+ commits" while more follow; a spinner's place kept;
+  `GitHeader.tsx` (All branches | Current and Remotes, pref `git.scope`
+  per device; the current-branch chip after them, accent tint, "detached
+  at <8>", "…" until read, so a checkout moves nothing beside it; "N
+  commits", "300+ commits" while more follow; a spinner's place kept;
   Read the history again), `GitStopped` (`GitStates.tsx`: "A merge
   stopped on conflicts in 3 files." with Open Changes to resolve and
   Abort behind a confirm), `GraphTable.tsx` (the columns' heads, the rows,

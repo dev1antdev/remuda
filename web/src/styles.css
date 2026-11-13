@@ -7172,6 +7172,19 @@ button.usage-row:hover {
 }
 
 /* ---- the Git lens: a checkout's history as a graph, after git-graph (features/git) ---- */
+
+/* a phone's header holds four lenses beside the usage pill: the pill keeps its number and its tone, the buttons a little
+   less padding, so the row never runs past the screen in a language with long words */
+@media (max-width: 480px) {
+  .usage-pill-bar {
+    display: none;
+  }
+
+  .lens-switch > button {
+    padding: 0 6px;
+  }
+}
+
 .git-lens {
   container: git-lens / inline-size;
   flex: 1;
@@ -7321,8 +7334,8 @@ button.usage-row:hover {
 /* the lanes: as wide as they need, never past 40 % of the row, clipped beyond */
 .git-graph {
   flex: none;
-  width: min(var(--git-lanes-w, 36px), 40%);
-  min-width: 36px;
+  width: min(var(--git-lanes-w, 48px), 40%);
+  min-width: 48px; /* room for its heading, a lane or two */
   height: 100%;
   overflow: hidden;
 }

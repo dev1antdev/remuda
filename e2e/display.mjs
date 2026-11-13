@@ -1415,6 +1415,8 @@ async function gitScreens() {
       check(await present(`${GIT} .git-label.is-tag`), "the tag v0.1.0 has no label");
       check(/main/.test(await evaluate(`document.querySelector('${GIT} .git-where')?.textContent ?? ""`)), "the head's chip does not say main");
       check(await evaluate(`[...document.querySelectorAll('${GIT} .git-row[data-index]')].every((r) => Math.round(r.getBoundingClientRect().height) === 24)`), "a row of the graph is not 24 px high");
+      // a phone widens its page to what overflows it, so the page's own width says whether the four lenses fit
+      check(await evaluate(`innerWidth === ${pass.width} && document.querySelector('.lens-switch').getBoundingClientRect().right <= innerWidth + 1`), "the header's four lenses run past the screen");
     },
     expect: [`${GIT} .git-head`, `${GIT} .git-lanes`],
     close: async () => {},

@@ -28,6 +28,11 @@ describe("menuFor", () => {
     const every = [...here, ...there, ...labels(menuFor({ kind: "tag", name: "v1", hash: HEAD }, ctx)), ...labels(menuFor({ kind: "uncommitted" }, ctx))];
     expect(every.some((l) => /\b(push|pull|fetch|stash)\b|^commit…$/i.test(l))).toBe(false);
   });
+
+  it("offers the uncommitted row the Changes lens, and a reset only once there is a HEAD to reset to", () => {
+    expect(labels(menuFor({ kind: "uncommitted" }, ctx))).toEqual(["Open Changes", "Reset uncommitted changes…"]);
+    expect(labels(menuFor({ kind: "uncommitted" }, { ...ctx, head: "" }))).toEqual(["Open Changes"]);
+  });
 });
 
 describe("the dialogs and requests", () => {
