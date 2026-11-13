@@ -1388,7 +1388,7 @@ async function worktreeScreens() {
       if (!(await until(() => present('.new-worktree .nw-row[data-tag="Open"]'), 8))) throw new Error("the linked worktree's branch is not listed as open");
       await tap('.new-worktree .nw-row[data-tag="Open"]');
       if (!(await until(() => evaluate(`/feature-x/.test(document.querySelector('.new-worktree .nw-note')?.textContent ?? "")`), 4))) failed("the note does not say the branch is checked out at feature-x already");
-      check(await present(".new-worktree .nw-base.is-vacant"), "the base shows for a branch that is opened, not made");
+      check(await evaluate(`!!document.querySelector(".new-worktree .nw-base.is-vacant")`), "the base shows for a branch that is opened, not made"); // kept in its room unseen, so present() would not see it
     },
     expect: [".new-worktree .nw-row"],
   });
