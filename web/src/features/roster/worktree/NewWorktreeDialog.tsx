@@ -19,7 +19,7 @@ import { createFrom, fetchLists, fetchOrigin, fetchSource, lookUp, type Found, t
 import { Details, noteOf } from "./Details";
 import { createWords, fill, fromPR, pickOf, planOf, type Pick } from "./plan";
 import { SourceList, SourceTabs } from "./SourcePicker";
-import { baseChoices, emptyWords, items, jumpFor, MODES, repositoriesOf, type Lists, type Mode } from "./sources";
+import { baseChoices, emptyWords, items, jumpFor, MODES, repositoriesOf, type Item, type Lists, type Mode } from "./sources";
 
 const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
 
@@ -97,6 +97,11 @@ export default function NewWorktreeDialog({ machine, session, agents, onMade, on
     setAt(i);
     if (!row) return;
     if (row.kind === "lookup") return void resolve(row.want, row.number);
+    fillFrom(row);
+  };
+
+  // fillFrom fills the Details from a row: its pick, the branch and name it suggests, the first prompt of its template
+  const fillFrom = (row: Item) => {
     const filledIn = pickOf(row, issueBranch);
     setPick(filledIn.pick);
     setBranch(filledIn.branch);
@@ -112,6 +117,8 @@ export default function NewWorktreeDialog({ machine, session, agents, onMade, on
       const hit = await lookUp(machine.id, src.github, number);
       setFound((list) => [hit, ...list.filter((f) => f.number !== hit.number)]);
       switchMode(hit.kind, `#${number}`);
+      const row = items(hit.kind, `#${number}`, src, withFound(lists.data ?? { issues: [], prs: [] }, [hit]), answer.data?.home ?? "", (i) => issueBranch(i.number, i.title))[0];
+      if (row && row.kind !== "lookup") fillFrom(row);
     } catch (e) {
       setError(errMsg(e));
     } finally {
@@ -142,11 +149,7 @@ export default function NewWorktreeDialog({ machine, session, agents, onMade, on
     const first = items(mode, text, src, allLists, answer.data?.home ?? "", (i) => issueBranch(i.number, i.title))[0];
     if (!first) return;
     if (first.kind === "lookup") return setPick({ kind: first.want, number: first.number });
-    const filledIn = pickOf(first, issueBranch);
-    setPick(filledIn.pick);
-    setBranch(filledIn.branch);
-    setName(filledIn.name);
-    prefill(filledIn.pick, filledIn.branch, filledIn.name);
+    fillFrom(first);
   };
 
   // the branch typed on the New tab: a pasted issue or pull request goes to its tab, as it does from the search
