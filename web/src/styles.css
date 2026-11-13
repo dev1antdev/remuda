@@ -15439,3 +15439,529 @@ textarea.screen-term-field {
 .conflict-sentence {
   padding: 14px 12px;
 }
+
+/* ---- the chat: messages sent while the agent worked, the prompts list, the live progress, the tool cards ---- */
+.chat {
+  position: relative;
+}
+
+.chat-main {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.chat-main > .chat-log {
+  min-width: 0;
+}
+
+/* a message the person (or another agent) sent while the agent worked, in its place in the turn */
+.part-sent {
+  align-self: flex-end;
+  max-width: min(620px, 78%);
+  padding: 7px 12px 8px;
+  border: 1px dashed color-mix(in srgb, var(--accent) 40%, transparent);
+  border-radius: var(--r-xl) var(--r-xl) var(--r-xs) var(--r-xl);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.part-sent.is-peer {
+  border-color: color-mix(in srgb, var(--violet) 45%, transparent);
+  background: color-mix(in srgb, var(--violet) 10%, transparent);
+}
+
+.turn-user .part-sent {
+  align-self: stretch;
+  max-width: none;
+  margin-top: 4px;
+}
+
+.part-sent-mark {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 3px;
+  font-size: var(--fs-11);
+  color: var(--fg-dim);
+}
+
+.part-sent .md p {
+  margin: 0;
+}
+
+/* a run of tool calls: one card, a 30 px line a call */
+.tool-card {
+  display: flex;
+  flex-direction: column;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: color-mix(in srgb, var(--bg-raised) 70%, transparent);
+}
+
+.tool-call {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.tool-row > summary,
+.tool-plan {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: var(--r-md);
+  font-size: var(--fs-12);
+  color: var(--fg-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  user-select: none;
+  list-style: none;
+}
+
+.tool-row > summary {
+  cursor: pointer;
+  transition: background var(--fast) var(--ease);
+}
+
+.tool-row > summary::-webkit-details-marker {
+  display: none;
+}
+
+.tool-row > summary:hover {
+  background: var(--bg-hover);
+}
+
+.tool-row > summary:focus-visible {
+  outline: 2px solid var(--accent-ring);
+  outline-offset: -2px;
+}
+
+.tool-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  color: var(--fg-faint);
+}
+
+.tool-mark.is-done {
+  color: var(--green);
+}
+
+.tool-mark.is-failed {
+  color: var(--red);
+}
+
+.tool-dot {
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid var(--fg-faint);
+  border-radius: 99px;
+}
+
+.tool-spin {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  flex-shrink: 0;
+  border: 2px solid var(--line-strong);
+  border-top-color: var(--green);
+  border-radius: 99px;
+  animation: spin 0.8s linear infinite;
+}
+
+.tool-name {
+  flex-shrink: 0;
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.tool-target {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--mono);
+  color: var(--fg-faint);
+  text-align: left;
+}
+
+.tool-row .tool-target.path-link {
+  flex: 0 1 auto;
+}
+
+.tool-every {
+  flex-shrink: 0;
+  color: var(--fg-faint);
+}
+
+.tool-took {
+  margin-left: auto;
+  flex-shrink: 0;
+  min-width: 3.2em;
+  text-align: right;
+  font-size: var(--fs-11);
+  font-variant-numeric: tabular-nums;
+  color: var(--fg-faint);
+}
+
+.tool-call.is-failed .tool-took,
+.tool-call.is-failed .tool-name {
+  color: var(--red);
+}
+
+.tool-chevron {
+  flex-shrink: 0;
+  color: var(--fg-faint);
+  transition: transform var(--fast) var(--ease);
+}
+
+.tool-row[open] > summary .tool-chevron {
+  transform: rotate(90deg);
+}
+
+.tool-row > .tool-io,
+.tool-row > .tool-thought {
+  margin: 2px 8px 6px 31px;
+}
+
+.tool-thought {
+  color: var(--fg-dim);
+  font-style: italic;
+  font-size: var(--fs-13);
+}
+
+.tool-plan.is-failed {
+  color: var(--red);
+}
+
+.tool-call > :not(.tool-row) {
+  margin-left: 31px;
+  margin-right: 8px;
+}
+
+.tool-call > .part-image {
+  margin-bottom: 4px;
+}
+
+/* the turn under way, over the composer: what Claude Code's spinner says */
+.chat-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 18px 6px 20px;
+  min-height: 20px;
+  font-size: var(--fs-12);
+  color: var(--fg-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.chat-progress-words {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tile-tokens {
+  flex-shrink: 0;
+  color: var(--fg-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* the switch of the prompts list at the timeline bar's end */
+.timeline-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.timeline-row > .timeline-bar {
+  flex: 1;
+  min-width: 0;
+}
+
+/* the prompts list: a column beside the log at a desk, a sheet from the bottom on a phone */
+.prompts {
+  display: flex;
+  flex-direction: column;
+  width: 340px;
+  flex-shrink: 0;
+  min-height: 0;
+  border-left: 1px solid var(--line);
+  background: var(--bg);
+}
+
+.prompts-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  flex-shrink: 0;
+  padding: 0 8px 0 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.prompts-title {
+  font-weight: 600;
+  font-size: var(--fs-13);
+}
+
+.prompts-meta {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+  font-size: var(--fs-11);
+  color: var(--fg-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.prompts-empty {
+  margin: 16px;
+}
+
+.prompts-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0;
+  padding: 6px 8px 10px;
+  list-style: none;
+}
+
+.prompt {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.prompt-rail {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  width: 14px;
+  flex-shrink: 0;
+}
+
+.prompt-rail::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 6px;
+  width: 2px;
+  background: var(--line);
+}
+
+.prompt.is-first .prompt-rail::before {
+  top: 18px;
+}
+
+.prompt.is-last .prompt-rail::before {
+  bottom: calc(100% - 18px);
+}
+
+.prompt.is-first.is-last .prompt-rail::before {
+  display: none;
+}
+
+.prompt-dot {
+  position: relative;
+  margin-top: 13px;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--line-strong);
+  border-radius: 99px;
+  background: var(--bg);
+}
+
+.prompt.is-picked .prompt-dot,
+.prompt.is-open .prompt-dot {
+  border-color: var(--accent);
+}
+
+.prompt.is-live .prompt-dot {
+  border-color: var(--green);
+  background: var(--green);
+}
+
+.prompt-card {
+  flex: 1;
+  min-width: 0;
+  margin: 3px 0;
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+}
+
+.prompt.is-picked .prompt-card {
+  background: var(--bg-raised);
+  border-color: var(--line);
+}
+
+.prompt.is-open .prompt-card {
+  background: var(--bg-raised);
+  border-color: var(--accent-ring);
+}
+
+.prompt-head.linkish {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 3px;
+  width: 100%;
+  padding: 7px 10px;
+  text-align: left;
+  font-weight: 400;
+  color: var(--fg);
+}
+
+.prompt-head.linkish:hover {
+  background: var(--bg-hover);
+}
+
+.prompt-head > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prompt-when {
+  font-size: var(--fs-10);
+  color: var(--fg-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.prompt-text {
+  font-size: var(--fs-13);
+  color: var(--fg);
+}
+
+.prompt-also,
+.prompt-facts {
+  font-size: var(--fs-11);
+  color: var(--fg-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.prompt-working {
+  color: var(--green);
+  font-weight: 600;
+}
+
+.prompt-gist {
+  font-size: var(--fs-12);
+  color: var(--fg-dim);
+}
+
+.prompt-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 10px 10px;
+  font-size: var(--fs-13);
+}
+
+.prompt-full {
+  color: var(--fg);
+}
+
+.prompt-sent {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0 0 0 8px;
+  list-style: none;
+  border-left: 2px solid var(--line-strong);
+}
+
+.prompt-sent li {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+}
+
+.prompt-sent-at {
+  flex-shrink: 0;
+  font-size: var(--fs-10);
+  color: var(--fg-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.prompt-sent-text {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.prompt-reply {
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  user-select: text;
+}
+
+.prompt-files {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  font-size: var(--fs-11);
+}
+
+.prompt-files-head {
+  color: var(--fg-faint);
+}
+
+.prompt-files .path-link {
+  max-width: 100%;
+  padding: 1px 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono);
+}
+
+.prompts-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-drawer);
+  background: var(--scrim);
+}
+
+.prompts.is-sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: var(--z-drawer);
+  width: auto;
+  max-height: 72%;
+  border-left: 0;
+  border-top: 1px solid var(--line-strong);
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
+  box-shadow: var(--shadow-lg);
+}
+
+@media (max-width: 1180px) and (min-width: 920px) {
+  .prompts {
+    width: 290px;
+  }
+}
+
+.prompt-full .md p,
+.prompt-sent-text .md p {
+  margin: 0;
+}
+
+.prompt-full .md p + p {
+  margin-top: 6px;
+}

@@ -20,5 +20,5 @@ export function doing(turns: Turn[]): Doing {
     const { name, hint } = toolLabel(part);
     return part.at ? { what: "tool", name, hint, at: part.at } : { what: "tool", name, hint };
   }
-  return { what: part.type === "thinking" ? "thinking" : "writing" };
+  return { what: part.type === "text" ? "writing" : "thinking" }; // a message sent mid-turn: the agent takes it in
 }

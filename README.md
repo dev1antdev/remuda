@@ -1587,6 +1587,23 @@ flatten the day — with the moments worth a look marked and named under
 it: the first failed call, the longest call, a loop of identical calls,
 the questions the agent asked, a compaction. A click on any of them
 jumps to that turn. It works on a transcript opened from the search too.
+**The prompts list** (the switch at the timeline's end, View › Prompts,
+or the palette) reads the conversation prompt by prompt, newest first —
+a column beside the chat at a desk, a sheet on a phone: when each prompt
+went, the messages you sent while the agent worked on it, what it came
+to ("done 16:02 · 4 min · ↓ 9.1k tokens · 3 files · 6 commands run",
+the turn under way saying "working" and ticking), and the start of the
+reply. Open a card (a click, or ↑ ↓ and Enter) to read the prompt and the
+reply whole with the files it changed; the chat jumps to that turn.
+**While Claude Code works**, the line over the composer says what its
+own spinner says — "Refactoring… 2 min 14 s · ↓ 6.8k" — read off the
+pane's screen with the permission mode, and a wall tile's state line
+says the same. A message you typed while the agent worked shows in the
+turn it reached, marked "Sent while it worked"; the search, the recap,
+the handover and the export count it as yours. Each run of tool calls
+is one card, a line a call: done, failed or running, what it was about,
+how long it took, a chevron for its result; an answer's foot adds the
+tokens it wrote, "↓ 9.1k", as the CLI counts them.
 **Plan** — when the agent keeps a task list (Claude Code's own
 TaskCreate / TaskUpdate, or TodoWrite), a quiet line over the chat says
 how far it is and what it is on, in the agent's own words — "Plan 3/7 ·

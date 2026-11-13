@@ -8,7 +8,7 @@ import { useRoster } from "@/features/roster/useRoster";
 import { folderOf } from "@/features/roster/workspaces";
 import { useSharing } from "@/features/roster/useSharing";
 import { budgetTone, budgetWords, budgetsFor, graver, ratio, tightest, toneClass, type BudgetTone } from "@/features/usage/budgets";
-import { fillClass, tok, usd } from "@/features/usage/format";
+import { fillClass, tokFine, usd } from "@/features/usage/format";
 import { accountWindows, gravest, limitLine, type AccountWindow } from "@/features/usage/limits";
 import { gitLensTip, isCheckout } from "@/features/git/checkout";
 import { FolderIcon, Icon, Tip } from "@/ui";
@@ -93,7 +93,7 @@ function UsagePill({ usage, budget, limits }: { usage: NonNullable<Located["pane
   const tone = graver(budget ? graver(contextTone, budgetTone(ratio(budget))) : contextTone, gravest(limits));
   const cls = budget || limits.length ? toneClass(tone) : fillClass(fill);
   const planWords = limits.map((w) => limitLine(w, Date.now())).join("; ");
-  const told = t("{model}: context {used} of {window} ({pct}%) · {responses} · {cost} API-equivalent so far.", { model: usage.name, used: tok(usage.context), window: tok(usage.window), pct: percent, responses: plural(usage.turns, "response"), cost: usd(usage.cost) });
+  const told = t("{model}: context {used} of {window} ({pct}%) · {responses} · {cost} API-equivalent so far.", { model: usage.name, used: tokFine(usage.context), window: tokFine(usage.window), pct: percent, responses: plural(usage.turns, "response"), cost: usd(usage.cost) });
   return (
     <button
       type="button"
