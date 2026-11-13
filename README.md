@@ -729,7 +729,7 @@ Devices under a name — "the office TV", a colleague's — and open it where
 the viewing happens: that browser gets the Wall, the sidebar, the chats,
 the screens and their timelapses, the standup, the usage and Activity, and nothing that types or
 changes — no composer, no keys, no question buttons, no Changes lens, no
-tasks; the terminal lens shows the pane's screen as the Wall does, without
+tasks; the Git lens draws its graph and opens no menu; the terminal lens shows the pane's screen as the Wall does, without
 attaching, and the file viewer opens only files inside the machines'
 workspace folders. Every call past that is refused with "this link is for
 viewing only", a viewer's look marks nothing as seen, and the header says
@@ -1062,6 +1062,44 @@ them in all, the oldest going first; a turn whose changes weigh over
 16 MB is listed but cannot be undone. The turns are not in the nightly
 backups. A second remuda beside the real one keeps none unless it is
 given `-record`.
+
+## Git — the history as a graph
+
+An agent's pane has a fourth lens beside Chat, Terminal and Changes:
+**Git**, its checkout's history drawn the way VS Code's Git Graph draws
+it (after the git-graph mod for Herdr Desktop). Every branch is a lane
+in your theme's terminal colours, a fork or a merge a curve; each row
+carries its labels — the checked-out branch first, filled and ticked, a
+remote branch of the same name riding on it as `main | origin`, a remote
+branch alone with a cloud, tags, a detached HEAD — then the subject, the
+date (`now`, `12m`, `3h`, `6d`, `Oct 3`) and, when there is room, the
+author and the commit. HEAD is a ring on a tinted row, merge commits are
+muted, and while the tree is dirty **Uncommitted changes (N)** sits on
+top, joined to HEAD by a dashed line; a click on it opens the Changes
+lens. All branches or the current one, with or without the remotes,
+300 commits at a time and 300 more at the end. It follows the checkout
+by itself: a commit, a checkout or a new tag from any terminal redraws
+it within a few seconds, and reading it never touches your index.
+
+Click a commit for its details under the graph — hash, parents, author,
+date, the message's body and its files with their lines — and a file
+for its diff, coloured and with the changed words marked. Right-click a
+branch, a remote branch, a tag, a commit or the uncommitted row (a ⋯ or
+a tap on a label on a phone) for what git can do there: check out
+(a remote branch asks the local name first), create, rename or delete a
+branch, merge into the current branch, rebase it, cherry-pick, revert,
+reset soft, mixed or hard, add or delete a tag, copy a name or a hash;
+double-click a branch's label to check it out. Each asks first in a
+small dialog — only a local checkout with nothing uncommitted runs at
+once — red where it loses something: a hard reset names the files it
+discards, and deleting a branch git calls unmerged asks a second time.
+When git refuses, its own words stay in the dialog. A merge, rebase,
+cherry-pick or revert that stops on conflicts is left as it is, and the
+lens says so with **Abort** and a way to the Changes lens to resolve
+them. Nothing runs while an agent works or waits for an answer in that
+checkout — the refusal says who — nor when the branch moved since the
+graph was drawn; nothing here fetches, pulls or pushes, and nothing ever
+forces. A viewer link sees the graph and no menu.
 
 ## Agents and your tasks
 

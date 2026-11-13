@@ -335,6 +335,10 @@ writeFileSync(`${appDir}/.claude/settings.local.json`, `${JSON.stringify({ permi
 git(appDir, "add", "-A");
 git(appDir, "add", "-f", ".claude/settings.local.json"); // past an excludes file that ignores it, as Claude Code sets one up
 git(appDir, "commit", "-q", "-m", "init");
+// a tag and a second commit, so the Git lens draws two commits, labels and a line changed with its words marked
+git(appDir, "tag", "v0.1.0");
+writeFileSync(`${appDir}/README.md`, "# the app\n");
+git(appDir, "commit", "-q", "-am", "docs: name the app");
 writeFileSync(`${appDir}/src/app.go`, goLines("hello, world", 42));
 writeFileSync(`${appDir}/docs/notes.md`, "# Notes\n\nThe first note.\nA second note, staged.\n");
 git(appDir, "add", "docs/notes.md");
@@ -1380,6 +1384,90 @@ async function worktreeFlow() {
   say("worktree flow: a clean close takes its worktree, a dirty one keeps it, the leftover goes once clean");
 }
 
+// ---- the Git lens on the repository's real history ----
+
+const GIT = ".lens-pane:not([hidden]) .git-lens";
+
+// menuOn opens the Git lens's menu for what is under a selector: a right-click at a desk, a tap on a label on a phone
+async function menuOn(selector) {
+  const at = await centre(selector);
+  if (!at) throw new Error(`nothing to open a menu on at ${selector}`);
+  if (pass.phone) await press(at);
+  else {
+    await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: at[0], y: at[1] });
+    await send("Input.dispatchMouseEvent", { type: "mousePressed", x: at[0], y: at[1], button: "right", clickCount: 1 });
+    await send("Input.dispatchMouseEvent", { type: "mouseReleased", x: at[0], y: at[1], button: "right", clickCount: 1 });
+  }
+  if (!(await until(() => present(".menu .menu-item"), 4))) throw new Error(`no menu opened on ${selector}`);
+}
+
+// gitScreens draws the Git lens on every pass: the graph with its uncommitted row, labels and HEAD, a commit's details,
+// a file's diff with its words marked, a branch's menu and its delete asked and cancelled — nothing is written
+async function gitScreens() {
+  await onAgents();
+  const branchesBefore = git(appDir, "branch", "--format=%(refname:short)").toString();
+  await screen("git-lens", {
+    open: async () => {
+      await palette("lens:git");
+      if (!(await until(async () => (await count(`${GIT} .git-row[data-index]`)) === 3, 10))) failed(`the graph draws ${await count(`${GIT} .git-row[data-index]`)} rows, not the uncommitted one and two commits`);
+      check(await present(`${GIT} .git-row.is-uncommitted`), "no Uncommitted changes row over HEAD");
+      check(await present(`${GIT} .git-row.is-head .git-label.is-current`), "HEAD's row does not carry the checked-out branch, filled");
+      check(await present(`${GIT} .git-label.is-tag`), "the tag v0.1.0 has no label");
+      check(/main/.test(await evaluate(`document.querySelector('${GIT} .git-where')?.textContent ?? ""`)), "the head's chip does not say main");
+      check(await evaluate(`[...document.querySelectorAll('${GIT} .git-row[data-index]')].every((r) => Math.round(r.getBoundingClientRect().height) === 24)`), "a row of the graph is not 24 px high");
+    },
+    expect: [`${GIT} .git-head`, `${GIT} .git-lanes`],
+    close: async () => {},
+  });
+  await screen("git-details", {
+    open: async () => {
+      await tap(await mark(`[...document.querySelectorAll('${GIT} .git-row[data-index]')].find((r) => r.textContent.includes("docs: name the app"))?.querySelector('.git-subject')`, "git-commit"));
+      if (!(await until(() => present(`${GIT} .git-details .git-file`), 6))) throw new Error("the commit's files did not come");
+      check(/README\.md/.test(await evaluate(`document.querySelector('${GIT} .git-files')?.textContent ?? ""`)), "the commit's files do not name README.md");
+    },
+    expect: [`${GIT} .git-meta`, `${GIT} .git-files`],
+    close: async () => {},
+  });
+  await screen("git-diff", {
+    open: async () => {
+      await tap(`${GIT} .git-file`);
+      if (!(await until(() => present(`${GIT} .git-diff .fv-line.add`), 6))) throw new Error("the file's diff did not come");
+      check((await count(`${GIT} .git-diff .fv-mark`)) > 0, "the changed words are not marked");
+      check((await count(`${GIT} .git-diff .fv-line.del`)) === 1, "the removed line is not drawn");
+    },
+    expect: [`${GIT} .git-diff`],
+    close: async () => {
+      await tap(`${GIT} .git-details-head .icon-btn`);
+      await sleep(200);
+    },
+  });
+  await screen("git-branch-menu", {
+    open: async () => {
+      await menuOn(`${GIT} .git-label-part[data-ref-name="feature-x"]`);
+      const rows = await evaluate(`[...document.querySelectorAll('.menu .menu-item')].map((i) => i.textContent)`);
+      check(rows.length >= 5, `the branch's menu has ${rows.length} rows`);
+      check(!rows.some((r) => /push|pull|fetch/i.test(r)), "the branch's menu offers what reaches a remote");
+    },
+    expect: [".menu .menu-item.danger"],
+    close: async () => {},
+  });
+  await screen("git-delete-branch", {
+    open: async () => {
+      await evaluate(`document.querySelector('.menu .menu-item.danger')?.click()`);
+      if (!(await until(() => present(".modal.git-dialog"), 4))) throw new Error("Delete branch… asked nothing first");
+      check(await present(".modal.git-dialog button[type=submit].danger"), "the delete's button is not red");
+      check(/feature-x/.test(await evaluate(`document.querySelector('.git-dialog-detail')?.textContent ?? ""`)), "the dialog does not name the branch");
+    },
+    expect: [".modal.git-dialog .modal-actions"],
+    close: async () => {
+      await tap(".modal.git-dialog .modal-actions .btn:not(.danger)");
+      if (!(await until(async () => !(await present(".modal.git-dialog")), 3))) failed("Cancel did not close the dialog");
+      check(git(appDir, "branch", "--format=%(refname:short)").toString() === branchesBefore, "a cancelled delete changed the branches");
+    },
+  });
+  await palette("lens:terminal");
+}
+
 async function runPass() {
   await send("Emulation.setDeviceMetricsOverride", { width: pass.width, height: pass.height, deviceScaleFactor: 1, mobile: pass.phone });
   await send("Emulation.setTouchEmulationEnabled", { enabled: pass.phone, maxTouchPoints: pass.phone ? 5 : 0 });
@@ -1579,6 +1667,7 @@ async function runPass() {
       close: async () => palette("split"),
     });
   await changesScreens();
+  await gitScreens();
   await screen("previews", {
     open: async () => {
       await onAgents();
