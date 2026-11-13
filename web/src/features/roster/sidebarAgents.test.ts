@@ -83,6 +83,7 @@ describe("pins", () => {
   it("lets go of a pin whose agent is gone from a connected machine, or whose machine the fleet no longer has", () => {
     expect(livePins(machines, [agentKey("gog", a.id), "gog|w9:p9", "pi|w1:p1", "gone|w1:p1"])).toEqual([agentKey("gog", a.id), "pi|w1:p1"]);
     expect(livePins([], ["gog|w9:p9"])).toEqual(["gog|w9:p9"]);
+    expect(livePins([machine("gog", [])], ["gog|w9:p9"])).toEqual(["gog|w9:p9"]);
   });
 });
 

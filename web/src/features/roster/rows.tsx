@@ -207,7 +207,7 @@ function WorkspaceView({ machine: m, item, group, primary, compact, current, pre
       ].filter(Boolean).join("\n");
   const sub = branch || primary || sync || words;
   return (
-    <div className={`ws-item is-${agent ? d : "shell"}${selected ? " on" : ""}${alert ? " is-alert" : ""}${!several && limited(lead) ? " is-limit" : ""}${group ? " in-repo" : ""}`}>
+    <div className={`ws-item is-${agent ? d : "shell"}${selected ? " on" : ""}${alert ? " is-alert" : ""}${limited(lead) ? " is-limit" : ""}${group ? " in-repo" : ""}`}>
       <div className="ws-main" role="button" tabIndex={0} onClick={open} onKeyDown={(e) => rowKey(e, open)} title={tip}>
         <span className="ws-line">
           {!agents && <span className="radar-mark">$</span>}
