@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import agentLines from "./AgentLines.tsx?raw";
 import dialogs from "./dialogs.tsx?raw";
 import folderPicker from "./FolderPicker.tsx?raw";
 import healthButton from "./HealthButton.tsx?raw";
@@ -35,7 +36,7 @@ function iconButtons(source: string): { tag: string; before: string[] }[] {
   return found;
 }
 
-const SOURCES = { dialogs, folderPicker, healthButton, machineMenu, rows, sidebar, tabStrip, sourcePicker, removeWorktree, actionDialog, projectSettings };
+const SOURCES = { agentLines, dialogs, folderPicker, healthButton, machineMenu, rows, sidebar, tabStrip, sourcePicker, removeWorktree, actionDialog, projectSettings };
 
 describe("the sidebar's icon-only buttons", () => {
   it("say what they do through a Tip — their own, or their menu's or popover's — and an aria-label, never a title (AGENTS.md)", () => {

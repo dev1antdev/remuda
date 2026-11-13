@@ -1,6 +1,7 @@
 // Files the agent wrote: resolved, read, diffed, uploaded — on the machine the pane lives on.
 
 import { check, getJSON } from "@/lib/http";
+import type { TreeListing } from "./tree/tree";
 
 export type FileInfo = {
   path: string;
@@ -45,4 +46,8 @@ export async function uploadFiles(machineId: string, paneId: string, files: File
   return ((await res.json()) as { files: Upload[] }).files;
 }
 
-export const fsDiff = (machineId: string, path: string): Promise<FileDiff> => getJSON(`/api/fs/diff?${new URLSearchParams({ machine: machineId, path })}`);
+// fsTree is one folder of the project tree: path under the workspace folder dir ("" the folder itself), its entries
+// folders first with git's marks
+export const fsTree = (machineId: string, dir: string, path: string): Promise<TreeListing> => getJSON(`/api/fs/tree?${new URLSearchParams({ machine: machineId, dir, path })}`);
+
+export const fsDiff =(machineId: string, path: string): Promise<FileDiff> => getJSON(`/api/fs/diff?${new URLSearchParams({ machine: machineId, path })}`);

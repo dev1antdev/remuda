@@ -1,4 +1,4 @@
-// The pane area: the tab strip (its tools slot the lens's one control and the View menu), the three lenses of the pane on
+// The pane area: the tab strip (its tools slot the lens's one control and the View menu), the four lenses of the pane on
 // screen with the files rail beside them, or a transcript on its own.
 // A lens stays mounted once seen, scoped to the pane: it never mounts hidden, since a terminal opened
 // unseen would attach at 80×24 and resize the shared pane. The split view (app/split.ts) shows the chat and the
@@ -21,8 +21,9 @@ import { closeTabAsk } from "@/features/roster/tabs";
 import { madeWorktree } from "@/features/roster/tidy";
 import RunButton from "@/features/roster/project/RunButton";
 import Chat from "@/features/chat/Chat";
-import FilesRail from "@/features/chat/FilesRail";
+import FilesRail from "./FilesRail";
 import Review from "@/features/review/Review";
+import { GitLens } from "@/features/git/GitLens";
 import { TerminalLens, TerminalTools, useTerminalViewItems } from "@/features/terminal/TerminalLens";
 import { timelapseRows } from "@/features/terminal/timelapse/row";
 import { Screen } from "@/features/terminal/Screen";
@@ -30,6 +31,7 @@ import { LimitNotice } from "@/features/usage/LimitNotice";
 import { accountWindows } from "@/features/usage/limits";
 import { Icon, Notice, PANELS, Resizer } from "@/ui";
 import { WindowsPaths } from "@/ui/Markdown";
+import FollowPRLinks from "@/features/pr/FollowPRLinks";
 import { act } from "./act";
 import { folderOf, type Located } from "./current";
 import { actions, app, type Lens } from "./store";
@@ -194,11 +196,17 @@ export default function PaneArea({ current }: { current: Located | null }) {
         }}
       />
       <WindowsPaths.Provider value={onWindows(machine)}>
+      <FollowPRLinks machineId={machine.id} dir={folder} paneId={pane.id} off={viewOnly}>
       <div className={`pane-body${split ? " is-split" : ""}${covered ? " is-covered" : ""}`} ref={body}>
         {covered && <SharingVeil onShow={() => setRevealed(paneKey)} />}
         {seen("changes") && (
           <div className="lens-pane" hidden={!shown("changes")}>
             <Review key={`${machine.id}|${session.id}|${folder}`} machineId={machine.id} paneId={pane.id} dir={folder} agent={pane.agent} onSeen={refresh} active={shown("changes")} editor={!onWindows(machine)} />
+          </div>
+        )}
+        {seen("git") && (
+          <div className="lens-pane" hidden={!shown("git")}>
+            <GitLens key={`${machine.id}|${session.id}|${folder}`} machineId={machine.id} dir={folder} active={shown("git")} viewOnly={viewOnly} onChanges={() => actions.setLens("changes")} />
           </div>
         )}
         {seen("chat") && (
@@ -240,11 +248,14 @@ export default function PaneArea({ current }: { current: Located | null }) {
             status={pane.status}
             dir={folder}
             active={!narrow}
+            viewOnly={viewOnly}
+            editor={!viewOnly && !onWindows(machine)}
             onOpenFile={(target) => actions.openFile(machine.id, pane.id, target, folder)}
             onOpenInCode={onWindows(machine) ? undefined : (path) => (viewOnly ? actions.openFile(machine.id, pane.id, { path }, folder) : actions.openInCode(machine.id, folder, path))} // a viewer has no Code mode: the file viewer reads it; a Windows PC has no editor
           />
         )}
       </div>
+      </FollowPRLinks>
       </WindowsPaths.Provider>
     </main>
   );

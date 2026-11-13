@@ -340,13 +340,12 @@ type Diff struct {
 	Diff      string `json:"diff"`
 }
 
-// GitDiff is the file's uncommitted change against HEAD in its repository, or marks it untracked / outside any repo.
+// GitDiff is the file's uncommitted change against HEAD in its repository, git's own diff whatever driver is set, or marks it
+// untracked / outside any repo. A file deleted since HEAD, its folder with it, is read from the nearest folder still there.
 func (mc *Machine) GitDiff(p string) (Diff, error) {
 	style := mc.Paths()
 	q := script.Quote(p)
-	diff := script.InRepo(style.Dir(p)) +
-		`printf '%s\n' "$root"; if git ls-files --error-unmatch -- ` + q + ` >/dev/null 2>&1; then echo tracked; ` +
-		`git -c color.ui=never diff HEAD -- ` + q + ` | head -c 400000; else echo untracked; fi`
+	diff := gitDiffScript(style.Slash(style.Dir(p)), q)
 	out, err := mc.text(diff, 30*time.Second)
 	if err != nil {
 		return Diff{}, err
@@ -354,4 +353,13 @@ func (mc *Machine) GitDiff(p string) (Diff, error) {
 	root, rest, _ := strings.Cut(out, "\n")
 	state, diff, _ := strings.Cut(rest, "\n")
 	return Diff{Repo: style.Clean(strings.TrimSpace(root)), Untracked: strings.TrimSpace(state) == "untracked", Diff: diff}, nil
+}
+
+// gitDiffScript prints the repository's root, then tracked or untracked, then the diff: a file HEAD holds counts as
+// tracked though a commit to come deletes it (git rm).
+func gitDiffScript(folder, quotedPath string) string {
+	return `d=` + script.Quote(folder) + `; while [ ! -d "$d" ]; do up=$(dirname "$d"); [ "$up" = "$d" ] && exit 0; d=$up; done; ` +
+		`cd "$d" 2>/dev/null || exit 0; root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; ` +
+		`printf '%s\n' "$root"; if git ls-files --error-unmatch -- ` + quotedPath + ` >/dev/null 2>&1 || [ -n "$(git ls-tree --name-only HEAD -- ` + quotedPath + ` 2>/dev/null)" ]; then echo tracked; ` +
+		`git -c color.ui=never diff --no-ext-diff HEAD -- ` + quotedPath + ` | head -c 400000; else echo untracked; fi`
 }

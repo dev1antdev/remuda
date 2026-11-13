@@ -17,6 +17,7 @@ import FleetDialog from "@/features/updates/FleetDialog";
 import ReopenDialog from "@/features/reopen/ReopenDialog";
 import ArenaDialog from "@/features/arena/ArenaDialog";
 import ArenaPanel from "@/features/arena/ArenaPanel";
+import PRPanel from "@/features/pr/PRPanel";
 import { useRoster } from "@/features/roster/useRoster";
 import { useSharing } from "@/features/roster/useSharing";
 import { AddMachineDialog, NewTabDialog, NewWorkspaceDialog, RenameDialog, RenameMachineDialog } from "@/features/roster/dialogs";
@@ -116,6 +117,7 @@ export default function Overlays() {
       {panel === "standup" && <Standup onClose={actions.closePanel} />}
       {panel === "arena" && <ArenaPanel onClose={actions.closePanel} />}
       {panel === "concierge" && !viewOnly && <Concierge onClose={actions.closePanel} />}
+      {panel === "pr" && !viewOnly && <PRPanel onClose={actions.closePanel} />}
       {panel === "usage" && (
         <Usage machines={machines} onClose={actions.closePanel} onOpenSession={(machine, project, session, dir) => openHit({ machine, project, session, dir, uuid: "", ts: "", role: "assistant", snippet: "" })} />
       )}

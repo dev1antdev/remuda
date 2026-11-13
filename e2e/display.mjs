@@ -8,7 +8,8 @@
 // there, no console error. Every failure is collected and named by pass, screen and element; any one fails the run.
 import { execFileSync, spawn } from "node:child_process";
 import { createServer } from "node:net";
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { fakePullRequests, prScreens } from "./fake-pr.mjs";
 
 const base = process.env.E2E_URL;
 const cdp = process.env.E2E_CDP;
@@ -78,9 +79,12 @@ socket.onmessage = (message) => {
   if (msg.method === "Fetch.requestPaused") {
     const url = msg.params.request?.url ?? "";
     if (url.includes("/api/opinion")) void fakeOpinion(msg.params);
+    else if (url.includes("/api/pr/")) void fakePullRequests(msg.params, send);
     else if (url.includes("/api/concierge")) void fakeConcierge(msg.params);
     else if (url.includes("/api/scorecard")) void fakeScorecard(msg.params);
     else if (/\/api\/(scenes\/|scene-runs\/)/.test(url)) void fakeScenes(msg.params);
+    else if (url.includes("/api/review/conflict")) void fakeConflictRead(msg.params);
+    else if (/\/api\/review\?/.test(url)) void dressReview(msg.params);
     else if (url.includes("/api/review/secrets")) void fakeSecrets(msg.params);
     else if (url.includes("/api/timelapse/recordings") || url.includes("/api/timelapse/search")) void fakeTimelapse(msg.params);
     else if (url.includes("/api/standup")) void fakeStandup(msg.params);
@@ -88,6 +92,7 @@ socket.onmessage = (message) => {
     else if (url.includes("/api/fleet-setup")) void fakeFleet(msg.params);
     else if (url.includes("/api/undo")) void fakeUndo(msg.params);
     else if (url.includes("/api/limits/offers")) void fakeOffers(msg.params);
+    else if (url.includes("/api/question")) void fakeQuestion(msg.params);
     else if (url.includes("/api/worktrees/github")) void fakeLists(msg.params);
     else if (url.includes("/api/worktrees/source")) void dressSource(msg.params);
     else if (/\/api\/feed/.test(url)) void dressFeed(msg.params);
@@ -329,6 +334,10 @@ writeFileSync(`${appDir}/README.md`, "# app\n");
 writeFileSync(`${appDir}/src/app.go`, goLines("hello", 41));
 writeFileSync(`${appDir}/docs/notes.md`, "# Notes\n\nThe first note.\n");
 writeFileSync(`${appDir}/old.txt`, "an old file\n");
+// for the project tree: a folder git ignores, a link, a file whose icon has a light theme's own
+writeFileSync(`${appDir}/.gitignore`, "build/\n");
+writeFileSync(`${appDir}/app.toml`, 'name = "app"\n');
+symlinkSync("README.md", `${appDir}/latest.md`);
 // Claude Code's own approvals committed by mistake, one of them carrying a token: the lens head warns of it. The token
 // is made here, its letters in another order, so no secret sits in this file
 const shuffledKey = (n) => Array.from({ length: n }, (_, i) => "Zq8vK2mWp4Lr7Tb9Xs3Nd6Hc1JyQe5Gu0"[(i * 7 + 3) % 33]).join("");
@@ -337,11 +346,23 @@ writeFileSync(`${appDir}/.claude/settings.local.json`, `${JSON.stringify({ permi
 git(appDir, "add", "-A");
 git(appDir, "add", "-f", ".claude/settings.local.json"); // past an excludes file that ignores it, as Claude Code sets one up
 git(appDir, "commit", "-q", "-m", "init");
+// a tag on the first commit, a bare origin it went to, and a second commit not pushed yet: the Git lens draws two
+// commits, labels and a line changed with its words marked; the Changes lens has its "not on origin/main" and its scope
+// against the base
+git(appDir, "tag", "v0.1.0");
+const originDir = `${tmp}/display/origin.git`;
+git(`${tmp}/display`, "init", "-q", "--bare", originDir);
+git(appDir, "remote", "add", "origin", originDir);
+git(appDir, "push", "-q", "-u", "origin", "main");
+writeFileSync(`${appDir}/README.md`, "# the app\n");
+git(appDir, "commit", "-q", "-am", "docs: name the app");
 writeFileSync(`${appDir}/src/app.go`, goLines("hello, world", 42));
 writeFileSync(`${appDir}/docs/notes.md`, "# Notes\n\nThe first note.\nA second note, staged.\n");
 git(appDir, "add", "docs/notes.md");
 git(appDir, "rm", "-q", "old.txt");
 writeFileSync(`${appDir}/src/new.ts`, 'export const fresh = "a new file";\n');
+mkdirSync(`${appDir}/build`, { recursive: true });
+writeFileSync(`${appDir}/build/out.txt`, "built\n");
 const CHANGED = ["docs/notes.md", "old.txt", "src/app.go", "src/new.ts"];
 // the "dev server" an agent would start in the repository, for the previews: python3's http.server on a free port
 const freePort = () =>
@@ -457,6 +478,8 @@ async function seed() {
       status: "run",
       title: "Draw every screen of the page at two widths",
       radar: { state: "working", since: now - 3 * 60e3, last_active: now },
+      // three subagents at work, the two oldest by name: the sidebar's tree under the agent's line
+      subagents: { working: 3, session: "0c7a6c1e-2a43-4c1a-9a5e-3c1f0b6f8a11", list: [{ id: "agent-a1", description: "explore · cart service", doing: "Read · service.go" }, { id: "agent-a2", description: "test-runner", doing: "Bash · go test ./..." }] },
       usage: { model: "claude-opus-4-5", name: "Opus 4.5", context: 124000, window: 200000, cost: 4.2, turns: 12, tokens: { input: 1200, output: 3400, cache_read: 98000, cache_write: 2100 } },
       pr: { url: "https://github.com/example/app/pull/15", label: "PR #15", status: { state: "OPEN", draft: false, mergeable: "MERGEABLE", review: "REVIEW_REQUIRED", checks: { total: 3, pass: 2, fail: 1, pending: 0, skipped: 0 }, at: iso(now) } },
     },
@@ -608,6 +631,25 @@ async function fakeScenes({ requestId, request }) {
   else if (path.endsWith("/run")) body = run(path.split("/").at(-2), false);
   else body = run(path.split("/").at(-1).replace(/^run-/, ""), true);
   await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(body)).toString("base64") });
+}
+
+// fakeConflict is a screen asking for a conflict in the repository: dressReview adds src/clash.go, both sides edited,
+// to the lens's summary of it, and fakeConflictRead answers the file with its markers; nothing is merged anywhere
+let fakeConflict = false;
+const isApp = (request) => (new URL(request.url).searchParams.get("dir") ?? "").replace(/\/+$/, "").endsWith("/display/app");
+async function dressReview({ requestId, request, responseStatusCode }) {
+  const reply = await send("Fetch.getResponseBody", { requestId });
+  if (!fakeConflict || !isApp(request) || responseStatusCode !== 200 || !reply.result) {
+    await send("Fetch.continueRequest", { requestId });
+    return;
+  }
+  const summary = JSON.parse(reply.result.base64Encoded ? Buffer.from(reply.result.body, "base64").toString("utf8") : reply.result.body);
+  summary.files = [{ path: "src/clash.go", added: 0, removed: 0, fresh: true, conflict: "UU" }, ...(summary.files ?? [])];
+  await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(summary)).toString("base64") });
+}
+async function fakeConflictRead({ requestId }) {
+  const text = ["package main", "", "// greet says hello", "func greet() string {", "<<<<<<< HEAD", '\treturn "hello"', "=======", '\treturn "hello, world"', '\t// and to everyone', ">>>>>>> feature", "}", ""].join("\n");
+  await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify({ stages: "123", text })).toString("base64") });
 }
 
 // fakeSecrets answers the secret check for the repository with what it would find in work holding secrets: a token on
@@ -794,6 +836,44 @@ const UNDO_CHAT = [
   { role: "assistant", ts: iso(now - 11 * 60e3), ids: ["e2e-undo-answer"], parts: [{ type: "text", text: "Drew them, and committed the screens." }], took: 150 },
 ];
 let undoChat = false;
+// PROMPTS_CHAT is the dressed pane's conversation for the chat's own screens: an answer whose calls make one card — a
+// read, an edit with its change, a test that failed and passed again — then a turn under way, a message the person sent
+// while it worked inside it, its last call still running; the question route says what Claude Code's spinner says
+const PROMPTS_SESSION = "0e2e0000-7777-4000-8000-0000000000aa";
+const PROMPTS_CHAT = [
+  { role: "user", ts: iso(now - 14 * 60e3), ids: ["e2e-p1"], parts: [{ type: "text", text: "Draw the **prompts list** beside the chat, newest first." }] },
+  {
+    role: "assistant",
+    ts: iso(now - 14 * 60e3 + 3e3),
+    ids: ["e2e-p1a"],
+    took: 252,
+    tokens: 38000,
+    output: 9100,
+    cost: 0.42,
+    parts: [
+      { type: "text", text: "I'll start with the cards." },
+      { type: "tool", tool_name: "Read", tool_id: "toolu_e2e_p1", at: iso(now - 14 * 60e3 + 4e3), took: 0.2, input: { file_path: `${appDir}/src/app.go` }, output: "package main" },
+      { type: "tool", tool_name: "Edit", tool_id: "toolu_e2e_p2", at: iso(now - 14 * 60e3 + 9e3), took: 0.4, input: { file_path: `${appDir}/src/app.go`, old_string: 'fmt.Println("hello")', new_string: 'fmt.Println("hello, prompts")' }, output: "The file was updated." },
+      { type: "thinking", text: "The test should cover the newest-first order." },
+      { type: "tool", tool_name: "Bash", tool_id: "toolu_e2e_p3", at: iso(now - 13 * 60e3), took: 3.1, input: { command: "go test ./..." }, output: "--- FAIL: TestPrompts", is_error: true },
+      { type: "tool", tool_name: "Bash", tool_id: "toolu_e2e_p4", at: iso(now - 12 * 60e3), took: 2.7, input: { command: "go test ./..." }, output: "ok" },
+      { type: "text", text: "Drew the list and its sheet on a phone. The tests pass now; the card opens in place and the log jumps to its turn." },
+    ],
+  },
+  { role: "user", ts: iso(now - 6 * 60e3), ids: ["e2e-p2"], parts: [{ type: "text", text: "Now show the spinner's progress over the composer." }] },
+  {
+    role: "assistant",
+    ts: iso(now - 6 * 60e3 + 2e3),
+    ids: ["e2e-p2a", "e2e-p2m"],
+    output: 2100,
+    parts: [
+      { type: "tool", tool_name: "Read", tool_id: "toolu_e2e_p5", at: iso(now - 5 * 60e3), took: 0.1, input: { file_path: `${appDir}/README.md` }, output: "# app" },
+      { type: "queued", text: "Show it in the **wall tile** too.", at: iso(now - 4 * 60e3) },
+      { type: "tool", tool_name: "Bash", tool_id: "toolu_e2e_p6", at: iso(now - 20e3), input: { command: "npm test -- progress" } },
+    ],
+  },
+];
+let promptsChat = false;
 // windowsLocal plays the local machine as a Windows PC in the dressed roster, for the screen terminal's screen alone
 let windowsLocal = false;
 function fakeUndoTurn() {
@@ -811,6 +891,24 @@ async function fakeUndo({ requestId, request }) {
   const [code, body] =
     request.method !== "GET" ? [403, { error: "the e2e undoes nothing" }] : path.endsWith("/plan") ? [200, { turn, uncommitted: 4, pushed: ["origin/main"], left_as_is: [] }] : [200, { turns: [turn, older].map((one) => ({ ...one, files: one.files.length })), recording: true }];
   await send("Fetch.fulfillRequest", { requestId, responseCode: code, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(body)).toString("base64") });
+}
+
+// ASKED is what the dressed Codex asks on its screen, which the sidebar's "Needs you" and the zoo's bubble quote
+const ASKED = "Bash command\ngo build ./...\nbuild the app\nDo you want to proceed?";
+
+// fakeQuestion answers a read of a pane's dialog: while the chat's own screens are up the dressed pane's screen shows
+// Claude Code's spinner; else the asking pane's dialog, none for the rest; an answer is passed on
+async function fakeQuestion({ requestId, request }) {
+  if (request.method !== "GET") {
+    await send("Fetch.continueRequest", { requestId });
+    return;
+  }
+  const pane = new URL(request.url).searchParams.get("pane");
+  const answer =
+    promptsChat && pane === paneA1
+      ? { question: null, mode: "acceptEdits", progress: { verb: "Refactoring", seconds: 134, tokens: 6800 } }
+      : { question: DRESS[pane]?.status === "input" ? { text: ASKED, options: [{ label: "Yes" }, { label: "No" }] } : null };
+  await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(answer)).toString("base64") });
 }
 
 async function dressRoster({ requestId, responseStatusCode, responseHeaders = [] }) {
@@ -849,6 +947,7 @@ async function dressRoster({ requestId, responseStatusCode, responseHeaders = []
       if (session.id === desk?.id) session.concierge = true; // the page shows it in the concierge's place alone
       if (session.id === app.id) {
         session.jira = [{ key: "APP-12", summary: "Draw every screen", status: "In Review", category: "indeterminate", url: "https://example.atlassian.net/browse/APP-12" }];
+        session.sync = { ahead: 2, behind: 1 }; // the selected card says how far it stands from its upstream
       }
       dressCollisions(session);
       for (const tab of session.tabs ?? []) for (const pane of tab.panes ?? []) Object.assign(pane, DRESS[pane.id] ?? {});
@@ -907,6 +1006,10 @@ async function dressChat({ requestId, request, responseStatusCode, responseHeade
   const chat = JSON.parse(reply.result.base64Encoded ? Buffer.from(reply.result.body, "base64").toString("utf8") : reply.result.body);
   chat.denied = DENIED;
   if (undoChat) chat.turns = [...(chat.turns ?? []), ...UNDO_CHAT];
+  if (promptsChat) {
+    chat.turns = PROMPTS_CHAT;
+    chat.session_id ||= PROMPTS_SESSION;
+  }
   const headers = responseHeaders.filter((h) => !/^(etag|content-length|content-encoding)$/i.test(h.name));
   await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: headers, body: Buffer.from(JSON.stringify(chat)).toString("base64") });
 }
@@ -1010,6 +1113,9 @@ const tapUntil = async (selector, opened) => {
   await tap(selector);
   await until(() => present(opened), 3);
 };
+// setPref writes a pref the way another tab of the page would, so every hook of it reads it again at once
+const setPref = (key, value) =>
+  evaluate(`(() => { localStorage.setItem(${JSON.stringify(`remuda.${key}`)}, ${JSON.stringify(JSON.stringify(value))}); dispatchEvent(new StorageEvent("storage", { key: ${JSON.stringify(`remuda.${key}`)} })); })()`);
 const folderHead = (name) => `[...document.querySelectorAll('.ws-folder-head')].find((h) => h.querySelector('.ws-folder-name')?.textContent === ${JSON.stringify(name)})`;
 const firstCardOf = (folder) => `${folderHead(folder)}?.parentElement.querySelector('.ws-item')`;
 const mark = async (expression, attr) => {
@@ -1111,8 +1217,15 @@ async function changesScreens() {
       check(JSON.stringify(paths) === JSON.stringify(CHANGED), `the lens lists ${paths.join(", ")}`);
       check((await count(`${LENS} .review-file.fresh`)) === CHANGED.length, "a file never looked at is not marked fresh");
       check(await evaluate(`(() => { const sub = document.querySelector('${LENS} .review-sub'); return !!sub && sub.scrollWidth <= sub.clientWidth + 1 && /4/.test(sub.textContent); })()`), "the line under the branch does not say the 4 files whole");
+      // git's groups: the staged edit and deletion, the edit not staged, the new file; the commit not on origin/main
+      const groups = { staged: await inGroup("staged"), unstaged: await inGroup("unstaged"), untracked: await inGroup("untracked") };
+      check(JSON.stringify(groups) === JSON.stringify({ staged: 2, unstaged: 1, untracked: 1 }), `the groups hold ${JSON.stringify(groups)}`);
+      check((await count(`${LENS} .review-group.is-outgoing .review-outgoing`)) === 1, "the commit not on origin/main is not listed");
+      // the agent dressed at work in the repository holds every write back, and the commit box says why
+      check(await evaluate(`(() => { const acts = [...document.querySelectorAll('${LENS} .review-act')]; return acts.length > 0 && acts.every((b) => b.getAttribute("aria-disabled") === "true"); })()`), "a write is offered while the agent works there");
+      check(/Claude Code/.test(await evaluate(`document.querySelector('${LENS} .commit-hint')?.textContent ?? ""`)), "the commit box does not name the agent at work");
     },
-    expect: [`${LENS} .review-head`, `${LENS} .review-collision`],
+    expect: [`${LENS} .review-head`, `${LENS} .review-collision`, `${LENS} .commit-box`],
     close: async () => {},
   });
   await screen("changes-diff", {
@@ -1128,12 +1241,12 @@ async function changesScreens() {
   });
   await screen("changes-columns", {
     open: async () => {
-      await tap(`${LENS} .review-head .icon-btn[aria-pressed]`);
+      await tap(`${LENS} .review-head .review-columns`);
       if (!(await until(async () => (await count(`${LENS} .review-diff.columns`)) === (pass.phone ? 1 : 0), 3))) failed("the columns switch did not switch");
     },
     expect: [`${LENS} .review-hunk`],
     close: async () => {
-      await tap(`${LENS} .review-head .icon-btn[aria-pressed]`);
+      await tap(`${LENS} .review-head .review-columns`);
       await sleep(200);
     },
   });
@@ -1240,7 +1353,7 @@ async function changesScreens() {
   });
   await screen("changes-file", {
     open: async () => {
-      await tap(await mark(`${fileHead("src/app.go")}?.parentElement.querySelector('.icon-btn')`, "open-file"));
+      await tap(await mark(`${fileHead("src/app.go")}?.parentElement.querySelector('.review-open')`, "open-file"));
       if (!(await until(async () => (await count(".fv .fv-code:not(.fv-diff) .hl-keyword")) > 0, 5))) failed("the file viewer does not colour the Go file");
     },
     expect: [".fv .fv-head"],
@@ -1258,7 +1371,213 @@ async function changesScreens() {
       if (!(await until(async () => !(await present(".fv")), 3))) failed("Esc did not close the file viewer");
     },
   });
+  await stagingScreens();
   await palette("lens:terminal");
+}
+
+// a row of a group by its key, its own button for an action, and the files a group lists
+const rowOf = (key) => `${LENS} .review-file[data-key=${JSON.stringify(key)}]`;
+const actionOf = (key, action) => `${rowOf(key)} .review-act.is-${action}`;
+const inGroup = (group) => count(`${LENS} .review-group.is-${group} .review-file`);
+const gitStatus = () => execFileSync("git", ["status", "--porcelain=v1"], { cwd: appDir, encoding: "utf8" });
+// pressRow presses a row's button: the pointer over the row first, where its counts give way to its buttons
+async function pressRow(key, action) {
+  await hover(`${rowOf(key)} .review-file-row`);
+  await tap(actionOf(key, action));
+}
+
+// stagingScreens are the lens as a client of the repository: the tree, the commits not on origin/main and the scope
+// against the base on the seeded work; then, with the agents in the repository dressed at rest, a file staged through
+// the lens and back (the e2e's own throwaway repository, put back each pass), the commit box held by the secret check,
+// and a conflict through a faked summary; the agents are dressed at work again afterwards
+async function stagingScreens() {
+  await screen("changes-tree", {
+    open: async () => {
+      await tap(`${LENS} .review-tree-toggle`);
+      if (!(await until(async () => (await count(`${LENS} .review-folder`)) === 3, 3))) failed(`the tree shows ${await count(`${LENS} .review-folder`)} folders, not docs/ and src/ twice`);
+      check((await count(`${LENS} .review-file`)) === CHANGED.length, "a folder of the tree hides its files");
+    },
+    expect: [`${LENS} .review-folder`],
+    close: async () => {
+      await tap(`${LENS} .review-tree-toggle`);
+      await until(async () => (await count(`${LENS} .review-folder`)) === 0, 3);
+    },
+  });
+  await screen("changes-outgoing", {
+    open: async () => {
+      check(/origin\/main/.test(await evaluate(`document.querySelector('${LENS} .review-group.is-outgoing .review-group-title')?.textContent ?? ""`)), "the group does not name origin/main");
+      await tap(`${LENS} .review-outgoing-head`);
+      if (!(await until(() => present(`${LENS} .review-outgoing.open .review-file`), 6))) throw new Error("the commit's files did not open");
+      await tap(`${LENS} .review-outgoing.open .review-file-head`);
+      if (!(await until(() => present(`${LENS} .review-outgoing.open .review-hunk`), 6))) failed("the commit's file did not open on its diff");
+    },
+    expect: [`${LENS} .review-outgoing.open .review-hunk`],
+    close: async () => {
+      await tap(`${LENS} .review-outgoing-head`);
+      await sleep(200);
+    },
+  });
+  await screen("changes-base", {
+    open: async () => {
+      await tap(`${LENS} .review-scope button:last-child`);
+      if (!(await until(async () => (await count(`${LENS} .review-group.is-base .review-file`)) === CHANGED.length + 1, 8))) failed(`vs base lists ${await count(`${LENS} .review-group.is-base .review-file`)} files, not ${CHANGED.length + 1}`);
+      check(/origin\/main/.test(await evaluate(`document.querySelector('${LENS} .review-base-line')?.textContent ?? ""`)), "the head does not name the base");
+      check(!(await present(`${LENS} .review-act`)) && !(await present(`${LENS} .commit-box`)), "the base scope offers a write");
+    },
+    expect: [`${LENS} .review-base-line`],
+    close: async () => {
+      await tap(`${LENS} .review-scope button:first-child`);
+      await until(() => present(`${LENS} .review-group.is-unstaged`), 5);
+    },
+  });
+  const atWork = { ...DRESS };
+  for (const paneId of Object.keys(DRESS)) if (DRESS[paneId].radar?.state === "working" || DRESS[paneId].radar?.state === "blocked") DRESS[paneId] = { ...DRESS[paneId], radar: { ...DRESS[paneId].radar, state: "idle" } };
+  try {
+    await screen("changes-stage", {
+      open: async () => {
+        await send("Page.navigate", { url: `${base}/?machine=local&pane=${encodeURIComponent(paneA1)}&lens=changes` });
+        if (!(await until(async () => (await inGroup("unstaged")) === 1, 15))) throw new Error("the lens did not come back on the repository's work");
+        if (!(await until(() => evaluate(`(() => { const button = document.querySelector(${JSON.stringify(actionOf("unstaged:src/app.go", "stage"))}); return !!button && button.getAttribute("aria-disabled") !== "true"; })()`), 6))) throw new Error("Stage is held back with no agent at work");
+        await pressRow("unstaged:src/app.go", "stage");
+        if (!(await until(async () => (await inGroup("staged")) === 3 && !(await present(`${LENS} .review-group.is-unstaged`)), 8))) failed("src/app.go did not move to Staged");
+        check(/^M {2}src\/app\.go$/m.test(gitStatus()), `git does not have src/app.go staged: ${gitStatus()}`);
+      },
+      expect: [`${LENS} .review-group.is-staged`],
+      close: async () => {
+        await pressRow("staged:src/app.go", "unstage");
+        if (!(await until(async () => (await inGroup("unstaged")) === 1, 8))) failed("Unstage did not put src/app.go back");
+      },
+    });
+    await screen("changes-commit", {
+      open: async () => {
+        await evaluate(`document.querySelector('${LENS} .commit-message')?.focus()`); // the toast of the stage just undone may still lie over the box on a phone
+        await send("Input.insertText", { text: "Say hello to the world" });
+        if (!(await until(() => present(`${LENS} .commit-box .secret-check.is-found`), 8))) failed("the secret check does not stand before the commit");
+        check(await evaluate(`document.querySelector('${LENS} .commit-go')?.disabled === true`), "Commit is not held back by the findings");
+        check(await present(`${LENS} .commit-anyway`), "no Commit anyway… beside the held button");
+        await evaluate(`document.querySelector('${LENS} .commit-box')?.scrollIntoView({ block: "center" })`);
+      },
+      expect: [`${LENS} .commit-box .secret-check`],
+      close: async () => {
+        // the message taken out again, so the next pass's box starts empty: React hears the field's own input event
+        await evaluate(`(() => { const box = document.querySelector('${LENS} .commit-message'); Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set.call(box, ""); box.dispatchEvent(new Event("input", { bubbles: true })); })()`);
+        await until(async () => !(await present(`${LENS} .commit-box .secret-check`)), 3);
+      },
+    });
+    await screen("changes-conflict", {
+      open: async () => {
+        fakeConflict = true;
+        await tap(`${LENS} .review-look-again`);
+        if (!(await until(() => present(`${LENS} .review-group.is-conflict .review-file`), 6))) throw new Error("the faked conflict is not listed apart");
+        check(await present(`${LENS} .review-group.is-conflict .review-conflict-kind`), "the conflict does not say its kind");
+        check(await evaluate(`document.querySelector('${LENS} .commit-go')?.disabled === true`), "Commit is offered over a conflict");
+        await tap(`${LENS} .review-group.is-conflict .review-file-head`);
+        if (!(await until(() => present(`${LENS} .conflict-view .fv-line.yours`), 6))) failed("the conflict's blocks are not drawn");
+        check(await present(`${LENS} .conflict-view .fv-line.marker`), "the markers are not on their band");
+        check((await count(`${LENS} .conflict-view.columns`)) === (pass.phone ? 0 : 1), "yours and incoming are not side by side at a desk");
+        await evaluate(`document.querySelector('${LENS} .conflict-view')?.scrollIntoView({ block: "center" })`);
+      },
+      expect: [`${LENS} .conflict-view`],
+      close: async () => {
+        fakeConflict = false;
+        await tap(`${LENS} .review-look-again`);
+        await until(async () => !(await present(`${LENS} .review-group.is-conflict`)), 5);
+      },
+    });
+  } finally {
+    DRESS = atWork;
+    await send("Page.navigate", { url: `${base}/?machine=local&pane=${encodeURIComponent(paneA1)}&lens=changes` });
+    await until(() => present(`${LENS} .review-head`), 15);
+  }
+}
+
+// ---- the project's files: the files rail's tree, a row's menu, the file viewer's changed lines ----
+
+const RAIL = ".footprint";
+const treeRow = (path) => `[...document.querySelectorAll('${RAIL} .tree-open')].find((b) => b.title.split("\\n")[0] === ${JSON.stringify(path)})?.closest('.tree-row')`;
+const treeMenu = async (path) => {
+  await hover(await mark(`${treeRow(path)}?.querySelector('.tree-open')`, "tree-row"));
+  await tap(await mark(`${treeRow(path)}?.querySelector('.tree-more')`, "tree-more"));
+  if (!(await until(() => present(".menu .menu-item"), 4))) throw new Error(`the menu of ${path} did not open`);
+};
+
+// filesScreens draws the Project tab of the files rail on the repository, with git's marks, a folder opened, a row's
+// menu, Send to agent (nothing sent) and the light theme's icons — the rail is a desk's — then, on every pass, the file
+// viewer's changed lines with the old ones shown in place, opened from the tree at a desk and from the Changes lens on a phone
+async function filesScreens() {
+  await onAgents();
+  if (!pass.phone) {
+    await screen("files-tree", {
+      open: async () => {
+        await palette("lens:chat");
+        await tap(`${RAIL} .footprint-tabs button:last-child`);
+        if (!(await until(() => evaluate(`!!(${treeRow("src")})`), 10))) throw new Error("the Project tab lists no src folder");
+        check(await evaluate(`!!${treeRow("src")}?.querySelector('.tree-dot.on')`), "src, holding changes, wears no dot");
+        check(await evaluate(`!!${treeRow("old.txt")}?.classList.contains('is-gone')`), "the deleted old.txt is not listed as gone");
+        check(await evaluate(`!!${treeRow("build")}?.classList.contains('is-ignored')`), "the ignored build folder is not dimmed");
+        check(await evaluate(`!!${treeRow("latest.md")}?.querySelector('.tree-link')`), "the link latest.md wears no link mark");
+        check((await count(`${RAIL} .file-icon[data-icon="folder-src"]`)) === 1, "src wears no src folder icon");
+      },
+      expect: [`${RAIL} .tree-row.tone-changed`],
+      close: async () => {},
+    });
+    await screen("files-tree-folder", {
+      open: async () => {
+        await tap(await mark(`${treeRow("src")}?.querySelector('.tree-open')`, "tree-src"));
+        if (!(await until(() => evaluate(`!!(${treeRow("src/app.go")})`), 6))) throw new Error("src did not open");
+        check(await evaluate(`!!${treeRow("src/app.go")}?.classList.contains('tone-changed') && !!${treeRow("src/new.ts")}?.classList.contains('tone-added')`), "src's files do not wear their marks");
+      },
+      expect: [`${RAIL} .tree-group.nested .tree-row`],
+      close: async () => {},
+    });
+    await screen("files-tree-menu", {
+      open: async () => {
+        await treeMenu("src/app.go");
+        check((await count(".menu .menu-item")) === 6, `the row's menu has ${await count(".menu .menu-item")} rows, not 6`);
+      },
+      expect: [".menu"],
+    });
+    await screen("files-tree-send", {
+      open: async () => {
+        await treeMenu("src/app.go");
+        await tap(await mark(`[...document.querySelectorAll(".menu .menu-item")].pop()`, "send-row"));
+        if (!(await until(() => present(".modal .send-about"), 4))) throw new Error("Send to agent did not open its dialog");
+        check(await evaluate(`document.querySelector(".modal .send-about")?.textContent.endsWith(${JSON.stringify(`${appDir}/src/app.go`)})`), "the dialog does not name the file's path");
+      },
+      expect: [".modal textarea", ".modal .send-about"],
+    });
+    await screen("files-tree-light", {
+      open: async () => {
+        await palette("theme-light");
+        if (!(await until(() => evaluate(`document.documentElement.dataset.theme === "light"`), 4))) throw new Error("the page did not turn light");
+        if (!(await until(async () => (await count(`${RAIL} .file-icon[data-icon="toml_light"]`)) === 1, 4))) failed("app.toml does not wear the light theme's icon");
+      },
+      expect: [`${RAIL} .tree-row`],
+      close: async () => {
+        await palette("theme-dark");
+        if (!(await until(() => evaluate(`document.documentElement.dataset.theme === "dark"`), 4))) failed("the page did not turn dark again");
+      },
+    });
+  }
+  await screen("file-lines", {
+    open: async () => {
+      if (pass.phone) {
+        await palette("lens:changes");
+        await until(async () => (await count(`${LENS} .review-file`)) > 0, 8);
+        await tap(await mark(`${fileHead("src/app.go")}?.parentElement.querySelector('.review-open')`, "open-file"));
+      } else await tap(await mark(`${treeRow("src/app.go")}?.querySelector('.tree-open')`, "tree-file"));
+      if (!(await until(() => present(".fv .fv-gutter .fv-line.is-changed"), 6))) throw new Error("the file viewer marks no changed line");
+      await tap(".fv .fv-toggle");
+      if (!(await until(() => evaluate(`[...document.querySelectorAll(".fv .fv-line.is-old")].some((l) => l.textContent.includes('"hello"'))`), 4))) failed("the old line does not show in place");
+    },
+    expect: [".fv .fv-line.is-old"],
+    close: async () => {
+      await key("Escape", "Escape");
+      if (!(await until(async () => !(await present(".fv")), 3))) failed("Esc did not close the file viewer");
+      if (!pass.phone) await tap(`${RAIL} .footprint-tabs button:first-child`);
+      await palette("lens:terminal");
+    },
+  });
 }
 
 // changesFlow runs once, after the passes: the Review mode lists the repository, Mark reviewed moves the baseline,
@@ -1270,7 +1589,7 @@ async function changesFlow() {
     if (!(await until(() => present(`${LENS} .review-head`), 15))) throw new Error("the Changes lens did not come up");
   };
   const lookAgain = async () => {
-    await tap(await mark(`document.querySelectorAll('${LENS} .review-head .icon-btn')[1]`, "look-again"));
+    await tap(await mark(`document.querySelector('${LENS} .review-head .review-look-again')`, "look-again"));
     await sleep(400);
   };
   const markReviewed = async () => {
@@ -1505,6 +1824,92 @@ async function worktreeFlow() {
   say("worktree flow: a clean close takes its worktree, a dirty one keeps it, the leftover goes once clean");
 }
 
+// ---- the Git lens on the repository's real history ----
+
+const GIT = ".lens-pane:not([hidden]) .git-lens";
+
+// menuOn opens the Git lens's menu for what is under a selector: a right-click at a desk, a tap on a label on a phone
+async function menuOn(selector) {
+  const at = await centre(selector);
+  if (!at) throw new Error(`nothing to open a menu on at ${selector}`);
+  if (pass.phone) await press(at);
+  else {
+    await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: at[0], y: at[1] });
+    await send("Input.dispatchMouseEvent", { type: "mousePressed", x: at[0], y: at[1], button: "right", clickCount: 1 });
+    await send("Input.dispatchMouseEvent", { type: "mouseReleased", x: at[0], y: at[1], button: "right", clickCount: 1 });
+  }
+  if (!(await until(() => present(".menu .menu-item"), 4))) throw new Error(`no menu opened on ${selector}`);
+}
+
+// gitScreens draws the Git lens on every pass: the graph with its uncommitted row, labels and HEAD, a commit's details,
+// a file's diff with its words marked, a branch's menu and its delete asked and cancelled — nothing is written
+async function gitScreens() {
+  await onAgents();
+  const branchesBefore = git(appDir, "branch", "--format=%(refname:short)").toString();
+  await screen("git-lens", {
+    open: async () => {
+      await palette("lens:git");
+      if (!(await until(async () => (await count(`${GIT} .git-row[data-index]`)) === 3, 10))) failed(`the graph draws ${await count(`${GIT} .git-row[data-index]`)} rows, not the uncommitted one and two commits`);
+      check(await present(`${GIT} .git-row.is-uncommitted`), "no Uncommitted changes row over HEAD");
+      check(await present(`${GIT} .git-row.is-head .git-label.is-current`), "HEAD's row does not carry the checked-out branch, filled");
+      check(await present(`${GIT} .git-label.is-tag`), "the tag v0.1.0 has no label");
+      check(/main/.test(await evaluate(`document.querySelector('${GIT} .git-where')?.textContent ?? ""`)), "the head's chip does not say main");
+      check(await evaluate(`[...document.querySelectorAll('${GIT} .git-row[data-index]')].every((r) => Math.round(r.getBoundingClientRect().height) === 24)`), "a row of the graph is not 24 px high");
+      // a phone widens its page to what overflows it, so the page's own width says whether the four lenses fit
+      check(await evaluate(`innerWidth === ${pass.width} && document.querySelector('.lens-switch').getBoundingClientRect().right <= innerWidth + 1`), "the header's four lenses run past the screen");
+    },
+    expect: [`${GIT} .git-head`, `${GIT} .git-lanes`],
+    close: async () => {},
+  });
+  await screen("git-details", {
+    open: async () => {
+      await tap(await mark(`[...document.querySelectorAll('${GIT} .git-row[data-index]')].find((r) => r.textContent.includes("docs: name the app"))?.querySelector('.git-subject')`, "git-commit"));
+      if (!(await until(() => present(`${GIT} .git-details .git-file`), 6))) throw new Error("the commit's files did not come");
+      check(/README\.md/.test(await evaluate(`document.querySelector('${GIT} .git-files')?.textContent ?? ""`)), "the commit's files do not name README.md");
+    },
+    expect: [`${GIT} .git-meta`, `${GIT} .git-files`],
+    close: async () => {},
+  });
+  await screen("git-diff", {
+    open: async () => {
+      await tap(`${GIT} .git-file`);
+      if (!(await until(() => present(`${GIT} .git-diff .fv-line.add`), 6))) throw new Error("the file's diff did not come");
+      check((await count(`${GIT} .git-diff .fv-mark`)) > 0, "the changed words are not marked");
+      check((await count(`${GIT} .git-diff .fv-line.del`)) === 1, "the removed line is not drawn");
+    },
+    expect: [`${GIT} .git-diff`],
+    close: async () => {
+      await tap(`${GIT} .git-details-head .icon-btn`);
+      await sleep(200);
+    },
+  });
+  await screen("git-branch-menu", {
+    open: async () => {
+      await menuOn(`${GIT} .git-label-part[data-ref-name="feature-x"]`);
+      const rows = await evaluate(`[...document.querySelectorAll('.menu .menu-item')].map((i) => i.textContent)`);
+      check(rows.length >= 5, `the branch's menu has ${rows.length} rows`);
+      check(!rows.some((r) => /push|pull|fetch/i.test(r)), "the branch's menu offers what reaches a remote");
+    },
+    expect: [".menu .menu-item.danger"],
+    close: async () => {},
+  });
+  await screen("git-delete-branch", {
+    open: async () => {
+      await evaluate(`document.querySelector('.menu .menu-item.danger')?.click()`);
+      if (!(await until(() => present(".modal.git-dialog"), 4))) throw new Error("Delete branch… asked nothing first");
+      check(await present(".modal.git-dialog button[type=submit].danger"), "the delete's button is not red");
+      check(/feature-x/.test(await evaluate(`document.querySelector('.git-dialog-detail')?.textContent ?? ""`)), "the dialog does not name the branch");
+    },
+    expect: [".modal.git-dialog .modal-actions"],
+    close: async () => {
+      await tap(".modal.git-dialog .modal-actions .btn:not(.danger)");
+      if (!(await until(async () => !(await present(".modal.git-dialog")), 3))) failed("Cancel did not close the dialog");
+      check(git(appDir, "branch", "--format=%(refname:short)").toString() === branchesBefore, "a cancelled delete changed the branches");
+    },
+  });
+  await palette("lens:terminal");
+}
+
 async function runPass() {
   await send("Emulation.setDeviceMetricsOverride", { width: pass.width, height: pass.height, deviceScaleFactor: 1, mobile: pass.phone });
   await send("Emulation.setTouchEmulationEnabled", { enabled: pass.phone, maxTouchPoints: pass.phone ? 5 : 0 });
@@ -1538,8 +1943,60 @@ async function runPass() {
       await sidebarOpen();
       await conciergeHidden(".sidebar");
     },
-    expect: [".ws-folder-head", ".ws-item", ".machine-head", ".ws-item .collide-mark.is-lines"],
+    expect: [".ws-folder-head", ".ws-item", ".machine-head", ".ws-item .collide-mark.is-lines", ".needs-you .inbox-row", ".ws-item .ws-agent-line", ".sidebar-foot"],
     close: async () => {},
+  });
+  // the sidebar's agents after Orca: "Needs you" with what the Codex asks on its screen, a line per agent under every
+  // card (two under the repository's), the subagents at work on their tree under the Claude Code, the main checkout's
+  // primary tag and the selected card's distance from its upstream, the foot's link to the one waiting
+  await screen("sidebar-agents", {
+    open: async () => {
+      await sidebarOpen();
+      if (!(await until(() => evaluate(`[...document.querySelectorAll(".needs-you .inbox-ask")].some((el) => el.textContent.includes("go build ./..."))`), 15))) failed("the inbox does not say what the Codex asks");
+      const lines = await evaluate(`${firstCardOf("app")}?.querySelectorAll(".ws-agent-line").length ?? 0`);
+      check(lines === 2, `the repository's card has ${lines} agent lines, not its two agents'`);
+      check(await evaluate(`!!${firstCardOf("app")}?.querySelector(".ws-agent-line.shape-asking .needs-pill")`), "the asking agent's line wears no Needs you pill");
+      check(await evaluate(`${firstCardOf("app")}?.querySelectorAll(".sub-tree .sub-line").length === 3`), "the Claude Code's subagents are not on their tree, two named and one more");
+      check(await evaluate(`!!${firstCardOf("app")}?.querySelector(".primary-tag")`), "the main checkout beside its worktree wears no primary tag");
+      check(await evaluate(`${firstCardOf("app")}?.querySelector(".ws-sync")?.textContent === "↑2 ↓1"`), "the selected card does not say how far it stands from its upstream");
+      check(await evaluate(`!!document.querySelector(".sidebar-foot .sidebar-foot-needs")`), "the foot does not link to the agent waiting");
+    },
+    expect: [".needs-you .inbox-row", ".sub-tree .sub-line", ".ws-agent-line.shape-working", ".ws-agent-line.shape-done"],
+    close: async () => {},
+  });
+  // an agent pinned from its line's pin (under the pointer at a desk, always there on a phone) stands in the pinned
+  // group; unpinned again, the group goes
+  await screen("sidebar-pinned", {
+    open: async () => {
+      await sidebarOpen();
+      const line = await mark(`${firstCardOf("app")}?.querySelector(".ws-agent-line.shape-working")`, "agent-line");
+      await hover(line);
+      await sleep(150);
+      await tap(`${line} .agent-pin`);
+      if (!(await until(() => present(".sidebar-group.pinned .ws-agent-line"), 4))) failed("the pinned agent is not in the pinned group");
+    },
+    expect: [".sidebar-group.pinned .ws-agent-line .agent-line-where"],
+    close: async () => {
+      await hover(".sidebar-group.pinned .ws-agent-line");
+      await sleep(150);
+      await tap(".sidebar-group.pinned .ws-agent-line .agent-pin");
+      if (!(await until(async () => !(await present(".sidebar-group.pinned")), 3))) failed("the pinned group stays once its agent is unpinned");
+    },
+  });
+  // the order by priority: sections for the ones that need you, the finished, the working and the idle, with counts
+  await screen("sidebar-priority", {
+    open: async () => {
+      await sidebarOpen();
+      await setPref("radar", { order: "priority", rowLabel: "title", freshMinutes: 15, staleMinutes: 120, shells: false });
+      if (!(await until(() => present(".ws-section.is-needs .ws-section-head .badge"), 4))) failed("the order by priority draws no Needs you section");
+      check(await evaluate(`!!document.querySelector(".ws-section.is-done")`), "the order by priority has no Done section for the finished worktree");
+      check(await evaluate(`!!document.querySelector(".ws-section.is-needs .ws-agent-line .agent-shape.is-asking-square")`), "under the Needs you heading a question is not the ! square");
+    },
+    expect: [".ws-section-head", ".ws-section .ws-item"],
+    close: async () => {
+      await setPref("radar", { order: "active", rowLabel: "title", freshMinutes: 15, staleMinutes: 120, shells: false });
+      await until(() => present(".ws-folder-head"), 3);
+    },
   });
   await screen("folder-folded", {
     open: async () => {
@@ -1698,6 +2155,37 @@ async function runPass() {
       await palette("lens:terminal");
     },
   });
+  // the chat's own: an answer's calls as one card, a message sent while the agent worked in its turn, its last call
+  // still running and the spinner's progress over the composer — then the prompts list beside the log (a sheet on a
+  // phone) with a card opened in place
+  await screen("chat-working", {
+    open: async () => {
+      promptsChat = true;
+      await palette("lens:chat");
+      if (!(await until(() => present(".lens-pane:not([hidden]) .part-sent"), 20))) throw new Error("the message sent while the agent worked is not in its turn");
+      await evaluate(`(() => { const log = document.querySelector(".lens-pane:not([hidden]) .chat-log"); if (log) log.scrollTop = log.scrollHeight; })()`);
+      if (!(await until(() => evaluate(`!!document.querySelector(".lens-pane:not([hidden]) .chat-progress")?.textContent.includes("Refactoring")`), 10))) failed("the progress line does not say what the spinner says");
+    },
+    expect: [".lens-pane:not([hidden]) .tool-card .tool-spin", ".lens-pane:not([hidden]) .part-sent .part-sent-mark", ".lens-pane:not([hidden]) .chat-progress"],
+    close: async () => {},
+  });
+  await screen("chat-prompts", {
+    open: async () => {
+      promptsChat = true;
+      if (!(await present(".lens-pane:not([hidden]) .chat-log"))) await palette("lens:chat"); // the screen before left it on
+      if (!(await until(() => present(".lens-pane:not([hidden]) .tool-card"), 20))) throw new Error("the answer's calls are not one card");
+      await palette("prompts");
+      if (!(await until(() => present(".prompts .prompt"), 10))) throw new Error("the prompts list did not open");
+      await tap(".prompts .prompt:nth-child(2) .prompt-head");
+      if (!(await until(() => present(".prompts .prompt.is-open .prompt-reply"), 5))) failed("a card of the prompts list did not open in place");
+    },
+    expect: [".lens-pane:not([hidden]) .tool-card .tool-mark.is-failed", ".prompts .prompt.is-live .prompt-working", ".prompts .prompt.is-open .prompt-reply"],
+    close: async () => {
+      if (await present(".prompts")) await palette("prompts");
+      promptsChat = false;
+      await palette("lens:terminal");
+    },
+  });
   if (!pass.phone)
     await screen("split-view", {
       open: async () => palette("split"),
@@ -1705,6 +2193,8 @@ async function runPass() {
       close: async () => palette("split"),
     });
   await changesScreens();
+  await gitScreens();
+  await filesScreens();
   await screen("previews", {
     open: async () => {
       await onAgents();
@@ -1724,6 +2214,7 @@ async function runPass() {
     expect: [".modal .trigger-form", ".modal .trigger-try"],
   });
   await sceneScreens();
+  await prScreens({ screen, palette, tap, present, until, evaluate, count, failed, check, onAgents, sleep });
   await screen("float-terminal", {
     open: async () => {
       await key("`", "Backquote", 2);
@@ -2120,13 +2611,17 @@ try {
       { urlPattern: "*/api/scenes/*", requestStage: "Request" },
       { urlPattern: "*/api/scene-runs/*", requestStage: "Request" },
       { urlPattern: "*/api/review/secrets*", requestStage: "Request" },
+      { urlPattern: "*/api/review?dir=*", requestStage: "Response" },
+      { urlPattern: "*/api/review/conflict*", requestStage: "Request" },
       { urlPattern: "*/api/timelapse/recordings*", requestStage: "Request" },
       { urlPattern: "*/api/standup*", requestStage: "Request" },
+      { urlPattern: "*/api/pr/*", requestStage: "Request" },
       { urlPattern: "*/api/recap*", requestStage: "Request" },
       { urlPattern: "*/api/timelapse/search*", requestStage: "Request" },
       { urlPattern: "*/api/fleet-setup*", requestStage: "Request" },
       { urlPattern: "*/api/undo*", requestStage: "Request" },
       { urlPattern: "*/api/limits/offers*", requestStage: "Request" },
+      { urlPattern: "*/api/question*", requestStage: "Request" },
       { urlPattern: "*/api/worktrees/github*", requestStage: "Request" },
       { urlPattern: "*/api/worktrees/source*", requestStage: "Response" },
     ],

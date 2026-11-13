@@ -30,6 +30,9 @@ import (
 	"github.com/dev1antdev/remuda/internal/concierge"
 	"github.com/dev1antdev/remuda/internal/drift"
 	"github.com/dev1antdev/remuda/internal/feed"
+	"github.com/dev1antdev/remuda/internal/filetree"
+	"github.com/dev1antdev/remuda/internal/gitops"
+	"github.com/dev1antdev/remuda/internal/gitstage"
 	"github.com/dev1antdev/remuda/internal/health"
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/icons"
@@ -120,12 +123,15 @@ type Server struct {
 	Undo       *undo.Service       // the agents' turns kept to be undone, and the undo at the person's word
 	Concierge  *concierge.Service  // the Claude Code agent the person asks what the others are doing, on the machine they pick
 	Scenes     *scenes.Service     // the morning set-ups and the evening tidies, run at the person's press
+	GitOps     *gitops.Service     // git's writes on a checkout at the person's press, refused while an agent works there
+	Stage      *gitstage.Service   // the Changes lens's git writes, each at the person's press; nil writes nothing
 	Repos      *repos.Store        // each repository's project settings: worktree defaults, the setup script, the run actions
 
 	streams   termStreams
-	relayed   relays     // the terminals piped to a machine's own remuda, which holds their attach
-	typed     sent.Lines // the screen terminal's lines being typed, a row of the activity once Enter sends one
-	teleports sync.Map   // the moves of work to another machine, by job id: where the agent carrying on is
+	relayed   relays           // the terminals piped to a machine's own remuda, which holds their attach
+	typed     sent.Lines       // the screen terminal's lines being typed, a row of the activity once Enter sends one
+	trees     filetree.Service // the project tree's folders, each checkout's git status read once for a few seconds
+	teleports sync.Map         // the moves of work to another machine, by job id: where the agent carrying on is
 }
 
 // Handler mounts every route: each context registers its own, the static page comes last, and the guard wraps all but two.
@@ -146,6 +152,7 @@ func (s *Server) Handler() http.Handler {
 	s.prefsRoutes(api)
 	s.scheduleRoutes(api)
 	s.reviewRoutes(api)
+	s.changesRoutes(api)
 	s.codeRoutes(api)
 	s.updateRoutes(api)
 	s.recoverRoutes(api)
@@ -160,6 +167,7 @@ func (s *Server) Handler() http.Handler {
 	s.handoverRoutes(api)
 	s.forkRoutes(api)
 	s.prRoutes(api)
+	s.ghprRoutes(api)
 	s.liveRoutes(api)
 	s.deviceRoutes(api)
 	s.agentKeyRoutes(api)
@@ -185,6 +193,7 @@ func (s *Server) Handler() http.Handler {
 	s.driftRoutes(api)
 	s.undoRoutes(api)
 	s.sceneRoutes(api)
+	s.gitRoutes(api)
 	api.Handle("GET /", s.staticHandler())
 
 	// the only two routes outside the token guard

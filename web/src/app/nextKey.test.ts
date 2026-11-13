@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { nextKeyAsked, type KeyPress } from "./nextKey";
+import { nextKeyAsked, walkKeyAsked, type KeyPress } from "./nextKey";
 
 const press = (over: Partial<KeyPress> = {}): KeyPress => ({ code: "KeyN", altKey: true, metaKey: false, ctrlKey: false, shiftKey: false, target: { closest: () => null }, ...over });
 // a target inside one of the given elements, as Element.closest would answer
@@ -26,5 +26,24 @@ describe("nextKeyAsked", () => {
       expect(nextKeyAsked(press({ target: inside(field) }), false, true)).toBe(false);
       expect(nextKeyAsked(press({ target: inside(field) }), false, false)).toBe(true);
     }
+  });
+});
+
+describe("walkKeyAsked", () => {
+  it("walks down on Alt+] and up on Alt+[ by key code, with Alt+N's rules", () => {
+    for (const mac of [true, false]) {
+      expect(walkKeyAsked(press({ code: "BracketRight" }), false, mac)).toBe(1);
+      expect(walkKeyAsked(press({ code: "BracketLeft" }), false, mac)).toBe(-1);
+      expect(walkKeyAsked(press(), false, mac)).toBe(0);
+      expect(walkKeyAsked(press({ code: "BracketRight", altKey: false }), false, mac)).toBe(0);
+      expect(walkKeyAsked(press({ code: "BracketRight", metaKey: true }), false, mac)).toBe(0);
+      expect(walkKeyAsked(press({ code: "BracketLeft", shiftKey: true }), false, mac)).toBe(0);
+      expect(walkKeyAsked(press({ code: "BracketRight" }), true, mac)).toBe(0);
+      expect(walkKeyAsked(press({ code: "BracketRight", target: inside(".xterm") }), false, mac)).toBe(0);
+    }
+  });
+  it("leaves Option+] to a field on a Mac, where it types a quote", () => {
+    expect(walkKeyAsked(press({ code: "BracketRight", target: inside("textarea") }), false, true)).toBe(0);
+    expect(walkKeyAsked(press({ code: "BracketRight", target: inside("textarea") }), false, false)).toBe(1);
   });
 });

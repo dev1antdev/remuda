@@ -14,7 +14,7 @@ import { keepNewest, type OnPageAlert } from "@/features/alerts/onpage";
 import { readURL } from "./url";
 import { DEFAULT_OPEN_LENS, OPEN_LENS_KEY, lensToOpen, openLensOf } from "./openLens";
 
-export type Lens = "chat" | "terminal" | "changes";
+export type Lens = "chat" | "terminal" | "changes" | "git";
 export type Mode = "herdr" | "wall" | "tasks" | "code" | "review";
 export type Selection = { machineId: string; paneId: string };
 
@@ -59,7 +59,10 @@ export type NoticeMsg = { text: string; error?: boolean; brief?: boolean };
 export type Confirm = { text: string; label: string; run: () => void };
 // a jump names its pane ("" = the transcript viewer): a Chat gets it only when it is that pane's
 export type Jump = { machineId: string; paneId: string; session: string; turn: string; n: number };
-export type Panel = "palette" | "search" | "alerts" | "activity" | "schedules" | "usage" | "standup" | "release" | "arena" | "server" | "concierge" | null; // server: the host's vitals, in server mode; concierge: the agent asked what the others are doing
+export type Panel = "palette" | "search" | "alerts" | "activity" | "schedules" | "usage" | "standup" | "release" | "arena" | "server" | "concierge" | "pr" | null; // server: the host's vitals, in server mode; concierge: the agent asked what the others are doing; pr: the pull request panel
+// where the pull request panel looks: a checkout on a machine, the pane it was opened from, and the pull request asked
+// for (a chip's, a link's); null opens it on the pane on screen
+export type PRAt = { machineId: string; dir: string; paneId?: string; url?: string; n: number };
 // what the transcript viewer shows, read-only: a session by folder and id, or one of its subagents
 export type Viewer = Pick<SearchHit, "machine" | "dir" | "session"> & { subagent?: { id: string; description: string } };
 // the find bar over the conversation shown: the bar writes the query and the step, the chat writes the count;
@@ -98,6 +101,7 @@ export type AppState = {
   split: boolean; // the chat beside the terminal, asked for by a per-device pref; shown only on a wide screen with a mouse (app/split.ts)
   float: { machineId: string } | null; // the floating terminal's drawer, open on that machine's scratch shell; null while hidden
   listen: boolean; // the standup panel is asked to read the day aloud once its report is in (the palette's Listen to the day)
+  prAt: PRAt | null; // where the pull request panel looks, null for the pane on screen
 };
 
 const fromURL = readURL();
@@ -136,6 +140,7 @@ export const app = createStore<AppState>({
   split: readPref("split", false),
   float: null,
   listen: false,
+  prAt: null,
 });
 
 let jumps = linked ? 1 : 0;
@@ -203,6 +208,10 @@ export const actions = {
   },
   closePanel() {
     app.set({ panel: null });
+  },
+  // the pull request panel on a checkout, a pull request asked for by its address
+  openPRPanel(at: Omit<PRAt, "n">) {
+    app.set((s) => ({ panel: "pr", prAt: { ...at, n: (s.prAt?.n ?? 0) + 1 } }));
   },
   // the search panel, with a query already typed
   openSearch(query = "") {

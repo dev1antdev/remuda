@@ -6,6 +6,7 @@ import { useCallback } from "react";
 import Palette from "@/features/palette/Palette";
 import { paneEntries, paneTitle, tabName, type Entry } from "@/features/palette/rank";
 import { exportConversation } from "@/features/chat/export";
+import { usePromptsShown } from "@/features/chat/PromptsList";
 import { useTimelineShown } from "@/features/chat/TimelineBar";
 import { DEFAULT_RADAR, type RadarPrefs } from "@/features/roster/radar";
 import { closeWorkspace } from "@/features/roster/WorkspaceMenu";
@@ -36,6 +37,7 @@ import { USAGE_TAB_KEY, type UsageTab } from "@/features/usage/scorecard";
 import { holdLockScreen } from "@/features/standup/lockScreen";
 import { primeSpeech, speechSupported } from "@/lib/speech";
 import { useScenes } from "@/features/scenes/api";
+import { isCheckout } from "@/features/git/checkout";
 import { popOut, popOutSupported } from "./pip";
 import { actions, app, type Lens, type Mode } from "./store";
 import { setDarkFlavorPref, setLightFlavorPref, setTextSizePref, setThemePref, useDarkFlavorPref, useLightFlavorPref, useTextSize, useThemePref } from "./theme";
@@ -59,6 +61,7 @@ const LENSES: { lens: Lens; title: string; icon: IconName }[] = [
   { lens: "chat", title: t("Show the chat"), icon: "message" },
   { lens: "terminal", title: t("Show the terminal"), icon: "terminal" },
   { lens: "changes", title: t("Show the changes"), icon: "file" },
+  { lens: "git", title: t("Show the Git history"), icon: "git-branch" },
 ];
 
 export default function CommandPalette() {
@@ -91,6 +94,7 @@ function useCommands(): (query: string) => Entry[] {
   const [focus, setFocus] = usePref<string>("wall.focus", "");
   const [office, setOffice] = usePref<boolean>("wall.office", false);
   const [timelineShown, setTimelineShown] = useTimelineShown();
+  const [promptsShown, setPromptsShown] = usePromptsShown();
   const step = useSpinner(moving(machines));
   const now = useClock(machines);
   const goNext = useNextNeedingMe();
@@ -117,7 +121,7 @@ function useCommands(): (query: string) => Entry[] {
       if (current && !viewer) {
         const folder = folderOf(current);
         for (const l of LENSES) {
-          if ((mode === "herdr" && l.lens === lens) || (l.lens === "changes" && !folder) || !lensesOf(current.pane.agent).includes(l.lens)) continue;
+          if ((mode === "herdr" && l.lens === lens) || (l.lens === "changes" && !folder) || (l.lens === "git" && !isCheckout(current.session)) || !lensesOf(current.pane.agent).includes(l.lens)) continue;
           const show = () => {
             actions.setMode("herdr");
             actions.setLens(l.lens);
@@ -144,6 +148,7 @@ function useCommands(): (query: string) => Entry[] {
         if (session.worktree || session.branch)
           command("worktree", t("New workspace in {workspace}…", { workspace: named }), () => actions.openDialog({ kind: "worktree", machineId: machine.id, session }), { hint: t("a worktree of its own: a new folder and branch, an agent in it"), icon: "git-branch", keywords: ["worktree", "branch", "create", "agent"] });
         command("previews", t("Previews of {workspace}…", { workspace: named }), () => actions.openDialog({ kind: "previews", machineId: machine.id, workspace: session.id, name: session.name }), { hint: t("what its agents serve, opened in a tab of this browser"), icon: "external-link", keywords: ["preview", "port", "dev", "server", "localhost", "open", "browser"] });
+        if (session.branch || session.worktree) command("pull-requests", t("Pull requests of {workspace}…", { workspace: named }), () => actions.openPRPanel({ machineId: machine.id, dir: folderOf(current), paneId: current.pane.id, url: current.pane.pr?.url }), { hint: t("its branch's and its repository's: comments, checks, files, merge"), icon: "git-pull-request", keywords: ["pr", "pull request", "github", "review", "merge", "checks", "ci", "comments"] });
         command("triggers-here", t("Triggers in {workspace}…", { workspace: named }), () => actions.openDialog({ kind: "triggers", machineId: machine.id, dir: session.dir ?? "", workspace: session.id, name: session.name }), { hint: t("what its panes print, and what that sets off"), icon: "zap", keywords: ["trigger", "rule", "output", "match", "regex", "pattern", "watch"] });
         command("rename-workspace", t("Rename workspace {workspace}…", { workspace: named }), () => actions.openDialog({ kind: "rename", machineId: machine.id, what: "workspace", id: session.id, label: session.name }), { icon: "tag" });
         const folder = sessionFolder(session);
@@ -175,6 +180,11 @@ function useCommands(): (query: string) => Entry[] {
           actions.setLens("chat");
           setTimelineShown(!timelineShown);
         }, { hint: t("prompts and answers in time over the chat; the first error, the longest call, loops and questions marked"), icon: "clock", keywords: ["timeline", "history", "highlights", "errors", "loop", "overview", "map", "time"] });
+        if (current.pane.agent) command("prompts", promptsShown ? t("Hide the prompts list") : t("Show the prompts list"), () => {
+          actions.setMode("herdr");
+          actions.setLens("chat");
+          setPromptsShown(!promptsShown);
+        }, { hint: t("prompt by prompt, newest first: what each took, wrote and changed"), icon: "list", keywords: ["prompts", "timeline", "history", "turns", "messages", "tokens"] });
       }
       if (viewer) {
         const machine = machines.find((m) => m.id === viewer.machine);
@@ -182,6 +192,7 @@ function useCommands(): (query: string) => Entry[] {
         command("find-viewer", t("Find in this transcript"), () => actions.openFind(), { hint: `${FIND_KEY}: ${t("every match marked, Enter walks them")}`, icon: "search", keywords: ["search", "text", "match", "highlight", "where"] });
         command("recap-viewer", t("Recap this transcript"), () => actions.openDialog({ kind: "recap", machineId: viewer.machine, paneId: "", session: viewer.session, dir: viewer.dir, title: basename(viewer.dir) || viewer.dir }), { hint: t("prompts, answers, tools, files, cost — Copy as Markdown"), icon: "sun", keywords: ["recap", "summary", "report", "standup", "digest"] });
         command("timeline-viewer", timelineShown ? t("Hide the session timeline") : t("Show the session timeline"), () => setTimelineShown(!timelineShown), { hint: t("prompts and answers in time over the transcript; the first error, the longest call, loops and questions marked"), icon: "clock", keywords: ["timeline", "history", "highlights", "errors", "loop", "overview", "map", "time"] });
+        command("prompts-viewer", promptsShown ? t("Hide the prompts list") : t("Show the prompts list"), () => setPromptsShown(!promptsShown), { hint: t("prompt by prompt, newest first: what each took, wrote and changed"), icon: "list", keywords: ["prompts", "timeline", "history", "turns", "messages", "tokens"] });
       }
 
       const screens = wall.view === "screen";
@@ -288,6 +299,6 @@ function useCommands(): (query: string) => Entry[] {
       const shown = share.on ? commands.map((entry) => ({ ...entry, title: share.redact(entry.title), hint: entry.hint && share.redact(entry.hint) })) : commands;
       return [...panes, ...(viewOnly ? shown.filter((entry) => viewerCommand(entry.id)) : shown)];
     },
-    [machines, viewOnly, jiraSite, server, scenes, mode, lens, viewer, chatSession, chatLive, footprint, split, full, float, themePref, openLens, darkFlavor, lightFlavor, textSize, current, radar, wall, setWall, focus, setFocus, office, setOffice, timelineShown, setTimelineShown, step, now, goNext, share],
+    [machines, viewOnly, jiraSite, server, scenes, mode, lens, viewer, chatSession, chatLive, footprint, split, full, float, themePref, openLens, darkFlavor, lightFlavor, textSize, current, radar, wall, setWall, focus, setFocus, office, setOffice, timelineShown, setTimelineShown, promptsShown, setPromptsShown, step, now, goNext, share],
   );
 }
