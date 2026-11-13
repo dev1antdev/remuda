@@ -14,7 +14,7 @@ import { keepNewest, type OnPageAlert } from "@/features/alerts/onpage";
 import { readURL } from "./url";
 import { DEFAULT_OPEN_LENS, OPEN_LENS_KEY, lensToOpen, openLensOf } from "./openLens";
 
-export type Lens = "chat" | "terminal" | "changes";
+export type Lens = "chat" | "terminal" | "changes" | "git";
 export type Mode = "herdr" | "wall" | "tasks" | "code" | "review";
 export type Selection = { machineId: string; paneId: string };
 

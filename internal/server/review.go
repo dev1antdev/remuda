@@ -57,10 +57,15 @@ func (s *Server) handleReview(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	writeJSON(w, s.Review.Summary(mc, dir))
+	summary := s.Review.Summary(mc, dir)
+	if s.Stage != nil && s.Stage.Busy != nil && summary.Repo != "" {
+		summary.Busy = s.Stage.Busy(mc.ID(), dir, rpath.For(mc.Home()).Clean(summary.Repo))
+	}
+	writeJSON(w, summary)
 }
 
-// handleReviewDiff answers GET /api/review/diff?machine=&dir=&path= with one file's unified diff.
+// handleReviewDiff answers GET /api/review/diff?machine=&dir=&path= with one file's unified diff: since the last look,
+// on one side of the index (side=staged|unstaged), in one commit (commit=<sha>), or from a merge base (base=<sha>).
 func (s *Server) handleReviewDiff(w http.ResponseWriter, r *http.Request) {
 	dir, path := r.URL.Query().Get("dir"), r.URL.Query().Get("path")
 	mc, ok := s.reviewTarget(w, r, "", dir)
@@ -72,7 +77,17 @@ func (s *Server) handleReviewDiff(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 400, errors.New("a path relative to the folder is required"))
 		return
 	}
-	diff, err := s.Review.Diff(mc, dir, path)
+	query := r.URL.Query()
+	var diff string
+	var err error
+	switch {
+	case query.Get("commit") != "":
+		diff, err = review.CommitDiff(mc, dir, query.Get("commit"), path)
+	case query.Get("base") != "":
+		diff, err = review.BaseDiff(mc, dir, query.Get("base"), path)
+	default:
+		diff, err = s.Review.DiffSide(mc, dir, path, query.Get("side"))
+	}
 	if err != nil {
 		httpErr(w, 502, err)
 		return

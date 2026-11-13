@@ -1,4 +1,4 @@
-// The pane area: the tab strip (its tools slot the lens's one control and the View menu), the three lenses of the pane on
+// The pane area: the tab strip (its tools slot the lens's one control and the View menu), the four lenses of the pane on
 // screen with the files rail beside them, or a transcript on its own.
 // A lens stays mounted once seen, scoped to the pane: it never mounts hidden, since a terminal opened
 // unseen would attach at 80×24 and resize the shared pane. The split view (app/split.ts) shows the chat and the
@@ -19,8 +19,9 @@ import { FindTool } from "@/features/chat/FindBar";
 import TabStrip from "@/features/roster/TabStrip";
 import { closeTabAsk } from "@/features/roster/tabs";
 import Chat from "@/features/chat/Chat";
-import FilesRail from "@/features/chat/FilesRail";
+import FilesRail from "./FilesRail";
 import Review from "@/features/review/Review";
+import { GitLens } from "@/features/git/GitLens";
 import { TerminalLens, TerminalTools, useTerminalViewItems } from "@/features/terminal/TerminalLens";
 import { timelapseRows } from "@/features/terminal/timelapse/row";
 import { Screen } from "@/features/terminal/Screen";
@@ -196,6 +197,11 @@ export default function PaneArea({ current }: { current: Located | null }) {
             <Review key={`${machine.id}|${session.id}|${folder}`} machineId={machine.id} paneId={pane.id} dir={folder} agent={pane.agent} onSeen={refresh} active={shown("changes")} editor={!onWindows(machine)} />
           </div>
         )}
+        {seen("git") && (
+          <div className="lens-pane" hidden={!shown("git")}>
+            <GitLens key={`${machine.id}|${session.id}|${folder}`} machineId={machine.id} dir={folder} active={shown("git")} viewOnly={viewOnly} onChanges={() => actions.setLens("changes")} />
+          </div>
+        )}
         {seen("chat") && (
           <div className={`lens-pane${split ? " split-chat" : ""}`} hidden={!shown("chat")} onFocusCapture={() => focusSide("chat")} onPointerDownCapture={() => focusSide("chat")}>
             <Chat
@@ -235,6 +241,8 @@ export default function PaneArea({ current }: { current: Located | null }) {
             status={pane.status}
             dir={folder}
             active={!narrow}
+            viewOnly={viewOnly}
+            editor={!viewOnly && !onWindows(machine)}
             onOpenFile={(target) => actions.openFile(machine.id, pane.id, target, folder)}
             onOpenInCode={onWindows(machine) ? undefined : (path) => (viewOnly ? actions.openFile(machine.id, pane.id, { path }, folder) : actions.openInCode(machine.id, folder, path))} // a viewer has no Code mode: the file viewer reads it; a Windows PC has no editor
           />
