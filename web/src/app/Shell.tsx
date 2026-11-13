@@ -27,6 +27,7 @@ import Overlays from "./Overlays";
 import PaneArea from "./PaneArea";
 import PopOut from "./PopOut";
 import Rail from "./Rail";
+import StatusBar from "./StatusBar";
 import Wall from "./Wall";
 import { folderOf, useCurrent } from "./current";
 import { useFullKeys } from "./full";
@@ -195,6 +196,7 @@ export default function Shell() {
           </>
         )}
         </div>
+        <StatusBar />
         <FloatTerminal />
       </div>
       <Toasts items={toasts} />

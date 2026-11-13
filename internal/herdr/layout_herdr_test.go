@@ -65,6 +65,9 @@ func TestLayoutsOnAThrowawayHerdr(t *testing.T) {
 	if at, err := client.PaneAtPrompt(pane); err != nil || !at {
 		t.Fatalf("a fresh shell is at its prompt: %v %v", at, err)
 	}
+	if pid, err := client.PaneShellPID(pane); err != nil || pid <= 1 {
+		t.Fatalf("herdr names the pane's shell: %d %v", pid, err)
+	}
 	if err := client.PaneClose(pane); err != nil {
 		t.Fatal(err)
 	}

@@ -38,6 +38,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/notes"
 	"github.com/dev1antdev/remuda/internal/opinion"
 	"github.com/dev1antdev/remuda/internal/placement"
+	"github.com/dev1antdev/remuda/internal/ports"
 	"github.com/dev1antdev/remuda/internal/prefs"
 	"github.com/dev1antdev/remuda/internal/preview"
 	"github.com/dev1antdev/remuda/internal/prstatus"
@@ -47,6 +48,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/recap"
 	"github.com/dev1antdev/remuda/internal/recipes"
 	"github.com/dev1antdev/remuda/internal/repos"
+	"github.com/dev1antdev/remuda/internal/resources"
 	"github.com/dev1antdev/remuda/internal/restart"
 	"github.com/dev1antdev/remuda/internal/review"
 	"github.com/dev1antdev/remuda/internal/said"
@@ -809,6 +811,38 @@ func Run(ctx context.Context, o Options) error {
 	srv.Previews = previews
 	defer previews.Shutdown()
 	events.Subscribe(bus, func(e events.MachineRemoved) { previews.CloseMachine(e.Machine) })
+	// the ports the workspaces' processes listen on, read while a page reads the roster, quicker while the status bar shows
+	listening := ports.New(srv.PortTargets, srv.PreviewSkip)
+	listening.OnChange = hub.RosterChanged
+	srv.Ports = listening
+	go listening.Loop(ctx.Done())
+	events.Subscribe(bus, func(e events.MachineRemoved) { listening.Forget(e.Machine) })
+	// what the machines' herdr panes weigh on them: one process table a read, each pane's shell as herdr names it
+	srv.Resources = resources.New(resources.Inputs{
+		Panes: func(machineID string) []resources.Pane {
+			snap, _ := watcher.Snapshot(machineID)
+			if snap == nil {
+				return nil
+			}
+			out := make([]resources.Pane, 0, len(snap.Panes))
+			for _, pane := range snap.Panes {
+				out = append(out, resources.Pane{ID: pane.PaneID, Workspace: pane.WorkspaceID})
+			}
+			return out
+		},
+		ShellPID: func(machineID, paneID string) (int, error) {
+			mc, err := fleet.Get(machineID)
+			if err != nil {
+				return 0, err
+			}
+			client, _, err := mc.Ready()
+			if err != nil {
+				return 0, err
+			}
+			return client.PaneShellPID(paneID)
+		},
+	})
+	events.Subscribe(bus, func(e events.MachineRemoved) { srv.Resources.Forget(e.Machine) })
 	if o.Tailscale {
 		var node *tsnetx.Node
 		srv.Tailscale = func() tsnetx.Status { return node.Status() } // set before the handler is handed out

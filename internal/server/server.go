@@ -43,6 +43,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/mirror"
 	"github.com/dev1antdev/remuda/internal/notes"
 	"github.com/dev1antdev/remuda/internal/opinion"
+	"github.com/dev1antdev/remuda/internal/ports"
 	"github.com/dev1antdev/remuda/internal/prefs"
 	"github.com/dev1antdev/remuda/internal/preview"
 	"github.com/dev1antdev/remuda/internal/prstatus"
@@ -52,6 +53,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/recap"
 	"github.com/dev1antdev/remuda/internal/recipes"
 	"github.com/dev1antdev/remuda/internal/repos"
+	"github.com/dev1antdev/remuda/internal/resources"
 	"github.com/dev1antdev/remuda/internal/retire"
 	"github.com/dev1antdev/remuda/internal/review"
 	"github.com/dev1antdev/remuda/internal/said"
@@ -128,6 +130,8 @@ type Server struct {
 	GitOps     *gitops.Service     // git's writes on a checkout at the person's press, refused while an agent works there
 	Stage      *gitstage.Service   // the Changes lens's git writes, each at the person's press; nil writes nothing
 	Repos      *repos.Store        // each repository's project settings: worktree defaults, the setup script, the run actions
+	Ports      *ports.Tracker      // the ports the machines' processes listen on, matched to their workspaces
+	Resources  *resources.Service  // what the machines' herdr panes weigh on them, for the status bar
 
 	streams   termStreams
 	relayed   relays           // the terminals piped to a machine's own remuda, which holds their attach
@@ -140,6 +144,7 @@ type Server struct {
 func (s *Server) Handler() http.Handler {
 	api := http.NewServeMux()
 	s.rosterRoutes(api)
+	s.resourceRoutes(api)
 	s.machineRoutes(api)
 	s.awakeRoutes(api)
 	s.sessionRoutes(api)

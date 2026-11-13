@@ -71,8 +71,8 @@ export type PRStatus = {
 // ClosingIssue is an issue a pull request closes: its number, its address and its repository, owner/name
 export type ClosingIssue = { number: number; url: string; repo: string };
 
-// LivePort is a port a process of the workspace's checkout listens on, as the status bar reads them
-export type LivePort = { port: number; process: string; pid: number; address: string };
+// LivePort is a port a process of the workspace's checkout listens on, as the status bar reads them (ListeningPort)
+export type LivePort = ListeningPort;
 
 export type PaneUsage = {
   model: string;
@@ -136,15 +136,19 @@ export type Session = {
   folder?: string; // the folder the sidebar groups by: the repository's main folder for a checkout, else the workspace's
   icon?: FolderIconRef; // the folder's icon, the person's own
   note?: string; // the person's note on this checkout, kept after the workspace closes
-  ports?: LivePort[]; // the ports its checkout's processes listen on, when the roster reads them
   review?: { changed: number; fresh: number; ready?: boolean; risk?: Risk }; // uncommitted files; fresh = moved since the reviewer looked; ready = rejected at the last look and the agent says it is ready for another; risk = how risky its review is, and why
   collisions?: Collision[]; // the other checkouts of its repository changing the same files against the main branch, the same lines first
   muted_until?: string; // the folder is silenced until then: no push, no webhook, no feed row
   scratch?: boolean; // the floating terminal's own shell: the drawer shows it, the sidebar and the palette leave it out
   concierge?: boolean; // the concierge's own workspace: the roster provider takes it out of the machines, its place shows it
   jira?: JiraIssue[]; // the Jira issues its branch and its agents name, once the person set a site
+  ports?: ListeningPort[]; // the ports its processes listen on, as last read while a page looks (internal/ports)
   tabs: Tab[];
 };
+
+// ListeningPort is a port a workspace's process listens on: its program, what it serves (vite, next…) when its arguments
+// say, its pid, and where it listens as a person writes it — localhost:5173, *:8080
+export type ListeningPort = { port: number; process: string; label?: string; pid: number; address: string };
 
 // a machine's vitals, read by internal/health a few minutes apart
 // one probe's load and the disk's free percentage

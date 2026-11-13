@@ -9,6 +9,7 @@ import { toggleSharing, useSharing } from "@/features/roster/useSharing";
 import { SHARING_KEY_NAME } from "./sharingKey";
 import { enterFull, leaveFull } from "./full";
 import { SPLIT_QUERY, canSplit } from "./split";
+import { STATUS_BAR_QUERY, toggleStatusBar, useStatusBarPrefs } from "@/features/statusbar/prefs";
 import { actions, app } from "./store";
 import { t } from "@/lib/i18n";
 
@@ -18,6 +19,8 @@ export default function ViewMenu({ items, shell = false, page = true }: { items:
   const split = app.use((s) => s.split);
   const may = canSplit(useMedia(SPLIT_QUERY), isTouch);
   const sharing = useSharing().on;
+  const [statusBar] = useStatusBarPrefs();
+  const desk = useMedia(STATUS_BAR_QUERY);
   // a shell has its terminal alone: no transcript for the files rail, no chat to put beside it
   const agentRows: MenuItem[] = shell
     ? []
@@ -27,6 +30,7 @@ export default function ViewMenu({ items, shell = false, page = true }: { items:
       ];
   const pageRows: MenuItem[] = [
     ...agentRows,
+    { label: t("Status bar"), icon: "activity", hint: desk ? t("the plan limits, the pane's branch, its machine's load and ports along the foot of the page") : t("on a screen wider than a phone's, with a mouse"), checked: statusBar.on && desk, disabled: !desk, onSelect: toggleStatusBar },
     { label: t("Full screen"), icon: "maximize", hint: t("the lens takes the whole screen; Esc brings the page back"), shortcut: full ? t("Esc") : undefined, checked: full, onSelect: full ? leaveFull : enterFull },
     { label: t("Screen-sharing mode"), icon: "eye-off", hint: t("the folders and machines you marked, or everything, read as neutral names, their panes covered"), shortcut: SHARING_KEY_NAME, checked: sharing, onSelect: toggleSharing },
   ];

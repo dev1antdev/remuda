@@ -8063,6 +8063,535 @@ button.usage-row:hover {
   }
 }
 
+/* ---- the status bar: the plan limits, the pane's place, its machine's load and ports, along the foot of the main
+   area on a desk with a mouse (app/StatusBar.tsx); every segment keeps its room and its figures are tabular, so
+   nothing moves when a value does ---- */
+.status-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
+  height: 28px;
+  padding: 0 8px;
+  border-top: 1px solid var(--line);
+  background: var(--bg-raised);
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.app-main:has(> .status-bar) .float-term {
+  bottom: 28px;
+}
+
+body:has(.status-bar) .toasts {
+  bottom: 44px;
+}
+
+.btn.ghost.status-item,
+.status-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: var(--r-xs);
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+}
+
+.status-item:focus-visible {
+  outline: 2px solid var(--accent-ring);
+  outline-offset: -2px;
+}
+
+.status-item .radar-logo {
+  width: 13px;
+  height: 13px;
+}
+
+.status-quiet {
+  color: var(--fg-faint);
+}
+
+.status-sep {
+  padding: 0 2px;
+  color: var(--fg-faint);
+}
+
+.status-num {
+  display: inline-flex;
+  align-items: center;
+  color: var(--fg);
+}
+
+.status-num .is-amber,
+.status-num.is-amber,
+.status-load.is-amber > .icon {
+  color: var(--amber);
+}
+
+.status-num .is-red,
+.status-num.is-red,
+.status-load.is-red > .icon {
+  color: var(--red);
+}
+
+.status-limits {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.status-window {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* a window's figure keeps the room of "wk 100%": a reading that grows by a digit moves nothing after it */
+.status-window .status-num {
+  min-width: 6.5ch;
+}
+
+.status-agent.is-stale {
+  opacity: 0.55;
+}
+
+.status-place {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.status-branch {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 0 6px;
+  border-radius: var(--r-xs);
+  color: var(--fg-dim);
+}
+
+.status-branch-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.25;
+}
+
+.status-pr.is-green > .icon {
+  color: var(--green);
+}
+
+.status-pr.is-mauve > .icon {
+  color: var(--violet);
+}
+
+.status-pr.is-red > .icon {
+  color: var(--red);
+}
+
+.status-pr.is-dim > .icon {
+  color: var(--fg-faint);
+}
+
+.status-machine-side {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+/* "CPU 100 % · 99.9 GB" fits, so a busier machine moves nothing beside it */
+.status-load .status-num {
+  min-width: 17ch;
+}
+
+.status-load.is-off .status-num,
+.status-ports.is-off .status-num {
+  min-width: 0;
+  color: var(--fg-faint);
+}
+
+.status-ports .status-num {
+  min-width: 2.5ch;
+  color: var(--fg-dim);
+}
+
+.status-ports.has-ports .status-num {
+  color: var(--fg);
+}
+
+.status-host-dot {
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: hsl(var(--machine-hue, 0) 55% 58%);
+}
+
+.status-host-dot.is-local {
+  background: var(--fg-faint);
+}
+
+.status-host-name {
+  max-width: 18ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.25;
+}
+
+/* the plan limits' hover card: a window a row, its bar with the tick at the share of its time gone */
+.tip.tip-card {
+  max-width: 340px;
+  padding: 10px 12px;
+}
+
+.limits-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 320px;
+  font-variant-numeric: tabular-nums;
+}
+
+.limits-card-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.limits-card-head .radar-logo {
+  width: 14px;
+  height: 14px;
+}
+
+.limits-card-age {
+  margin-left: auto;
+  color: var(--fg-faint);
+  font-size: var(--fs-11);
+}
+
+.limits-card-age.is-old {
+  color: var(--amber);
+}
+
+.limits-card-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.limits-card-rows.is-stale {
+  opacity: 0.55;
+}
+
+.limits-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.limits-row-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.limits-row-name {
+  flex: 1;
+  min-width: 0;
+  color: var(--fg-dim);
+}
+
+.limits-bar {
+  position: relative;
+  flex-shrink: 0;
+  width: 96px;
+  height: 6px;
+  border-radius: var(--r-xs);
+  background: var(--bg-active);
+}
+
+.limits-bar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: var(--r-xs);
+  background: var(--green);
+}
+
+.limits-bar.is-amber .limits-bar-fill {
+  background: var(--amber);
+}
+
+.limits-bar.is-red .limits-bar-fill {
+  background: var(--red);
+}
+
+.limits-bar-tick {
+  position: absolute;
+  top: -2px;
+  width: 2px;
+  height: 10px;
+  margin-left: -1px;
+  background: var(--fg);
+  opacity: 0.8;
+}
+
+.limits-row-pct {
+  min-width: 6ch;
+  text-align: right;
+  color: var(--fg);
+}
+
+.limits-row-pct.is-amber {
+  color: var(--amber);
+}
+
+.limits-row-pct.is-red {
+  color: var(--red);
+}
+
+.limits-row-left {
+  min-width: 6ch;
+  text-align: right;
+  color: var(--fg-faint);
+  font-size: var(--fs-11);
+}
+
+.limits-row-pace,
+.limits-row-sub {
+  color: var(--fg-faint);
+  font-size: var(--fs-11);
+}
+
+.limits-verdict.is-ahead {
+  color: var(--amber);
+}
+
+.limits-verdict.is-on {
+  color: var(--fg-dim);
+}
+
+.limits-verdict.is-under {
+  color: var(--green);
+}
+
+.limits-row-forecast.is-amber {
+  color: var(--amber);
+}
+
+.limits-card-foot {
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  color: var(--fg-faint);
+  font-size: var(--fs-11);
+}
+
+/* the load's and the ports' popups above the bar */
+.load-pop {
+  width: 420px;
+}
+
+.ports-pop {
+  width: 400px;
+}
+
+.load-list,
+.ports-list {
+  display: flex;
+  flex-direction: column;
+  font-size: var(--fs-13);
+  font-variant-numeric: tabular-nums;
+}
+
+.load-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.load-head-sum {
+  margin-left: auto;
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
+}
+
+.load-empty {
+  padding: 12px 14px;
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
+}
+
+.load-empty.is-error {
+  color: var(--red);
+}
+
+.load-ws {
+  border-bottom: 1px solid var(--line);
+}
+
+.load-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 46px;
+  padding: 0 14px 0 6px;
+}
+
+.load-row.is-terminal {
+  min-height: 30px;
+  padding-left: 36px;
+  background: var(--bg-raised);
+}
+
+.load-row.is-herdr {
+  padding-left: 36px;
+  background: var(--bg-raised);
+}
+
+.btn.ghost.load-ws-name,
+.load-ws-name {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  flex: 1;
+  min-width: 0;
+  height: auto;
+  min-height: 34px;
+  padding: 3px 6px;
+  color: var(--fg);
+  text-align: left;
+}
+
+.load-ws-title,
+.load-ws-line {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.3;
+}
+
+.load-ws-line {
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
+}
+
+.load-nums {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+  font-family: var(--mono);
+  font-size: var(--fs-12);
+}
+
+.load-nums > span {
+  min-width: 7ch;
+  text-align: right;
+}
+
+.load-nums .is-amber {
+  color: var(--amber);
+}
+
+.load-nums .is-red {
+  color: var(--red);
+}
+
+.load-foot {
+  padding: 8px 14px;
+  border-top: 1px solid var(--line);
+  color: var(--fg-faint);
+  font-size: var(--fs-12);
+}
+
+.port-group {
+  border-bottom: 1px solid var(--line);
+}
+
+.btn.ghost.port-group-head {
+  display: flex;
+  width: 100%;
+  justify-content: flex-start;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 0;
+  background: var(--bg-raised);
+  color: var(--fg);
+}
+
+.port-group-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+
+.port-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 54px;
+  padding: 0 10px 0 14px;
+}
+
+.port-number {
+  min-width: 5ch;
+  font-family: var(--mono);
+  font-weight: 600;
+}
+
+.port-what {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.port-process,
+.port-address {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.3;
+}
+
+.port-process {
+  color: var(--fg-dim);
+}
+
+.port-address {
+  color: var(--fg-faint);
+  font-family: var(--mono);
+  font-size: var(--fs-12);
+}
+
+.port-actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.btn.ghost.port-stop:hover:not(:disabled) {
+  color: var(--red);
+}
+
 /* ---- toasts: status in a corner, never in a bar ---- */
 .toasts {
   position: fixed;

@@ -30,8 +30,8 @@ const ALL_PASSES = [
 ];
 // E2E_DISPLAY_PASSES=desk-en,phone-ru runs only those
 const PASSES = process.env.E2E_DISPLAY_PASSES ? ALL_PASSES.filter((p) => process.env.E2E_DISPLAY_PASSES.split(",").includes(p.name)) : ALL_PASSES;
-const OVERLAYS = ".menu, .popover, .row-menu, .modal, .toast, .sel-pop, .float-term, .palette, .fv";
-const CONTENT = ".pane-area, .wall, .tasks-main, .code-mode, .queue, .float-term";
+const OVERLAYS = ".menu, .popover, .row-menu, .modal, .toast, .sel-pop, .float-term, .palette, .fv, .tip-card";
+const CONTENT = ".pane-area, .wall, .tasks-main, .code-mode, .queue, .float-term, .status-bar";
 
 const say = (line) => console.log(`e2e display: ${line}`);
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -95,6 +95,7 @@ socket.onmessage = (message) => {
     else if (url.includes("/api/question")) void fakeQuestion(msg.params);
     else if (url.includes("/api/worktrees/github")) void fakeLists(msg.params);
     else if (url.includes("/api/worktrees/source")) void dressSource(msg.params);
+    else if (/\/api\/(resources|ports)/.test(url)) void fakeMachineSide(msg.params);
     else if (/\/api\/feed/.test(url)) void dressFeed(msg.params);
     else if (/\/api\/chat\?/.test(url)) void dressChat(msg.params);
     else void dressRoster(msg.params);
@@ -381,7 +382,7 @@ const made = [];
 const now = Date.now();
 const iso = (ms) => new Date(ms).toISOString();
 const sessions = async () => (await api("GET", "/api/roster")).machines.find((m) => m.id === "local")?.sessions ?? [];
-let app, tree, notes, desk, inbox, drawTask, paneA1, paneN, paneDesk, paneTree, morningScene, eveningScene;
+let app, tree, notes, desk, inbox, drawTask, paneA1, paneA2, paneB, paneN, paneDesk, paneTree, morningScene, eveningScene;
 let DRESS = {};
 const NOTE_TEXT = "Waiting on the API team for the new endpoint.\nDon't merge before Friday's release.";
 // the morning's first step lays its tab out as two panes, the agent on the left and a dev server on the right
@@ -473,8 +474,8 @@ async function seed() {
   paneA1 = ready.a.tabs[0].panes[0].id;
   paneN = ready.n.tabs[0].panes[0].id;
   paneDesk = ready.d.tabs[0].panes[0].id;
-  const paneA2 = ready.a.tabs[1].panes[0].id;
-  const paneB = ready.b.tabs[0].panes[0].id;
+  paneA2 = ready.a.tabs[1].panes[0].id;
+  paneB = ready.b.tabs[0].panes[0].id;
   paneTree = paneB;
   DRESS = {
     [paneA1]: {
@@ -578,6 +579,145 @@ async function fakeOpinion({ requestId, request }) {
 // PLAN_OFFER is a queued card Claude's 5-hour window holds at 96 %, offered to run now on Codex
 const PLAN_OFFER = { id: "e2e-offer-1", kind: "task", project: 1, task: 12, ref: "#12", title: "Draw every screen", machine: "local", from: "claude", to: "codex", why: "Claude's 5 h window is at 96 % until 16:50", window: "5h", used: 96, resets_at: iso(now + 2 * 3600e3), at: iso(now - 60e3) };
 let planOfferRuns = 0;
+
+// the status bar's machine as the browser is told it: the repository's agents at a third of the cores, the notes'
+// shell quiet, herdr's own beside them; the ports of the repository and its worktree, and a server outside both
+const MiB = 1024;
+const GiB = 1024 * 1024;
+const fakeLoad = () => ({
+  at: iso(Date.now()),
+  cores: 8,
+  mem_kb: 16 * GiB,
+  total: { cpu: 36.2, rss_kb: 3.9 * GiB },
+  cpu_known: true,
+  workspaces: [
+    { id: app.id, cpu: 33.5, rss_kb: 3.2 * GiB, top: { name: "node", rss_kb: 1.4 * GiB }, terminals: [{ pane: paneA1, cpu: 31, rss_kb: 2.6 * GiB, top: { name: "node", rss_kb: 1.4 * GiB } }, { pane: paneA2, cpu: 2.5, rss_kb: 0.6 * GiB, top: { name: "codex", rss_kb: 400 * MiB } }] },
+    { id: tree.id, cpu: 2.4, rss_kb: 520 * MiB, top: { name: "claude", rss_kb: 380 * MiB }, terminals: [{ pane: paneB, cpu: 2.4, rss_kb: 520 * MiB, top: { name: "claude", rss_kb: 380 * MiB } }] },
+    { id: notes.id, cpu: 0, rss_kb: 6 * MiB, top: { name: "zsh", rss_kb: 6 * MiB }, terminals: [{ pane: paneN, cpu: 0, rss_kb: 6 * MiB, top: { name: "zsh", rss_kb: 6 * MiB } }] },
+  ],
+  herdr: { cpu: 0.3, rss_kb: 42 * MiB },
+});
+const portsOfApp = () => [
+  { port: devPort, process: "python3", label: "http.server", pid: 4242, address: `localhost:${devPort}` },
+  { port: 5173, process: "node", label: "vite", pid: 4100, address: "localhost:5173" },
+];
+const portsOfTree = () => [{ port: 3000, process: "node", label: "next", pid: 4200, address: "*:3000" }];
+let portStops = 0;
+async function fakeMachineSide({ requestId, request }) {
+  let body;
+  if (request.url.includes("/api/resources")) body = fakeLoad();
+  else if (request.url.includes("/api/ports/stop")) {
+    portStops++;
+    body = { stopped: {} };
+  } else
+    body = {
+      at: iso(Date.now() - 4e3),
+      read: true,
+      ports: [...portsOfApp().map((p) => ({ ...p, workspace: app.id })), ...portsOfTree().map((p) => ({ ...p, workspace: tree.id })), { port: 8888, process: "jupyter", label: "jupyter", pid: 5100, address: "localhost:8888" }],
+    };
+  await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(body)).toString("base64") });
+}
+
+// statusBarScreens: the bar along the foot on a desk — the plan limits, the pane's place, the load and the ports — the
+// limits' hover card with its pace tick, the load's and the ports' popups, and a stop's confirm opened and cancelled;
+// on a phone no bar at all
+async function statusBarScreens() {
+  if (pass.phone) {
+    await onAgents();
+    check(!(await present(".status-bar")), "a phone draws the status bar where its rail lies");
+    return;
+  }
+  await screen("status-bar", {
+    open: async () => {
+      await onAgents();
+      if (!(await until(() => evaluate(`document.querySelector(".status-ports .status-num")?.textContent === "3"`), 8))) failed("the status bar does not count the workspaces' three ports");
+      check(await present(".status-bar .status-pr.is-green"), "the pane's pull request is not in the status bar in its state's colour");
+      check(await present(".status-bar .status-issue"), "the workspace's issue is not in the status bar");
+      check((await count(".status-limits .status-agent")) === 2, "the status bar does not show Claude's and Codex's limits apart");
+      check(await present(".status-limits .status-num.is-amber"), "the week at 86 % is not amber in the status bar");
+      check(await present(".status-load.is-amber"), "the load at a third of the cores is not amber");
+    },
+    expect: [".status-bar .status-limits .status-agent", ".status-bar .status-place", ".status-bar .status-load", ".status-bar .status-ports", ".status-bar .status-host"],
+  });
+  await screen("status-limits-card", {
+    open: async () => {
+      await hover(".status-limits .status-agent");
+      if (!(await until(() => present(".tip-card .limits-bar-tick"), 6))) failed("the limits' card has no pace tick");
+      check(await present(".tip-card .limits-verdict.is-ahead"), "the week used faster than its time passes is not told so");
+      check(await present(".tip-card .limits-row-forecast.is-amber"), "the 5 hours' early run-out is not in the card");
+    },
+    expect: [".tip-card .limits-row"],
+    close: async () => {
+      await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: Math.round(pass.width / 2), y: Math.round(pass.height / 2) });
+      await closeAll();
+    },
+  });
+  await screen("status-load", {
+    open: async () => {
+      await tap(".status-load");
+      if (!(await until(() => present(".load-pop .load-ws"), 6))) throw new Error("the load's popup did not open");
+      await tap(".load-pop .load-ws .icon-btn");
+      if (!(await until(() => present(".load-pop .load-row.is-terminal"), 4))) failed("a workspace's terminals do not unfold");
+    },
+    expect: [".load-pop .load-row.is-herdr", ".load-pop .load-foot"],
+  });
+  await screen("status-ports", {
+    open: async () => {
+      await tap(".status-ports");
+      if (!(await until(() => present(".ports-pop .port-row"), 6))) throw new Error("the ports' popup did not open");
+      await tap(".ports-pop .port-group.is-other .port-group-head");
+      if (!(await until(() => evaluate(`[...document.querySelectorAll(".ports-pop .port-number")].some((n) => n.textContent === "8888")`), 4))) failed("the other processes do not unfold");
+    },
+    expect: [".ports-pop .port-group-head", ".ports-pop .port-stop"],
+  });
+  await screen("status-port-stop", {
+    open: async () => {
+      if (!(await present(".ports-pop .port-stop"))) {
+        await tap(".status-ports");
+        await until(() => present(".ports-pop .port-stop"), 6);
+      }
+      await tap(".ports-pop .port-stop");
+    },
+    expect: [".modal"],
+    close: async () => {
+      check(await evaluate(`[...document.querySelectorAll(".modal")].some((m) => m.textContent.includes("PID 4100") && m.textContent.includes("5173") && m.textContent.includes("SIGTERM"))`), "the stop's confirm does not name the process and the signal");
+      const before = portStops;
+      await key("Escape", "Escape");
+      await sleep(300);
+      check(portStops === before && !(await present(".modal")), "the stop's confirm, cancelled, still stopped something");
+      await closeAll();
+    },
+  });
+}
+
+// portsFlow is the server's side on real processes: the e2e's dev server listed in its workspace on the roster and on
+// /api/ports, the load read off this machine's own process table, a stop refused for a pid that does not listen there,
+// and a server this run started stopped for real
+async function portsFlow() {
+  where = `${pass.name} › ports-flow`;
+  const listed = await until(async () => {
+    const reading = await api("GET", "/api/ports?machine=local");
+    return reading.ports?.some((p) => p.port === devPort) ? reading : null;
+  }, 20);
+  const mine = listed?.ports.find((p) => p.port === devPort);
+  check(mine?.workspace === app.id && mine?.label === "http.server", `the dev server is listed as ${JSON.stringify(mine)}`);
+  const onRoster = (await sessions()).find((s) => s.id === app.id)?.ports ?? [];
+  check(onRoster.some((p) => p.port === devPort), `the roster carries the app's ports as ${JSON.stringify(onRoster)}`);
+  const load = await api("GET", "/api/resources?machine=local");
+  check(load.cores > 0 && load.mem_kb > 0 && load.workspaces.some((w) => w.id === app.id && w.terminals.length > 0), `the load read ${JSON.stringify(load).slice(0, 300)}`);
+  const wrong = await fetch(`${base}/api/ports/stop`, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ machine: "local", port: devPort, pid: 1 }) });
+  check(wrong.status === 404, `a stop of a pid that does not listen there answered ${wrong.status}`);
+  const victimPort = await freePort();
+  const victim = spawn("python3", ["-m", "http.server", String(victimPort), "--bind", "127.0.0.1"], { cwd: notesDir, stdio: "ignore" });
+  const ended = new Promise((resolve) => victim.on("exit", resolve));
+  const seen = await until(async () => (await api("GET", "/api/ports?machine=local")).ports?.find((p) => p.port === victimPort), 20);
+  check(seen?.workspace === notes.id, `the notes' server is listed as ${JSON.stringify(seen)}`);
+  if (seen) await api("POST", "/api/ports/stop", { machine: "local", port: victimPort, pid: seen.pid });
+  const stopped = await Promise.race([ended.then(() => true), sleep(10_000).then(() => false)]);
+  check(stopped, "the stopped server is still running");
+  if (!stopped) victim.kill();
+  say(`ports flow: port ${devPort} on the app's roster, the load of ${load.workspaces?.length} workspaces, port ${victimPort} stopped`);
+}
 
 // fakeOffers answers the plan limits' offers: the one open, and its run, which the server would start on Codex
 async function fakeOffers({ requestId, request }) {
@@ -967,6 +1107,8 @@ async function dressRoster({ requestId, responseStatusCode, responseHeaders = []
         ];
       }
       dressCollisions(session);
+      if (session.id === app.id) session.ports = portsOfApp(); // the status bar counts them, the sidebar card draws them
+      if (session.id === tree.id) session.ports = portsOfTree();
       for (const tab of session.tabs ?? []) for (const pane of tab.panes ?? []) Object.assign(pane, DRESS[pane.id] ?? {});
     }
   }
@@ -2212,6 +2354,7 @@ async function runPass() {
         if (!(await until(() => present(".pane-area .tab"), 15))) failed("the Agents page did not come back");
       },
     });
+  await statusBarScreens();
   await screen("new-tab-menu", { open: async () => tap(".tab-add"), expect: [".menu"] });
   await screen("view-menu", { open: async () => tap(".view-btn"), expect: [".menu"] });
   await screen("chat-lens", { open: async () => palette("lens:chat"), expect: [".lens-pane:not([hidden]) .chat-log, .lens-pane:not([hidden]) .composer"], close: async () => palette("lens:terminal") });
@@ -2705,6 +2848,8 @@ try {
       { urlPattern: "*/api/question*", requestStage: "Request" },
       { urlPattern: "*/api/worktrees/github*", requestStage: "Request" },
       { urlPattern: "*/api/worktrees/source*", requestStage: "Response" },
+      { urlPattern: "*/api/resources*", requestStage: "Request" },
+      { urlPattern: "*/api/ports*", requestStage: "Request" },
     ],
   });
   await send("Page.navigate", { url: `${base}/?token=${encodeURIComponent(token)}&machine=local&pane=${encodeURIComponent(paneA1)}&lens=terminal` });
@@ -2715,6 +2860,7 @@ try {
   await newWorktreeFlow().catch((error) => failed(`stopped: ${error.message}`));
   await worktreeFlow().catch((error) => failed(`stopped: ${error.message}`));
   await previewFlow().catch((error) => failed(`stopped: ${error.message}`));
+  await portsFlow().catch((error) => failed(`stopped: ${error.message}`));
   say(`${shots} screens in ${Math.round((Date.now() - started) / 1000)} s, screenshots in ${out}/display`);
 } catch (error) {
   failed(`stopped: ${error.message}`);
