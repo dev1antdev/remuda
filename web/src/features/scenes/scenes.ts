@@ -7,6 +7,7 @@ import type { AgentKind, Machine } from "@/features/roster/api";
 import { sizeWords } from "@/features/roster/tidy";
 import { t, tn } from "@/lib/i18n";
 import { basename } from "@/lib/text";
+import { pathParts } from "@/lib/pathname";
 import type { Action, Item, Layout, LayoutNode, Run, Scene, Step, Tidy } from "./api";
 
 export const MAX_STEPS = 12;
@@ -140,7 +141,7 @@ export function actionHint(action: Action): string {
 
 // worktreeName is a worktree by its repository and its own folder, the way the leftovers dialog names one
 export function worktreeName(path: string): string {
-  const parts = path.split("/").filter(Boolean);
+  const parts = pathParts(path);
   return parts.slice(-2).join("/");
 }
 

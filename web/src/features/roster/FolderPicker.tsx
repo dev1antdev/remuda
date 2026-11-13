@@ -8,6 +8,7 @@ import type { Machine } from "@/features/roster/api";
 import Icon from "@/ui/icons";
 import { folderOptions } from "@/features/roster/options";
 import { basename } from "@/lib/text";
+import { joinPath, pathCrumbs } from "@/lib/pathname";
 import { Dialog, Notice, Tip } from "@/ui";
 import { useQuery } from "@/lib/query";
 import { useSharing } from "@/features/roster/useSharing";
@@ -28,7 +29,7 @@ export default function FolderPicker({ machine, machines, start, onPick, onClose
     if (data?.path) setTyped(data.path);
   }, [data?.path]);
   const go = (p: string) => setPath(p);
-  const crumbs = data?.path ? data.path.split("/").filter(Boolean) : [];
+  const crumbs = pathCrumbs(data?.path ?? ""); // from / or from a drive (C:\) on a Windows PC
   const known = folderOptions(machines, machine.id);
   const { machineLabel, redact } = useSharing(); // under the screen-sharing mode the machine and the workspaces by their neutral names
   const here = data?.path ?? path;
@@ -56,14 +57,11 @@ export default function FolderPicker({ machine, machines, start, onPick, onClose
           {t("Go")}
         </button>
       </form>
-      {crumbs.length > 0 && (
+      {crumbs.length > 1 && (
         <div className="picker-crumbs" aria-label={t("Path")}>
-          <button type="button" className="linkish" onClick={() => go("/")}>
-            /
-          </button>
           {crumbs.map((c, i) => (
-            <button key={i} type="button" className="linkish" onClick={() => go("/" + crumbs.slice(0, i + 1).join("/"))}>
-              {c}
+            <button key={i} type="button" className="linkish" onClick={() => go(c.path)}>
+              {c.label}
             </button>
           ))}
         </div>
@@ -72,7 +70,7 @@ export default function FolderPicker({ machine, machines, start, onPick, onClose
       <div className="picker-list" aria-busy={loading}>
         {data && data.dirs.length === 0 && !loading && <div className="notice hint">{t("No subfolders here.")}</div>}
         {data?.dirs.map((d) => {
-          const full = (data.path === "/" ? "" : data.path) + "/" + d.name;
+          const full = joinPath(data.path, d.name);
           return (
             <div key={d.name} className="picker-row">
               <button type="button" className="picker-open" onClick={() => go(full)} title={full}>

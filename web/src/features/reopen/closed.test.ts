@@ -30,7 +30,7 @@ describe("a closed agent's words", () => {
 
 describe("reopenKeyAsked", () => {
   const press = (over: Partial<KeyPress> = {}): KeyPress => ({ code: "KeyZ", altKey: true, metaKey: false, ctrlKey: false, shiftKey: false, target: { closest: () => null }, ...over });
-  const inside = (selector: string): KeyPress["target"] => ({ closest: (s: string) => (s === selector ? {} : null) });
+  const inside = (selector: string): KeyPress["target"] => ({ closest: (s: string) => (s === selector || s.split(", ").includes(selector) ? {} : null) });
 
   it("is Alt+Z by key code and nothing more", () => {
     for (const mac of [true, false]) {
@@ -41,6 +41,7 @@ describe("reopenKeyAsked", () => {
       expect(reopenKeyAsked(press({ metaKey: true }), false, mac)).toBe(false);
       expect(reopenKeyAsked(press(), true, mac)).toBe(false);
       expect(reopenKeyAsked(press({ target: inside(".xterm") }), false, mac)).toBe(false);
+      expect(reopenKeyAsked(press({ target: inside(".screen-term") }), false, mac)).toBe(false); // the screen terminal of a Windows PC
     }
   });
 

@@ -58,7 +58,18 @@ socket.onmessage = (message) => {
   }
   if (msg.method === "Runtime.exceptionThrown") consoleErrors.push(msg.params.exceptionDetails?.exception?.description ?? "exception");
   if (msg.method === "Runtime.consoleAPICalled" && msg.params.type === "error") consoleErrors.push(msg.params.args.map((arg) => arg.value ?? arg.description).join(" "));
+  if (msg.method === "Fetch.requestPaused") void dressWindows(msg.params);
 };
+// dressWindows plays the local machine as a Windows PC in the browser's copy of the roster: herdr has no terminal attach
+// there, so the page shows the screen terminal; the screen and the typing stay the throwaway herdr's own
+async function dressWindows({ requestId, responseStatusCode, responseHeaders = [] }) {
+  const reply = await send("Fetch.getResponseBody", { requestId });
+  if (responseStatusCode !== 200 || !reply.result) return send("Fetch.continueRequest", { requestId });
+  const roster = JSON.parse(reply.result.base64Encoded ? Buffer.from(reply.result.body, "base64").toString("utf8") : reply.result.body);
+  for (const machine of roster.machines ?? []) if (machine.id === "local") machine.os = "windows";
+  const headers = responseHeaders.filter((h) => !/^(etag|content-length|content-encoding)$/i.test(h.name));
+  await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: headers, body: Buffer.from(JSON.stringify(roster)).toString("base64") });
+}
 // send is one DevTools call; one the browser never answers fails the smoke instead of holding the run
 const send = (method, params = {}) =>
   new Promise((resolve, reject) => {
@@ -136,6 +147,30 @@ try {
   });
   step("the terminal echoed back", `${screen.filter((line) => line.includes("e2e-ok")).length} lines carry e2e-ok`);
   await shot("terminal");
+
+  // the same pane on a machine the roster says is a Windows PC: the screen terminal, read again and typed into, never attached
+  const paneURL = `${base}/?machine=local&pane=${encodeURIComponent(workspace.pane)}&lens=terminal`;
+  await send("Fetch.enable", { patterns: [{ urlPattern: "*/api/roster*", requestStage: "Response" }] });
+  await send("Page.navigate", { url: paneURL });
+  await until("the screen terminal", () => present(".lens-pane:not([hidden]) .screen-term .screen-line"));
+  if (await present(".xterm")) fail("a Windows machine's pane attached a live terminal");
+  await click(".lens-pane:not([hidden]) .screen-term-screen");
+  if ((await evaluate("document.activeElement?.className ?? ''")) !== "screen-term-field") fail("the screen terminal did not take the focus");
+  await key("u", "KeyU", 2);
+  await send("Input.insertText", { text: "echo e2e-screen" });
+  await send("Input.insertText", { text: "-ok" });
+  await key("Enter", "Enter", 0, "\r");
+  const typed = await until("e2e-screen-ok through the screen terminal", async () => {
+    const read = await api("GET", `/api/screen?machine=local&pane=${encodeURIComponent(workspace.pane)}`);
+    const lines = (read.text ?? "").replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "").split(/\r?\n/).map((line) => line.trim());
+    return lines.includes("e2e-screen-ok") ? lines : null;
+  });
+  await until("the screen terminal drew its answer", () => evaluate(`[...document.querySelectorAll(".screen-term .screen-line")].some((line) => line.textContent.trim() === "e2e-screen-ok")`), 5);
+  step("the screen terminal typed and read back", `${typed.filter((line) => line.includes("e2e-screen-ok")).length} lines carry e2e-screen-ok`);
+  await shot("screen-terminal");
+  await send("Fetch.disable");
+  await send("Page.navigate", { url: paneURL });
+  await until("the live terminal again", () => present(".lens-pane:not([hidden]) .xterm .xterm-screen"));
 
   // a shell has its terminal alone: the lens switch keeps its room unseen, and no chat or changes lens opens for it
   if (!(await evaluate(`document.querySelector(".lens-switch")?.classList.contains("is-vacant") === true`))) fail("a shell pane's lens switch is drawn");

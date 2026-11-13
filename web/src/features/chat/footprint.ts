@@ -1,6 +1,7 @@
 // The files an agent touched in a conversation, read from its own tool calls: what it edited, what it only
 // read, the newest touch first. A tool's input cut to a string at 8 KB on the server still names its file.
 
+import { underFolder } from "@/lib/pathname";
 import type { Part, Turn } from "./api";
 
 export const EDIT_TOOLS = new Set(["Edit", "Write", "MultiEdit", "NotebookEdit"]);
@@ -73,8 +74,7 @@ export function footprint(turns: Turn[]): Footprint {
 
 // shownPath is the path as the rail shows it: relative to the pane's folder when under it
 export function shownPath(path: string, dir: string): string {
-  const base = dir.replace(/\/+$/, "");
-  return base && path.startsWith(base + "/") ? path.slice(base.length + 1) : path;
+  return underFolder(path, dir) ?? path;
 }
 
 // toolLabel is what a tool call says in one line: its name, and the file or command it was about

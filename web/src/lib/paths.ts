@@ -30,6 +30,15 @@ const PATH_RE = new RegExp(
     String.raw`|(?<![${WORD}.@%+/-])\.${DOTFILE}\b`, // a dotfile
   "gu",
 );
+// On a Windows machine's pane a path may also start at a drive (C:\Users\me\Form1.cs, C:/work/x.cs) or go by
+// backslashes (src\App.xaml.cs); those alternatives come first, so the whole of such a path is the one match.
+const WINDOWS_RE = new RegExp(
+  String.raw`(?<![${WORD}.@%+=\\/-])[A-Za-z]:[\\/](?:${SEG}[\\/])*${SEG}` + // from a drive
+    String.raw`|(?<![${WORD}.@%+=\\/:-])(?:${SEG}\\)+${SEG}` + // relative by backslashes
+    "|" +
+    PATH_RE.source,
+  "gu",
+);
 // a name a file would have: a dotfile, or an extension with a letter in it (v1.2.3 has none)
 const FILE_NAME = /^\.[^/]+$|\.[A-Za-z0-9]*[A-Za-z][A-Za-z0-9]*$/;
 const LINE_SUFFIX = /:(\d+)(?::\d+)?$/;
@@ -61,10 +70,12 @@ export function findUrls(text: string): UrlMatch[] {
   return out;
 }
 
-export function findPaths(text: string): PathMatch[] {
+// windows: the text is a Windows machine's, where a path may go by backslashes or start at a drive
+export function findPaths(text: string, windows = false): PathMatch[] {
   const out: PathMatch[] = [];
   const urls = findUrls(text);
-  for (const m of text.matchAll(PATH_RE)) {
+  const lastSeparator = (p: string) => Math.max(p.lastIndexOf("/"), windows ? p.lastIndexOf("\\") : -1);
+  for (const m of text.matchAll(windows ? WINDOWS_RE : PATH_RE)) {
     let raw = m[0];
     const at = m.index ?? 0;
     // not the path part of a URL
@@ -85,8 +96,8 @@ export function findPaths(text: string): PathMatch[] {
     }
     if (path === "/" || path === "./" || path === "../") continue;
     // a bare "x.y" that is really a version or a domain is not a file
-    if (!path.includes("/") && /^\d+(\.\d+)+$/.test(path)) continue;
-    if (!FILE_NAME.test(path.slice(path.lastIndexOf("/") + 1))) continue;
+    if (lastSeparator(path) < 0 && /^\d+(\.\d+)+$/.test(path)) continue;
+    if (!FILE_NAME.test(path.slice(lastSeparator(path) + 1))) continue;
     out.push({ start: at, end: at + raw.length, text: raw, path, line });
   }
   return out;

@@ -57,6 +57,10 @@ describe("shownPath", () => {
     expect(shownPath("/r2/a.ts", "/r")).toBe("/r2/a.ts");
     expect(shownPath("/r/a.ts", "")).toBe("/r/a.ts");
   });
+  it("takes a Windows machine's folder", () => {
+    expect(shownPath("C:\\Users\\me\\app\\src\\Form1.cs", "C:\\Users\\me\\app")).toBe("src\\Form1.cs");
+    expect(shownPath("D:\\other\\x.cs", "C:\\Users\\me\\app")).toBe("D:\\other\\x.cs");
+  });
 });
 
 describe("toolLabel", () => {

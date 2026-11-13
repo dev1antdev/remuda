@@ -13,6 +13,7 @@ import type { Machine } from "@/features/roster/api";
 import { basename, errMsg } from "@/lib/text";
 import { usePref } from "@/lib/prefs";
 import { connected, machineOptions } from "@/features/roster/options";
+import { editorOption, onWindows } from "@/features/roster/system";
 import Select from "@/ui/Select";
 import Icon from "@/ui/icons";
 import { openUrl } from "@/lib/host";
@@ -34,7 +35,8 @@ export default function Code({ machines, currentMachine, currentFolder, currentP
   currentPane: CurrentPane; // the pane on screen in Agents: the one Follow watches
   visible: boolean;
 }) {
-  const live = connected(machines);
+  const reachable = connected(machines);
+  const live = reachable.filter((m) => !onWindows(m)); // a Windows PC runs no code-server: listed, never picked
   const [machineId, setMachineId] = usePref("code.machine", "");
   const machine = live.find((m) => m.id === (machineId || currentMachine)) ?? live[0] ?? null;
   const [folders, setFolders] = usePref<Record<string, string>>("code.folders", {});
@@ -185,8 +187,8 @@ export default function Code({ machines, currentMachine, currentFolder, currentP
   return (
     <div className="code-mode">
       <div className="code-bar">
-        {live.length > 1 && (
-          <Select value={machine?.id ?? ""} onChange={setMachineId} options={machineOptions(machines).map((o) => ({ ...o, hint: machines.find((m) => m.id === o.value)?.host }))} />
+        {reachable.length > 1 && (
+          <Select value={machine?.id ?? ""} onChange={setMachineId} options={machineOptions(machines).map((o) => editorOption(o, machines.find((m) => m.id === o.value)))} />
         )}
         {machine && (
           <Select
@@ -198,7 +200,7 @@ export default function Code({ machines, currentMachine, currentFolder, currentP
           />
         )}
         {watched && status?.available && (
-          <Tip text={follow ? t("Following the agent: every file it finishes editing opens here. Click to stop.") : t("Follow the agent: open every file it edits in {folder}, as it happens", { folder: watched.dir.split("/").pop() || t("its folder") })}>
+          <Tip text={follow ? t("Following the agent: every file it finishes editing opens here. Click to stop.") : t("Follow the agent: open every file it edits in {folder}, as it happens", { folder: basename(watched.dir) || t("its folder") })}>
             <button type="button" className={`btn sm code-follow${follow ? " on" : ""}`} aria-pressed={follow} onClick={() => setFollow(!follow)}>
               <Icon name="eye" size={14} />
               <span>{t("Follow")}</span>
@@ -223,7 +225,7 @@ export default function Code({ machines, currentMachine, currentFolder, currentP
         )}
       </div>
       {!machine ? (
-        <div className="empty">{t("No connected machine.")}</div>
+        <div className="empty">{reachable.length ? t("No machine here runs code-server: there is none for Windows.") : t("No connected machine.")}</div>
       ) : status === null ? (
         <div className="empty">{t("Looking for code-server on {machine}…", { machine: machine.label })}</div>
       ) : status.available ? (

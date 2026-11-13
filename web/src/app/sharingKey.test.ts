@@ -15,6 +15,7 @@ describe("sharingKeyAsked", () => {
 
   it("leaves the terminal, a dialog and a Mac's fields alone", () => {
     expect(sharingKeyAsked(press({ target: inside(".xterm") }), false, false)).toBe(false);
+    expect(sharingKeyAsked(press({ target: inside(".screen-term") }), false, false)).toBe(false);
     expect(sharingKeyAsked(press(), true, false)).toBe(false);
     expect(sharingKeyAsked(press({ target: inside("textarea") }), false, true)).toBe(false);
     expect(sharingKeyAsked(press({ target: inside("textarea") }), false, false)).toBe(true);

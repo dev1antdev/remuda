@@ -54,6 +54,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/schedule"
 	"github.com/dev1antdev/remuda/internal/scorecard"
 	"github.com/dev1antdev/remuda/internal/scratch"
+	"github.com/dev1antdev/remuda/internal/sent"
 	"github.com/dev1antdev/remuda/internal/sessions"
 	"github.com/dev1antdev/remuda/internal/subagents"
 	"github.com/dev1antdev/remuda/internal/tasks"
@@ -120,8 +121,9 @@ type Server struct {
 	Scenes     *scenes.Service     // the morning set-ups and the evening tidies, run at the person's press
 
 	streams   termStreams
-	relayed   relays   // the terminals piped to a machine's own remuda, which holds their attach
-	teleports sync.Map // the moves of work to another machine, by job id: where the agent carrying on is
+	relayed   relays     // the terminals piped to a machine's own remuda, which holds their attach
+	typed     sent.Lines // the screen terminal's lines being typed, a row of the activity once Enter sends one
+	teleports sync.Map   // the moves of work to another machine, by job id: where the agent carrying on is
 }
 
 // Handler mounts every route: each context registers its own, the static page comes last, and the guard wraps all but two.

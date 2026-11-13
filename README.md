@@ -103,6 +103,11 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   `READY` (idle), `DONE`.
 - **Terminal lens** — xterm.js fed by a shared `herdr terminal attach` PTY
   per pane (all viewers share one attach; replay buffer for late joiners).
+  On a Windows PC, where herdr has no terminal attach, the lens is a screen
+  terminal instead: the pane's screen read a few times a second and typed
+  into (Enter, the arrows, Ctrl and the key bar too, a paste as a paste),
+  its text selectable; `herdr --remote <pc>` in a terminal on your Mac
+  gives a live one.
 - **Chat lens** — the transcript herdr names via `agent_session`, parsed
   into turns (text, thinking, tool calls with outputs), polled with ETags.
   Claude Code's session files, Codex's rollouts and Gemini CLI's chats

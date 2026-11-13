@@ -31,3 +31,9 @@ func TestATextIsOneLineAndCut(t *testing.T) {
 		t.Fatalf("cut: %q (%d runes)", got, len([]rune(got)))
 	}
 }
+
+func TestACombinationIsNamedByItsParts(t *testing.T) {
+	if got := KeyWords([]string{"ctrl+a", "alt+enter", "ctrl+shift+up", "shift+tab", "home", "meta+x"}); got != "Ctrl+A Alt+Enter Ctrl+Shift+↑ ⇧Tab Home meta+x" {
+		t.Fatalf("combinations: %q", got)
+	}
+}

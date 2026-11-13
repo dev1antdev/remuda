@@ -48,13 +48,39 @@ func Entry(device, text string, keys bool, machineID, paneID, workspace string) 
 func KeyWords(keys []string) string {
 	words := make([]string, 0, len(keys))
 	for _, key := range keys {
-		if name, ok := keyNames[strings.ToLower(key)]; ok {
-			words = append(words, name)
-		} else {
-			words = append(words, key)
-		}
+		words = append(words, keyWord(strings.ToLower(key)))
 	}
 	return strings.Join(words, " ")
+}
+
+// modifierWords are the modifiers of a combination as a person reads them.
+var modifierWords = map[string]string{"ctrl": "Ctrl", "alt": "Alt", "shift": "Shift"}
+
+// keyWord is one key's name: the known ones by keyNames, a combination by its modifiers and its key ("Ctrl+A",
+// "Alt+Enter"), anything else as herdr names it.
+func keyWord(key string) string {
+	if name, ok := keyNames[key]; ok {
+		return name
+	}
+	parts := strings.Split(key, "+")
+	if len(parts) < 2 {
+		return key
+	}
+	words := make([]string, 0, len(parts))
+	for _, mod := range parts[:len(parts)-1] {
+		word, ok := modifierWords[mod]
+		if !ok {
+			return key
+		}
+		words = append(words, word)
+	}
+	base := parts[len(parts)-1]
+	if name, ok := keyNames[base]; ok {
+		base = name
+	} else {
+		base = strings.ToUpper(base)
+	}
+	return strings.Join(append(words, base), "+")
 }
 
 // Cut makes a text one line of at most MaxText runes, an ellipsis standing for the rest.

@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { actions, app } from "@/app/store";
 import { useRoster } from "@/features/roster/useRoster";
+import { onWindows } from "@/features/roster/system";
 import { basename, plural } from "@/lib/text";
 import { Icon, Logo, PANELS, Resizer } from "@/ui";
 import { reviewQueue, type QueueItem } from "./queue";
@@ -55,7 +56,7 @@ export default function ReviewQueue() {
                 {item.machine.id !== "local" && <span className="queue-where"> · {item.machine.label}</span>}
               </span>
             </div>
-            <Review key={item.key} machineId={item.machine.id} paneId={item.pane?.id ?? ""} dir={item.dir} agent={item.pane?.agent ?? ""} onSeen={refresh} active />
+            <Review key={item.key} machineId={item.machine.id} paneId={item.pane?.id ?? ""} dir={item.dir} agent={item.pane?.agent ?? ""} onSeen={refresh} active editor={!onWindows(item.machine)} />
           </>
         ) : (
           <div className="placeholder">
