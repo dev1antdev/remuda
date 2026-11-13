@@ -473,6 +473,8 @@ async function seed() {
       status: "run",
       title: "Draw every screen of the page at two widths",
       radar: { state: "working", since: now - 3 * 60e3, last_active: now },
+      // three subagents at work, the two oldest by name: the sidebar's tree under the agent's line
+      subagents: { working: 3, session: "0c7a6c1e-2a43-4c1a-9a5e-3c1f0b6f8a11", list: [{ id: "agent-a1", description: "explore · cart service", doing: "Read · service.go" }, { id: "agent-a2", description: "test-runner", doing: "Bash · go test ./..." }] },
       usage: { model: "claude-opus-4-5", name: "Opus 4.5", context: 124000, window: 200000, cost: 4.2, turns: 12, tokens: { input: 1200, output: 3400, cache_read: 98000, cache_write: 2100 } },
       pr: { url: "https://github.com/example/app/pull/15", label: "PR #15", status: { state: "OPEN", draft: false, mergeable: "MERGEABLE", review: "REVIEW_REQUIRED", checks: { total: 3, pass: 2, fail: 1, pending: 0, skipped: 0 }, at: iso(now) } },
     },
@@ -895,6 +897,20 @@ async function fakeUndo({ requestId, request }) {
   await send("Fetch.fulfillRequest", { requestId, responseCode: code, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(body)).toString("base64") });
 }
 
+// ASKED is what the dressed Codex asks on its screen, which the sidebar's "Needs you" and the zoo's bubble quote
+const ASKED = "Bash command\ngo build ./...\nbuild the app\nDo you want to proceed?";
+
+// fakeQuestion answers a read of a pane's dialog: the asking pane's, none for the rest; an answer is passed on
+async function fakeQuestion({ requestId, request }) {
+  if (request.method !== "GET") {
+    await send("Fetch.continueRequest", { requestId });
+    return;
+  }
+  const pane = new URL(request.url).searchParams.get("pane");
+  const question = DRESS[pane]?.status === "input" ? { text: ASKED, options: [{ label: "Yes" }, { label: "No" }] } : null;
+  await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify({ question })).toString("base64") });
+}
+
 async function dressRoster({ requestId, responseStatusCode, responseHeaders = [] }) {
   const reply = await send("Fetch.getResponseBody", { requestId });
   if (responseStatusCode !== 200 || !reply.result) {
@@ -931,6 +947,7 @@ async function dressRoster({ requestId, responseStatusCode, responseHeaders = []
       if (session.id === desk?.id) session.concierge = true; // the page shows it in the concierge's place alone
       if (session.id === app.id) {
         session.jira = [{ key: "APP-12", summary: "Draw every screen", status: "In Review", category: "indeterminate", url: "https://example.atlassian.net/browse/APP-12" }];
+        session.sync = { ahead: 2, behind: 1 }; // the selected card says how far it stands from its upstream
       }
       dressCollisions(session);
       for (const tab of session.tabs ?? []) for (const pane of tab.panes ?? []) Object.assign(pane, DRESS[pane.id] ?? {});
@@ -1096,6 +1113,9 @@ const tapUntil = async (selector, opened) => {
   await tap(selector);
   await until(() => present(opened), 3);
 };
+// setPref writes a pref the way another tab of the page would, so every hook of it reads it again at once
+const setPref = (key, value) =>
+  evaluate(`(() => { localStorage.setItem(${JSON.stringify(`remuda.${key}`)}, ${JSON.stringify(JSON.stringify(value))}); dispatchEvent(new StorageEvent("storage", { key: ${JSON.stringify(`remuda.${key}`)} })); })()`);
 const folderHead = (name) => `[...document.querySelectorAll('.ws-folder-head')].find((h) => h.querySelector('.ws-folder-name')?.textContent === ${JSON.stringify(name)})`;
 const firstCardOf = (folder) => `${folderHead(folder)}?.parentElement.querySelector('.ws-item')`;
 const mark = async (expression, attr) => {
@@ -1801,8 +1821,60 @@ async function runPass() {
       await sidebarOpen();
       await conciergeHidden(".sidebar");
     },
-    expect: [".ws-folder-head", ".ws-item", ".machine-head", ".ws-item .collide-mark.is-lines"],
+    expect: [".ws-folder-head", ".ws-item", ".machine-head", ".ws-item .collide-mark.is-lines", ".needs-you .inbox-row", ".ws-item .ws-agent-line", ".sidebar-foot"],
     close: async () => {},
+  });
+  // the sidebar's agents after Orca: "Needs you" with what the Codex asks on its screen, a line per agent under every
+  // card (two under the repository's), the subagents at work on their tree under the Claude Code, the main checkout's
+  // primary tag and the selected card's distance from its upstream, the foot's link to the one waiting
+  await screen("sidebar-agents", {
+    open: async () => {
+      await sidebarOpen();
+      if (!(await until(() => evaluate(`[...document.querySelectorAll(".needs-you .inbox-ask")].some((el) => el.textContent.includes("go build ./..."))`), 15))) failed("the inbox does not say what the Codex asks");
+      const lines = await evaluate(`${firstCardOf("app")}?.querySelectorAll(".ws-agent-line").length ?? 0`);
+      check(lines === 2, `the repository's card has ${lines} agent lines, not its two agents'`);
+      check(await evaluate(`!!${firstCardOf("app")}?.querySelector(".ws-agent-line.shape-asking .needs-pill")`), "the asking agent's line wears no Needs you pill");
+      check(await evaluate(`${firstCardOf("app")}?.querySelectorAll(".sub-tree .sub-line").length === 3`), "the Claude Code's subagents are not on their tree, two named and one more");
+      check(await evaluate(`!!${firstCardOf("app")}?.querySelector(".primary-tag")`), "the main checkout beside its worktree wears no primary tag");
+      check(await evaluate(`${firstCardOf("app")}?.querySelector(".ws-sync")?.textContent === "↑2 ↓1"`), "the selected card does not say how far it stands from its upstream");
+      check(await evaluate(`!!document.querySelector(".sidebar-foot .sidebar-foot-needs")`), "the foot does not link to the agent waiting");
+    },
+    expect: [".needs-you .inbox-row", ".sub-tree .sub-line", ".ws-agent-line.shape-working", ".ws-agent-line.shape-done"],
+    close: async () => {},
+  });
+  // an agent pinned from its line's pin (under the pointer at a desk, always there on a phone) stands in the pinned
+  // group; unpinned again, the group goes
+  await screen("sidebar-pinned", {
+    open: async () => {
+      await sidebarOpen();
+      const line = await mark(`${firstCardOf("app")}?.querySelector(".ws-agent-line.shape-working")`, "agent-line");
+      await hover(line);
+      await sleep(150);
+      await tap(`${line} .agent-pin`);
+      if (!(await until(() => present(".sidebar-group.pinned .ws-agent-line"), 4))) failed("the pinned agent is not in the pinned group");
+    },
+    expect: [".sidebar-group.pinned .ws-agent-line .agent-line-where"],
+    close: async () => {
+      await hover(".sidebar-group.pinned .ws-agent-line");
+      await sleep(150);
+      await tap(".sidebar-group.pinned .ws-agent-line .agent-pin");
+      if (!(await until(async () => !(await present(".sidebar-group.pinned")), 3))) failed("the pinned group stays once its agent is unpinned");
+    },
+  });
+  // the order by priority: sections for the ones that need you, the finished, the working and the idle, with counts
+  await screen("sidebar-priority", {
+    open: async () => {
+      await sidebarOpen();
+      await setPref("radar", { order: "priority", rowLabel: "title", freshMinutes: 15, staleMinutes: 120, shells: false });
+      if (!(await until(() => present(".ws-section.is-needs .ws-section-head .badge"), 4))) failed("the order by priority draws no Needs you section");
+      check(await evaluate(`!!document.querySelector(".ws-section.is-done")`), "the order by priority has no Done section for the finished worktree");
+      check(await evaluate(`!!document.querySelector(".ws-section.is-needs .ws-agent-line .agent-shape.is-asking-square")`), "under the Needs you heading a question is not the ! square");
+    },
+    expect: [".ws-section-head", ".ws-section .ws-item"],
+    close: async () => {
+      await setPref("radar", { order: "active", rowLabel: "title", freshMinutes: 15, staleMinutes: 120, shells: false });
+      await until(() => present(".ws-folder-head"), 3);
+    },
   });
   await screen("folder-folded", {
     open: async () => {

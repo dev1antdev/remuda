@@ -105,6 +105,7 @@ type Store struct {
 	remotes   map[string]string     // each folder's origin, which every checkout of one repository shares
 	scans     map[string]scanNote   // the last secret check of each folder
 	bases     map[string]baseRead   // the fork base detected for each folder, kept while its HEAD stays
+	syncs     map[string]Sync       // each folder's branch against its upstream, as of the last fetch
 }
 
 // badgeSweep is a machine's last Badges run: when it began, and whether it is still going.
@@ -118,7 +119,7 @@ func key(machineID, dir string) string { return machineID + "|" + dir }
 // New loads the baselines kept in dir.
 func New(dir string) *Store {
 	store := &Store{dir: dir, baselines: map[string]Baseline{}, badges: map[string]Badge{}, branches: map[string]string{}, roots: map[string]string{}, sweeps: map[string]badgeSweep{},
-		works: map[string]work{}, remotes: map[string]string{}, scans: map[string]scanNote{}, bases: map[string]baseRead{}}
+		works: map[string]work{}, remotes: map[string]string{}, scans: map[string]scanNote{}, bases: map[string]baseRead{}, syncs: map[string]Sync{}}
 	if err := state.LoadJSON(dir, baselineFile, &store.baselines); err != nil {
 		log.Printf("%s is unreadable (%v): every folder counts as never reviewed", baselineFile, err)
 	}
@@ -448,11 +449,11 @@ func (store *Store) RefreshBadges(host shell.Host, dirs []string) {
 	}()
 }
 
-// branchScript prints three lines: the branch checked out, or the short hash of a detached HEAD; the repository's main
-// folder (MainFolderScript) — a submodule's git dir sits under its parent's .git/modules, never beside it; and the
-// address of its origin (remoteScript), "" for none.
+// branchScript prints four lines: the branch checked out, or the short hash of a detached HEAD; the repository's main
+// folder (MainFolderScript) — a submodule's git dir sits under its parent's .git/modules, never beside it; the
+// address of its origin (remoteScript), "" for none; and the branch against its upstream (syncScript), "" for none.
 const branchScript = `b=$({ git symbolic-ref --short -q HEAD || git rev-parse --short HEAD; } 2>/dev/null); printf '%s\n' "$b"; ` +
-	`r=$(` + MainFolderScript + `); printf '%s\n' "$r"; ` + remoteScript
+	`r=$(` + MainFolderScript + `); printf '%s\n' "$r"; ` + remoteScript + `; ` + syncScript
 
 // MainFolderScript prints, run inside a checkout, the repository's main folder: for a linked worktree the parent of the
 // common git dir it shares with its repository, else the checkout's own top folder.
@@ -499,13 +500,14 @@ func (store *Store) Badges(host shell.Host, dirs []string) {
 		}
 		answered[dir] = true
 		storeKey := key(host.ID(), dir)
-		lines := strings.SplitN(strings.TrimRight(heads, "\n"), "\n", 3)
-		for len(lines) < 3 {
+		lines := strings.SplitN(strings.TrimRight(heads, "\n"), "\n", 4)
+		for len(lines) < 4 {
 			lines = append(lines, "")
 		}
 		store.setBranch(storeKey, strings.TrimSpace(lines[0]))
 		store.setRoot(storeKey, rpath.For(host.Home()).Clean(strings.TrimSpace(lines[1]))) // Git Bash says /c/Users/me/app for C:\Users\me\app
 		store.setRemote(storeKey, strings.TrimSpace(lines[2]))
+		store.setSync(storeKey, lines[3])
 		blobLines := sections[0]
 		hasBaseline := !baseline.At.IsZero()
 		badge := Badge{}
@@ -527,6 +529,7 @@ func (store *Store) Badges(host shell.Host, dirs []string) {
 		if !answered[dir] {
 			store.setBranch(key(host.ID(), dir), "") // no longer a repository: no branch or changes to show
 			store.setRoot(key(host.ID(), dir), "")
+			store.setSync(key(host.ID(), dir), "")
 			store.forgetWork(key(host.ID(), dir))
 		}
 	}

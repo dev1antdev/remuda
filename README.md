@@ -55,15 +55,35 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   the pane**, a ring that cools with the time since the last turn — fresh,
   plain, then the whole card dims after two hours — and how long it has
   been so ("12m", "3h"). Under the name, the branch the folder has checked
-  out and what the agent is doing, or, once it finished, the first line of
-  what it answered, so the sidebar reads like a list of results. A
-  workspace running several agents lists them in small lines under its
-  card, each a click to open. Each agent wears its vendor's logo and hue
+  out — `primary` on a main checkout beside its worktrees, and on the card
+  you are on how far its branch stands from its upstream as of the last
+  fetch, "↑2 ↓1" — and, once the agent finished, the first line of what it
+  answered, so the sidebar reads like a list of results. Under every card
+  a line per agent, after the Orca and Better Sidebar mods for Herdr
+  Desktop: its logo, its title, how long it has been in
+  its state ("<1m", "8m", "3h") and its state as a shape that reads
+  without colour — a spinner while it works, a red **Needs you** while it
+  asks, a dot once it finished, a hollow ring at rest — each a click to
+  open; the subagents a Claude Code agent runs hang under its line on thin
+  tree lines, each a click to read its own conversation, and a chevron
+  folds them, the count left in sight. On top of the sidebar, **Needs
+  you** lists every agent waiting on you, the longest wait first, with
+  what it asks read off its screen ("Bash command · rm -rf build") or the
+  watchdog's note; a click opens it, nothing is answered from there. Under
+  the pointer an agent's age gives way to a pin (always there on a phone):
+  pinned agents stand in their own group at the top, on every device. A
+  folded folder or machine still says "2 need you · 1 working", so
+  folding never hides a question, a folder's icon glows softly while its
+  agents work, and the foot says "5 agents · 2 need you", the second part
+  a way to the one that waited longest. **Alt+]** and **Alt+[** walk every
+  agent in the sidebar's order. Each agent wears its vendor's logo and hue
   (27 vendors), the busiest folder sorts first; the sidebar's ⋯ flips to a
-  flat list by activity or herdr's own order, its settings hold the
-  thresholds and the label. Above the pane each tab says what it runs —
-  the agent by its logo and name, a shell as "terminal" — and + opens a
-  terminal in the workspace's folder at once, or an agent.
+  flat list by activity, herdr's own order, sections by priority (needs
+  you, done, working, idle) or by ticket prefix (`PR-12`, `INS-4`, after
+  `feature/` too), its settings hold the thresholds and the label. Above
+  the pane each tab says what it runs — the agent by its logo and name, a
+  shell as "terminal" — and + opens a terminal in the workspace's folder
+  at once, or an agent.
 - **Folder icons** — click a folder's icon (or "Folder icon…" in a
   workspace's ⋯ menu, or the palette) to give it a face: first the ones
   the project already has — its favicon, logo or app icon, found in the
@@ -1817,7 +1837,9 @@ conversation for what you typed. **?** opens the keyboard sheet: every
 key the page answers, in groups. **Alt+N** goes to the next agent that
 needs you — a question open, a watchdog note, a finish you have not
 looked at — round and round in the sidebar's order; on the Wall that
-tile takes the wall, elsewhere the agent opens on its chat. The browser
+tile takes the wall, elsewhere the agent opens on its chat. **Alt+]** and
+**Alt+[** step through every agent, one after another as the sidebar
+draws them, the pinned ones first. The browser
 tab counts them too: its title reads "(2) remuda" and the favicon wears
 a dot in the colour of the most pressing one — red for a question,
 amber for a watchdog note, green for a finish — so another tab or the

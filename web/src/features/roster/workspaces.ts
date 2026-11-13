@@ -1,11 +1,12 @@
 // The sidebar's list for one machine, after Orca: every repository a folder that folds shut, its workspaces under it
-// as cards that open their agent in one click, and a small line per agent only when a workspace runs more than one.
-// Pure functions over the roster; rows.tsx draws them.
+// as cards that open their agent in one click, and a line per agent under each card; or, in the orders that gather
+// otherwise, sections by priority or by ticket prefix. Pure functions over the roster; rows.tsx draws them.
 
 import { basename } from "@/lib/text";
 import { t, tn } from "@/lib/i18n";
 import type { FolderIconRef, Machine, Session } from "./api";
 import { agentRows, orderRows, rowLabel, type AgentRow, type RadarPrefs } from "./radar";
+import { prefixSections, prioritySections, type Section } from "./sections";
 
 // WorkspaceItem is one workspace's card: its agents in the radar's order, the one its card speaks for, and how lively it is
 export type WorkspaceItem = { session: Session; rows: AgentRow[]; lead: AgentRow | null; best: number };
@@ -14,22 +15,31 @@ export type WorkspaceItem = { session: Session; rows: AgentRow[]; lead: AgentRow
 // worktrees', as Orca shows a project
 export type Folder = { key: string; path: string; name: string; icon?: FolderIconRef; items: WorkspaceItem[]; best: number };
 
-export type Entry = { kind: "workspace"; item: WorkspaceItem } | { kind: "folder"; folder: Folder };
+export type Entry = { kind: "workspace"; item: WorkspaceItem } | { kind: "folder"; folder: Folder } | { kind: "section"; section: Section };
+
+// entryItems is every workspace an entry holds
+export const entryItems = (entry: Entry): WorkspaceItem[] => (entry.kind === "folder" ? entry.folder.items : entry.kind === "section" ? entry.section.items : [entry.item]);
+
+// foldKey is the key an entry's fold is kept under in the pref wsFolded, none for a lone workspace
+export const foldKey = (machineId: string, entry: Entry): string | null =>
+  entry.kind === "folder" ? `${machineId}|folder:${entry.folder.key}` : entry.kind === "section" ? `${machineId}|section:${entry.section.key}` : null;
 
 // folderOf is the folder a workspace belongs to: the server's word (the repository's main folder), else its own
 export const folderOf = (s: Session): string => s.folder || s.dir || s.worktree?.checkout_path || "";
 
 // itemOf is a workspace's card; its liveliness is its own agents'
 function itemOf(s: Session, prefs: RadarPrefs): WorkspaceItem {
-  const rows = prefs.order === "active" ? orderRows(agentRows(s, prefs)) : agentRows(s, prefs);
+  const rows = prefs.order === "recent" || prefs.order === "herdr" ? agentRows(s, prefs) : orderRows(agentRows(s, prefs));
   return { session: s, rows, lead: leadOf(rows), best: rows.reduce((best, r) => Math.max(best, r.last), 0) };
 }
 
 // entries lays out a machine: every folder with its workspaces under it, the main checkout first and the rest by
 // activity, the folders by their liveliest agent (herdr's order for the ones with none, or with that order picked);
-// the flat order lists the workspaces alone by activity
+// the flat order lists the workspaces alone by activity; priority and prefix gather them in sections instead
 export function entries(m: Machine, prefs: RadarPrefs): Entry[] {
   const items = m.sessions.filter((s) => !s.scratch).map((s) => itemOf(s, prefs)); // the floating terminal's shell is the drawer's
+  if (prefs.order === "priority") return prioritySections(items).map((section) => ({ kind: "section", section }));
+  if (prefs.order === "prefix") return prefixSections(items).map((section) => ({ kind: "section", section }));
   if (prefs.order === "recent") {
     const order = new Map(items.map((item, i) => [item, i]));
     return [...items].sort((a, b) => b.best - a.best || order.get(a)! - order.get(b)!).map((item) => ({ kind: "workspace", item }));
@@ -144,6 +154,29 @@ export function itemWords(item: WorkspaceItem, prefs: RadarPrefs): string {
   return tabs > 1 ? tn(tabs, "{n} tab", "{n} tabs") : t("terminal");
 }
 
+// cardWords is a card's second line beside its branch, now that a line per agent names each: what the agent the card
+// speaks for needs or said — a watchdog note, a question, a plan limit, its last answer — "" while it only works; a
+// workspace of shells alone, its tabs
+export function cardWords(item: WorkspaceItem): string {
+  const lead = item.lead;
+  if (!item.rows.some((r) => r.pane.agent)) {
+    const tabs = item.session.tabs.length;
+    return tabs > 1 ? tn(tabs, "{n} tab", "{n} tabs") : t("terminal");
+  }
+  const radar = lead?.pane.radar;
+  if (radar?.alert) return radar.alert;
+  if (radar?.state === "blocked") return t("waiting for your answer");
+  if (limited(lead)) return lead?.pane.limit?.continue_at ? t("stopped on its plan limit · continues after the reset") : t("stopped on its plan limit");
+  if ((radar?.state === "done" || radar?.state === "idle") && lead?.pane.said) return lead.pane.said;
+  return "";
+}
+
+// primaryOf is the folder's main checkout when worktrees stand beside it, the card Orca marks "primary"; null otherwise
+export function primaryOf(folder: Folder): WorkspaceItem | null {
+  if (!folder.items.some((item) => item.session.worktree?.linked)) return null;
+  return folder.items.find((item) => !item.session.worktree?.linked && (item.session.dir || "") === folder.path) ?? null;
+}
+
 // since is the moment a line's age counts from: the start of the work or the question, else the last turn
 export function since(r: AgentRow | null): number | undefined {
   const radar = r?.pane.radar;
@@ -152,11 +185,11 @@ export function since(r: AgentRow | null): number | undefined {
   return radar.last_active || undefined;
 }
 
-// shortAge is a line's age at a glance: "now", "12m", "3h", "4d"
+// shortAge is a line's age at a glance: "<1m", "12m", "3h", "4d"
 export function shortAge(from: number | undefined, now: number): string {
   if (!from) return "";
   const minutes = Math.floor(Math.max(0, now - from) / 60_000);
-  if (minutes < 1) return t("now");
+  if (minutes < 1) return t("<1m");
   if (minutes < 60) return t("{n}m", { n: minutes });
   const hours = Math.floor(minutes / 60);
   if (hours < 48) return t("{n}h", { n: hours });
