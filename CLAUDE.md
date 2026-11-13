@@ -1636,6 +1636,51 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   edits since the look; a file deleted since diffs as its removal), else
   against HEAD (an untracked file whole) — always `--no-ext-diff`, so a
   difftastic set as the external driver stays out of it.
+  **What git sees of the work** (`status.go`, `outgoing.go`, `sides.go`,
+  `base.go`, tested on real temp repositories in `status_test.go`): the
+  summary's script also prints `git status --porcelain=v2 -z
+  --no-renames --untracked-files=no -- .` (its paths from the repository's
+  top, the folder's `--show-prefix` cut off) and the staged and unstaged
+  `--numstat -z --relative` (`statusScript`, every read through `readGit`:
+  `--no-optional-locks -c core.fsmonitor=false`, so a read never writes
+  the index) — each `File` carries `index` / `work` (git's letters, M A D
+  T), `conflict` (an unmerged file's two letters, UU both edited, AA, DD,
+  AU, UA, DU, UD) and `staged` / `unstaged` (`Stat{added, removed,
+  binary}`, a file partly staged holding both), and a file the diff
+  against HEAD does not show (staged and changed back, any file of a
+  repository with no commit yet) is added (`withStatus`); and the commits
+  not on the remote (`outgoingScript` → `Summary.outgoing {against,
+  upstream, commits [{sha, short, author, when, subject}], total,
+  behind}`: `@{u}..HEAD`, else from the merge base with `origin/HEAD`,
+  origin/main or origin/master for a branch never pushed, the newest
+  `maxOutgoing` 100, `behind` the upstream's commits HEAD lacks as of the
+  last fetch — nothing fetches); `Summary.busy` is the route's, the agent
+  at work in the checkout (`gitstage.Service.Busy`). `GET
+  /api/review/diff` also takes `side=staged|unstaged` (`DiffSide`: `diff
+  --cached`, or the index against the working tree), `commit=<sha>`
+  (`CommitDiff`, the change against the first parent) and `base=<merge
+  base>` (`BaseDiff`, the merge base to the working tree, an untracked file
+  whole); `GET /api/review/commit?sha` is `ReadCommit` (author, time,
+  subject, body and the files with their counts and letters), `GET
+  /api/review/conflict?path` is `Conflict` (the index's stages present —
+  1 base, 2 yours, 3 incoming — and the file's text with its markers, cut
+  at 512 KB, `binary`, `missing`), and `GET /api/review/base?base=` is
+  `Store.Base`, **the branch's whole work against the branch it was cut
+  from**, after gitview's ancestry ranking (`detectScript`, `forkBase`,
+  tested): the branches merged into HEAD (the newest 12, the first
+  `ancestors` 4 that are not the branch's own, `origin/x` for `x` among
+  them) and the trunks (`origin/HEAD`'s, origin/main, origin/master,
+  origin/next, origin/develop, main, master, next, develop that exist)
+  each with `rev-list --count --max-count=500` from where HEAD left it,
+  the fewest commits winning, ties to the conventional trunk, then the
+  shorter name; a trunk itself is cut from nothing and compares with
+  origin's default branch, else the first of origin/main, origin/master,
+  main, master that is not itself; kept per folder while HEAD stays
+  (`Store.bases`, the files script guarded by that HEAD and read again
+  once it moved), a base the person pinned (`RefOK`) used instead —
+  `BaseView{base, detected, merge_base, ahead, refs, files}`, the newest
+  40 branches as `refs` to pin. The routes are in `server/changes.go`;
+  none is a viewer's or a key's.
   The lens shows fresh files first and folds the rest behind "N files
   unchanged since you looked"; seen commits are dimmed. Every
   `events.Snapshot` goes to `review.RefreshBadges`, which runs `Badges` a
@@ -1718,7 +1763,67 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `VerdictDialog.tsx`, `draft.ts` the comments and the messages they
   become): commits, files (fresh first), hunks with a comment box whose
   text goes to the pane's agent through `/api/submit` as
-  "Review feedback on path:line". Nothing is written into a repository.
+  "Review feedback on path:line". **The files in git's groups**, after
+  better-changes (`groups.ts`, `layout.ts`, `tree.ts`, tested;
+  `ChangeGroups.tsx`): Conflicts (its title red), Staged, Unstaged,
+  Untracked, each a `.review-group` with its count and one bulk button —
+  Stage all, Unstage all — the empty ones left out; `rowsOf` puts a file
+  partly staged in both, each side its own `ChangeRow{key "group:path",
+  stat, letter, from}` opening on its own diff (`side`), any other file on
+  the lens's usual diff since the look; the files unchanged since the look
+  fold at their group's foot (`.review-fold` per group); `review.tree`
+  (pref, the `list-tree` toggle beside the columns') draws each group as a
+  tree of folders, folders first, a folder holding one folder folded into
+  one row ("src/app/"), each with how many files it holds, a closed
+  folder's files left out of the keys' walk (`visibleKeys`). A row
+  (`Diff.tsx`'s `FileRow` with its `RowLook`) keeps its fresh dot, tags
+  and git's letter, and its counts and its buttons share one place
+  (`.review-slot`): under the pointer or in the focus, always on a touch
+  screen, `+` stage, `−` unstage, `↺` discard take it (`rowActions`: a
+  conflict's only `+`, its resolution; a staged row's `−` and `↺`);
+  discard asks first through `actions.ask` naming the file and what cannot
+  come back (`discardAsk`: an unstaged row's edits back to the index, a
+  staged row's every change back to HEAD, a new file and an untracked one
+  deleted, said so); `useLensWrites.ts` runs one write at a time and puts
+  git's words in the lens's error notice. Every write is held while the
+  roster has an agent working or asking in a workspace inside the checkout
+  or the folder (`busyAgent` in `scope.ts`), else the server's
+  `Summary.busy`, the reason in each button's tip. **The commit box**
+  (`CommitBox.tsx`, `commit.ts` tested) at the foot of the files, before
+  the commits not on the remote — the draft bar keeps the lens's foot, so
+  a phone reads both: the message (pref `review.commit:<machine>|<dir>`,
+  growing to `MAX_ROWS` 8), the split button Commit | ▾ (`commitLabel`:
+  Commit staged, else Commit all, which stages every unstaged and
+  untracked file listed first, `commitAllPaths`; Amend, which loads the
+  last message into an empty box through `GET /api/review/last-commit`,
+  takes it back on Commit unless it was edited, and sends the HEAD it was
+  chosen on), `whyNotCommit` (the agent at work, conflicts, the amend's
+  read, nothing to commit, no message) under it, else `commitHint` (what
+  Commit all stages, what Amend rewrites, a pushed HEAD's force push, a
+  subfolder's whole index); its own `useSecretCheck` stands before it as
+  before Approve & commit — asked once the button would be on, renewed
+  after every look (`ask(…, renew)`), its findings holding the button
+  with Commit anyway… behind `commitAnywayAsk`'s confirm, `SecretsCheck`
+  under the box, a finding opening its row; a failure keeps the message
+  and shows git's words. `SinceCommits.tsx` heads the commits since the
+  look; `OutgoingCommits.tsx` is "Committed — not on origin/feature", each
+  commit's subject, "author · 3h ago", short hash, a click opening its
+  files (`ReadCommit`) and each file its diff in the commit; the head's
+  sub line says "N to pull" (`pullWords`). **The scope** (`ReviewHead.tsx`
+  `.review-scope`: Uncommitted | vs base, `scope.ts` tested): vs base is
+  `BaseFiles.tsx` over `GET /api/review/base`, read only — no fresh dot,
+  no button, no commit box — comments still going to the agent, the head
+  saying "vs origin/main · 3 commits ahead · since 1a2b3c4" (`baseWords`)
+  with a `Select` to pin a base (pref `review.base:<machine>|<dir>`,
+  `baseChoices`). **A conflict** opens on `ConflictView.tsx` over
+  `conflicts.ts` (tested, better-changes' rows): its blocks alone with
+  `CONTEXT_LINES` 3 around each, two close blocks sharing them, every line
+  at its number in the file, the markers on a raised band, yours (blue)
+  and incoming (green) beside each other in two columns, the base dim;
+  `conflictSentence` instead when there is nothing to draw ("Conflict:
+  deleted on your side, changed on the incoming side.", "No conflict
+  markers left. Stage the file to mark it resolved."). The writes are
+  `internal/gitstage`'s; the rest is read.
   **The Review mode** (`features/review/ReviewQueue.tsx`, the fifth mode,
   `?mode=review`): every workspace with uncommitted work in one list —
   `queue.ts` (`reviewQueue`, tested) reads the roster's `session.dir` and
@@ -1751,8 +1856,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `COMMIT_ASK` — the button reads **Approve & commit** — or `PR_ASK` —
   **Approve & open PR**: commit, push the branch, open a pull request
   with `gh pr create` against the usual base unless the note names one,
-  and name its link in the answer; the agent does it, remuda never
-  writes into a repository) —
+  and name its link in the answer; the agent does it, a verdict writes
+  nothing into the repository) —
   through `/api/submit` first, then `markReviewed(verdict)`, so an
   agent's refusal leaves the baseline alone; a rejection needs a comment
   or a note. "Mark reviewed" is the silent one: the baseline moves, the
@@ -1863,6 +1968,53 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `**/.claude/settings.local.json` in it), and its first 64 KB through
   `secrets.Scan`: `Summary.Settings [{path, local, tracked, ignored,
   findings}]`. Nothing is written into the repository or `.claude`.
+- `internal/gitstage/` — **the Changes lens's git writes, each at the
+  person's press** (the person's decision of 2026-11-13; tested on real
+  temp repositories with git told nothing of the person's config, hooks
+  or signing — `GIT_CONFIG_GLOBAL`, `GIT_CONFIG_NOSYSTEM`). `Service.
+  Stage(host, dir, paths, bulk)` is `git --literal-pathspecs add --`
+  (a deletion staged as one, a name such as `[a].txt` that file alone),
+  `Unstage` `reset -q HEAD --`, or `rm -q --cached -r -f --` before the
+  first commit — the working tree left as it is — both in chunks of
+  `chunk` 200 paths; `Discard(path, kind)`: `unstaged` checks out the
+  index's copy, `all` checks out HEAD's (a file HEAD lacks is `git rm
+  -f`'d), `untracked` deletes the one file with `git clean -f -q --`
+  after checking git tracks it not and it is a file; `Commit(CommitRequest
+  {message, stage, amend, head})` stages `stage` first (Commit all),
+  refuses nothing staged, writes the message to a temp file (`MaxMessage`
+  16 KB, it travels inside the script) and runs `git commit -q -F`, the
+  repository's hooks and signing as they are, 2 minutes at most; an amend
+  goes only while HEAD is the `head` it was chosen on ("choose Amend
+  again"); `LastCommit` is HEAD and its message. Every write first reads
+  the checkout (`probeScript`: its top, whether there is a commit, the
+  unmerged files) and is refused (`Refusal{error, paths}`, a 409): while
+  `Busy(machine, dir, top)` names an agent — `internal/app/changes.go`:
+  a pane the watcher's snapshot has working or blocked whose workspace
+  folder or cwd is inside the checkout's top or the lens's folder, else a
+  turn `undo.Tracker.Going` in one of them — while another write runs in
+  the checkout (a lock per machine and top), for a path that is absolute,
+  climbs out or reads as an option, and around a conflict: a bulk action
+  passes over a conflicted file (`Done.skipped`), staging one alone needs
+  no `<<<<<<<` or `>>>>>>>` left in it, it is never unstaged nor
+  discarded, and no commit runs while one is in the folder. git's own
+  refusal is `GitError` with its words (a 502). Never a force, a reset of
+  a branch, a stash or a clean past the one file. Routes
+  (`internal/server/changes.go`, the person's only — neither a viewer
+  link nor an agent key reaches them, tested): `POST /api/review/stage`
+  and `/unstage {machine, dir, paths, bulk}`, `POST /api/review/discard
+  {machine, dir, path, kind}`, `POST /api/review/commit {machine, dir,
+  message, stage?, amend?, head?}`, `GET /api/review/last-commit`; after
+  each write the folder's badge is read again and the roster moves.
+- `web/src/lib/legible.ts` — **legible colours on tinted rows**, after
+  gitview (tested on every theme): a syntax colour, or a tinted row's own,
+  under `MIN_CONTRAST` 3.5 against what is really behind it — the row's
+  tint (`TINTED_ROWS`: a diff's added and removed rows over the base or
+  the raised surface, an edit's, a conflict's two sides) and the changed
+  words' mark over it — is lifted toward the theme's text in twentieths,
+  just enough (`lift`); `legibleRules(flavor)` is a rule for each colour
+  it had to lift and none for one that reads, `legibleFor` keeps each
+  theme's; `app/theme.ts` (`dressLegible`) puts the theme's on every
+  document of the page as `<style id="remuda-legible">`.
 - `internal/secrets/` — **what looks like a credential in text** (pure,
   tested hard): `Collector.Line(file, number, text, commit)` / `Text` /
   `Binary`, `Scan(file, text)`; a `Finding{file, line, rule, excerpt,

@@ -81,6 +81,8 @@ socket.onmessage = (message) => {
     else if (url.includes("/api/concierge")) void fakeConcierge(msg.params);
     else if (url.includes("/api/scorecard")) void fakeScorecard(msg.params);
     else if (/\/api\/(scenes\/|scene-runs\/)/.test(url)) void fakeScenes(msg.params);
+    else if (url.includes("/api/review/conflict")) void fakeConflictRead(msg.params);
+    else if (/\/api\/review\?/.test(url)) void dressReview(msg.params);
     else if (url.includes("/api/review/secrets")) void fakeSecrets(msg.params);
     else if (url.includes("/api/timelapse/recordings") || url.includes("/api/timelapse/search")) void fakeTimelapse(msg.params);
     else if (url.includes("/api/standup")) void fakeStandup(msg.params);
@@ -335,8 +337,14 @@ writeFileSync(`${appDir}/.claude/settings.local.json`, `${JSON.stringify({ permi
 git(appDir, "add", "-A");
 git(appDir, "add", "-f", ".claude/settings.local.json"); // past an excludes file that ignores it, as Claude Code sets one up
 git(appDir, "commit", "-q", "-m", "init");
-// a tag and a second commit, so the Git lens draws two commits, labels and a line changed with its words marked
+// a tag on the first commit, a bare origin it went to, and a second commit not pushed yet: the Git lens draws two
+// commits, labels and a line changed with its words marked; the Changes lens has its "not on origin/main" and its scope
+// against the base
 git(appDir, "tag", "v0.1.0");
+const originDir = `${tmp}/display/origin.git`;
+git(`${tmp}/display`, "init", "-q", "--bare", originDir);
+git(appDir, "remote", "add", "origin", originDir);
+git(appDir, "push", "-q", "-u", "origin", "main");
 writeFileSync(`${appDir}/README.md`, "# the app\n");
 git(appDir, "commit", "-q", "-am", "docs: name the app");
 writeFileSync(`${appDir}/src/app.go`, goLines("hello, world", 42));
@@ -609,6 +617,25 @@ async function fakeScenes({ requestId, request }) {
   else if (path.endsWith("/run")) body = run(path.split("/").at(-2), false);
   else body = run(path.split("/").at(-1).replace(/^run-/, ""), true);
   await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(body)).toString("base64") });
+}
+
+// fakeConflict is a screen asking for a conflict in the repository: dressReview adds src/clash.go, both sides edited,
+// to the lens's summary of it, and fakeConflictRead answers the file with its markers; nothing is merged anywhere
+let fakeConflict = false;
+const isApp = (request) => (new URL(request.url).searchParams.get("dir") ?? "").replace(/\/+$/, "").endsWith("/display/app");
+async function dressReview({ requestId, request, responseStatusCode }) {
+  const reply = await send("Fetch.getResponseBody", { requestId });
+  if (!fakeConflict || !isApp(request) || responseStatusCode !== 200 || !reply.result) {
+    await send("Fetch.continueRequest", { requestId });
+    return;
+  }
+  const summary = JSON.parse(reply.result.base64Encoded ? Buffer.from(reply.result.body, "base64").toString("utf8") : reply.result.body);
+  summary.files = [{ path: "src/clash.go", added: 0, removed: 0, fresh: true, conflict: "UU" }, ...(summary.files ?? [])];
+  await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(summary)).toString("base64") });
+}
+async function fakeConflictRead({ requestId }) {
+  const text = ["package main", "", "// greet says hello", "func greet() string {", "<<<<<<< HEAD", '\treturn "hello"', "=======", '\treturn "hello, world"', '\t// and to everyone', ">>>>>>> feature", "}", ""].join("\n");
+  await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify({ stages: "123", text })).toString("base64") });
 }
 
 // fakeSecrets answers the secret check for the repository with what it would find in work holding secrets: a token on
@@ -1112,8 +1139,15 @@ async function changesScreens() {
       check(JSON.stringify(paths) === JSON.stringify(CHANGED), `the lens lists ${paths.join(", ")}`);
       check((await count(`${LENS} .review-file.fresh`)) === CHANGED.length, "a file never looked at is not marked fresh");
       check(await evaluate(`(() => { const sub = document.querySelector('${LENS} .review-sub'); return !!sub && sub.scrollWidth <= sub.clientWidth + 1 && /4/.test(sub.textContent); })()`), "the line under the branch does not say the 4 files whole");
+      // git's groups: the staged edit and deletion, the edit not staged, the new file; the commit not on origin/main
+      const groups = { staged: await inGroup("staged"), unstaged: await inGroup("unstaged"), untracked: await inGroup("untracked") };
+      check(JSON.stringify(groups) === JSON.stringify({ staged: 2, unstaged: 1, untracked: 1 }), `the groups hold ${JSON.stringify(groups)}`);
+      check((await count(`${LENS} .review-group.is-outgoing .review-outgoing`)) === 1, "the commit not on origin/main is not listed");
+      // the agent dressed at work in the repository holds every write back, and the commit box says why
+      check(await evaluate(`(() => { const acts = [...document.querySelectorAll('${LENS} .review-act')]; return acts.length > 0 && acts.every((b) => b.getAttribute("aria-disabled") === "true"); })()`), "a write is offered while the agent works there");
+      check(/Claude Code/.test(await evaluate(`document.querySelector('${LENS} .commit-hint')?.textContent ?? ""`)), "the commit box does not name the agent at work");
     },
-    expect: [`${LENS} .review-head`, `${LENS} .review-collision`],
+    expect: [`${LENS} .review-head`, `${LENS} .review-collision`, `${LENS} .commit-box`],
     close: async () => {},
   });
   await screen("changes-diff", {
@@ -1129,12 +1163,12 @@ async function changesScreens() {
   });
   await screen("changes-columns", {
     open: async () => {
-      await tap(`${LENS} .review-head .icon-btn[aria-pressed]`);
+      await tap(`${LENS} .review-head .review-columns`);
       if (!(await until(async () => (await count(`${LENS} .review-diff.columns`)) === (pass.phone ? 1 : 0), 3))) failed("the columns switch did not switch");
     },
     expect: [`${LENS} .review-hunk`],
     close: async () => {
-      await tap(`${LENS} .review-head .icon-btn[aria-pressed]`);
+      await tap(`${LENS} .review-head .review-columns`);
       await sleep(200);
     },
   });
@@ -1241,7 +1275,7 @@ async function changesScreens() {
   });
   await screen("changes-file", {
     open: async () => {
-      await tap(await mark(`${fileHead("src/app.go")}?.parentElement.querySelector('.icon-btn')`, "open-file"));
+      await tap(await mark(`${fileHead("src/app.go")}?.parentElement.querySelector('.review-open')`, "open-file"));
       if (!(await until(async () => (await count(".fv .fv-code:not(.fv-diff) .hl-keyword")) > 0, 5))) failed("the file viewer does not colour the Go file");
     },
     expect: [".fv .fv-head"],
@@ -1259,7 +1293,124 @@ async function changesScreens() {
       if (!(await until(async () => !(await present(".fv")), 3))) failed("Esc did not close the file viewer");
     },
   });
+  await stagingScreens();
   await palette("lens:terminal");
+}
+
+// a row of a group by its key, its own button for an action, and the files a group lists
+const rowOf = (key) => `${LENS} .review-file[data-key=${JSON.stringify(key)}]`;
+const actionOf = (key, action) => `${rowOf(key)} .review-act.is-${action}`;
+const inGroup = (group) => count(`${LENS} .review-group.is-${group} .review-file`);
+const gitStatus = () => execFileSync("git", ["status", "--porcelain=v1"], { cwd: appDir, encoding: "utf8" });
+// pressRow presses a row's button: the pointer over the row first, where its counts give way to its buttons
+async function pressRow(key, action) {
+  await hover(`${rowOf(key)} .review-file-row`);
+  await tap(actionOf(key, action));
+}
+
+// stagingScreens are the lens as a client of the repository: the tree, the commits not on origin/main and the scope
+// against the base on the seeded work; then, with the agents in the repository dressed at rest, a file staged through
+// the lens and back (the e2e's own throwaway repository, put back each pass), the commit box held by the secret check,
+// and a conflict through a faked summary; the agents are dressed at work again afterwards
+async function stagingScreens() {
+  await screen("changes-tree", {
+    open: async () => {
+      await tap(`${LENS} .review-tree-toggle`);
+      if (!(await until(async () => (await count(`${LENS} .review-folder`)) === 3, 3))) failed(`the tree shows ${await count(`${LENS} .review-folder`)} folders, not docs/ and src/ twice`);
+      check((await count(`${LENS} .review-file`)) === CHANGED.length, "a folder of the tree hides its files");
+    },
+    expect: [`${LENS} .review-folder`],
+    close: async () => {
+      await tap(`${LENS} .review-tree-toggle`);
+      await until(async () => (await count(`${LENS} .review-folder`)) === 0, 3);
+    },
+  });
+  await screen("changes-outgoing", {
+    open: async () => {
+      check(/origin\/main/.test(await evaluate(`document.querySelector('${LENS} .review-group.is-outgoing .review-group-title')?.textContent ?? ""`)), "the group does not name origin/main");
+      await tap(`${LENS} .review-outgoing-head`);
+      if (!(await until(() => present(`${LENS} .review-outgoing.open .review-file`), 6))) throw new Error("the commit's files did not open");
+      await tap(`${LENS} .review-outgoing.open .review-file-head`);
+      if (!(await until(() => present(`${LENS} .review-outgoing.open .review-hunk`), 6))) failed("the commit's file did not open on its diff");
+    },
+    expect: [`${LENS} .review-outgoing.open .review-hunk`],
+    close: async () => {
+      await tap(`${LENS} .review-outgoing-head`);
+      await sleep(200);
+    },
+  });
+  await screen("changes-base", {
+    open: async () => {
+      await tap(`${LENS} .review-scope button:last-child`);
+      if (!(await until(async () => (await count(`${LENS} .review-group.is-base .review-file`)) === CHANGED.length + 1, 8))) failed(`vs base lists ${await count(`${LENS} .review-group.is-base .review-file`)} files, not ${CHANGED.length + 1}`);
+      check(/origin\/main/.test(await evaluate(`document.querySelector('${LENS} .review-base-line')?.textContent ?? ""`)), "the head does not name the base");
+      check(!(await present(`${LENS} .review-act`)) && !(await present(`${LENS} .commit-box`)), "the base scope offers a write");
+    },
+    expect: [`${LENS} .review-base-line`],
+    close: async () => {
+      await tap(`${LENS} .review-scope button:first-child`);
+      await until(() => present(`${LENS} .review-group.is-unstaged`), 5);
+    },
+  });
+  const atWork = { ...DRESS };
+  for (const paneId of Object.keys(DRESS)) if (DRESS[paneId].radar?.state === "working" || DRESS[paneId].radar?.state === "blocked") DRESS[paneId] = { ...DRESS[paneId], radar: { ...DRESS[paneId].radar, state: "idle" } };
+  try {
+    await screen("changes-stage", {
+      open: async () => {
+        await send("Page.navigate", { url: `${base}/?machine=local&pane=${encodeURIComponent(paneA1)}&lens=changes` });
+        if (!(await until(async () => (await inGroup("unstaged")) === 1, 15))) throw new Error("the lens did not come back on the repository's work");
+        if (!(await until(() => evaluate(`(() => { const button = document.querySelector(${JSON.stringify(actionOf("unstaged:src/app.go", "stage"))}); return !!button && button.getAttribute("aria-disabled") !== "true"; })()`), 6))) throw new Error("Stage is held back with no agent at work");
+        await pressRow("unstaged:src/app.go", "stage");
+        if (!(await until(async () => (await inGroup("staged")) === 3 && !(await present(`${LENS} .review-group.is-unstaged`)), 8))) failed("src/app.go did not move to Staged");
+        check(/^M {2}src\/app\.go$/m.test(gitStatus()), `git does not have src/app.go staged: ${gitStatus()}`);
+      },
+      expect: [`${LENS} .review-group.is-staged`],
+      close: async () => {
+        await pressRow("staged:src/app.go", "unstage");
+        if (!(await until(async () => (await inGroup("unstaged")) === 1, 8))) failed("Unstage did not put src/app.go back");
+      },
+    });
+    await screen("changes-commit", {
+      open: async () => {
+        await evaluate(`document.querySelector('${LENS} .commit-message')?.focus()`); // the toast of the stage just undone may still lie over the box on a phone
+        await send("Input.insertText", { text: "Say hello to the world" });
+        if (!(await until(() => present(`${LENS} .commit-box .secret-check.is-found`), 8))) failed("the secret check does not stand before the commit");
+        check(await evaluate(`document.querySelector('${LENS} .commit-go')?.disabled === true`), "Commit is not held back by the findings");
+        check(await present(`${LENS} .commit-anyway`), "no Commit anyway… beside the held button");
+        await evaluate(`document.querySelector('${LENS} .commit-box')?.scrollIntoView({ block: "center" })`);
+      },
+      expect: [`${LENS} .commit-box .secret-check`],
+      close: async () => {
+        // the message taken out again, so the next pass's box starts empty: React hears the field's own input event
+        await evaluate(`(() => { const box = document.querySelector('${LENS} .commit-message'); Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set.call(box, ""); box.dispatchEvent(new Event("input", { bubbles: true })); })()`);
+        await until(async () => !(await present(`${LENS} .commit-box .secret-check`)), 3);
+      },
+    });
+    await screen("changes-conflict", {
+      open: async () => {
+        fakeConflict = true;
+        await tap(`${LENS} .review-look-again`);
+        if (!(await until(() => present(`${LENS} .review-group.is-conflict .review-file`), 6))) throw new Error("the faked conflict is not listed apart");
+        check(await present(`${LENS} .review-group.is-conflict .review-conflict-kind`), "the conflict does not say its kind");
+        check(await evaluate(`document.querySelector('${LENS} .commit-go')?.disabled === true`), "Commit is offered over a conflict");
+        await tap(`${LENS} .review-group.is-conflict .review-file-head`);
+        if (!(await until(() => present(`${LENS} .conflict-view .fv-line.yours`), 6))) failed("the conflict's blocks are not drawn");
+        check(await present(`${LENS} .conflict-view .fv-line.marker`), "the markers are not on their band");
+        check((await count(`${LENS} .conflict-view.columns`)) === (pass.phone ? 0 : 1), "yours and incoming are not side by side at a desk");
+        await evaluate(`document.querySelector('${LENS} .conflict-view')?.scrollIntoView({ block: "center" })`);
+      },
+      expect: [`${LENS} .conflict-view`],
+      close: async () => {
+        fakeConflict = false;
+        await tap(`${LENS} .review-look-again`);
+        await until(async () => !(await present(`${LENS} .review-group.is-conflict`)), 5);
+      },
+    });
+  } finally {
+    DRESS = atWork;
+    await send("Page.navigate", { url: `${base}/?machine=local&pane=${encodeURIComponent(paneA1)}&lens=changes` });
+    await until(() => present(`${LENS} .review-head`), 15);
+  }
 }
 
 // changesFlow runs once, after the passes: the Review mode lists the repository, Mark reviewed moves the baseline,
@@ -1271,7 +1422,7 @@ async function changesFlow() {
     if (!(await until(() => present(`${LENS} .review-head`), 15))) throw new Error("the Changes lens did not come up");
   };
   const lookAgain = async () => {
-    await tap(await mark(`document.querySelectorAll('${LENS} .review-head .icon-btn')[1]`, "look-again"));
+    await tap(await mark(`document.querySelector('${LENS} .review-head .review-look-again')`, "look-again"));
     await sleep(400);
   };
   const markReviewed = async () => {
@@ -2085,6 +2236,8 @@ try {
       { urlPattern: "*/api/scenes/*", requestStage: "Request" },
       { urlPattern: "*/api/scene-runs/*", requestStage: "Request" },
       { urlPattern: "*/api/review/secrets*", requestStage: "Request" },
+      { urlPattern: "*/api/review?dir=*", requestStage: "Response" },
+      { urlPattern: "*/api/review/conflict*", requestStage: "Request" },
       { urlPattern: "*/api/timelapse/recordings*", requestStage: "Request" },
       { urlPattern: "*/api/standup*", requestStage: "Request" },
       { urlPattern: "*/api/recap*", requestStage: "Request" },
