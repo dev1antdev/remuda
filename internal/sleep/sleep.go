@@ -218,16 +218,15 @@ func (s *Service) sleepAll(client restart.Leaver, machineID, workspaceID string,
 		say(fmt.Sprintf("%s is asleep: %s stopped", w.Name, agentsWord(stopped)))
 		return nil
 	}
-	var kept []Agent
 	var names []string
+	running := map[string]bool{}
 	for _, a := range w.Agents {
 		if why, ok := awake[a.Pane]; ok {
 			names = append(names, fmt.Sprintf("%s in %s (%s)", restart.Title(a.Kind), a.Pane, why))
-		} else {
-			kept = append(kept, a)
+			running[a.Pane] = true
 		}
 	}
-	s.Store.keep(machineID, workspaceID, kept)
+	s.Store.awake(machineID, workspaceID, running) // a record an earlier sleep left keeps its sleepers
 	if stopped == 0 {
 		return fmt.Errorf("%s did not go to sleep: %s", w.Name, strings.Join(names, ", "))
 	}

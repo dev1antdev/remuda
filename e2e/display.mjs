@@ -872,8 +872,16 @@ const STOPPED = [
 // sleeps), Resume after restart over a dressed reboot (left by Not now), and the switches in Settings
 async function sleepScreens() {
   const menuItem = (en, ru) => `[...document.querySelectorAll("[role=menu] [role=menuitem]")].find((item) => item.textContent.includes(${JSON.stringify(pass.lang === "ru" ? ru : en)}))`;
+  // the vitals' popover a screen before stands over the cards: Esc takes it down, as closeAll leaves popovers be
+  const noPopover = async () => {
+    for (let i = 0; i < 3 && (await present(".popover")); i++) {
+      await key("Escape", "Escape");
+      await sleep(150);
+    }
+  };
   await screen("card-asleep", {
     open: async () => {
+      await noPopover();
       await sidebarOpen();
       if (!(await until(() => present(".ws-item.is-asleep"), 6))) return failed("the sleeping workspace's card is not drawn asleep");
       await hover(await mark(`document.querySelector(".ws-item.is-asleep .ws-main")`, "card"));
@@ -886,6 +894,7 @@ async function sleepScreens() {
   });
   await screen("sleep-confirm", {
     open: async () => {
+      await noPopover();
       await sidebarOpen();
       await hover(await mark(firstCardOf("app") + "?.querySelector('.ws-main')", "card"));
       await sleep(150);

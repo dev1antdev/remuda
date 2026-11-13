@@ -117,6 +117,26 @@ func TestASleepNobodyLeftLeavesTheWorkspaceAwake(t *testing.T) {
 	}
 }
 
+// TestASecondSleepKeepsTheSleepersOfTheFirst: a workspace partly woken and slept again keeps what still slept, even
+// when the agent of the second sleep runs on.
+func TestASecondSleepKeepsTheSleepersOfTheFirst(t *testing.T) {
+	quick(t)
+	f := newFake(shellPane("w1:p1", "w1:t1", "/work/api"), agentPane("w1:p2", "w1:t1", "codex", sidB, herdr.StatusIdle, "/work/api"))
+	f.stubborn["w1:p2"] = true
+	s := &Service{Store: Open("")}
+	s.Store.put("local", "w1", asleep(sleeper("w1:p1", "w1:t1", "claude", sidA)))
+	snap, _ := f.SessionSnapshot()
+	w, _, _, _ := Plan(snap, "w1")
+	s.Store.put("local", "w1", w)
+	if err := s.sleepAll(f, "local", "w1", w, func(string) {}); err == nil || !strings.HasPrefix(err.Error(), "api did not go to sleep") {
+		t.Fatalf("sleep: %v", err)
+	}
+	record, ok := s.Store.Of("local", "w1")
+	if !ok || len(record.Agents) != 1 || record.Agents[0].Pane != "w1:p1" {
+		t.Fatalf("the first sleeper sleeps on: %+v", record)
+	}
+}
+
 func TestSleepTakesAnotherConversationAndAGonePaneAsTheyAre(t *testing.T) {
 	quick(t)
 	f := newFake(agentPane("w1:p1", "w1:t1", "claude", sidA, herdr.StatusIdle, "/work/api"), agentPane("w1:p2", "w1:t1", "claude", sidB, herdr.StatusIdle, "/work/api"))

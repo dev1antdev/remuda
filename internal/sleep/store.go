@@ -156,6 +156,29 @@ func (s *Store) keep(machineID, workspaceID string, agents []Agent) {
 	s.saveLocked()
 }
 
+// awake takes these panes off the workspace's record, the others staying asleep; none left wakes it.
+func (s *Store) awake(machineID, workspaceID string, panes map[string]bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	w, ok := s.asleep[machineID][workspaceID]
+	if !ok {
+		return
+	}
+	var kept []Agent
+	for _, a := range w.Agents {
+		if !panes[a.Pane] {
+			kept = append(kept, a)
+		}
+	}
+	if len(kept) == 0 {
+		s.dropLocked(machineID, workspaceID)
+	} else {
+		w.Agents = kept
+		s.asleep[machineID][workspaceID] = w
+	}
+	s.saveLocked()
+}
+
 func (s *Store) dropLocked(machineID, workspaceID string) {
 	delete(s.asleep[machineID], workspaceID)
 	if len(s.asleep[machineID]) == 0 {
