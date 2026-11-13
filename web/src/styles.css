@@ -4070,6 +4070,11 @@ ul.pick-list {
   flex: 1 1 auto;
 }
 
+/* the Sound row's choice keeps the width of its longest pick, so the words beside it never wrap anew on a change */
+.alerts-opt > .sel.alerts-sound-pick {
+  min-width: 11em;
+}
+
 /* a play button per sound under the Sound row, its words beside the icon; they wrap rather than run past the dialog */
 .alerts-sounds {
   flex-wrap: wrap;

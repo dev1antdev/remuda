@@ -24,6 +24,7 @@ export default function SoundRow() {
           <small>{t("A bell when an agent needs you, a short rising run when one finishes, the chime for anything else — at most one in 1.5 s, none in the quiet hours.")}</small>
         </span>
         <Select<SoundChoice>
+          className="alerts-sound-pick"
           value={choice}
           onChange={(next) => {
             if (next !== "off") wakeSounds(); // the pick is the gesture: the page may ring from now on
