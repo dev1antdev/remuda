@@ -764,6 +764,10 @@ func Run(ctx context.Context, o Options) error {
 	events.Subscribe(bus, func(e events.MachineRemoved) { fleetSetup.Forget(e.Machine) })
 	projectSettings := repos.Open(o.Dir) // each repository's worktree defaults, setup script and run actions
 	events.Subscribe(bus, func(e events.MachineRemoved) { projectSettings.Forget(e.Machine) })
+	repoSync := repositories(o.Dir, fleet, watcher, reviews, turns.Tracker, func(machineID, workspaceID string) bool {
+		return shells.Is(machineID, workspaceID) || conciergeAgent.Is(machineID, workspaceID)
+	})
+	events.Subscribe(bus, func(e events.MachineRemoved) { repoSync.Forget(e.Machine, true) })
 	arenas := &arena.Service{Store: arena.Open(o.Dir), Machines: fleet, Watch: watcher, Input: input, Tasks: taskStore, Notify: pushSvc.Notify, Dir: o.Dir,
 		ModelOf: func(machineID, paneID string) string {
 			d, _ := meter.Display(machineID, paneID)
@@ -824,6 +828,7 @@ func Run(ctx context.Context, o Options) error {
 		Repos:      projectSettings,
 		Sleep:      sleeps,
 		Issues:     githubIssues,
+		Sync:       repoSync,
 	}
 	previews := &preview.Service{Allow: srv.Guard.SignedIn, IdleAfter: 30 * time.Minute, Listen: preview.LoopbackListen(o.Addr)}
 	srv.Previews = previews

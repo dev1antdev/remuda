@@ -246,6 +246,7 @@ function useCommands(): (query: string) => Entry[] {
       }
       command("triggers", t("Triggers…"), () => actions.openDialog({ kind: "triggers" }), { hint: t("a line a pane prints, and what it sets off: a push, a preview, a task moved"), icon: "zap", keywords: ["trigger", "triggers", "rule", "output", "match", "regex", "pattern", "watch", "tests", "dev server"] });
       command("schedules", t("Schedules"), () => actions.openPanel("schedules"), { hint: t("prompts sent to agents on a timetable"), icon: "calendar", keywords: ["cron", "timer", "prompt"] });
+      command("repos", t("Repositories"), () => actions.openPanel("repos"), { hint: t("every repository on every machine: not pushed, not pulled; fetch, pull, push"), icon: "folder-git", keywords: ["git", "repository", "repo", "fetch", "pull", "push", "sync", "ahead", "behind", "manygit", "репозиторий"] });
       const usageOn = (tab: UsageTab) => () => {
         writePref(USAGE_TAB_KEY, tab);
         actions.openPanel("usage");

@@ -711,7 +711,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   ends xterm's own drag; a click that never moves is left to xterm. The ⬚ selection layer (phone long-press) is screen-only.
 - **Nothing in a bar moves when state changes.** The page's places are
   **the rail** (`app/Rail.tsx`) down the left edge: the five modes, then
-  Concierge, Standup, Usage, Schedules, Activity (a dot for news), Shell, in server
+  Concierge, Standup, Usage, Schedules, Repositories (panel `repos`, "Repos"
+  under its icon; see `internal/gitsync`), Activity (a dot for news), Shell, in server
   mode **Server** (panel `server`, `features/roster/ServerPanel.tsx`:
   the host's load, disk, memory, temperature, clock and throttling with
   the day's sparklines, its versions and tailnet address, what wants a
@@ -960,6 +961,110 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   remote remuda, a nearly full disk, Claude Code's sign-in running out (`internal/signin`) or a
   setting there on a model being retired (`internal/retire`; `concerns(…, more)` takes the
   machine's name, its `retiring`, the roster's `retirements` its hits name and the clock); a Windows PC's ⓘ opens on a System row, "Windows · the terminal is the pane's screen, no Code mode".
+- `internal/gitsync/` — **every repository at a glance, and fetch, pull
+  and push at the person's press** (tested on temp repositories with a bare
+  remote made in the test, a HOME and no system config of their own, and on
+  `shell.Fake`), after gitgraph's Manygit. **The reads**: `ReadScript` is one
+  script per machine — the main folder (`review.MainFolderScript`, only for a
+  folder in git: alone it answers a plain folder itself) of every folder
+  `Service.Folders` names (each workspace's folder as the sidebar groups it,
+  `server.FolderOf`: herdr's repo_root, else `review.Store.Root`, else the
+  folder; never the floating terminal's or the concierge's), then what the machine's
+  scan finds (`Scan{Folder, Depth 1–5}`, `repos.json` in the state dir,
+  `Scans`; `CheckScan` reads `~/` against the machine's home and refuses a
+  relative folder, `/`, `/root`, `/home`, `/Users`, any home or a folder above
+  one: Manygit's rule, walking a Mac's home asks for Desktop, Documents and
+  Downloads): `find -H <folder> -mindepth 1 -maxdepth depth+1` for a `.git`,
+  every hidden folder and node_modules, vendor, venv, __pycache__, dist, build,
+  target, site-packages and Library pruned, at most `MaxScan` 500 (the rest
+  `More`) — each once by its physical path (`pwd -P`: a Mac's /tmp is
+  /private/tmp, a checkout and its worktree's main folder may come spelled
+  both ways), each read with `git --no-optional-locks -c
+  core.fsmonitor=false status --porcelain=v2 --branch -z --no-renames`, its
+  `git remote`, and FETCH_HEAD's mtime (`--git-path`, so a linked worktree's
+  own); `ParseRead` makes `Repo{path, name, parent (~ for home), workspace,
+  branch, detached, upstream, gone (set but no `branch.ab`), ahead, behind,
+  dirty (every entry, untracked and conflicts too), staged, conflicts, remote,
+  fetched, error (git's own line: a dubious ownership, a broken .git), initial}`,
+  each path once by `rpath` (a Windows machine's `pwd` and `find` spell one
+  folder two ways), sorted by folder then name. `Service.List(fresh)` reads every machine of
+  `Fleet` (`fleet.List()`: never a `-server` host) side by side, a machine
+  away named with why (`Listed{away}` — "connecting" before its first answer),
+  a read standing `FreshFor` 10 s for another page, one read of a machine at a
+  time, dropped by every action there. **The actions** (`Fetch`, `Pull`,
+  `Push(anyway)`, each an `Outcome{action, state done|refused|failed|held,
+  reason, agent, doing, remote, branch, upstream, ahead, behind, count, output,
+  scan, repo}` the page words itself, the checkout read again in the same
+  script): a probe first (`probeScript`: the checkout's top, branch,
+  `branch.<b>.remote` / `.merge`, `@{u}` and the counts, the remotes), then one
+  action per checkout at a time (`running`, else `ReasonRunning`) and at most
+  `PerMachine` 4 actions on a machine at once (the probe, a push's check and
+  the git part are each a session of its ssh master, whose sshd allows ten),
+  under `quietNetwork` —
+  `GCM_INTERACTIVE=0 GIT_TERMINAL_PROMPT=0 GIT_ASKPASS= SSH_ASKPASS=` and
+  `GIT_SSH_COMMAND` the repository's or the person's ssh command with `-o
+  BatchMode=yes` — `Timeout` 60 s, stdin `/dev/null`, git's last six lines
+  (hints and progress out, `lastLines`) on a failure. **Fetch** is `git fetch
+  --prune -- <remote>`, the upstream's remote else origin else the only one,
+  and runs while an agent works there. **Pull** is that fetch, then `merge
+  --ff-only @{u}` (`merge.autoStash` off) only when the branch is behind and
+  not ahead: a diverged one is `ReasonDiverged` with both counts and nothing
+  changes, an up-to-date one `ReasonUpToDate`, local changes in the way git's
+  own refusal; refused for a detached HEAD, no upstream, a local upstream, and
+  **while an agent works, asks or a turn is ending in the checkout**
+  (`Service.Busy` = `AgentIn` over the watcher's snapshot — a pane working or
+  blocked whose workspace herdr names this very checkout, else whose folder
+  lies in it, so an agent in a linked worktree never holds its repository's
+  main folder back — and `undo.Tracker.Going` of the workspace folders in it;
+  wired in `internal/app/repos.go`). **Push** sends `refs/heads/<b>` to its
+  upstream (`branch.<b>.merge` on `branch.<b>.remote`), or to origin (else the
+  only remote) under its own name with `--set-upstream` when it has none
+  (`ReasonNewBranch`; several remotes and no origin is `ReasonWhichRemote`);
+  never `--force`, never a tag (`push.followTags` off); **the secret check
+  stands first** (`Service.Check` = `review.ScanWork(host, top, true)`: the
+  commits on no remote-tracking branch and the work beside them, any finding
+  holding it): findings are `Held` with the scan (`ReasonSecretsFound`), a
+  check that failed `Held` with why (`ReasonCheckFailed`), and `anyway`, sent
+  only after the person's confirm, skips it. Routes (`internal/server/repos.go`,
+  the person's only — neither `viewerRoutes` nor an agent key's, tested in
+  `internal/auth/repos_test.go`): `GET /api/repos[?fresh=1]` (`{machines}`),
+  `PUT /api/repos/scan {machine, folder, depth}` (an empty folder stops it,
+  400 with why), `POST /api/repos/fetch|pull|push {machine, dir, anyway}` (an
+  absolute folder, any checkout — the Git lens's too; 200 with the outcome,
+  whatever it came to). **The page**: `features/repos/` — `ReposPanel.tsx`
+  (panel `repos`: the rail's Repositories, More on a phone, the palette's
+  "Repositories", `?panel=repos`; never for a viewer; read every `READ_EVERY`
+  30 s while open; a machine's head — its name, its count or why it is away,
+  what it scans, a ⋯ with Scan a folder… (`ScanDialog.tsx`) and Stop
+  scanning — then a 26 px line per folder and `RepoRow.tsx`, 34 px: the name
+  (the accent and bold when it is the pane on screen's repository), the dot and
+  the uncommitted count, ↑ green and ↓ red, "not pushed", "no remote",
+  "upstream gone", "fetch failed", "…" while read or acted on — never 0 —
+  then the branch and the last fetch's age in a column of fixed width, the
+  whole state in its `Tip` ("3 not pulled from origin/main", better-changes'
+  words); a click opens its `Menu` (`repoMenu.ts`): Fetch / Pull / Push in the
+  order its arrows suggest (`syncOffers`, Manygit's: behind pulls first, ahead
+  pushes first, no upstream "Push and set upstream"), New agent here… (the New
+  workspace dialog on its folder), New terminal here (a shell workspace there,
+  opened), Open Changes (its workspace's pane on the Changes lens, when one
+  stands on it), Open in the editor (never a Windows PC's), Copy path, Copy
+  branch; Fetch all — every row with a remote on the connected machines,
+  `FETCH_AT_ONCE` 8 at a time (`pool.ts`), "Fetching 3/12…" in a button that
+  keeps its width, then one toast naming each failure by its repository and
+  git's line; a held push opens `PushHeldDialog.tsx` — the findings as the
+  review's check words them, Push anyway… behind `actions.ask`); the screen
+  sharing mode's names on the machines, folders and paths; `useRepoSync.ts`
+  the actions as they run; `repos.ts` and `outcome.ts` the pure parts, tested
+  (`syncOf`, `syncLabel`, `syncTip`, `dirtyWords`, `syncOffers`, `fetchable`,
+  `groupsOf`, `machineWords`, `scanWords`, `workspaceOn`, `paneOf`,
+  `replaced`; `outcomeWords`, `runWords`, `ranWords`, `heldWords`,
+  `pushAnywayAsk`); **`syncApi.ts`** (`fetchRepo`, `pullRepo`, `pushRepo`,
+  `syncRepo`, the `Outcome` type) and `outcome.ts` are what any other screen
+  with a checkout (the Git lens) calls and words them with. The e2e display
+  suite dresses the place's answer with two machines (`dressRepos`, every row
+  state, one away) beside this machine's e2e repository and answers every
+  action in the browser (`fakeRepoAction`: slow fetches so Fetch all's count
+  shows, one failing, a held push), so nothing reaches a remote.
 - `internal/drift/` — **Fleet setup: how every machine is set up, side
   by side, the odd one out marked** (tested: the script on this
   machine's sh, awk, sed and git in a temp HOME with anonymized config

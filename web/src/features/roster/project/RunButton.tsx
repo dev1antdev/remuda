@@ -17,7 +17,7 @@ import { actionHint, lastKey, primary, withAction, type Action } from "./project
 export default function RunButton({ machineId, workspace, pane, root, masked = false }: { machineId: string; workspace: string; pane: string; root: string; masked?: boolean }) {
   const n = saved.use((s) => s.n);
   const project = useQuery(() => fetchProject(machineId, root, true), [machineId, root, n], { keep: true });
-  const list = project.data?.settings.actions ?? [];
+  const list = project.data?.settings?.actions ?? [];
   const [last, setLast] = usePref(lastKey(machineId, root), "");
   const [adding, setAdding] = useState(false);
   const main = primary(list, last);
