@@ -196,7 +196,7 @@ func CheckStep(step Step, recipeKnown func(string) bool) (Step, error) {
 	if !rpath.Absolute(step.Dir) {
 		return step, errors.New("an absolute folder is required")
 	}
-	step.Dir = rpath.For(step.Dir).Clean(step.Dir)
+	step.Dir = cleanDir(step.Dir)
 	switch {
 	case step.Recipe != "":
 		if step.Agent != "" || step.Model != "" || step.Args != "" || step.Prompt != "" {

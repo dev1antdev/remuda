@@ -47,7 +47,7 @@ func (n *Node) panes() []*Node {
 // Capture is a tab's layout as a step keeps it: the folders made relative to dir, the agent's pane found by its id
 // (the first pane when it is not in the tab).
 func Capture(desc *herdr.LayoutDescription, dir, agentPane string) Layout {
-	layout := Layout{Root: nodeOf(&desc.Root, rpath.For(dir).Clean(dir))}
+	layout := Layout{Root: nodeOf(&desc.Root, cleanDir(dir))}
 	for i, pane := range desc.Root.Panes() {
 		if pane.PaneID == agentPane {
 			layout.Agent = i
@@ -63,6 +63,14 @@ func nodeOf(n *herdr.LayoutNode, dir string) Node {
 		return Node{Type: "split", Direction: n.Direction, Ratio: n.Ratio, First: &first, Second: &second}
 	}
 	return Node{Type: "pane", Dir: relativeTo(dir, n.CWD), Label: n.Label, Command: n.Command}
+}
+
+// cleanDir is a step's folder cleaned in its machine's spelling: path.Clean's on a Mac or Linux, Windows' own there.
+func cleanDir(dir string) string {
+	if style := rpath.For(dir); style.Windows {
+		return style.Clean(dir)
+	}
+	return path.Clean(dir)
 }
 
 // relativeTo is a folder as seen from dir: "" for dir itself, the path below it, else the folder as it is.
@@ -93,7 +101,7 @@ func relativeTo(dir, folder string) string {
 
 // Tree is the layout as herdr's layout.apply takes it, every folder absolute again under dir.
 func (l Layout) Tree(dir string) herdr.LayoutNode {
-	return treeOf(&l.Root, rpath.For(dir).Clean(dir))
+	return treeOf(&l.Root, cleanDir(dir))
 }
 
 func treeOf(n *Node, dir string) herdr.LayoutNode {
