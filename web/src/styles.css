@@ -14210,12 +14210,26 @@ textarea.screen-term-field {
 }
 
 /* ---- worktrees: the New worktree dialog, the remove dialog, a project's settings, the run button ---- */
+/* the base field rule is weighty (input and four :not()s): a mono field says so as weightily */
 .new-worktree .mono,
 .remove-worktree .mono,
 .repo-settings .mono,
 .action-editor .mono,
-.nw-row-label.mono {
+:is(.new-worktree, .repo-settings, .action-editor) input.mono:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]) {
   font-family: var(--mono);
+}
+
+.nw-search input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]) {
+  height: 100%;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.rs-row-control > input,
+.rs-row-control > .sel {
+  width: 100%;
 }
 
 .nw-body {
@@ -14280,7 +14294,6 @@ textarea.screen-term-field {
 .nw-search input {
   flex: 1;
   min-width: 0;
-  height: 100%;
 }
 
 .nw-rows {
@@ -14458,12 +14471,19 @@ textarea.screen-term-field {
     padding: 0 8px;
   }
 
-  .nw-base > span {
-    display: none;
+  /* the base on a line of its own under the tabs, kept while unseen so the Details never move */
+  .nw-tabs-row {
+    flex-wrap: wrap;
+  }
+
+  .nw-base {
+    order: 3;
+    width: 100%;
   }
 
   .nw-base .sel {
-    max-width: 120px;
+    flex: 1;
+    max-width: none;
   }
 }
 

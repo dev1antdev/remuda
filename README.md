@@ -47,6 +47,25 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   repository a worktree of its own, a new folder and branch, so its agent
   never touches another workspace's files (a second agent on the same
   checkout is a tab) — sets its icon or opens it in the editor.
+  **New worktree**, after Orca's, starts from a **Branch** (one checked
+  out already opens its workspace, a local one is checked out, one only
+  on origin becomes a local branch tracking it), an open **Issue** or
+  **PR** read with `gh` on the machine (pasting `#123` or a link jumps to
+  the right tab; an issue takes the branch of the pull request already
+  working on it), or a **New** branch from the base you pick; ↻ fetches
+  from origin. A line under the branch says exactly what *Create* will do
+  before you press it, and the agent's first prompt for an issue or a
+  pull request is filled in from the project's template, there to edit.
+  **Project settings…** in the folder's ⋯ keeps, per repository, the base,
+  where worktrees go, the issue's branch name, the agent and prompts they
+  start with, and a **setup script** — the repository's own `herdr.yaml`
+  (or Orca's `orca.yaml`) `scripts.setup` first, then one of yours — run
+  in your login shell with `HERDR_ROOT_PATH`, `HERDR_WORKTREE_PATH` and
+  `HERDR_WORKSPACE_NAME` (and the `ORCA_*` names), before the agent or in
+  a Setup tab beside it, ending on "Setup finished." or "Setup failed
+  (exit N).". Its **run actions** are the **▶ Dev ▾** button in the tab
+  strip: named commands (a dev server, the tests) started in a new tab or
+  a split beside the pane, the last one used on the button itself.
   Open, a folder holds a card per workspace — the main
   checkout and its worktrees — a click away from its agent. The agents read
   after [herdr-radar](https://github.com/hhdebb/herdr-radar)'s design,
@@ -478,10 +497,16 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   which closes the workspace and runs `git worktree remove` and `git
   branch -D` on the machine, refusing a worktree with uncommitted
   changes before anything closes.
-  Closing any workspace that stands on a worktree herdr or remuda made
-  (under `~/.herdr/worktrees`) takes the worktree with it: the folder
-  goes when nothing in it is uncommitted, the branch once it is merged,
-  and a toast says what stayed and why. *Leftover worktrees…* in a
+  Closing a workspace that stands on a worktree herdr or remuda made
+  (under `~/.herdr/worktrees`), or *Close & remove worktree…* in its ⋯
+  menu, opens a table of what goes, after Orca's: the folder *Deleted*,
+  the branch *Kept* or *Deleted* (deleted once merged; a click flips
+  it), and in red what would be lost — uncommitted changes, the branch's
+  commits that are on no remote, a submodule's commits pushed nowhere.
+  *Remove anyway* then runs `git worktree remove --force`; *Close, keep
+  the folder* closes the workspace alone. It waits while an agent works
+  there, says *Close workspace* when another workspace uses the same
+  checkout, and looks again when you confirm. *Leftover worktrees…* in a
   machine's ⋯ menu finds the ones left from workspaces closed elsewhere
   and removes the clean ones.
   A *Review* link beside the run opens its worktree in the Review mode.
