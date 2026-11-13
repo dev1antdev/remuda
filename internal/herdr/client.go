@@ -419,6 +419,19 @@ func (c *Client) PaneSendKeys(paneID string, keys []string) error {
 	return c.Call("pane.send_keys", map[string]any{"pane_id": paneID, "keys": keys}, nil)
 }
 
+// PaneSendInput types text and then presses keys in one call (pane.send_input), either may be empty: the screen
+// terminal's way into a pane with no attach (a Windows machine's); the keys are in herdr's key-combo grammar.
+func (c *Client) PaneSendInput(paneID, text string, keys []string) error {
+	params := map[string]any{"pane_id": paneID}
+	if text != "" {
+		params["text"] = text
+	}
+	if len(keys) > 0 {
+		params["keys"] = keys
+	}
+	return c.Call("pane.send_input", params, nil)
+}
+
 // AgentPrompt is herdr's own submit: bracketed paste, then Enter 300ms later.
 // It refuses with agent_blocked while the agent waits on a menu, agent_not_found / agent_not_ready without an agent.
 func (c *Client) AgentPrompt(target, text string) error {

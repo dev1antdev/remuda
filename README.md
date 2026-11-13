@@ -103,6 +103,11 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   `READY` (idle), `DONE`.
 - **Terminal lens** — xterm.js fed by a shared `herdr terminal attach` PTY
   per pane (all viewers share one attach; replay buffer for late joiners).
+  On a Windows PC, where herdr has no terminal attach, the lens is a screen
+  terminal instead: the pane's screen read a few times a second and typed
+  into (Enter, the arrows, Ctrl and the key bar too, a paste as a paste),
+  its text selectable; `herdr --remote <pc>` in a terminal on your Mac
+  gives a live one.
 - **Chat lens** — the transcript herdr names via `agent_session`, parsed
   into turns (text, thinking, tool calls with outputs), polled with ETags.
   Claude Code's session files, Codex's rollouts and Gemini CLI's chats
@@ -144,13 +149,21 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   bottom under the thumb, with Code, the panels and Settings behind
   More. The sidebar's head keeps two buttons: + (a workspace, a PC) and
   ⋯ (message several agents, the order, the settings).
-- **Catppuccin, all four flavours** — Latte by day and Frappé, Macchiato
-  or Mocha by night, following the system by default; "Theme: …" and
-  "Dark flavour: …" in the palette (⌘K) or the Look section of Settings
-  pin one on this device, and the accent — peach unless you say — is
-  any of Catppuccin's fourteen colours, a swatch each in Settings. The
-  terminal, the Wall's screens and the Code editor wear the matching
-  palette.
+- **Twenty themes, ten dark and ten light** — Catppuccin Frappé,
+  Macchiato and Mocha, Dracula, Nord, Gruvbox Dark, Tokyo Night, Rosé
+  Pine, One Dark and Kanagawa; Catppuccin Latte, Solarized Light, Gruvbox
+  Light, Rosé Pine Dawn, Tokyo Night Day, GitHub Light, One Light,
+  Everforest Light, Ayu Light and Flexoki Light. Settings › Look shows
+  each as a little card: pick a dark one and a light one, and the page
+  wears the dark one when your system is dark and the light one when it
+  is light — or always one of them ("Theme: …", "Dark theme: Nord",
+  "Light theme: …" in the palette, ⌘K). The accent — peach unless you
+  say — is any of the theme's fourteen colours, a swatch each. The
+  terminal (in the theme's own terminal colours), the Wall's screens, a
+  timelapse and its GIF, the zoo, the diagrams and the Code editor all
+  follow, and every theme is checked to read: text at 7:1 on its
+  background, the dimmer greys at 4.5:1 and 3:1, the ink on every accent
+  at 4.5:1.
 - **English or Russian** — the page speaks the language of your browser,
   or the one you pick in Settings › Look › Language ("Язык: Русский" in
   the palette); a change reloads the page. The agents' answers, the
@@ -178,7 +191,7 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   left it; drag its top edge for its height, or End the shell for a
   fresh one next time.
 - **Settings that follow you** — "Sync these settings between devices",
-  the last row of Settings › Look, keeps the theme, its flavour and
+  the last row of Settings › Look, keeps the theme, the dark and light ones, the
   accent, the density, the code font, the sidebar's settings, the Wall's,
   the review's two columns, the files rail, the timeline, the tasks view,
   the standup period, Code's Follow and the panels' widths in this remuda,
@@ -910,8 +923,10 @@ one, through code-server's own command line, so nothing reloads. The
 Code bar's **Follow** opens every file the agent on screen finishes
 editing, as it happens; **Reload the editor** gives the folder a fresh
 frame when the connection was lost. The editor wears the page's own
-flavour — Catppuccin Latte, Frappé, Macchiato or Mocha, following the
-switch — through the Catppuccin extension remuda installs; and when a
+theme, following the switch, through that theme's own extension, which
+remuda installs from Open VSX (Solarized Light is VS Code's own; Tokyo
+Night Day wears Tokyo Night's light theme, and Flexoki, which has no
+extension there, VS Code's Default Light Modern); and when a
 machine's code-server
 is older than the release remuda carries, the ⓘ says so and Updates
 offers the upgrade. Install it on a
@@ -1436,12 +1451,12 @@ no dot.
 
 **Code is coloured** in the chat's fenced blocks and in the Changes lens's
 diffs — Go, TypeScript, Python, shell, JSON, YAML, TOML, CSS, HTML, Rust,
-SQL, Makefiles, Dockerfiles — in Catppuccin's own hues for the flavour you
-wear, by a small highlighter of remuda's own, no library behind it.
+SQL, Makefiles, Dockerfiles — in Catppuccin's own mapping of hues over the
+theme you wear, by a small highlighter of remuda's own, no library behind it.
 
 **Diagrams are drawn:** a ```` ```mermaid ```` block an agent writes — a
 flowchart, a sequence diagram, a state machine — shows as the diagram in
-the chat and in a task's comments, in your flavour's colours, with its
+the chat and in a task's comments, in your theme's colours, with its
 source a click away (Source); the file viewer draws a Markdown file and a
 `.mmd` diagram too (Preview, beside File and Changes). Mermaid is loaded
 only when a diagram is on screen; a block it cannot read stays code with

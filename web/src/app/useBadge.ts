@@ -8,7 +8,7 @@ import { useRoster } from "@/features/roster/useRoster";
 import { usePref } from "@/lib/prefs";
 import { inShell, tellShell } from "@/lib/shell";
 import { badgeOf, titleFor, type BadgeTone } from "./badge";
-import { useTheme } from "./theme";
+import { useFlavor } from "./theme";
 
 export const ICON_HREF = "/icons/icon-192.png";
 const SIZE = 64;
@@ -66,7 +66,7 @@ function drawBadge(image: HTMLImageElement, tone: BadgeTone): string | null {
 export function useBadge(): void {
   const { machines } = useRoster();
   const [radar] = usePref<RadarPrefs>("radar", DEFAULT_RADAR);
-  const theme = useTheme();
+  const flavor = useFlavor();
   const { count, tone } = badgeOf(machines, radar, Date.now());
 
   useEffect(() => {
@@ -94,5 +94,5 @@ export function useBadge(): void {
     return () => {
       stale = true;
     };
-  }, [tone, theme]);
+  }, [tone, flavor]);
 }

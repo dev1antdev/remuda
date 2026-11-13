@@ -279,29 +279,6 @@ type Prompter interface {
 // ErrAgentBusy: the agent shows a menu; the message must not land in it.
 var ErrAgentBusy = errors.New("the agent is waiting for an answer — answer its prompt first")
 
-// allowedKeys is herdr's pane.send_keys grammar as observed live: lowercase names, "+" for modifiers.
-var allowedKeys = map[string]bool{
-	"enter": true, "esc": true, "tab": true, "shift+tab": true, "space": true,
-	"up": true, "down": true, "left": true, "right": true,
-	"home": true, "end": true, "pageup": true, "pagedown": true,
-	"backspace": true, "delete": true,
-	"ctrl+c": true, "ctrl+d": true, "ctrl+u": true, "ctrl+z": true,
-	"ctrl+r": true, "ctrl+l": true, "ctrl+k": true,
-}
-
-// Keys lowercases the names and refuses one herdr's grammar has no word for.
-func Keys(names []string) ([]string, error) {
-	out := make([]string, 0, len(names))
-	for _, name := range names {
-		name = strings.ToLower(name)
-		if !allowedKeys[name] {
-			return nil, fmt.Errorf("key %q not allowed", name)
-		}
-		out = append(out, name)
-	}
-	return out, nil
-}
-
 // Input is the one door for what people type into panes: every delivery holds the pane's lock, so nothing interleaves.
 type Input struct {
 	Machines *machines.Manager
@@ -406,14 +383,6 @@ func (in *Input) FirstPrompt(client Prompter, ref events.PaneRef, text string, t
 		return errors.New("the agent asks something first (its dialog is on the screen); answer it and send the text yourself")
 	}
 	return fmt.Errorf("the agent did not come up within %s (%v)", timeout.Round(time.Second), last)
-}
-
-// SendKeys presses named keys in a pane; the names went through Keys.
-func (in *Input) SendKeys(client Prompter, ref events.PaneRef, keys []string) error {
-	lock := in.lock(ref)
-	lock.Lock()
-	defer lock.Unlock()
-	return client.PaneSendKeys(ref.Pane, keys)
 }
 
 // ErrAgentWorking: the agent is in the middle of a turn, and a schedule's prompt waits for its next run rather than piling up behind it.

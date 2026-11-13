@@ -6,13 +6,17 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
+	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/scrollback"
+	"github.com/dev1antdev/remuda/internal/sessions"
 )
 
 // The wall's screen view: a pane's terminal as text with its colours, read from herdr on demand at the tiles' pace.
-// The terminal lens's find over the scrollback reads the pane's rows here too, and scrolls the pane to a match.
+// The terminal lens's find over the scrollback reads the pane's rows here too, and scrolls the pane to a match. The
+// screen terminal — a pane with no attach, a Windows machine's — is that screen read again and again, typed into here.
 
 // MaxScrollbackRows bounds one find's read; the page asks for fewer.
 const MaxScrollbackRows = 20000
@@ -21,6 +25,43 @@ func (s *Server) screenRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/screen", s.handleScreen)
 	api.HandleFunc("GET /api/scrollback", s.handleScrollback)
 	api.HandleFunc("POST /api/scroll", s.handleScroll)
+	api.HandleFunc("POST /api/input", s.handleInput)
+}
+
+// handleInput is POST /api/input {machine, pane, text?, paste?, keys?}: the screen terminal's typing, text then keys
+// under the pane's lock; the activity gets a row per line it sends (sent.Lines), not one per keystroke.
+func (s *Server) handleInput(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Machine string   `json:"machine"`
+		Pane    string   `json:"pane"`
+		Text    string   `json:"text"`
+		Paste   bool     `json:"paste"`
+		Keys    []string `json:"keys"`
+	}
+	if !decode(w, r, &req) {
+		return
+	}
+	if req.Pane == "" {
+		httpErr(w, 400, fmt.Errorf("pane required"))
+		return
+	}
+	typed, err := sessions.NewTyped(req.Text, req.Paste, req.Keys)
+	if err != nil {
+		httpErr(w, 400, err)
+		return
+	}
+	mc, client, _, ok := s.ready(w, r, req.Machine)
+	if !ok {
+		return
+	}
+	if err := s.Input.SendInput(client, events.PaneRef{Machine: mc.ID(), Pane: req.Pane}, typed); err != nil {
+		rpcErr(w, err)
+		return
+	}
+	for _, row := range s.typed.Typed(s.senderName(r.Context()), mc.ID(), req.Pane, typed.Text, typed.Keys, time.Now()) {
+		s.noteSent(r.Context(), mc.ID(), req.Pane, row.What, row.Keys)
+	}
+	writeJSON(w, map[string]any{"ok": true})
 }
 
 // handleScrollback is GET /api/scrollback?machine&pane&q&lines: where q occurs in the pane's last rows (herdr's

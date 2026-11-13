@@ -13,6 +13,7 @@ import { changeCounts, diffLines, type DiffLine } from "./diffLines";
 import type { FileTarget } from "./target";
 import { actions } from "@/app/store";
 import { useRoster } from "@/features/roster/useRoster";
+import { onWindows } from "@/features/roster/system";
 import { t } from "@/lib/i18n";
 
 type Tab = "file" | "drawn" | "changes";
@@ -41,7 +42,8 @@ export default function FileViewer({
   const [diff, setDiff] = useState<FileDiff | null>(null);
   const [tab, setTab] = useState<Tab>(() => startTab(target));
   const [error, setError] = useState<string | null>(null);
-  const { viewOnly } = useRoster(); // a viewer link's screen reads the file only: no diff, no editor
+  const { viewOnly, machines } = useRoster(); // a viewer link's screen reads the file only: no diff, no editor
+  const editor = !viewOnly && !onWindows(machines.find((m) => m.id === machineId)); // a Windows PC has no code-server
   const lineRef = useRef<HTMLDivElement>(null);
   const box = useRef<HTMLDivElement>(null);
 
@@ -169,7 +171,7 @@ export default function FileViewer({
               )}
             </nav>
           )}
-          {!viewOnly && (
+          {editor && (
             <Tip text={t("Open in Code (VS Code on this machine), at this line")}>
               <button
                 type="button"

@@ -20,11 +20,12 @@ for (const [name, value] of Object.entries({ E2E_URL: base, E2E_CDP: cdp, E2E_TO
 }
 
 // the desks first: once Chrome has emulated a touch screen, (pointer: coarse) keeps matching after it stops
+// each pass wears a theme other than Catppuccin's, so the display checks run on them: the desks a dark one, the phones a light one
 const ALL_PASSES = [
-  { name: "desk-en", width: 1440, height: 900, phone: false, lang: "en" },
-  { name: "desk-ru", width: 1440, height: 900, phone: false, lang: "ru" },
-  { name: "phone-en", width: 390, height: 844, phone: true, lang: "en" },
-  { name: "phone-ru", width: 390, height: 844, phone: true, lang: "ru" },
+  { name: "desk-en", width: 1440, height: 900, phone: false, lang: "en", look: { theme: "dark", "theme.dark": "nord" } },
+  { name: "desk-ru", width: 1440, height: 900, phone: false, lang: "ru", look: { theme: "dark", "theme.dark": "tokyo-night" } },
+  { name: "phone-en", width: 390, height: 844, phone: true, lang: "en", look: { theme: "light", "theme.light": "solarized-light" } },
+  { name: "phone-ru", width: 390, height: 844, phone: true, lang: "ru", look: { theme: "light", "theme.light": "rose-pine-dawn" } },
 ];
 // E2E_DISPLAY_PASSES=desk-en,phone-ru runs only those
 const PASSES = process.env.E2E_DISPLAY_PASSES ? ALL_PASSES.filter((p) => process.env.E2E_DISPLAY_PASSES.split(",").includes(p.name)) : ALL_PASSES;
@@ -790,6 +791,8 @@ const UNDO_CHAT = [
   { role: "assistant", ts: iso(now - 11 * 60e3), ids: ["e2e-undo-answer"], parts: [{ type: "text", text: "Drew them, and committed the screens." }], took: 150 },
 ];
 let undoChat = false;
+// windowsLocal plays the local machine as a Windows PC in the dressed roster, for the screen terminal's screen alone
+let windowsLocal = false;
 function fakeUndoTurn() {
   const file = (path, was, extra = {}) => ({ path, was, dirty_at: false, dirty_to: true, ...extra });
   return {
@@ -823,6 +826,7 @@ async function dressRoster({ requestId, responseStatusCode, responseHeaders = []
   }
   for (const machine of roster.machines ?? []) {
     if (machine.id !== "local") continue;
+    if (windowsLocal) machine.os = "windows"; // the screen terminal's screen: this machine played as a Windows PC
     // Claude Code's sign-in there ends in a day and a half at the latest, so it may end at any time: a red concern with a shell to sign in again from;
     // its settings keep fast mode on Opus 4.8 as the default, so every dialog that starts Claude Code on its default model says it goes on 30 Nov
     const health = machine.health ?? { at: iso(now), disk_free_gb: 120, disk_used_pct: 30, load1: 0.4 };
@@ -1380,12 +1384,15 @@ async function runPass() {
   await send("Emulation.setDeviceMetricsOverride", { width: pass.width, height: pass.height, deviceScaleFactor: 1, mobile: pass.phone });
   await send("Emulation.setTouchEmulationEnabled", { enabled: pass.phone, maxTouchPoints: pass.phone ? 5 : 0 });
   fakeOpinionState = null;
-  const prefs = { lang: pass.lang, "tasks.sel": { kind: "project", id: inbox }, "tasks.view": "board" };
+  const prefs = { lang: pass.lang, "tasks.sel": { kind: "project", id: inbox }, "tasks.view": "board", ...pass.look };
   await evaluate(`(() => { localStorage.clear(); for (const [k, v] of Object.entries(${JSON.stringify(prefs)})) localStorage.setItem("remuda." + k, JSON.stringify(v)); })()`);
   await send("Page.navigate", { url: `${base}/?machine=local&pane=${encodeURIComponent(paneA1)}&lens=terminal` });
   if (!(await until(() => present(".pane-area .tab"), 15))) failed("the Agents page did not come up");
   const spoken = await evaluate("document.documentElement.lang");
   if (spoken !== pass.lang) failed(`the page speaks ${spoken}, not ${pass.lang}`);
+  const worn = await evaluate(`document.documentElement.dataset.flavor + " " + document.documentElement.dataset.theme`);
+  const asked = `${pass.look["theme.dark"] ?? pass.look["theme.light"]} ${pass.look.theme}`;
+  if (worn !== asked) failed(`the page wears ${worn}, not ${asked}`);
   if ((await evaluate(`matchMedia("(pointer: coarse)").matches`)) !== pass.phone) failed(`the browser does not take itself for a ${pass.phone ? "phone" : "desk"}: (pointer: coarse) says otherwise`);
   where = pass.name;
 
@@ -1485,6 +1492,28 @@ async function runPass() {
     close: async () => {
       await send("Page.navigate", { url: `${base}/?machine=local&pane=${encodeURIComponent(paneA1)}&lens=terminal` });
       if (!(await until(() => present(".pane-area .tab"), 15))) failed("the Agents page did not come back");
+    },
+  });
+  // a Windows PC's pane: herdr has no terminal attach there, so the lens is the pane's screen read again and typed into —
+  // the notes shell played as a Windows machine's by the dressed roster, its screen and its typing the throwaway herdr's own
+  await screen("screen-terminal", {
+    open: async () => {
+      windowsLocal = true;
+      await send("Page.navigate", { url: `${base}/?machine=local&pane=${encodeURIComponent(paneN)}&lens=terminal` });
+      if (!(await until(() => present(".lens-pane:not([hidden]) .screen-term .screen-line"), 15))) throw new Error("the screen terminal did not come up");
+      check(!(await present(".xterm")), "a Windows machine's pane attached a live terminal");
+      const word = `screen-${pass.name}`;
+      await tap(".lens-pane:not([hidden]) .screen-term-screen");
+      await send("Input.insertText", { text: `echo ${word}` });
+      await key("Enter", "Enter");
+      const typed = () => evaluate(`[...document.querySelectorAll(".lens-pane:not([hidden]) .screen-term .screen-line")].some((line) => line.textContent.trim() === ${JSON.stringify(word)})`);
+      if (!(await until(typed, 10))) failed("what was typed into the screen terminal did not come back on its screen");
+    },
+    expect: [".lens-pane:not([hidden]) .screen-term-note"],
+    close: async () => {
+      windowsLocal = false;
+      await send("Page.navigate", { url: `${base}/?machine=local&pane=${encodeURIComponent(paneA1)}&lens=terminal` });
+      if (!(await until(() => present(".lens-pane:not([hidden]) .xterm-screen"), 15))) failed("the live terminal did not come back");
     },
   });
   // an agent appearing in a pane: started at a shell's prompt, the terminal stays; an agent's pane a restart passed
@@ -1806,6 +1835,23 @@ async function runPass() {
     expect: [".modal.updates"],
   });
   await screen("settings", { open: async () => palette("settings"), expect: [".settings-dialog .settings-section"], close: async () => {} });
+  await screen("settings-themes", {
+    open: async () => {
+      await evaluate(`document.querySelector('.settings-dialog .settings-themes')?.scrollIntoView({ block: "start" })`);
+      check((await count(".settings-dialog .theme-cards[role=radiogroup] .theme-card")) === 20, "Settings › Look does not offer ten dark and ten light themes");
+      const outside = await evaluate(`(() => { const box = document.querySelector(".settings-dialog").getBoundingClientRect(); return [...document.querySelectorAll(".theme-card")].filter((card) => { const r = card.getBoundingClientRect(); return r.width < 60 || r.left < box.left - 1 || r.right > box.right + 1; }).map((card) => card.dataset.flavor); })()`);
+      check(outside.length === 0, `theme cards that do not fit the dialog: ${outside.join(", ")}`);
+      const picked = pass.look["theme.dark"] ?? pass.look["theme.light"];
+      check(await present(`.theme-card.on[data-flavor="${picked}"][aria-checked="true"]`), `the ${picked} card is not the one picked`);
+      const other = pass.look.theme === "dark" ? "dracula" : "github-light";
+      await tap(`.theme-card[data-flavor="${other}"]`);
+      if (!(await until(async () => (await evaluate("document.documentElement.dataset.flavor")) === other, 3))) failed(`a tap on the ${other} card did not dress the page in it`);
+      await tap(`.theme-card[data-flavor="${picked}"]`);
+      if (!(await until(async () => (await evaluate("document.documentElement.dataset.flavor")) === picked, 3))) failed(`a tap on the ${picked} card did not dress the page back`);
+    },
+    expect: [".settings-dialog .theme-card.on"],
+    close: async () => {},
+  });
   const sections = (await evaluate(`document.querySelectorAll('.settings-dialog .settings-section').length`)) ?? 0;
   for (let i = 1; i < sections; i++)
     await screen(`settings-section-${i + 1}`, {

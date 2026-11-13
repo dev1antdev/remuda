@@ -36,6 +36,13 @@ export function thumbFont(avail: number, cols: number, cellWidth: number, fontSi
   return Math.max(2, Math.min(fontSize, Math.floor(fit * 2) / 2));
 }
 
+// screenFont is the screen terminal's size: the one at which cols columns fill avail pixels, never larger than the text
+// size the person picked nor under MIN_FONT, where the screen scrolls sideways instead
+export function screenFont(avail: number, cols: number, cellWidth: number, fontSize: number, preferred: number): number {
+  const fit = (avail * fontSize) / (Math.max(1, cols) * cellWidth);
+  return Math.max(MIN_FONT, Math.min(preferred, Math.floor(fit * 2) / 2));
+}
+
 // applyGeometry sizes the grid: fit → to the mount (at least minCols wide, the mount scrolling sideways),
 // keep → the pane's own grid with the font shrunk to fit the width. False when the mount is hidden.
 export function applyGeometry(term: Terminal, fit: FitAddon, mount: HTMLElement, g: Geometry): boolean {

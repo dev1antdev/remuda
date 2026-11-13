@@ -103,7 +103,7 @@ func (s *Server) handleCodeWorkspace(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"path": path, "folders": folders})
 }
 
-// handleCodeTheme is POST /api/code/{machine}/theme {theme}: the editor there wears the page's Catppuccin flavour.
+// handleCodeTheme is POST /api/code/{machine}/theme {theme}: the editor there wears the page's theme.
 func (s *Server) handleCodeTheme(w http.ResponseWriter, r *http.Request) {
 	mc, err := s.Machines.Get(r.PathValue("machine"))
 	if err != nil {
@@ -116,10 +116,8 @@ func (s *Server) handleCodeTheme(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &req) {
 		return
 	}
-	switch req.Theme {
-	case "latte", "frappe", "macchiato", "mocha", "dark", "light":
-	default:
-		httpErr(w, 400, fmt.Errorf("theme must be latte, frappe, macchiato or mocha"))
+	if !code.KnownTheme(req.Theme) {
+		httpErr(w, 400, fmt.Errorf("theme %q is none of the page's themes", req.Theme))
 		return
 	}
 	installed, err := s.Code.Theme(mc, req.Theme)

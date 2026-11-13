@@ -42,6 +42,25 @@ affiliation or endorsement.
 
 ## Colours
 
-The page's colours are [Catppuccin](https://github.com/catppuccin/catppuccin)'s
-Frappé and Latte palettes (MIT License, Copyright (c) 2021 Catppuccin), as
-values in `src/lib/theme.ts` and `src/styles.css`.
+The page's colours are twenty published palettes, each laid out in
+Catppuccin's named slots, as values in `src/lib/themes/` and `src/styles.css`;
+where a palette has fewer than fourteen hues an accent is the nearest of its
+own or a blend of two, and a few text colours are moved only as far as reading
+needs (lib/theme.test.ts says which bar each meets). The terminal colours are
+each palette's own ports'.
+
+| Theme | Palette, author | Licence |
+|---|---|---|
+| Catppuccin Latte, Frappé, Macchiato, Mocha | [Catppuccin](https://github.com/catppuccin/catppuccin) | MIT, Copyright (c) 2021 Catppuccin |
+| Dracula | [Dracula Theme](https://draculatheme.com/spec), Zeno Rocha | MIT, Copyright (c) 2023 Dracula Theme |
+| Nord | [Nord](https://github.com/nordtheme/nord), Sven Greb | MIT, Copyright (c) 2016-present Sven Greb |
+| Gruvbox Dark, Gruvbox Light | [gruvbox](https://github.com/morhetz/gruvbox), Pavel Pertsev (morhetz) | MIT/X11 |
+| Tokyo Night, Tokyo Night Day | [tokyonight.nvim](https://github.com/folke/tokyonight.nvim), Folke Lemaitre, after [Tokyo Night](https://github.com/enkia/tokyo-night-vscode-theme) by enkia (MIT) | Apache-2.0 (its terminal ports are published as MIT) |
+| Rosé Pine, Rosé Pine Dawn | [Rosé Pine](https://github.com/rose-pine/neovim) | MIT, Copyright (c) 2023 Rosé Pine |
+| One Dark, One Light | [Atom's One Dark and One Light syntax themes](https://github.com/atom/atom/tree/master/packages) | MIT, Copyright (c) 2011-2022 GitHub Inc. |
+| Kanagawa | [kanagawa.nvim](https://github.com/rebelot/kanagawa.nvim), Tommaso Laurenzi | MIT, Copyright (c) 2021 Tommaso Laurenzi |
+| Solarized Light | [Solarized](https://github.com/altercation/solarized), Ethan Schoonover | MIT, Copyright (c) 2011 Ethan Schoonover |
+| GitHub Light | [Primer primitives](https://github.com/primer/primitives), GitHub | MIT, Copyright (c) 2018 GitHub Inc. |
+| Everforest Light | [Everforest](https://github.com/sainnhe/everforest), sainnhe | MIT, Copyright (c) 2019 sainnhe |
+| Ayu Light | [ayu](https://github.com/ayu-theme/ayu-colors), Konstantin Pschera | MIT, Copyright (c) Konstantin Pschera |
+| Flexoki Light | [Flexoki](https://stephango.com/flexoki), Steph Ango | MIT, Copyright (c) 2023 Steph Ango |

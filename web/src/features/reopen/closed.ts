@@ -45,6 +45,6 @@ const FIELDS = "input, textarea, select, [contenteditable]";
 // keeps its own keys, nor over a dialog; on a Mac never over a field either, where Option+Z types a character
 export function reopenKeyAsked(press: KeyPress, dialogOpen: boolean, mac: boolean): boolean {
   if (press.code !== "KeyZ" || !press.altKey || press.metaKey || press.ctrlKey || press.shiftKey) return false;
-  if (dialogOpen || press.target?.closest?.(".xterm")) return false;
+  if (dialogOpen || press.target?.closest?.(".xterm, .screen-term")) return false;
   return !(mac && press.target?.closest?.(FIELDS));
 }

@@ -248,7 +248,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   colours kept (the wall's screen view); `PaneRecent` is the pane's last n
   rows, the screen and herdr's scrollback above it (source `recent`),
   `PaneScroll` moves its viewport (`pane.scroll`, every viewer's) and
-  `PaneInfo.Scroll` is where it stands. `PaneInfo` has
+  `PaneInfo.Scroll` is where it stands; `PaneSendInput` is `pane.send_input`
+  (text, then keys, in one call — herdr brackets its text as a paste while
+  the app asked for bracketed paste, where `pane.send_text` stays raw:
+  seen on a throwaway 0.9.5), the screen terminal's way in. `PaneInfo` has
   `Dir()`, `AgentName()`, `DisplayTitle()`; status vocabularies are the
   `Status*`/`UI*` constants with `UIStatus(status, hasAgent)` as the one
   mapping. **What a client writes into herdr's own UI** (`metadata.go`,
@@ -529,7 +532,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   files, no `repo` outside git). `ListDirs(path, hidden)` lists a folder's
   subfolders (repositories marked by a `.git`; `""`/`~` is home) for the
   folder picker behind the New workspace dialog's browse button
-  (`web/src/features/roster/FolderPicker.tsx`: crumbs, subfolders, the machine's known
+  (`web/src/features/roster/FolderPicker.tsx`: crumbs from / or from a drive on a Windows PC (`pathCrumbs`), subfolders, the machine's known
   workspaces as quick picks, hidden on request). Routes: `/api/fs/dirs`,
   `/api/fs/stat` (resolve + kind; `dir=` stands in for the pane's folder
   when there is no pane — a transcript on its own, a task's comments),
@@ -815,7 +818,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   headless Chrome — driving `e2e/smoke.mjs` over the
   DevTools protocol with no dependency: sign in, a scratch shell
   workspace through the API, a command typed into the terminal lens and
-  read back through `/api/screen`, the shell's lens switch vacant (a
+  read back through `/api/screen` and once more through the screen terminal
+  with the browser's roster saying the machine is a Windows PC (`os`
+  dressed through CDP's `Fetch`), the shell's lens switch vacant (a
   shell has its terminal alone), the Wall, Review, Activity,
   the palette, the workspace closed, no console errors — then
   `e2e/display.mjs`, **the display checks**: a repository with two tabs
@@ -825,10 +830,16 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   work with a PR, a Codex asking, a finished one, plan limits, a folder
   icon — nothing changes on the server); four passes, 1440×900 and
   390×844 (touch), in English and Russian (`E2E_DISPLAY_PASSES` picks
-  some), each opening every screen the way a person does — the sidebar,
+  some), each in a theme other than Catppuccin's set through its pref
+  before the load and checked on the root (the desks Nord and Tokyo
+  Night, the phones Solarized Light and Rosé Pine Dawn), each opening
+  every screen the way a person does — Settings › Look's twenty theme
+  cards checked to fit the dialog and to dress the page at a tap — the sidebar,
   a folded folder, the card's, the machine's and the vitals' menus, the
   tab strip and its + menu, the View menu, the chat lens, the split
-  view, the floating terminal, the screen-sharing chip, the icon
+  view, the screen terminal (the notes shell played as a Windows PC's,
+  a command typed into it and its answer read off it), the floating
+  terminal, the screen-sharing chip, the icon
   dialog's four tabs, the Wall's chat, screen, zoo and office views,
   the Tasks board, list and detail, Review, Code, every panel, each
   section of Settings, the palette, the keys sheet and the dialogs (new
@@ -850,7 +861,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   (`features/roster/HealthButton.tsx`; the rules in `concerns.ts`) turns amber on an update, a lagging
   remote remuda, a nearly full disk, Claude Code's sign-in running out (`internal/signin`) or a
   setting there on a model being retired (`internal/retire`; `concerns(…, more)` takes the
-  machine's name, its `retiring`, the roster's `retirements` its hits name and the clock).
+  machine's name, its `retiring`, the roster's `retirements` its hits name and the clock); a Windows PC's ⓘ opens on a System row, "Windows · the terminal is the pane's screen, no Code mode".
 - `internal/drift/` — **Fleet setup: how every machine is set up, side
   by side, the odd one out marked** (tested: the script on this
   machine's sh, awk, sed and git in a temp HOME with anonymized config
@@ -1301,7 +1312,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   diagram is on screen (its own chunks; the main bundle grew by about
   7 KB, 3 KB gzipped), one drawing at a time (mermaid keeps one
   configuration), `securityLevel: "strict"`, labels as SVG text
-  (`htmlLabels: false`, so the answer parses as XML), the flavour and
+  (`htmlLabels: false`, so the answer parses as XML), the theme and
   accent read off the root's `data-flavor` / `data-accent` and drawn again
   when they change; **never innerHTML**: the SVG string is parsed by
   `DOMParser` as `image/svg+xml`, scripts, `on*` handlers and
@@ -1312,8 +1323,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   new (no `unsafe-eval`, checked in headless Chrome). `ui/mermaidLook.ts`
   is the pure part, tested: `isMermaid` (a fence's first word mermaid or
   mmd), `isMermaidFile` / `isMarkdownFile` / `previewOf` / `opensDrawn`
-  for the file viewer, `lookOf`, `mermaidConfig` (Catppuccin's swatches as
-  mermaid's `base` theme variables, the accent on the shapes' edges).
+  for the file viewer, `lookOf` (`flavorOf` keeps any of the twenty
+  themes, Frappé else), `mermaidConfig` (the theme's swatches as
+  mermaid's `base` theme variables, `darkMode` by its side, the accent on
+  the shapes' edges).
   **The file viewer draws** (`features/files/FileViewer.tsx`): a Markdown
   file (`.md`, `.markdown`) and a diagram file (`.mmd`, `.mermaid`) get a
   Preview tab between File and Changes — the Markdown through `Markdown`
@@ -1377,7 +1390,13 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   a media query as a hook, for a piece the stylesheet hides that would
   otherwise poll unseen), `clock.ts` (`useNow`: the time, refreshed every
   so many ms, for a counter on screen), `text.ts` (`errMsg`,
-  `basename` / `dirname`, `plural`, `shellQuote`), `time.ts`, `paths.ts`,
+  `basename` / `dirname`, `plural`, `shellQuote`), `pathname.ts` (a path's
+  parts the way its machine writes them, tested: `windowsPath` — a drive
+  letter, a `\\share`, or backslashes and no slash — `basename` / `dirname`
+  by either separator on such a path and by `/` alone on a POSIX one, where
+  a backslash is a character of the name, `pathParts`, `joinPath` with the
+  folder's own separator, `underFolder` case-blind on Windows, `pathCrumbs`
+  from `/` or from a drive; `text.ts` re-exports the two), `time.ts`, `paths.ts`,
   `host.ts` (`copyText`: Clipboard API, else execCommand; `saveText`: a
   file for the browser to keep, `saveBlob` any other — a timelapse's GIF; `openUrl`: a
   new tab — nothing embeds remuda any more, the JetBrains plugin and its
@@ -1386,12 +1405,31 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   monospace font: the pref keys `text.size` / `density` / `font.mono`,
   `TEXT_SCALE`, `textSizeOf` / `densityOf` / `monoOf`, `MONO_FONTS` and
   `monoStack`; `app/theme.ts` puts them on the root as `data-text`,
-  `data-density` and `--mono`), `theme.ts` (the four Catppuccin flavours as
-  `Swatches` — `FLAVORS`, the fourteen `ACCENTS` — `resolveTheme` /
-  `resolveFlavor` / `themeOf`, the pref readers `themePrefOf` /
-  `flavorPrefOf` / `accentOf`, `ansiPalette` / `terminalTheme` /
-  `pageColor` by flavour; its test reads `styles.css` so the `--ctp-*`
-  blocks never drift from the swatches),
+  `data-density` and `--mono`), `theme.ts` (**the twenty themes**, ten
+  dark and ten light, each a `Palette` in `lib/themes/` — `palette.ts`
+  the types (`Swatches`: Catppuccin's 26 named slots, crust … text and
+  the fourteen `ACCENTS`; `TerminalColours`), `dark.ts` / `light.ts` the
+  data: Catppuccin Frappé, Macchiato, Mocha, Dracula, Nord, Gruvbox Dark,
+  Tokyo Night, Rosé Pine, One Dark, Kanagawa; Catppuccin Latte,
+  Solarized Light, Gruvbox Light, Rosé Pine Dawn, Tokyo Night Day, GitHub
+  Light, One Light, Everforest Light, Ayu Light, Flexoki Light — each
+  palette's official values, its background and foreground ramp as the
+  neutrals, its own hues as the accents (a blend of two where it has
+  fewer), its ports' terminal sixteen and cursor where it has them; the
+  few colours moved for reading say so beside the swatches; a flavour
+  is a theme's id — `FLAVORS`, `FLAVOR_NAMES`, `DARK_FLAVORS` /
+  `LIGHT_FLAVORS`, `isFlavor`, `resolveTheme` / `resolveFlavor(pref,
+  dark, light, systemLight)` / `themeOf` (its side), the pref readers
+  `themePrefOf` / `darkFlavorOf` / `lightFlavorOf` (an unknown or other
+  side's id reads as Frappé / Latte, so the values from before —
+  frappe, macchiato, mocha — still read) / `accentOf`, `themeChoiceName`,
+  `ansiPalette` (the theme's own sixteen, else Catppuccin's mapping from
+  the slots; the page's text and base as ink and paper) / `terminalTheme`
+  (its own cursor, else rosewater) / `pageColor`, `contrast` (WCAG's
+  ratio); its test reads `styles.css` so the `--ctp-*` blocks never drift
+  from the swatches and holds **every theme to the bar**: text at 7:1 on
+  the base and the mantle, subtext0 at 4.5:1 and overlay1 at 3:1 on the
+  base, the ink on every accent at 4.5:1),
   `speech.ts` (the browser's own voice reading a script of parts and
   sentences — the player, the voice picked for a sentence's language,
   Safari on iOS's priming; the standup's Listen and the talking zoo, see
@@ -2216,14 +2254,21 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   per master. `GET /api/code/{machine}` probes `/healthz` (a good answer is
   cached 15s; `?check=1` re-probes) and reads the workbench page for
   the remote authority and code-server's version (`settingOf`, tested),
-  which the Code bar shows beside a reload button (a fresh frame for the same folder when the editor lost its connection or shows a stale state). **The editor wears the page's flavour**: `POST /api/code/{machine}/theme {theme}` (latte / frappe / macchiato / mocha) → `code.Service.Theme`, once per machine and flavour while remuda runs — Catppuccin's extension installed from Open VSX when missing, then `workbench.colorTheme` set to `code.ThemeName(flavor)` ("Catppuccin Mocha" …, tested) in code-server's `settings.json` (`WithTheme`, tested: merged as JSON, else the line replaced in a file with comments), which the editor applies as the file changes; `Code.tsx` asks when the frame is up and whenever the page's flavour changes; the installer seeds Frappé. **Its version** rides on the vitals (`code_server`, the release the `~/.local/opt/code-server` link names) and `Latest.Code` is `setup.CodeVersion`, the release the installer carries (`health.PinnedCode`, set by the app): the ⓘ says when a machine lags it and Updates offers `what = code`, `remuda code install` on the machine (`updates.Plan`, tested). `web/src/features/code/Code.tsx` is the picker (machine, then a folder from the roster's workspaces — or **All workspaces on the machine**, its first row and the default past one folder: `POST /api/code/{machine}/workspace` writes every folder herdr has a workspace in to `~/.config/code-server/remuda.code-workspace` on the machine, `code.Service.Workspace` / `WorkspaceJSON`, tested, and the frame opens `?workspace=` on it; the file is written again whenever the roster's folders change, and the editor, watching it, takes the new folders in place) and the iframe, kept mounted behind the other modes once opened. `actions.openInCode(machine, folder, path, line?)` (the files rail's code button, the Changes lens's per-file button, the file viewer's header button — the last two at a line; store field `codeFile`, a folder of "" keeps the one picked) switches the mode and moves the picker to that machine and folder; **when that editor is already on screen** the file goes to it in place — `POST /api/code/{machine}/open {path, line}` → `code.Service.Open`, code-server's own CLI with `--reuse-window` over its IPC socket (`OpenScript`, tested; `file:line` carries the line; the CLI exits 0 without a listener, so its last line is read for "error") — and nothing reloads; only a first frame mounts with `payload=[["openFile","vscode-remote://<authority>/path"]]`
+  which the Code bar shows beside a reload button (a fresh frame for the same folder when the editor lost its connection or shows a stale state). **The editor wears the page's theme**: `POST /api/code/{machine}/theme {theme}` (any of the twenty ids, or the bare dark / light a page from before sent, `code.KnownTheme`; else a 400) → `code.Service.Theme`, once per machine and theme while remuda runs — `code.EditorThemeOf(theme)` (`internal/code/themes.go`, tested, and `features/code/themes.test.ts` reads it so it names exactly the page's twenty) is the theme's Open VSX extension and its exact `workbench.colorTheme` name: Catppuccin's for its four, Dracula's ("Dracula Theme"), Nord's, jdinhlife's Gruvbox (Dark / Light Medium), enkia's Tokyo Night (and its "Tokyo Night Light" for Tokyo Night Day, which has none of its own), mvllow's Rosé Pine and Rosé Pine Dawn, One Dark Pro, metaphore's "Kanagawa Wave", GitHub's "GitHub Light Default", akamud's "Atom One Light", sainnhe's Everforest Light, teabyii's "Ayu Light Bordered"; Solarized Light is VS Code's own, Flexoki (no extension on Open VSX) wears VS Code's "Default Light Modern" and an unknown word "Default Dark Modern" — `ThemeReadScript` installs the extension when `--list-extensions` lacks it (none for a built-in), then `workbench.colorTheme` is set to its name in code-server's `settings.json` (`WithTheme`, tested: merged as JSON, else the line replaced in a file with comments), which the editor applies as the file changes; `Code.tsx` asks when the frame is up and whenever the page's theme changes; the installer seeds Frappé. **Its version** rides on the vitals (`code_server`, the release the `~/.local/opt/code-server` link names) and `Latest.Code` is `setup.CodeVersion`, the release the installer carries (`health.PinnedCode`, set by the app): the ⓘ says when a machine lags it and Updates offers `what = code`, `remuda code install` on the machine (`updates.Plan`, tested). `web/src/features/code/Code.tsx` is the picker (machine, then a folder from the roster's workspaces — or **All workspaces on the machine**, its first row and the default past one folder: `POST /api/code/{machine}/workspace` writes every folder herdr has a workspace in to `~/.config/code-server/remuda.code-workspace` on the machine, `code.Service.Workspace` / `WorkspaceJSON`, tested, and the frame opens `?workspace=` on it; the file is written again whenever the roster's folders change, and the editor, watching it, takes the new folders in place) and the iframe, kept mounted behind the other modes once opened. `actions.openInCode(machine, folder, path, line?)` (the files rail's code button, the Changes lens's per-file button, the file viewer's header button — the last two at a line; store field `codeFile`, a folder of "" keeps the one picked) switches the mode and moves the picker to that machine and folder; **when that editor is already on screen** the file goes to it in place — `POST /api/code/{machine}/open {path, line}` → `code.Service.Open`, code-server's own CLI with `--reuse-window` over its IPC socket (`OpenScript`, tested; `file:line` carries the line; the CLI exits 0 without a listener, so its last line is read for "error") — and nothing reloads; only a first frame mounts with `payload=[["openFile","vscode-remote://<authority>/path"]]`
   (the path escaped per segment), which the workbench opens on load —
   the authority is what code-server's own page states (`Status.Authority`,
   read off `data-settings` by the probe: "remote" since 4.9x, the host
   before; the page's host when the probe found none), or the editor
   answers "Unable to resolve resource"; the frame's address is settled once per request, so
   coming back to the folder later does not open the file again; a path that is the folder itself opens no file (the rail can name it after a Read of the directory). **Follow** (the Code bar's button, pref `code.follow`): while the pane on screen in Agents runs an agent on this machine, its tail is polled at a tile's pace (`useChat`, `last=4`) and every edit it finishes — `newestEdit` in `code/follow.ts`, tested: the Edit / Write / MultiEdit / NotebookEdit with no error whose result came last (its call's `at` plus `took`, since calls made side by side finish out of order; the order made where a time is missing), named by `tool_id` — opens in the editor the same way; what was already there when Follow began is not news. The flag `-code-port`
-  changes the port on every machine at once.
+  changes the port on every machine at once. **A Windows PC has no
+  code-server** (`features/roster/system.ts`, tested: `onWindows` by the
+  roster's machine `os`, `editorOption`): the Code mode lists it in the
+  machine pick, disabled, "no code-server for Windows", and never picks it
+  (`live` leaves it out; with no other machine the page says so); the
+  folder's and the card's "Open in the editor", the files rail's code
+  button, the Changes lens's per-file one (`Review`'s `editor`) and the
+  file viewer's are absent for its panes.
 - `internal/preview/` — **previews of what the agents serve** (tested):
   `Script` is one POSIX script per machine — `ss -ltnpH` and `/proc` on
   Linux, `lsof -iTCP -sTCP:LISTEN -Fpcn` and `ps` elsewhere — printing
@@ -2278,6 +2323,12 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   a wide character or a surrogate pair before or inside a link leaves the
   underline on the link's own cells; tested) and the chat linkifier; keeps a
   `:line` suffix, drops trailing punctuation, never a path inside a URL.
+  On a Windows machine's pane (`findPaths(text, true)`; the Markdown hears
+  it through the `WindowsPaths` context of `ui/Markdown.tsx`, which
+  `PaneArea` and a wall tile set from the roster's `os`) a path may also
+  start at a drive (`C:\Users\me\Form1.cs:12`, `C:/work/x.cs`) or go by
+  backslashes (`src\App.xaml.cs`), those alternatives tried first; a POSIX
+  pane's text reads as it always did.
   A link needs a name a file would have — a dotfile (`.env`, `.gitignore`;
   the dot kept on `.mcp.json`) or a name with an extension, in any
   alphabet — so a folder (`internal/server`) or a slashed phrase
@@ -2298,6 +2349,54 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   release within 4px) as a press+release report at its cell, sent after
   xterm's mouseup so a click that opened a link is not also an app click.
   Drags never reach the app.
+- **The screen terminal** (`web/src/features/terminal/screen/`;
+  `internal/server/screen.go`): herdr has **no `herdr terminal attach` on
+  Windows**, so a pane of a machine whose roster `os` is `windows`
+  (`onWindows` in `features/roster/system.ts`) never gets the live
+  terminal: the terminal lens (`TerminalLens`'s `screen`), the split view's
+  terminal side and the floating terminal's drawer show `ScreenTerminal`
+  instead — never a WebSocket attach, never a resize of the pane (the pop-out
+  and the Wall never attached). `useLiveScreen` reads `GET /api/screen`
+  (ANSI, an ETag 304 when unchanged) every `FAST_MS` 400 ms while its field
+  has the focus, `SLOW_MS` 1.5 s while it is only on screen, nothing while
+  hidden or while a selection lies on it (`useSelectionHeld`: the rows stay
+  put while they are copied), and at once and `ECHO_MS` 150 ms after every
+  send; the rows are the Wall's `parseAnsi` / `ScreenLines`, at the font
+  that fits the pane's columns up to the text size picked and never under
+  `MIN_FONT` 8 (`screenFont` in `engine/geometry.ts`, through `useFitFont`'s
+  fit rule), drawn from the top and kept at the bottom while followed,
+  scrolling either way when the grid is larger. No cursor: `pane.read`
+  names none. `useTyping` is the keyboard: a hidden `textarea` takes what is
+  typed — characters as text, through an input method (composition) and a
+  phone's keyboard (`beforeinput` for its Backspace and Enter) too, a paste
+  as a paste — and a keydown on it or on the screen the keys herdr names
+  (`keyOf` in `strokes.ts`, tested: Enter with Shift, Alt or Ctrl, Esc,
+  Tab and Shift+Tab, Backspace, Delete, the arrows with their modifiers,
+  Home / End / PageUp / PageDown, Ctrl and a letter or digit by key code,
+  Ctrl+[ as Esc, Alt and a letter off a Mac — a Mac's Option types its
+  character; never ⌘, Ctrl+V off a Mac, Ctrl+Shift+…, the find key, nor
+  Ctrl/⌘+C over a selection, which copies); the key bar types through the
+  same path (`strokeOf` reads its sequences, `withModifier` spends its
+  one-shot Ctrl or Alt); `createSender` (`sender.ts`, tested) sends the
+  first stroke at once and coalesces what is typed while a request is out
+  (`takeBatch`: typed text then the keys after it, a paste alone, at most
+  `MAX_TEXT` 4096 characters and `MAX_KEYS` 64), never two requests in
+  flight, a refusal a toast that drops what was queued behind it. `POST
+  /api/input {machine, pane, text?, paste?, keys?}` (`handleInput`, the
+  person's only — neither a viewer link's GET routes nor an agent key's,
+  tested in `internal/auth`) is `sessions.Input.SendInput` under the pane's
+  lock, and a row of the activity per line (`sent.Lines`). The find over
+  the scrollback works as on the live terminal: `useTerminalFind` moves
+  herdr's viewport, the screen read again shows it, `markLines` marks the
+  query and the row asked for; the find closed scrolls the pane back to
+  the bottom, the screen terminal having no wheel of its own. The View
+  menu keeps the text size and the key bar alone (`useTerminalViewItems`'s
+  `screen`); a quiet line under the screen, with a `Tip`, says why it is a
+  screen and that `herdr --remote <pc>` gives a live terminal. `.screen-term`
+  counts as a terminal for the page's keys (Ctrl+K and Esc stay the pane's,
+  Alt+N / Alt+H / Alt+Z pass it by, `app/escape.ts`). Measured on a throwaway
+  herdr here: a keystroke on the screen in about 15 ms, a command's output
+  about 50 ms after Enter.
 - **The floating terminal** (`internal/scratch`, tested;
   `internal/server/scratch.go`; `web/src/features/terminal/float/`): a
   shell on a key over every mode. `scratch.Store` keeps, per machine in
@@ -3055,7 +3154,14 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   (`Restarter.Typed`, wired in app.go) add a `quiet` entry — "iPhone sent
   «yes» to api · w3:p1", the device's name from `auth.Devices.Name`, an
   agent key's name, else "an API client"; the text one line cut at 80
-  runes, keys by their names — that `feed.LastID` skips, so the bell stays
+  runes, keys by their names (a combination by its parts, "Ctrl+A",
+  "Alt+Enter") — and the screen terminal's `/api/input` one per line it
+  sends, not per keystroke (`sent.Lines`, tested: per device and pane, the
+  text typed since the last row when Enter ends it, a backspace taking a
+  character off and Ctrl+U the line, else the keys pressed before the Enter
+  — "↓ ↓ Enter", a menu answered — and Ctrl+C as a row of its own; the
+  last 512 runes of a line kept, at most 256 lines, the one typed into
+  longest ago going first) — that `feed.LastID` skips, so the bell stays
   dark and `feed.seen` does not move for it; the panel draws it in the quiet
   colour. `features/activity/Activity.tsx` is the panel behind
   the bell (store panel `activity`): by day (`group.ts`, tested), a row
@@ -4617,7 +4723,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   is called), a value at most 16 KB, the file 1 MB; tested. Routes `GET /api/prefs` (an ETag, 304 when unchanged) and
   `PUT /api/prefs` (the part, the merged whole back). The page decides
   what travels: `lib/syncKeys.ts` (tested) is the allow-list — `theme`,
-  `theme.dark`, `theme.accent`, `density`, `font.mono`, `lang` (not `text.size`:
+  `theme.dark`, `theme.light`, `theme.accent`, `density`, `font.mono`, `lang` (not `text.size`:
   a size suits a screen, like `termFont`), `radar`, `wall`, `review.split`,
   `chat.timeline`, `footprint`, `tasks.view`, `standup.period`,
   `code.follow`, every `panel.*` and every `pins:*` (a folder's pinned
@@ -5167,9 +5273,20 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   with what to put in it, since remuda adds to no file of theirs; the
   agent schedules, a project's queue and stages and a Claude Code second
   opinion ask for it — `Keys`
-  (herdr's `send_keys` grammar), `RefOK` (a branch name git gets as an
+  (herdr's `send_keys` grammar as remuda allows it, `typing.go`, tested:
+  `ctrl`, `alt` and `shift`, each once, before a named key — enter, esc,
+  tab, space, backspace, the arrows — or `ctrl` / `alt` before a letter or
+  digit; a printable key alone is text), `RefOK` (a branch name git gets as an
   argument), and `Input`: one lock per pane, `Submit` (`agent.prompt`, else
-  `send_text` + Enter; `ErrAgentBusy` while a menu is open), `SendKeys`,
+  `send_text` + Enter; `ErrAgentBusy` while a menu is open), `SendKeys`
+  (herdr 0.9.5 refuses `home`, `end`, `pageup`, `pagedown` and `delete` as
+  `invalid_key`, so those go as a terminal's bytes through `send_text`:
+  `ESC O H`, `ESC O F`, `ESC [5~`, `ESC [6~`, `ESC [3~`), `SendInput` (the
+  screen terminal's typing, a `Typed{Text, Paste, Keys}` checked by
+  `NewTyped` — some text or keys, the text `MaxTypedText` 64 KB at most,
+  any characters: typed text goes raw through `send_text`, keystroke for
+  keystroke, a paste through `send_input` with the keys after it, which
+  herdr brackets while the app asked for it; tested on a throwaway herdr),
   `SubmitToAgent` (`agent.prompt` alone: a pane whose agent left is
   `ErrNoAgent`, never typed into its shell — the schedules, the pull
   requests' hand-offs and a booked continue), `SubmitToFolder` (the
@@ -5237,30 +5354,49 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   lens is on (15 s with the socket up) — and a tap sends `shift+tab`
   through `/api/keys`, the key a phone cannot send; nothing is drawn for
   another agent or while no footer is on screen.
-- `web/src/styles.css` — one design system in **Catppuccin's colours:
-  Latte by day, Frappé, Macchiato or Mocha by night, one of the fourteen
-  named colours as the accent** (`lib/theme.ts` holds the swatches,
-  tested against the stylesheet): the palette sits on the root as
-  `--ctp-<name>` custom properties, one block per flavour picked by
-  `data-flavor` (a bare root wears Frappé; `color-scheme` follows), the
-  derived inks (`--ctp-input`, `--ctp-overlay`, `--ctp-active`,
-  `--ctp-on-accent`, the scrim and shadow inks) once for the dark
-  flavours and once for Latte, fourteen one-line `data-accent` blocks set
-  `--ctp-accent`, and every token reads `var(--ctp-…)` — never a literal
-  colour or `light-dark()` in the token block. `app/theme.ts` resolves
-  the prefs `theme` (system / dark / light), `theme.dark` (frappe /
-  macchiato / mocha) and `theme.accent` into `data-theme`, `data-flavor`
-  and `data-accent` (`startTheme` in main.tsx before the first render;
-  `useTheme` / `useFlavor` / `useAccent` / `useThemePref` /
-  `useDarkFlavorPref`, `setThemePref` / `setDarkFlavorPref` /
-  `setAccentPref`; the "Theme: …" and "Dark flavour: …" rows of the
-  palette, the Look section of Settings with the accent swatches; the
-  pop-out's document — `dressAlso` in `app/theme.ts`, tested: every later
-  change of the look reaches it too, not only the one it opened in — and
-  `<meta name="theme-color">` follow); the
-  terminal lens takes `terminalTheme(flavor)` and the wall's screens
-  `ansiPalette(flavor)`, Catppuccin's own terminal mapping, so a tile
-  shows the lens's colours. Four surface
+- `web/src/styles.css` — one design system in **twenty themes' colours,
+  ten dark and ten light, each laid out in Catppuccin's named slots, one
+  of the fourteen named colours as the accent** (`lib/theme.ts` and
+  `lib/themes/` hold the swatches, tested against the stylesheet): the
+  palette sits on the root as `--ctp-<name>` custom properties, one block
+  per theme picked by `data-flavor` (a bare root wears Frappé), each
+  ending with the theme's two inks for a coloured fill — `--ctp-ink-dark`
+  and `--ctp-ink-light`, its crust or text and its text or base, pushed
+  toward black or white only as far as the accents that wear it need to
+  read at 4.5:1 — and `--ctp-on-<accent>` naming the one each accent
+  wears; the derived inks (`--ctp-input`, `--ctp-overlay`,
+  `--ctp-active`, the scrim and shadow inks) once on `:root` for the dark
+  themes and once on `:root[data-theme="light"]` for every light one
+  (`color-scheme` follows); fourteen one-line `data-accent` blocks set
+  `--ctp-accent` and `--ctp-on-accent` (`--ctp-on-amber` is the yellow's
+  ink); every rule a light theme changes keys on `data-theme="light"`,
+  never on one theme (the zoo's creatures), and every token reads
+  `var(--ctp-…)` — never a literal colour or `light-dark()` in the token
+  block. `app/theme.ts` resolves the prefs `theme` (system / dark /
+  light), `theme.dark` (any of the ten dark, Frappé unless set),
+  `theme.light` (any of the ten light, Latte unless set) and
+  `theme.accent` into `data-theme`, `data-flavor` and `data-accent`
+  (`startTheme` in main.tsx before the first render; `useFlavor` /
+  `useAccent` / `useThemePref` / `useDarkFlavorPref` /
+  `useLightFlavorPref`, `setThemePref` / `setDarkFlavorPref` /
+  `setLightFlavorPref` / `setAccentPref`; the palette's rows
+  (`app/themeCommands.ts`, tested: "Theme: follow the system", "Theme:
+  always dark", "Theme: always light", then "Dark theme: Nord" … and
+  "Light theme: …" for each, ids `theme-…`, so a viewer has them too);
+  Settings › Look: the mode, then the dark theme and the light theme as
+  rows of cards (`features/settings/ThemePicker.tsx` over
+  `themeCards.ts`, tested: each a `btn` with `.on` for the picked one —
+  a little window in the theme's base, mantle, text and dim text with
+  three accents, `previewHues`: the person's accent, red and green — and
+  its name under it, a radio group whose arrows, Home and End move the
+  pick, `stepChoice`), then the accent swatches drawn from the theme on
+  screen; the pop-out's document — `dressAlso` in `app/theme.ts`, tested:
+  every later change of the look reaches it too, not only the one it
+  opened in — and `<meta name="theme-color">` follow); the terminal lens
+  takes `terminalTheme(flavor)` and the wall's screens, the timelapse
+  player and its GIF `ansiPalette(flavor)`, the theme's own terminal
+  colours, so a tile shows the lens's colours; the tab's badge is drawn
+  again on every change of the theme (`useBadge`). Four surface
   layers (`--bg` base → `--bg-raised` mantle → `--bg-input` → `--bg-overlay`,
   `--bg-active` / `--bg-elev` for a raised chip), hairlines from the
   surfaces (`--line`, `--line-strong`, `--line-hover`), peach as the
@@ -5488,8 +5624,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   a repaint (see attach.go), never a byte replay.
 - herdr `pane.send_keys` grammar is lowercase with `+` modifiers: `enter`,
   `esc`, `up`, `down`, `tab`, `shift+tab`, `backspace`, `ctrl+c`… (verified
-  live on 0.9.1; the server lowercases and allowlists). The REST `/api/keys`
-  path is for the chat lens only. The terminal lens key bar never uses it:
+  live on 0.9.1; the server lowercases and checks it, `sessions.Keys`; 0.9.5
+  has no word for home, end, the page keys and delete, which go as their
+  bytes). The REST `/api/keys`
+  path is for the chat lens only, `/api/input` for the screen terminal's
+  typing. The live terminal lens's key bar never uses either:
   it types raw sequences through the live terminal's own input path
   (`TermApi.input`), so ⏎ = `ESC CR` (Alt+Enter → newline in Claude Code,
   verified), arrows follow DECCKM, and Ctrl/Alt are one-shot modifiers.
