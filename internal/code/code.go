@@ -188,33 +188,20 @@ func WorkspaceJSON(folders []string) []byte {
 	return append(out, '\n')
 }
 
-// ThemeName is the Catppuccin theme of the page's flavour, as the extension names it; an unknown word is Frappé.
-func ThemeName(flavor string) string {
-	switch flavor {
-	case "latte", "light":
-		return "Catppuccin Latte"
-	case "macchiato":
-		return "Catppuccin Macchiato"
-	case "mocha":
-		return "Catppuccin Mocha"
-	}
-	return "Catppuccin Frappé"
-}
-
-// Theme dresses the machine's editor in the page's theme: Catppuccin's extension installed once from Open VSX, then
-// workbench.colorTheme in code-server's settings.json, which the editor applies as the file changes — but an editor
-// already open knows nothing of an extension installed under it, so installed says the frame must load again. A
+// Theme dresses the machine's editor in the page's theme: the theme's extension installed once from Open VSX when it has
+// one, then workbench.colorTheme in code-server's settings.json, which the editor applies as the file changes — but an
+// editor already open knows nothing of an extension installed under it, so installed says the frame must load again. A
 // machine is dressed again only when the theme differs from the one last written while remuda runs.
 func (s *Service) Theme(mc *machines.Machine, theme string) (installed bool, err error) {
-	name := ThemeName(theme)
+	editor := EditorThemeOf(theme)
+	name := editor.Name
 	s.mu.Lock()
 	worn := s.themed[mc.ID()]
 	s.mu.Unlock()
 	if worn == name {
 		return false, nil
 	}
-	read := script.PATH + `; B=$(command -v code-server 2>/dev/null || echo "$HOME/.local/opt/code-server/bin/code-server"); if ! "$B" --list-extensions 2>/dev/null | grep -qi '^catppuccin.catppuccin-vsc$'; then "$B" --install-extension catppuccin.catppuccin-vsc >/dev/null 2>&1 && echo ` + installedMark + `; fi; f="$HOME/.local/share/code-server/User/settings.json"; mkdir -p "$(dirname "$f")"; if [ -f "$f" ]; then cat "$f"; else echo '{}'; fi`
-	current, err := shell.Text(mc, read, 120*time.Second)
+	current, err := shell.Text(mc, ThemeReadScript(editor.Extension), 120*time.Second)
 	if err != nil {
 		return false, fmt.Errorf("code-server's settings on %s: %w", mc.Label(), err)
 	}
@@ -231,6 +218,17 @@ func (s *Service) Theme(mc *machines.Machine, theme string) (installed bool, err
 	s.themed[mc.ID()] = name
 	s.mu.Unlock()
 	return installed, nil
+}
+
+// ThemeReadScript installs the extension when code-server lacks it (the first line of the answer says so), then prints
+// code-server's settings.json, an empty object when there is none; an extension of "" is a theme VS Code has built in.
+func ThemeReadScript(extension string) string {
+	install := ""
+	if extension != "" {
+		bin := `B=$(command -v code-server 2>/dev/null || echo "$HOME/.local/opt/code-server/bin/code-server"); `
+		install = bin + `if ! "$B" --list-extensions 2>/dev/null | grep -qixF ` + script.Quote(extension) + `; then "$B" --install-extension ` + script.Quote(extension) + ` >/dev/null 2>&1 && echo ` + installedMark + `; fi; `
+	}
+	return script.PATH + `; ` + install + `f="$HOME/.local/share/code-server/User/settings.json"; mkdir -p "$(dirname "$f")"; if [ -f "$f" ]; then cat "$f"; else echo '{}'; fi`
 }
 
 // installedMark is the first line of the theme script's answer when it had to install the extension.

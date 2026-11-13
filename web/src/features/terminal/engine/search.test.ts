@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { FRAPPE, LATTE } from "@/lib/theme";
+import { FLAVORS } from "@/lib/theme";
 import { cellSpan, hexAlpha, occurrences, pickNear, searchDecorations } from "./search";
+
+const FRAPPE = FLAVORS.frappe;
+const LATTE = FLAVORS.latte;
 
 describe("hexAlpha", () => {
   it("appends the alpha as two hex digits", () => {

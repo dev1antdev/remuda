@@ -780,7 +780,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   work with a PR, a Codex asking, a finished one, plan limits, a folder
   icon — nothing changes on the server); four passes, 1440×900 and
   390×844 (touch), in English and Russian (`E2E_DISPLAY_PASSES` picks
-  some), each opening every screen the way a person does — the sidebar,
+  some), each in a theme other than Catppuccin's set through its pref
+  before the load and checked on the root (the desks Nord and Tokyo
+  Night, the phones Solarized Light and Rosé Pine Dawn), each opening
+  every screen the way a person does — Settings › Look's twenty theme
+  cards checked to fit the dialog and to dress the page at a tap — the sidebar,
   a folded folder, the card's, the machine's and the vitals' menus, the
   tab strip and its + menu, the View menu, the chat lens, the split
   view, the screen terminal (the notes shell played as a Windows PC's,
@@ -1183,7 +1187,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   diagram is on screen (its own chunks; the main bundle grew by about
   7 KB, 3 KB gzipped), one drawing at a time (mermaid keeps one
   configuration), `securityLevel: "strict"`, labels as SVG text
-  (`htmlLabels: false`, so the answer parses as XML), the flavour and
+  (`htmlLabels: false`, so the answer parses as XML), the theme and
   accent read off the root's `data-flavor` / `data-accent` and drawn again
   when they change; **never innerHTML**: the SVG string is parsed by
   `DOMParser` as `image/svg+xml`, scripts, `on*` handlers and
@@ -1194,8 +1198,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   new (no `unsafe-eval`, checked in headless Chrome). `ui/mermaidLook.ts`
   is the pure part, tested: `isMermaid` (a fence's first word mermaid or
   mmd), `isMermaidFile` / `isMarkdownFile` / `previewOf` / `opensDrawn`
-  for the file viewer, `lookOf`, `mermaidConfig` (Catppuccin's swatches as
-  mermaid's `base` theme variables, the accent on the shapes' edges).
+  for the file viewer, `lookOf` (`flavorOf` keeps any of the twenty
+  themes, Frappé else), `mermaidConfig` (the theme's swatches as
+  mermaid's `base` theme variables, `darkMode` by its side, the accent on
+  the shapes' edges).
   **The file viewer draws** (`features/files/FileViewer.tsx`): a Markdown
   file (`.md`, `.markdown`) and a diagram file (`.mmd`, `.mermaid`) get a
   Preview tab between File and Changes — the Markdown through `Markdown`
@@ -1274,12 +1280,31 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   monospace font: the pref keys `text.size` / `density` / `font.mono`,
   `TEXT_SCALE`, `textSizeOf` / `densityOf` / `monoOf`, `MONO_FONTS` and
   `monoStack`; `app/theme.ts` puts them on the root as `data-text`,
-  `data-density` and `--mono`), `theme.ts` (the four Catppuccin flavours as
-  `Swatches` — `FLAVORS`, the fourteen `ACCENTS` — `resolveTheme` /
-  `resolveFlavor` / `themeOf`, the pref readers `themePrefOf` /
-  `flavorPrefOf` / `accentOf`, `ansiPalette` / `terminalTheme` /
-  `pageColor` by flavour; its test reads `styles.css` so the `--ctp-*`
-  blocks never drift from the swatches),
+  `data-density` and `--mono`), `theme.ts` (**the twenty themes**, ten
+  dark and ten light, each a `Palette` in `lib/themes/` — `palette.ts`
+  the types (`Swatches`: Catppuccin's 26 named slots, crust … text and
+  the fourteen `ACCENTS`; `TerminalColours`), `dark.ts` / `light.ts` the
+  data: Catppuccin Frappé, Macchiato, Mocha, Dracula, Nord, Gruvbox Dark,
+  Tokyo Night, Rosé Pine, One Dark, Kanagawa; Catppuccin Latte,
+  Solarized Light, Gruvbox Light, Rosé Pine Dawn, Tokyo Night Day, GitHub
+  Light, One Light, Everforest Light, Ayu Light, Flexoki Light — each
+  palette's official values, its background and foreground ramp as the
+  neutrals, its own hues as the accents (a blend of two where it has
+  fewer), its ports' terminal sixteen and cursor where it has them; the
+  few colours moved for reading say so beside the swatches; a flavour
+  is a theme's id — `FLAVORS`, `FLAVOR_NAMES`, `DARK_FLAVORS` /
+  `LIGHT_FLAVORS`, `isFlavor`, `resolveTheme` / `resolveFlavor(pref,
+  dark, light, systemLight)` / `themeOf` (its side), the pref readers
+  `themePrefOf` / `darkFlavorOf` / `lightFlavorOf` (an unknown or other
+  side's id reads as Frappé / Latte, so the values from before —
+  frappe, macchiato, mocha — still read) / `accentOf`, `themeChoiceName`,
+  `ansiPalette` (the theme's own sixteen, else Catppuccin's mapping from
+  the slots; the page's text and base as ink and paper) / `terminalTheme`
+  (its own cursor, else rosewater) / `pageColor`, `contrast` (WCAG's
+  ratio); its test reads `styles.css` so the `--ctp-*` blocks never drift
+  from the swatches and holds **every theme to the bar**: text at 7:1 on
+  the base and the mantle, subtext0 at 4.5:1 and overlay1 at 3:1 on the
+  base, the ink on every accent at 4.5:1),
   `speech.ts` (the browser's own voice reading a script of parts and
   sentences — the player, the voice picked for a sentence's language,
   Safari on iOS's priming; the standup's Listen and the talking zoo, see
@@ -2104,7 +2129,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   per master. `GET /api/code/{machine}` probes `/healthz` (a good answer is
   cached 15s; `?check=1` re-probes) and reads the workbench page for
   the remote authority and code-server's version (`settingOf`, tested),
-  which the Code bar shows beside a reload button (a fresh frame for the same folder when the editor lost its connection or shows a stale state). **The editor wears the page's flavour**: `POST /api/code/{machine}/theme {theme}` (latte / frappe / macchiato / mocha) → `code.Service.Theme`, once per machine and flavour while remuda runs — Catppuccin's extension installed from Open VSX when missing, then `workbench.colorTheme` set to `code.ThemeName(flavor)` ("Catppuccin Mocha" …, tested) in code-server's `settings.json` (`WithTheme`, tested: merged as JSON, else the line replaced in a file with comments), which the editor applies as the file changes; `Code.tsx` asks when the frame is up and whenever the page's flavour changes; the installer seeds Frappé. **Its version** rides on the vitals (`code_server`, the release the `~/.local/opt/code-server` link names) and `Latest.Code` is `setup.CodeVersion`, the release the installer carries (`health.PinnedCode`, set by the app): the ⓘ says when a machine lags it and Updates offers `what = code`, `remuda code install` on the machine (`updates.Plan`, tested). `web/src/features/code/Code.tsx` is the picker (machine, then a folder from the roster's workspaces — or **All workspaces on the machine**, its first row and the default past one folder: `POST /api/code/{machine}/workspace` writes every folder herdr has a workspace in to `~/.config/code-server/remuda.code-workspace` on the machine, `code.Service.Workspace` / `WorkspaceJSON`, tested, and the frame opens `?workspace=` on it; the file is written again whenever the roster's folders change, and the editor, watching it, takes the new folders in place) and the iframe, kept mounted behind the other modes once opened. `actions.openInCode(machine, folder, path, line?)` (the files rail's code button, the Changes lens's per-file button, the file viewer's header button — the last two at a line; store field `codeFile`, a folder of "" keeps the one picked) switches the mode and moves the picker to that machine and folder; **when that editor is already on screen** the file goes to it in place — `POST /api/code/{machine}/open {path, line}` → `code.Service.Open`, code-server's own CLI with `--reuse-window` over its IPC socket (`OpenScript`, tested; `file:line` carries the line; the CLI exits 0 without a listener, so its last line is read for "error") — and nothing reloads; only a first frame mounts with `payload=[["openFile","vscode-remote://<authority>/path"]]`
+  which the Code bar shows beside a reload button (a fresh frame for the same folder when the editor lost its connection or shows a stale state). **The editor wears the page's theme**: `POST /api/code/{machine}/theme {theme}` (any of the twenty ids, or the bare dark / light a page from before sent, `code.KnownTheme`; else a 400) → `code.Service.Theme`, once per machine and theme while remuda runs — `code.EditorThemeOf(theme)` (`internal/code/themes.go`, tested, and `features/code/themes.test.ts` reads it so it names exactly the page's twenty) is the theme's Open VSX extension and its exact `workbench.colorTheme` name: Catppuccin's for its four, Dracula's ("Dracula Theme"), Nord's, jdinhlife's Gruvbox (Dark / Light Medium), enkia's Tokyo Night (and its "Tokyo Night Light" for Tokyo Night Day, which has none of its own), mvllow's Rosé Pine and Rosé Pine Dawn, One Dark Pro, metaphore's "Kanagawa Wave", GitHub's "GitHub Light Default", akamud's "Atom One Light", sainnhe's Everforest Light, teabyii's "Ayu Light Bordered"; Solarized Light is VS Code's own, Flexoki (no extension on Open VSX) wears VS Code's "Default Light Modern" and an unknown word "Default Dark Modern" — `ThemeReadScript` installs the extension when `--list-extensions` lacks it (none for a built-in), then `workbench.colorTheme` is set to its name in code-server's `settings.json` (`WithTheme`, tested: merged as JSON, else the line replaced in a file with comments), which the editor applies as the file changes; `Code.tsx` asks when the frame is up and whenever the page's theme changes; the installer seeds Frappé. **Its version** rides on the vitals (`code_server`, the release the `~/.local/opt/code-server` link names) and `Latest.Code` is `setup.CodeVersion`, the release the installer carries (`health.PinnedCode`, set by the app): the ⓘ says when a machine lags it and Updates offers `what = code`, `remuda code install` on the machine (`updates.Plan`, tested). `web/src/features/code/Code.tsx` is the picker (machine, then a folder from the roster's workspaces — or **All workspaces on the machine**, its first row and the default past one folder: `POST /api/code/{machine}/workspace` writes every folder herdr has a workspace in to `~/.config/code-server/remuda.code-workspace` on the machine, `code.Service.Workspace` / `WorkspaceJSON`, tested, and the frame opens `?workspace=` on it; the file is written again whenever the roster's folders change, and the editor, watching it, takes the new folders in place) and the iframe, kept mounted behind the other modes once opened. `actions.openInCode(machine, folder, path, line?)` (the files rail's code button, the Changes lens's per-file button, the file viewer's header button — the last two at a line; store field `codeFile`, a folder of "" keeps the one picked) switches the mode and moves the picker to that machine and folder; **when that editor is already on screen** the file goes to it in place — `POST /api/code/{machine}/open {path, line}` → `code.Service.Open`, code-server's own CLI with `--reuse-window` over its IPC socket (`OpenScript`, tested; `file:line` carries the line; the CLI exits 0 without a listener, so its last line is read for "error") — and nothing reloads; only a first frame mounts with `payload=[["openFile","vscode-remote://<authority>/path"]]`
   (the path escaped per segment), which the workbench opens on load —
   the authority is what code-server's own page states (`Status.Authority`,
   read off `data-settings` by the probe: "remote" since 4.9x, the host
@@ -4573,7 +4598,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   is called), a value at most 16 KB, the file 1 MB; tested. Routes `GET /api/prefs` (an ETag, 304 when unchanged) and
   `PUT /api/prefs` (the part, the merged whole back). The page decides
   what travels: `lib/syncKeys.ts` (tested) is the allow-list — `theme`,
-  `theme.dark`, `theme.accent`, `density`, `font.mono`, `lang` (not `text.size`:
+  `theme.dark`, `theme.light`, `theme.accent`, `density`, `font.mono`, `lang` (not `text.size`:
   a size suits a screen, like `termFont`), `radar`, `wall`, `review.split`,
   `chat.timeline`, `footprint`, `tasks.view`, `standup.period`,
   `code.follow`, every `panel.*` and every `pins:*` (a folder's pinned
@@ -5204,30 +5229,49 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   lens is on (15 s with the socket up) — and a tap sends `shift+tab`
   through `/api/keys`, the key a phone cannot send; nothing is drawn for
   another agent or while no footer is on screen.
-- `web/src/styles.css` — one design system in **Catppuccin's colours:
-  Latte by day, Frappé, Macchiato or Mocha by night, one of the fourteen
-  named colours as the accent** (`lib/theme.ts` holds the swatches,
-  tested against the stylesheet): the palette sits on the root as
-  `--ctp-<name>` custom properties, one block per flavour picked by
-  `data-flavor` (a bare root wears Frappé; `color-scheme` follows), the
-  derived inks (`--ctp-input`, `--ctp-overlay`, `--ctp-active`,
-  `--ctp-on-accent`, the scrim and shadow inks) once for the dark
-  flavours and once for Latte, fourteen one-line `data-accent` blocks set
-  `--ctp-accent`, and every token reads `var(--ctp-…)` — never a literal
-  colour or `light-dark()` in the token block. `app/theme.ts` resolves
-  the prefs `theme` (system / dark / light), `theme.dark` (frappe /
-  macchiato / mocha) and `theme.accent` into `data-theme`, `data-flavor`
-  and `data-accent` (`startTheme` in main.tsx before the first render;
-  `useTheme` / `useFlavor` / `useAccent` / `useThemePref` /
-  `useDarkFlavorPref`, `setThemePref` / `setDarkFlavorPref` /
-  `setAccentPref`; the "Theme: …" and "Dark flavour: …" rows of the
-  palette, the Look section of Settings with the accent swatches; the
-  pop-out's document — `dressAlso` in `app/theme.ts`, tested: every later
-  change of the look reaches it too, not only the one it opened in — and
-  `<meta name="theme-color">` follow); the
-  terminal lens takes `terminalTheme(flavor)` and the wall's screens
-  `ansiPalette(flavor)`, Catppuccin's own terminal mapping, so a tile
-  shows the lens's colours. Four surface
+- `web/src/styles.css` — one design system in **twenty themes' colours,
+  ten dark and ten light, each laid out in Catppuccin's named slots, one
+  of the fourteen named colours as the accent** (`lib/theme.ts` and
+  `lib/themes/` hold the swatches, tested against the stylesheet): the
+  palette sits on the root as `--ctp-<name>` custom properties, one block
+  per theme picked by `data-flavor` (a bare root wears Frappé), each
+  ending with the theme's two inks for a coloured fill — `--ctp-ink-dark`
+  and `--ctp-ink-light`, its crust or text and its text or base, pushed
+  toward black or white only as far as the accents that wear it need to
+  read at 4.5:1 — and `--ctp-on-<accent>` naming the one each accent
+  wears; the derived inks (`--ctp-input`, `--ctp-overlay`,
+  `--ctp-active`, the scrim and shadow inks) once on `:root` for the dark
+  themes and once on `:root[data-theme="light"]` for every light one
+  (`color-scheme` follows); fourteen one-line `data-accent` blocks set
+  `--ctp-accent` and `--ctp-on-accent` (`--ctp-on-amber` is the yellow's
+  ink); every rule a light theme changes keys on `data-theme="light"`,
+  never on one theme (the zoo's creatures), and every token reads
+  `var(--ctp-…)` — never a literal colour or `light-dark()` in the token
+  block. `app/theme.ts` resolves the prefs `theme` (system / dark /
+  light), `theme.dark` (any of the ten dark, Frappé unless set),
+  `theme.light` (any of the ten light, Latte unless set) and
+  `theme.accent` into `data-theme`, `data-flavor` and `data-accent`
+  (`startTheme` in main.tsx before the first render; `useFlavor` /
+  `useAccent` / `useThemePref` / `useDarkFlavorPref` /
+  `useLightFlavorPref`, `setThemePref` / `setDarkFlavorPref` /
+  `setLightFlavorPref` / `setAccentPref`; the palette's rows
+  (`app/themeCommands.ts`, tested: "Theme: follow the system", "Theme:
+  always dark", "Theme: always light", then "Dark theme: Nord" … and
+  "Light theme: …" for each, ids `theme-…`, so a viewer has them too);
+  Settings › Look: the mode, then the dark theme and the light theme as
+  rows of cards (`features/settings/ThemePicker.tsx` over
+  `themeCards.ts`, tested: each a `btn` with `.on` for the picked one —
+  a little window in the theme's base, mantle, text and dim text with
+  three accents, `previewHues`: the person's accent, red and green — and
+  its name under it, a radio group whose arrows, Home and End move the
+  pick, `stepChoice`), then the accent swatches drawn from the theme on
+  screen; the pop-out's document — `dressAlso` in `app/theme.ts`, tested:
+  every later change of the look reaches it too, not only the one it
+  opened in — and `<meta name="theme-color">` follow); the terminal lens
+  takes `terminalTheme(flavor)` and the wall's screens, the timelapse
+  player and its GIF `ansiPalette(flavor)`, the theme's own terminal
+  colours, so a tile shows the lens's colours; the tab's badge is drawn
+  again on every change of the theme (`useBadge`). Four surface
   layers (`--bg` base → `--bg-raised` mantle → `--bg-input` → `--bg-overlay`,
   `--bg-active` / `--bg-elev` for a raised chip), hairlines from the
   surfaces (`--line`, `--line-strong`, `--line-hover`), peach as the

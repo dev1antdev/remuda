@@ -33,6 +33,8 @@ describe("which fences and files are diagrams", () => {
 describe("the look a diagram wears", () => {
   it("reads the root's flavour and accent, Frappé and peach otherwise", () => {
     expect(flavorOf("mocha")).toBe("mocha");
+    expect(flavorOf("tokyo-night-day")).toBe("tokyo-night-day");
+    expect(flavorOf("sepia")).toBe("frappe");
     expect(flavorOf(undefined)).toBe("frappe");
     expect(lookOf("latte|blue")).toEqual({ flavor: "latte", accent: "blue" });
     expect(lookOf("|")).toEqual({ flavor: "frappe", accent: "peach" });
@@ -49,6 +51,8 @@ describe("the look a diagram wears", () => {
     expect(config.themeVariables.primaryTextColor).toBe(FLAVORS.latte.text);
     expect(config.themeVariables.nodeBorder).toBe(FLAVORS.latte.blue);
     expect(mermaidConfig("mocha", "peach", "Inter").themeVariables.darkMode).toBe(true);
+    expect(mermaidConfig("github-light", "peach", "Inter").themeVariables.darkMode).toBe(false);
+    expect(mermaidConfig("nord", "teal", "Inter").themeVariables.nodeBorder).toBe(FLAVORS.nord.teal);
     expect(config.themeVariables.pie1).toBe(FLAVORS.latte.pink);
   });
 });
