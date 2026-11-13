@@ -10,66 +10,71 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
-      - name: system
-        shell: pwsh
-        run: |
-          [Environment]::OSVersion
-          Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, BuildNumber, OSArchitecture | Format-List
-          whoami; whoami /groups | Select-String -Pattern 'Administrators'
-          $env:USERPROFILE; $env:APPDATA; $env:LOCALAPPDATA; $env:HOME
-          Get-Service sshd -ErrorAction SilentlyContinue | Format-List
-          Get-WindowsCapability -Online -Name 'OpenSSH*' | Format-List Name, State
-          Test-Path C:\Windows\System32\OpenSSH\sshd.exe
-          Get-ChildItem C:\Windows\System32\OpenSSH -ErrorAction SilentlyContinue
-          Get-Command bash, sh, git -ErrorAction SilentlyContinue | Format-List Name, Source
-      - name: git bash tools
-        shell: bash
-        run: |
-          set -x
-          uname -s; uname -m; uname -r; echo "HOME=$HOME"; echo "0=$0"; echo "BASH=$BASH"; echo "SHELL=${SHELL:-}"
-          echo "PATH=$PATH"
-          command -v sh bash sed awk grep find tail stat base64 sha256sum tar gzip curl git nc ps tasklist netstat powershell.exe cmd.exe cygpath df uptime nohup timeout || true
-          head -5 /proc/meminfo; cat /proc/uptime; cat /proc/loadavg || true
-          df -k "$HOME" || true; df -kP "$HOME" || true
-          stat -c '%s %Y' /etc/profile; stat --version | head -1
-          tail --version | head -1; base64 --version | head -1; tar --version | head -1; awk --version | head -1; sed --version | head -1; find --version | head -1
-          ps -W | head -5 || true
-          cygpath -w "$HOME"; cygpath -u 'C:\Users\runneradmin\x'; cygpath -m "$HOME"
-          echo "APPDATA=$APPDATA LOCALAPPDATA=$LOCALAPPDATA USERPROFILE=$USERPROFILE"
-          cmd //c ver || true
-          printf 'x\n' | sh -c 'read a; echo got $a'
-          ls -la "C:\\Users" | head -3
-          cd 'C:\Windows' && pwd
       - name: herdr install
         shell: pwsh
         run: |
           powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://herdr.dev/install.ps1 | iex"
-          Get-ChildItem "$env:LOCALAPPDATA\Programs\Herdr\bin" -ErrorAction SilentlyContinue
-          Get-ChildItem "$env:USERPROFILE\.herdr" -Recurse -Depth 4 -ErrorAction SilentlyContinue | Select-Object FullName | Format-Table -AutoSize
-          [Environment]::GetEnvironmentVariable('Path','User')
       - name: herdr facts
         shell: bash
         run: |
           set -x
-          export PATH="$LOCALAPPDATA/Programs/Herdr/bin:$PATH"
+          export PATH="$(cygpath -u "$LOCALAPPDATA")/Programs/Herdr/bin:$PATH"
           command -v herdr; herdr --version
           herdr status server || true
-          herdr status || true
           ( herdr server > "$RUNNER_TEMP/herdr-server.out" 2>&1 & )
           sleep 5
           herdr status server || true
           cat "$RUNNER_TEMP/herdr-server.out" || true
           herdr workspace list || true
-          herdr api snapshot 2>/dev/null | head -c 3000 || true
           herdr workspace create --cwd "$HOME" --label probe 2>&1 | head -c 2000 || true
-          herdr api snapshot 2>/dev/null | head -c 4000 || true
+          herdr api snapshot 2>/dev/null | head -c 6000 || true
+          echo
           herdr session list --json || true
           herdr machine list --json || true
           ls -la ~/.config/herdr || true; ls -la "$APPDATA/herdr" || true; ls -la "$LOCALAPPDATA/herdr" || true
           herdr integration list 2>&1 | head -40 || true
-          herdr --help | head -40
+          herdr --help | head -60
       - name: pipes
         shell: pwsh
         run: |
           [System.IO.Directory]::GetFiles("\\.\pipe\") | Select-String -Pattern 'herdr' -SimpleMatch
           Get-Process | Where-Object { $_.ProcessName -like '*herdr*' } | Format-Table Id, ProcessName, Path -AutoSize
+      - name: ssh with git bash as the default shell
+        shell: pwsh
+        run: |
+          New-ItemProperty -Path "HKLM:\SOFTWARE\OpenSSH" -Name DefaultShell -Value "C:\Program Files\Git\bin\bash.exe" -PropertyType String -Force | Out-Null
+          ssh-keygen -q -t ed25519 -N '""' -f "$env:RUNNER_TEMP\k" 2>&1
+          if (-not (Test-Path "$env:RUNNER_TEMP\k")) { ssh-keygen -q -t ed25519 -N "" -f "$env:RUNNER_TEMP\k" }
+          Get-Content "$env:RUNNER_TEMP\k.pub" | Set-Content -Encoding ascii C:\ProgramData\ssh\administrators_authorized_keys
+          icacls C:\ProgramData\ssh\administrators_authorized_keys /inheritance:r /grant "Administrators:F" /grant "SYSTEM:F"
+          Get-Content C:\ProgramData\ssh\sshd_config | Select-String -Pattern 'Match|AuthorizedKeys|Forward|Subsystem'
+          Restart-Service sshd
+          "Host pc`n  HostName 127.0.0.1`n  User runneradmin`n  IdentityFile $env:RUNNER_TEMP\k`n  StrictHostKeyChecking no`n  UserKnownHostsFile $env:RUNNER_TEMP\kh`n  BatchMode yes" | Set-Content -Encoding ascii "$env:RUNNER_TEMP\sshcfg"
+      - name: ssh execs
+        shell: bash
+        run: |
+          set -x
+          W() { /c/Windows/System32/OpenSSH/ssh.exe -F "$RUNNER_TEMP\\sshcfg" "$@"; }
+          W -V || true
+          W pc 'uname -s; echo HOME=$HOME; echo 0=$0; echo SHELL=$SHELL; echo MSYSTEM=$MSYSTEM; echo PATH=$PATH; command -v herdr; command -v sh' || true
+          W pc "sh -c 'printf \"[%s]\\n\" \"a b\" \$HOME'" || true
+          W pc "printf '%s\\n' \"two words\" 'it'\\''s'" || true
+          enc=$(printf '%s\n' 'printf "[%s]\n" "a b" "$HOME" '"'"'q x'"'"'; for f in /etc/prof*; do echo "$f"; done; echo "$(uname -s)"' | base64 -w0)
+          W pc "set -f;IFS=;eval \$(printf %s $enc|base64 -d)" || true
+          echo 'from stdin' | W pc 'cat; echo done' || true
+          W pc 'echo $APPDATA; echo $LOCALAPPDATA; echo $USERPROFILE; pwd; pwd -W' || true
+          W pc 'herdr --version; herdr status server' || true
+      - name: herdr server over ssh
+        shell: bash
+        run: |
+          set -x
+          W() { /c/Windows/System32/OpenSSH/ssh.exe -F "$RUNNER_TEMP\\sshcfg" "$@"; }
+          export PATH="$(cygpath -u "$LOCALAPPDATA")/Programs/Herdr/bin:$PATH"
+          herdr server stop || true
+          sleep 2
+          herdr status server || true
+          W pc 'cd "$HOME"; nohup herdr server >> "$HOME/herdr-ssh.out" 2>&1 < /dev/null & sleep 4; herdr status server' || true
+          sleep 3
+          herdr status server || true
+          cat ~/herdr-ssh.out || true
+          herdr api snapshot | head -c 1500 || true
