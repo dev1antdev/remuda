@@ -72,7 +72,9 @@ func TestFailureMessageNamesTheChecksAndCarriesTheLogs(t *testing.T) {
 		"- build, test, scan: https://github.com/o/r/actions/runs/40693613487/job/1229",
 		"- external: https://ci.example.com/build/7",
 		"The failed steps of run 40693613487, the end of their log:\n\n```\ntest\tgo test\t2026-10-29T10:00:00Z FAIL: TestX\n```",
-		"Fix what the log shows, push the fix to the branch, and say when the checks are green again.",
+		"  Read its failed steps with: gh run view 40693613487 --job 1229 --log-failed -R github.com/o/r",
+		"  Read its failed steps with: gh run view 40693613499 --job 1231 --log-failed -R github.com/o/r",
+		"Find the cause and fix it on the branch, then say what you changed.\n\n" + Guard,
 	} {
 		if !strings.Contains(msg, want) {
 			t.Fatalf("message lacks %q:\n%s", want, msg)
@@ -166,7 +168,7 @@ func TestReviewParsesBothSectionsAndTheMessageReadsLikeTheLens(t *testing.T) {
 		"1. internal/x.go:42 (alice)\n   > +\treturn\n   This leaks the lock.",
 		"2. internal/x.go:12 (carol)\n   > -\tx := 1\n   Name it.\n   Two lines.",
 		"3. internal/x.go:42 (alice, in reply)\n   Still leaks.",
-		"Work on what is asked above, push the branch, and say when it is ready for another look.",
+		"Work on what is asked above, then say what you changed and what you would reply.\n\n" + Guard,
 	} {
 		if !strings.Contains(msg, want) {
 			t.Fatalf("message lacks %q:\n%s", want, msg)
@@ -204,7 +206,7 @@ func TestTrackerAnnouncesTheStateOnTheFirstReadAndOnAMove(t *testing.T) {
 
 	clock = clock.Add(Every)
 	tr.TouchPane("box", "w1:p1")
-	waitFor(t, "the second read", func() bool { return len(host.Scripts()) == 2 })
+	waitFor(t, "the second read", func() bool { return len(views(host)) == 2 })
 	time.Sleep(20 * time.Millisecond)
 	if len(heard) != 1 {
 		t.Fatalf("an unchanged state was announced: %+v", heard)
@@ -212,7 +214,7 @@ func TestTrackerAnnouncesTheStateOnTheFirstReadAndOnAMove(t *testing.T) {
 	tr.TouchPane("box", "w1:p1")
 	tr.TouchPane("box", "w9:p9")
 	time.Sleep(20 * time.Millisecond)
-	if len(host.Scripts()) != 2 {
+	if len(views(host)) != 2 {
 		t.Fatal("a fresh read was repeated, or an unknown pane read")
 	}
 

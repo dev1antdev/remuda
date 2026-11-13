@@ -1,41 +1,56 @@
-// The Changes lens: a workspace folder's uncommitted work and the commits since the last look, the diffs in one
-// column or two with the changed words marked, walked by keys, with comments on diff lines gathered into a draft
-// that goes to the pane's agent, on its own or under a verdict.
+// The Changes lens: a workspace folder's uncommitted work in git's groups — conflicts, staged, unstaged, untracked — with
+// the files moved since the last look marked, the commits since that look and the ones not on the remote, a commit box,
+// and the branch's whole work against its base as another scope; the diffs in one column or two with the changed words
+// marked, walked by keys, with comments on diff lines gathered into a draft that goes to the pane's agent.
 
 import { useCallback, useMemo, useRef, useState } from "react";
 import { actions, app } from "@/app/store";
-import SendToAgent from "@/features/agents/SendToAgent";
 import { useAgentTargets } from "@/features/agents/useAgentTargets";
 import { fsText } from "@/features/files/api";
-import { submitPrompt } from "@/features/roster/api";
+import { useRoster } from "@/features/roster/useRoster";
 import { isTouch, usePref } from "@/lib/prefs";
 import { useQuery } from "@/lib/query";
-import { basename, errMsg, plural } from "@/lib/text";
+import { basename } from "@/lib/text";
 import { joinPath } from "@/lib/pathname";
 import { ago } from "@/lib/time";
-import { Icon, Notice, useTimedNotice } from "@/ui";
-import { fetchReview, fetchReviewDiff, markReviewed, type Review as ReviewData, type ReviewFile, type Verdict } from "./api";
-import { FileRow, type NewComment } from "./Diff";
-import { DraftBar } from "./DraftBar";
+import { Notice, useTimedNotice } from "@/ui";
+import { VENDOR_NAME } from "@/ui/brand";
+import { fetchBase, fetchReview, fetchReviewDiff, type DiffFrom, type Review as ReviewData, type ReviewFile } from "./api";
+import { BaseFiles, baseOrder } from "./BaseFiles";
+import { ChangeGroups } from "./ChangeGroups";
+import { CommitBox } from "./CommitBox";
+import { ConflictView } from "./ConflictView";
+import { FileRow, type RowLook } from "./Diff";
+import { useDraft } from "./useDraft";
+import { rowFor, rowsOf, type GroupId } from "./groups";
 import { Note } from "./Hunk";
 import { useReviewKeys } from "./keys";
-import { commentsMessage, place, verdictMessage, type DraftComment, type VerdictAsk } from "./draft";
-import { VerdictDialog } from "./VerdictDialog";
-import { subWords, type OpinionComment } from "./opinion";
+import { layoutGroups, visibleKeys } from "./layout";
 import { OpinionBlock } from "./OpinionBlock";
 import { OpinionDialog } from "./OpinionDialog";
+import { subWords, type OpinionComment } from "./opinion";
+import { OutgoingCommits } from "./OutgoingCommits";
+import { ReviewFoot } from "./ReviewFoot";
 import { ReviewHead } from "./ReviewHead";
 import { CollisionNotice } from "./CollisionNotice";
+import { SinceCommits } from "./SinceCommits";
+import { busyAgent, isSubfolder, type Scope } from "./scope";
 import type { SecretFinding } from "./secrets";
+import { useLensWrites } from "./useLensWrites";
 import { useOpinion } from "./useOpinion";
 import { useSecretCheck } from "./useSecretCheck";
 import { t } from "@/lib/i18n";
 
 export type { DraftComment } from "./draft";
 
-const NO_COMMENTS: DraftComment[] = []; // one empty list for every file without comments: a new array would redraw its hunks
 const NO_OPINION: OpinionComment[] = [];
 const NO_SECRETS: SecretFinding[] = [];
+
+const toggled = <T,>(set: ReadonlySet<T>, item: T): Set<T> => {
+  const next = new Set(set);
+  if (!next.delete(item)) next.add(item);
+  return next;
+};
 
 export default function Review({ machineId, paneId, dir, agent, onSeen, active = true, editor = true }: {
   machineId: string;
@@ -47,16 +62,17 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
   editor?: boolean; // the machine has code-server for the per-file button (a Windows PC has none)
 }) {
   const agents = useAgentTargets();
-  const currentPane = { machineId, paneId };
+  const roster = useRoster();
   const onOpenFile = (path: string, line?: number) => actions.openFile(machineId, paneId, { path, line });
-  const [draft, setDraft] = usePref<DraftComment[]>(`review.draft:${machineId}|${dir}`, []);
   const [split, setSplit] = usePref("review.split", !isTouch);
+  const [tree, setTree] = usePref("review.tree", false);
+  const [pinned, setPinned] = usePref(`review.base:${machineId}|${dir}`, "");
+  const [scope, setScope] = useState<Scope>("uncommitted");
+  const [closed, setClosed] = useState<ReadonlySet<string>>(new Set());
+  const [unfolded, setUnfolded] = useState<ReadonlySet<GroupId>>(new Set());
   const rootRef = useRef<HTMLDivElement>(null);
-  const [pickingAgent, setPickingAgent] = useState(false);
-  const [openVerdict, setOpenVerdict] = useState<Verdict | null>(null);
   const [actionError, setActionError] = useState("");
   const [openFile, setOpenFile] = useState<string | null>(null);
-  const [showUnchanged, setShowUnchanged] = useState(false);
   const [look, setLook] = useState(0); // a new look remounts the rows, which re-read their diffs
   const undone = app.use((s) => s.undone); // an undo from the page changed a folder: this one is looked at again
   const [undoneSeen, setUndoneSeen] = useState(undone);
@@ -64,139 +80,103 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
     setUndoneSeen(undone);
     setLook((count) => count + 1);
   }
-  const [marking, setMarking] = useState(false);
-  const [sending, setSending] = useState(false);
   const [notice, showNotice] = useTimedNotice(5000);
 
   const { data: review, error: fetchError } = useQuery<ReviewData>(() => fetchReview(machineId, dir), [machineId, dir, look]);
+  const { data: base, error: baseError } = useQuery(() => (scope === "base" ? fetchBase(machineId, dir, pinned) : Promise.resolve(undefined)), [scope, machineId, dir, pinned, look], { enabled: scope === "base", keep: true });
   const error = actionError || fetchError || review?.error || "";
   const lookAgain = () => setLook((count) => count + 1);
-  const loadDiff = useCallback((path: string) => fetchReviewDiff(machineId, dir, path), [machineId, dir]); // stable: every row's query keys on it
+  const loadDiff = useCallback((path: string, from: DiffFrom) => fetchReviewDiff(machineId, dir, path, from), [machineId, dir]); // stable: every row's query keys on it
   const loadSource = useCallback((path: string) => fsText(machineId, `${dir}/${path}`), [machineId, dir]); // the file itself, for the lines around a hunk
 
-  // stable, so a memoised hunk is left alone by a roster poll or a keystroke elsewhere
-  const addComment = useCallback(
-    (file: string, comment: NewComment) => setDraft((comments) => [...comments, { ...comment, file, id: comments.reduce((max, other) => Math.max(max, other.id), 0) + 1 }]),
-    [setDraft],
-  );
-  const removeComment = useCallback((id: number) => setDraft((comments) => comments.filter((comment) => comment.id !== id)), [setDraft]);
-  const draftByFile = useMemo(() => {
-    const byFile = new Map<string, DraftComment[]>();
-    for (const comment of draft) byFile.set(comment.file, [...(byFile.get(comment.file) ?? []), comment]);
-    return byFile;
-  }, [draft]);
-  const where = () => place(dir, review);
-  const listed = useMemo(() => (review?.files ?? []).map((file) => file.path), [review]);
-  const second = useOpinion({ machineId, dir, look, active, files: listed, addComment, onError: setActionError });
-  const check = useSecretCheck(machineId, dir);
-
-  const markReviewedSilently = async () => {
-    setMarking(true);
-    try {
-      await markReviewed(machineId, dir);
-      setOpenFile(null);
-      lookAgain();
-      onSeen?.();
-      showNotice(t("Reviewed — the next look starts from here."));
-    } catch (failure) {
-      setActionError(errMsg(failure));
-    } finally {
-      setMarking(false);
-    }
-  };
-  const sendComments = async (target: { machineId: string; paneId: string; agent: string; sessionName?: string }, text = commentsMessage(draft, where())) => {
-    if (sending) return;
-    setSending(true);
-    try {
-      await submitPrompt(target.machineId, target.paneId, text);
-      setDraft([]);
-      setPickingAgent(false);
-      const comments = plural(draft.length, "comment");
-      showNotice(target.sessionName ? t("Sent {comments} to {agent} in {workspace}.", { comments, agent: target.agent, workspace: target.sessionName }) : t("Sent {comments} to {agent}.", { comments, agent: target.agent }));
-    } finally {
-      setSending(false);
-    }
-  };
-  // the agent first, the baseline second: a refusal leaves everything as it was
-  const sendVerdict = async (verdict: Verdict, target: { machineId: string; paneId: string; agent: string; sessionName?: string }, note: string, ask: VerdictAsk) => {
-    await submitPrompt(target.machineId, target.paneId, verdictMessage(verdict, note, draft, where(), ask));
-    await markReviewed(machineId, dir, verdict);
-    setDraft([]);
-    setOpenVerdict(null);
-    check.clear();
-    setOpenFile(null);
-    lookAgain();
-    onSeen?.();
-    const said = verdict === "approved" ? t("Approved") : t("Rejected");
-    const told = target.sessionName ? t("{verdict} — {agent} in {workspace} has been told", { verdict: said, agent: target.agent, workspace: target.sessionName }) : t("{verdict} — {agent} has been told", { verdict: said, agent: target.agent });
-    showNotice(`${told}${ask === "pr" ? t(" and asked to open a pull request") : ask === "commit" ? t(" and asked to commit") : ""}.`);
-  };
-
-  const files = review?.files ?? [];
+  const files = useMemo(() => review?.files ?? [], [review]);
   const commits = review?.commits ?? [];
   const lastLook = review?.baseline ? new Date(review.baseline.at) : null;
-  const freshFiles = lastLook ? files.filter((file) => file.fresh) : files;
-  const unchangedFiles = lastLook ? files.filter((file) => !file.fresh) : [];
+  const groups = useMemo(() => rowsOf(files), [files]);
+  const layouts = useMemo(() => layoutGroups(groups, { tree, closed, looked: !!lastLook, unfolded }), [groups, tree, closed, lastLook, unfolded]);
+  const listed = useMemo(() => files.map((file) => file.path), [files]);
+  const draft = useDraft({ machineId, dir, agent, review: review ?? null, files: listed, onError: setActionError, onDone: showNotice });
+  const second = useOpinion({ machineId, dir, look, active, files: listed, addComment: draft.addComment, onError: setActionError });
+  const check = useSecretCheck(machineId, dir);
+  const commitCheck = useSecretCheck(machineId, dir);
+  const marks = check.scan ? check.marks : commitCheck.marks;
+  const machine = roster.machines.find((candidate) => candidate.id === machineId);
+  const busy = busyAgent(machine, review?.repo, dir, (kind) => VENDOR_NAME[kind] ?? kind) || review?.busy || "";
+  const writes = useLensWrites({ machineId, dir, onDone: () => (lookAgain(), onSeen?.()), onError: setActionError });
+  const whyNotWrite = busy ? t("{agent} is working here: wait until it rests.", { agent: busy }) : "";
+
   const keys = useReviewKeys({
     active,
     root: rootRef,
-    files: [...freshFiles, ...(showUnchanged ? unchangedFiles : [])].map((file) => file.path),
+    files: scope === "base" ? baseOrder(base, tree, closed) : visibleKeys(layouts),
     openFile,
     setOpenFile,
-    onOpen: (path, line) => onOpenFile(`${dir}/${path}`, line),
+    onOpen: (key, line) => onOpenFile(joinPath(dir, key.slice(key.indexOf(":") + 1)), line),
     toggleSplit: () => setSplit((on) => !on),
   });
-  // a finding clicked in the verdict dialog: the dialog gives way to its row, opened, in view and focused
+  // a finding clicked in a secret check: the dialog gives way to its row, opened, in view and focused
   const showFinding = (finding: SecretFinding) => {
-    setOpenVerdict(null);
-    if (unchangedFiles.some((file) => file.path === finding.file)) setShowUnchanged(true);
-    keys.reveal(finding.file, finding.line);
+    draft.closeVerdict();
+    const row = rowFor(groups, finding.file);
+    if (!row) return;
+    setScope("uncommitted");
+    if (lastLook && !row.file.fresh) setUnfolded((shown) => new Set([...shown, row.group]));
+    keys.reveal(row.key, finding.line);
   };
 
   if (review === null && !error) return <div className="empty">{t("Looking at the folder…")}</div>;
   if (review && !review.repo) return <div className="empty">{t("{folder} is not a git checkout — nothing to review.", { folder: basename(dir) })}</div>;
   const lastVerdict = review?.baseline?.verdict;
   const lastLookText = !lastLook ? t("not reviewed yet") : lastVerdict === "approved" ? t("approved {ago}", { ago: ago(lastLook) }) : lastVerdict === "changes" ? t("rejected {ago}", { ago: ago(lastLook) }) + (review?.baseline?.ready ? t(" · ready again") : "") : t("since you looked {ago}", { ago: ago(lastLook) });
-  const orphanComments = draft.filter((comment) => !files.some((file) => file.path === comment.file));
-  const hasAgentToTell = !!agent || agents.length > 0;
-  const fileRow = (file: ReviewFile) => (
-    <FileRow
-      key={`${file.path}|${look}`}
-      file={file}
-      open={openFile === file.path}
-      split={split}
-      onToggle={() => setOpenFile(openFile === file.path ? null : file.path)}
-      load={loadDiff}
-      loadSource={loadSource}
-      onLoaded={keys.loaded}
-      canComment={hasAgentToTell}
-      draft={draftByFile.get(file.path) ?? NO_COMMENTS}
-      onComment={addComment}
-      onRemove={removeComment}
-      opinion={second.perFile.get(file.path) ?? NO_OPINION}
-      reviewer={second.reviewer}
-      onAdopt={second.adopt}
-      onDismissOpinion={second.dismissOne}
-      secrets={check.marks.get(file.path) ?? NO_SECRETS}
-      onOpen={(line) => onOpenFile(joinPath(dir, file.path), line)}
-      onCode={editor ? () => actions.openInCode(machineId, dir, joinPath(dir, file.path)) : undefined}
-    />
-  );
+  const fileRow = (file: ReviewFile, rowLook: RowLook) => {
+    const key = rowLook.key ?? file.path;
+    return (
+      <FileRow
+        key={`${key}|${look}`}
+        file={file}
+        look={rowLook}
+        open={openFile === key}
+        split={split}
+        onToggle={() => setOpenFile(openFile === key ? null : key)}
+        load={loadDiff}
+        loadSource={loadSource}
+        onLoaded={keys.loaded}
+        canComment={draft.canComment}
+        draft={draft.forFile(file.path)}
+        onComment={draft.addComment}
+        onRemove={draft.removeComment}
+        opinion={second.perFile.get(file.path) ?? NO_OPINION}
+        reviewer={second.reviewer}
+        onAdopt={second.adopt}
+        onDismissOpinion={second.dismissOne}
+        secrets={marks.get(file.path) ?? NO_SECRETS}
+        onOpen={(line) => onOpenFile(joinPath(dir, file.path), line)}
+        onCode={editor ? () => actions.openInCode(machineId, dir, joinPath(dir, file.path)) : undefined}
+      />
+    );
+  };
 
   return (
     <div className="review" ref={rootRef}>
       <ReviewHead
         review={review}
+        scope={scope}
+        onScope={(next) => (setScope(next), setOpenFile(null))}
+        base={base ?? null}
+        pinned={pinned}
+        onPin={setPinned}
         lastLookText={lastLookText}
         opinionWords={subWords(second.opinion)}
         split={split}
         onSplit={() => setSplit((on) => !on)}
+        tree={tree}
+        onTree={() => setTree((on) => !on)}
         onLookAgain={lookAgain}
         opinionRunning={second.running}
         onAskOpinion={() => second.setAsking(true)}
         onUndo={() => actions.openDialog({ kind: "undo-turn", machineId, dir })}
-        marking={marking}
-        onMark={() => void markReviewedSilently()}
+        marking={draft.marking}
+        onMark={() => void draft.markSilently(() => (setOpenFile(null), lookAgain(), onSeen?.()))}
       />
       {error && (
         <Notice tone="error" onDismiss={() => setActionError("")}>
@@ -207,72 +187,55 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
       <div className="review-body">
         <CollisionNotice machineId={machineId} dir={dir} />
         {second.opinion && (
-          <OpinionBlock
-            opinion={second.opinion}
-            reviewer={second.reviewer}
-            asking={second.askingPerson}
-            apart={second.apart}
-            moved={second.moved}
-            onAdopt={second.adopt}
-            onAdoptAll={second.adoptAll}
-            onDismiss={second.dismissOne}
-            onDismissAll={second.dismissAll}
-          />
+          <OpinionBlock opinion={second.opinion} reviewer={second.reviewer} asking={second.askingPerson} apart={second.apart} moved={second.moved} onAdopt={second.adopt} onAdoptAll={second.adoptAll} onDismiss={second.dismissOne} onDismissAll={second.dismissAll} />
         )}
-        {commits.length > 0 && (
-          <div className="review-commits">
-            {commits.map((commit) => (
-              <div key={commit.sha} className={`review-commit${commit.seen ? " seen" : ""}`} title={commit.seen ? t("A commit of work you already reviewed") : undefined}>
-                <code>{commit.sha}</code>
-                <span className="review-commit-subject">{commit.subject}</span>
-                {commit.seen && <span className="review-tag">{t("reviewed")}</span>}
-                <span className="review-commit-when">{ago(commit.when * 1000)}</span>
-              </div>
-            ))}
-          </div>
+        {scope === "base" ? (
+          <BaseFiles view={base ?? null} error={baseError ?? ""} tree={tree} closed={closed} onFolder={(key) => setClosed((shut) => toggled(shut, key))} fileRow={fileRow} />
+        ) : (
+          <>
+            <SinceCommits commits={commits} total={review?.commits_total} />
+            <ChangeGroups
+              layouts={layouts}
+              tree={tree}
+              whyNot={whyNotWrite}
+              writing={writes.writing}
+              closed={closed}
+              onFolder={(key) => setClosed((shut) => toggled(shut, key))}
+              onUnfold={(group) => setUnfolded((shown) => toggled(shown, group))}
+              onBulk={writes.onBulk}
+              onAction={writes.onAction}
+              fileRow={(row, rowLook) => fileRow(row.file, rowLook)}
+              conflictBody={(row) => <ConflictView machineId={machineId} dir={dir} path={row.file.path} split={split} />}
+            />
+            {files.length === 0 && <div className="empty">{commits.length > 0 ? t("Everything here is committed.") : lastLook ? t("Nothing has changed here since you looked.") : t("Nothing is uncommitted here.")}</div>}
+            {review && (files.length > 0 || (review.outgoing?.total ?? 0) > 0) && (
+              <CommitBox
+                machineId={machineId}
+                dir={dir}
+                groups={groups}
+                busy={busy}
+                outgoing={review.outgoing}
+                subfolder={isSubfolder(review.repo, dir)}
+                look={look}
+                check={commitCheck}
+                listed={listed}
+                onJump={showFinding}
+                onCommitted={() => (setOpenFile(null), lookAgain(), onSeen?.())}
+              />
+            )}
+            {review?.outgoing && <OutgoingCommits machineId={machineId} dir={dir} outgoing={review.outgoing} fileRow={fileRow} />}
+          </>
         )}
-        {files.length === 0 && <div className="empty">{commits.length > 0 ? t("Everything here is committed.") : lastLook ? t("Nothing has changed here since you looked.") : t("Nothing is uncommitted here.")}</div>}
-        {freshFiles.map((file) => fileRow(file))}
-        {unchangedFiles.length > 0 && (
-          <div className="review-fold">
-            <button type="button" className="linkish" aria-expanded={showUnchanged} onClick={() => setShowUnchanged((shown) => !shown)}>
-              <Icon name={showUnchanged ? "chevron-down" : "chevron-right"} size={12} /> {t("{files} unchanged since you looked", { files: plural(unchangedFiles.length, "file") })}
-            </button>
-            {showUnchanged && unchangedFiles.map((file) => fileRow(file))}
-          </div>
-        )}
-        {review && orphanComments.length > 0 && (
+        {review && draft.orphans.length > 0 && (
           <div className="review-orphans">
             <Notice tone="hint">{t("Comments on files no longer in this list — still in the draft:")}</Notice>
-            {orphanComments.map((comment) => (
-              <Note key={comment.id} comment={comment} where={comment.line > 0 ? `${comment.file}:${comment.line}` : comment.file} onRemove={removeComment} />
+            {draft.orphans.map((comment) => (
+              <Note key={comment.id} comment={comment} where={comment.line > 0 ? `${comment.file}:${comment.line}` : comment.file} onRemove={draft.removeComment} />
             ))}
           </div>
         )}
       </div>
-      {review && hasAgentToTell && (files.length > 0 || commits.length > 0 || draft.length > 0) && (
-        <DraftBar
-          comments={draft.length}
-          agent={agent}
-          otherAgents={agents.length > 1}
-          sending={sending}
-          onClear={() => setDraft([])}
-          onSend={() => void sendComments({ machineId, paneId, agent }).catch((failure) => setActionError(errMsg(failure)))}
-          onPick={() => setPickingAgent(true)}
-          onVerdict={setOpenVerdict}
-        />
-      )}
-      {pickingAgent && (
-        <SendToAgent
-          title={t("Send the review to")}
-          text={commentsMessage(draft, where())}
-          agents={agents}
-          currentPane={currentPane}
-          rememberKey={`review:${machineId}|${dir}`}
-          onClose={() => setPickingAgent(false)}
-          onSend={(target, text) => sendComments(target, text)}
-        />
-      )}
+      <ReviewFoot draft={draft} review={review ?? null} agent={agent} agents={agents} machineId={machineId} paneId={paneId} dir={dir} check={check} listed={listed} onJump={showFinding} onError={setActionError} onSent={() => (check.clear(), setOpenFile(null), lookAgain(), onSeen?.())} />
       {second.asking && (
         <OpinionDialog
           machineId={machineId}
@@ -286,20 +249,6 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
             if (asked.agent_error) setActionError(t("{agent} did not start: {error}", { agent: label, error: asked.agent_error }));
             else showNotice(t("{agent} is reviewing in a new tab; its comments appear here when it answers.", { agent: label }));
           }}
-        />
-      )}
-      {openVerdict && (
-        <VerdictDialog
-          verdict={openVerdict}
-          paneAgent={agent}
-          agents={agents}
-          currentPane={currentPane}
-          comments={draft.length}
-          check={check}
-          listed={listed}
-          onJump={showFinding}
-          onClose={() => setOpenVerdict(null)}
-          onSend={(target, note, ask) => sendVerdict(openVerdict, target, note, ask)}
         />
       )}
     </div>

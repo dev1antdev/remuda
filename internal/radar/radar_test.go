@@ -184,3 +184,31 @@ func TestRestartKeepsTicksAndRaisesNone(t *testing.T) {
 		t.Fatalf("p3 new finish: %s, want done", d.State)
 	}
 }
+
+// A finish looked at through remuda tells its ear once, as the tick comes down, and stays looked at until the agent
+// works again; herdr's own focus brings the tick down without counting as a look here.
+func TestAFinishLookedAtThroughRemudaIsTold(t *testing.T) {
+	tr := New(t.TempDir(), nil)
+	var told []string
+	tr.OnSeen = func(machineID, paneID string) { told = append(told, machineID+"|"+paneID) }
+	now := time.Now()
+	tr.Observe("m", snap(herdr.StatusWorking, false), now)
+	tr.Seen("m", "p1")
+	if len(told) != 0 || tr.Looked("m", "p1") {
+		t.Fatalf("a look while it works: told %v, looked %v", told, tr.Looked("m", "p1"))
+	}
+	tr.Observe("m", snap(herdr.StatusDone, false), now.Add(5*time.Second))
+	tr.Seen("m", "p1")
+	tr.Seen("m", "p1")
+	if len(told) != 1 || told[0] != "m|p1" || !tr.Looked("m", "p1") {
+		t.Fatalf("told %v, looked %v; want one word and looked", told, tr.Looked("m", "p1"))
+	}
+	tr.Observe("m", snap(herdr.StatusWorking, false), now.Add(10*time.Second))
+	if tr.Looked("m", "p1") {
+		t.Fatal("still looked at once the agent works again")
+	}
+	tr.Observe("m", snap(herdr.StatusDone, true), now.Add(15*time.Second))
+	if tr.Looked("m", "p1") || len(told) != 1 {
+		t.Fatalf("herdr's own focus: looked %v, told %v", tr.Looked("m", "p1"), told)
+	}
+}

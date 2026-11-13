@@ -75,15 +75,34 @@ func (c *Client) PaneClose(paneID string) error {
 // PaneAtPrompt says whether the pane's shell is at its prompt: the shell's own process group holds the terminal, so
 // nothing the person started runs in the foreground. A pane herdr cannot say that of is not at its prompt.
 func (c *Client) PaneAtPrompt(paneID string) (bool, error) {
-	var out struct {
-		Info struct {
-			ShellPID   *int `json:"shell_pid"`
-			Foreground *int `json:"foreground_process_group_id"`
-		} `json:"process_info"`
-	}
-	if err := c.Call("pane.process_info", map[string]any{"pane_id": paneID}, &out); err != nil {
+	info, err := c.processInfo(paneID)
+	if err != nil {
 		return false, err
 	}
-	shell, foreground := out.Info.ShellPID, out.Info.Foreground
+	shell, foreground := info.ShellPID, info.Foreground
 	return shell != nil && foreground != nil && *shell == *foreground, nil
+}
+
+// PaneShellPID is the pid of the shell the pane's terminal runs — the root of every process started in the pane — 0
+// when herdr names none.
+func (c *Client) PaneShellPID(paneID string) (int, error) {
+	info, err := c.processInfo(paneID)
+	if err != nil || info.ShellPID == nil {
+		return 0, err
+	}
+	return *info.ShellPID, nil
+}
+
+// processInfo is herdr's pane.process_info: the pane's shell and the process group holding its terminal
+type processInfo struct {
+	ShellPID   *int `json:"shell_pid"`
+	Foreground *int `json:"foreground_process_group_id"`
+}
+
+func (c *Client) processInfo(paneID string) (processInfo, error) {
+	var out struct {
+		Info processInfo `json:"process_info"`
+	}
+	err := c.Call("pane.process_info", map[string]any{"pane_id": paneID}, &out)
+	return out.Info, err
 }

@@ -8,7 +8,6 @@ import { hiddenWords } from "@/features/roster/sharing";
 import { usePref } from "@/lib/prefs";
 import { newer } from "@/lib/version";
 import { episodeKey, remember, stoppedWords } from "@/features/roster/stopped";
-import { resumeStopped } from "@/features/updates/recover";
 import { reopen } from "@/features/reopen/offer";
 import { previewServed } from "@/features/triggers/offer";
 import { offersToShow, offerWords, rememberOffer } from "@/features/triggers/triggers";
@@ -173,10 +172,10 @@ export function useToasts(): ToastItem[] {
       ),
       onDismiss: () => setReleaseSeen(release),
     });
-  // the chats a reboot stopped: one toast per machine and episode, the same Resume as the ⓘ's
+  // the chats a reboot stopped: one toast per machine and episode, its button the same "Resume after restart" as the ⓘ's; none while they are being resumed
   for (const m of machines) {
     const stopped = m.stopped ?? [];
-    if (!stopped.length) continue;
+    if (!stopped.length || m.resuming) continue;
     const key = episodeKey(m.id, stopped);
     if (recoverSeen.includes(key)) continue;
     toasts.push({
@@ -189,10 +188,10 @@ export function useToasts(): ToastItem[] {
           className="btn sm primary"
           onClick={() => {
             setRecoverSeen(remember(recoverSeen, key));
-            void resumeStopped(m.id, stopped.length);
+            actions.openDialog({ kind: "resume-after-restart", machineId: m.id });
           }}
         >
-          {t("Resume")}
+          {t("Resume…")}
         </button>
       ),
       onDismiss: () => setRecoverSeen(remember(recoverSeen, key)),

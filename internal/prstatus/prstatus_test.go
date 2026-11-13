@@ -64,9 +64,26 @@ func waitFor(t *testing.T, what string, ok func() bool) {
 	t.Fatalf("waited in vain for %s", what)
 }
 
+// views is the full reads among the scripts a fake ran, its probes left out.
+func views(host *shell.Fake) []string {
+	var out []string
+	for _, s := range host.Scripts() {
+		if !strings.Contains(s, "gh api -i") {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
 func TestTrackerReadsOnceAndAgainOnlyWhenDue(t *testing.T) {
 	var reads atomic.Int32
-	host := &shell.Fake{Name: "box", Answer: func(string) (string, error) { reads.Add(1); return mixed, nil }}
+	host := &shell.Fake{Name: "box", Answer: func(s string) (string, error) {
+		if strings.Contains(s, "gh api -i") {
+			return "", nil
+		}
+		reads.Add(1)
+		return mixed, nil
+	}}
 	clock := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
 	tr := New(func(id string) (shell.Shell, bool) { return host, id == "box" })
 	tr.now = func() time.Time { return clock }
@@ -78,7 +95,7 @@ func TestTrackerReadsOnceAndAgainOnlyWhenDue(t *testing.T) {
 	if status, _ := tr.Status("box", "w1:p1"); status.Checks.Fail != 1 || status.Review != "APPROVED" {
 		t.Fatalf("status = %+v", status)
 	}
-	if got := host.Scripts(); len(got) != 1 || !strings.Contains(got[0], "'https://github.com/o/r/pull/7'") {
+	if got := views(host); len(got) != 1 || !strings.Contains(got[0], "'https://github.com/o/r/pull/7'") {
 		t.Fatalf("scripts = %q", got)
 	}
 
@@ -115,7 +132,7 @@ func TestTrackerKeepsNoStatusWhenGhCannot(t *testing.T) {
 	tr := New(func(string) (shell.Shell, bool) { return host, true })
 	ref := events.PaneRef{Machine: "box", Pane: "w1:p1"}
 	tr.OnNamed(events.PullRequestNamed{Pane: ref, URL: "https://github.com/o/r/pull/7", Label: "PR #7"})
-	waitFor(t, "the read", func() bool { return len(host.Scripts()) == 1 })
+	waitFor(t, "the read", func() bool { return len(views(host)) == 1 })
 	time.Sleep(20 * time.Millisecond)
 	if _, ok := tr.Status("box", "w1:p1"); ok {
 		t.Fatal("a failed read left a status")

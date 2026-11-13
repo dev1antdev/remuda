@@ -1,4 +1,5 @@
-// The "make something" dialogs: a workspace, a tab, a worktree, a rename, a machine added or renamed.
+// The "make something" dialogs: a workspace, a tab, a rename, a machine added or renamed — and the pieces the New
+// worktree dialog (worktree/) starts its agent with.
 
 import { useState } from "react";
 import { fetchRecipes, type Recipe } from "@/features/recipes/api";
@@ -20,13 +21,13 @@ import { t } from "@/lib/i18n";
 
 const ADJ = ["clear", "quiet", "amber", "brisk", "calm", "early", "fresh", "keen", "mild", "swift"];
 const NOUN = ["forest", "river", "harbor", "meadow", "summit", "valley", "ridge", "grove", "lake", "field"];
-function suggestBranch(): string {
+export function suggestBranch(): string {
   const pick = (a: string[]) => a[Math.floor(Math.random() * a.length)]!;
   return `worktree/${pick(ADJ)}-${pick(NOUN)}-${1000 + Math.floor(Math.random() * 9000)}`;
 }
 
 // defaultAgent is the one a "make something" dialog offers first: claude when herdr knows it, else the first listed
-function defaultAgent(agents: AgentKind[], want: string): string {
+export function defaultAgent(agents: AgentKind[], want: string): string {
   return agents.some((a) => a.id === want) ? want : (agents[0]?.id ?? "shell");
 }
 
@@ -48,7 +49,7 @@ function AgentSelect({ agents, value, onChange }: { agents: AgentKind[]; value: 
 
 // useStart is the agent a dialog starts and the person's choices for it: the model last used for the kind comes back
 // from this device's prefs, a pick of another kind brings that kind's; what the create route takes comes out of options()
-function useStart(initial: string, prompt = "") {
+export function useStart(initial: string, prompt = "") {
   const [agent, setAgent] = useState(initial);
   const [draft, setDraft] = useState<Draft>(() => ({ ...EMPTY_DRAFT, prompt, ...choiceFor(initial, readPref(lastModelKey(initial), "")) }));
   const pickAgent = (kind: string) => {
@@ -70,9 +71,9 @@ function useStart(initial: string, prompt = "") {
 }
 
 // StartOptionsFields is the recipe pick and the folded "Options" under the agent — the model, extra arguments, a first
-// prompt, and at the fold's end the ways to save them as a recipe and to manage the recipes; a shell keeps the pick alone.
-// A model or mode being retired is said above the fold, folded or not.
-function StartOptionsFields({ kind, draft, agents, machine = "", onChange, onRecipe }: { kind: string; draft: Draft; agents: AgentKind[]; machine?: string; onChange: (d: Draft) => void; onRecipe: (r: Recipe) => void }) {
+// prompt (unless the dialog shows its own: prompt false), and at the fold's end the ways to save them as a recipe and to
+// manage the recipes; a shell keeps the pick alone. A model or mode being retired is said above the fold, folded or not.
+export function StartOptionsFields({ kind, draft, agents, machine = "", onChange, onRecipe, prompt = true }: { kind: string; draft: Draft; agents: AgentKind[]; machine?: string; onChange: (d: Draft) => void; onRecipe: (r: Recipe) => void; prompt?: boolean }) {
   const [open, setOpen] = useState(() => draft.prompt !== ""); // a first prompt given to the dialog is shown, not folded away
   const [picked, setPicked] = useState("");
   const [managing, setManaging] = useState<{ initial?: Recipe } | null>(null);
@@ -129,10 +130,12 @@ function StartOptionsFields({ kind, draft, agents, machine = "", onChange, onRec
             {t("Extra arguments")}
             <input value={draft.args} placeholder={t("--permission-mode plan")} spellCheck={false} onChange={(e) => set({ args: e.target.value })} />
           </label>
-          <label>
-            {t("First prompt")} <small>{t("sent once the agent is up")}</small>
-            <textarea value={draft.prompt} rows={3} placeholder={t("What the agent should start on")} onChange={(e) => set({ prompt: e.target.value })} />
-          </label>
+          {prompt && (
+            <label>
+              {t("First prompt")} <small>{t("sent once the agent is up")}</small>
+              <textarea value={draft.prompt} rows={3} placeholder={t("What the agent should start on")} onChange={(e) => set({ prompt: e.target.value })} />
+            </label>
+          )}
           <div className="start-options-recipes">
             <button type="button" className="linkish" onClick={() => setManaging({ initial: recipeOf("", kind, draft) })}>
               <Icon name="sparkles" size={12} /> {t("Save as recipe…")}
@@ -242,54 +245,6 @@ export function NewTabDialog({ session, machine, agents, onCreate, onClose }: {
       <label>
         {t("Name (optional)")}
         <input autoFocus value={name} placeholder="tests" onChange={(e) => setName(e.target.value)} />
-      </label>
-      <AgentSelect agents={agents} value={agent} onChange={pickAgent} />
-      <StartOptionsFields kind={agent} draft={draft} agents={agents} machine={machine} onChange={setDraft} onRecipe={applyRecipe} />
-    </FormDialog>
-  );
-}
-
-export function NewWorktreeDialog({ session, machine, agents, issue, title = "", prompt = "", onCreate, onClose }: {
-  session: Session;
-  machine: string; // the repository's machine, where the agent starts
-  agents: AgentKind[];
-  issue?: number; // a GitHub issue the worktree is for (the issues panel's Start): its branch, its name and the agent's first prompt
-  repo?: string;
-  title?: string;
-  prompt?: string;
-  onCreate: (branch: string, base: string, name: string, agent: string, extras: StartExtras) => Promise<void>;
-  onClose: () => void;
-}) {
-  const [branch, setBranch] = useState(() => (issue ? issueBranch(issue) : suggestBranch()));
-  const [base, setBase] = useState("");
-  const [name, setName] = useState(() => (issue ? `#${issue} ${title}`.trim().slice(0, 60) : ""));
-  const { agent, pickAgent, draft, setDraft, options, applyRecipe } = useStart(defaultAgent(agents, "claude"), prompt);
-  const submit = useSubmit(async () => {
-    if (!branch.trim()) throw new Error(t("Branch name is required"));
-    await onCreate(branch.trim(), base.trim(), name.trim(), agent, options());
-  });
-  const { redact } = useSharing(); // under the screen-sharing mode the repository by its neutral name
-  const repo = redact(session.worktree?.repo_name ?? session.name);
-  return (
-    <FormDialog
-      title={t("New workspace in {repo}", { repo })}
-      icon="git-branch"
-      hint={t("A worktree of its own: a folder with its own branch beside {repo}, so the agents of different workspaces never touch each other's files. Closing the workspace removes it again once nothing in it is uncommitted.", { repo })}
-      onClose={onClose}
-      submit={submit}
-      submitLabel={t("Create workspace")}
-    >
-      <label>
-        {t("Branch")}
-        <input autoFocus value={branch} onChange={(e) => setBranch(e.target.value)} />
-      </label>
-      <label>
-        {t("Base (optional — a branch, tag or commit; the current HEAD by default)")}
-        <input value={base} placeholder="main" onChange={(e) => setBase(e.target.value)} />
-      </label>
-      <label>
-        {t("Workspace name (optional)")}
-        <input value={name} placeholder={t("defaults to the branch")} onChange={(e) => setName(e.target.value)} />
       </label>
       <AgentSelect agents={agents} value={agent} onChange={pickAgent} />
       <StartOptionsFields kind={agent} draft={draft} agents={agents} machine={machine} onChange={setDraft} onRecipe={applyRecipe} />

@@ -24,7 +24,7 @@ func (t *Turn) spend(line []byte, ts string) {
 	t.Responses = append(t.Responses, r)
 }
 
-// settleSpending fills Took and Tokens of every assistant turn once the file is read.
+// settleSpending fills Took, Tokens and Output of every assistant turn once the file is read.
 func settleSpending(turns []Turn) {
 	for i := range turns {
 		t := &turns[i]
@@ -33,6 +33,7 @@ func settleSpending(turns []Turn) {
 		}
 		for _, r := range t.Responses {
 			t.Tokens += r.Input + r.Output + r.CacheRead + r.CacheWrite5m + r.CacheWrite1h
+			t.Output += r.Output
 		}
 		if i == 0 || turns[i-1].Role != "user" {
 			continue

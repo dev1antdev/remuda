@@ -8,7 +8,7 @@ import { basename } from "@/lib/text";
 import type { Machine, Session } from "./api";
 import { useRoster } from "./useRoster";
 import { DEFAULT_RADAR, type RadarPrefs } from "./radar";
-import { entries, folderOf } from "./workspaces";
+import { entries, entryItems, folderOf } from "./workspaces";
 import {
   DEFAULT_SHARING,
   SHARING_KEY,
@@ -64,7 +64,7 @@ export function useSharing(): Sharing {
     const folderKeys: string[] = [];
     for (const m of machines)
       for (const entry of entries(m, radar))
-        for (const item of entry.kind === "folder" ? entry.folder.items : [entry.item]) {
+        for (const item of entryItems(entry)) {
           const folder = folderOf(item.session);
           if (folder && hidesFolder(pref, m.id, folder)) folderKeys.push(folderKey(m.id, folder));
         }

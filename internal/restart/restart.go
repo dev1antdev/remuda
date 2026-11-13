@@ -161,9 +161,10 @@ type Restarter struct {
 	// a resume here would leave out, so no restart touches it; it starts again, on them, from its own place.
 	Skip func(machineID, workspaceID string) bool
 
-	mu      sync.Mutex
-	pending map[string]*booking  // machine|pane
-	last    map[string]time.Time // machine|pane → when it was last restarted
+	mu         sync.Mutex
+	pending    map[string]*booking  // machine|pane
+	last       map[string]time.Time // machine|pane → when it was last restarted
+	recovering map[string]bool      // machines a recovery of the chats a reboot stopped runs on now
 }
 
 // own says whether the pane is in a workspace remuda keeps for itself, which no restart touches.
@@ -365,26 +366,18 @@ func (r *Restarter) swap(key string, client *herdr.Client, p herdr.PaneInfo, a a
 		}
 	}
 	say(fmt.Sprintf("· %s (%s): %s %s", title, paneID, a.Title, a.exit))
-	if err := client.AgentPrompt(paneID, a.exit); err != nil {
-		return fmt.Errorf("%s: %s: %v", title, a.exit, err)
-	}
-	r.typed(key, paneID, a.exit)
-	state := r.waitShell(client, paneID, a.Kind, 12*time.Second)
-	if state == stillThere {
-		say("  still there — Ctrl-C twice")
-		if err := client.PaneSendKeys(paneID, []string{"ctrl+c", "ctrl+c"}); err != nil {
-			return fmt.Errorf("%s: Ctrl-C: %v", title, err)
-		}
-		state = r.waitShell(client, paneID, a.Kind, 8*time.Second)
+	state, err := Leave(client, paneID, a.Kind, func(text string) { r.typed(key, paneID, text) }, say)
+	if err != nil {
+		return fmt.Errorf("%s: %v", title, err)
 	}
 	switch state {
-	case paneGone:
+	case LeftGone:
 		return fmt.Errorf("%s: the pane closed with the agent (no shell under it); open a new one and run `%s`", title, Resume(a.Kind, session))
-	case unseen:
+	case LeftUnseen:
 		return fmt.Errorf("%s: could not see the pane after %s — left as it is", title, a.exit)
-	case somethingElse:
+	case LeftOther:
 		return fmt.Errorf("%s: something else runs in the pane now — left as it is", title)
-	case stillThere:
+	case LeftStill:
 		return fmt.Errorf("%s: %s did not leave — left as it is", title, a.Title)
 	}
 	time.Sleep(700 * time.Millisecond) // the prompt settles
@@ -395,42 +388,6 @@ func (r *Restarter) swap(key string, client *herdr.Client, p herdr.PaneInfo, a a
 	}
 	say(fmt.Sprintf("  ✓ %s is back, session %s resumed", a.Title, short(session)))
 	return nil
-}
-
-type paneState int
-
-const (
-	shellBack paneState = iota
-	paneGone
-	stillThere
-	somethingElse
-	unseen // no snapshot came back at all: nothing is known
-)
-
-// waitShell polls until the pane has no agent, is gone or runs something else; stillThere after the timeout.
-func (r *Restarter) waitShell(client *herdr.Client, paneID, kind string, timeout time.Duration) paneState {
-	deadline := time.Now().Add(timeout)
-	seen := false
-	for time.Now().Before(deadline) {
-		time.Sleep(time.Second)
-		p, found, err := look(client, paneID)
-		if err != nil {
-			continue
-		}
-		seen = true
-		switch {
-		case !found:
-			return paneGone
-		case p.Agent == "":
-			return shellBack
-		case p.Agent != kind:
-			return somethingElse
-		}
-	}
-	if !seen {
-		return unseen
-	}
-	return stillThere
 }
 
 func pane(client *herdr.Client, paneID string) (herdr.PaneInfo, bool) {

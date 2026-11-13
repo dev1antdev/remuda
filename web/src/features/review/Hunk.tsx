@@ -211,7 +211,7 @@ function CommentBox({ row, onAdd, onClose }: { row: DiffRow; onAdd: (text: strin
 
 // Source is a row's text, the +/-/space marker kept in the one-column view, the words that changed against its partner
 // marked, the code coloured in the file's language when there are tokens for it (the mark cuts the tokens, so both hold)
-function Source({ row, partner, marker, tokens }: { row: DiffRow; partner: DiffRow | null; marker: boolean; tokens: Token[] | undefined }) {
+export function Source({ row, partner, marker, tokens }:{ row: DiffRow; partner: DiffRow | null; marker: boolean; tokens: Token[] | undefined }) {
   const text = row.text.slice(1);
   const lead = marker ? row.text.slice(0, 1) : "";
   const other = partner?.text.slice(1);

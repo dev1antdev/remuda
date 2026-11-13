@@ -71,11 +71,19 @@ func (req *createReq) start() (sessions.Start, error) {
 
 // create is the one path for every "make a container, start an agent in it" request.
 // The agent kind is checked before any RPC: an unknown one must not leave an orphaned container.
-func (s *Server) create(w http.ResponseWriter, r *http.Request, build func(*machines.Machine, *herdr.Client, *createReq) (id string, pane *herdr.PaneInfo, extra map[string]any, err error)) {
+func (s *Server) create(w http.ResponseWriter, r *http.Request, build builder) {
 	var req createReq
 	if !decode(w, r, &req) {
 		return
 	}
+	s.createWith(w, r, &req, build)
+}
+
+// builder makes the container an agent starts in: its id, its pane and what the answer says of it besides.
+type builder func(*machines.Machine, *herdr.Client, *createReq) (id string, pane *herdr.PaneInfo, extra map[string]any, err error)
+
+// createWith is create for a request already read.
+func (s *Server) createWith(w http.ResponseWriter, r *http.Request, req *createReq, build builder) {
 	if !sessions.KnownAgent(req.Agent) {
 		httpErr(w, 400, fmt.Errorf("unknown agent %q", req.Agent))
 		return
@@ -89,7 +97,7 @@ func (s *Server) create(w http.ResponseWriter, r *http.Request, build func(*mach
 	if !ok {
 		return
 	}
-	id, pane, extra, err := build(mc, client, &req)
+	id, pane, extra, err := build(mc, client, req)
 	if err != nil {
 		rpcErr(w, err)
 		return
@@ -106,7 +114,7 @@ func (s *Server) create(w http.ResponseWriter, r *http.Request, build func(*mach
 				resp["agent_error"] = err.Error() + " (the first prompt was not sent)"
 			}
 		} else if prompt != "" {
-			go s.firstPrompt(client, events.PaneRef{Machine: mc.ID(), Pane: pane.PaneID}, prompt, firstPromptPlace(&req, extra))
+			go s.firstPrompt(client, events.PaneRef{Machine: mc.ID(), Pane: pane.PaneID}, prompt, firstPromptPlace(req, extra))
 		}
 	}
 	s.Watch.Refresh(mc)
@@ -166,28 +174,28 @@ func (s *Server) handleNewTab(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *Server) handleNewWorktree(w http.ResponseWriter, r *http.Request) {
-	s.create(w, r, func(mc *machines.Machine, c *herdr.Client, req *createReq) (string, *herdr.PaneInfo, map[string]any, error) {
-		branch, base := strings.TrimSpace(req.Branch), strings.TrimSpace(req.Base)
-		if req.Workspace == "" || branch == "" {
-			return "", nil, nil, &herdr.Error{Code: "invalid_request", Message: "workspace and branch required"}
-		}
-		if !sessions.RefOK(branch) || (base != "" && !sessions.RefOK(base)) {
-			return "", nil, nil, &herdr.Error{Code: "invalid_request", Message: "branch names: no leading dash, no spaces, no .."}
-		}
-		res, err := c.WorktreeCreate(req.Workspace, branch, base, req.Name)
-		if err != nil {
-			return "", nil, nil, err
-		}
-		extra := map[string]any{"path": res.Worktree.Path, "branch": res.Worktree.Branch}
-		// before the agent starts, so it finds the .env and local configs the repository lists in .worktreeinclude
-		if included, err := worktrees.Include(mc, res.Worktree.Path); err != nil {
-			extra["include_error"] = err.Error()
-		} else if included.Listed {
-			extra["included"] = included
-		}
-		return res.Workspace.WorkspaceID, &res.RootPane, extra, nil
-	})
+// plainWorktree is a worktree on a branch and base as given, herdr's worktree.create alone: what a caller that picked
+// nothing in the New worktree dialog asks for (the API, the e2e).
+func plainWorktree(mc *machines.Machine, c *herdr.Client, req *createReq) (string, *herdr.PaneInfo, map[string]any, error) {
+	branch, base := strings.TrimSpace(req.Branch), strings.TrimSpace(req.Base)
+	if req.Workspace == "" || branch == "" {
+		return "", nil, nil, &herdr.Error{Code: "invalid_request", Message: "workspace and branch required"}
+	}
+	if !sessions.RefOK(branch) || (base != "" && !sessions.RefOK(base)) {
+		return "", nil, nil, &herdr.Error{Code: "invalid_request", Message: "branch names: no leading dash, no spaces, no .."}
+	}
+	res, err := c.WorktreeCreate(req.Workspace, branch, base, req.Name)
+	if err != nil {
+		return "", nil, nil, err
+	}
+	extra := map[string]any{"path": res.Worktree.Path, "branch": res.Worktree.Branch}
+	// before the agent starts, so it finds the .env and local configs the repository lists in .worktreeinclude
+	if included, err := worktrees.Include(mc, res.Worktree.Path); err != nil {
+		extra["include_error"] = err.Error()
+	} else if included.Listed {
+		extra["included"] = included
+	}
+	return res.Workspace.WorkspaceID, &res.RootPane, extra, nil
 }
 
 // handleWorkspaceClose is DELETE /api/sessions/{id}: the workspace closed and, when it stood on a worktree herdr or

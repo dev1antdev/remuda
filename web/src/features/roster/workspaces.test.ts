@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Machine, Pane, Session, Tab } from "./api";
 import { DEFAULT_RADAR } from "./radar";
-import { agentWords, branchShown, entries, folderCounts, itemTitle, limited, itemWords, leadOf, repositoryOf, representative, shortAge, since, type WorkspaceItem } from "./workspaces";
+import { agentWords, branchShown, cardWords, entries, entryItems, folderCounts, foldKey, itemTitle, limited, itemWords, leadOf, primaryOf, repositoryOf, representative, shortAge, since, type WorkspaceItem } from "./workspaces";
 
 const now = 1_000_000_000_000;
 const ago = (minutes: number) => now - minutes * 60_000;
@@ -14,7 +14,7 @@ const machine = (sessions: Session[]): Machine => ({ id: "gog", label: "GOG", st
 const repo = (name: string, linked: boolean) => ({ repo_key: `/p/${name}/.git`, repo_name: name, linked, checkout_path: `/p/${name}` });
 
 describe("entries", () => {
-  const fold = (list: ReturnType<typeof entries>) => list.map((e) => (e.kind === "folder" ? `${e.folder.name}: ${e.folder.items.map((i) => i.session.name).join(", ")}` : e.item.session.name));
+  const fold = (list: ReturnType<typeof entries>) => list.map((e) => (e.kind === "folder" ? `${e.folder.name}: ${e.folder.items.map((i) => i.session.name).join(", ")}` : e.kind === "section" ? `${e.section.title}: ${e.section.items.map((i) => i.session.name).join(", ")}` : e.item.session.name));
 
   it("makes every repository a folder with its workspaces, the main checkout first, the liveliest folder first", () => {
     const main = session("user-profiles", [tab([pane({ radar: { state: "idle", last_active: ago(60) } })])], { folder: "/p/user-profiles", dir: "/p/user-profiles", worktree: repo("user-profiles", false), branch: "main" });
@@ -51,6 +51,49 @@ describe("entries", () => {
     const tree = session("small-improvements", [tab([pane({ radar: { state: "working" } })])], { folder: "/p/user-profiles", worktree: repo("user-profiles", true) });
     const games = session("games-db", [tab([pane({ radar: { state: "done", last_active: ago(5) } })])]);
     expect(fold(entries(machine([main, tree, games]), { ...DEFAULT_RADAR, order: "recent" }))).toEqual(["small-improvements", "games-db", "user-profiles"]);
+  });
+  it("gathers the workspaces by priority: the ones that need you, then the finished, the working, the idle", () => {
+    const asking = session("api", [tab([pane({ radar: { state: "working", since: ago(2) } }), pane({ radar: { state: "blocked", since: ago(1) } })])]);
+    const stuck = session("db", [tab([pane({ radar: { state: "working", since: ago(40), alert: "stuck 25 min" } })])]);
+    const done = session("web", [tab([pane({ radar: { state: "done", last_active: ago(3) } })])]);
+    const busy = session("cli", [tab([pane({ radar: { state: "working", since: ago(5) } })])]);
+    const quiet = session("notes", [tab([pane({ agent: "" })])]);
+    const sections = entries(machine([quiet, busy, done, stuck, asking]), { ...DEFAULT_RADAR, order: "priority" });
+    expect(fold(sections)).toEqual(["Needs you: db, api", "Done: web", "Working: cli", "Idle: notes"]);
+    expect(sections.map((e) => foldKey("gog", e))).toEqual(["gog|section:priority:needs", "gog|section:priority:done", "gog|section:priority:working", "gog|section:priority:idle"]);
+  });
+
+  it("gathers the workspaces by ticket prefix, after a folder too, the ones without last", () => {
+    const pr = session("PR-12 checkout", [tab([pane()])]);
+    const ins = session("api", [tab([pane()])], { branch: "feature/INS-4-cache" });
+    const lower = session("web", [tab([pane()], { named: true, label: "plat-9 review" })]);
+    const none = session("herdr-mods", [tab([pane()])], { branch: "main" });
+    expect(fold(entries(machine([none, lower, ins, pr]), { ...DEFAULT_RADAR, order: "prefix" }))).toEqual(["INS-: api", "PLAT-: web", "PR-: PR-12 checkout", "No prefix: herdr-mods"]);
+  });
+});
+
+describe("primaryOf", () => {
+  it("marks the main checkout of a folder that holds worktrees, and none in a folder without", () => {
+    const main = session("app", [tab([pane()])], { folder: "/p/app", dir: "/p/app", worktree: repo("app", false) });
+    const tree = session("feature-x", [tab([pane()])], { folder: "/p/app", dir: "/w/feature-x", worktree: repo("app", true) });
+    const [entry] = entries(machine([tree, main]), DEFAULT_RADAR);
+    if (entry?.kind !== "folder") throw new Error("no folder");
+    expect(primaryOf(entry.folder)?.session).toBe(main);
+    const [alone] = entries(machine([main]), DEFAULT_RADAR);
+    if (alone?.kind !== "folder") throw new Error("no folder");
+    expect(primaryOf(alone.folder)).toBeNull();
+  });
+});
+
+describe("cardWords", () => {
+  const item = (s: Session): WorkspaceItem => entries(machine([s]), DEFAULT_RADAR).flatMap(entryItems)[0]!;
+  it("says what the agent needs or answered, nothing while it only works, the tabs of a workspace of shells", () => {
+    expect(cardWords(item(session("a", [tab([pane({ title: "Fix it", radar: { state: "working" } })])])))).toBe("");
+    expect(cardWords(item(session("b", [tab([pane({ radar: { state: "blocked" } })])])))).toBe("waiting for your answer");
+    expect(cardWords(item(session("c", [tab([pane({ radar: { state: "working", alert: "stuck 25 min" } })])])))).toBe("stuck 25 min");
+    expect(cardWords(item(session("d", [tab([pane({ said: "All green.", radar: { state: "done" } })])])))).toBe("All green.");
+    expect(cardWords(item(session("e", [tab([pane({ agent: "" })]), tab([pane({ agent: "" })])])))).toBe("2 tabs");
+    expect(cardWords(item(session("f", [tab([pane({ agent: "" })])])))).toBe("terminal");
   });
 });
 
@@ -113,7 +156,7 @@ describe("leadOf", () => {
 });
 
 describe("the line's words", () => {
-  const item = (s: Session, prefs = { ...DEFAULT_RADAR, shells: true }): WorkspaceItem => entries(machine([s]), prefs).flatMap((e) => (e.kind === "workspace" ? [e.item] : e.folder.items))[0]!;
+  const item = (s: Session, prefs = { ...DEFAULT_RADAR, shells: true }): WorkspaceItem => entries(machine([s]), prefs).flatMap(entryItems)[0]!;
 
   it("names a workspace called as its folder by its branch inside the folder", () => {
     const main = item(session("user-profiles", [tab([pane()])], { branch: "msn-2448" }));
@@ -167,11 +210,11 @@ describe("the line's age", () => {
 
   it("reads at a glance", () => {
     expect(shortAge(undefined, now)).toBe("");
-    expect(shortAge(ago(0.5), now)).toBe("now");
+    expect(shortAge(ago(0.5), now)).toBe("<1m");
     expect(shortAge(ago(12), now)).toBe("12m");
     expect(shortAge(ago(60 * 5 + 10), now)).toBe("5h");
     expect(shortAge(ago(60 * 24 * 3), now)).toBe("3d");
-    expect(shortAge(now + 60_000, now)).toBe("now");
+    expect(shortAge(now + 60_000, now)).toBe("<1m");
   });
 });
 

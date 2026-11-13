@@ -4,8 +4,10 @@ package restart
 // and folder in <state>/chats.json; when a machine's herdr comes back with
 // those panes as bare shells — the watcher's first snapshot after the machine
 // was away, or after remuda's own start — they are listed as stopped, the
-// page offers one Resume, and Recover starts each on its session. Nothing
-// starts by itself.
+// page offers them in "Resume after restart", and Recover starts the ones picked on
+// their sessions. Nothing starts by itself unless the person switched on
+// "Resume automatically next time" (OnStopped, then AutoRecover). A workspace put
+// to sleep (Asleep) is the sleep's to wake: its panes are neither stopped nor closed.
 
 import (
 	"fmt"
@@ -36,12 +38,20 @@ type Chat struct {
 	Title   string `json:"title,omitempty"`
 }
 
-// Stopped is a remembered chat whose pane came back as a bare shell; the roster carries it.
+// Stopped is a remembered chat whose pane came back as a bare shell; the roster carries it, with the folder and the
+// command that brings it back, for the dialog to show.
 type Stopped struct {
-	Pane  string `json:"pane"`
-	Agent string `json:"agent"`
-	Title string `json:"title"`
-	chat  Chat
+	Pane    string `json:"pane"`
+	Agent   string `json:"agent"`
+	Title   string `json:"title"`
+	Dir     string `json:"dir"`
+	Command string `json:"command"`
+	chat    Chat
+}
+
+// stoppedOf is the roster's entry for a chat a reboot stopped in a pane.
+func stoppedOf(paneID string, c Chat, title string) Stopped {
+	return Stopped{Pane: paneID, Agent: c.Kind, Title: title, Dir: c.Dir, Command: Resume(c.Kind, c.Session), chat: c}
 }
 
 // Memory remembers the chats and the ones a reboot stopped.
@@ -52,6 +62,11 @@ type Memory struct {
 	// Skip names a workspace remuda keeps for itself (the concierge's): its panes are never remembered, so neither a
 	// reboot nor a close of theirs is offered back.
 	Skip func(machineID, workspaceID string) bool
+	// Asleep names a pane of a workspace the person put to sleep: its agent left at their word and waking brings it
+	// back, so it is neither stopped by a reboot nor closed.
+	Asleep func(machineID, workspaceID, paneID string) bool
+	// OnStopped hears a machine whose list of chats a reboot stopped has gained some, outside the memory's lock.
+	OnStopped func(machineID string)
 
 	mu      sync.Mutex
 	chats   map[string]Chat      // machine|pane
@@ -89,13 +104,20 @@ func OpenMemory(dir string) *Memory {
 // the machine's first, or the first after its herdr was away) and has stood so for stoppedGrace, and is forgotten
 // when the person left the agent themselves; a pane no longer there was closed — listed as such, then forgotten.
 func (m *Memory) Observe(e events.Snapshot) {
+	if m.observe(e) && m.OnStopped != nil {
+		m.OnStopped(e.Machine)
+	}
+}
+
+// observe is Observe under the lock; true when the machine's stopped list gained a pane.
+func (m *Memory) observe(e events.Snapshot) bool {
 	if e.Snap == nil {
-		return
+		return false
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.paused[e.Machine] {
-		return
+		return false
 	}
 	prefix := e.Machine + "|"
 	seen := map[string]bool{}
@@ -105,7 +127,7 @@ func (m *Memory) Observe(e events.Snapshot) {
 		p := &e.Snap.Panes[i]
 		key := prefix + p.PaneID
 		seen[key] = true
-		if m.Skip != nil && m.Skip(e.Machine, p.WorkspaceID) {
+		if (m.Skip != nil && m.Skip(e.Machine, p.WorkspaceID)) || (m.Asleep != nil && m.Asleep(e.Machine, p.WorkspaceID, p.PaneID)) {
 			if _, ok := m.chats[key]; ok {
 				delete(m.chats, key)
 				changed = true
@@ -140,7 +162,7 @@ func (m *Memory) Observe(e events.Snapshot) {
 			switch {
 			case e.At.Sub(since) < stoppedGrace:
 			case p.Dir() == c.Dir:
-				stopped = append(stopped, Stopped{Pane: p.PaneID, Agent: c.Kind, Title: firstNonEmpty(c.Title, p.DisplayTitle()), chat: c})
+				stopped = append(stopped, stoppedOf(p.PaneID, c, firstNonEmpty(c.Title, p.DisplayTitle())))
 			default:
 				delete(m.chats, key)
 				delete(m.shells, key)
@@ -170,6 +192,7 @@ func (m *Memory) Observe(e events.Snapshot) {
 		m.saveClosedLocked()
 	}
 	sort.Slice(stopped, func(i, j int) bool { return stopped[i].Pane < stopped[j].Pane })
+	joined := gained(m.stopped[e.Machine], stopped)
 	if len(stopped) == 0 {
 		delete(m.stopped, e.Machine)
 	} else {
@@ -178,6 +201,21 @@ func (m *Memory) Observe(e events.Snapshot) {
 	if changed {
 		m.saveLocked()
 	}
+	return joined
+}
+
+// gained says whether the new list names a pane the old one did not.
+func gained(old, now []Stopped) bool {
+	had := map[string]bool{}
+	for _, s := range old {
+		had[s.Pane] = true
+	}
+	for _, s := range now {
+		if !had[s.Pane] {
+			return true
+		}
+	}
+	return false
 }
 
 // paneDir is the folder a chat lives in: the pane's own, else its workspace's.
@@ -297,11 +335,48 @@ func (r *Restarter) Observe(e events.Snapshot) {
 	}
 }
 
-// Recover starts every chat the reboot stopped on the machine, each on its session under its pane's lock. A pane
-// that is not a bare shell in the same folder any more, or whose folder or session file is gone, is skipped with the
-// reason; a start that fails leaves the pane at its shell and on the list, so Resume can be pressed again.
-func (r *Restarter) Recover(mc *machines.Machine, say func(string)) error {
-	stopped := r.Stopped(mc.ID())
+// Picked is the machine's stopped chats in the panes named, every one when none is named.
+func (r *Restarter) Picked(machineID string, panes []string) []Stopped {
+	stopped := r.Stopped(machineID)
+	if len(panes) == 0 {
+		return stopped
+	}
+	want := map[string]bool{}
+	for _, p := range panes {
+		want[p] = true
+	}
+	var picked []Stopped
+	for _, s := range stopped {
+		if want[s.Pane] {
+			picked = append(picked, s)
+		}
+	}
+	return picked
+}
+
+// Recovering says whether a recovery runs on the machine now: the page then offers no Resume of its own.
+func (r *Restarter) Recovering(machineID string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.recovering[machineID]
+}
+
+// Recover starts the chats the reboot stopped on the machine in the panes picked (every one for none), each on its
+// session under its pane's lock. A pane that is not a bare shell in the same folder any more, or whose folder or
+// session file is gone, is skipped with the reason; a start that fails leaves the pane at its shell and on the list,
+// so Resume can be pressed again.
+func (r *Restarter) Recover(mc *machines.Machine, panes []string, say func(string)) error {
+	return r.recover(mc, panes, false, say)
+}
+
+// AutoRecover is Recover of every stopped chat, run by itself because the person switched on "Resume automatically
+// next time"; the activity's row says so.
+func (r *Restarter) AutoRecover(mc *machines.Machine, say func(string)) error {
+	return r.recover(mc, nil, true, say)
+}
+
+func (r *Restarter) recover(mc *machines.Machine, panes []string, auto bool, say func(string)) error {
+	stopped := r.Picked(mc.ID(), panes)
 	if len(stopped) == 0 {
 		return fmt.Errorf("no chat stopped by a reboot on %s", mc.Label())
 	}
@@ -309,16 +384,12 @@ func (r *Restarter) Recover(mc *machines.Machine, say func(string)) error {
 	if err != nil {
 		return err
 	}
-	say(fmt.Sprintf("%s stopped with the reboot on %s", chatsWord(len(stopped)), mc.Label()))
-	checks := func(s Stopped) error {
-		if info, err := mc.ResolvePath("", s.chat.Dir); err != nil || info.Kind != "dir" {
-			return fmt.Errorf("its folder %s is gone — nothing to resume into", s.chat.Dir)
-		}
-		if s.chat.Kind == "claude" && !sessionFileExists(mc, s.chat) {
-			return fmt.Errorf("its session file is gone — nothing to resume")
-		}
-		return nil
+	if !r.claimRecovery(mc.ID()) {
+		return fmt.Errorf("the chats stopped on %s are being resumed already", mc.Label())
 	}
+	defer r.releaseRecovery(mc.ID())
+	say(fmt.Sprintf("%s stopped with the reboot on %s", chatsWord(len(stopped)), mc.Label()))
+	checks := func(s Stopped) error { return CanResume(mc, s.chat.Kind, s.chat.Session, s.chat.Dir) }
 	out := r.resume(client, mc.ID(), stopped, checks, say)
 	var lines []string
 	for _, o := range out {
@@ -326,10 +397,45 @@ func (r *Restarter) Recover(mc *machines.Machine, say func(string)) error {
 	}
 	if r.Memory != nil && r.Memory.Note != nil {
 		title := fmt.Sprintf("%s back after the reboot on %s", chatsWord(len(out.back())), mc.Label())
+		if auto {
+			title = fmt.Sprintf("%s resumed by itself after the reboot on %s", chatsWord(len(out.back())), mc.Label())
+		}
 		r.Memory.Note(mc.ID(), title, strings.Join(lines, "\n"))
 	}
 	if failed := out.failed(); len(failed) > 0 {
 		return fmt.Errorf("%s not back: %s", chatsWord(len(failed)), strings.Join(failed, ", "))
+	}
+	return nil
+}
+
+// claimRecovery takes the one recovery of a machine at a time; false while another runs there.
+func (r *Restarter) claimRecovery(machineID string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.recovering == nil {
+		r.recovering = map[string]bool{}
+	}
+	if r.recovering[machineID] {
+		return false
+	}
+	r.recovering[machineID] = true
+	return true
+}
+
+func (r *Restarter) releaseRecovery(machineID string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.recovering, machineID)
+}
+
+// CanResume says why a conversation cannot come back on the machine, nil when it can: its folder must still be there,
+// and a Claude Code session's file too.
+func CanResume(mc *machines.Machine, kind, session, dir string) error {
+	if info, err := mc.ResolvePath("", dir); err != nil || info.Kind != "dir" {
+		return fmt.Errorf("its folder %s is gone — nothing to resume into", dir)
+	}
+	if kind == "claude" && !sessionFileExists(mc, Chat{Kind: kind, Session: session, Dir: dir}) {
+		return fmt.Errorf("its session file is gone — nothing to resume")
 	}
 	return nil
 }

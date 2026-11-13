@@ -1,14 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { fileUrl, fsDiff, fsStat, fsText, type FileDiff, type FileInfo } from "@/features/files/api";
-import { highlightLines, langOf } from "@/lib/highlight";
+import { langOf } from "@/lib/highlight";
 import { basename, errMsg } from "@/lib/text";
 import { Notice, Tip } from "@/ui";
 import Icon from "@/ui/icons";
 import { Markdown } from "@/ui/Markdown";
 import { Mermaid } from "@/ui/Mermaid";
 import { opensDrawn, previewOf } from "@/ui/mermaidLook";
-import { tokenNodes } from "@/ui/Tokens";
-import { changeCounts, diffLines, type DiffLine } from "./diffLines";
+import { FileIcon } from "@/ui/FileIcon";
+import CodeLines from "./CodeLines";
+import DiffView from "./DiffView";
+import { changeCounts, diffLines } from "./diffLines";
+import { changesOf, lineCountOf, wholeFile } from "./gutter";
 
 import type { FileTarget } from "./target";
 import { actions } from "@/app/store";
@@ -97,6 +100,13 @@ export default function FileViewer({
           setText(t);
           setDiff(d);
           if (target.prefer === "changes" && !(d && d.diff)) setTab("file");
+        } else if (i.kind === "missing" && !i.candidates?.length && !viewOnly) {
+          const d = await fsDiff(machineId, i.path).catch(() => null); // a file deleted since HEAD: its removal is its change
+          if (stop) return;
+          if (d?.diff) {
+            setDiff(d);
+            setTab("changes");
+          }
         }
       } catch (e) {
         if (!stop) setError(errMsg(e));
@@ -118,8 +128,10 @@ export default function FileViewer({
   const changes = useMemo(() => diffLines(diff?.diff ?? "", lang), [diff, lang]);
   const counts = useMemo(() => changeCounts(changes), [changes]);
   const hasDiff = !!(diff && diff.diff);
+  const gone = info?.kind === "missing" && hasDiff;
   const drawnAs = info?.kind === "text" ? previewOf(info.path) : null;
-  const shown: Tab = tab === "drawn" && !drawnAs ? "file" : tab;
+  const shown: Tab = gone ? "changes" : tab === "drawn" && !drawnAs ? "file" : tab;
+  const lineChanges = useMemo(() => (!text || !diff ? [] : diff.untracked ? wholeFile(lineCountOf(text.text)) : changesOf(diff.diff)), [text, diff]);
 
   return (
     <div className="fv-scrim" onMouseDown={(e) => e.target === e.currentTarget && close()}>
@@ -139,6 +151,7 @@ export default function FileViewer({
       >
         <header className="fv-head">
           <div className="fv-title">
+            <FileIcon path={info?.path ?? target.path} className="fv-icon" />
             <span className="fv-name">{name}</span>
             <span className="fv-path" title={info?.path ?? target.path} dir="rtl">
               <bdi>
@@ -147,11 +160,13 @@ export default function FileViewer({
               </bdi>
             </span>
           </div>
-          {info?.kind === "text" && (!viewOnly || drawnAs) && (
+          {(info?.kind === "text" || gone) && (!viewOnly || drawnAs) && (
             <nav className="fv-tabs" aria-label={t("View")}>
-              <button type="button" className={shown === "file" ? "on" : ""} aria-pressed={shown === "file"} onClick={() => setTab("file")}>
-                {t("File")}
-              </button>
+              {!gone && (
+                <button type="button" className={shown === "file" ? "on" : ""} aria-pressed={shown === "file"} onClick={() => setTab("file")}>
+                  {t("File")}
+                </button>
+              )}
               {drawnAs && (
                 <button type="button" className={shown === "drawn" ? "on" : ""} aria-pressed={shown === "drawn"} onClick={() => setTab("drawn")} title={drawnAs === "mermaid" ? t("The diagram, drawn") : t("The Markdown, drawn")}>
                   {t("Preview")}
@@ -163,7 +178,7 @@ export default function FileViewer({
                   className={shown === "changes" ? "on" : ""}
                   aria-pressed={shown === "changes"}
                   onClick={() => setTab("changes")}
-                  title={diff?.untracked ? t("New file, not yet in git") : diff?.repo ? t("Uncommitted change against HEAD") : t("Not inside a git repository")}
+                  title={gone ? t("Deleted since HEAD") : diff?.untracked ? t("New file, not yet in git") : diff?.repo ? t("Uncommitted change against HEAD") : t("Not inside a git repository")}
                 >
                   {t("Changes")}
                   {hasDiff && <span className="fv-badge">{`+${counts.add} −${counts.del}`}</span>}
@@ -196,7 +211,7 @@ export default function FileViewer({
         <div className="fv-body">
           {error && <Notice tone="error">{error}</Notice>}
           {!error && !info && <div className="empty">{t("Loading…")}</div>}
-          {info?.kind === "missing" && (
+          {info?.kind === "missing" && !gone && (
             <div className="empty">
               {info.candidates?.length ? (
                 <>
@@ -225,7 +240,7 @@ export default function FileViewer({
             </div>
           )}
           {info?.kind === "pdf" && <iframe className="fv-pdf" src={fileUrl(machineId, info.path)} title={name} />}
-          {info?.kind === "text" && shown === "file" && text && <CodeView text={text.text} lang={lang} line={target.line} lineRef={lineRef} />}
+          {info?.kind === "text" && shown === "file" && text && <CodeLines text={text.text} lang={lang} line={target.line} lineRef={lineRef} changes={lineChanges} />}
           {info?.kind === "text" && shown === "drawn" && text && (
             <div className="fv-drawn">
               {drawnAs === "mermaid" ? <FileDiagram source={text.text} /> : <Markdown text={text.text} onOpenFile={onRetarget} diagrams />}
@@ -236,7 +251,7 @@ export default function FileViewer({
               {t("… cut at {cut} of {size}", { cut: fmtSize(text.max), size: fmtSize(info.size) })}
             </div>
           )}
-          {info?.kind === "text" && shown === "changes" && <DiffView diff={diff} lines={changes} />}
+          {(info?.kind === "text" || gone) && shown === "changes" && <DiffView diff={diff} lines={changes} />}
         </div>
       </div>
     </div>
@@ -248,44 +263,6 @@ function FileDiagram({ source }: { source: string }) {
   const [error, setError] = useState("");
   useEffect(() => setError(""), [source]);
   return error ? <Notice tone="error">{t("Mermaid could not read it: {error}", { error })}</Notice> : <Mermaid source={source} onError={setError} />;
-}
-
-// CodeView splits and colours once per text, not per render: a 512KB file is 10k rows (past the highlighter's cap they stay plain)
-function CodeView({ text, lang, line, lineRef }: { text: string; lang: string; line?: number; lineRef: React.RefObject<HTMLDivElement | null> }) {
-  const lines = useMemo(() => (lang ? highlightLines(text, lang) : text.split("\n").map((l) => [{ kind: "plain" as const, text: l }])), [text, lang]);
-  return (
-    <div className="fv-code">
-      {lines.map((tokens, i) => {
-        const n = i + 1;
-        const hit = n === line;
-        return (
-          <div key={n} className={hit ? "fv-line hit" : "fv-line"} ref={hit ? lineRef : undefined}>
-            <span className="fv-ln">{n}</span>
-            <span className="fv-src">{tokenNodes(tokens)}</span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// the classes are the review's: a kept line has none, a note (no newline at the end) reads as the header does
-const LINE_CLASS: Record<DiffLine["kind"], string> = { add: "add", del: "del", hunk: "hunk", meta: "meta", note: "meta", context: "" };
-
-function DiffView({ diff, lines }: { diff: FileDiff | null; lines: DiffLine[] }) {
-  if (!diff) return <div className="empty">{t("Could not run git here.")}</div>;
-  if (!diff.repo) return <div className="empty">{t("Not inside a git repository.")}</div>;
-  if (diff.untracked) return <div className="empty">{t("New file — not yet added to git, so the whole file is the change.")}</div>;
-  if (!diff.diff) return <div className="empty">{t("No uncommitted changes — the file matches HEAD.")}</div>;
-  return (
-    <div className="fv-code fv-diff">
-      {lines.map((line, i) => (
-        <div key={i} className={`fv-line ${LINE_CLASS[line.kind]}`}>
-          <span className="fv-src">{line.tokens ? [line.text.slice(0, 1), ...tokenNodes(line.tokens)] : line.text}</span>
-        </div>
-      ))}
-    </div>
-  );
 }
 
 function fmtSize(n: number): string {

@@ -36,8 +36,10 @@ import (
 	"github.com/dev1antdev/remuda/internal/live"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/mirror"
+	"github.com/dev1antdev/remuda/internal/notes"
 	"github.com/dev1antdev/remuda/internal/opinion"
 	"github.com/dev1antdev/remuda/internal/placement"
+	"github.com/dev1antdev/remuda/internal/ports"
 	"github.com/dev1antdev/remuda/internal/prefs"
 	"github.com/dev1antdev/remuda/internal/preview"
 	"github.com/dev1antdev/remuda/internal/prstatus"
@@ -46,6 +48,8 @@ import (
 	"github.com/dev1antdev/remuda/internal/radar"
 	"github.com/dev1antdev/remuda/internal/recap"
 	"github.com/dev1antdev/remuda/internal/recipes"
+	"github.com/dev1antdev/remuda/internal/repos"
+	"github.com/dev1antdev/remuda/internal/resources"
 	"github.com/dev1antdev/remuda/internal/restart"
 	"github.com/dev1antdev/remuda/internal/review"
 	"github.com/dev1antdev/remuda/internal/said"
@@ -213,6 +217,11 @@ func Run(ctx context.Context, o Options) error {
 	}
 	tracker := radar.New(o.Dir, chats.LastWriteOf)
 	defer tracker.Flush()
+	// a finish looked at through remuda is no push, and one already out comes down; a withdrawal moves the roster,
+	// which lists it for the pages to close
+	tracker.OnSeen = pushSvc.Seen
+	pushSvc.Looked = tracker.Looked
+	pushSvc.OnWithdraw = hub.RosterChanged
 	issues := jira.New(o.Dir)
 	issues.OnChange = hub.RosterChanged // an issue read from the site moves the chips on the page
 	// the issue keys a conversation names, read only once the person set a Jira site
@@ -231,6 +240,7 @@ func Run(ctx context.Context, o Options) error {
 		return mc, true
 	})
 	requests.OnState = func(e events.PullRequestState) { events.Publish(bus, e) }
+	requests.OnChange = hub.RosterChanged // a read begun or ended moves an open hover card's freshness at once
 	// a repository's issues, read and written through gh on the machine of one of its checkouts, as the person
 	githubIssues := ghissues.New(func(machineID string) (ghissues.Host, error) {
 		mc, err := fleet.Get(machineID)
@@ -744,6 +754,7 @@ func Run(ctx context.Context, o Options) error {
 	go turns.Tracker.Loop(ctx.Done())
 
 	updater := &updates.Service{Health: vitals, Jobs: runner, Restart: restarter, Watch: watcher, Machines: fleet}
+	sleeps := sleeper(o.Dir, bus, fleet, watcher, runner, input, restarter, updater, activity, conciergeAgent.Is, hub.RosterChanged)
 	fleetSetup := &drift.Service{Fleet: fleet, Health: vitals, Updates: updater, Dirs: func(machineID string) []string {
 		if snap, _ := watcher.Snapshot(machineID); snap != nil {
 			return snap.WorkspaceDirs()
@@ -751,6 +762,8 @@ func Run(ctx context.Context, o Options) error {
 		return nil
 	}}
 	events.Subscribe(bus, func(e events.MachineRemoved) { fleetSetup.Forget(e.Machine) })
+	projectSettings := repos.Open(o.Dir) // each repository's worktree defaults, setup script and run actions
+	events.Subscribe(bus, func(e events.MachineRemoved) { projectSettings.Forget(e.Machine) })
 	arenas := &arena.Service{Store: arena.Open(o.Dir), Machines: fleet, Watch: watcher, Input: input, Tasks: taskStore, Notify: pushSvc.Notify, Dir: o.Dir,
 		ModelOf: func(machineID, paneID string) string {
 			d, _ := meter.Display(machineID, paneID)
@@ -787,6 +800,7 @@ func Run(ctx context.Context, o Options) error {
 		Live:      hub,
 		Awake:     keepAwake,
 		Icons:     icons.New(o.Dir),
+		Notes:     notes.Open(o.Dir),
 		Arena:     arenas,
 		Limits:    planLimits,
 		Scratch:   shells,
@@ -804,13 +818,49 @@ func Run(ctx context.Context, o Options) error {
 
 		Collisions: radarOfCollisions,
 		Undo:       turns,
+		GitOps:     gitWrites(watcher, turns.Tracker),
+		Stage:      stageWrites(fleet, watcher, turns),
 		Scenes:     sceneSet,
+		Repos:      projectSettings,
+		Sleep:      sleeps,
 		Issues:     githubIssues,
 	}
 	previews := &preview.Service{Allow: srv.Guard.SignedIn, IdleAfter: 30 * time.Minute, Listen: preview.LoopbackListen(o.Addr)}
 	srv.Previews = previews
 	defer previews.Shutdown()
 	events.Subscribe(bus, func(e events.MachineRemoved) { previews.CloseMachine(e.Machine) })
+	// the ports the workspaces' processes listen on, read while a page reads the roster, quicker while the status bar shows
+	listening := ports.New(srv.PortTargets, srv.PreviewSkip)
+	listening.OnChange = hub.RosterChanged
+	srv.Ports = listening
+	go listening.Loop(ctx.Done())
+	events.Subscribe(bus, func(e events.MachineRemoved) { listening.Forget(e.Machine) })
+	// what the machines' herdr panes weigh on them: one process table a read, each pane's shell as herdr names it
+	srv.Resources = resources.New(resources.Inputs{
+		Panes: func(machineID string) []resources.Pane {
+			snap, _ := watcher.Snapshot(machineID)
+			if snap == nil {
+				return nil
+			}
+			out := make([]resources.Pane, 0, len(snap.Panes))
+			for _, pane := range snap.Panes {
+				out = append(out, resources.Pane{ID: pane.PaneID, Workspace: pane.WorkspaceID})
+			}
+			return out
+		},
+		ShellPID: func(machineID, paneID string) (int, error) {
+			mc, err := fleet.Get(machineID)
+			if err != nil {
+				return 0, err
+			}
+			client, _, err := mc.Ready()
+			if err != nil {
+				return 0, err
+			}
+			return client.PaneShellPID(paneID)
+		},
+	})
+	events.Subscribe(bus, func(e events.MachineRemoved) { srv.Resources.Forget(e.Machine) })
 	if o.Tailscale {
 		var node *tsnetx.Node
 		srv.Tailscale = func() tsnetx.Status { return node.Status() } // set before the handler is handed out

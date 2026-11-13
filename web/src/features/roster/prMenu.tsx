@@ -12,6 +12,7 @@ import type { MenuItem } from "@/ui";
 import { handFailure, removeWorktree, sendReview, type Machine, type PullRequest, type Session } from "./api";
 import { actionLabel, actionsFor, handedWords, removeAsk, removedWords, type PRAction } from "./prActions";
 import { prWords } from "./prStatus";
+import { isPullURL } from "@/features/pr/links";
 import { t } from "@/lib/i18n";
 
 // handPR sends one hand-off: the server reads GitHub with gh, or GitLab with glab, on the machine and submits the
@@ -31,11 +32,19 @@ export function askRemoveWorktree(machine: Machine, session: Session): void {
   actions.ask(removeAsk(session.name), t("Remove the worktree"), () => void act(removeWorktree(machine.id, session.id).then((r) => actions.notify(removedWords(r.branch)))));
 }
 
-// prMenuItems are the rows behind a tile's chips: Open with the state as its hint, then the hand-offs the state allows.
-export function prMenuItems(machineId: string, paneId: string, pr: PullRequest): MenuItem[] {
+// prPanelRow opens the pull request panel on a GitHub pull request, in the checkout it came from; none for a merge request
+export function prPanelRow(machineId: string, paneId: string, pr: PullRequest, dir: string): MenuItem[] {
+  if (!isPullURL(pr.url) || !dir) return [];
+  return [{ label: t("Pull request panel"), icon: "git-pull-request", hint: t("comments, checks, files, merge"), onSelect: () => actions.openPRPanel({ machineId, dir, paneId, url: pr.url }) }];
+}
+
+// prMenuItems are the rows behind a tile's chips: Open with the state as its hint, then the pull request panel and the
+// hand-offs the state allows (a viewer's menu ends before them).
+export function prMenuItems(machineId: string, paneId: string, pr: PullRequest, dir = ""): MenuItem[] {
   const items: MenuItem[] = [{ label: t("Open {pr}", { pr: pr.label }), icon: "external-link", hint: pr.status ? prWords(pr.status) : undefined, onSelect: () => openUrl(pr.url) }];
   const hands = actionsFor(pr);
-  if (hands.length > 0) items.push({ sep: true });
+  const panel = prPanelRow(machineId, paneId, pr, dir);
+  if (hands.length > 0 || panel.length > 0) items.push({ sep: true }, ...panel);
   for (const action of hands) {
     items.push({ label: actionLabel(action, pr.label), icon: action === "failure" ? "alert-triangle" : "git-branch", onSelect: () => void handPR(action, machineId, paneId, pr.label) });
   }
