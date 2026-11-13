@@ -1,0 +1,75 @@
+# Temporary: what a real Windows says, for the windows-remote work. Removed before the PR is ready.
+name: windows probe
+on:
+  push:
+    branches: [windows-remote]
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: system
+        shell: pwsh
+        run: |
+          [Environment]::OSVersion
+          Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, BuildNumber, OSArchitecture | Format-List
+          whoami; whoami /groups | Select-String -Pattern 'Administrators'
+          $env:USERPROFILE; $env:APPDATA; $env:LOCALAPPDATA; $env:HOME
+          Get-Service sshd -ErrorAction SilentlyContinue | Format-List
+          Get-WindowsCapability -Online -Name 'OpenSSH*' | Format-List Name, State
+          Test-Path C:\Windows\System32\OpenSSH\sshd.exe
+          Get-ChildItem C:\Windows\System32\OpenSSH -ErrorAction SilentlyContinue
+          Get-Command bash, sh, git -ErrorAction SilentlyContinue | Format-List Name, Source
+      - name: git bash tools
+        shell: bash
+        run: |
+          set -x
+          uname -s; uname -m; uname -r; echo "HOME=$HOME"; echo "0=$0"; echo "BASH=$BASH"; echo "SHELL=${SHELL:-}"
+          echo "PATH=$PATH"
+          command -v sh bash sed awk grep find tail stat base64 sha256sum tar gzip curl git nc ps tasklist netstat powershell.exe cmd.exe cygpath df uptime nohup timeout || true
+          head -5 /proc/meminfo; cat /proc/uptime; cat /proc/loadavg || true
+          df -k "$HOME" || true; df -kP "$HOME" || true
+          stat -c '%s %Y' /etc/profile; stat --version | head -1
+          tail --version | head -1; base64 --version | head -1; tar --version | head -1; awk --version | head -1; sed --version | head -1; find --version | head -1
+          ps -W | head -5 || true
+          cygpath -w "$HOME"; cygpath -u 'C:\Users\runneradmin\x'; cygpath -m "$HOME"
+          echo "APPDATA=$APPDATA LOCALAPPDATA=$LOCALAPPDATA USERPROFILE=$USERPROFILE"
+          cmd //c ver || true
+          printf 'x\n' | sh -c 'read a; echo got $a'
+          ls -la "C:\\Users" | head -3
+          cd 'C:\Windows' && pwd
+      - name: herdr install
+        shell: pwsh
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://herdr.dev/install.ps1 | iex"
+          Get-ChildItem "$env:LOCALAPPDATA\Programs\Herdr\bin" -ErrorAction SilentlyContinue
+          Get-ChildItem "$env:USERPROFILE\.herdr" -Recurse -Depth 4 -ErrorAction SilentlyContinue | Select-Object FullName | Format-Table -AutoSize
+          [Environment]::GetEnvironmentVariable('Path','User')
+      - name: herdr facts
+        shell: bash
+        run: |
+          set -x
+          export PATH="$LOCALAPPDATA/Programs/Herdr/bin:$PATH"
+          command -v herdr; herdr --version
+          herdr status server || true
+          herdr status || true
+          ( herdr server > "$RUNNER_TEMP/herdr-server.out" 2>&1 & )
+          sleep 5
+          herdr status server || true
+          cat "$RUNNER_TEMP/herdr-server.out" || true
+          herdr workspace list || true
+          herdr api snapshot 2>/dev/null | head -c 3000 || true
+          herdr workspace create --cwd "$HOME" --label probe 2>&1 | head -c 2000 || true
+          herdr api snapshot 2>/dev/null | head -c 4000 || true
+          herdr session list --json || true
+          herdr machine list --json || true
+          ls -la ~/.config/herdr || true; ls -la "$APPDATA/herdr" || true; ls -la "$LOCALAPPDATA/herdr" || true
+          herdr integration list 2>&1 | head -40 || true
+          herdr --help | head -40
+      - name: pipes
+        shell: pwsh
+        run: |
+          [System.IO.Directory]::GetFiles("\\.\pipe\") | Select-String -Pattern 'herdr' -SimpleMatch
+          Get-Process | Where-Object { $_.ProcessName -like '*herdr*' } | Format-Table Id, ProcessName, Path -AutoSize
