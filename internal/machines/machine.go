@@ -33,7 +33,6 @@ type Machine struct {
 	herdrBin    string    // herdr's binary on the machine, once known
 	socket      string
 	os          string // darwin | linux | windows as the connection read it, "" before a remote's first connect
-	remudaBin   string // remuda.exe on a Windows machine, through which herdr's named pipe is reached
 
 	conn   *sshx.Conn
 	client *herdr.Client
@@ -205,7 +204,7 @@ func (mc *Machine) connect() {
 	mc.client = client
 	mc.home = home
 	mc.herdrBin, mc.socket = bin, sock
-	mc.os, mc.remudaBin = found.os, found.remuda
+	mc.os = found.os
 	mc.attach = herdr.NewAttachManager(func(termID string) *exec.Cmd {
 		return conn.AttachCmd(bin, sock, termID)
 	})
