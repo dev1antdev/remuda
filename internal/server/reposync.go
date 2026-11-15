@@ -57,6 +57,7 @@ func (s *Server) repoAction(action string) http.HandlerFunc {
 			Machine string `json:"machine"`
 			Dir     string `json:"dir"`
 			Anyway  bool   `json:"anyway"`
+			Head    string `json:"head"` // with anyway: the commit the held push's check read
 		}
 		if !decode(w, r, &req) {
 			return
@@ -77,7 +78,7 @@ func (s *Server) repoAction(action string) http.HandlerFunc {
 		case gitsync.ActPull:
 			outcome = s.Sync.Pull(mc.ID(), req.Dir)
 		default:
-			outcome = s.Sync.Push(mc.ID(), req.Dir, req.Anyway)
+			outcome = s.Sync.Push(mc.ID(), req.Dir, req.Anyway, req.Head)
 		}
 		writeJSON(w, outcome)
 	}

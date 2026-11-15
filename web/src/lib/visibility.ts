@@ -27,6 +27,10 @@ export function alsoVisible(doc: Document): () => void {
 export const pageVisible = () =>
   inShell() || document.visibilityState === "visible" || [...others].some((doc) => doc.visibilityState === "visible");
 
+// documentVisible says whether this very document is on screen, whatever the pop-out or the Mac app's menu bar need:
+// what only this document draws — the sidebar's "Needs you", the zoo — reads nothing while it is hidden
+export const documentVisible = () => document.visibilityState === "visible";
+
 // watchVisibility calls back whenever any document of ours changes visibility or leaves; the return stops it.
 export function watchVisibility(fn: () => void): () => void {
   watchers.add(fn);

@@ -57,6 +57,44 @@ esac
 	}
 }
 
+// A repository with its issues switched off answers gh issue list with gh's own refusal: its pull requests still list,
+// and the issues say why there are none.
+func TestTheOpenPullRequestsListWhenTheIssuesCannotBeRead(t *testing.T) {
+	standIn(t, `case "$1 $2" in
+  "issue list") echo "the 'acme/storefront' repository has disabled issues" >&2; exit 1 ;;
+  "pr list") printf '%s\n' '`+prsJSON+`' ;;
+esac
+`)
+	lists, err := ListOpen(shell.Local{Name: "local"}, "acme/storefront")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(lists.PRs) != 2 || len(lists.Issues) != 0 {
+		t.Errorf("the lists are %+v", lists)
+	}
+	if !strings.Contains(lists.IssuesTrouble, "has disabled issues") || lists.PRsTrouble != "" {
+		t.Errorf("the issues' trouble is %q, the pull requests' %q", lists.IssuesTrouble, lists.PRsTrouble)
+	}
+
+	standIn(t, `case "$1 $2" in
+  "issue list") printf '%s\n' '`+issuesJSON+`' ;;
+  "pr list") echo "GraphQL: Could not resolve to a Repository with the name 'acme/storefront'. (repository)" >&2; exit 1 ;;
+esac
+`)
+	lists, err = ListOpen(shell.Local{Name: "local"}, "acme/storefront")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(lists.Issues) != 2 || !strings.Contains(lists.PRsTrouble, "Could not resolve") {
+		t.Errorf("the lists are %+v", lists)
+	}
+
+	standIn(t, "echo 'To get started with GitHub CLI, please run:  gh auth login' >&2\nexit 4\n")
+	if _, err := ListOpen(shell.Local{Name: "local"}, "acme/storefront"); err == nil || !strings.Contains(err.Error(), "gh auth login") {
+		t.Errorf("a gh that reads neither list answered %v", err)
+	}
+}
+
 func TestANumberIsLookedUp(t *testing.T) {
 	standIn(t, `case "$1" in
   api) printf 'true\tOPEN\tFix the cart\n' ;;

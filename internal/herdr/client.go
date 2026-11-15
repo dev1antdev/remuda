@@ -502,6 +502,7 @@ type WorktreeCreateResult struct {
 		Path   string `json:"path"`
 		Branch string `json:"branch"`
 	} `json:"worktree"`
+	AlreadyOpen bool `json:"already_open"` // worktree.open: the workspace was open on the checkout already, its panes the person's
 }
 
 // WorktreeCreate adds a git worktree to the workspace's repository and opens it as a workspace under it.

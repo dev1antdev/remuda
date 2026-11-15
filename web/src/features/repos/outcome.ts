@@ -48,6 +48,8 @@ function refusedWords(o: Outcome, name: string): string {
       });
     case "busy":
       return busyWords(o, name);
+    case "moved":
+      return t("{name} has new commits since its secret check: nothing was pushed. Push again to check them too.", { name });
   }
   return t("{name}: nothing done.", { name });
 }

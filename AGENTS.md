@@ -138,8 +138,9 @@ not style.
   who; never a force push (`--force`, `--force-with-lease`), never `git
   clean -fdx` past the one path the person picked; git's own words shown
   when it fails; the secret check before a commit and a push. Every read
-  runs `git --no-optional-locks -c core.fsmonitor=false`, so a look never
-  touches the index.
+  of the Git lens and the Changes lens runs `git --no-optional-locks -c
+  core.fsmonitor=false -c diff.autoRefreshIndex=false`, so a look never
+  touches the index (the first two alone still let git's diff write it).
 - **GitHub is written only at the person's press** (the person's decision
   of 2026-11-13, `internal/ghpr`): remuda comments, replies in a thread,
   resolves or reopens one, asks a reviewer again, merges (merge, squash,

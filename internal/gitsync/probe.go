@@ -16,6 +16,7 @@ type probe struct {
 	notRepo  bool // it is no git checkout
 	top      string
 	branch   string // "" for a detached HEAD
+	head     string // the commit HEAD names, "" before the first
 	remote   string // branch.<b>.remote, "." for a local upstream
 	merge    string // branch.<b>.merge, refs/heads/main
 	upstream string // the tracking branch as git names it, origin/main; "" when none is set or it is gone
@@ -29,7 +30,7 @@ type probe struct {
 func probeScript(style rpath.Style, dir string) string {
 	return `cd ` + script.Quote(style.Slash(dir)) + ` 2>/dev/null || { printf 'missing=1\n'; exit 0; }; ` +
 		`top=$(` + read + ` rev-parse --show-toplevel 2>/dev/null) || { printf 'norepo=1\n'; exit 0; }; cd "$top" || exit 0; printf 'top=%s\n' "$top"; ` +
-		`b=$(git symbolic-ref --short -q HEAD 2>/dev/null); printf 'branch=%s\n' "$b"; ` +
+		`b=$(git symbolic-ref --short -q HEAD 2>/dev/null); printf 'branch=%s\n' "$b"; printf 'head=%s\n' "$(git rev-parse -q --verify HEAD 2>/dev/null)"; ` +
 		`if [ -n "$b" ]; then printf 'remote=%s\n' "$(git config --get "branch.$b.remote" 2>/dev/null)"; printf 'merge=%s\n' "$(git config --get "branch.$b.merge" 2>/dev/null)"; fi; ` +
 		`if u=$(git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null) && [ -n "$u" ]; then printf 'upstream=%s\n' "$u"; ` +
 		`printf 'counts=%s\n' "$(` + read + ` rev-list --left-right --count 'HEAD...@{u}' 2>/dev/null)"; fi; ` +
@@ -62,6 +63,8 @@ func parseProbe(style rpath.Style, output string) probe {
 			p.top = style.Clean(value)
 		case "branch":
 			p.branch = value
+		case "head":
+			p.head = value
 		case "remote":
 			p.remote = value
 		case "merge":
