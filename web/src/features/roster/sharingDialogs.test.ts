@@ -19,13 +19,14 @@ import picker from "./FolderPicker.tsx?raw";
 import leftovers from "./LeftoversDialog.tsx?raw";
 import mac from "./MacDialog.tsx?raw";
 import tree from "@/features/files/tree/ProjectTree.tsx?raw";
+import chat from "@/features/chat/Chat.tsx?raw";
 
 // the "make something" dialogs; a rename's field holds the name it changes, so the renames are not among them
 const making = dialogs.slice(dialogs.indexOf("export function NewWorkspaceDialog"), dialogs.indexOf("export function RenameMachineDialog"));
 
 // the dialogs and the confirm the sidebar's menus, the ⓘ and the palette open — the menus already saying the neutral
 // names under the screen-sharing mode — and what in them would say a real one straight off the roster or the server
-const SOURCES = { overlays, broadcast, send, arena, teleport, everywhere, updates, making, picker, leftovers, mac, triggers, triggerForm, scenes, sceneForm, stepForm, tidyForm, sceneRun, sceneItems, tree };
+const SOURCES = { overlays, broadcast, send, arena, teleport, everywhere, updates, making, picker, leftovers, mac, triggers, triggerForm, scenes, sceneForm, stepForm, tidyForm, sceneRun, sceneItems, tree, chat };
 const RAW_NAMES = [
   /(?<!redact\()\b(?:machine|target|group|chosen\?|x)\.label\b/, // a machine's own label, not through the mode
   /\{ workspace \}\)|workspace: (?:session|target)\.(?:name|sessionName)\b/, // a workspace's own name in the words
