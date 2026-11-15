@@ -4289,8 +4289,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   last full read while it stands (`standFor`: checks running 2 min, an
   open request 10, a closed or merged one an hour — a check moves
   without the pull request moving); anything else reads the request in
-  full and keeps the new ETag (`entry.etag`, `entry.fullAt`). GitLab has
-  no probe.
+  full and keeps the new ETag (`entry.etag`, `entry.fullAt`) — only
+  beside a full read that answered: one that failed keeps the last ETag
+  and read together, else the next 304 would keep a read from before the
+  move. GitLab has no probe.
   **A GitLab merge request is read the same way through glab**
   (`gitlab.go`, tested on `shell.Fake` with GitLab's own answers):
   `MergeParts` takes the instance, the project path and the number off
@@ -4672,8 +4674,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   stats strip, each figure a link to its tab, Unresolved opening the
   Comments on the unresolved alone; Overview | Comments [n] | Checks
   (the worst's icon) | Files [n]), `ConfirmCard.tsx` (the question, in
-  red "Still in the way: …", a squash's message, the head on screen sent
-  with the merge), `Overview.tsx` (`Group`, folded per device in pref
+  red "Still in the way: …", a squash's message, the head on screen when
+  the card opened sent with the merge — a newer one the panel's minute
+  read or Read GitHub again brings while it is open is said in amber and
+  holds the button back, `headMoved`), `Overview.tsx` (`Group`, folded per device in pref
   `pr.closed`: the agents on it — `agentsOn`: its head branch checked out
   in a workspace of the panel's machine, or the pull request named
   anywhere — a click opening one; the reviewers with Ask again; the

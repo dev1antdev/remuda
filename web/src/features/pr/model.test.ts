@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { actionQuestion, actions, blockers, cardChecks, checkCounts, checkGroups, kindOf, prLook, searchText, splitMessage, squashMessage, stats } from "./model";
+import { actionQuestion, actions, blockers, cardChecks, checkCounts, checkGroups, headMoved, kindOf, prLook, searchText, splitMessage, squashMessage, stats } from "./model";
 import type { Check, Detail } from "./api";
 
 const check = (name: string, over: Partial<Check> = {}): Check => ({ name, status: "COMPLETED", conclusion: "SUCCESS", ...over });
@@ -114,6 +114,15 @@ describe("actions", () => {
     expect(message).toBe("Save trips for offline use (#482)\n\nLine one.\n\nTwo.");
     expect(splitMessage(message)).toEqual({ subject: "Save trips for offline use (#482)", body: "Line one.\n\nTwo." });
     expect(splitMessage(" just a subject ")).toEqual({ subject: "just a subject", body: "" });
+  });
+  it("holds a merge back once a push came in after its confirm opened, and nothing else", () => {
+    const seen = "0123456789abcdef0123456789abcdef01234567";
+    const pushed = "89abcdef0123456789abcdef0123456789abcdef";
+    for (const a of ["merge", "squash", "rebase", "auto"] as const) {
+      expect(headMoved(a, seen, pushed)).toBe(true);
+      expect(headMoved(a, seen, seen)).toBe(false);
+    }
+    for (const a of ["cancel-auto", "close", "reopen"] as const) expect(headMoved(a, seen, pushed)).toBe(false);
   });
 });
 
