@@ -159,14 +159,23 @@ func (s *Server) handleIssueWrite(what string) http.HandlerFunc {
 		case "assign":
 			err = s.Issues.Assign(mc.ID(), req.Repo, number, req.Me)
 		}
-		switch {
-		case errors.Is(err, ghissues.ErrInvalid), errors.Is(err, ghissues.ErrEmpty):
-			httpErr(w, 400, err)
-		case err != nil:
-			httpErr(w, http.StatusBadGateway, err)
-		default:
-			writeJSON(w, map[string]any{"ok": true})
-		}
+		issueWritten(w, err)
+	}
+}
+
+// issueWritten answers a write: ok; a close or reopen refused after its comment was posted as {commented, error}, so the
+// page keeps no draft of a comment that is on GitHub; else why not, gh's refusal a 502.
+func issueWritten(w http.ResponseWriter, err error) {
+	var partly *ghissues.Partly
+	switch {
+	case errors.Is(err, ghissues.ErrInvalid), errors.Is(err, ghissues.ErrEmpty):
+		httpErr(w, 400, err)
+	case errors.As(err, &partly):
+		writeJSON(w, map[string]any{"ok": false, "commented": true, "error": err.Error()})
+	case err != nil:
+		httpErr(w, http.StatusBadGateway, err)
+	default:
+		writeJSON(w, map[string]any{"ok": true})
 	}
 }
 

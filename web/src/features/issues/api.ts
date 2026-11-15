@@ -97,8 +97,11 @@ export const fetchIssue = (machine: string, repo: string, number: number, fresh 
 
 export const commentIssue = (machine: string, repo: string, number: number, body: string) => sendJSON("POST", `/api/issues/${number}/comment`, { machine, repo, body });
 
-export const closeIssue = (machine: string, repo: string, number: number, reason: "completed" | "not_planned", comment = "") => sendJSON("POST", `/api/issues/${number}/close`, { machine, repo, reason, comment });
+// Written is a write's answer; a close or reopen gh refused after the comment that goes first was posted says so
+export type Written = { ok: boolean; commented?: boolean; error?: string };
 
-export const reopenIssue = (machine: string, repo: string, number: number, comment = "") => sendJSON("POST", `/api/issues/${number}/reopen`, { machine, repo, comment });
+export const closeIssue = (machine: string, repo: string, number: number, reason: "completed" | "not_planned", comment = "") => sendJSON<Written>("POST", `/api/issues/${number}/close`, { machine, repo, reason, comment });
+
+export const reopenIssue = (machine: string, repo: string, number: number, comment = "") => sendJSON<Written>("POST", `/api/issues/${number}/reopen`, { machine, repo, comment });
 
 export const assignIssue = (machine: string, repo: string, number: number, me: boolean) => sendJSON("POST", `/api/issues/${number}/assign`, { machine, repo, me });

@@ -7,7 +7,21 @@ import (
 	"testing"
 
 	"github.com/dev1antdev/remuda/internal/auth"
+	"github.com/dev1antdev/remuda/internal/ghissues"
 )
+
+func TestACloseRefusedAfterItsCommentWentSaysTheCommentIsPosted(t *testing.T) {
+	rec := httptest.NewRecorder()
+	issueWritten(rec, &ghissues.Partly{Refused: ghissues.Refused{Machine: "GOG", Output: "GraphQL: Could not close (closeIssue)"}})
+	if body := rec.Body.String(); rec.Code != 200 || !strings.Contains(body, `"commented":true`) || !strings.Contains(body, `"ok":false`) || !strings.Contains(body, "comment is posted") {
+		t.Fatalf("a close refused after its comment went: %d %s", rec.Code, body)
+	}
+	rec = httptest.NewRecorder()
+	issueWritten(rec, &ghissues.Refused{Machine: "GOG", Output: "GraphQL: Could not close (closeIssue)"})
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("a refused close: %d %s", rec.Code, rec.Body.String())
+	}
+}
 
 func TestTheIssueRoutesRefuseAViewerAndAKeyBeforeAnythingRuns(t *testing.T) {
 	s := &Server{} // no fleet, no gh: a refusal must come before either is asked

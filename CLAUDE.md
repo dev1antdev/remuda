@@ -6012,7 +6012,12 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   most `MaxBody` 64 KB), `Close` (`--reason "completed" | "not planned"`,
   the comment posted first as GitHub's Close with comment does), `Reopen`
   (the same), `Assign` (`gh issue edit --add-assignee @me` /
-  `--remove-assignee @me`); a refusal is `*Refused` with gh's own words.
+  `--remove-assignee @me`); a refusal is `*Refused` with gh's own words —
+  a close or a reopen refused after its comment went (the script prints
+  `postedMark` between them; anyone may comment on a public repository's
+  issue, few may close it) is `*Partly`, "the comment is posted, but…",
+  answered 200 `{ok: false, commented, error}` (`issueWritten`), the
+  viewer saying it and clearing the draft so the comment is not sent twice.
   Routes (`internal/server/issues.go`, every one the person's — a viewer
   link and an agent key get a 403 before anything runs, `thePersons`,
   tested there and in `internal/auth`): `GET /api/issues/repos?machine&dir`,
