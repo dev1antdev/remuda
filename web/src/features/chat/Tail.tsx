@@ -9,7 +9,7 @@ import { sendKeys } from "@/features/roster/api";
 import { useNow } from "@/lib/clock";
 import { errMsg } from "@/lib/text";
 import { took } from "@/lib/time";
-import { Empty, Notice } from "@/ui";
+import { Notice } from "@/ui";
 import type { Subagent } from "./api";
 import Composer from "./Composer";
 import { useRoster } from "@/features/roster/useRoster";
@@ -65,7 +65,7 @@ const Tail = memo(function Tail({ machineId, paneId, status, dir, agent = "", wo
       <TileState words={words} doing={now} said={answered} plan={progress} subagents={subs} spinner={spinner} />
       <Ribbon turns={turns} status={status} dir={dir} cut={turns.length >= TAIL_TURNS} unread={tailUnread(TAIL_TURNS)} className="tile-ribbon" />
       <div className="chat-log" ref={logRef} onScroll={follow.onScroll}>
-        {turns.length === 0 && (chat === null ? <div className="empty chat-empty">{t("Loading…")}</div> : <Empty small icon="message" title={t("No transcript yet.")} />)}
+        {turns.length === 0 && <div className="empty chat-empty">{chat === null ? t("Loading…") : t("No transcript yet.")}</div>}
         {turns.map((t, i) => (
           <TurnView key={t.ids?.[0] || i} turn={t} machineId={machineId} onOpenFile={onOpenFile} subagents={subagents} onOpenSubagent={onOpenSubagent} live={status === "run" && i === turns.length - 1} />
         ))}

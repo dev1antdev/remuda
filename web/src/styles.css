@@ -85,13 +85,15 @@
   --fs-18: calc(18px * var(--text-scale));
   --fs-20: calc(20px * var(--text-scale));
 
-  /* controls — scaled a little with the text, tightened by the density (data-density on the root) */
+  /* controls — scaled a little with the text, an eighth taller under a finger (--ctl-touch, below), tightened by the
+     density (data-density on the root) */
   --ctl-scale: 1;
+  --ctl-touch: 1;
   --ctl-tighten: 0px;
-  --ctl-lg: calc(36px * var(--ctl-scale) - var(--ctl-tighten));
-  --ctl: calc(32px * var(--ctl-scale) - var(--ctl-tighten));
-  --ctl-sm: calc(28px * var(--ctl-scale) - var(--ctl-tighten));
-  --ctl-xs: calc(24px * var(--ctl-scale) - var(--ctl-tighten));
+  --ctl-lg: calc(36px * var(--ctl-scale) * var(--ctl-touch) - var(--ctl-tighten));
+  --ctl: calc(32px * var(--ctl-scale) * var(--ctl-touch) - var(--ctl-tighten));
+  --ctl-sm: calc(28px * var(--ctl-scale) * var(--ctl-touch) - var(--ctl-tighten));
+  --ctl-xs: calc(24px * var(--ctl-scale) * var(--ctl-touch) - var(--ctl-tighten));
 
   /* density — the rows' height and padding, the tab strip's height, the gap between turns */
   --row-h: 30px;
@@ -118,6 +120,14 @@
   --bg-elev: var(--bg-active);
 
   color-scheme: dark;
+}
+
+/* a touch screen: a button is 36 px tall, a header's 40, a tab 36 — nothing a thumb aims at is a mouse's size */
+@media (pointer: coarse) {
+  :root {
+    --ctl-touch: 1.125;
+    --tab-h: 36px;
+  }
 }
 
 /* ---- the palettes: each theme's colours in Catppuccin's named slots (lib/themes/ holds the same values, lib/theme.test.ts
@@ -8664,8 +8674,15 @@ rect.ribbon-s.is-shown {
     flex-wrap: wrap;
   }
 
+  /* the search takes a row of its own with the head's icon buttons beside it, never a row each */
+  .tasks-head h1:has(+ .tasks-search) {
+    flex-basis: 100%;
+  }
+
   .tasks-search {
-    width: 100%;
+    flex: 1 1 calc(100% - 112px);
+    width: auto;
+    min-width: 0;
     max-width: none;
   }
 
@@ -8751,6 +8768,20 @@ rect.ribbon-s.is-shown {
   .btn.sm,
   .sidebar-head-btn {
     height: var(--ctl);
+  }
+
+  /* a segment of a switch is a thumb's: the lens switch is how a phone moves between the lenses */
+  .mode-switch button,
+  .lens-switch button,
+  .fv-tabs button,
+  .tasks-view button,
+  .review-scope button {
+    height: 32px;
+  }
+
+  .keybar .key {
+    height: 40px;
+    min-width: 42px;
   }
 
   .ws-main,

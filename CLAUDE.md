@@ -4202,7 +4202,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   number — and its + is a menu: Terminal makes a shell tab in the
   workspace's folder at once and shows it, its terminal alone, Agent…
   the New tab dialog; a shell's tab shows its terminal (`lensOn`), the
-  lens asked for kept for the agents' tabs. (`HealthButton.tsx`, `MachineMenu.tsx`; its head is a + menu — a
+  lens asked for kept for the agents' tabs; the tab on screen is brought
+  into view in a strip too narrow for every tab (a pane opened from the
+  sidebar or a notification on a phone). (`HealthButton.tsx`, `MachineMenu.tsx`; its head is a + menu — a
   workspace on a connected machine, an agent from a recipe, each scene and "Scenes…", a PC — and a ⋯ menu — message
   several agents, the order, Sidebar settings, which opens Settings on its Sidebar section; `RadarSettings.tsx` is
   `RadarFields`, the order, the row label, the idle tiers and the
@@ -6907,7 +6909,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   literal px size; **Settings › Text size** puts `data-text` on the root,
   small 0.92 / large 1.1 / larger 1.2, and the control heights
   `--ctl-lg`/`--ctl`/`--ctl-sm`/`--ctl-xs` scale a little with it through
-  `--ctl-scale`), the density knobs (`--row-h`, `--row-pad-y`, `--tab-h`,
+  `--ctl-scale`, and are an eighth taller under a finger, `--ctl-touch`
+  1.125 on a coarse pointer: a button 36 px, a header's 40, and with them
+  a tab 36, a segment of a switch 32, a key of the key bar 40), the density knobs (`--row-h`, `--row-pad-y`, `--tab-h`,
   `--tile-pad-y`, `--task-row-h`, `--gap-row`, `--ctl-tighten`: the
   sidebar rows, the tabs, a tile's head, the task rows, the gap between
   turns, the controls — `data-density="compact"` tightens them, with a
@@ -6932,7 +6936,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   a box that drew one), one placeholder, one focus ring. Rows share a radius,
   hover and focus ring; cards are `.card`; counts are `.badge` (`.quiet`);
   state dots are `.dot.dot-<status>` / `.dot.machine-state.is-<state>`. On
-  a coarse pointer the small controls grow and hover-revealed ones stay
+  a coarse pointer every control grows (`--ctl-touch`) and hover-revealed ones stay
   visible. A button is styled by its family class, not by where it sits;
   the only context rules left are the components whose children *are* the
   component — segmented controls (`.mode-switch`, `.lens-switch`,
@@ -7090,7 +7094,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   (`go:embed all:dist`; `mermaid` for the agents' diagrams, pinned exact
   and split into chunks only a drawn diagram loads). Build with `make web` before `go build`; `npm
   test` runs Vitest on the pure modules (`*.test.ts` beside each; node,
-  no DOM). Laid out by feature: `lib/` → `ui/` → `features/<name>/` (one
+  no DOM). **An effect never returns a promise**: React calls whatever an
+  effect returns as its cleanup, and Chrome's `scrollIntoView`, `scrollTo`
+  and `scrollBy` answer a promise where WebKit's answer nothing — an
+  effect written as one expression around one crashed the page in Chrome
+  alone (`lib/effects.test.ts` reads every source for it). Laid out by feature: `lib/` → `ui/` → `features/<name>/` (one
   folder per lens or panel, its server calls in its own `api.ts`) →
   `app/`; a dependency points down that list, and a feature never imports
   another feature's screens (its `api.ts` and pure modules, and the few
