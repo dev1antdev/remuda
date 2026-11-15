@@ -211,4 +211,13 @@ func TestAFinishLookedAtThroughRemudaIsTold(t *testing.T) {
 	if tr.Looked("m", "p1") || len(told) != 1 {
 		t.Fatalf("herdr's own focus: looked %v, told %v", tr.Looked("m", "p1"), told)
 	}
+	// a headless herdr keeps one pane focused for good: its finish, the tick down already, is still looked at here
+	tr.Seen("m", "p1")
+	if len(told) != 2 || !tr.Looked("m", "p1") {
+		t.Fatalf("a look at herdr's focused pane: told %v, looked %v", told, tr.Looked("m", "p1"))
+	}
+	tr.Seen("m", "p1")
+	if len(told) != 2 {
+		t.Fatalf("told again: %v", told)
+	}
 }

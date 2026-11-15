@@ -60,6 +60,20 @@ export type PlanItem = {
 // denied: the calls Claude Code refused without asking in the conversation, nobody being there to approve them (the lens's answer only)
 export type ChatResponse = { session_id?: string; subagent?: string; sessions: SessionInfo[]; turns: Turn[]; plan?: PlanItem[]; subagents?: Subagent[]; denied?: Denial[] };
 
+// chatQuery is a read's query. The server counts a pane's read as the person's look — its finish's notification taken
+// back, or never sent — so a page whose own document is hidden says it is none (look=0): the Mac app polls on with its
+// window closed, for its menu bar, and a tab behind a pop-out window polls for that window.
+export function chatQuery(read: { machineId: string; paneId: string; sessionId: string | null; dir?: string; last?: number; subagent?: string; hidden: boolean }): URLSearchParams {
+  const q = new URLSearchParams({ machine: read.machineId });
+  if (read.paneId) q.set("pane", read.paneId);
+  else if (read.dir) q.set("dir", read.dir);
+  if (read.sessionId) q.set("session", read.sessionId);
+  if (read.last) q.set("last", String(read.last));
+  if (read.subagent) q.set("subagent", read.subagent);
+  if (read.hidden && read.paneId) q.set("look", "0");
+  return q;
+}
+
 // fetchChat returns null when unchanged (304 via ETag).
 export async function fetchChat(
   machineId: string,
@@ -70,12 +84,7 @@ export async function fetchChat(
   last?: number, // only the last N turns: a wall tile
   subagent?: string, // one subagent's own conversation, read-only
 ): Promise<{ body: ChatResponse; etag: string | null } | null> {
-  const q = new URLSearchParams({ machine: machineId });
-  if (paneId) q.set("pane", paneId);
-  else if (dir) q.set("dir", dir);
-  if (sessionId) q.set("session", sessionId);
-  if (last) q.set("last", String(last));
-  if (subagent) q.set("subagent", subagent);
+  const q = chatQuery({ machineId, paneId, sessionId, dir, last, subagent, hidden: typeof document !== "undefined" && document.visibilityState !== "visible" });
   const res = await fetch(`/api/chat?${q}`, { headers: etag ? { "If-None-Match": etag } : {} });
   if (res.status === 304) return null;
   await check(res);

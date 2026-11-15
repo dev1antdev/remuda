@@ -20,6 +20,14 @@ func (s *Server) chatRoutes(api *http.ServeMux) {
 
 var sessionIDRe = regexp.MustCompile(`^[A-Za-z0-9-]{1,80}$`)
 
+// looksAtPane says whether a read of a pane's conversation is the person's look at it, which brings its finish down and
+// keeps that finish's push from going out: the chat lens on a page they see. A tile's tail is none, nor a viewer's
+// screen, nor a page whose own document is hidden and says so with look=0 — the Mac app polls on with its window
+// closed, for its menu bar, and a tab behind a pop-out window polls for it.
+func looksAtPane(r *http.Request, paneID string, last int) bool {
+	return paneID != "" && last == 0 && r.URL.Query().Get("look") != "0" && !auth.IsViewer(r.Context())
+}
+
 const maxLastTurns = 200
 
 // handleChat is GET /api/chat?machine&pane[&session] or ?machine&dir&session, with an ETag per file version; last=N answers the
@@ -67,7 +75,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		s.writeSubagent(w, r, conv, subagent)
 		return
 	}
-	if paneID != "" && last == 0 && !auth.IsViewer(r.Context()) { // a tile's tail is not the person's look at the pane, nor a viewer's: the lens is
+	if looksAtPane(r, paneID, last) {
 		s.Radar.Seen(mc.ID(), paneID)
 	}
 	if conv.Path == "" {
