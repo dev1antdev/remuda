@@ -27,6 +27,7 @@ type Detail struct {
 	Reactions    []Reaction `json:"reactions"`
 	Comments     int        `json:"comments"`
 	Timeline     []Event    `json:"timeline"`
+	Cut          bool       `json:"cut,omitempty"` // the timeline's pages stopped half way: the rest is on GitHub
 	Pulls        []Pull     `json:"pulls"`
 	Participants []Person   `json:"participants"`
 	Pull         bool       `json:"pull,omitempty"` // the number is a pull request's: the viewer sends it to GitHub
@@ -133,22 +134,29 @@ func labelOf(l *ghLabel) Label {
 }
 
 // timelineOf reads the REST timeline's pages, gh's --paginate printing one JSON array a page, into the viewer's events:
-// a burst of one person's label changes is one line, an event the viewer does not draw is left out.
-func timelineOf(text string) ([]Event, error) {
+// a burst of one person's label changes is one line, an event the viewer does not draw is left out. Pages that stop
+// half way — gh refused one, or the script ran out of time — keep the ones read whole, and say the timeline is cut.
+func timelineOf(text string) (events []Event, cut bool) {
 	trimmed := strings.TrimSpace(text)
 	at := strings.Index(trimmed, "[")
 	if at < 0 {
-		return nil, errors.New(trimmed)
+		return []Event{}, true
 	}
 	dec := json.NewDecoder(strings.NewReader(trimmed[at:]))
 	var raw []restEvent
 	for dec.More() {
 		var page []restEvent
 		if err := dec.Decode(&page); err != nil {
-			return nil, errors.New(trimmed)
+			cut = true
+			break
 		}
 		raw = append(raw, page...)
 	}
+	return eventsOf(raw), cut
+}
+
+// eventsOf is the timeline's raw events as the viewer draws them, the newest MaxEvents.
+func eventsOf(raw []restEvent) []Event {
 	events := []Event{}
 	for _, e := range raw {
 		base := Event{Actor: e.who(), At: e.CreatedAt}
@@ -218,7 +226,7 @@ func timelineOf(text string) ([]Event, error) {
 	if len(events) > MaxEvents {
 		events = events[len(events)-MaxEvents:]
 	}
-	return events, nil
+	return events
 }
 
 // commitRepo is the owner/repository a commit's API address names.
@@ -330,11 +338,8 @@ func detailOf(issueBody, timeline, closedBy string) (Detail, error) {
 	if raw.Milestone != nil {
 		d.Milestone = &Milestone{Title: raw.Milestone.Title, URL: raw.Milestone.HTMLURL}
 	}
-	events, err := timelineOf(timeline)
-	if err != nil {
-		events = []Event{}
-	}
-	d.Timeline = events
+	events, cut := timelineOf(timeline)
+	d.Timeline, d.Cut = events, cut
 	if pulls, ok := closedByOf(closedBy); ok {
 		d.Pulls = pulls
 	} else {

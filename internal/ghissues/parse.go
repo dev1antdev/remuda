@@ -34,8 +34,12 @@ type ghListItem struct {
 	URL         string     `json:"url"`
 }
 
+// errCut says gh's answer began but stopped before its end: the script ran out of time, or gh gave up half way.
+var errCut = errors.New("its answer was cut short")
+
 // jsonFrom decodes the JSON that starts at the first open, past whatever gh printed first; anything else is gh's
-// complaint, which the error carries whole.
+// complaint, which the error carries whole. JSON that does not end is errCut, or the words gh printed before it: the
+// answer's own text (an issue about gh's sign-in, a title saying "not found") is never read as gh's complaint.
 func jsonFrom(text, open string, v any) error {
 	trimmed := strings.TrimSpace(text)
 	at := strings.Index(trimmed, open)
@@ -43,9 +47,20 @@ func jsonFrom(text, open string, v any) error {
 		return errors.New(trimmed)
 	}
 	if err := json.NewDecoder(strings.NewReader(trimmed[at:])).Decode(v); err != nil {
-		return errors.New(trimmed)
+		if at == 0 {
+			return errCut
+		}
+		return errors.New(strings.TrimSpace(trimmed[:at]))
 	}
 	return nil
+}
+
+// cutWords is what gh's trouble is read from: beside an answer cut short, why the run ended — its timeout, say.
+func cutWords(err, runErr error) string {
+	if errors.Is(err, errCut) && runErr != nil {
+		return err.Error() + ": " + runErr.Error()
+	}
+	return err.Error()
 }
 
 func labelsOf(raw []ghLabel) []Label {

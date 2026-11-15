@@ -4,6 +4,8 @@
 
 const at = (minutes) => new Date(Date.now() - minutes * 60_000).toISOString();
 const HEAD = "0123456789abcdef0123456789abcdef01234567";
+const PUSHED = "89abcdef0123456789abcdef0123456789abcdef";
+let head = HEAD; // a push while the merge's confirm is open moves it to PUSHED
 
 export const PR_URL = "https://github.com/octo/trips/pull/482";
 
@@ -50,7 +52,7 @@ const detail = () => ({
   author: "sam",
   head: "offline-trips",
   base: "main",
-  head_oid: HEAD,
+  head_oid: head,
   changed_files: 3,
   additions: 120,
   deletions: 14,
@@ -132,8 +134,10 @@ export function answerFor(url, method) {
 }
 
 // prScreens opens the panel the way a person does — the palette's row for the workspace on screen — and draws its two
-// lists, a pull request on each of its tabs, and the merge's confirm card with what stands in the way, cancelled
+// lists, a pull request on each of its tabs, and the merge's confirm card with what stands in the way, a push landing
+// while it is open holding the merge back, cancelled
 export async function prScreens({ screen, palette, tap, present, until, evaluate, count, failed, check, onAgents, sleep }) {
+  head = HEAD;
   const open = async () => {
     await onAgents();
     await palette("pull-requests");
@@ -204,9 +208,14 @@ export async function prScreens({ screen, palette, tap, present, until, evaluate
       await evaluate(`document.querySelectorAll("[role=menu] [role=menuitem]")[2]?.click()`);
       if (!(await until(() => present(".pr-panel .pr-confirm .pr-in-the-way"), 4))) failed("the merge's confirm does not say what stands in the way");
       check(await present(".pr-panel .pr-confirm textarea"), "a squash's confirm has no commit message to edit");
+      head = PUSHED; // a push lands while the confirm is open, and the panel reads GitHub again
+      await evaluate(`document.querySelector(".modal.pr-panel .modal-head-controls .icon-btn")?.click()`);
+      if (!(await until(() => present(".pr-panel .pr-confirm .notice.warn"), 6))) failed("a push since the merge's confirm opened is not said: the merge would name a head the person never saw");
+      check(await evaluate(`!!document.querySelector(".pr-panel .pr-confirm .btn.primary")?.disabled`), "the merge's confirm still merges after a newer push came in");
     },
     expect: [".pr-panel .pr-confirm .btn.primary"],
     close: async () => {
+      head = HEAD;
       await evaluate(`[...document.querySelectorAll(".pr-panel .pr-confirm .btn")].find((b) => !b.classList.contains("primary"))?.click()`);
       if (!(await until(async () => !(await present(".pr-panel .pr-confirm")), 3))) failed("Cancel does not take the confirm card away");
       await evaluate(`document.querySelector(".modal.pr-panel .modal-head > .icon-btn")?.click()`);

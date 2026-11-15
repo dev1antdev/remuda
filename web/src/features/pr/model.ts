@@ -149,6 +149,10 @@ export function actions(pr: Detail): Action[] {
 
 export const merges = (a: Action) => a === "merge" || a === "squash" || a === "rebase";
 
+// headMoved says a push came in after the confirm opened on the head the person saw: an action that names that head would
+// otherwise send the one the panel's later read brought, which nobody looked at
+export const headMoved = (a: Action, seen: string, now: string) => (merges(a) || a === "auto") && seen !== now;
+
 // actionLabel is an action's row in the menu and its confirm's button
 export function actionLabel(a: Action): string {
   return {

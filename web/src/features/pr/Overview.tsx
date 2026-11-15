@@ -54,7 +54,7 @@ const DECISION: Record<string, { label: () => string; tone: string }> = {
 export default function Overview({ at, pr, onChanged, onClose }: { at: PRAt; pr: Detail; onChanged: () => void; onClose: () => void }) {
   const { machines } = useRoster();
   const share = useSharing(); // under the screen-sharing mode a hidden folder's workspace goes by its neutral name
-  const agents = agentsOn(machines, at.machineId, { url: pr.url, head: pr.head });
+  const agents = agentsOn(machines, at, { url: pr.url, head: pr.head });
   const [asking, setAsking] = useState("");
   const again = async (login: string) => {
     setAsking(login);

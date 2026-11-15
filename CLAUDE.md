@@ -4332,8 +4332,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   last full read while it stands (`standFor`: checks running 2 min, an
   open request 10, a closed or merged one an hour — a check moves
   without the pull request moving); anything else reads the request in
-  full and keeps the new ETag (`entry.etag`, `entry.fullAt`). GitLab has
-  no probe.
+  full and keeps the new ETag (`entry.etag`, `entry.fullAt`) — only
+  beside a full read that answered: one that failed keeps the last ETag
+  and read together, else the next 304 would keep a read from before the
+  move. GitLab has no probe.
   **A GitLab merge request is read the same way through glab**
   (`gitlab.go`, tested on `shell.Fake` with GitLab's own answers):
   `MergeParts` takes the instance, the project path and the number off
@@ -4648,8 +4650,14 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   checkout's pull requests and its repository's, one in full, and what
   the person writes on GitHub at a press — all through gh on the
   checkout's machine as the person, as `internal/prstatus` reads.
-  `gh.go`: `ghScript` runs gh with its arguments quoted, a JSON body on
-  stdin through a here-document (one line: json.Marshal never writes the
+  `gh.go`: `ghScript` runs gh with its arguments quoted; what a write
+  hands gh on its stdin — a comment's, a reply's JSON, any mutation's or
+  REST body's (`runText`) — is put on the machine as a file first
+  (`putInput`: `mktemp`, `PutFile`, removed by the script's trap), never
+  inside the script, which is a command line there (any user's `ps`;
+  Linux refuses an argument past 128 KB, which a 64 KB comment of markup
+  passes once JSON spells `<` as `<`), a read's query through a
+  here-document (one line: json.Marshal never writes the
   delimiter on a line of its own), stdout, stderr and the exit status
   printed apart (`parseAnswer` reads them from the end) and, for a long
   answer, stdout cut on the machine through a file (`lastBytes` /
@@ -4734,10 +4742,14 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   stats strip, each figure a link to its tab, Unresolved opening the
   Comments on the unresolved alone; Overview | Comments [n] | Checks
   (the worst's icon) | Files [n]), `ConfirmCard.tsx` (the question, in
-  red "Still in the way: …", a squash's message, the head on screen sent
-  with the merge), `Overview.tsx` (`Group`, folded per device in pref
+  red "Still in the way: …", a squash's message, the head on screen when
+  the card opened sent with the merge — a newer one the panel's minute
+  read or Read GitHub again brings while it is open is said in amber and
+  holds the button back, `headMoved`), `Overview.tsx` (`Group`, folded per device in pref
   `pr.closed`: the agents on it — `agentsOn`: its head branch checked out
-  in a workspace of the panel's machine, or the pull request named
+  in a checkout of the panel's repository on its machine (a workspace of
+  the same `folder`: another repository's on a branch named the same,
+  main say, is not on it), or the pull request named
   anywhere — a click opening one; the reviewers with Ask again; the
   description), `Comments.tsx` (the author filter, Unresolved, "Mark N
   read" — pref `pr.seen`, a fingerprint per comment, `MAX_SEEN` 2000 —
@@ -6048,17 +6060,28 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   the milestone, reactions, `timeline` — `Event{kind comment | labels |
   assign | closed | reopened | renamed | milestone | mention | commit}`, a
   burst of one person's label changes within a minute one `labels` line,
-  at most `MaxEvents` 600 — `pulls`, `participants` (people, not bots, in
+  at most `MaxEvents` 600, `cut` when its pages stopped half way (the
+  pages read whole kept, the viewer saying the rest is on GitHub) —
+  `pulls`, `participants` (people, not bots, in
   order of appearance) and `pull` (the number is a pull request's).
   `troubleOf` reads gh's complaint as a `*Trouble{kind no-gh | signed-out
-  | not-found | failed, text naming the machine, run}`. **The writes**
+  | not-found | failed, text naming the machine, run}` — never off an
+  answer that began and was cut short (the timeout, a page refused half
+  way: `errCut`, said with why the run ended, `cutWords`), whose own text
+  (an issue about `gh auth login`, a title saying "not found") is the
+  issues', not gh's complaint. **The writes**
   (`write.go`), each at the person's press: `Comment` (the text put on the
   machine as a `mktemp` file, `gh issue comment --body-file "$f"`, the
   file removed by a trap whatever happens — never on a command line, at
   most `MaxBody` 64 KB), `Close` (`--reason "completed" | "not planned"`,
   the comment posted first as GitHub's Close with comment does), `Reopen`
   (the same), `Assign` (`gh issue edit --add-assignee @me` /
-  `--remove-assignee @me`); a refusal is `*Refused` with gh's own words.
+  `--remove-assignee @me`); a refusal is `*Refused` with gh's own words —
+  a close or a reopen refused after its comment went (the script prints
+  `postedMark` between them; anyone may comment on a public repository's
+  issue, few may close it) is `*Partly`, "the comment is posted, but…",
+  answered 200 `{ok: false, commented, error}` (`issueWritten`), the
+  viewer saying it and clearing the draft so the comment is not sent twice.
   Routes (`internal/server/issues.go`, every one the person's — a viewer
   link and an agent key get a 403 before anything runs, `thePersons`,
   tested there and in `internal/auth`): `GET /api/issues/repos?machine&dir`,

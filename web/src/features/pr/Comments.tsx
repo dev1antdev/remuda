@@ -33,7 +33,7 @@ export default function Comments({ at, pr, onlyOpen, onOnlyOpen, onChanged }: { 
   const [handoff, setHandoff] = useState<Handoff | null>(null);
   const targets = useAgentTargets();
   const { machines } = useRoster();
-  const onPR = agentsOn(machines, at.machineId, { url: pr.url, head: pr.head });
+  const onPR = agentsOn(machines, at, { url: pr.url, head: pr.head });
   const first = onPR[0] ? { machineId: onPR[0].machineId, paneId: onPR[0].paneId } : at.paneId ? { machineId: at.machineId, paneId: at.paneId } : null;
   return (
     <>
