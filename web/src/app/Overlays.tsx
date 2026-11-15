@@ -221,7 +221,7 @@ export default function Overlays() {
       )}
       {dialog?.kind === "broadcast" && <BroadcastDialog agents={targets} onClose={actions.closeDialog} />}
       {dialog?.kind === "keys" && <KeysDialog onClose={actions.closeDialog} />}
-      {dialog?.kind === "settings" && <SettingsDialog onClose={actions.closeDialog} />}
+      {dialog?.kind === "settings" && <SettingsDialog section={dialog.section} onClose={actions.closeDialog} />}
       {dialog?.kind === "import-issue" && (
         <ImportIssueDialog
           projectId={dialog.projectId}

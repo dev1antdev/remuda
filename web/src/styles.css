@@ -12600,26 +12600,166 @@ body.popout {
   animation: pop var(--fast) var(--ease);
 }
 
-/* ---- Settings (features/settings/SettingsDialog.tsx) ---- */
-.settings-section {
+/* ---- Settings (features/settings/SettingsDialog.tsx): the list of sections beside the one picked ---- */
+.modal.settings-dialog {
+  height: min(84dvh, 700px);
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+}
+
+.settings-dialog > .modal-head {
+  padding: 14px 14px 14px 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.settings-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 208px minmax(0, 1fr);
+}
+
+.settings-nav {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 16px;
+  min-height: 0;
+  padding: 14px 10px 16px;
+  overflow-y: auto;
+  border-right: 1px solid var(--line);
+  background: var(--bg-raised);
 }
 
-.settings-section + .settings-section {
-  margin-top: 14px;
-  padding-top: 12px;
-  border-top: 1px solid var(--line);
+.settings-nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
-.settings-section h3 {
-  margin: 0 0 4px;
+.settings-nav-head,
+.settings-sub {
+  margin: 0;
   font-size: var(--fs-11);
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--fg-faint);
+}
+
+.settings-nav-head {
+  padding: 0 10px 5px;
+}
+
+.btn.settings-nav-item {
+  flex-shrink: 0;
+  justify-content: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 0 10px;
+  color: var(--fg);
+}
+
+.btn.settings-nav-item .icon {
+  flex-shrink: 0;
+  color: var(--fg-dim);
+}
+
+.btn.settings-nav-item.on,
+.btn.settings-nav-item.on:hover:not(:disabled) {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.btn.settings-nav-item.on .icon {
+  color: inherit;
+}
+
+.settings-nav-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.5;
+}
+
+.settings-pane {
+  min-width: 0;
+  min-height: 0;
+  padding: 18px 22px 22px;
+  overflow-y: auto;
+}
+
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* the section's name heads its pane; a long one's groups each get a quiet label */
+.settings-section h3 {
+  margin: 0 0 6px;
+  font-size: var(--fs-18);
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.settings-sub {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.settings-section h3 + .settings-sub {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+/* on a phone the list is a row of chips over the section, the one on screen brought into view */
+@media (max-width: 700px) {
+  .modal.settings-dialog {
+    height: min(88dvh, 760px);
+  }
+
+  .settings-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .settings-nav {
+    flex-direction: row;
+    gap: 6px;
+    padding: 10px 12px;
+    overflow: auto hidden;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    scrollbar-width: none;
+  }
+
+  .settings-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .settings-nav-group {
+    display: contents;
+  }
+
+  .settings-nav-head {
+    display: none;
+  }
+
+  .btn.settings-nav-item {
+    width: auto;
+    gap: 7px;
+    padding: 0 12px;
+    border-radius: var(--r-xl);
+    background: var(--bg-quiet);
+    white-space: nowrap;
+  }
+
+  .settings-pane {
+    padding: 14px 16px 18px;
+  }
 }
 
 .settings-dialog .settings-row {

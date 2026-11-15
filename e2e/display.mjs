@@ -1350,9 +1350,9 @@ async function sleepScreens() {
   });
   await screen("settings-sleep", {
     open: async () => {
-      await palette("settings");
+      await palette("settings:sleep");
       if (!(await until(() => present(".settings-dialog .sleep-settings input[type=checkbox]:not(:disabled)"), 6))) return failed("Settings shows no switches for sleep and resume");
-      await evaluate(`document.querySelector('.settings-dialog .sleep-settings')?.scrollIntoView({ block: "start" })`);
+      check(await present('.settings-nav [data-section="sleep"][aria-selected="true"]'), "the palette's row for a section does not open Settings on it");
       check((await count(".settings-dialog .sleep-settings input[type=checkbox]:checked")) === 0, "the sleep and resume switches do not start off");
     },
     expect: [".settings-dialog .sleep-settings"],
@@ -1536,6 +1536,12 @@ const tapUntil = async (selector, opened) => {
   if (await until(() => present(opened), 2)) return;
   await tap(selector);
   await until(() => present(opened), 3);
+};
+// settingsSection picks a section of the open Settings in its list: a column at a desk, a row of chips on a phone
+const settingsSection = async (id) => {
+  const tab = `.settings-nav [data-section="${id}"]`;
+  await tap(tab);
+  if (!(await until(() => present(`${tab}[aria-selected="true"]`), 3))) failed(`Settings does not open its ${id} section`);
 };
 // setPref writes a pref the way another tab of the page would, so every hook of it reads it again at once
 const setPref = (key, value) =>
@@ -3186,9 +3192,19 @@ async function runPass() {
     },
     expect: [".modal.updates"],
   });
-  await screen("settings", { open: async () => palette("settings"), expect: [".settings-dialog .settings-section"], close: async () => {} });
+  await screen("settings", {
+    open: async () => {
+      await palette("settings");
+      if (!(await until(() => present(".settings-pane .settings-section"), 6))) return failed("Settings shows no section");
+      check((await count(".settings-nav [role=tab]")) === 9, "Settings does not list its nine sections");
+      check((await count('.settings-nav [role=tab][aria-selected="true"]')) === 1 && (await count(".settings-dialog .settings-section")) === 1, "Settings does not show one section, the one picked in its list");
+    },
+    expect: [".settings-dialog .settings-nav", ".settings-pane .settings-section"],
+    close: async () => {},
+  });
   await screen("settings-themes", {
     open: async () => {
+      await settingsSection("look");
       await evaluate(`document.querySelector('.settings-dialog .settings-themes')?.scrollIntoView({ block: "start" })`);
       check((await count(".settings-dialog .theme-cards[role=radiogroup] .theme-card")) === 20, "Settings › Look does not offer ten dark and ten light themes");
       const outside = await evaluate(`(() => { const box = document.querySelector(".settings-dialog").getBoundingClientRect(); return [...document.querySelectorAll(".theme-card")].filter((card) => { const r = card.getBoundingClientRect(); return r.width < 60 || r.left < box.left - 1 || r.right > box.right + 1; }).map((card) => card.dataset.flavor); })()`);
@@ -3204,16 +3220,19 @@ async function runPass() {
     expect: [".settings-dialog .theme-card.on"],
     close: async () => {},
   });
-  const sections = (await evaluate(`document.querySelectorAll('.settings-dialog .settings-section').length`)) ?? 0;
-  for (let i = 1; i < sections; i++)
-    await screen(`settings-section-${i + 1}`, {
-      open: async () => evaluate(`document.querySelectorAll('.settings-dialog .settings-section')[${i}].scrollIntoView({ block: "start" })`),
-      expect: [".settings-dialog"],
+  const sections = (await evaluate(`[...document.querySelectorAll('.settings-nav [role=tab]')].map((tab) => tab.dataset.section)`)) ?? [];
+  for (const id of sections)
+    await screen(`settings-section-${id}`, {
+      open: async () => {
+        await settingsSection(id);
+        check(await evaluate(`(() => { const pane = document.querySelector(".settings-pane"); return !!pane && pane.scrollWidth <= pane.clientWidth + 1; })()`), `the ${id} section scrolls sideways in its pane`);
+      },
+      expect: [".settings-pane .settings-section"],
       close: async () => {},
     });
   await screen("settings-backups", {
     open: async () => {
-      await evaluate(`document.querySelector('.settings-dialog .backup-settings')?.scrollIntoView({ block: "start" })`);
+      await settingsSection("backups");
       if (!(await until(async () => (await count(".backup-settings .backup-files li")) >= 1, 8))) failed("the Backups section lists no copy on the machine");
       check(await present(".backup-settings .notice"), "the Backups section does not say how the last run went");
     },
@@ -3222,7 +3241,8 @@ async function runPass() {
   });
   await screen("settings-herdr", {
     open: async () => {
-      await evaluate(`document.querySelector('.settings-dialog .mirror-settings')?.scrollIntoView({ block: "start" })`);
+      await settingsSection("herdr");
+      if (!(await until(() => present(".mirror-settings .config-snippet"), 6))) return failed("Inside herdr shows no snippet");
       check(await evaluate(`[...document.querySelectorAll('.mirror-settings .settings-row input[type=checkbox]')].map((box) => box.checked).join()`) === "true,false", "Inside herdr does not start with the figures on and the toasts off");
       check(await evaluate(`document.querySelector('.mirror-settings .config-snippet')?.textContent.includes("$remuda_cost")`), "Inside herdr shows no snippet naming remuda's tokens");
       await tap(".mirror-settings .backup-actions .btn:not(.sm)");

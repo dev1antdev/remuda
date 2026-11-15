@@ -1798,7 +1798,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   import, so every table a module builds at load is already in the
   language, and `setLangPref` writes the pref and reloads the page, since
   those tables, the terminal engines and the pure modules could not be
-  re-rendered into another language; the Settings row Language and the
+  re-rendered into another language; the row Language of Settings › General and the
   palette's "Language: English" / "Язык: Русский"; the keys are the
   English strings in `t("…")` across the components — JSX text, the
   attributes a person reads, the props of menus, palette rows and the
@@ -4204,16 +4204,24 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   the New tab dialog; a shell's tab shows its terminal (`lensOn`), the
   lens asked for kept for the agents' tabs. (`HealthButton.tsx`, `MachineMenu.tsx`; its head is a + menu — a
   workspace on a connected machine, an agent from a recipe, each scene and "Scenes…", a PC — and a ⋯ menu — message
-  several agents, the order, Sidebar settings; `RadarSettings.tsx` is
+  several agents, the order, Sidebar settings, which opens Settings on its Sidebar section; `RadarSettings.tsx` is
   `RadarFields`, the order, the row label, the idle tiers and the
   shells switch, shown by **Settings** (`features/settings/
-  SettingsDialog.tsx`, dialog kind `settings`, the rail's last button
-  and a palette row: the theme, the language (`lib/i18n`), the text
-  size, the density, the monospace font, the panels' widths, the switch that syncs
-  those between devices (`internal/prefs`), the sidebar, the way to the
-  alerts and the keys, the version, what remuda shows inside herdr
-  (`internal/mirror`), the signed-in devices and, under
-  them, the agents' tasks-only keys with a Revoke each);
+  SettingsDialog.tsx`, dialog kind `settings` with an optional `section`, the rail's last button
+  and the palette's "Settings" and a "Settings › <section>" row each, `settings:<id>`), **two panes**: the list
+  of sections (`SettingsNav.tsx`, a tablist: a column beside the section at a desk, a row of chips over it under
+  700 px, the one on screen brought into view; the section on screen takes the focus as the dialog opens, the
+  arrows, Home and End walk the list) and the one picked beside it, alone, scrolling by itself under the
+  dialog's fixed head, so a section's own reads run only while it shows; the dialog opens on the section asked
+  for, else on the one this device showed last (pref `settings.section`, per device). `sections.ts` is the pure
+  part, tested (`sectionGroups`, `listedIds`, `shownSection`, `stepSection`): **This device** — Look
+  (`LookSection.tsx`, under the quiet labels Colours, Text, Layout and Between devices: the theme's mode, the
+  dark and the light theme, the accent; the text size and the monospace font; the density, the panels' widths,
+  the status bar's two switches; the switch that syncs those between devices, `internal/prefs`), Sidebar, General
+  (`GeneralSection.tsx`: the language, `lib/i18n`, the way to the alerts and the keys, the version) — and
+  **This cockpit**, never for a viewer — Sleep and resume, Inside herdr (`internal/mirror`), Jira, Backups,
+  Timelapse, and Devices (the signed-in devices and, under them, the agents' tasks-only keys and the viewer
+  links, a soft-red Revoke each);
   one spinner clock for
   the braille frames and the pulsing question). A finished or
   idle workspace's second line says what the agent answered

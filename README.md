@@ -209,7 +209,12 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   Usage, Schedules, Activity and Settings. On a phone it lies along the
   bottom under the thumb, with Code, the panels and Settings behind
   More. The sidebar's head keeps two buttons: + (a workspace, a PC) and
-  ⋯ (message several agents, the order, the settings).
+  ⋯ (message several agents, the order, the settings). Settings is two
+  panes: the sections down its left side — this device's (Look, Sidebar,
+  General) and this cockpit's (Sleep and resume, Inside herdr, Jira,
+  Backups, Timelapse, Devices) — and the one you picked beside them; on a
+  phone the sections are a row of chips. It opens where you left it, and
+  the palette has a row for each ("Settings › Backups").
 - **The status bar** — a thin line along the foot of the page at a desk:
   each agent's plan limits ("5h 38% · wk 54%", amber from 80 %), whose
   card on hover puts a tick on every window's bar at the share of its time
@@ -238,7 +243,7 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   background, the dimmer greys at 4.5:1 and 3:1, the ink on every accent
   at 4.5:1.
 - **English or Russian** — the page speaks the language of your browser,
-  or the one you pick in Settings › Look › Language ("Язык: Русский" in
+  or the one you pick in Settings › General › Language ("Язык: Русский" in
   the palette); a change reloads the page. The agents' answers, the
   pushes, the standup and the MCP answers stay as they are.
 - **Text size, density and font** — the Look section of Settings also

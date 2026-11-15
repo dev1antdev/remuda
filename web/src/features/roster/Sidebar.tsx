@@ -99,7 +99,7 @@ export default function Sidebar() {
     { heading: t("Order") },
     ...ORDERS.map(({ order, label }) => ({ label: label(), checked: prefs.order === order, onSelect: () => onPrefs({ ...prefs, order }) })),
     { sep: true },
-    { label: t("Sidebar settings…"), icon: "sliders", hint: t("labels, idle tiers, shells"), onSelect: () => actions.openDialog({ kind: "settings" }) },
+    { label: t("Sidebar settings…"), icon: "sliders", hint: t("labels, idle tiers, shells"), onSelect: () => actions.openDialog({ kind: "settings", section: "sidebar" }) },
   ];
 
   return (
