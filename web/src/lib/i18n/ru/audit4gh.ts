@@ -3,4 +3,5 @@ import type { Dictionary } from "../../i18n";
 
 export const audit4gh: Dictionary = {
   "A newer push came in since you opened this: cancel, look at it, then choose again.": "Пока это было открыто, пришёл новый пуш: отмените, посмотрите его и выберите снова.",
+  "The timeline stopped half way; the rest is on GitHub.": "Лента оборвалась на полпути; остальное на GitHub.",
 };

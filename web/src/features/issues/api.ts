@@ -62,6 +62,7 @@ export type Detail = {
   reactions: Reaction[];
   comments: number;
   timeline: Event[];
+  cut?: boolean; // the timeline's pages stopped half way: the rest is on GitHub
   pulls: Pull[];
   participants: Person[];
   pull?: boolean;

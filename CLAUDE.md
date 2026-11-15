@@ -5990,10 +5990,16 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   the milestone, reactions, `timeline` — `Event{kind comment | labels |
   assign | closed | reopened | renamed | milestone | mention | commit}`, a
   burst of one person's label changes within a minute one `labels` line,
-  at most `MaxEvents` 600 — `pulls`, `participants` (people, not bots, in
+  at most `MaxEvents` 600, `cut` when its pages stopped half way (the
+  pages read whole kept, the viewer saying the rest is on GitHub) —
+  `pulls`, `participants` (people, not bots, in
   order of appearance) and `pull` (the number is a pull request's).
   `troubleOf` reads gh's complaint as a `*Trouble{kind no-gh | signed-out
-  | not-found | failed, text naming the machine, run}`. **The writes**
+  | not-found | failed, text naming the machine, run}` — never off an
+  answer that began and was cut short (the timeout, a page refused half
+  way: `errCut`, said with why the run ended, `cutWords`), whose own text
+  (an issue about `gh auth login`, a title saying "not found") is the
+  issues', not gh's complaint. **The writes**
   (`write.go`), each at the person's press: `Comment` (the text put on the
   machine as a `mktemp` file, `gh issue comment --body-file "$f"`, the
   file removed by a trap whatever happens — never on a command line, at
