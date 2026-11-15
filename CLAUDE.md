@@ -4685,7 +4685,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   read or Read GitHub again brings while it is open is said in amber and
   holds the button back, `headMoved`), `Overview.tsx` (`Group`, folded per device in pref
   `pr.closed`: the agents on it — `agentsOn`: its head branch checked out
-  in a workspace of the panel's machine, or the pull request named
+  in a checkout of the panel's repository on its machine (a workspace of
+  the same `folder`: another repository's on a branch named the same,
+  main say, is not on it), or the pull request named
   anywhere — a click opening one; the reviewers with Ask again; the
   description), `Comments.tsx` (the author filter, Unresolved, "Mark N
   read" — pref `pr.seen`, a fingerprint per comment, `MAX_SEEN` 2000 —

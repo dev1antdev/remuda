@@ -41,15 +41,20 @@ export const fileTotals = (files: PRFile[]) => files.reduce((sum, f) => ({ addit
 
 export type AgentOn = { machineId: string; paneId: string; agent: string; workspace: string; folder: string; state: string };
 
-// agentsOn is every agent working on the pull request: one whose workspace on the panel's machine has its head branch
-// checked out, or one anywhere that named the pull request itself
-export function agentsOn(machines: Machine[], machineId: string, pr: { url: string; head: string }): AgentOn[] {
+// agentsOn is every agent working on the pull request: one whose workspace is a checkout of the panel's repository on
+// its machine with the head branch checked out — never another repository's that names a branch the same, main say —
+// or one anywhere that named the pull request itself
+export function agentsOn(machines: Machine[], at: { machineId: string; dir: string }, pr: { url: string; head: string }): AgentOn[] {
+  const here = machines.find((m) => m.id === at.machineId);
+  const panel = here?.sessions.find((s) => s.dir === at.dir || folderOf(s) === at.dir);
+  const repository = panel ? folderOf(panel) : at.dir;
   const out: AgentOn[] = [];
   for (const m of machines)
     for (const s of m.sessions)
       for (const tab of s.tabs)
         for (const pane of tab.panes) {
-          if (!pane.agent || !((m.id === machineId && s.branch === pr.head) || pane.pr?.url === pr.url)) continue;
+          const checkout = m.id === at.machineId && !!repository && folderOf(s) === repository && s.branch === pr.head;
+          if (!pane.agent || !(checkout || pane.pr?.url === pr.url)) continue;
           out.push({ machineId: m.id, paneId: pane.id, agent: pane.agent, workspace: s.name, folder: folderOf(s), state: pane.radar?.state ?? pane.status });
         }
   return out;
