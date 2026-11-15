@@ -143,9 +143,34 @@ func Recall(out string, seen map[int]Seen) string {
 // infrastructure is the processes whose ports are never anyone's app: remuda, herdr, ssh and Tailscale's own
 var infrastructure = map[string]bool{"remuda": true, "herdr": true, "sshd": true, "sshd-sess": true, "ssh": true, "tailscaled": true, "tailscale": true, "Tailscale": true, "IPNExtension": true}
 
+// agents are the coding agents' own programs: herdr runs them in its panes, and a port one of them holds (Claude Code
+// keeps one on the loopback, in its workspace's folder) is no server of the person's to preview, count or stop
+var agents = map[string]bool{"claude": true, "codex": true, "gemini": true, "kimi": true}
+
+// agentProgram says whether a process's arguments run an agent: its program, or the script an interpreter runs
+// (node …/gemini, python …/kimi), past the interpreter's flags
+func agentProgram(args string) bool {
+	for _, word := range strings.Fields(args) {
+		if strings.HasPrefix(word, "-") {
+			continue
+		}
+		name := path.Base(word)
+		if dot := strings.IndexByte(name, '.'); dot > 0 {
+			name = name[:dot]
+		}
+		if agents[name] {
+			return true
+		}
+		if name != "node" && name != "nodejs" && name != "bun" && name != "deno" && !strings.HasPrefix(name, "python") {
+			return false
+		}
+	}
+	return false
+}
+
 // Parse reads the script's lines into the listeners worth a preview: one per port, never one in skip (the cockpit's
-// own, the door, code-server), nor remuda's, herdr's, ssh's or Tailscale's, nor a process with no folder of the
-// person's own (a system daemon runs in /, another user's answers nothing).
+// own, the door, code-server), nor remuda's, herdr's, ssh's or Tailscale's, nor an agent's own, nor a process with no
+// folder of the person's own (a system daemon runs in /, another user's answers nothing).
 func Parse(out string, skip map[int]bool) []Listener {
 	byPort := map[int]Listener{}
 	for _, line := range script.Lines(out) {
@@ -159,7 +184,7 @@ func Parse(out string, skip map[int]bool) []Listener {
 		}
 		pid, _ := strconv.Atoi(strings.TrimSpace(f[2]))
 		command := strings.TrimSpace(f[3])
-		if infrastructure[command] {
+		if infrastructure[command] || agentProgram(f[6]) {
 			continue
 		}
 		dir := strings.TrimSpace(f[4])

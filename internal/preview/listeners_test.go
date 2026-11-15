@@ -61,6 +61,23 @@ func TestParseKeepsTheAppsServersOnly(t *testing.T) {
 	}
 }
 
+// An agent herdr runs may listen on a port of its own — Claude Code 2.1.323 holds one on the loopback, its program
+// named by its version on a Mac — in the very folder of its workspace: that is no server of the person's, never
+// offered as a preview, counted on the status bar or stopped; a dev server whose arguments only mention a word like
+// them stays.
+func TestAnAgentsOwnPortIsNoServer(t *testing.T) {
+	answer := line("49778", "127.0.0.1", "1813", "2.1.323", "/Users/me/code/app", "/Users/me/code/app", "claude --resume 0b6f2c1e-7d0a-4c55-9a1e-3f2d8c4b5a61") +
+		line("49801", "127.0.0.1", "1820", "codex", "/Users/me/code/app", "/Users/me/code/app", "/opt/homebrew/bin/codex") +
+		line("49802", "127.0.0.1", "1830", "node", "/Users/me/code/app", "/Users/me/code/app", "node --no-warnings /opt/homebrew/bin/gemini") +
+		line("49803", "127.0.0.1", "1840", "python3.12", "/Users/me/code/app", "/Users/me/code/app", "/Users/me/.local/share/uv/tools/kimi-cli/bin/python3.12 /Users/me/.local/bin/kimi") +
+		line("49804", "127.0.0.1", "1850", "node", "/Users/me/code/app", "/Users/me/code/app", "node /Users/me/.npm/_npx/codex/bin/codex.js") +
+		line("5173", "127.0.0.1", "4100", "node", "/Users/me/code/claude", "/Users/me/code/claude", "node /Users/me/code/claude/node_modules/.bin/vite --open claude") +
+		line("8000", "127.0.0.1", "4300", "python3", "/Users/me/code/app", "/Users/me", "python3 -m http.server 8000")
+	if got := ports(Parse(answer, nil)); got != "5173@127.0.0.1=vite 8000@127.0.0.1=http.server" {
+		t.Fatalf("listeners %s: an agent's own port is listed", got)
+	}
+}
+
 func TestMatchNamesTheDeepestWorkspace(t *testing.T) {
 	list := Match(Parse(macAnswer, nil), map[string]string{
 		"w1": "/Users/me/code/app",

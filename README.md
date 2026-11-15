@@ -1412,7 +1412,8 @@ once, then "Add to Home Screen" — it installs as a PWA.
 - remuda signals a process only when you press **Stop** on a port in the
   status bar and confirm: a SIGTERM to the pid that listens there now,
   looked up afresh — never remuda's, herdr's, ssh's or Tailscale's own, nor
-  another user's.
+  an agent's (Claude Code holds a loopback port of its own), nor another
+  user's.
 
 A second copy beside the real one (to try `-tailscale`, say) gets its own
 token, tasks and push subscriptions with `REMUDA_STATE_DIR=/some/dir`, and
