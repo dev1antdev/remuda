@@ -102,9 +102,9 @@ func TestALongCommentOfMarkupReachesGhInARealShell(t *testing.T) {
 	if found, err := exec.Command("sh", "-c", `PATH="$HOME/.local/bin:$PATH"; command -v gh`).Output(); err != nil || strings.TrimSpace(string(found)) != filepath.Join(bin, "gh") {
 		t.Fatalf("the stand-in is not the gh the scripts find: %q %v", found, err)
 	}
-	markup := strings.Repeat("<li>", 6000) + "and the rest" // 24 KB of text; JSON spells each < in six bytes
+	markup := strings.Repeat("<li>", 10000) + "and the rest" // 40 KB of text, 140 KB of JSON: each < and > in six bytes
 	if err := PostComment(localFiler{shell.Local{Name: "here"}}, Repo{"octo", "trips"}, 482, markup); err != nil {
-		t.Fatalf("a 24 KB comment did not reach gh: %v", err)
+		t.Fatalf("a 40 KB comment did not reach gh: %v", err)
 	}
 	var body struct {
 		Body string `json:"body"`
