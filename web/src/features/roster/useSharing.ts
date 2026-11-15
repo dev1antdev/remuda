@@ -63,7 +63,7 @@ export function useSharing(): Sharing {
     // the letters go out in the sidebar's order, so the first folder on screen is Project A
     const folderKeys: string[] = [];
     for (const m of machines)
-      for (const entry of entries(m, radar))
+      for (const entry of entries(m, radar, (s) => hidesFolder(pref, m.id, folderOf(s))))
         for (const item of entryItems(entry)) {
           const folder = folderOf(item.session);
           if (folder && hidesFolder(pref, m.id, folder)) folderKeys.push(folderKey(m.id, folder));

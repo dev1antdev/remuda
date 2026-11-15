@@ -71,17 +71,19 @@ func MakePlan(src repos.Source, branch, base string, pick Pick) (Plan, error) {
 		return Plan{}, fmt.Errorf("%q isn't a valid branch name", branch)
 	}
 	plan := Plan{Branch: branch}
+	prNumber, head := pick.Number, pick.Head
+	if pick.Kind == "issue" {
+		prNumber = pick.PR
+	}
+	headPicked := (pick.Kind == "pr" || pick.Kind == "issue") && head != "" && prNumber > 0
+	// a fork's head goes into a branch of this repository's own, under whatever name a pull request is given
+	forkHead := headPicked && pick.CrossRepo && (pick.Kind == "pr" || branch == head || branch == ForkBranch(prNumber, head))
 	if src.GitHub != "" {
-		switch pick.Kind {
-		case "issue":
+		if pick.Kind == "issue" {
 			plan.IssueRef = src.GitHub + "#" + strconv.Itoa(pick.Number)
-			if pick.PR > 0 && branch == pick.Head {
-				plan.PRRef = src.GitHub + "#" + strconv.Itoa(pick.PR)
-			}
-		case "pr":
-			if branch == pick.Head {
-				plan.PRRef = src.GitHub + "#" + strconv.Itoa(pick.Number)
-			}
+		}
+		if headPicked && (branch == head || forkHead) {
+			plan.PRRef = src.GitHub + "#" + strconv.Itoa(prNumber)
 		}
 	}
 	for _, c := range src.Checkouts {
@@ -98,16 +100,11 @@ func MakePlan(src repos.Source, branch, base string, pick Pick) (Plan, error) {
 		plan.Action, plan.From, plan.Track = "remote", "origin/"+branch, true
 		return plan, nil
 	}
-	prNumber, head := pick.Number, pick.Head
-	if pick.Kind == "issue" {
-		prNumber = pick.PR
+	if forkHead {
+		plan.Action, plan.Fetch = "local", "+refs/pull/"+strconv.Itoa(prNumber)+"/head:refs/heads/"+branch
+		return plan, nil
 	}
-	headPicked := (pick.Kind == "pr" || pick.Kind == "issue") && head != "" && prNumber > 0
 	if headPicked && branch == head {
-		if pick.CrossRepo {
-			plan.Action, plan.Fetch = "local", "+refs/pull/"+strconv.Itoa(prNumber)+"/head:refs/heads/"+branch
-			return plan, nil
-		}
 		plan.Action, plan.From, plan.Track, plan.Fetch = "remote", "origin/"+branch, true, "+refs/heads/"+branch+":refs/remotes/origin/"+branch
 		return plan, nil
 	}
@@ -135,6 +132,12 @@ func MakePlan(src repos.Source, branch, base string, pick Pick) (Plan, error) {
 	return plan, nil
 }
 
+// ForkBranch is the branch a fork's pull request is fetched into by default: the head's name on the fork says nothing of
+// this repository's branches (a fork's main is not this main), so the number goes before it.
+func ForkBranch(number int, head string) string {
+	return "pr-" + strconv.Itoa(number) + "-" + head
+}
+
 func hasBranch(list []repos.Branch, name string) bool {
 	for _, b := range list {
 		if b.Name == name {
@@ -144,7 +147,8 @@ func hasBranch(list []repos.Branch, name string) bool {
 	return false
 }
 
-// Slug is a branch as herdr names its worktree's folder: lower case, a dash for every other run of characters.
+// Slug is a branch as herdr names its worktree's folder: lower case, a dash for every other run of characters, and
+// "worktree" for a branch with no a-z or 0-9 in it (a Cyrillic one), never the folder it goes in itself.
 func Slug(branch string) string {
 	var b strings.Builder
 	dash := false
@@ -158,6 +162,9 @@ func Slug(branch string) string {
 			continue
 		}
 		dash = true
+	}
+	if b.Len() == 0 {
+		return "worktree"
 	}
 	return b.String()
 }

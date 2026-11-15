@@ -63,11 +63,11 @@ func TestGhsAnswerIsReadApartAndItsTroubleNamed(t *testing.T) {
 	if _, err := run(refused, []string{"api", "repos/o/r"}, ""); err == nil || err.Error() != "Not Found (HTTP 404)" {
 		t.Fatalf("err = %v", err)
 	}
-	s := ghScript([]string{"api", "graphql", "--input", "-"}, `{"q":"it's"}`, "")
+	s := ghScript([]string{"api", "graphql", "--input", "-"}, `{"q":"it's"}`, "", "")
 	if !strings.Contains(s, "gh 'api' 'graphql' '--input' '-' 2>\"$err\" <<'REMUDA_INPUT'\n{\"q\":\"it's\"}\nREMUDA_INPUT") {
 		t.Fatalf("script = %q", s)
 	}
-	if s := ghScript([]string{"run", "view"}, "", lastBytes(10)); !strings.Contains(s, `tail -c 10 "$out"`) {
+	if s := ghScript([]string{"run", "view"}, "", "", lastBytes(10)); !strings.Contains(s, `tail -c 10 "$out"`) {
 		t.Fatalf("a cut script = %q", s)
 	}
 }

@@ -71,7 +71,7 @@ type Log struct {
 // ReadLog reads the failed steps' output of a job, its last LogRead bytes on the machine, and keeps the last LogShown,
 // gh's per-line job and step names, timestamps and the terminal's escapes stripped.
 func ReadLog(host shell.Shell, repo Repo, job int64) (Log, error) {
-	out, err := runKept(host, []string{"run", "view", "--job", strconv.FormatInt(job, 10), "-R", repo.String(), "--log-failed"}, "", lastBytes(LogRead), LogTimeout)
+	out, err := runKept(host, []string{"run", "view", "--job", strconv.FormatInt(job, 10), "-R", repo.String(), "--log-failed"}, "", "", lastBytes(LogRead), LogTimeout)
 	if err != nil {
 		return Log{}, err
 	}

@@ -147,7 +147,8 @@ export function ribbon(turns: Turn[], { now, live, cut }: { now: number; live: L
     // a long conversation in the lens: the exchanges long over before the window are not laid out at all
     if (!last && exchanges[i + 1]!.start < from && exchanges[i + 1]!.start >= x.start + (x.took ?? 0) * 1000) return;
     const laid = stretchesOf(x, live, last, now);
-    if (last) {
+    // the line under the ribbon is the latest turn only while it reaches into the window: one long over is nothing in it
+    if (last && (laid.end >= from || live !== null)) {
       const tools = laid.calls.length;
       figures = { took: Math.max(0, (laid.end - x.start) / 1000), tools, failed: laid.calls.filter((c) => c.part.is_error).length, live: live !== null };
     }

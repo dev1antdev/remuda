@@ -21,6 +21,7 @@ var prPanelRoutes = []struct{ method, path string }{
 	{"POST", "/api/pr/state"},
 	{"POST", "/api/pr/failure"},
 	{"POST", "/api/pr/review"},
+	{"POST", "/api/pr/refresh"},
 }
 
 func TestThePullRequestPanelIsNeitherAViewersNorAKeys(t *testing.T) {

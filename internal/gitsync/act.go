@@ -44,6 +44,7 @@ const (
 	ReasonNewBranch    = "new-branch"     // a push that set the branch's upstream
 	ReasonCheckFailed  = "check-failed"   // a push the secret check could not clear
 	ReasonSecretsFound = "secrets"        // a push the secret check found something in
+	ReasonMoved        = "moved"          // a push anyway of a branch that moved since the check the person saw
 )
 
 // Outcome is what one action came to, in fields the page puts in its own words.
@@ -58,6 +59,7 @@ type Outcome struct {
 	Upstream string             `json:"upstream,omitempty"`
 	Ahead    int                `json:"ahead,omitempty"`
 	Behind   int                `json:"behind,omitempty"`
+	Head     string             `json:"head,omitempty"`   // the commit a push sends, the one its secret check read
 	Count    int                `json:"count,omitempty"`  // the commits a pull brought or a push sent
 	Output   string             `json:"output,omitempty"` // git's last lines when it failed, or why the machine is away
 	Scan     *review.SecretScan `json:"scan,omitempty"`   // what the secret check found, for a held push
@@ -73,24 +75,31 @@ func fetchScript(remote string) string {
 	return `git fetch --prune -- ` + script.Quote(remote) + ` </dev/null 2>&1; rc=$?; `
 }
 
-// pullScript fetches, then fast-forwards the branch to its upstream only when that is all it takes: a branch with
-// commits of its own beside the upstream's is said diverged and nothing changes; git's own refusal of local changes
-// in the way stands as it is. Never a merge commit, a rebase or a stash.
-func pullScript(remote string) string {
-	return fetchScript(remote) + `if [ "$rc" -eq 0 ]; then c=$(` + read + ` rev-list --left-right --count 'HEAD...@{u}' 2>/dev/null); ` +
-		`if [ -z "$c" ]; then printf '\036gone\n'; else set -- $c; ` +
-		`if [ "$2" = 0 ]; then printf '\036uptodate\n'; elif [ "$1" != 0 ]; then printf '\036diverged %s %s\n' "$1" "$2"; ` +
-		`else printf '\036pulled %s\n' "$2"; git -c merge.autoStash=false merge --ff-only --no-edit '@{u}' </dev/null 2>&1; rc=$?; fi; fi; fi; `
-}
+// fastForwardScript, a pull's second half after its fetch, fast-forwards the branch to its upstream only when that is
+// all it takes: a branch with commits of its own beside the upstream's is said diverged and nothing changes; git's own
+// refusal of local changes in the way stands as it is. Never a merge commit, a rebase or a stash.
+const fastForwardScript = `rc=0; c=$(` + read + ` rev-list --left-right --count 'HEAD...@{u}' 2>/dev/null); ` +
+	`if [ -z "$c" ]; then printf '\036gone\n'; else set -- $c; ` +
+	`if [ "$2" = 0 ]; then printf '\036uptodate\n'; elif [ "$1" != 0 ]; then printf '\036diverged %s %s\n' "$1" "$2"; ` +
+	`else printf '\036pulled %s\n' "$2"; git -c merge.autoStash=false merge --ff-only --no-edit '@{u}' </dev/null 2>&1; rc=$?; fi; fi; `
 
-// pushScript sends the branch to the remote's branch it names; never a force, never a tag (push.followTags off), its
-// upstream set when it had none.
-func pushScript(remote, branch, target string, setUpstream bool) string {
-	flag := ""
-	if setUpstream {
-		flag = "--set-upstream "
+// pushScript sends the branch to the remote's branch it names, as far as the commit head — the one its secret check
+// read, so a commit made since is not carried unread — never a force, never a tag (push.followTags off); its upstream
+// set when it had none, as --set-upstream would.
+func pushScript(remote, branch, head, target string, setUpstream bool) string {
+	source := "refs/heads/" + branch
+	if head != "" {
+		source = head
 	}
-	return `git -c push.followTags=false push ` + flag + `-- ` + script.Quote(remote) + ` ` + script.Quote("refs/heads/"+branch+":"+target) + ` </dev/null 2>&1; rc=$?; `
+	if !strings.HasPrefix(target, "refs/") {
+		target = "refs/heads/" + target
+	}
+	upstream := ""
+	if setUpstream {
+		upstream = `if [ "$rc" -eq 0 ]; then git config ` + script.Quote("branch."+branch+".remote") + ` ` + script.Quote(remote) + ` && ` +
+			`git config ` + script.Quote("branch."+branch+".merge") + ` ` + script.Quote(target) + `; fi; `
+	}
+	return `git -c push.followTags=false push -- ` + script.Quote(remote) + ` ` + script.Quote(source+":"+target) + ` </dev/null 2>&1; rc=$?; ` + upstream
 }
 
 // run runs an action's git part in the checkout without a prompt, then reads the checkout again; the read follows a

@@ -103,13 +103,15 @@ describe("links, files and agents", () => {
     expect(fileTree(files, new Set(["src"])).map((r) => r.name)).toEqual(["docs", "a.md", "src", "README.md"]);
     expect(fileTotals(files)).toEqual({ additions: 44, deletions: 5 });
   });
-  it("finds the agents on the pull request: its branch on the panel's machine, or the link they named", () => {
+  it("finds the agents on the pull request: its branch in the panel's repository, or the link they named", () => {
     const pane = (id: string, over: object = {}) => ({ id, title: "", agent: "claude", cwd: "/w", focused: false, status: "idle", cols: 80, rows: 24, ...over });
-    const session = (name: string, branch: string, panes: object[]) => ({ id: name, name, status: "idle", active_tab_id: "t", branch, tabs: [{ id: "t", label: "t", panes }] });
+    const session = (name: string, branch: string, panes: object[], folder = `/w/${name}`) => ({ id: name, name, status: "idle", active_tab_id: "t", branch, dir: folder, folder, tabs: [{ id: "t", label: "t", panes }] });
     const machines = [
-      { id: "local", label: "Mac", state: "connected", sessions: [session("trips", "offline-trips", [pane("p1", { radar: { state: "working" } }), pane("p2", { agent: "" })]), session("other", "main", [pane("p3")])] },
+      { id: "local", label: "Mac", state: "connected", sessions: [session("trips", "offline-trips", [pane("p1", { radar: { state: "working" } }), pane("p2", { agent: "" })]), session("other", "main", [pane("p3")]), session("lib", "offline-trips", [pane("p6")])] },
       { id: "gog", label: "GOG", state: "connected", sessions: [session("trips", "offline-trips", [pane("p4")]), session("x", "y", [pane("p5", { pr: { url: "https://github.com/octo/trips/pull/482", label: "PR #482" } })])] },
     ] as unknown as Machine[];
-    expect(agentsOn(machines, "local", { url: "https://github.com/octo/trips/pull/482", head: "offline-trips" }).map((a) => `${a.machineId}|${a.paneId}|${a.state}`)).toEqual(["local|p1|working", "gog|p5|idle"]);
+    const on = (head: string) => agentsOn(machines, { machineId: "local", dir: "/w/trips" }, { url: "https://github.com/octo/trips/pull/482", head }).map((a) => `${a.machineId}|${a.paneId}|${a.state}`);
+    expect(on("offline-trips")).toEqual(["local|p1|working", "gog|p5|idle"]);
+    expect(on("main")).toEqual(["gog|p5|idle"]); // another repository's checkout on a branch of the same name is not on it
   });
 });

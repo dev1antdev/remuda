@@ -126,7 +126,7 @@ function FixWithAgent({ at, pr, check }: { at: PRAt; pr: Detail; check: Check })
   const { machines } = useRoster();
   const share = useSharing(); // under the screen-sharing mode a hidden folder's agent goes by its neutral name
   const masked = (a: AgentTarget) => (share.folderHidden(a.machineId, a.folder ?? "") ? share.folderName(a.machineId, a.folder ?? "", a.sessionName) : null);
-  const onPR = new Set(agentsOn(machines, at.machineId, { url: pr.url, head: pr.head }).map((a) => `${a.machineId}|${a.paneId}`));
+  const onPR = new Set(agentsOn(machines, at, { url: pr.url, head: pr.head }).map((a) => `${a.machineId}|${a.paneId}`));
   const ordered = [...targets].sort((a, b) => Number(onPR.has(`${b.machineId}|${b.paneId}`)) - Number(onPR.has(`${a.machineId}|${a.paneId}`)));
   const hand = async (machineId: string, paneId: string, name: string) => {
     actions.notify(t("Reading {check} for the agent…", { check: check.name }), { brief: true });

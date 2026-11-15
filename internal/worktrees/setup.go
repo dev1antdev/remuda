@@ -51,6 +51,34 @@ func SetupScript(team, local string) string {
 	return strings.Join(parts, "\n")
 }
 
+// ErrSetupUnchosen: the project asks every time whether its setup runs, and the request chose neither.
+var ErrSetupUnchosen = errors.New("choose whether to run the setup script")
+
+// NoSetupOnWindows is why a new worktree's setup did not run on a Windows PC, whose panes run PowerShell.
+const NoSetupOnWindows = "setup scripts do not run on a Windows PC yet; run it there yourself"
+
+// SetupChoice is whether a new worktree's setup script runs: chosen is the request's run | skip, "" for the project's
+// own when (ask | skip, "" for run); opens is a create that opens a checkout already there. note says why a setup that
+// would have run did not.
+func SetupChoice(script, chosen, when string, opens, windows bool) (run bool, note string, err error) {
+	if chosen != "" {
+		when = chosen
+	}
+	if script == "" || opens || when == "skip" {
+		return false, "", nil
+	}
+	if when == "ask" {
+		if windows {
+			return false, "", nil // nothing to choose where nothing runs: the page offers no Run or Skip there
+		}
+		return false, "", ErrSetupUnchosen
+	}
+	if windows {
+		return false, NoSetupOnWindows, nil
+	}
+	return true, "", nil
+}
+
 // SetupFile is the file a setup runs as: it removes itself, enters the worktree, runs the script in the person's login
 // shell (an interactive bash, zsh or ksh, so what their profile puts on PATH is there; sh for any other) and says how it went.
 func SetupFile(body, root, worktree string) string {

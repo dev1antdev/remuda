@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blockedWords, branchGoesByDefault, buttonWords, rows, sharedWords, warnings } from "./removal";
+import { blockedWords, branchGoesByDefault, buttonWords, keepFolderOffered, rows, sharedWords, warnings } from "./removal";
 import type { Removal } from "./api";
 
 const clean: Removal = {
@@ -48,5 +48,12 @@ describe("the remove dialog", () => {
   it("refuses while an agent works there", () => {
     expect(blockedWords({ ...clean, working: "Claude Code works or asks there" })).toBe("Claude Code works or asks there: let it finish, or stop it, before its worktree goes.");
     expect(blockedWords(clean)).toBe("");
+  });
+  it("still closes a workspace whose worktree could not be looked at, its folder kept", () => {
+    expect(keepFolderOffered(undefined, true)).toBe(true);
+    expect(keepFolderOffered(undefined, false)).toBe(false);
+    expect(keepFolderOffered({ ...clean, dirty: 2 }, false)).toBe(true);
+    expect(keepFolderOffered(clean, false)).toBe(false);
+    expect(keepFolderOffered({ ...clean, dirty: 2, shared: ["api-fix"] }, false)).toBe(false);
   });
 });

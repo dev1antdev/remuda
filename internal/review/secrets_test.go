@@ -239,8 +239,8 @@ func TestTheSecretCheckOnARealCheckoutChangesNothing(t *testing.T) {
 	}
 
 	inner, err := ScanWork(machine, filepath.Join(dir, "sub"), false)
-	if err != nil || len(inner.Findings) != 1 || inner.Findings[0].File != "inner.txt" {
-		t.Errorf("a folder inside the checkout reads its own work: %+v %v", inner.Findings, err)
+	if err != nil || len(inner.Findings) != 2 || inner.Findings[0].File != "inner.txt" || inner.Findings[1].File != "staged.txt" || inner.Findings[1].Commit != secrets.Staged {
+		t.Errorf("a folder inside the checkout reads its own work, and what is staged outside it, which its commit carries: %+v %v", inner.Findings, err)
 	}
 	after, _ := os.ReadFile(filepath.Join(dir, ".git", "index"))
 	if status() != before || string(after) != string(index) {
@@ -342,6 +342,41 @@ func TestWhatIsStagedIsReadToo(t *testing.T) {
 	if len(scan.Findings) != 3 || found["deploy.env"].Commit != secrets.Staged || found["deploy.env"].Line != 2 ||
 		found["gone.env"].Commit != secrets.Staged || found["kept.env"].Commit != "" {
 		t.Errorf("findings: %+v", scan.Findings)
+	}
+}
+
+// A folder inside the repository commits the whole index: what is staged outside it goes too, so it is read too.
+func TestWhatIsStagedOutsideTheFolderIsReadToo(t *testing.T) {
+	ownGitConfig(t)
+	dir, git, write := scratchCheckout(t)
+	for _, folder := range []string{"web", "server"} {
+		if err := os.MkdirAll(filepath.Join(dir, folder), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("web/app.txt", "hi\n")
+	write("server/main.txt", "hi\n")
+	git("add", "-A")
+	git("commit", "-qm", "init")
+	write("web/web.env", "WEB_TOKEN="+fakeKey(80, 30)+"\n")
+	write("server/server.env", "SERVER_TOKEN="+fakeKey(81, 30)+"\n")
+	write("root.env", "ROOT_SECRET="+fakeKey(82, 30)+"\n")
+	git("add", "web/web.env", "server/server.env", "root.env")
+
+	scan, err := ScanWork(shell.Local{Name: "local"}, filepath.Join(dir, "web"), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := map[string]secrets.Finding{}
+	for _, finding := range scan.Findings {
+		found[finding.File] = finding
+	}
+	if len(scan.Findings) != 3 || found["web.env"].Commit != "" || found["server/server.env"].Commit != secrets.Staged || found["root.env"].Commit != secrets.Staged {
+		t.Errorf("findings: %+v", scan.Findings)
+	}
+	top, err := ScanWork(shell.Local{Name: "local"}, dir, false)
+	if err != nil || len(top.Findings) != 3 {
+		t.Errorf("from the top, each once: %+v, %v", top.Findings, err)
 	}
 }
 
