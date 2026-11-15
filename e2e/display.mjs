@@ -2070,8 +2070,10 @@ const rowOf = (key) => `${LENS} .review-file[data-key=${JSON.stringify(key)}]`;
 const actionOf = (key, action) => `${rowOf(key)} .review-act.is-${action}`;
 const inGroup = (group) => count(`${LENS} .review-group.is-${group} .review-file`);
 const gitStatus = () => execFileSync("git", ["status", "--porcelain=v1"], { cwd: appDir, encoding: "utf8" });
-// pressRow presses a row's button: the pointer over the row first, where its counts give way to its buttons
+// pressRow presses a row's button: the pointer over the row first, where its counts give way to its buttons. On a
+// phone the toast of the write before lies over the lens's lowest rows for its two seconds, so it is let go first
 async function pressRow(key, action) {
+  if (pass.phone) await until(async () => !(await present('[data-toast="notice"]')), 8);
   await hover(`${rowOf(key)} .review-file-row`);
   await tap(actionOf(key, action));
 }
