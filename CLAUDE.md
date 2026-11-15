@@ -6934,7 +6934,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   tooltip (`TipProvider` once over the page): Radix's DropdownMenu,
   Popover and Tooltip in the design system's clothes (`.menu`,
   `.menu-item` with an icon slot, a hint and a shortcut, `.popover`,
-  `.tip`) — the keyboard walks a menu, Esc closes, all three open where
+  `.tip`; every floating surface — these three, a toast, a Select's list —
+  wears `--bg-glass` over a blur of what is under it (`--glass`) and grows
+  out of the button it hangs from, the `pop` keyframes about Radix's
+  transform origin; a toast slides in from its corner, `toast-in`) — the
+  keyboard walks a menu, Esc closes, all three open where
   there is room inside the window (collision padding 8 px, a menu or a
   popover taller than the room scrolling, Radix's available height) and
   follow their button as the page scrolls, a click inside a menu or a

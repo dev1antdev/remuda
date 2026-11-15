@@ -17,6 +17,9 @@
   --bg-quiet: color-mix(in srgb, var(--ctp-text) 7%, transparent);
   --bg-quiet-hover: color-mix(in srgb, var(--ctp-text) 12%, transparent);
   --bg-field: var(--ctp-field);
+  /* a floating surface — a menu, a popover, a tooltip, a toast: the overlay a little see-through over a blur of what is under it */
+  --bg-glass: color-mix(in srgb, var(--ctp-overlay) 94%, transparent);
+  --glass: blur(18px) saturate(1.5);
 
   /* ink */
   --fg: var(--ctp-text);
@@ -1594,6 +1597,10 @@ input[type="checkbox"]:hover:not(:checked) {
   min-width: 190px;
   padding: 5px;
   border-radius: var(--r-lg);
+  background: var(--bg-glass);
+  backdrop-filter: var(--glass);
+  -webkit-backdrop-filter: var(--glass);
+  box-shadow: var(--shadow-md);
   display: flex;
   flex-direction: column;
   animation: pop-in var(--fast) var(--ease);
@@ -5325,8 +5332,15 @@ ul.pick-list {
 }
 
 .modal-scrim {
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  animation: fade-in var(--base) var(--ease);
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
 }
 
 .modal {
@@ -9095,15 +9109,25 @@ body:has(.status-bar) .toasts {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 12px;
+  padding: 10px 12px 10px 14px;
   border: 1px solid var(--line-strong);
   border-radius: var(--r-lg);
-  background: var(--bg-overlay);
+  background: var(--bg-glass);
+  backdrop-filter: var(--glass);
+  -webkit-backdrop-filter: var(--glass);
   color: var(--fg);
   font-size: var(--fs-13);
   box-shadow: var(--shadow-md);
   pointer-events: auto;
-  animation: rise var(--base) var(--ease);
+  animation: toast-in var(--base) var(--ease);
+}
+
+/* a toast comes in from the corner it lives in */
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(14px);
+  }
 }
 
 .toast-text {
@@ -11528,6 +11552,8 @@ body.popout {
   display: flex;
   align-items: center;
   gap: 8px;
+  padding: 0 4px 8px;
+  border-bottom: 1px solid var(--line);
 }
 
 .palette-head-icon {
@@ -11536,11 +11562,16 @@ body.popout {
   color: var(--fg-faint);
 }
 
-.palette-head input {
+/* the palette's field is the palette itself: no box of its own, the focus always in it */
+.palette-head input,
+.palette-head input:focus-visible {
   flex: 1;
   min-width: 0;
   height: var(--ctl-lg);
-  border-radius: var(--r-lg);
+  padding: 0 4px;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
   font-size: var(--fs-15);
 }
 
@@ -11576,7 +11607,7 @@ body.popout {
 }
 
 .palette-row[aria-selected="true"] {
-  background: var(--bg-hover);
+  background: var(--bg-quiet-hover);
 }
 
 .palette-row.danger .palette-title {
@@ -12225,10 +12256,21 @@ body.popout {
   padding: 6px;
   border: 1px solid var(--line-strong);
   border-radius: var(--r-lg);
-  background: var(--bg-overlay);
+  background: var(--bg-glass);
+  backdrop-filter: var(--glass);
+  -webkit-backdrop-filter: var(--glass);
   box-shadow: var(--shadow-md);
   z-index: var(--z-menu);
-  animation: rise var(--fast) var(--ease);
+  transform-origin: var(--radix-dropdown-menu-content-transform-origin, top);
+  animation: pop var(--fast) var(--ease);
+}
+
+/* a floating surface grows out of the button it hangs from */
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
 }
 
 /* ---- popovers (ui/Popover.tsx): a panel behind a button, inside the window, scrolling when taller than the room ---- */
@@ -12241,11 +12283,14 @@ body.popout {
   overscroll-behavior: contain;
   border: 1px solid var(--line-strong);
   border-radius: var(--r-lg);
-  background: var(--bg-overlay);
+  background: var(--bg-glass);
+  backdrop-filter: var(--glass);
+  -webkit-backdrop-filter: var(--glass);
   box-shadow: var(--shadow-lg);
   color: var(--fg);
   z-index: var(--z-menu);
-  animation: rise var(--fast) var(--ease);
+  transform-origin: var(--radix-popover-content-transform-origin, var(--radix-hover-card-content-transform-origin, top));
+  animation: pop var(--fast) var(--ease);
 }
 
 .popover:focus {
@@ -12335,16 +12380,19 @@ body.popout {
 /* ---- tooltips (ui/Tip.tsx) ---- */
 .tip {
   max-width: 280px;
-  padding: 6px 9px;
+  padding: 6px 10px;
   border: 1px solid var(--line-strong);
-  border-radius: var(--r-sm);
-  background: var(--bg-overlay);
+  border-radius: var(--r-md);
+  background: var(--bg-glass);
+  backdrop-filter: var(--glass);
+  -webkit-backdrop-filter: var(--glass);
   box-shadow: var(--shadow-md);
   color: var(--fg);
   font-size: var(--fs-12);
   line-height: 1.35;
   z-index: var(--z-select);
-  animation: rise var(--fast) var(--ease);
+  transform-origin: var(--radix-tooltip-content-transform-origin, center);
+  animation: pop var(--fast) var(--ease);
 }
 
 /* ---- Settings (features/settings/SettingsDialog.tsx) ---- */
