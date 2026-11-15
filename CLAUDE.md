@@ -4460,8 +4460,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   asking there or a turn still ending (`busyIn`: `undo.Service.Working`
   and `Tracker.Going`), a request read as merged (`mergedIn`), and the
   `Stamp` of what it showed. `POST /api/worktrees/{id}/remove {machine,
-  delete_branch, stamp, keep_folder}` looks again: an agent at work is a
-  409, another workspace on the checkout or `keep_folder` closes this
+  delete_branch, stamp, keep_folder}` with `keep_folder` closes this
+  workspace alone and looks at nothing (so a workspace whose worktree
+  folder was deleted behind herdr's back, which herdr still marks a linked
+  worktree and no look can read, still closes); else it looks again: an
+  agent at work is a 409, another workspace on the checkout closes this
   workspace alone, a stamp that is not the fresh look's is a 409 ("it
   changed since this opened"), else herdr closes the workspace and
   `RemoveAsShown` runs `git worktree remove`, with `--force` only for the
@@ -4474,10 +4477,12 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   and the palette, and the close of a made one): a red trash tile, the
   table — Folder *Deleted*, Branch *Kept* or *Deleted* (deleted by default
   once merged, a click flips it) — the losses in red, *Remove* / *Remove
-  anyway* (`btn danger`), *Close, keep the folder* beside a loss, *Close
+  anyway* (`btn danger`), *Close, keep the folder* beside a loss and when
+  the look failed (`keepFolderOffered`: the one way left to close a
+  workspace whose folder is gone), *Close
   workspace* when shared, held back while an agent works; `removal.ts`
   the pure part, tested: `rows`, `warnings`, `sharedWords`,
-  `buttonWords`, `blockedWords`, `branchGoesByDefault`. **Leftover worktrees** (the machine's ⋯ menu and the
+  `buttonWords`, `blockedWords`, `branchGoesByDefault`, `keepFolderOffered`. **Leftover worktrees** (the machine's ⋯ menu and the
   palette, dialog kind `leftovers` → `LeftoversDialog.tsx`): `GET
   /api/machines/{id}/leftovers` lists, in one script (`LeftoversScript`:
   du for the size), every folder two levels under the root that no
@@ -4525,7 +4530,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   gh's stderr kept out of its JSON, its update notice and prompts off; a
   pull request's `closes` from GitHub's closing references and a
   "fixes #N" in its body; no gh, or one not signed in, a `trouble`
-  sentence rather than an error); `GET /api/worktrees/lookup` one number
+  sentence rather than an error; one list gh refuses while it reads the
+  other — a repository with its issues switched off — is that list's
+  `issues_trouble` / `prs_trouble`, the other listed all the same, tested
+  on a gh stand-in); `GET /api/worktrees/lookup` one number
   through `gh api …/issues/N` and `gh pr view` (`repos.Lookup`); `POST
   /api/worktrees/fetch {machine, root}` `git fetch --prune origin` at the
   person's press, a 409 while an agent works or asks in that checkout
@@ -4534,17 +4542,24 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   again and works out `MakePlan` (the page's `planOf` mirrors it): the
   branch checked out in a checkout is `open` — the workspace standing on
   it answered (`opened`, renamed when a name was typed), else herdr's
-  `worktree.open` — a local one `local`, one only on origin `remote`
+  `worktree.open`, whose `already_open` (a workspace the snapshot did not
+  show yet) is answered the same way, nothing started in its panes — a
+  local one `local`, one only on origin `remote`
   (herdr's `worktree.create` from `origin/<b>`, then `git branch
   --set-upstream-to`), a pull request's head not fetched yet fetched first
   (`+refs/heads/<h>:refs/remotes/origin/<h>`; a fork's as
-  `+refs/pull/N/head:refs/heads/<b>`, a local branch tracking nothing),
+  `+refs/pull/N/head:refs/heads/<b>`, a local branch tracking nothing,
+  under any name the person gives a fork's pull request and by default
+  `pr-<N>-<head>` — `ForkBranch`, the page's `forkBranch`: a fork's head
+  named `main` is not this repository's main, which a bare head opened),
   anything else `new` from the picked branch or the base (`--unset-upstream`
   when that is origin's, so its first push makes its own, as Orca's
   `--no-track`); `BadBranch` refuses what check-ref-format would. herdr's
   `WorktreeCreateAt` makes the checkout, in the project's location
   (`FolderFor`: `<location>/<Slug>`, herdr's own naming: lower case, a dash
-  for every other run) or herdr's root; the issue and pull request it was
+  for every other run, `worktree` for a branch with no a-z or 0-9 — a
+  Cyrillic one — never the location itself, which then held the worktree
+  and every later one inside it) or herdr's root; the issue and pull request it was
   made for go into `git config branch.<b>.remuda-issue` / `remuda-pr`
   (`owner/repo#N`) for other screens to read; `.worktreeinclude` as
   always. **The setup**: `SetupScript` the team's then the project's local
@@ -4564,7 +4579,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   once and the setup runs in a "Setup" tab herdr makes beside it, the
   agent's tab kept in front (`setup: "tab"`). When the project asks every
   time, the request must say `run` or `skip`. Not on a Windows PC (its
-  panes run PowerShell): `setup_error` says so. **Project settings** are
+  panes run PowerShell): `setup_error` says so, and nothing is asked there
+  (`SetupChoice`, tested: the page offers no Run or Skip for it, so a
+  project asking every time refused every create on a Windows PC). Under
+  the screen-sharing mode the dialog's note, its rows' places, its empty
+  list and its errors go through `redact`, like the project pick. **Project settings** are
   `internal/repos` (`settings.go`, tested): `Settings{base, location,
   issue_branch, agent, issue_prompt, pr_prompt, setup, setup_when ask | run
   | skip, setup_wait, actions}` in `repos.json` on the cockpit by machine

@@ -13,7 +13,7 @@ import type { Machine, Session } from "../api";
 import { tidyWords } from "../tidy";
 import { useSharing } from "../useSharing";
 import { fetchRemoval, removeAsShown } from "./api";
-import { blockedWords, branchGoesByDefault, buttonWords, rows, sharedHere, sharedWords, warnings } from "./removal";
+import { blockedWords, branchGoesByDefault, buttonWords, keepFolderOffered, rows, sharedHere, sharedWords, warnings } from "./removal";
 
 export default function RemoveWorktreeDialog({ machine, session, onDone, onClose }: { machine: Machine; session: Session; onDone: () => void; onClose: () => void }) {
   const share = useSharing();
@@ -28,11 +28,11 @@ export default function RemoveWorktreeDialog({ machine, session, onDone, onClose
   }, [rm?.stamp]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const go = async (keepFolder: boolean) => {
-    if (!rm) return;
+    if (!rm && !keepFolder) return;
     setBusy(true);
     setError("");
     try {
-      const answer = await removeAsShown(machine.id, session.id, { delete_branch: deleteBranch, stamp: rm.stamp, keep_folder: keepFolder });
+      const answer = await removeAsShown(machine.id, session.id, { delete_branch: !keepFolder && deleteBranch, stamp: rm?.stamp ?? "", keep_folder: keepFolder });
       if (answer.worktree) {
         const said = tidyWords(answer.worktree);
         actions.notify(said.text, { error: said.error });
@@ -122,7 +122,7 @@ export default function RemoveWorktreeDialog({ machine, session, onDone, onClose
         <button type="button" className="btn" onClick={onClose}>
           {t("Cancel")}
         </button>
-        {rm && !shared && lost.length > 0 && (
+        {keepFolderOffered(rm, !!look.error && !look.loading, deleteBranch) && (
           <button type="button" className="btn" disabled={busy} onClick={() => void go(true)}>
             {t("Close, keep the folder")}
           </button>

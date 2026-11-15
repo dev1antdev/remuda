@@ -52,7 +52,10 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   on origin becomes a local branch tracking it), an open **Issue** or
   **PR** read with `gh` on the machine (pasting `#123` or a link jumps to
   the right tab; an issue takes the branch of the pull request already
-  working on it), or a **New** branch from the base you pick; ↻ fetches
+  working on it; a pull request from a fork lands on a branch of its own,
+  `pr-12-main`, so a fork's `main` is never taken for yours; a repository
+  with its issues switched off still lists its pull requests), or a
+  **New** branch from the base you pick; ↻ fetches
   from origin. A line under the branch says exactly what *Create* will do
   before you press it, and the agent's first prompt for an issue or a
   pull request is filled in from the project's template, there to edit.
@@ -607,7 +610,8 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   it), and in red what would be lost — uncommitted changes, the branch's
   commits that are on no remote, a submodule's commits pushed nowhere.
   *Remove anyway* then runs `git worktree remove --force`; *Close, keep
-  the folder* closes the workspace alone. It waits while an agent works
+  the folder* closes the workspace alone, and is there too when the
+  worktree cannot be looked at (its folder deleted by hand). It waits while an agent works
   there, says *Close workspace* when another workspace uses the same
   checkout, and looks again when you confirm. *Leftover worktrees…* in a
   machine's ⋯ menu finds the ones left from workspaces closed elsewhere

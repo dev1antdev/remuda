@@ -36,6 +36,10 @@ func TestAPlanSaysWhatCreateWillDo(t *testing.T) {
 		{"a pull request's head", "cart", "", Pick{Kind: "pr", Number: 212, Head: "cart"},
 			Plan{Action: "remote", Branch: "cart", From: "origin/cart", Track: true, Fetch: "+refs/heads/cart:refs/remotes/origin/cart", PRRef: "acme/storefront#212"}},
 		{"a fork's pull request", "cart", "", Pick{Kind: "pr", Number: 212, Head: "cart", CrossRepo: true}, Plan{Action: "local", Branch: "cart", Fetch: "+refs/pull/212/head:refs/heads/cart", PRRef: "acme/storefront#212"}},
+		{"a fork's pull request from its main, under a name of this repository's", "pr-207-main", "", Pick{Kind: "pr", Number: 207, Head: "main", CrossRepo: true},
+			Plan{Action: "local", Branch: "pr-207-main", Fetch: "+refs/pull/207/head:refs/heads/pr-207-main", PRRef: "acme/storefront#207"}},
+		{"an issue a fork's pull request works on", "pr-207-checkout", "", Pick{Kind: "issue", Number: 203, PR: 207, Head: "checkout", CrossRepo: true},
+			Plan{Action: "local", Branch: "pr-207-checkout", Fetch: "+refs/pull/207/head:refs/heads/pr-207-checkout", IssueRef: "acme/storefront#203", PRRef: "acme/storefront#207"}},
 		{"a pull request's head renamed", "cart-2", "", Pick{Kind: "pr", Number: 212, Head: "cart"}, Plan{Action: "new", Branch: "cart-2", From: "origin/cart", Untrack: true, Fetch: "+refs/heads/cart:refs/remotes/origin/cart"}},
 	}
 	for _, c := range cases {
@@ -67,6 +71,10 @@ func TestTheFolderIsNamedAsHerdrNamesIt(t *testing.T) {
 	}
 	if FolderFor("", "x") != "" {
 		t.Error("no location gives a folder of its own")
+	}
+	// a branch with no letter or digit of a-z, 0-9 in it: herdr 0.9.5 named its folder "worktree", never the root itself
+	if got := FolderFor("/Users/me/trees", "исправление"); got != "/Users/me/trees/worktree" {
+		t.Errorf("a Cyrillic branch goes to %q", got)
 	}
 }
 
@@ -154,6 +162,24 @@ func TestAForksPullRequestIsFetchedAsABranchOfItsOwn(t *testing.T) {
 	}
 	if got := gitOut(t, main, "rev-parse", "their-fix"); got != gitOut(t, main, "rev-parse", "main") {
 		t.Errorf("the fork's head is %q", got)
+	}
+
+	// a fork's pull request from its own main: fetched as a branch of its own, this repository's main left as it was
+	before := gitOut(t, main, "rev-parse", "main")
+	fork := strings.TrimSpace(gitIn(t, main, "commit-tree", "-p", "HEAD", "-m", "from a fork", "HEAD^{tree}"))
+	gitIn(t, main, "push", "-q", "origin", fork+":refs/pull/8/head")
+	plan, err = MakePlan(src, ForkBranch(8, "main"), "", Pick{Kind: "pr", Number: 8, Head: "main", CrossRepo: true})
+	if err != nil || plan.Action != "local" {
+		t.Fatalf("the fork's main plans %+v, %v", plan, err)
+	}
+	if _, err := Create(host, gitMaker{t: t, root: main, home: host.home}, main, "w1", plan, "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if got := gitOut(t, main, "rev-parse", "pr-8-main"); got != fork {
+		t.Errorf("the fork's head is %q, not %q", got, fork)
+	}
+	if got := gitOut(t, main, "rev-parse", "main"); got != before {
+		t.Errorf("this repository's main moved to %q", got)
 	}
 }
 

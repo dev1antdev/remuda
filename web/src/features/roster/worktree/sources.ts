@@ -13,8 +13,9 @@ export type Team = { file: string; script: string };
 export type Source = { root: string; name: string; origin: string; github: string; base: string; local: Branch[]; remote: Branch[]; checkouts: Checkout[]; team?: Team };
 export type Issue = { number: number; title: string };
 export type PR = { number: number; title: string; head: string; cross_repo?: boolean; closes?: number[] };
-// Lists are origin's open issues and pull requests through gh, or why there are none to show
-export type Lists = { issues: Issue[]; prs: PR[]; trouble?: string };
+// Lists are origin's open issues and pull requests through gh, or why there are none to show: both lists, or one (a
+// repository with its issues switched off still has pull requests)
+export type Lists = { issues: Issue[]; prs: PR[]; trouble?: string; issues_trouble?: string; prs_trouble?: string };
 
 export type Mode = "branch" | "issue" | "pr" | "new";
 export const MODES: Mode[] = ["branch", "issue", "pr", "new"];
@@ -111,7 +112,8 @@ export function emptyWords(mode: Mode, src: Source | null, reading: boolean, err
   if (mode === "issue" || mode === "pr") {
     if (!src.github) return t("This repository's origin isn't on GitHub.");
     if (!lists) return t("Loading from GitHub…");
-    if (lists.trouble) return lists.trouble;
+    const trouble = lists.trouble || (mode === "issue" ? lists.issues_trouble : lists.prs_trouble);
+    if (trouble) return trouble;
   }
   return t("Nothing matches.");
 }

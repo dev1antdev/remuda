@@ -57,6 +57,9 @@ describe("the rows", () => {
     expect(emptyWords("pr", src, false, "", null)).toBe("Loading from GitHub…");
     expect(emptyWords("pr", src, false, "", { issues: [], prs: [], trouble: "gh is not installed on GOG" })).toBe("gh is not installed on GOG");
     expect(emptyWords("branch", src, false, "", lists)).toBe("Nothing matches.");
+    const noIssues: Lists = { issues: [], prs: [], issues_trouble: "gh on GOG answered: the 'acme/storefront' repository has disabled issues" };
+    expect(emptyWords("issue", src, false, "", noIssues)).toBe("gh on GOG answered: the 'acme/storefront' repository has disabled issues");
+    expect(emptyWords("pr", src, false, "", noIssues)).toBe("Nothing matches.");
   });
   it("offers the default base first", () => {
     expect(baseChoices(src)).toEqual(["origin/main", "origin/only-on-origin", "main", "fix", "local-one"]);
@@ -84,6 +87,8 @@ describe("the plan", () => {
   it("puts a new worktree in the project's own location when it has one", () => {
     expect(folderFor(src, { ...where, location: "/Users/me/trees/" }, "dev/feat/198")).toBe("/Users/me/trees/dev-feat-198");
     expect(slug("Weird.Name_x+y")).toBe("weird-name-x-y");
+    expect(slug("исправление")).toBe("worktree");
+    expect(folderFor(src, { ...where, location: "/Users/me/trees" }, "исправление")).toBe("/Users/me/trees/worktree");
   });
   it("fills the Details from a row", () => {
     const [issue] = items("issue", "198", src, lists, "/Users/me", (i) => issueBranch(i.number));
@@ -91,6 +96,19 @@ describe("the plan", () => {
     const [other] = items("issue", "203", src, lists, "/Users/me", (i) => issueBranch(i.number));
     expect(pickOf(other!, issueBranch).branch).toBe("dev/feat/203");
     expect(fromPR({ kind: "issue", number: 198, pr: 212, head: "dev/feat/198" }, "dev/feat/198")).toBe("From PR #212 · ");
+  });
+  it("fetches a fork's pull request into a branch of its own, never one named like a branch here", () => {
+    const forked: Lists = { issues: [{ number: 203, title: "Checkout redesign" }], prs: [{ number: 207, title: "Redesign from a fork", head: "main", cross_repo: true, closes: [203] }] };
+    const [pr] = items("pr", "", src, forked, "/Users/me", () => "");
+    const pickedPR = pickOf(pr!, issueBranch);
+    expect(pickedPR.branch).toBe("pr-207-main");
+    expect(plan(pickedPR.branch, pickedPR.pick)).toMatchObject({ action: "local", fetch: true, note: "From a fork · fetches pull/207/head as pr-207-main" });
+    expect(plan("redesign", pickedPR.pick)).toMatchObject({ action: "local", fetch: true });
+    const [issue] = items("issue", "", src, forked, "/Users/me", (i) => issueBranch(i.number));
+    const fromIssue = pickOf(issue!, issueBranch);
+    expect(fromIssue.branch).toBe("pr-207-main");
+    expect(plan(fromIssue.branch, fromIssue.pick)).toMatchObject({ action: "local", fetch: true });
+    expect(fromPR(fromIssue.pick, fromIssue.branch)).toBe("From PR #207 · ");
   });
   it("names the button by the plan", () => {
     expect(createWords(plan("fix", { kind: "branch", branch: "fix" }), false)).toBe("Open worktree");
