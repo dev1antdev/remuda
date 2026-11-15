@@ -4588,8 +4588,14 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   checkout's pull requests and its repository's, one in full, and what
   the person writes on GitHub at a press — all through gh on the
   checkout's machine as the person, as `internal/prstatus` reads.
-  `gh.go`: `ghScript` runs gh with its arguments quoted, a JSON body on
-  stdin through a here-document (one line: json.Marshal never writes the
+  `gh.go`: `ghScript` runs gh with its arguments quoted; what a write
+  hands gh on its stdin — a comment's, a reply's JSON, any mutation's or
+  REST body's (`runText`) — is put on the machine as a file first
+  (`putInput`: `mktemp`, `PutFile`, removed by the script's trap), never
+  inside the script, which is a command line there (any user's `ps`;
+  Linux refuses an argument past 128 KB, which a 64 KB comment of markup
+  passes once JSON spells `<` as `<`), a read's query through a
+  here-document (one line: json.Marshal never writes the
   delimiter on a line of its own), stdout, stderr and the exit status
   printed apart (`parseAnswer` reads them from the end) and, for a long
   answer, stdout cut on the machine through a file (`lastBytes` /

@@ -36,9 +36,11 @@ func (f *filerFake) PutFile(path string, data []byte, timeout time.Duration) err
 }
 
 func TestACommentsTextNeverTravelsInsideTheScript(t *testing.T) {
+	made := 0
 	host := &filerFake{Fake: &shell.Fake{Name: "box", Answer: func(s string) (string, error) {
 		if strings.HasPrefix(s, "mktemp") {
-			return "/tmp/remuda-gh.ab12\n", nil
+			made++
+			return "/tmp/remuda-gh." + itoa(made) + "\n", nil
 		}
 		return answered(`{"data":{}}`, "", 0), nil
 	}}}
@@ -54,11 +56,19 @@ func TestACommentsTextNeverTravelsInsideTheScript(t *testing.T) {
 			t.Fatalf("the text rode inside a script, a command line on the machine: %q", s)
 		}
 	}
-	var body struct {
+	var comment struct {
 		Body string `json:"body"`
 	}
-	if err := json.Unmarshal([]byte(host.put["/tmp/remuda-gh.ab12"]), &body); err != nil || body.Body != secret {
-		t.Fatalf("the file put on the machine: %q %v", host.put["/tmp/remuda-gh.ab12"], err)
+	if err := json.Unmarshal([]byte(host.put["/tmp/remuda-gh.1"]), &comment); err != nil || comment.Body != secret {
+		t.Fatalf("the comment's file put on the machine: %q %v", host.put["/tmp/remuda-gh.1"], err)
+	}
+	var reply struct {
+		Variables struct {
+			Body string `json:"body"`
+		} `json:"variables"`
+	}
+	if err := json.Unmarshal([]byte(host.put["/tmp/remuda-gh.2"]), &reply); err != nil || reply.Variables.Body != secret {
+		t.Fatalf("the reply's file put on the machine: %q %v", host.put["/tmp/remuda-gh.2"], err)
 	}
 	if s := host.Scripts()[1]; !strings.Contains(s, `<"$in"`) || !strings.Contains(s, `trap 'rm -f "$in"' EXIT`) {
 		t.Fatalf("gh does not read the file, or the file is left behind: %q", s)
