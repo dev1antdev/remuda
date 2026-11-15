@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useQuery } from "@/lib/query";
 import { basename, dirname, errMsg, plural } from "@/lib/text";
-import { Icon, Notice, Tip } from "@/ui";
+import { FileIcon, Icon, Notice, Tip } from "@/ui";
 import type { DiffFrom, ReviewFile, Stat } from "./api";
 import { fileLines, surround, whyNotUnfold, type Unfold } from "./context";
 import { draftOnRow, type DraftComment } from "./draft";
@@ -70,6 +70,7 @@ export function FileRow({ file, look = {}, open, split, onToggle, load, loadSour
             <Icon name="chevron-right" size={12} />
           </span>
           {file.fresh && <span className="review-dot" title={t("Changed since you looked")} />}
+          <FileIcon path={file.path} size={14} />
           <span className="review-path" title={look.name ? file.path : undefined}>
             {!look.name && <span className="review-dir">{dirname(file.path)}</span>}
             {look.name ?? basename(file.path)}
@@ -89,7 +90,11 @@ export function FileRow({ file, look = {}, open, split, onToggle, load, loadSour
               <Icon name="message" size={12} /> {opinion.length}
             </span>
           )}
-          {look.conflict && <span className="review-conflict-kind">{look.conflict}</span>}
+          {look.conflict && (
+            <span className="review-conflict-kind" title={look.conflict}>
+              {look.conflict}
+            </span>
+          )}
         </button>
         <span className={`review-slot${look.actions ? " has-actions" : ""}`}>
           <span className="review-slot-quiet">

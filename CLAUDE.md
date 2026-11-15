@@ -636,8 +636,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `fileIcons.test.ts` checks the precedence, the Windows app's files, every
   icon the rules name shipped and nothing else, no `<script`, `on…=`,
   `javascript:`, `<foreignObject` or outside `href` in any, under 600 KB in
-  all. Drawn in both tabs of the files rail, the file viewer's head and the
-  folder picker.
+  all. Drawn in both tabs of the files rail, the file viewer's head, the
+  folder picker, the Changes lens's file rows and a commit's files in the
+  Git lens.
 - `web/src/features/chat/attachments.ts` — `useAttachments` (upload at
   once, chips with thumbnails); `lib/transfer.ts` has `filesFrom`
   (drop/paste → files; a pasted screenshot gets a name), `lib/text.ts`
@@ -2675,7 +2676,13 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   per device; the current-branch chip after them, accent tint, "detached
   at <8>", "…" until read, so a checkout moves nothing beside it; "N
   commits", "300+ commits" while more follow; a spinner's place kept;
-  Read the history again), `GitStopped` (`GitStates.tsx`: "A merge
+  **Fetch, pull or push** — one `Menu` behind a cloud `icon-btn`, the
+  person's alone, `syncMenu.ts` tested: the Repositories place's own calls
+  and words (`features/repos/syncApi.ts`, `outcome.ts`) on the lens's
+  checkout through `useSync.ts`, one at a time, pull and push off while
+  HEAD is detached, a push the secret check holds opening the place's
+  `PushHeldDialog`, the history read again after each; Read the history
+  again), `GitStopped` (`GitStates.tsx`: "A merge
   stopped on conflicts in 3 files." with Open Changes to resolve and
   Abort behind a confirm), `GraphTable.tsx` (the columns' heads, the rows,
   Load 300 more; one set of handlers: a click picks a commit, the
@@ -2955,7 +2962,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   at once — amber and red where Orca puts them (`cpuLevel` 30 / 60 % of all
   the cores, `memLevel` 30 / 50 % of the RAM); its popup is the machine's
   workspaces by memory, each "node 512 MB · 3 terminals" and unfolding to
-  its terminals (`terminalName`), a click opening it (`paneToOpen`), herdr's
+  its terminals (`terminalName`), a click opening it (`paneToOpen`), Sleep
+  or Wake beside it (`features/sleep/flows.ts`' `askSleep` / `wake`, its
+  room kept empty where neither applies), herdr's
   own row, and the foot "CPU is a share of all 8 cores · 16 GB"; "not on
   Windows yet" for a Windows PC. **Live ports** (`PortsSegment.tsx` over
   `ports.ts`, tested): the count of the pane's machine's workspaces' ports
@@ -6933,7 +6942,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   folder per lens or panel, its server calls in its own `api.ts`) →
   `app/`; a dependency points down that list, and a feature never imports
   another feature's screens (its `api.ts` and pure modules, and the few
-  shared pieces `agents/SendToAgent`, `files/target`, `usage/RetiredNotice`, are fine; from
+  shared pieces `agents/SendToAgent`, `files/target`, `usage/RetiredNotice`, `repos/PushHeldDialog`, are fine; from
   `app/` a feature takes only `store`, `current`, `act`, `pip`, `theme`).
   `features/terminal/engine/` is the terminal outside React (`engine.ts`
   wires `transport`, `modes`, `mouse`, `pointer`, `selection`, `layer`,

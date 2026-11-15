@@ -18,9 +18,12 @@ import { GitHeader } from "./GitHeader";
 import { GraphTable, type MenuPoint, type Pressed } from "./GraphTable";
 import { rowCommit } from "./history";
 import { menuFor, type Action, type Context, type Target } from "./menus";
+import { PushHeldDialog } from "@/features/repos/PushHeldDialog";
 import { OpDialog } from "./OpDialog";
 import { asksFirst, doneWords, requestOf, type Values, type Writing } from "./ops";
+import { syncRows } from "./syncMenu";
 import { useHistory } from "./useHistory";
+import { useSync } from "./useSync";
 import { commitsWords, laneColors, operationWords, stoppedWords } from "./words";
 import { t, tc } from "@/lib/i18n";
 
@@ -35,6 +38,7 @@ export function GitLens({ machineId, dir, active, viewOnly, onChanges }: { machi
   const flavor = useFlavor();
   const colors = useMemo(() => laneColors(ansiPalette(flavor).colors), [flavor]);
   const now = useNow(60_000);
+  const sync = useSync(machineId, dir, refresh);
   const ctx: Context = { branch: state?.branch ?? "", head: state?.head ?? "", branches: history?.log.branches ?? [], dirty: state?.dirty ?? 0 };
 
   const finished = useCallback(
@@ -132,11 +136,12 @@ export function GitLens({ machineId, dir, active, viewOnly, onChanges }: { machi
   );
   return (
     <div className="git-lens" onKeyDown={(e) => e.key === "Escape" && selected && !e.defaultPrevented && setSelected(null)}>
-      <GitHeader branch={state?.branch} head={state?.head} scope={scope} onScope={setScope} count={history?.log.repo ? commitsWords(history.commits.length, history.log.more) : "…"} fetching={fetching} onRefresh={refresh} />
+      <GitHeader branch={state?.branch} head={state?.head} scope={scope} onScope={setScope} count={history?.log.repo ? commitsWords(history.commits.length, history.log.more) : "…"} fetching={fetching || !!sync.running} sync={viewOnly || !dir ? undefined : syncRows(state?.branch ?? "", sync.running, (action) => void sync.run(action))} onRefresh={refresh} />
       {state?.operation && <GitStopped operation={state.operation} conflicts={state.conflicts} readOnly={viewOnly} onAbort={abort} onChanges={onChanges} />}
       {body}
       {picked && <CommitDetails key={picked.hash} machineId={machineId} dir={dir} commit={picked} now={now} onClose={() => setSelected(null)} />}
       {menu && <MenuAt key={menu.key} at={menu.at} items={menu.items} label={t("Git")} onClose={() => setMenu(null)} />}
+      {sync.held && <PushHeldDialog held={{ outcome: sync.held }} name={sync.name} onClose={sync.dropHeld} onPush={() => void sync.run("push", true)} />}
       {dialog && <OpDialog machineId={machineId} dir={dir} action={dialog} ctx={ctx} changes={state?.changes} onDone={(result, values) => finished(dialog, values, result)} onClose={() => setDialog(null)} />}
     </div>
   );

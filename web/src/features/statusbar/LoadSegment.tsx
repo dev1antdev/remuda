@@ -1,11 +1,13 @@
 // The machine's load in the status bar: "CPU 12 % · 3.8 GB", what the pane's machine's herdr panes weigh on it, read
 // every 5 s while the page has the focus and every 30 s while it only shows; a click opens its workspaces by memory,
-// each with its heaviest process and its terminals, a click on one opening it.
+// each with its heaviest process and its terminals, a click on one opening it, and Sleep or Wake beside a workspace.
 
 import { useState } from "react";
 import { actions } from "@/app/store";
-import type { Machine } from "@/features/roster/api";
+import type { Machine, Session } from "@/features/roster/api";
 import { useSharing } from "@/features/roster/useSharing";
+import { askSleep, wake } from "@/features/sleep/flows";
+import { canSleep } from "@/features/sleep/sleep";
 import { t } from "@/lib/i18n";
 import { useQuery } from "@/lib/query";
 import { Icon, Popover, Tip } from "@/ui";
@@ -97,6 +99,7 @@ function LoadList({ usage, machine, onPick }: { usage: Usage; machine: Machine; 
                 <span className="load-ws-title">{nameOf(ws)}</span>
                 <span className="load-ws-line">{workspaceLine(ws)}</span>
               </button>
+              <SleepSlot machineId={machine.id} session={session} name={nameOf(ws)} onPick={onPick} />
               <Numbers cpu={ws.cpu} kb={ws.rss_kb} known={usage.cpu_known} total={usage.mem_kb} />
             </div>
             {!folded &&
@@ -132,4 +135,31 @@ function Numbers({ cpu, kb, known, total }: { cpu: number; kb: number; known: bo
       <span className={memTone ? `is-${memTone}` : undefined}>{memWords(kb)}</span>
     </span>
   );
+}
+
+// SleepSlot is a workspace's Sleep… while its agents could be put to sleep, Wake while it sleeps, else its room kept
+// empty so the numbers beside it never move
+function SleepSlot({ machineId, session, name, onPick }: { machineId: string; session: Session | undefined; name: string; onPick: () => void }) {
+  const named = `“${name}”`;
+  if (session?.asleep) {
+    const label = t("Wake {workspace}", { workspace: named });
+    return (
+      <Tip text={label} side="left">
+        <button type="button" className="icon-btn sm load-sleep" aria-label={label} onClick={() => (onPick(), void wake(machineId, session))}>
+          <Icon name="sun" size={12} />
+        </button>
+      </Tip>
+    );
+  }
+  if (session && canSleep(session)) {
+    const label = t("Sleep {workspace}…", { workspace: named });
+    return (
+      <Tip text={label} side="left">
+        <button type="button" className="icon-btn sm load-sleep" aria-label={label} onClick={() => (onPick(), askSleep(machineId, session))}>
+          <Icon name="moon" size={12} />
+        </button>
+      </Tip>
+    );
+  }
+  return <span className="icon-btn sm load-sleep is-vacant" aria-hidden="true" />;
 }
