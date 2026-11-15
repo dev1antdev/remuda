@@ -20,6 +20,7 @@ import { hueStyle } from "./hue";
 import { moving, useClock, useSpinner } from "./useClocks";
 import { NO_MACHINES } from "./server";
 import { useRoster } from "./useRoster";
+import { useMachineOrder } from "./useMachineOrder";
 import { useScenes } from "@/features/scenes/api";
 import { agentKey, fleetTally, livePins, pinnedRows, PINS_KEY, tallyOf, togglePin, waitingAgents } from "./sidebarAgents";
 import { HeadSummary } from "./marks";
@@ -56,6 +57,7 @@ export default function Sidebar() {
   const onPin = viewOnly ? undefined : (key: string) => setPins((list) => togglePin(list, key));
   const onIcon = (m: Machine, f: Folder) => actions.openDialog({ kind: "folder-icon", machineId: m.id, folder: f.path, name: f.name, icon: f.icon });
   const share = useSharing();
+  const order = useMachineOrder(machines, !viewOnly);
   // every folder and section of every machine shut, or all open again
   const foldAll = (shut: boolean) =>
     setWsFolded((f) => {
@@ -141,13 +143,14 @@ export default function Sidebar() {
       <NeedsYou waiting={waiting} questions={questions} share={share} now={now} selected={selected} />
       <PinnedAgents pinned={pinnedRows(machines, kept)} share={share} prefs={prefs} step={step} now={now} selected={selected} onSelect={actions.selectPane} pins={kept} onPin={onPin} subFolded={subFolded} onFoldSubs={onFoldSubs} />
       {server && machines.length === 0 && <p className="ws-empty">{t(NO_MACHINES)}</p>}
-      {machines.map((m) => {
+      {order.shown.map((m, at) => {
         const folded = !!collapsed[m.id];
+        const mark = order.mark(m.id);
         const workspaces = m.sessions.filter((s) => !s.scratch).length; // the floating terminal's shell is the drawer's
         const tally = tallyOf(m.sessions);
         return (
-          <div key={m.id} className={`machine${folded ? " folded" : ""}${m.id !== "local" ? " has-hue" : ""}`} style={hueStyle(m.id)}>
-            <div className="machine-head">
+          <div key={m.id} className={`machine${folded ? " folded" : ""}${m.id !== "local" ? " has-hue" : ""}${order.dragging(m.id) ? " is-dragging" : ""}${mark ? ` drop-${mark}` : ""}`} style={hueStyle(m.id)} {...order.block(m.id)}>
+            <div className="machine-head" {...order.head(m.id)}>
               <button type="button" className={`machine-toggle${folded && current?.machineId === m.id ? " on" : ""}`} title={folded ? t("Show workspaces") : t("Hide workspaces")} aria-expanded={!folded} onClick={() => onToggle(m.id)}>
                 <span className={`machine-state is-${m.state}`} title={stateTitle(m)} />
                 <span className="machine-label" title={share.machineHidden(m.id) ? undefined : m.host}>
@@ -163,13 +166,29 @@ export default function Sidebar() {
                   <Icon name="chevron-right" size={12} />
                 </span>
               </button>
+              {order.canMove && (
+                <Tip text={t("Drag to move this machine among the others")}>
+                  <span className="machine-grip" aria-hidden="true">
+                    <Icon name="grip" size={12} strokeWidth={2.6} />
+                  </span>
+                </Tip>
+              )}
               <HealthButton machine={m} latest={latest} serverVersion={serverVersion} viewOnly={viewOnly} />
               {!viewOnly && <Tip text={t("New workspace on {machine}", { machine: share.machineLabel(m) })}>
                 <button type="button" className="icon-btn" aria-label={t("New workspace on {machine}", { machine: share.machineLabel(m) })} disabled={m.state !== "connected"} onClick={() => actions.openDialog({ kind: "workspace", machineId: m.id })}>
                   <Icon name="plus" size={14} />
                 </button>
               </Tip>}
-              {!viewOnly && <MachineMenu machine={m} onRename={() => actions.openDialog({ kind: "renameMachine", machine: m })} onRemove={m.id !== "local" && m.source !== "herdr" ? () => onRemoveMachine(m) : undefined} />}
+              {!viewOnly && (
+                <MachineMenu
+                  machine={m}
+                  onRename={() => actions.openDialog({ kind: "renameMachine", machine: m })}
+                  onRemove={m.id !== "local" && m.source !== "herdr" ? () => onRemoveMachine(m) : undefined}
+                  onStep={order.canMove ? (by) => order.step(m.id, by) : undefined}
+                  first={at === 0}
+                  last={at === order.shown.length - 1}
+                />
+              )}
             </div>
             {m.state === "error" && (
               <Notice tone="error" className="machine-error">

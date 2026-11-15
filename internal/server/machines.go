@@ -11,6 +11,7 @@ import (
 
 func (s *Server) machineRoutes(api *http.ServeMux) {
 	api.HandleFunc("POST /api/machines", s.handleAddMachine)
+	api.HandleFunc("PUT /api/machines/order", s.handleMachineOrder)
 	api.HandleFunc("DELETE /api/machines/{id}", s.handleRemoveMachine)
 	api.HandleFunc("PATCH /api/machines/{id}", s.handleRenameMachine)
 	api.HandleFunc("POST /api/machines/{id}/health", s.handleMachineHealth)
@@ -72,6 +73,28 @@ func (s *Server) handleRenameMachine(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, map[string]any{"ok": true, "label": mc.Label(), "mac": s.Machines.MAC(id)})
+}
+
+// handleMachineOrder is PUT /api/machines/order {ids}: the machines in the order the person dragged them to in the
+// sidebar. The roster lists them so from then on, on every device; a machine the order does not name comes after.
+func (s *Server) handleMachineOrder(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		IDs []string `json:"ids"`
+	}
+	if !decode(w, r, &req) {
+		return
+	}
+	if err := s.Machines.SetOrder(req.IDs); err != nil {
+		httpErr(w, 400, err)
+		return
+	}
+	s.rosterMoved()
+	list := s.Machines.List()
+	ids := make([]string, len(list))
+	for i, mc := range list {
+		ids[i] = mc.ID()
+	}
+	writeJSON(w, map[string]any{"ids": ids})
 }
 
 // handleMachineHealth is POST /api/machines/{id}/health: read the machine's vitals now.

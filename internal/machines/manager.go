@@ -52,6 +52,7 @@ type Manager struct {
 	dir      string // the state dir, where labels.json lives
 	names    map[string]string
 	macs     map[string]string // the MAC addresses, for the magic packet that wakes a sleeping machine
+	placed   []string          // the person's order of the machines, by id (order.json); order is the arrival's
 	herdrBin string
 	door     *Door                                 // how every remote's agents reach the tasks here; nil opens none
 	saveMu   sync.Mutex                            // writes of machines.json, one at a time
@@ -205,6 +206,7 @@ func NewManager(dir, localSocket, localHerdrBin string, door *Door) *Manager {
 	if m.macs == nil {
 		m.macs = map[string]string{}
 	}
+	_ = state.LoadJSON(m.dir, orderFile, &m.placed)
 	local.setLabel(m.names[LocalID])
 	for _, cfg := range m.load() {
 		m.add(cfg)
@@ -400,12 +402,13 @@ func (m *Manager) Get(id string) (*Machine, error) {
 	return mc, nil
 }
 
-// List is the fleet the cockpit works with: every machine, the host too unless it serves the page only.
+// List is the fleet the cockpit works with: every machine, the host too unless it serves the page only, in the order
+// the person gave them (SetOrder), the ones it does not name after those as they arrived.
 func (m *Manager) List() []*Machine {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	out := make([]*Machine, 0, len(m.order))
-	for _, id := range m.order {
+	for _, id := range arranged(m.order, m.placed) {
 		if m.server && id == LocalID {
 			continue
 		}

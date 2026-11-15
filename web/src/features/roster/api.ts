@@ -307,6 +307,9 @@ export const renameMachine = (id: string, label: string): Promise<void> => sendJ
 
 export const removeMachine = (id: string): Promise<void> => sendJSON("DELETE", `/api/machines/${encodeURIComponent(id)}`);
 
+// setMachineOrder keeps the machines in the order given, on the cockpit: every device lists them so
+export const setMachineOrder = (ids: string[]): Promise<void> => sendJSON("PUT", "/api/machines/order", { ids }).then(() => undefined);
+
 // a workspace folder silenced until a moment: no push, no webhook, no feed row from its panes until then
 export const muteWorkspace = (machine: string, dir: string, until: Date): Promise<{ muted_until: string }> => sendJSON("PUT", "/api/mutes", { machine, dir, until: until.toISOString() });
 

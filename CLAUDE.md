@@ -351,9 +351,29 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   for any machine (the local one too) lives in `labels.json` and shows
   through `Machine.Label()` everywhere (`Cfg.Label` stays what the
   registry said); `PATCH /api/machines/{id} {label}` sets it, empty goes
-  back. The sidebar's per-machine ⋯ menu (`MachineMenu`) has Rename, Copy
+  back. The sidebar's per-machine ⋯ menu (`MachineMenu`) has Rename, Move
+  up and Move down, Copy
   SSH host (through `copyText`, so a plain-http address copies too, and a
-  toast) and, for a manually added one, Remove. Each remote connects in the
+  toast) and, for a manually added one, Remove. **The machines stand in
+  the person's order** (`order.go`, tested): `Manager.SetOrder(ids)` keeps
+  the ids as they were dragged in `order.json` in the state dir — each one
+  the registry has, each once, at most `maxPlaced` 256 — and `List` (the
+  roster, and with it the sidebar, the Wall, the palette and every pick of
+  a machine, on every device) names them first in that order, a machine
+  the order does not name after them as it arrived (`arranged`), a machine
+  gone and back keeping its place; `All` keeps the arrival's. `PUT
+  /api/machines/order {ids}` (the person's only; 400 for a machine the
+  registry lacks or one named twice), the roster moved after. On the page
+  (`features/roster/useMachineOrder.ts` from the Sidebar, `machineOrder.ts`
+  the pure part, tested: `movedBeside`, `stepped`, `inOrder`, `dropMark`,
+  `lowerHalf`) a machine is dragged by its head — a grip shows there under
+  the pointer, the sign of it and where a drag starts in Firefox, which
+  starts none on a button — and dropped on another machine's block: its
+  upper half takes it before that machine, its lower half after, a line of
+  the accent showing where, the dragged block dimmed; the new order shows
+  at once and stands until the roster lists it; a finger and the keyboard
+  have the menu's Move up and Move down; with one machine, or for a
+  viewer, nothing drags. Each remote connects in the
   background: dial master → one script reads `$HOME` and finds the herdr
   bin (incl. `~/.local/bin`) → RPC transport → `Ping` → **the door**
   (`door.go`, in a goroutine, once per connection): this remuda's port

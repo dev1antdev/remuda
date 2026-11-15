@@ -255,6 +255,12 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   on this device — each shows in its own face in the list, an
   uninstalled one falls back to the system's monospace. Nothing is
   downloaded: no web fonts.
+- **Machines in your order** — drag a machine by its name in the sidebar
+  (a grip shows under the pointer) and drop it above or below another;
+  on a phone, or from the keyboard, its ⋯ menu has Move up and Move
+  down. The order is kept on the cockpit, so every device, the Wall and
+  the palette list the machines the same way; a machine added later
+  comes last.
 - **Under a finger** — on a phone or a tablet every control is an
   eighth taller than with a mouse (a button 36 px, the header's 40, the
   key bar's keys 40), the lens switch's segments are a thumb's, and the
