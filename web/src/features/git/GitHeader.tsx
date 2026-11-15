@@ -1,19 +1,20 @@
 // The lens's head, after git-graph's: All branches | Current, the remote branches' box, where HEAD stands — after them,
 // so a checkout that changes its name moves nothing beside it — how many commits are drawn, a spinner's place kept so
-// nothing moves while a read is out, and a reread.
+// nothing moves while a read is out, fetch / pull / push in one menu (the person's, never a viewer's), and a reread.
 
-import { Icon, Tip } from "@/ui";
+import { Icon, Menu, Tip, type MenuItem } from "@/ui";
 import type { Scope } from "./api";
 import { whereWords } from "./words";
 import { t, tc } from "@/lib/i18n";
 
-export function GitHeader({ branch, head, scope, onScope, count, fetching, onRefresh }: {
+export function GitHeader({ branch, head, scope, onScope, count, fetching, sync, onRefresh }: {
   branch?: string;
   head?: string;
   scope: Scope;
   onScope: (scope: Scope) => void;
   count: string;
   fetching: boolean;
+  sync?: MenuItem[];
   onRefresh: () => void;
 }) {
   const where = whereWords(branch, head);
@@ -39,6 +40,18 @@ export function GitHeader({ branch, head, scope, onScope, count, fetching, onRef
       <span className="git-spin" aria-hidden="true">
         {fetching && <Icon name="refresh-cw" size={12} className="spin" />}
       </span>
+      {sync && (
+        <Menu
+          label={t("Fetch, pull or push")}
+          tip={t("Fetch, pull or push")}
+          items={sync}
+          trigger={
+            <button type="button" className="icon-btn sm git-sync" aria-label={t("Fetch, pull or push")}>
+              <Icon name="cloud" size={14} />
+            </button>
+          }
+        />
+      )}
       <Tip text={t("Read the history again")}>
         <button type="button" className="icon-btn sm" aria-label={t("Read the history again")} onClick={onRefresh}>
           <Icon name="refresh-cw" size={14} />

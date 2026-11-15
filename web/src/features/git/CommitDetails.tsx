@@ -4,7 +4,7 @@
 
 import { useEffect, useState } from "react";
 import { useQuery } from "@/lib/query";
-import { Icon, Tip } from "@/ui";
+import { FileIcon, Icon, Tip } from "@/ui";
 import { readCommit, readPatch, type Commit, type CommitDetail, type GitFile } from "./api";
 import { CommitDiff } from "./CommitDiff";
 import { dateWords, filesWords, stampWords } from "./words";
@@ -96,6 +96,7 @@ function Body({ detail, onOpen }: { detail: CommitDetail; onOpen: (file: GitFile
             <li key={file.path}>
               <button type="button" className="git-file" onClick={() => onOpen(file)}>
                 <span className={`git-file-status is-${STATUS_TONE[file.status] ?? "mod"}`}>{file.status}</span>
+                <FileIcon path={file.path} size={14} />
                 <span className="git-file-path">
                   <span className="git-file-dir">{slash >= 0 ? file.path.slice(0, slash + 1) : ""}</span>
                   {file.path.slice(slash + 1)}

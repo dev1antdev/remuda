@@ -8,7 +8,7 @@ import { t } from "@/lib/i18n";
 import { heldWords, pushAnywayAsk } from "./outcome";
 import type { HeldPush } from "./useRepoSync";
 
-export function PushHeldDialog({ held, name, onClose, onPush }: { held: HeldPush; name: string; onClose: () => void; onPush: () => void }) {
+export function PushHeldDialog({ held, name, onClose, onPush }: { held: Pick<HeldPush, "outcome">; name: string; onClose: () => void; onPush: () => void }) {
   const { outcome } = held;
   const findings = outcome.scan?.findings ?? [];
   const notRead = skippedWords(outcome.scan?.skipped);

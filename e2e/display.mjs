@@ -663,6 +663,7 @@ async function statusBarScreens() {
       if (!(await until(() => present(".load-pop .load-ws"), 6))) throw new Error("the load's popup did not open");
       await tap(".load-pop .load-ws .icon-btn");
       if (!(await until(() => present(".load-pop .load-row.is-terminal"), 4))) failed("a workspace's terminals do not unfold");
+      check((await count(".load-pop .load-ws .load-sleep")) === (await count(".load-pop .load-ws")), "a workspace of the popup has no room for Sleep or Wake");
     },
     expect: [".load-pop .load-row.is-herdr", ".load-pop .load-foot"],
   });
@@ -2536,6 +2537,7 @@ async function gitScreens() {
       check(await present(`${GIT} .git-row.is-uncommitted`), "no Uncommitted changes row over HEAD");
       check(await present(`${GIT} .git-row.is-head .git-label.is-current`), "HEAD's row does not carry the checked-out branch, filled");
       check(await present(`${GIT} .git-label.is-tag`), "the tag v0.1.0 has no label");
+      check(await present(`${GIT} .git-head .git-sync`), "the head offers no fetch, pull or push");
       check(/main/.test(await evaluate(`document.querySelector('${GIT} .git-where')?.textContent ?? ""`)), "the head's chip does not say main");
       check(await evaluate(`[...document.querySelectorAll('${GIT} .git-row[data-index]')].every((r) => Math.round(r.getBoundingClientRect().height) === 24)`), "a row of the graph is not 24 px high");
       // a phone widens its page to what overflows it, so the page's own width says whether the four lenses fit

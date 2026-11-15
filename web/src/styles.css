@@ -8914,6 +8914,15 @@ body:has(.status-bar) .toasts {
   padding: 0 14px 0 6px;
 }
 
+/* Sleep or Wake beside a workspace: the room is the row's whether or not it offers one, so the numbers never move */
+.load-sleep {
+  flex-shrink: 0;
+}
+
+.load-sleep.is-vacant {
+  visibility: hidden;
+}
+
 .load-row.is-terminal {
   min-height: 30px;
   padding-left: 36px;

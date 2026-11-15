@@ -169,4 +169,9 @@ export const gitgraph: Dictionary = {
   "Reverted {hash}": "Отменён {hash}",
   "Reset uncommitted changes ({mode})": "Незакоммиченные изменения сброшены ({mode})",
   "Reset to {hash} ({mode})": "Сброшено к {hash} ({mode})",
+  "Fetch, pull or push": "Fetch, pull или push",
+  "the remote's branches read again; nothing here changes": "ветки remote читаются заново; здесь ничего не меняется",
+  "{branch} fast-forwarded to its upstream": "{branch} перематывается вперёд до своего upstream",
+  "{branch} sent to its upstream, never forced": "{branch} отправляется в свой upstream, никогда не force",
+  "no branch checked out": "ни одна ветка не выбрана",
 };
