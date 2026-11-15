@@ -9,6 +9,9 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/dev1antdev/remuda/internal/script"
+	"github.com/dev1antdev/remuda/internal/shell"
 )
 
 // A session's subagents: the agents a conversation spawned through its Agent tool, each a transcript of its own
@@ -57,6 +60,12 @@ type subagentMeta struct {
 	Model          string `json:"model"`
 	WorktreeBranch string `json:"worktreeBranch"`
 	Finished       bool   `json:"finished"`
+}
+
+// cachedMeta is a meta file as read at a version of it.
+type cachedMeta struct {
+	version Version
+	meta    subagentMeta
 }
 
 type subagentEntry struct {
@@ -124,6 +133,137 @@ func (r *Reader) Subagents(sessionPath string, now time.Time) ([]Subagent, strin
 	return out, stamp(versions), nil
 }
 
+// SubagentsFor is the subagents a chat has a use for: the ones the calls given spawned — the Agent calls of the turns
+// on screen, by their tool ids — and the ones whose transcript moved within QuietAfter of now, which may still be at
+// work. A long session spawns hundreds, a gigabyte of transcripts between them: read whole for every opening of the
+// chat, over ssh, they never arrived. The folder is listed in one round trip and its meta files, which say which call
+// spawned which, read in one more; only the transcripts of the ones answered are read.
+func (r *Reader) SubagentsFor(sessionPath string, spawnedBy map[string]bool, now time.Time) ([]Subagent, error) {
+	if FormatOf(sessionPath) != Claude {
+		return nil, nil
+	}
+	dir := SubagentsDir(sessionPath)
+	versions, err := r.subagentFiles(dir, now)
+	if err != nil || len(versions) == 0 {
+		return nil, err
+	}
+	metas := r.metasOf(dir, versions)
+	var out []Subagent
+	for path, version := range versions {
+		if !strings.HasSuffix(path, ".jsonl") {
+			continue
+		}
+		if spawnedBy[metas[metaPathOf(path)].ToolUseID] || now.Sub(version.Time()) <= QuietAfter {
+			out = append(out, r.subagentAt(path, version, versions, now))
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Started != out[j].Started {
+			return out[i].Started < out[j].Started
+		}
+		return out[i].ID < out[j].ID
+	})
+	return out, nil
+}
+
+// HasSubagent says the session's folder holds a subagent of that id.
+func (r *Reader) HasSubagent(sessionPath, id string, now time.Time) bool {
+	if !SubagentID(id) || FormatOf(sessionPath) != Claude {
+		return false
+	}
+	dir := SubagentsDir(sessionPath)
+	versions, err := r.subagentFiles(dir, now)
+	if err != nil {
+		return false
+	}
+	_, ok := versions[filepath.Join(dir, id+".jsonl")]
+	return ok
+}
+
+// metaPathOf is the meta file beside a subagent's transcript.
+func metaPathOf(transcriptPath string) string {
+	return strings.TrimSuffix(transcriptPath, ".jsonl") + ".meta.json"
+}
+
+// metasKept is how many meta files a reader remembers; past it the memory starts over.
+const metasKept = 16384
+
+// metasOf is the meta of every subagent a folder's listing names, by the meta file's path. The ones this reader has
+// not read at the version listed are read: each file here, the whole folder in one round trip on a remote.
+func (r *Reader) metasOf(dir string, versions map[string]Version) map[string]subagentMeta {
+	out := map[string]subagentMeta{}
+	var missing []string
+	r.mu.Lock()
+	for path, version := range versions {
+		if !strings.HasSuffix(path, ".meta.json") {
+			continue
+		}
+		if known, ok := r.metas[path]; ok && known.version == version {
+			out[path] = known.meta
+			continue
+		}
+		missing = append(missing, path)
+	}
+	r.mu.Unlock()
+	if len(missing) == 0 {
+		return out
+	}
+	read := map[string]subagentMeta{}
+	if r.host.Local() {
+		for _, path := range missing {
+			raw, err := os.ReadFile(path)
+			var meta subagentMeta
+			if err == nil && json.Unmarshal(raw, &meta) == nil {
+				read[path] = meta
+			}
+		}
+	} else if answer, err := shell.Text(r.host, metasScript(dir), 20*time.Second); err == nil {
+		for name, meta := range parseMetas(answer) {
+			read[filepath.Join(dir, name)] = meta
+		}
+	}
+	r.mu.Lock()
+	if len(r.metas)+len(read) > metasKept {
+		r.metas = map[string]cachedMeta{}
+	}
+	for _, path := range missing {
+		if meta, ok := read[path]; ok {
+			r.metas[path] = cachedMeta{version: versions[path], meta: meta}
+			out[path] = meta
+		}
+	}
+	r.mu.Unlock()
+	return out
+}
+
+// metasScript prints every meta file of a subagents folder, each after its name: a few hundred bytes a subagent,
+// four megabytes at most.
+func metasScript(dir string) string {
+	return "cd " + script.Quote(dir) + ` 2>/dev/null || exit 0
+for f in *.meta.json; do
+  [ -f "$f" ] || continue
+  printf '\036%s\037' "$f"
+  cat "$f"
+done | head -c 4194304`
+}
+
+// parseMetas reads metasScript's answer: the metas by file name; one that does not parse, the last one cut by the
+// cap among them, is left out.
+func parseMetas(answer string) map[string]subagentMeta {
+	out := map[string]subagentMeta{}
+	for _, piece := range strings.Split(answer, script.RS) {
+		name, raw, ok := strings.Cut(piece, script.US)
+		if !ok || !strings.HasSuffix(name, ".meta.json") || strings.ContainsAny(name, "/\\") {
+			continue
+		}
+		var meta subagentMeta
+		if json.Unmarshal([]byte(raw), &meta) == nil {
+			out[name] = meta
+		}
+	}
+	return out
+}
+
 // RecentSubagents is a session's subagents whose transcript moved within QuietAfter of now, each with what it is at:
 // the only ones that can be at work, since one silent for longer reads quiet or done. Only their files are read, the
 // folder listed in one round trip, so the hundreds a long session spawned and left cost nothing more, here or over ssh.
@@ -185,7 +325,12 @@ func (r *Reader) subagentEntry(path, id string, version Version, metaPath string
 		fresh.meta = entry.meta
 	}
 	if entry == nil || entry.metaVersion != metaVersion {
-		if raw, err := r.ReadFrom(metaPath, 0); err == nil {
+		r.mu.Lock()
+		known, read := r.metas[metaPath]
+		r.mu.Unlock()
+		if read && known.version == metaVersion {
+			fresh.meta = known.meta
+		} else if raw, err := r.ReadFrom(metaPath, 0); err == nil {
 			var meta subagentMeta
 			if json.Unmarshal(raw, &meta) == nil {
 				fresh.meta = meta

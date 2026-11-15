@@ -32,6 +32,7 @@ type Reader struct {
 	subagents    map[string]*subagentEntry
 	subagentUses uint64                // the use count behind subagentEntry.used
 	subDirs      map[string]dirListing // a remote session's subagent folder, as listed a moment ago
+	metas        map[string]cachedMeta // the subagents' meta files as read, by path
 }
 
 type cachedTail struct {
@@ -58,7 +59,7 @@ const (
 func NewReader(host shell.Host) *Reader {
 	return &Reader{host: host, tails: map[string]*cachedTail{}, sessionPath: map[string]string{}, sessionMiss: map[string]time.Time{},
 		continuation: map[string]continuation{}, predecessor: map[string]string{},
-		subTails: map[string]*cachedTail{}, subagents: map[string]*subagentEntry{}, subDirs: map[string]dirListing{}}
+		subTails: map[string]*cachedTail{}, subagents: map[string]*subagentEntry{}, subDirs: map[string]dirListing{}, metas: map[string]cachedMeta{}}
 }
 
 // Version stats the session file; the version doubles as the ETag.

@@ -491,7 +491,15 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   is not written for every kind of agent) — with a stamp of the folder's versions for the chat's
   ETag; `Reader.RecentSubagents(path, now)` the same for the ones written
   within `QuietAfter` alone, the others never read (the zoo's count, see
-  `internal/subagents`); `Reader.SubagentTurns(path, id)` is one agent's own conversation
+  `internal/subagents`); **`Reader.SubagentsFor(path, spawnedBy, now)` is
+  what a chat asks** (tested here and through a fake remote): the
+  subagents the tool ids given spawned and the ones written within
+  `QuietAfter` — the folder listed in one round trip, its meta files,
+  which name the call that spawned each, read in one more for the whole
+  folder (`metasOf`: `metasScript` prints every `*.meta.json` after its
+  name, four megabytes at most, `parseMetas`; kept by path and version,
+  `metasKept` 16384), and only the transcripts of the ones answered
+  fetched; `HasSubagent` goes by the listing; `Reader.SubagentTurns(path, id)` is one agent's own conversation
   (`SubagentID` guards the id). Their records are sidechain ones, which
   `Parse` drops from the parent file (`parseRecords(r, keepSidechain)`). **A message
   sent while the agent worked** (`queued.go`, tested on `testdata/queued.jsonl`, an
@@ -6850,7 +6858,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   the task watch), and the lens's whole answer (never a `last=N` tail)
   carries them as `denied` for its notice; `ParseQuestion`
   (question.go, pure, tested) reads an agent's dialog and its choices off
-  a pane's visible screen for the chat's question card. Every answer carries `subagents`, the conversation's agents as they stand (`Conversation.Subagents`, listed by `Open`; its ETag moves with their files), and `subagent=<id>` answers one of them on its own (`Conversation.Subagent`: read-only, no sessions, nothing marked seen, an ETag of its file). `GET /api/chat?last=N` (1..200) answers the last N turns only
+  a pane's visible screen for the chat's question card. Every answer carries `subagents`, the conversation's agents the answered turns have a use for, as they stand (`Conversation.SubagentsOf(turns)`: the ones the turns' Agent calls spawned and the ones that may still be at work — `Reader.SubagentsFor`; never the session's every subagent, which `Open` once listed whole: a long session's two hundred weigh a gigabyte of transcripts, read over ssh at every opening of the chat they never arrived, and no row showed under any call; the ETag still moves with every subagent's file, `SubagentsStamp`), and `subagent=<id>` answers one of them on its own (`Conversation.Subagent`: read-only, no sessions, nothing marked seen, an ETag of its file). `GET /api/chat?last=N` (1..200) answers the last N turns only
   — `Conversation.LastTurns`, the `Tail` (the slice, and the agent's
   plan over the whole file, `transcript.Plan`, which every answer carries
   as `plan` while it has items, so a tile sees a plan set thirty turns

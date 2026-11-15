@@ -270,6 +270,10 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   interruption, the summary after a compaction — is a quiet line in the
   middle of the chat, never a bubble of yours; a long message of yours
   that Claude Code logged as a paste shows as you wrote it.
+- **Subagents of a long session** — the chat lists the subagents of the
+  calls on screen and the ones still at work, not every one the session
+  ever spawned: a conversation with two hundred of them opens at once,
+  on a remote machine too.
 - **Empty places** — a screen with nothing to show says so the same way
   everywhere: an icon, one line and, where it helps, a hint or a button
   (a chat whose agent has written nothing yet offers its terminal).
