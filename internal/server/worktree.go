@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/dev1antdev/remuda/internal/events"
+	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/repos"
 	"github.com/dev1antdev/remuda/internal/sessions"
@@ -67,6 +68,11 @@ func (s *Server) handleWorktreeGitHub(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeJSON(w, map[string]any{"issues": []repos.Issue{}, "prs": []repos.PR{}, "trouble": ghTrouble(mc, err)})
 		return
+	}
+	for _, trouble := range []*string{&lists.IssuesTrouble, &lists.PRsTrouble} {
+		if *trouble != "" {
+			*trouble = ghTrouble(mc, errors.New(*trouble))
+		}
 	}
 	writeJSON(w, lists)
 }
@@ -193,27 +199,31 @@ func (s *Server) newWorktree(w http.ResponseWriter, r *http.Request, req *newWor
 		return
 	}
 	setup := worktrees.SetupScript(teamScript(src), settings.Setup)
-	when := req.Setup
-	if when == "" {
-		when = settings.SetupWhen
-	}
-	if setup != "" && when == "ask" {
-		httpErr(w, 400, errors.New("choose whether to run the setup script"))
+	runSetup, setupNote, err := worktrees.SetupChoice(setup, req.Setup, settings.SetupWhen, plan.Action == "open", mc.Windows())
+	if err != nil {
+		httpErr(w, 400, err)
 		return
+	}
+	answerOpened := func(ws *herdr.WorkspaceInfo, pane string) {
+		if name := strings.TrimSpace(req.Name); name != "" && name != ws.Label {
+			_ = client.WorkspaceRename(ws.WorkspaceID, name)
+		}
+		s.Watch.Refresh(mc)
+		writeJSON(w, map[string]any{"id": ws.WorkspaceID, "pane": pane, "opened": true, "path": plan.Path, "branch": plan.Branch})
 	}
 	if plan.Action == "open" {
 		if ws := standingOn(s, mc, plan.Path); ws != nil {
-			if name := strings.TrimSpace(req.Name); name != "" && name != ws.Label {
-				_ = client.WorkspaceRename(ws.WorkspaceID, name)
-			}
-			s.Watch.Refresh(mc)
-			writeJSON(w, map[string]any{"id": ws.WorkspaceID, "pane": firstPaneOf(s, mc, ws.WorkspaceID), "opened": true, "path": plan.Path, "branch": plan.Branch})
+			answerOpened(ws, firstPaneOf(s, mc, ws.WorkspaceID))
 			return
 		}
 	}
 	made, err := worktrees.Create(mc, client, src.Root, req.Workspace, plan, strings.TrimSpace(req.Name), worktrees.FolderFor(settings.Location, plan.Branch))
 	if err != nil {
 		rpcErr(w, err)
+		return
+	}
+	if made.AlreadyOpen { // a workspace herdr has open on the checkout that the snapshot did not show yet: its panes are the person's
+		answerOpened(&made.Workspace, made.RootPane.PaneID)
 		return
 	}
 	path := made.Worktree.Path
@@ -232,10 +242,8 @@ func (s *Server) newWorktree(w http.ResponseWriter, r *http.Request, req *newWor
 			resp["included"] = included
 		}
 	}
-	runSetup := setup != "" && when != "skip" && plan.Action != "open"
-	if runSetup && mc.Windows() {
-		resp["setup_error"] = "setup scripts do not run on a Windows PC yet; run it there yourself"
-		runSetup = false
+	if setupNote != "" {
+		resp["setup_error"] = setupNote
 	}
 	agent := req.Agent != "" && req.Agent != "shell"
 	prompt := strings.TrimSpace(req.Prompt)

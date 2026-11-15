@@ -39,10 +39,13 @@ type PR struct {
 	Closes    []int  `json:"closes,omitempty"`
 }
 
-// Lists are a repository's open issues and pull requests.
+// Lists are a repository's open issues and pull requests, and gh's refusal of one list when the other was read (a
+// repository with its issues switched off still has pull requests).
 type Lists struct {
-	Issues []Issue `json:"issues"`
-	PRs    []PR    `json:"prs"`
+	Issues        []Issue `json:"issues"`
+	PRs           []PR    `json:"prs"`
+	IssuesTrouble string  `json:"issues_trouble,omitempty"`
+	PRsTrouble    string  `json:"prs_trouble,omitempty"`
 }
 
 // Found is one number looked up: an issue or a pull request, open or not.
@@ -62,13 +65,17 @@ const ghPrelude = "command -v gh >/dev/null 2>&1 || { echo 'no gh'; exit 4; }\n"
 	"GH_NO_UPDATE_NOTIFIER=1 GH_PROMPT_DISABLED=1; export GH_NO_UPDATE_NOTIFIER GH_PROMPT_DISABLED\n" +
 	"e=$(mktemp 2>/dev/null || echo \"${TMPDIR:-/tmp}/remuda-gh.$$\"); trap 'rm -f \"$e\"' EXIT\n"
 
-// ListScript reads the open issues, then the open pull requests.
+// ListScript reads the open issues, then the open pull requests; a list gh refuses is "!" and gh's complaint, the
+// other read all the same.
 func ListScript(repo string) string {
 	r := script.Quote(repo)
 	n := strconv.Itoa(ListLimit)
+	read := func(command string) string {
+		return "if list=$(" + command + " 2>\"$e\"); then printf '%s\\n' \"$list\"; else printf '!'; cat \"$e\"; fi\n"
+	}
 	return script.PATH + "\n" + ghPrelude +
-		"gh issue list -R " + r + " --state open --limit " + n + " --json number,title 2>\"$e\" || { cat \"$e\"; exit 5; }\nprintf '\\036\\n'\n" +
-		"gh pr list -R " + r + " --state open --limit " + n + " --json number,title,headRefName,body,closingIssuesReferences,isCrossRepository 2>\"$e\" || { cat \"$e\"; exit 5; }\n"
+		read("gh issue list -R "+r+" --state open --limit "+n+" --json number,title") + "printf '\\036\\n'\n" +
+		read("gh pr list -R "+r+" --state open --limit "+n+" --json number,title,headRefName,body,closingIssuesReferences,isCrossRepository")
 }
 
 var closesRef = regexp.MustCompile(`(?i)\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?):?\s+#(\d+)\b`)
@@ -80,8 +87,19 @@ func ParseLists(out string) (Lists, error) {
 		return Lists{}, errors.New(lastLine(out, "gh answered nothing"))
 	}
 	lists := Lists{Issues: []Issue{}, PRs: []PR{}}
-	if err := json.Unmarshal([]byte(strings.TrimSpace(parts[0])), &lists.Issues); err != nil {
+	issueAnswer, prAnswer := strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1])
+	issuesRefused, prsRefused := strings.HasPrefix(issueAnswer, "!"), strings.HasPrefix(prAnswer, "!")
+	if issuesRefused && prsRefused {
+		return Lists{}, errors.New(lastLine(issueAnswer[1:], "gh answered nothing"))
+	}
+	if issuesRefused {
+		lists.IssuesTrouble = lastLine(issueAnswer[1:], "gh read no issues")
+	} else if err := json.Unmarshal([]byte(issueAnswer), &lists.Issues); err != nil {
 		return Lists{}, fmt.Errorf("gh's issue list: %w", err)
+	}
+	if prsRefused {
+		lists.PRsTrouble = lastLine(prAnswer[1:], "gh read no pull requests")
+		return lists, nil
 	}
 	var prs []struct {
 		Number    int    `json:"number"`
@@ -93,7 +111,7 @@ func ParseLists(out string) (Lists, error) {
 			Number int `json:"number"`
 		} `json:"closingIssuesReferences"`
 	}
-	if err := json.Unmarshal([]byte(strings.TrimSpace(parts[1])), &prs); err != nil {
+	if err := json.Unmarshal([]byte(prAnswer), &prs); err != nil {
 		return Lists{}, fmt.Errorf("gh's pull request list: %w", err)
 	}
 	for _, p := range prs {
