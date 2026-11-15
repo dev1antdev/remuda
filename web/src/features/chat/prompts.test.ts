@@ -3,7 +3,7 @@ import { setLang } from "@/lib/i18n";
 import { tokFine } from "@/features/usage/format";
 import type { Turn } from "./api";
 import { alsoWords, facts, gist, plainText, promptCards, totalOutput, walk } from "./prompts";
-import { promptedAt, spinnerSeconds, spinnerWords } from "./progress";
+import { freshRead, promptedAt, spinnerSeconds, spinnerWords } from "./progress";
 
 setLang("en");
 
@@ -137,6 +137,14 @@ describe("the spinner", () => {
     expect(spinnerWords("Refactoring", 134, 6800)).toBe("Refactoring… 2 min 14 s · ↓ 6.8k");
     expect(spinnerWords("Thinking", null)).toBe("Thinking…");
     expect(spinnerWords("", 5, 0)).toBe("5 s");
+  });
+
+  it("keeps no spinner read before the work under way began: a tile's last read is the turn before's", () => {
+    const read = { question: null, mode: "default", progress: { verb: "Refactoring", seconds: 134, tokens: 6800 }, at: 1_000 };
+    expect(freshRead(read, 2_000)).toEqual({ question: null, mode: "default", progress: undefined, at: 1_000 });
+    expect(freshRead(read, 1_000)).toBe(read);
+    expect(freshRead(read, 0)).toBe(read);
+    expect(freshRead(null, 2_000)).toBeNull();
   });
 
   it("finds when the turn under way began", () => {

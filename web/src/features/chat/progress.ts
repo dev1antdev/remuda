@@ -3,7 +3,7 @@
 
 import { tokFine } from "@/features/usage/format";
 import { spent } from "@/lib/time";
-import type { Progress, Turn } from "./api";
+import type { Progress, ScreenRead, Turn } from "./api";
 
 // LiveRead is the turn under way as the screen last showed it: the spinner, when it was read, when the prompt went (unix ms)
 export type LiveRead = { progress?: Progress; readAt: number; since: number };
@@ -30,4 +30,10 @@ export function promptedAt(turns: Turn[]): number {
     if (turn.role === "user" && turn.ts) return Date.parse(turn.ts) || 0;
   }
   return 0;
+}
+
+// freshRead is a read of the screen as the turn under way may use it: one taken before the work began (unix ms, this
+// page's clock) keeps its dialog and mode but not its spinner, which was an earlier turn's
+export function freshRead(read: ScreenRead | null, began: number): ScreenRead | null {
+  return read?.progress && read.at < began ? { ...read, progress: undefined } : read;
 }
