@@ -33,6 +33,7 @@ type Service struct {
 	// Lock is the per-pane typing lock: a leave and a start hold it, so nothing else lands in the bare shell between.
 	Lock func(machineID, paneID string) sync.Locker
 	// Typed hears what a sleep types into a pane — an agent's exit, or an Esc as a key — for the activity; nil hears none.
+	// The agents leave side by side, so it is called from several goroutines at once.
 	Typed func(machineID, paneID, text string, keys bool)
 	// Skip names a workspace remuda keeps for itself (the concierge's): it never sleeps.
 	Skip func(machineID, workspaceID string) bool
