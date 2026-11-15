@@ -2891,9 +2891,13 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   folder (its parent's when it has none) and arguments; `Parse` keeps one
   per port (the IPv4 loopback's socket first), leaves out the ports given
   (the cockpit's own `-addr`, 7317, the door 7318, code-server's), the
-  processes remuda, herdr, ssh and Tailscale run, and any whose folder is
-  `/` or unknown (a system daemon, another user's), names what it is from
-  its arguments (`labelOf`: vite, next, http.server, uvicorn …) and where
+  processes remuda, herdr, ssh and Tailscale run, an agent's own
+  (`agentProgram`: claude, codex, gemini or kimi as the program or the
+  script node or python runs — Claude Code holds a loopback port in its
+  workspace's folder, never a server to preview, count or stop), and any
+  whose folder is `/` or unknown (a system daemon, another user's), names
+  what it is from its arguments (`labelOf`: vite, next, http.server,
+  uvicorn …) and where
   the machine reaches it (`Dial`: 127.0.0.1 for a wildcard, ::1 for an
   IPv6 one — a Mac's Vite listens on `[::1]` alone — else the address);
   `Match` names the deepest workspace folder holding it (a Mac's
@@ -3018,18 +3022,23 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `Recall`, `Parse` with `Server.PreviewSkip`, `Match` against
   `previewFolders`, the floating terminal's and the concierge's left out)
   every `Every` 15 s while the roster was read within `WatchedFor` a minute
-  (`Touch`, from the roster handler) and every `QuickEvery` 5 s while the
-  status bar asked within `QuickFor` 20 s (`Hurry`, from `/api/resources`
-  and `/api/ports`); one read at a time per machine, a failed read keeping
-  the ports before it with its reason (logged once an hour), `OnChange` the
-  live hub's `RosterChanged`. `For` is a workspace's `[]Port{port, process,
-  label, pid, address}` — `AddressOf`: localhost:5173, *:8080 — the
-  roster's `session.ports` (nothing once a reading is older than
-  `StaleAfter` 2 min), the contract the sidebar's card shares; `Of` the
-  machine's whole reading, its other listeners too. `Stop(host, skip, pid,
+  (`Touch`, from the roster handler) and, for the machine the status bar
+  shows alone, every `QuickEvery` 5 s while the bar asked about it within
+  `QuickFor` 20 s (`Hurry(machine)`, from `/api/resources` and `/api/ports`:
+  the others keep the roster's pace, so a bar on a Pi's page does not
+  triple the looks at every machine of the fleet); one read at a time per
+  machine, a failed read keeping the ports before it with its reason and
+  the time they were read (logged once an hour), `OnChange` the live hub's `RosterChanged` — also when a
+  read follows a stale reading, whose ports the roster had dropped. `For`
+  is a workspace's `[]Port{port, process, label, pid, address}` —
+  `AddressOf`: localhost:5173, *:8080 — the roster's `session.ports`
+  (nothing once a reading is older than `StaleAfter` 2 min), the contract
+  the sidebar's card shares; `Of` the machine's whole reading, its other
+  listeners too, not read while stale (the bar then counts "…", not 0, and
+  `/api/ports` names no `at` until a reading). `Stop(host, skip, pid,
   port)` looks afresh and sends `kill -TERM` only to that very pid on that
   very port among the listeners the person may stop — never remuda's,
-  herdr's, ssh's, Tailscale's, a skipped port's or another user's
+  herdr's, ssh's, Tailscale's, an agent's, a skipped port's or another user's
   (`ErrNotListening`, a 404). Routes `GET /api/ports?machine` and `POST
   /api/ports/stop {machine, pid, port}`, the person's only, at the page's
   press after its confirm.
