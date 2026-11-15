@@ -396,7 +396,8 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   (a branch that diverged is said so and left alone) and waits while an
   agent works or asks in that checkout; a push is never forced and never
   carries tags, and the secret check stands before it as before Approve &
-  open PR — Push anyway… asks first. Nothing waits for a login: git runs
+  open PR — Push anyway… asks first. What goes is what the check read: a
+  commit an agent makes meanwhile waits for the next push. Nothing waits for a login: git runs
   with its prompts off and ssh in batch mode, sixty seconds at most, and
   a failure shows git's own words.
 - **Collision radar** — two agents on one repository, in different

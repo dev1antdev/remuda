@@ -15,31 +15,42 @@ import (
 func gitWrites(watcher *watch.Watcher, turns *undo.Tracker) *gitops.Service {
 	return &gitops.Service{Busy: func(machineID, top string, worktrees []string) string {
 		snap, _ := watcher.Snapshot(machineID)
-		if snap == nil {
-			return ""
-		}
-		inCheckout := func(dir string) bool { return checkoutOf(realOn(machineID, dir), top, worktrees) }
-		for i := range snap.Panes {
-			pane := &snap.Panes[i]
-			if pane.Agent == "" || (pane.AgentStatus != herdr.StatusWorking && pane.AgentStatus != herdr.StatusBlocked) {
-				continue
-			}
-			ws := snap.Workspace(pane.WorkspaceID)
-			if ws == nil || !inCheckout(snap.WorkspaceDir(ws)) {
-				continue
-			}
-			if pane.AgentStatus == herdr.StatusBlocked {
-				return pane.AgentName() + " is waiting for your answer"
-			}
-			return pane.AgentName() + " is at work"
-		}
-		for _, dir := range snap.WorkspaceDirs() {
-			if inCheckout(dir) && turns.Going(machineID, dir) {
-				return "an agent's turn is still ending"
-			}
-		}
-		return ""
+		real := func(dir string) string { return realOn(machineID, dir) }
+		return busyCheckout(snap, top, worktrees, real, func(dir string) bool { return turns.Going(machineID, dir) })
 	}}
+}
+
+// busyCheckout names who holds git's writes on the checkout at top back in the snapshot: an agent working or asking
+// there — its workspace's folder in it, or its own pane's — else a turn still ending in a workspace folder of it; ""
+// for nobody.
+func busyCheckout(snap *herdr.Snapshot, top string, worktrees []string, real func(string) string, going func(string) bool) string {
+	if snap == nil {
+		return ""
+	}
+	inCheckout := func(dir string) bool { return checkoutOf(real(dir), top, worktrees) }
+	for i := range snap.Panes {
+		pane := &snap.Panes[i]
+		if pane.Agent == "" || (pane.AgentStatus != herdr.StatusWorking && pane.AgentStatus != herdr.StatusBlocked) {
+			continue
+		}
+		workspaceDir := ""
+		if ws := snap.Workspace(pane.WorkspaceID); ws != nil {
+			workspaceDir = snap.WorkspaceDir(ws)
+		}
+		if !inCheckout(workspaceDir) && !inCheckout(pane.Dir()) {
+			continue
+		}
+		if pane.AgentStatus == herdr.StatusBlocked {
+			return pane.AgentName() + " is waiting for your answer"
+		}
+		return pane.AgentName() + " is at work"
+	}
+	for _, dir := range snap.WorkspaceDirs() {
+		if inCheckout(dir) && going(dir) {
+			return "an agent's turn is still ending"
+		}
+	}
+	return ""
 }
 
 // realOn is a folder of this machine with its links resolved, as git names a checkout's top (/tmp is /private/tmp on a

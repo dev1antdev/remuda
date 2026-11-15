@@ -997,10 +997,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   away named with why (`Listed{away}` — "connecting" before its first answer),
   a read standing `FreshFor` 10 s for another page, one read of a machine at a
   time, dropped by every action there. **The actions** (`Fetch`, `Pull`,
-  `Push(anyway)`, each an `Outcome{action, state done|refused|failed|held,
-  reason, agent, doing, remote, branch, upstream, ahead, behind, count, output,
-  scan, repo}` the page words itself, the checkout read again in the same
-  script): a probe first (`probeScript`: the checkout's top, branch,
+  `Push(anyway, head)`, each an `Outcome{action, state done|refused|failed|held,
+  reason, agent, doing, remote, branch, upstream, ahead, behind, head, count,
+  output, scan, repo}` the page words itself, the checkout read again in the same
+  script): a probe first (`probeScript`: the checkout's top, branch, HEAD's commit,
   `branch.<b>.remote` / `.merge`, `@{u}` and the counts, the remotes), then one
   action per checkout at a time (`running`, else `ReasonRunning`) and at most
   `PerMachine` 4 actions on a machine at once (the probe, a push's check and
@@ -1011,8 +1011,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   BatchMode=yes` — `Timeout` 60 s, stdin `/dev/null`, git's last six lines
   (hints and progress out, `lastLines`) on a failure. **Fetch** is `git fetch
   --prune -- <remote>`, the upstream's remote else origin else the only one,
-  and runs while an agent works there. **Pull** is that fetch, then `merge
-  --ff-only @{u}` (`merge.autoStash` off) only when the branch is behind and
+  and runs while an agent works there. **Pull** is that fetch, then — the agent
+  looked for again once it is in, since one may have begun while it ran (the
+  fourth audit) — `merge --ff-only @{u}` (`fastForwardScript`, `merge.autoStash`
+  off) only when the branch is behind and
   not ahead: a diverged one is `ReasonDiverged` with both counts and nothing
   changes, an up-to-date one `ReasonUpToDate`, local changes in the way git's
   own refusal; refused for a detached HEAD, no upstream, a local upstream, and
@@ -1021,20 +1023,25 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   blocked whose workspace herdr names this very checkout, else whose folder
   lies in it, so an agent in a linked worktree never holds its repository's
   main folder back — and `undo.Tracker.Going` of the workspace folders in it;
-  wired in `internal/app/repos.go`). **Push** sends `refs/heads/<b>` to its
-  upstream (`branch.<b>.merge` on `branch.<b>.remote`), or to origin (else the
-  only remote) under its own name with `--set-upstream` when it has none
-  (`ReasonNewBranch`; several remotes and no origin is `ReasonWhichRemote`);
+  wired in `internal/app/repos.go`). **Push** sends the commit the probe read
+  (`<sha>:<target>`, so a commit an agent makes while the check reads is not
+  carried unread: it stays ahead, the fourth audit) to its upstream
+  (`branch.<b>.merge` on `branch.<b>.remote`), or to origin (else the only
+  remote) under its own name with its upstream then set in the config as
+  `--set-upstream` would when it has none (`ReasonNewBranch`; several remotes
+  and no origin is `ReasonWhichRemote`);
   never `--force`, never a tag (`push.followTags` off); **the secret check
   stands first** (`Service.Check` = `review.ScanWork(host, top, true)`: the
   commits on no remote-tracking branch and the work beside them, any finding
   holding it): findings are `Held` with the scan (`ReasonSecretsFound`), a
-  check that failed `Held` with why (`ReasonCheckFailed`), and `anyway`, sent
-  only after the person's confirm, skips it. Routes (`internal/server/repos.go`,
+  check that failed `Held` with why (`ReasonCheckFailed`), each naming the commit
+  its check read as `head`, and `anyway`, sent only after the person's confirm
+  with that `head`, skips it — refused as `ReasonMoved` when the branch moved
+  since, so the commits the person never saw checked are not sent. Routes (`internal/server/repos.go`,
   the person's only — neither `viewerRoutes` nor an agent key's, tested in
   `internal/auth/repos_test.go`): `GET /api/repos[?fresh=1]` (`{machines}`),
   `PUT /api/repos/scan {machine, folder, depth}` (an empty folder stops it,
-  400 with why), `POST /api/repos/fetch|pull|push {machine, dir, anyway}` (an
+  400 with why), `POST /api/repos/fetch|pull|push {machine, dir, anyway, head}` (an
   absolute folder, any checkout — the Git lens's too; 200 with the outcome,
   whatever it came to). **The page**: `features/repos/` — `ReposPanel.tsx`
   (panel `repos`: the rail's Repositories, More on a phone, the palette's
@@ -2120,7 +2127,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   chosen on), `whyNotCommit` (the agent at work, conflicts, the amend's
   read, nothing to commit, no message) under it, else `commitHint` (what
   Commit all stages, what Amend rewrites, a pushed HEAD's force push, a
-  subfolder's whole index); its own `useSecretCheck` stands before it as
+  subfolder's whole index — said for Commit all too, which also carries
+  what is staged outside the folder); its own `useSecretCheck` stands before it as
   before Approve & commit — asked once the button would be on, renewed
   after every look (`ask(…, renew)`), its findings holding the button
   with Commit anyway… behind `commitAnywayAsk`'s confirm, `SecretsCheck`
@@ -2256,7 +2264,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   HEAD (`--cached`: what `git commit` carries, though a staged file may
   have changed or gone since; a line the work already showed is said
   once, the rest with `commit: "staged"`, "staged · .env:2" on the page,
-  never a row to jump to) — and, for a pull request (`push`), the whole patches of
+  never a row to jump to; from a folder inside the repository what is
+  staged outside it too, named from the top — `':(top)'
+  ':(top,literal,exclude)<prefix>'` — since a commit from the folder
+  carries the whole index, once committed unread, the fourth audit) — and, for a pull request (`push`), the whole patches of
   the commits on no remote-tracking branch (`git log -p --no-merges -n 200
   HEAD --not --remotes`, each after `\036commit <sha>`, outside the folder
   too, paths the repository's: a push sends whole commits; the ones past
@@ -2636,7 +2647,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `MaxFiles` 500, the rest counted); `ReadPatch` one file's patch
   (`--no-ext-diff --no-textconv -M` against the first parent, `show
   --format=` for a root commit, the old path beside a rename's,
-  `MaxPatch` 600 KB). `HashOK` / `PathOK` guard every input. **The
+  `MaxPatch` 600 KB), read from the checkout's top since the commit names
+  its files from there — a workspace in a folder of the repository once
+  got every patch empty (the fourth audit) — and, for a viewer
+  (`inFolder`), only a file under the folder (`ErrOutside`, a 403). `HashOK` / `PathOK` guard every input. **The
   writes** (`gitops`, tested on temp repositories: each op, a branch -d
   refused as unmerged then -D, a merge stopped on a conflict and aborted,
   an abort of another op refused, a reset drawn before a commit landed
@@ -2656,7 +2670,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `HashOK`; a known mode and op); `Inspect` reads the checkout's top,
   HEAD, branch, stopped op and every worktree's top (`git worktree list`);
   `Service.Busy` (`gitWrites` in `internal/app/gitops.go`, `checkoutOf`
-  tested: an agent pane working or asking whose workspace folder lies in
+  and `busyCheckout` tested: an agent pane working or asking whose
+  workspace folder, or its own pane's folder (a tab whose shell went
+  elsewhere and started it there, missed until the fourth audit), lies in
   the checkout and in no worktree nested inside it, a local folder's
   links resolved as git names the top, else `undo.Tracker.Going` on such
   a folder) refuses with who; HEAD and the branch must be what the page
