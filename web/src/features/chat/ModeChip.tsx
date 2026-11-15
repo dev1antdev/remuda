@@ -34,7 +34,7 @@ export function ModeChip({ machineId, paneId, screen }: { machineId: string; pan
         disabled={sending}
         onClick={() => void cycle()}
       >
-        <Icon name={MODE_ICON[mode]} size={12} /> {words}
+        <Icon name={MODE_ICON[mode]} size={12} /> <span className="mode-chip-words">{words}</span>
       </button>
     </Tip>
   );

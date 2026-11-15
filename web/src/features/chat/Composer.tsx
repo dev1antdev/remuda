@@ -1,8 +1,9 @@
 // The composer owns the draft, so typing never re-renders the transcript: attachments uploaded at once,
 // quick prompts, dictation, Enter to send (Shift+Enter a new line; on a phone the button sends), ↑ in an empty
 // line to bring back what was sent before; a quote of the answer put after what is typed; Alt+Enter keeps the text as a
-// note in the agent's queue, sent only from the queue's own buttons. The compact one, in a wall tile, is the line and
-// its buttons alone; the bare one, for an agent that reads no file and keeps its own mode (the concierge), takes no
+// note in the agent's queue, sent only from the queue's own buttons. It is one box: the attachments' chips, the field
+// across its whole width, then a row of its tools with Stop and Send at its end. The compact one, in a wall tile, is
+// the line and its buttons alone; the bare one, for an agent that reads no file and keeps its own mode (the concierge), takes no
 // attachment and shows no permission mode.
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -211,28 +212,6 @@ export default function Composer({ machineId, paneId, working, dir, agent = "", 
         </Notice>
       )}
       {!compact && notes.length > 0 && <QueueList notes={notes} busy={sending} onSend={(list) => void sendNotes(list)} onEdit={editNote} onRemove={(note) => setNotes((list) => removeNote(list, note.id))} />}
-      {att.items.length > 0 && (
-        <div className="attachments">
-          {att.items.map((a) => (
-            <div key={a.id} className={`attachment${a.error ? " failed" : ""}${a.upload ? "" : " pending"}`} title={a.error ?? a.upload?.rel ?? a.file.name}>
-              {a.thumb ? (
-                <img src={a.thumb} alt="" />
-              ) : (
-                <span className="attachment-icon">
-                  <Icon name="file" size={18} />
-                </span>
-              )}
-              <span className="attachment-name">{a.file.name}</span>
-              {!a.upload && !a.error && <span className="attachment-spin" />}
-              <Tip text={t("Remove")}>
-                <button type="button" className="icon-btn sm danger attachment-x" aria-label={t("Remove")} onClick={() => removeAttachment(a)}>
-                  <Icon name="x" size={12} />
-                </button>
-              </Tip>
-            </div>
-          ))}
-        </div>
-      )}
       <div
         className={`composer${compact ? " compact" : ""}${dragOver ? " drag" : ""}`}
         onDragOver={(e) => {
@@ -262,130 +241,157 @@ export default function Composer({ machineId, paneId, working, dir, agent = "", 
             void attach(files);
           }}
         />
-        {!compact && (
-          <>
-            {agent === "claude" && !bare && screen && <ModeChip machineId={machineId} paneId={paneId} screen={screen} />}
-            {!bare && (
-              <Tip text={t("Attach files (up to {n}): they are uploaded into the pane's folder", { n: MAX_ATTACHMENTS })}>
-                <button type="button" className="icon-btn lg composer-attach" aria-label={t("Attach files")} disabled={att.items.length >= MAX_ATTACHMENTS} onClick={() => picker.current?.click()}>
-                  <Icon name="paperclip" size={16} />
-                </button>
-              </Tip>
-            )}
-            <QuickPromptsButton
-              dir={dir}
-              onPick={(text) =>
-                void expandPrompt(text, machineId, dir).then((filled) => {
-                  insertAt(filled);
-                  area.current?.focus();
-                })
-              }
-              onManage={() => setManage(true)}
-            />
-            <Tip text={t("Queue it as a note for the agent (Alt+↵): sent only when you press Send on it")}>
-              <button type="button" className="icon-btn lg composer-attach composer-queue" aria-label={t("Add to the queue")} disabled={!draft.trim() || att.uploading} onClick={queueDraft}>
-                <Icon name="inbox" size={16} />
-              </button>
-            </Tip>
-            {dictation.supported && (
-              <Tip text={dictation.listening ? t("Stop dictating") : t("Dictate through this device's own speech recognition")}>
-                <button
-                  type="button"
-                  className={`icon-btn lg composer-attach composer-mic${dictation.listening ? " listening" : ""}`}
-                  aria-label={dictation.listening ? t("Stop dictating") : t("Dictate")}
-                  aria-pressed={dictation.listening}
-                  onClick={dictation.toggle}
-                >
-                  <Icon name="mic" size={16} />
-                </button>
-              </Tip>
-            )}
-          </>
-        )}
         {manage && <QuickPromptsDialog dir={dir} onClose={() => setManage(false)} />}
-        <textarea
-          ref={area}
-          value={draft}
-          placeholder={placeholder ?? (compact ? t("Message…") : isTouch ? t("Message the agent… (Enter = new line)") : t("Message the agent… (Shift+Enter = new line)"))}
-          rows={Math.min(compact ? 3 : 6, Math.max(1, draft.split("\n").length))}
-          onChange={(e) => {
-            history.reset();
-            setCaretPos(e.target.selectionStart);
-            setDraft(e.target.value);
-          }}
-          onBlur={(e) => (caret.current = e.target.selectionStart)}
-          onSelect={(e) => {
-            caret.current = e.currentTarget.selectionStart;
-            setCaretPos(e.currentTarget.selectionStart);
-          }}
-          onPaste={(e) => {
-            const files = bare ? [] : filesFrom(e.clipboardData);
-            if (files.length === 0) return;
-            e.preventDefault();
-            void attach(files);
-          }}
-          onKeyDown={(e) => {
-            // the completion takes the keys while it is open: ↑ ↓ walk its rows, ↵ or Tab picks, Esc closes it for this token
-            if (open && shown.length > 0) {
-              if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-                e.preventDefault();
-                setActive((i) => (i + (e.key === "ArrowDown" ? 1 : shown.length - 1)) % shown.length);
-                return;
-              }
-              if ((e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) || e.key === "Tab") {
-                e.preventDefault();
-                pick(shown[at]!);
-                return;
-              }
-              if (e.key === "Escape") {
-                e.preventDefault();
-                setDismissed({ kind: open.kind, start: open.start });
-                return;
-              }
-            }
-            // Alt+Enter keeps the text as a note in the queue, in the lens
-            if (!compact && e.key === "Enter" && e.altKey && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.nativeEvent.isComposing) {
-              e.preventDefault();
-              queueDraft();
-              return;
-            }
-            // phone keyboards have no Shift+Enter: there Enter breaks the line and the button sends
-            if (isTouch) return;
-            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-              e.preventDefault();
-              void send();
-              return;
-            }
-            // ↑ on an empty line, or while walking, brings back what was sent before; ↓ walks forward and back to the line being written
-            if ((e.key === "ArrowUp" || e.key === "ArrowDown") && !e.shiftKey && !e.altKey && !e.metaKey && !e.ctrlKey && (draft === "" || history.browsing())) {
-              const text = history.walk(e.key === "ArrowUp" ? "up" : "down", draft);
-              if (text === null) return;
-              e.preventDefault();
-              caret.current = text.length;
-              moveCaret.current = text.length;
-              setDraft(text);
-            }
-          }}
-        />
-        <button type="button" className="btn primary composer-send" disabled={sending || att.uploading || !draft.trim()} onClick={() => void send()} title={isTouch ? t("Send") : t("Send (Enter)")}>
-          {sending ? (
-            "…"
-          ) : att.uploading ? (
-            t("Uploading…")
-          ) : (
-            <>
-              <span>{t("Send")}</span>
-              <Icon name="send" size={14} />
-            </>
+        <div className="composer-box">
+          {att.items.length > 0 && (
+            <div className="attachments">
+              {att.items.map((a) => (
+                <div key={a.id} className={`attachment${a.error ? " failed" : ""}${a.upload ? "" : " pending"}`} title={a.error ?? a.upload?.rel ?? a.file.name}>
+                  {a.thumb ? (
+                    <img src={a.thumb} alt="" />
+                  ) : (
+                    <span className="attachment-icon">
+                      <Icon name="file" size={18} />
+                    </span>
+                  )}
+                  <span className="attachment-name">{a.file.name}</span>
+                  {!a.upload && !a.error && <span className="attachment-spin" />}
+                  <Tip text={t("Remove")}>
+                    <button type="button" className="icon-btn sm danger attachment-x" aria-label={t("Remove")} onClick={() => removeAttachment(a)}>
+                      <Icon name="x" size={12} />
+                    </button>
+                  </Tip>
+                </div>
+              ))}
+            </div>
           )}
-        </button>
-        {working && (
-          <Tip text={t("Send Esc: the agent stops what it is doing")}>
-            <button type="button" className="btn danger soft composer-stop" aria-label={t("Stop")} onClick={() => void sendKeys(machineId, paneId, ["esc"]).catch((e) => setError(errMsg(e)))}>
-              <Icon name="square" size={12} /> <span>{t("Stop")}</span>
+          <textarea
+            ref={area}
+            value={draft}
+            placeholder={placeholder ?? (compact ? t("Message…") : isTouch ? t("Message the agent… (Enter = new line)") : t("Message the agent… (Shift+Enter = new line)"))}
+            rows={Math.min(compact ? 3 : 6, Math.max(1, draft.split("\n").length))}
+            onChange={(e) => {
+              history.reset();
+              setCaretPos(e.target.selectionStart);
+              setDraft(e.target.value);
+            }}
+            onBlur={(e) => (caret.current = e.target.selectionStart)}
+            onSelect={(e) => {
+              caret.current = e.currentTarget.selectionStart;
+              setCaretPos(e.currentTarget.selectionStart);
+            }}
+            onPaste={(e) => {
+              const files = bare ? [] : filesFrom(e.clipboardData);
+              if (files.length === 0) return;
+              e.preventDefault();
+              void attach(files);
+            }}
+            onKeyDown={(e) => {
+              // the completion takes the keys while it is open: ↑ ↓ walk its rows, ↵ or Tab picks, Esc closes it for this token
+              if (open && shown.length > 0) {
+                if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                  e.preventDefault();
+                  setActive((i) => (i + (e.key === "ArrowDown" ? 1 : shown.length - 1)) % shown.length);
+                  return;
+                }
+                if ((e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) || e.key === "Tab") {
+                  e.preventDefault();
+                  pick(shown[at]!);
+                  return;
+                }
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  setDismissed({ kind: open.kind, start: open.start });
+                  return;
+                }
+              }
+              // Alt+Enter keeps the text as a note in the queue, in the lens
+              if (!compact && e.key === "Enter" && e.altKey && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.nativeEvent.isComposing) {
+                e.preventDefault();
+                queueDraft();
+                return;
+              }
+              // phone keyboards have no Shift+Enter: there Enter breaks the line and the button sends
+              if (isTouch) return;
+              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault();
+                void send();
+                return;
+              }
+              // ↑ on an empty line, or while walking, brings back what was sent before; ↓ walks forward and back to the line being written
+              if ((e.key === "ArrowUp" || e.key === "ArrowDown") && !e.shiftKey && !e.altKey && !e.metaKey && !e.ctrlKey && (draft === "" || history.browsing())) {
+                const text = history.walk(e.key === "ArrowUp" ? "up" : "down", draft);
+                if (text === null) return;
+                e.preventDefault();
+                caret.current = text.length;
+                moveCaret.current = text.length;
+                setDraft(text);
+              }
+            }}
+          />
+          <div className="composer-tools">
+            {!compact && (
+              <>
+                {agent === "claude" && !bare && screen && <ModeChip machineId={machineId} paneId={paneId} screen={screen} />}
+                {!bare && (
+                  <Tip text={t("Attach files (up to {n}): they are uploaded into the pane's folder", { n: MAX_ATTACHMENTS })}>
+                    <button type="button" className="icon-btn lg composer-attach" aria-label={t("Attach files")} disabled={att.items.length >= MAX_ATTACHMENTS} onClick={() => picker.current?.click()}>
+                      <Icon name="paperclip" size={16} />
+                    </button>
+                  </Tip>
+                )}
+                <QuickPromptsButton
+                  dir={dir}
+                  onPick={(text) =>
+                    void expandPrompt(text, machineId, dir).then((filled) => {
+                      insertAt(filled);
+                      area.current?.focus();
+                    })
+                  }
+                  onManage={() => setManage(true)}
+                />
+                <Tip text={t("Queue it as a note for the agent (Alt+↵): sent only when you press Send on it")}>
+                  <button type="button" className="icon-btn lg composer-attach composer-queue" aria-label={t("Add to the queue")} disabled={!draft.trim() || att.uploading} onClick={queueDraft}>
+                    <Icon name="inbox" size={16} />
+                  </button>
+                </Tip>
+                {dictation.supported && (
+                  <Tip text={dictation.listening ? t("Stop dictating") : t("Dictate through this device's own speech recognition")}>
+                    <button
+                      type="button"
+                      className={`icon-btn lg composer-attach composer-mic${dictation.listening ? " listening" : ""}`}
+                      aria-label={dictation.listening ? t("Stop dictating") : t("Dictate")}
+                      aria-pressed={dictation.listening}
+                      onClick={dictation.toggle}
+                    >
+                      <Icon name="mic" size={16} />
+                    </button>
+                  </Tip>
+                )}
+              </>
+            )}
+            <span className="composer-gap" />
+            {working && (
+              <Tip text={t("Send Esc: the agent stops what it is doing")}>
+                <button type="button" className="btn danger soft composer-stop" aria-label={t("Stop")} onClick={() => void sendKeys(machineId, paneId, ["esc"]).catch((e) => setError(errMsg(e)))}>
+                  <Icon name="square" size={12} /> <span>{t("Stop")}</span>
+                </button>
+              </Tip>
+            )}
+            <button type="button" className="btn primary composer-send" disabled={sending || att.uploading || !draft.trim()} onClick={() => void send()} title={isTouch ? t("Send") : t("Send (Enter)")}>
+              {sending ? (
+                "…"
+              ) : att.uploading ? (
+                t("Uploading…")
+              ) : (
+                <>
+                  <span>{t("Send")}</span>
+                  <Icon name="send" size={14} />
+                </>
+              )}
             </button>
-          </Tip>
-        )}
+          </div>
+        </div>
       </div>
     </>
   );

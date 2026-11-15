@@ -4683,55 +4683,140 @@ body.is-resizing iframe {
   display: none;
 }
 
+/* the composer is one box on the conversation's column: the attachments, the field across its whole width, then a row
+   of its tools with Stop and Send at the end; the focus ring is the box's */
 .composer {
-  display: flex;
-  gap: 8px;
-  align-items: flex-end;
-  padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
-  border-top: 1px solid var(--line);
-  background: var(--bg-raised);
+  padding: 2px var(--chat-inset, 14px) calc(12px + env(safe-area-inset-bottom));
 }
 
-.composer textarea {
-  flex: 1;
-  min-height: 36px;
+.composer-box {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-xl);
+  background: var(--bg-input);
+  box-shadow: var(--shadow-sm);
+  transition: border-color var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
+}
+
+.composer-box:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.composer-box textarea,
+.composer-box textarea:focus-visible {
+  min-height: 40px;
   max-height: 40dvh;
-  border-radius: var(--r-lg);
+  padding: 11px 14px 4px;
+  border: 0;
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: var(--fs-13-5);
   resize: none;
 }
 
-/* on a phone the tools — the mode chip, attach, quick prompts, the queue, the mic — would squeeze the field to a
-   sliver: the field takes the whole first row and the tools and Send the row under it */
+.composer-tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  padding: 4px 6px 6px 8px;
+}
+
+.composer-gap {
+  flex: 1;
+  min-width: 4px;
+}
+
+/* the tools are quiet until pointed at: the box is already the thing that stands out */
+.composer-tools .composer-attach {
+  width: 32px;
+  height: 32px;
+  background: none;
+}
+
+.composer-tools .composer-attach:hover:not(:disabled) {
+  background: var(--bg-quiet-hover);
+}
+
+/* the mode's words give way first on a narrow screen: the tools and Send keep theirs */
+.composer-tools .mode-chip {
+  flex: 0 1 auto;
+  min-width: 34px;
+  margin-right: 4px;
+}
+
+.mode-chip-words {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.composer-box textarea::placeholder {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 @media (max-width: 600px) {
-  .composer:not(.compact) {
-    flex-wrap: wrap;
-    row-gap: 6px;
+  .chat {
+    --chat-inset: 12px;
   }
 
-  .composer:not(.compact) textarea {
-    order: -1;
-    flex: 1 0 100%;
+  .composer-tools {
+    padding-left: 6px;
   }
 
-  .composer:not(.compact) .composer-send {
-    margin-left: auto;
+  .composer-tools .composer-attach {
+    width: 30px;
   }
 }
 
 .composer-send,
 .composer-stop {
-  height: var(--ctl-lg);
+  height: var(--ctl);
+  border-radius: 99px;
+}
+
+.composer-stop {
+  margin-right: 6px;
+}
+
+/* a tile's composer is one line: the field, then Stop and Send in it */
+.composer.compact .composer-box {
+  flex-direction: row;
+  align-items: flex-end;
   border-radius: var(--r-lg);
+  box-shadow: none;
+}
+
+.composer.compact .composer-box textarea {
+  flex: 1;
+  min-width: 0;
+  min-height: 34px;
+  padding: 7px 10px;
+  border-radius: var(--r-lg);
+  font-size: var(--fs-13);
+}
+
+.composer.compact .composer-tools {
+  padding: 3px;
+}
+
+.composer.compact .composer-gap {
+  display: none;
 }
 
 /* ---- attachments ---- */
+/* the files attached to the message: chips at the top of the composer's box */
 .attachments {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  padding: 8px 14px 0;
-  background: var(--bg-raised);
-  border-top: 1px solid var(--line);
+  padding: 10px 12px 0;
 }
 
 .attachment {
@@ -8390,11 +8475,6 @@ rect.ribbon-s.is-shown {
     min-width: 0;
   }
 
-  .composer-attach {
-    width: 32px;
-    height: 36px;
-  }
-
   .composer-send > span,
   .composer-stop > span {
     display: none;
@@ -10953,18 +11033,16 @@ body:has(.status-bar) .toasts {
 
 .composer.compact {
   padding: 6px 8px;
-  gap: 6px;
-}
-
-.composer.compact textarea {
-  min-height: 30px;
 }
 
 .composer.compact .composer-send,
 .composer.compact .composer-stop {
-  height: var(--ctl);
-  border-radius: var(--r-md);
-  padding: 0 10px;
+  height: var(--ctl-sm);
+  padding: 0 9px;
+}
+
+.composer.compact .composer-stop {
+  margin-right: 3px;
 }
 
 /* ---- the Review mode: the queue of workspaces with changes, and the Changes lens of the picked one ---- */
@@ -15173,9 +15251,9 @@ button.pr-line:hover {
 
 .complete {
   position: absolute;
-  left: 14px;
-  right: 14px;
-  bottom: calc(100% - 2px);
+  left: var(--chat-inset, 14px);
+  right: var(--chat-inset, 14px);
+  bottom: calc(100% + 4px);
   z-index: var(--z-menu);
   display: flex;
   flex-direction: column;
