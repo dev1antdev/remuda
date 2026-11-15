@@ -3622,8 +3622,13 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   status change on the pane cancels its pending alerts** — answered at the
   desk means no push — and a finish looked at through remuda before its
   push goes (`Service.Looked` = `radar.Tracker.Looked`: its chat, its
-  terminal, a seen mark; herdr's own focus does not count) is never
-  pushed. Delays are vars so `push_test.go` can shrink them.
+  terminal, a seen mark; herdr's own focus does not count, nor a chat
+  read from a page whose own document is hidden — `look=0` on `GET
+  /api/chat`, `looksAtPane`, sent by `chatQuery` in
+  `features/chat/api.ts`, tested on both sides: the Mac app polls on with
+  its window closed, for its menu bar, and would have silenced every
+  finish of the pane it last showed) is never pushed. Delays are vars so
+  `push_test.go` can shrink them.
   **Notifications take themselves back** (`withdraw.go`, tested in
   `withdraw_test.go`, after Orca's desktop-notifications): an alert's tag
   names its episode — `machine|pane|kind|<moment it began>`, unix ms for
@@ -3638,7 +3643,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   (`withdrawals.take`) when the pane's status leaves the one it told of
   or the pane closes (`Service.moved`, first thing in `OnStatus`) and
   when its finish is looked at (`Service.Seen`, heard from
-  `radar.Tracker.OnSeen`). Then a socket device that takes withdrawals
+  `radar.Tracker.OnSeen`); an alert whose pane moved on, closed or was
+  looked at while it still went out device by device is taken back as
+  soon as it has (`withdrawals.stand` against the pane's `paneMark`,
+  numbered in the order heard, newer than the `since` the alert was
+  decided at; the marks kept a day). Then a socket device that takes withdrawals
   hears `{"type": "withdraw", "tags": [...]}` at once, else as it next
   connects (`OwedTo` / `Settle`); a browser is owed the tags for a day,
   the newest `maxOwed` 20 riding on every push it gets as
@@ -3647,7 +3656,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   as `withdrawn` (`Service.Withdrawn`, the newest `maxWithdrawn` 50) for
   every page to close in its browser, `OnWithdraw` moving it. A tag
   raised again after it was taken back (a task's "asks first" note, no
-  episode's) stands again, out of both lists. Nothing is kept on disk: a
+  episode's) leaves both lists, whatever the new alert's kind — a task's
+  finish or pull request shows under the tag its question was taken back
+  by — and stands again when its kind does. Nothing is kept on disk: a
   restart forgets what stands.
   **Quiet hours** (`quiet.go`): a device's prefs may carry `quiet {from,
   to, tz}` — "HH:MM" by its own IANA zone, the zone database embedded so
@@ -3934,7 +3945,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   Wall or in the pop-out, is not a look; a look through remuda — `Seen`, never
   herdr's focus — is `Looked` until the agent works again and tells
   `OnSeen` as the tick comes down, for `internal/push` to take the finish's
-  notification back and push none) — and a seen finish stays seen until the agent works again, because herdr itself keeps reporting `done` for hours, until the pane is focused in herdr; **a question is held until the agent works
+  notification back and push none; a finish whose tick herdr's own focus
+  brought down is still the first such look's to tell, since a headless
+  herdr keeps one pane focused for good, and a chat read with `look=0`,
+  from a page whose own document is hidden, is none) — and a seen finish stays seen until the agent works again, because herdr itself keeps reporting `done` for hours, until the pane is focused in herdr; **a question is held until the agent works
   again** (unless it never had worked — then the dialog simply closed);
   `last_active` is the last moment herdr said working, recovered for panes
   older than remuda from the session file's mtime (`chat.Service.LastWriteOf`:

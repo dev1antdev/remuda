@@ -208,11 +208,12 @@ func (t *Tracker) Forget(machineID string) {
 	}
 }
 
-// Seen records that someone looked at the pane: the held tick comes down.
+// Seen records that someone looked at the pane: the held tick comes down. A finish herdr's own focus brought the
+// tick down for — a headless herdr keeps one pane focused for good — is still this look's to tell.
 func (t *Tracker) Seen(machineID, paneID string) {
 	t.mu.Lock()
 	st := t.panes[key(machineID, paneID)]
-	cameDown := st != nil && st.doneHeld
+	cameDown := st != nil && (st.doneHeld || st.doneSeen && !st.looked)
 	if cameDown {
 		st.doneHeld, st.doneSeen, st.looked = false, true, true
 		t.dirty = true

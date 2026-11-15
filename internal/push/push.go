@@ -314,6 +314,7 @@ func (s *Service) Notify(p Payload) {
 	if s.silenced(p) {
 		return
 	}
+	since := s.withdrawals.now()
 	s.record(p)
 	var targets []*Subscription
 	for _, sub := range s.list() {
@@ -322,7 +323,7 @@ func (s *Service) Notify(p Payload) {
 		}
 		targets = append(targets, sub)
 	}
-	s.deliver(targets, p)
+	s.deliver(targets, p, since)
 }
 
 // Broadcast sends one payload now to every device, whatever its watchdog pref: a schedule's word is the person's own.
@@ -330,13 +331,15 @@ func (s *Service) Broadcast(p Payload) {
 	if s.silenced(p) {
 		return
 	}
+	since := s.withdrawals.now()
 	s.record(p)
-	s.deliver(s.list(), p)
+	s.deliver(s.list(), p, since)
 }
 
 // deliver sends one payload to each device, skipping the ones inside their quiet hours right now; an alert that may be
-// taken back later stands for the devices it reached.
-func (s *Service) deliver(targets []*Subscription, p Payload) {
+// taken back later stands for the devices it reached, and one whose pane moved on since it was decided (since) while
+// it went out is taken back as soon as it has.
+func (s *Service) deliver(targets []*Subscription, p Payload, since uint64) {
 	now := time.Now()
 	var reached []string
 	for _, sub := range targets {
@@ -347,7 +350,7 @@ func (s *Service) deliver(targets []*Subscription, p Payload) {
 			reached = append(reached, sub.Endpoint)
 		}
 	}
-	s.withdrawals.stand(p, reached, now)
+	s.announce(s.withdrawals.stand(p, reached, since, time.Now()))
 }
 
 // sendNoted sends one payload and keeps the outcome as the device's last delivery; a browser's push carries the tags
@@ -414,6 +417,7 @@ func (s *Service) SendTest(endpoint string) error {
 func (s *Service) OnStatus(ev events.PaneStatus) {
 	key := ev.Pane
 	s.moved(key, ev.To)
+	since := s.withdrawals.now()
 	began := time.Now()
 	// cancel and schedule under one lock: two changes of the same pane arriving together must not leave a timer the later one meant to kill
 	s.mu.Lock()
@@ -476,7 +480,7 @@ func (s *Service) OnStatus(ev events.PaneStatus) {
 			if note {
 				s.record(p)
 			}
-			s.deliver(targets, p)
+			s.deliver(targets, p, since)
 		})
 		pending = append(pending, t)
 	}
