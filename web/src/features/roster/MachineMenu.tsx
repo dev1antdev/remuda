@@ -1,5 +1,6 @@
-// The machine's own ⋯ menu: rename, updates, the keep-awake switch, a wake-up for a sleeping machine with a known
-// MAC address, the SSH host to copy, whether the screen-sharing mode hides it, and — for one added here — remove.
+// The machine's own ⋯ menu: rename, a place higher or lower in the list, updates, the keep-awake switch, a wake-up for
+// a sleeping machine with a known MAC address, the SSH host to copy, whether the screen-sharing mode hides it, and —
+// for one added here — remove.
 
 import { useState } from "react";
 import { act } from "@/app/act";
@@ -14,7 +15,14 @@ import { markedMachine } from "./sharing";
 import { toggleSharingMachine, useSharing } from "./useSharing";
 import { t } from "@/lib/i18n";
 
-export function MachineMenu({ machine: m, onRename, onRemove }: { machine: Machine; onRename: () => void; onRemove?: () => void }) {
+export function MachineMenu({ machine: m, onRename, onRemove, onStep, first, last }: {
+  machine: Machine;
+  onRename: () => void;
+  onRemove?: () => void;
+  onStep?: (by: -1 | 1) => void; // a place earlier or later among the machines: what a drag of its head does, for a finger and the keyboard
+  first?: boolean;
+  last?: boolean;
+}) {
   const [updates, setUpdates] = useState(false);
   const [mac, setMac] = useState(false);
   const share = useSharing();
@@ -25,6 +33,12 @@ export function MachineMenu({ machine: m, onRename, onRemove }: { machine: Machi
   const copyHost = (host: string) => void copyText(host).then((ok) => actions.notify(ok ? t("SSH host copied") : t("The SSH host could not be copied"), { brief: true, error: !ok }));
   const items = (): MenuItem[] => [
     { label: t("Rename…"), icon: "edit", onSelect: onRename },
+    ...(onStep
+      ? [
+          { label: t("Move up"), icon: "chevron-up" as const, disabled: first, onSelect: () => onStep(-1) },
+          { label: t("Move down"), icon: "chevron-down" as const, hint: t("or drag the machine by its name"), disabled: last, onSelect: () => onStep(1) },
+        ]
+      : []),
     { label: t("Updates…"), icon: "refresh-cw", disabled: !connected, onSelect: () => setUpdates(true) },
     { label: t("Fleet setup…"), icon: "columns", hint: t("every machine side by side"), onSelect: () => actions.openDialog({ kind: "fleet-setup" }) },
     { label: t("Keep awake while agents work"), icon: "sun", checked: !!m.awake?.on, disabled: !connected, onSelect: () => void act(setAwake(m.id, !m.awake?.on)) },

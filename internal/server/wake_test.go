@@ -64,3 +64,20 @@ func TestMachinePatchIsPartial(t *testing.T) {
 		t.Fatalf("the address went with the name")
 	}
 }
+
+// The order of the machines is the person's to set: ids the registry has, each once.
+func TestMachineOrderTakesKnownMachinesOnce(t *testing.T) {
+	s := &Server{Machines: machines.NewManager(t.TempDir(), "", "", nil)}
+	mux := http.NewServeMux()
+	s.machineRoutes(mux)
+	code, body := taskCall(mux, "PUT", "/api/machines/order", "", `{"ids":["local"]}`)
+	if ids, _ := body["ids"].([]any); code != 200 || len(ids) != 1 || ids[0] != "local" {
+		t.Fatalf("an order of the one machine: %d %v", code, body)
+	}
+	if code, _ := taskCall(mux, "PUT", "/api/machines/order", "", `{"ids":["local","nowhere"]}`); code != 400 {
+		t.Fatalf("an order naming a machine the fleet lacks: %d", code)
+	}
+	if code, _ := taskCall(mux, "PUT", "/api/machines/order", "", `{"ids":["local","local"]}`); code != 400 {
+		t.Fatalf("an order naming a machine twice: %d", code)
+	}
+}

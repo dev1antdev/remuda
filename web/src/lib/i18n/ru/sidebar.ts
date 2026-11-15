@@ -53,4 +53,6 @@ export const sidebar: Dictionary = {
   "This picture could not be read": "Эту картинку не удалось прочитать",
   "An SVG icon can be at most 64 KB": "SVG-иконка может весить не больше 64 КБ",
   "Pick a PNG, JPEG, GIF, WebP, ICO or SVG picture": "Выберите картинку PNG, JPEG, GIF, WebP, ICO или SVG",
+  "or drag the machine by its name": "или перетащите машину за её имя",
+  "Drag to move this machine among the others": "Перетащите, чтобы переставить машину среди остальных",
 };

@@ -2210,6 +2210,65 @@ body.is-resizing iframe {
   padding-top: 8px;
 }
 
+/* a machine dragged by its head to another place among the machines: it dims where it was, and a line of the accent
+   shows where it lands */
+.machine.is-dragging {
+  opacity: 0.45;
+}
+
+/* the grip: where a drag starts in a browser that starts none on a button (Firefox), and the sign that the head drags */
+.machine-grip {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 16px;
+  height: var(--ctl-sm);
+  color: var(--fg-faint);
+  cursor: grab;
+  visibility: hidden;
+}
+
+.machine-head:hover .machine-grip,
+.machine.is-dragging .machine-grip {
+  visibility: visible;
+}
+
+.machine-grip:active {
+  cursor: grabbing;
+}
+
+/* a finger does not drag: the machine's menu has Move up and Move down */
+@media (pointer: coarse) {
+  .machine-grip {
+    display: none;
+  }
+}
+
+.machine.drop-before,
+.machine.drop-after {
+  position: relative;
+}
+
+.machine.drop-before::before,
+.machine.drop-after::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  height: 2px;
+  border-radius: var(--r-xs);
+  background: var(--accent);
+  pointer-events: none;
+}
+
+.machine.drop-before::before {
+  top: -4px;
+}
+
+.machine.drop-after::after {
+  bottom: -4px;
+}
+
 .machine-head {
   display: flex;
   align-items: center;

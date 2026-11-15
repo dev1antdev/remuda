@@ -72,3 +72,101 @@ func TestTheLocalMachineIsNamedForItsSystem(t *testing.T) {
 		}
 	}
 }
+
+// The person's order: the machines it names first, as they dragged them; one added since after them, as it arrived.
+func TestTheFleetIsListedInThePersonsOrder(t *testing.T) {
+	dir := t.TempDir()
+	m := NewManager(dir, filepath.Join(dir, "no-herdr.sock"), "herdr", nil)
+	for _, id := range []string{"gog", "roofr", "windows"} {
+		m.machines[id] = newRemote(Config{ID: id, Label: id, Host: id + ".remote"})
+		m.order = append(m.order, id)
+	}
+	if ids := idsOf(m.List()); ids != "local,gog,roofr,windows" {
+		t.Fatalf("before any order: %s", ids)
+	}
+	if err := m.SetOrder([]string{"windows", "local", "roofr", "gog"}); err != nil {
+		t.Fatal(err)
+	}
+	if ids := idsOf(m.List()); ids != "windows,local,roofr,gog" {
+		t.Fatalf("after the order: %s", ids)
+	}
+	if ids := idsOf(m.All()); ids != "local,gog,roofr,windows" {
+		t.Fatalf("every machine keeps the order it arrived in: %s", ids)
+	}
+	m.machines["pi"] = newRemote(Config{ID: "pi", Label: "pi", Host: "pi.remote"})
+	m.order = append(m.order, "pi")
+	if ids := idsOf(m.List()); ids != "windows,local,roofr,gog,pi" {
+		t.Fatalf("a machine added since does not come last: %s", ids)
+	}
+	m.drop("roofr")
+	if ids := idsOf(m.List()); ids != "windows,local,gog,pi" {
+		t.Fatalf("a machine gone is still listed, or the rest moved: %s", ids)
+	}
+	m.SetServer(true)
+	if ids := idsOf(m.List()); ids != "windows,gog,pi" {
+		t.Fatalf("a server's host is listed in the order: %s", ids)
+	}
+}
+
+func TestAnOrderNamesKnownMachinesOnce(t *testing.T) {
+	dir := t.TempDir()
+	m := NewManager(dir, filepath.Join(dir, "no-herdr.sock"), "herdr", nil)
+	m.machines["gog"] = newRemote(Config{ID: "gog", Label: "GOG", Host: "gog.remote"})
+	m.order = append(m.order, "gog")
+	if err := m.SetOrder([]string{"gog", "nowhere"}); err == nil {
+		t.Fatal("an order naming a machine the registry lacks was kept")
+	}
+	if err := m.SetOrder([]string{"gog", "gog"}); err == nil {
+		t.Fatal("an order naming a machine twice was kept")
+	}
+	if err := m.SetOrder(make([]string, maxPlaced+1)); err == nil {
+		t.Fatal("an order longer than any fleet was kept")
+	}
+	if ids := idsOf(m.List()); ids != "local,gog" {
+		t.Fatalf("a refused order moved the fleet: %s", ids)
+	}
+	if err := m.SetOrder([]string{"gog"}); err != nil {
+		t.Fatal(err)
+	}
+	if ids := idsOf(m.List()); ids != "gog,local" {
+		t.Fatalf("an order naming one machine: %s", ids)
+	}
+}
+
+// The order outlives a restart: the next registry on the same state dir reads it.
+func TestTheOrderIsKeptAcrossARestart(t *testing.T) {
+	dir := t.TempDir()
+	m := NewManager(dir, filepath.Join(dir, "no-herdr.sock"), "herdr", nil)
+	m.machines["gog"] = newRemote(Config{ID: "gog", Label: "GOG", Host: "gog.remote"})
+	m.order = append(m.order, "gog")
+	if err := m.SetOrder([]string{"gog", "local"}); err != nil {
+		t.Fatal(err)
+	}
+	next := NewManager(dir, filepath.Join(dir, "no-herdr.sock"), "herdr", nil)
+	next.machines["gog"] = newRemote(Config{ID: "gog", Label: "GOG", Host: "gog.remote"})
+	next.order = append(next.order, "gog")
+	if ids := idsOf(next.List()); ids != "gog,local" {
+		t.Fatalf("after a restart: %s", ids)
+	}
+}
+
+func TestArrangedKeepsEveryMachineOnce(t *testing.T) {
+	for _, c := range []struct{ arrival, placed, want string }{
+		{"a,b,c", "", "a,b,c"},
+		{"a,b,c", "c,a", "c,a,b"},
+		{"a,b,c", "c,x,a,c", "c,a,b"},
+		{"", "a", ""},
+	} {
+		got := strings.Join(arranged(split(c.arrival), split(c.placed)), ",")
+		if got != c.want {
+			t.Errorf("arranged(%q, %q) = %q, want %q", c.arrival, c.placed, got, c.want)
+		}
+	}
+}
+
+func split(s string) []string {
+	if s == "" {
+		return nil
+	}
+	return strings.Split(s, ",")
+}
