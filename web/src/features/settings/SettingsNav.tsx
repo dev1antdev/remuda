@@ -13,9 +13,13 @@ export default function SettingsNav({ groups, shown, onPick }: { groups: Section
   const list = useRef<HTMLDivElement>(null);
   const tabOf = (id: SectionId) => list.current?.querySelector<HTMLElement>(`#${tabId(id)}`);
   const focusTab = (id: SectionId) => tabOf(id)?.focus();
-  useEffect(() => focusTab(shown), []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    focusTab(shown);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   // a chip half off the row comes whole into view once it is the one on screen
-  useEffect(() => tabOf(shown)?.scrollIntoView({ block: "nearest", inline: "nearest" }), [shown]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    tabOf(shown)?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [shown]); // eslint-disable-line react-hooks/exhaustive-deps
   const onKey = (e: KeyboardEvent) => {
     const next = stepSection(listedIds(groups), shown, e.key);
     if (!next) return;
