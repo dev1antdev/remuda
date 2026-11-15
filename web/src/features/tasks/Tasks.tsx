@@ -13,7 +13,7 @@ import { useRoster } from "@/features/roster/useRoster";
 import { isTouch, usePref } from "@/lib/prefs";
 import { useQuery } from "@/lib/query";
 import { errMsg } from "@/lib/text";
-import { Icon, Menu, Notice, PANELS, Resizer, Tip, type IconName, useDebounced, useTimedNotice } from "@/ui";
+import { Empty, Icon, Menu, Notice, PANELS, Resizer, Tip, type IconName, useDebounced, useTimedNotice } from "@/ui";
 import { createTask, deleteTask, getTask, listLabels, listProjects, listTasks, patchTask, type Run, type Task } from "./api";
 import Board from "./Board";
 import { BulkBar } from "./BulkBar";
@@ -365,7 +365,7 @@ export default function Tasks() {
           </div>
         ) : (
           <div className={`tasks-list${list.fetching ? " loading" : ""}`}>
-            {tasks.length === 0 && !list.fetching && <div className="placeholder">{proposedView ? tr("Nothing proposed: a task an agent files lands here for you to accept or decline.") : tr("Nothing here.")}</div>}
+            {tasks.length === 0 && !list.fetching && (proposedView ? <Empty icon="bot" title={tr("Nothing proposed.")} hint={tr("A task an agent files lands here for you to accept or decline.")} /> : <Empty icon="circle-check" title={tr("Nothing here.")} />)}
             {tasks.map((t) => (
               <TaskRow
                 key={t.id}

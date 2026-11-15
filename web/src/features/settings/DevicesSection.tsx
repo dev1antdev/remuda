@@ -73,7 +73,7 @@ export default function DevicesSection() {
             </span>
             <small>{deviceLine(device, now)}</small>
           </span>
-          <button type="button" className="btn danger sm" onClick={() => revoke(device)}>
+          <button type="button" className="btn danger soft sm" onClick={() => revoke(device)}>
             {device.this ? t("Sign out") : t("Revoke")}
           </button>
         </div>

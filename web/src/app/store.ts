@@ -8,6 +8,7 @@ import { clamp, step } from "@/features/chat/find";
 import type { FolderIconRef, Machine, Session } from "@/features/roster/api";
 import type { FileTarget } from "@/features/files/target";
 import type { SearchHit } from "@/features/search/api";
+import type { SectionId } from "@/features/settings/sections";
 import type { TimelapseFound } from "@/features/terminal/timelapse/found";
 import type { BudgetStatus } from "@/features/usage/api";
 import { keepNewest, type OnPageAlert } from "@/features/alerts/onpage";
@@ -29,7 +30,7 @@ export type AppDialog =
   | { kind: "machine" }
   | { kind: "broadcast" } // one message to several agents
   | { kind: "keys" } // the keyboard sheet
-  | { kind: "settings" } // the theme, the sidebar, the panels, the way to the alerts and the keys
+  | { kind: "settings"; section?: SectionId } // Settings, on the section asked for or the one this device showed last
   | { kind: "renameMachine"; machine: Machine }
   | { kind: "recap"; machineId: string; paneId: string; session: string | null; dir: string; title: string } // one conversation's recap; paneId "" = a transcript on its own
   | { kind: "budget"; budget: BudgetStatus | null } // a spending limit, new or the one given

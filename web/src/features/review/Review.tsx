@@ -13,7 +13,7 @@ import { useQuery } from "@/lib/query";
 import { basename } from "@/lib/text";
 import { joinPath } from "@/lib/pathname";
 import { ago } from "@/lib/time";
-import { Notice, useTimedNotice } from "@/ui";
+import { Empty, Notice, useTimedNotice } from "@/ui";
 import { VENDOR_NAME } from "@/ui/brand";
 import { fetchBase, fetchReview, fetchReviewDiff, type DiffFrom, type Review as ReviewData, type ReviewFile } from "./api";
 import { BaseFiles, baseOrder } from "./BaseFiles";
@@ -125,7 +125,7 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
   };
 
   if (review === null && !error) return <div className="empty">{t("Looking at the folder…")}</div>;
-  if (review && !review.repo) return <div className="empty">{t("{folder} is not a git checkout — nothing to review.", { folder: basename(dir) })}</div>;
+  if (review && !review.repo) return <Empty icon="folder" title={t("{folder} is not a git checkout — nothing to review.", { folder: basename(dir) })} />;
   const lastVerdict = review?.baseline?.verdict;
   const lastLookText = !lastLook ? t("not reviewed yet") : lastVerdict === "approved" ? t("approved {ago}", { ago: ago(lastLook) }) : lastVerdict === "changes" ? t("rejected {ago}", { ago: ago(lastLook) }) + (review?.baseline?.ready ? t(" · ready again") : "") : t("since you looked {ago}", { ago: ago(lastLook) });
   const fileRow = (file: ReviewFile, rowLook: RowLook) => {
@@ -207,7 +207,7 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
               fileRow={(row, rowLook) => fileRow(row.file, rowLook)}
               conflictBody={(row) => <ConflictView machineId={machineId} dir={dir} path={row.file.path} split={split} />}
             />
-            {files.length === 0 && <div className="empty">{commits.length > 0 ? t("Everything here is committed.") : lastLook ? t("Nothing has changed here since you looked.") : t("Nothing is uncommitted here.")}</div>}
+            {files.length === 0 && <Empty small icon="circle-check" title={commits.length > 0 ? t("Everything here is committed.") : lastLook ? t("Nothing has changed here since you looked.") : t("Nothing is uncommitted here.")} />}
             {review && (files.length > 0 || (review.outgoing?.total ?? 0) > 0) && (
               <CommitBox
                 machineId={machineId}

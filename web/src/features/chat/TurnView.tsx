@@ -39,6 +39,17 @@ export const TurnView = memo(
       .map((p) => p.text ?? "")
       .join("\n\n")
       .trim();
+    const body = (
+      <ErrorBoundary resetKey={turn} fallback={(message) => <Notice tone="error">{t("This turn could not be drawn: {message}", { message })}</Notice>}>
+        {pieces(turn.parts).map((piece) =>
+          piece.kind === "card" ? (
+            <ToolCard key={piece.items[0]!.index} items={piece.items} machineId={machineId} onOpenFile={onOpenFile} subagents={subagents} onOpenSubagent={onOpenSubagent} diffs={diffs} live={live} />
+          ) : (
+            <PartView key={piece.item.index} part={piece.item.part} onOpenFile={onOpenFile} diffs={diffs} />
+          ),
+        )}
+      </ErrorBoundary>
+    );
     return (
       <div className={cls} data-ids={turn.ids?.join(" ")}>
         {pinned && (
@@ -46,15 +57,7 @@ export const TurnView = memo(
             <Icon name="pin" size={12} />
           </span>
         )}
-        <ErrorBoundary resetKey={turn} fallback={(message) => <Notice tone="error">{t("This turn could not be drawn: {message}", { message })}</Notice>}>
-          {pieces(turn.parts).map((piece) =>
-            piece.kind === "card" ? (
-              <ToolCard key={piece.items[0]!.index} items={piece.items} machineId={machineId} onOpenFile={onOpenFile} subagents={subagents} onOpenSubagent={onOpenSubagent} diffs={diffs} live={live} />
-            ) : (
-              <PartView key={piece.item.index} part={piece.item.part} onOpenFile={onOpenFile} diffs={diffs} />
-            ),
-          )}
-        </ErrorBoundary>
+        {turn.role === "user" ? <div className="turn-bubble">{body}</div> : body}
         {turn.role === "assistant" && <Spent turn={turn} />}
         {(!!(onForward && text && turn.role === "assistant") || !!((onLink || onPin) && turn.ids?.length) || !!(undo && onUndo)) && (
           <div className="turn-actions">

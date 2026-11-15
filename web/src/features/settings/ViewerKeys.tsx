@@ -66,7 +66,7 @@ export default function ViewerKeys() {
             <span className="device-head">{key.name}</span>
             <small>{viewerLine(key, now)}</small>
           </span>
-          <button type="button" className="btn danger sm" onClick={() => revoke(key)}>
+          <button type="button" className="btn danger soft sm" onClick={() => revoke(key)}>
             {t("Revoke")}
           </button>
         </div>

@@ -2,7 +2,7 @@
 // "terminal" — and + opens a terminal in the workspace's folder at once, or an agent through its dialog; a split tab
 // lists its panes under the row. A lens's own controls go in the right slot (tools), never in the header.
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Icon, Logo, Menu, StatusDot, Tip } from "@/ui";
 import { VENDOR_NAME, brandColor } from "@/ui/brand";
 import type { Pane, Session, Status, Tab } from "./api";
@@ -32,6 +32,12 @@ export default function TabStrip({ session, tab, pane, onSelect, onNewTab, onNew
 }) {
   const [editing, setEditing] = useState<{ id: string; value: string } | null>(null);
   const faces = tabFaces(session.tabs, masked);
+  // the tab on screen comes into view in a strip too narrow for every tab: a pane opened from the sidebar or a
+  // notification on a phone would otherwise have its own tab off the strip's edge
+  const strip = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    strip.current?.querySelector(".tab.on")?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [session.id, tab.id]);
   const commit = () => {
     if (!editing) return;
     const t = session.tabs.find((x) => x.id === editing.id);
@@ -42,7 +48,7 @@ export default function TabStrip({ session, tab, pane, onSelect, onNewTab, onNew
   return (
     <div className="tabstrip">
       <div className="tabs-row">
-        <div className="tabs" role="tablist">
+        <div className="tabs" role="tablist" ref={strip}>
           {session.tabs.map((t) => {
             const first = t.panes.find((p) => p.focused) ?? t.panes[0];
             if (editing?.id === t.id) {

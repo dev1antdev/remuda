@@ -7,7 +7,7 @@ import { actions, app } from "@/app/store";
 import { useRoster } from "@/features/roster/useRoster";
 import { onWindows } from "@/features/roster/system";
 import { basename, plural } from "@/lib/text";
-import { Icon, Logo, PANELS, Resizer } from "@/ui";
+import { Empty, Icon, Logo, PANELS, Resizer } from "@/ui";
 import { reviewQueue, type QueueItem } from "./queue";
 import { riskChip, riskHead, riskTip } from "./risk";
 import { CollisionMark } from "@/features/roster/CollisionMark";
@@ -59,9 +59,7 @@ export default function ReviewQueue() {
             <Review key={item.key} machineId={item.machine.id} paneId={item.pane?.id ?? ""} dir={item.dir} agent={item.pane?.agent ?? ""} onSeen={refresh} active editor={!onWindows(item.machine)} />
           </>
         ) : (
-          <div className="placeholder">
-            <p>{queue.length === 0 ? t("Nothing waits for a review.") : t("Pick a workspace to review its changes.")}</p>
-          </div>
+          <Empty icon={queue.length === 0 ? "circle-check" : "git-pull-request"} title={queue.length === 0 ? t("Nothing waits for a review.") : t("Pick a workspace to review its changes.")} />
         )}
       </section>
     </main>

@@ -209,7 +209,12 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   Usage, Schedules, Activity and Settings. On a phone it lies along the
   bottom under the thumb, with Code, the panels and Settings behind
   More. The sidebar's head keeps two buttons: + (a workspace, a PC) and
-  ⋯ (message several agents, the order, the settings).
+  ⋯ (message several agents, the order, the settings). Settings is two
+  panes: the sections down its left side — this device's (Look, Sidebar,
+  General) and this cockpit's (Sleep and resume, Inside herdr, Jira,
+  Backups, Timelapse, Devices) — and the one you picked beside them; on a
+  phone the sections are a row of chips. It opens where you left it, and
+  the palette has a row for each ("Settings › Backups").
 - **The status bar** — a thin line along the foot of the page at a desk:
   each agent's plan limits ("5h 38% · wk 54%", amber from 80 %), whose
   card on hover puts a tick on every window's bar at the share of its time
@@ -238,7 +243,7 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   background, the dimmer greys at 4.5:1 and 3:1, the ink on every accent
   at 4.5:1.
 - **English or Russian** — the page speaks the language of your browser,
-  or the one you pick in Settings › Look › Language ("Язык: Русский" in
+  or the one you pick in Settings › General › Language ("Язык: Русский" in
   the palette); a change reloads the page. The agents' answers, the
   pushes, the standup and the MCP answers stay as they are.
 - **Text size, density and font** — the Look section of Settings also
@@ -250,6 +255,13 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   on this device — each shows in its own face in the list, an
   uninstalled one falls back to the system's monospace. Nothing is
   downloaded: no web fonts.
+- **Under a finger** — on a phone or a tablet every control is an
+  eighth taller than with a mouse (a button 36 px, the header's 40, the
+  key bar's keys 40), the lens switch's segments are a thumb's, and the
+  tab on screen is brought into view in its strip.
+- **Empty places** — a screen with nothing to show says so the same way
+  everywhere: an icon, one line and, where it helps, a hint or a button
+  (a chat whose agent has written nothing yet offers its terminal).
 - **Panels** — the sidebar, the files rail, the Review queue and a
   task's detail each have a draggable edge: pull it to the width you
   like and it stays that way on this device; Tab to the edge and use

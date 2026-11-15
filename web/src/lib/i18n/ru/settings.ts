@@ -112,4 +112,11 @@ export const settings: Dictionary = {
   "a tapped notification, the Mac app's menu, an Activity row or Alt+N shows the pane's terminal": "нажатое уведомление, меню приложения на Mac, строка Активности или Alt+N показывают терминал панели",
   "the same openings show the pane's chat": "те же переходы показывают чат панели",
   "the same openings keep whichever lens the page was on": "те же переходы оставляют ту линзу, что была открыта",
+  "This device": "Это устройство",
+  "This cockpit": "Эта кабина",
+  General: "Общие",
+  Colours: "Цвета",
+  Layout: "Компоновка",
+  "Between devices": "Между устройствами",
+  "Settings › {section}": "Настройки › {section}",
 };

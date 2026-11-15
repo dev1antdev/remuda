@@ -26,6 +26,7 @@ import { forkPane } from "@/features/chat/forkPane";
 import { askSleep } from "@/features/sleep/flows";
 import { canSleep } from "@/features/sleep/sleep";
 import { sleepCommands } from "@/features/sleep/commands";
+import { sectionGroups } from "@/features/settings/sections";
 import { keyWords } from "@/features/terminal/float/float";
 import { toggleFloat } from "@/features/terminal/float/useFloatKey";
 import { openTimelapse } from "@/features/terminal/timelapse/row";
@@ -276,6 +277,8 @@ function useCommands(): (query: string) => Entry[] {
       command("open-lens-chat", t("Notifications open: the chat"), () => writePref(OPEN_LENS_KEY, "chat"), { hint: `${openLens === "chat" ? t("now · ") : ""}${t("the same openings show the pane's chat")}`, icon: "message", keywords: ["notification", "alert", "open", "chat", "lens"] });
       command("open-lens-keep", t("Notifications open: the lens it was on"), () => writePref(OPEN_LENS_KEY, "keep"), { hint: `${openLens === "keep" ? t("now · ") : ""}${t("the same openings keep whichever lens the page was on")}`, icon: "columns", keywords: ["notification", "alert", "open", "keep", "lens"] });
       command("settings", t("Settings"), () => actions.openDialog({ kind: "settings" }), { hint: t("the theme, the sidebar, the panels, the alerts, the keys"), icon: "sliders", keywords: ["settings", "preferences", "theme", "options"] });
+      for (const section of sectionGroups(false).flatMap((group) => group.sections))
+        command(`settings:${section.id}`, t("Settings › {section}", { section: section.label }), () => actions.openDialog({ kind: "settings", section: section.id }), { icon: section.icon, keywords: ["settings", "preferences", section.id, english(section.label)] });
       command("keys", t("Keyboard shortcuts"), () => actions.openDialog({ kind: "keys" }), { hint: t("? · every key the page answers"), icon: "keyboard", keywords: ["keys", "shortcuts", "help", "hotkeys", "bindings", "keyboard"] });
       command("float-terminal", float ? t("Hide the floating terminal") : t("Floating terminal"), () => toggleFloat(machines, current?.machine.id ?? null), {
         hint: float ? t("the shell keeps running · {key}", { key: keyWords(isMac) }) : t("a shell of its own over any screen, on this pane's machine · {key}", { key: keyWords(isMac) }),

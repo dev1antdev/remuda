@@ -2,6 +2,7 @@
 export { Dialog, useEscape } from "./Dialog";
 export { ErrorBoundary } from "./ErrorBoundary";
 export { Notice, StatusDot, type Tone } from "./Notice";
+export { default as Empty } from "./Empty";
 export { Toasts, type ToastItem } from "./Toasts";
 export { useDismiss, useSubmit, useTimedNotice, useDebounced } from "./hooks";
 export { FormDialog, type Submit } from "./FormDialog";

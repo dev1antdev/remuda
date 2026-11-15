@@ -4,13 +4,13 @@
 import { useMemo } from "react";
 import { useMedia } from "@/lib/media";
 import type { Span } from "./api";
-import { hourLabel, hourMarks, layout, spanWords, WIDTH, window, type Segment } from "./strip";
+import { hourLabel, hourMarks, layout, spanWords, WIDTH, window as periodShown, type Segment } from "./strip";
 import { t } from "@/lib/i18n";
 
 export function DayStrip({ spans, since, onJump }: { spans: Span[]; since?: string; onJump?: (turn: string) => void }) {
   const phone = useMedia("(max-width: 600px)");
   const { segments, marks } = useMemo(() => {
-    const { from, to } = window(since, Date.now(), phone ? 8 : undefined);
+    const { from, to } = periodShown(since, Date.now(), phone ? 8 : undefined);
     return { segments: layout(spans, from, to), marks: hourMarks(from, to, phone ? 6 : 3) };
   }, [spans, since, phone]);
   const linked = (seg: Segment) => Boolean(onJump && seg.turn && seg.state !== "idle");

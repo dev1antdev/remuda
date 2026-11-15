@@ -6,7 +6,7 @@ import { usePref } from "@/lib/prefs";
 import { DEFAULT_RADAR, type RadarPrefs } from "@/features/roster/radar";
 import { moving, useClock, useSpinner } from "@/features/roster/useClocks";
 import { useRoster } from "@/features/roster/useRoster";
-import { PortalHost } from "@/ui";
+import { Empty, PortalHost } from "@/ui";
 import { DEFAULT_WALL, spinsFor, tileKey, type WallPrefs } from "@/features/roster/wall";
 import { useAllPanes } from "./current";
 import { popOutWindow } from "./pip";
@@ -46,9 +46,7 @@ function Popped({ popout }: { popout: Selection }) {
       ) : located ? (
         <TileView tile={{ ...located, key: tileKey(located.machine.id, located.pane.id) }} view={wall.view} radar={radar} step={step} now={now} />
       ) : (
-        <div className="placeholder">
-          <p>{t("That pane is gone.")}</p>
-        </div>
+        <Empty small icon="pip" title={t("That pane is gone.")} />
       )}
     </div>
   );

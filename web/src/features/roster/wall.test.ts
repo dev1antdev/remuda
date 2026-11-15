@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Machine, Pane, Session } from "./api";
 import { DEFAULT_RADAR } from "./radar";
-import { DEFAULT_WALL, OFFICE_ROTATE, featured, isIdle, needsMe, neighbour, nextNeedingMe, rotates, spinsFor, tileKey, tiles, withFocus } from "./wall";
+import { DEFAULT_WALL, OFFICE_ROTATE, emptyWall, featured, isIdle, needsMe, neighbour, nextNeedingMe, rotates, spinsFor, tileKey, tiles, withFocus } from "./wall";
 
 const NOW = 1_700_000_000_000;
 const MIN = 60_000;
@@ -176,5 +176,25 @@ describe("spinsFor", () => {
     expect(spinsFor("screen", true)).toBe(true);
     expect(spinsFor("chat", false)).toBe(false);
     expect(spinsFor("zoo", true)).toBe(false);
+  });
+});
+
+describe("emptyWall", () => {
+  const none = { shown: [], hidden: 0, idle: 0, calm: 0 };
+  const connected = [{ id: "local", state: "connected" } as Machine];
+  it("says there is no machine yet on a remuda that serves the page only, with how to add one", () => {
+    const said = emptyWall([], none, true);
+    expect(said.icon).toBe("server");
+    expect(said.hint).toContain("herdr machine add");
+  });
+  it("says no machine is connected while every one is away", () => {
+    expect(emptyWall([{ id: "gog", state: "connecting" } as Machine], none, false).title).toBe("No machine connected.");
+    expect(emptyWall([], none, false).title).toBe("No machine connected.");
+  });
+  it("tells a calm wall from a filtered one and from one with no agent", () => {
+    expect(emptyWall(connected, { ...none, calm: 2 }, false).title).toBe("Nobody needs you right now.");
+    expect(emptyWall(connected, { ...none, hidden: 1 }, false).title).toBe("Every agent is hidden or idle.");
+    expect(emptyWall(connected, { ...none, idle: 3 }, false).title).toBe("Every agent is hidden or idle.");
+    expect(emptyWall(connected, none, false).title).toBe("No agent runs anywhere.");
   });
 });

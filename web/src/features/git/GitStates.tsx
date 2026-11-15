@@ -1,21 +1,13 @@
 // The lens's other faces: the sentences it says when there is no graph to draw, a loading state shaped like the rows,
 // and the banner over the graph while a merge, rebase, cherry-pick or revert waits on its conflicts.
 
-import { Icon, Notice } from "@/ui";
+import { Empty, Notice } from "@/ui";
 import type { IconName } from "@/ui/icons";
 import { stoppedWords } from "./words";
 import { t, tc } from "@/lib/i18n";
 
 export function GitEmpty({ icon, title, body }: { icon: IconName; title: string; body?: string }) {
-  return (
-    <div className="git-empty">
-      <span className="git-empty-icon">
-        <Icon name={icon} size={20} />
-      </span>
-      <b>{title}</b>
-      {body && <p>{body}</p>}
-    </div>
-  );
+  return <Empty className="git-empty" icon={icon} title={title} hint={body} />;
 }
 
 // GitLoading is a few rows' worth of lanes and bars while the first page is read
