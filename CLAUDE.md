@@ -1958,8 +1958,14 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   --no-renames --untracked-files=no -- .` (its paths from the repository's
   top, the folder's `--show-prefix` cut off) and the staged and unstaged
   `--numstat -z --relative` (`statusScript`, every read through `readGit`:
-  `--no-optional-locks -c core.fsmonitor=false`, so a read never writes
-  the index) — each `File` carries `index` / `work` (git's letters, M A D
+  `--no-optional-locks -c core.fsmonitor=false -c
+  diff.autoRefreshIndex=false`, so a read never writes the index — without
+  the last, git's diff refreshes the stat of a file only touched and
+  writes the index back under the `index.lock` an agent's own git add or
+  commit may want; the summary's numstat, the uncommitted files' list for
+  their blobs (numstat's paths, which leave such a file out as
+  `--name-only` would not), the sidebar sweep's numstat and the file
+  viewer's diff read the same way, `readlock_test.go`) — each `File` carries `index` / `work` (git's letters, M A D
   T), `conflict` (an unmerged file's two letters, UU both edited, AA, DD,
   AU, UA, DU, UD) and `staged` / `unstaged` (`Stat{added, removed,
   binary}`, a file partly staged holding both), and a file the diff
@@ -4009,9 +4015,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   for a viewer): the pinned agents, in pin order, stand in a **Pinned**
   group over the machines (`SidebarGroups.tsx` `PinnedAgents`, its
   workspace and machine quietly after the title), pref `sidebar.pins`
-  (`machine|pane`, on the sync allow-list; `livePins` lets go of an agent
-  gone from a connected machine or a machine the fleet lost, since herdr
-  gives a closed pane's id to a new one). **The subagents at work** hang
+  (`machine|pane`, on the sync allow-list; `livePins` lets go of a pin
+  whose pane is gone from a connected machine or whose machine the fleet
+  lost, since herdr gives a closed pane's id to a new one — a pane that is
+  a shell for a while, its workspace asleep or its agent restarting onto
+  an update, keeps it, drawn again once the agent is back). **The subagents at work** hang
   under their agent on Orca's tree lines (`.sub-elbow`, the last corner
   rounded; `pane.subagents.list`, the oldest five by name and "N more at
   work"), a click opening the transcript viewer on that one's own

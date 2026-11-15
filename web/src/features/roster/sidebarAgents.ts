@@ -108,9 +108,11 @@ export function pinnedRows(machines: Machine[], pins: string[]): Pinned[] {
   return pins.flatMap((key) => found.get(key) ?? []);
 }
 
-// livePins drops the pins of agents gone: their machine is connected, shows its workspaces and has no such agent, or the
+// livePins drops the pins of agents gone: their machine is connected, shows its workspaces and has no such pane, or the
 // fleet no longer has the machine; a machine away, still connecting or not read yet keeps its pins, since its agents may
-// well be there. Herdr gives a closed pane's id to a new one later, which a stale pin would otherwise take for the old agent.
+// well be there, and so does a pane that is a shell for a while — its workspace asleep, its agent restarting onto an
+// update — since the pin is synced and would be gone everywhere by the time the agent is back. Herdr gives a closed
+// pane's id to a new one later, which a stale pin would otherwise take for the old agent.
 export function livePins(machines: Machine[], pins: string[]): string[] {
   if (machines.length === 0) return pins;
   const byId = new Map(machines.map((m) => [m.id, m]));
@@ -120,7 +122,7 @@ export function livePins(machines: Machine[], pins: string[]): string[] {
     if (!machine) return false;
     if (machine.state !== "connected" || machine.sessions.length === 0) return true;
     const pane = key.slice(at + 1);
-    return machine.sessions.some((s) => s.tabs.some((tab) => tab.panes.some((p) => p.id === pane && !!p.agent)));
+    return machine.sessions.some((s) => s.tabs.some((tab) => tab.panes.some((p) => p.id === pane)));
   });
 }
 
