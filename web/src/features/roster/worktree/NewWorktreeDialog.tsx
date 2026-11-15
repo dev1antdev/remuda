@@ -229,6 +229,7 @@ export default function NewWorktreeDialog({ machine, session, agents, issue, tit
   };
 
   const repoLabel = (root: string) => share.redact(root.split(/[\\/]/).filter(Boolean).pop() ?? root);
+  const shownRows = share.on ? rows.map((row) => ({ ...row, sub: share.redact(row.sub) })) : rows; // an Open row's place names the repository's folder
   return (
     <Dialog
       as="form"
@@ -248,12 +249,12 @@ export default function NewWorktreeDialog({ machine, session, agents, issue, tit
           <Select value={root} onChange={setRoot} options={repos.map((r) => ({ value: r.root, label: repoLabel(r.root), hint: share.machineHidden(machine.id) ? undefined : share.redact(r.root), icon: <Icon name="folder" size={14} /> }))} />
         </label>
         <SourceTabs mode={mode} onMode={(m) => switchMode(m)} bases={src ? baseChoices(src) : [base]} base={base} onBase={setBase} showBase={plan?.action === "new" && plan.fromBase} fetching={fetching} onFetch={() => void fetchNow()} />
-        {mode !== "new" && <SourceList mode={mode} query={query} onQuery={typed} rows={rows} at={at} onPick={choose} empty={emptyWords(mode, src, answer.loading, answer.error, allLists)} field={field} onKey={onKey} />}
-        {answer.error && mode === "new" && <Notice tone="error">{answer.error}</Notice>}
+        {mode !== "new" && <SourceList mode={mode} query={query} onQuery={typed} rows={shownRows} at={at} onPick={choose} empty={share.redact(emptyWords(mode, src, answer.loading, answer.error, allLists))} field={field} onKey={onKey} />}
+        {answer.error && mode === "new" && <Notice tone="error">{share.redact(answer.error)}</Notice>}
         <Details
           branch={branch}
           onBranch={typedBranch}
-          note={note.note}
+          note={share.redact(note.note)}
           error={note.error}
           name={name}
           onName={setName}
@@ -275,7 +276,7 @@ export default function NewWorktreeDialog({ machine, session, agents, issue, tit
             setError("");
           }}
         />
-        {error && <Notice tone="error">{error}</Notice>}
+        {error && <Notice tone="error">{share.redact(error)}</Notice>}
       </div>
       <div className="modal-actions nw-foot">
         <span className="nw-keys">{mode === "new" ? t("↵ create · esc close") : t("↑↓ choose · ↵ create · esc close")}</span>

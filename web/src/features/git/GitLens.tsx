@@ -141,7 +141,7 @@ export function GitLens({ machineId, dir, active, viewOnly, onChanges }: { machi
       {body}
       {picked && <CommitDetails key={picked.hash} machineId={machineId} dir={dir} commit={picked} now={now} onClose={() => setSelected(null)} />}
       {menu && <MenuAt key={menu.key} at={menu.at} items={menu.items} label={t("Git")} onClose={() => setMenu(null)} />}
-      {sync.held && <PushHeldDialog held={{ outcome: sync.held }} name={sync.name} onClose={sync.dropHeld} onPush={() => void sync.run("push", true)} />}
+      {sync.held && <PushHeldDialog held={{ outcome: sync.held }} name={sync.name} onClose={sync.dropHeld} onPush={() => void sync.run("push", sync.held ?? undefined)} />}
       {dialog && <OpDialog machineId={machineId} dir={dir} action={dialog} ctx={ctx} changes={state?.changes} onDone={(result, values) => finished(dialog, values, result)} onClose={() => setDialog(null)} />}
     </div>
   );

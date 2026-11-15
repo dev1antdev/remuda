@@ -55,18 +55,18 @@ export default function Sidebar() {
   const onFoldSubs = (key: string) => setSubFolded((f) => ({ ...f, [key]: !f[key] }));
   const onPin = viewOnly ? undefined : (key: string) => setPins((list) => togglePin(list, key));
   const onIcon = (m: Machine, f: Folder) => actions.openDialog({ kind: "folder-icon", machineId: m.id, folder: f.path, name: f.name, icon: f.icon });
+  const share = useSharing();
   // every folder and section of every machine shut, or all open again
   const foldAll = (shut: boolean) =>
     setWsFolded((f) => {
       const next = { ...f };
       for (const m of machines)
-        for (const e of entries(m, prefs)) {
+        for (const e of entries(m, prefs, (s) => share.sessionHidden(m.id, s))) {
           const key = foldKey(m.id, e);
           if (key) next[key] = shut;
         }
       return next;
     });
-  const share = useSharing();
   const onRemoveMachine = (m: Machine) => actions.ask(t("Remove machine “{machine}”? Nothing on the PC is touched.", { machine: share.machineLabel(m) }), t("Remove"), () => void act(removeMachine(m.id)));
   // the state dot's tooltip: the reason a machine cannot be reached, its own names masked while sharing the screen
   const stateTitle = (m: Machine) => (m.state === "error" ? share.redact(m.error || t("unreachable")) : m.state === "connecting" ? t("connecting…") : t("connected"));

@@ -51,6 +51,15 @@ type owedTag struct {
 	at  time.Time
 }
 
+// paneMark is the last word heard of a pane — the status it moved to, or its finish looked at — numbered in the order
+// heard, so an alert still on its way to the devices learns whether its pane moved on meanwhile.
+type paneMark struct {
+	seq    uint64
+	to     string // the status it last moved to; "" while only a look was heard
+	looked bool   // its finish was looked at since it moved there
+	at     time.Time
+}
+
 // withdrawals keeps the alerts standing and the ones taken back, under a lock of its own: a timer delivering an alert
 // and a status change withdrawing one meet here, never under the service's lock.
 type withdrawals struct {
@@ -58,33 +67,90 @@ type withdrawals struct {
 	standing []standingAlert
 	recent   []owedTag            // newest last, for the roster
 	owed     map[string][]owedTag // by endpoint: what its next pushes, or its next connection, close
+	marks    map[events.PaneRef]paneMark
+	seq      uint64
 }
 
-func newWithdrawals() *withdrawals { return &withdrawals{owed: map[string][]owedTag{}} }
+func newWithdrawals() *withdrawals {
+	return &withdrawals{owed: map[string][]owedTag{}, marks: map[events.PaneRef]paneMark{}}
+}
 
-// stand notes an alert handed to devices; one raised again under a tag taken back before stands again, so no page
-// and no later push closes it.
-func (w *withdrawals) stand(p Payload, devices []string, now time.Time) {
-	if len(devices) == 0 || p.Tag == "" || p.Machine == "" || p.Pane == "" || standsWhile[p.Kind] == "" {
-		return
+// now is the number of the last word heard of any pane: an alert notes it as it is decided, and a pane whose mark is
+// newer than that moved on while the alert went out.
+func (w *withdrawals) now() uint64 {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.seq
+}
+
+// moved notes the status a pane moved to.
+func (w *withdrawals) moved(pane events.PaneRef, to string, now time.Time) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.seq++
+	w.marks[pane] = paneMark{seq: w.seq, to: to, at: now}
+}
+
+// looked notes a pane's finish looked at.
+func (w *withdrawals) looked(pane events.PaneRef, now time.Time) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.seq++
+	mark := w.marks[pane]
+	mark.seq, mark.looked, mark.at = w.seq, true, now
+	w.marks[pane] = mark
+}
+
+// ends says whether what was heard of a pane ends an alert of the kind.
+func (m paneMark) ends(kind string) bool {
+	switch {
+	case m.to == events.Gone, kind == "done" && m.looked:
+		return true
+	case m.to == "":
+		return false
+	}
+	return standsWhile[kind] != m.to
+}
+
+// stand notes an alert handed to devices; any alert raised under a tag taken back before — of any kind: a task's
+// finish shows under the tag its question was taken back by — leaves the withdrawn lists, so no page and no later push
+// closes it, and one of a kind a status takes back stands again. An alert decided at since whose pane moved on while
+// it went out device by device is taken back at once, and answered.
+func (w *withdrawals) stand(p Payload, devices []string, since uint64, now time.Time) []standingAlert {
+	if len(devices) == 0 || p.Tag == "" {
+		return nil
 	}
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.pruneLocked(now)
 	w.recent = without(w.recent, p.Tag)
-	for endpoint, owed := range w.owed {
-		w.owed[endpoint] = without(owed, p.Tag)
+	for _, endpoint := range devices { // a device the new alert did not reach still shows the old one, and is owed it
+		if owed, ok := w.owed[endpoint]; ok {
+			w.owed[endpoint] = without(owed, p.Tag)
+		}
 	}
+	if p.Machine == "" || p.Pane == "" || standsWhile[p.Kind] == "" {
+		return nil
+	}
+	pane := events.PaneRef{Machine: p.Machine, Pane: p.Pane}
+	merged := false
 	for i, alert := range w.standing {
 		if alert.tag == p.Tag { // a reminder of the same episode: the devices it reached join the first's
 			w.standing[i].devices = union(alert.devices, devices)
-			return
+			merged = true
+			break
 		}
 	}
-	w.standing = append(w.standing, standingAlert{tag: p.Tag, kind: p.Kind, pane: events.PaneRef{Machine: p.Machine, Pane: p.Pane}, at: now, devices: devices})
-	if len(w.standing) > maxStanding {
-		w.standing = w.standing[len(w.standing)-maxStanding:]
+	if !merged {
+		w.standing = append(w.standing, standingAlert{tag: p.Tag, kind: p.Kind, pane: pane, at: now, devices: devices})
+		if len(w.standing) > maxStanding {
+			w.standing = w.standing[len(w.standing)-maxStanding:]
+		}
 	}
+	if mark, ok := w.marks[pane]; ok && mark.seq > since && mark.ends(p.Kind) {
+		return w.takeLocked(func(alert standingAlert) bool { return alert.tag == p.Tag }, now)
+	}
+	return nil
 }
 
 // take removes the pane's standing alerts that match and notes them taken back, each device owed its tags; the
@@ -92,10 +158,14 @@ func (w *withdrawals) stand(p Payload, devices []string, now time.Time) {
 func (w *withdrawals) take(pane events.PaneRef, match func(kind string) bool, now time.Time) []standingAlert {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	return w.takeLocked(func(alert standingAlert) bool { return alert.pane == pane && match(alert.kind) }, now)
+}
+
+func (w *withdrawals) takeLocked(match func(standingAlert) bool, now time.Time) []standingAlert {
 	var taken []standingAlert
 	kept := w.standing[:0]
 	for _, alert := range w.standing {
-		if alert.pane == pane && match(alert.kind) {
+		if match(alert) {
 			taken = append(taken, alert)
 		} else {
 			kept = append(kept, alert)
@@ -165,6 +235,11 @@ func (w *withdrawals) pruneLocked(now time.Time) {
 	}
 	w.standing = standing
 	w.recent = freshOnly(w.recent, fresh)
+	for pane, mark := range w.marks {
+		if !fresh(mark.at) {
+			delete(w.marks, pane)
+		}
+	}
 	for endpoint, owed := range w.owed {
 		if owed = freshOnly(owed, fresh); len(owed) == 0 {
 			delete(w.owed, endpoint)
@@ -221,7 +296,12 @@ func union(a, b []string) []string {
 // withdraw takes back the pane's standing alerts that match: a socket device that takes withdrawals hears it at once,
 // every other device with its next pushes, and the pages through the roster.
 func (s *Service) withdraw(pane events.PaneRef, match func(kind string) bool) {
-	taken := s.withdrawals.take(pane, match, time.Now())
+	s.announce(s.withdrawals.take(pane, match, time.Now()))
+}
+
+// announce tells the devices of alerts just taken back: a socket device that takes withdrawals at once, the pages by
+// the roster.
+func (s *Service) announce(taken []standingAlert) {
 	if len(taken) == 0 {
 		return
 	}
@@ -246,12 +326,15 @@ func (s *Service) withdraw(pane events.PaneRef, match func(kind string) bool) {
 // moved takes back what a pane's new status ends: a question once it no longer asks, a finish once it is no longer
 // done, a watchdog note once the state it was about moved on, everything once the pane closed.
 func (s *Service) moved(pane events.PaneRef, to string) {
+	s.withdrawals.moved(pane, to, time.Now())
 	s.withdraw(pane, func(kind string) bool { return to == events.Gone || standsWhile[kind] != to })
 }
 
 // Seen takes back a pane's finish once someone looked at it through remuda: its chat, its terminal, a seen mark.
 func (s *Service) Seen(machine, pane string) {
-	s.withdraw(events.PaneRef{Machine: machine, Pane: pane}, func(kind string) bool { return kind == "done" })
+	ref := events.PaneRef{Machine: machine, Pane: pane}
+	s.withdrawals.looked(ref, time.Now())
+	s.withdraw(ref, func(kind string) bool { return kind == "done" })
 }
 
 // Withdrawn is the tags taken back within a day, newest first, for the roster: every page closes them in its browser.

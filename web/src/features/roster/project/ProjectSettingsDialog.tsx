@@ -68,7 +68,7 @@ export default function ProjectSettingsDialog({ machineId, root, onClose, onSave
             {field("base", p?.base || "origin/main", true)}
           </Row>
           <Row label={t("Worktree location")} hint={t("The folder new worktrees go in")}>
-            {field("location", `~/.herdr/worktrees/${p?.name ?? "repo"}`, true)}
+            {field("location", `~/.herdr/worktrees/${name}`, true)}
           </Row>
           <Row label={t("Issue branch name")} hint={t("{number} and {slug} are filled in")}>
             {field("issue_branch", DEFAULTS.issue_branch, true)}

@@ -87,10 +87,24 @@ func (s *Service) write(machineID, repo string, number int, text string, build f
 	out, err := host.Run(build(file), WriteTimeout)
 	defer s.moved(machineID, repo, number)
 	if err != nil {
+		if _, rest, posted := strings.Cut(string(out), postedMark); posted {
+			return &Partly{Refused{Machine: host.Label(), Output: firstText(rest, err)}}
+		}
 		if trouble := troubleOf(host.Label(), repo, firstText(string(out), err)); trouble.Kind != "failed" {
 			return trouble
 		}
 		return &Refused{Machine: host.Label(), Output: firstText(string(out), err)}
 	}
 	return nil
+}
+
+// Partly is a close or a reopen gh refused after the comment that goes with it was posted: the comment is on GitHub.
+type Partly struct{ Refused }
+
+func (p *Partly) Error() string {
+	text := strings.TrimSpace(p.Output)
+	if text == "" {
+		text = "it answered nothing"
+	}
+	return "the comment is posted, but gh on " + p.Machine + " did not do the rest: " + text
 }

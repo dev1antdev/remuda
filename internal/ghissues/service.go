@@ -159,7 +159,7 @@ func (s *Service) List(machineID, repo, query string, fresh bool) (List, error) 
 	}
 	items, err := parseList(sections[2], query)
 	if err != nil {
-		return List{}, troubleOf(host.Label(), repo, err.Error())
+		return List{}, troubleOf(host.Label(), repo, cutWords(err, runErr))
 	}
 	list := List{Items: items, More: len(items) >= Limit, Me: me, At: now, Source: FromGitHub}
 	s.mu.Lock()
@@ -212,12 +212,15 @@ func (s *Service) Issue(machineID, repo string, number int, fresh bool) (Detail,
 		answer.Source = FromProbe
 		return answer, nil
 	}
-	if issue.status != 200 || len(sections) < 4 {
+	if issue.status == 200 && len(sections) < 4 { // the issue came whole, what was to follow it did not
+		return Detail{}, troubleOf(host.Label(), repo, cutWords(errCut, runErr))
+	}
+	if issue.status != 200 {
 		return Detail{}, troubleOf(host.Label(), repo, firstText(issue.text, runErr))
 	}
 	detail, err := detailOf(issue.body, sections[2], sections[3])
 	if err != nil {
-		return Detail{}, troubleOf(host.Label(), repo, err.Error())
+		return Detail{}, troubleOf(host.Label(), repo, cutWords(err, runErr))
 	}
 	detail.Me, detail.At, detail.Source = me, now, FromGitHub
 	s.mu.Lock()

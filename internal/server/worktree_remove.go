@@ -113,22 +113,29 @@ func (s *Server) handleWorktreeRemoveAsShown(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	id := r.PathValue("id")
-	rm, code, err := s.removal(mc, id)
-	if err != nil {
-		httpErr(w, code, err)
-		return
-	}
-	if rm.Working != "" && len(rm.Shared) == 0 && !req.KeepFolder {
-		httpErr(w, http.StatusConflict, fmt.Errorf("%s: let it finish before the worktree goes", rm.Working))
-		return
-	}
-	if len(rm.Shared) > 0 || req.KeepFolder {
+	closeAlone := func() {
 		if err := client.WorkspaceClose(id); err != nil {
 			rpcErr(w, err)
 			return
 		}
 		s.Watch.Refresh(mc)
 		writeJSON(w, map[string]any{"closed": true, "kept": true})
+	}
+	if req.KeepFolder { // nothing of the worktree goes: no look needed, and one that cannot be looked at (its folder gone) still closes
+		closeAlone()
+		return
+	}
+	rm, code, err := s.removal(mc, id)
+	if err != nil {
+		httpErr(w, code, err)
+		return
+	}
+	if rm.Working != "" && len(rm.Shared) == 0 {
+		httpErr(w, http.StatusConflict, fmt.Errorf("%s: let it finish before the worktree goes", rm.Working))
+		return
+	}
+	if len(rm.Shared) > 0 {
+		closeAlone()
 		return
 	}
 	if req.Stamp != rm.Stamp {

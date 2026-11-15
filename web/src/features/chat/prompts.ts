@@ -29,17 +29,19 @@ export type PromptCard = {
 export const GIST_MAX = 140;
 const SHORT_SENTENCE = 25;
 const SHELL_TOOLS = new Set(["Bash", "exec_command", "shell", "local_shell"]);
-const NOT_A_PROMPT = [COMPACTION_PREFIX, "[Request interrupted"];
+const NOT_A_PROMPT = [COMPACTION_PREFIX, "[Request interrupted", "<task-notification>"];
 
-const textOf = (turn: Turn) =>
+// promptOf is what the person wrote in a user turn: its texts but an interruption's note, a compaction's summary and a
+// background task's note, which Claude Code writes as records of their own that the prompt after them shares a turn with
+const promptOf = (turn: Turn) =>
   turn.parts
     .filter((p) => p.type === "text")
-    .map((p) => p.text ?? "")
-    .join("\n\n")
-    .trim();
+    .map((p) => (p.text ?? "").trim())
+    .filter((text) => text !== "" && !NOT_A_PROMPT.some((prefix) => text.startsWith(prefix)))
+    .join("\n\n");
 
-// promptCards reads the turns as one card per prompt of the person's, oldest first; an interruption's note and a
-// compaction's summary are no prompts, and what follows them stays with the card before
+// promptCards reads the turns as one card per prompt of the person's, oldest first; an interruption's note, a
+// compaction's summary and a background task's note are no prompts, and what follows them alone stays with the card before
 export function promptCards(turns: Turn[]): PromptCard[] {
   const cards: PromptCard[] = [];
   let card: PromptCard | null = null;
@@ -53,8 +55,8 @@ export function promptCards(turns: Turn[]): PromptCard[] {
     const sent = turn.parts.filter((p) => p.type === "queued").map((p) => ({ at: p.at, text: p.text ?? "", from: p.from }));
     if (turn.role === "user") {
       asked = turn.ts ? Date.parse(turn.ts) || 0 : 0;
-      const text = textOf(turn);
-      const prompt = text !== "" && !NOT_A_PROMPT.some((prefix) => text.startsWith(prefix));
+      const text = promptOf(turn);
+      const prompt = text !== "";
       if (prompt || (!card && sent.length > 0)) {
         settle();
         card = { n: cards.length + 1, id: turn.ids?.[0] ?? "", at: turn.ts, text: prompt ? text : sent.shift()!.text, also: [], took: 0, output: 0, edits: [], commands: 0, reply: "" };

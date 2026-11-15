@@ -63,6 +63,11 @@ describe("the rows the File tab draws", () => {
     expect(shape(codeRows(2, end, new Set()))).toEqual(["0", "1", "removed"]);
   });
 
+  it("draw nothing for what lies past the text shown, a file cut at the viewer's cap", () => {
+    const deep = changesOf(`${HEAD}@@ -2 +2 @@\n-was two\n+two\n@@ -40,2 +40,0 @@\n-forty\n-forty-one\n@@ -60,0 +59 @@\n+late\n`);
+    expect(shape(codeRows(3, deep, new Set()))).toEqual(["0", "1c", "2"]);
+  });
+
   it("open only what replaced something", () => {
     expect(opens(changes[0])).toBe(true);
     expect(opens(changes[2])).toBe(false);

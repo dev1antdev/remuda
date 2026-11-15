@@ -10,7 +10,7 @@ import { ago, agoWords } from "@/lib/time";
 import { errMsg } from "@/lib/text";
 import { Icon } from "@/ui";
 import { t, tn } from "@/lib/i18n";
-import { assignIssue, closeIssue, commentIssue, fetchIssue, reopenIssue, troubleOf, type Detail } from "./api";
+import { assignIssue, closeIssue, commentIssue, fetchIssue, reopenIssue, troubleOf, type Detail, type Written } from "./api";
 import Composer from "./Composer";
 import IssueSide from "./IssueSide";
 import { StatePill, TroubleNote, Who } from "./pieces";
@@ -50,7 +50,12 @@ export default function IssueViewer({ machineId, folder, at, back, onBack, onGo,
   const write = async (doing: string, run: () => Promise<unknown>, after?: () => void): Promise<boolean> => {
     setBusy(doing);
     try {
-      await run();
+      const done = (await run()) as Written | undefined;
+      if (done?.commented) {
+        actions.notify(done.error ?? "", { error: true }); // the comment went, the close or reopen did not: no draft to send twice
+        onChanged();
+        return true;
+      }
       after?.();
       onChanged();
       return true;

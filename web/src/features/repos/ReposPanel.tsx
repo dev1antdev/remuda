@@ -70,7 +70,7 @@ export default function ReposPanel({ onClose }: { onClose: () => void }) {
         {listed && listed.length === 0 && <p className="repos-empty">{t("No machine to read: add one from the sidebar's +.")}</p>}
       </div>
       {scanning && <ScanDialog machineId={scanning.id} machineName={scanning.label} scan={scanning.scan} onClose={() => setScanning(null)} onSaved={query.reload} />}
-      {sync.held && <PushHeldDialog held={sync.held} name={nameOf(sync.held.machineId, sync.held.repo)} onClose={sync.dropHeld} onPush={() => sync.held && void sync.act(sync.held.machineId, sync.held.repo, "push", true)} />}
+      {sync.held && <PushHeldDialog held={sync.held} name={nameOf(sync.held.machineId, sync.held.repo)} onClose={sync.dropHeld} onPush={() => sync.held && void sync.act(sync.held.machineId, sync.held.repo, "push", sync.held.outcome)} />}
     </Dialog>
   );
 }

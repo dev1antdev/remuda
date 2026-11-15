@@ -12,6 +12,33 @@ import (
 	"github.com/dev1antdev/remuda/internal/shell"
 )
 
+// A setup runs as the project or the request says; on a Windows PC never, and nothing is asked there either: the page
+// offers no Run or Skip for a machine it cannot run on, so a project that asks every time must not refuse the create.
+func TestTheSetupRunsAsChosen(t *testing.T) {
+	cases := []struct {
+		name, script, chosen, when string
+		opens, windows             bool
+		run                        bool
+		note                       string
+		err                        error
+	}{
+		{"no script", "", "", "ask", false, false, false, "", nil},
+		{"the project runs it", "pnpm i", "", "", false, false, true, "", nil},
+		{"the project skips it", "pnpm i", "", "skip", false, false, false, "", nil},
+		{"asked every time, chosen", "pnpm i", "run", "ask", false, false, true, "", nil},
+		{"asked every time, not chosen", "pnpm i", "", "ask", false, false, false, "", ErrSetupUnchosen},
+		{"a checkout opened", "pnpm i", "run", "", true, false, false, "", nil},
+		{"a Windows PC", "pnpm i", "", "", false, true, false, NoSetupOnWindows, nil},
+		{"a Windows PC whose project asks every time", "pnpm i", "", "ask", false, true, false, "", nil},
+	}
+	for _, c := range cases {
+		run, note, err := SetupChoice(c.script, c.chosen, c.when, c.opens, c.windows)
+		if run != c.run || note != c.note || err != c.err {
+			t.Errorf("%s: run %v, note %q, error %v", c.name, run, note, err)
+		}
+	}
+}
+
 // runSetup writes the setup's file through the machine and runs the line it answers, as the pane's shell would.
 func runSetup(t *testing.T, body string) (string, error) {
 	t.Helper()

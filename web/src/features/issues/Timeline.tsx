@@ -7,7 +7,7 @@ import type { MouseEvent } from "react";
 import type { OpenFile } from "@/features/files/target";
 import { openUrl } from "@/lib/host";
 import { ago } from "@/lib/time";
-import { Icon, Tip } from "@/ui";
+import { Icon, Notice, Tip } from "@/ui";
 import type { IconName } from "@/ui/icons";
 import { Markdown } from "@/ui/Markdown";
 import { t, tc, tn } from "@/lib/i18n";
@@ -197,6 +197,7 @@ export default function Timeline({ issue, repo, onGo, onOpenFile }: { issue: Det
           )}
         </div>
       ))}
+      {issue.cut && <Notice tone="hint">{t("The timeline stopped half way; the rest is on GitHub.")}</Notice>}
     </div>
   );
 }

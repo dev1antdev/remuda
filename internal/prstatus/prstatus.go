@@ -269,7 +269,7 @@ func (t *Tracker) note(ref events.PaneRef, url string, got reading) (events.Pull
 	e.reading = false
 	e.readAt = t.now()
 	e.reason = reason
-	if got.etag != "" {
+	if got.etag != "" && status != nil { // an ETag stands for the read after its probe: a failed read keeps the last pair
 		e.etag = got.etag
 	}
 	if got.full && status != nil {

@@ -74,5 +74,7 @@ func secretScript(dir string, push bool) string {
 		`{ ` + gitDiff + ` --relative "$base" 2>/dev/null || printf '\036failed work\n'; ` +
 		untrackedScript +
 		`printf '\036staged\n'; ` + gitDiff + ` --cached --relative "$base" 2>/dev/null || printf '\036failed work\n'; ` +
+		// a folder inside the repository commits the whole index: what is staged outside it is read too, named from the top
+		`p=$(git rev-parse --show-prefix 2>/dev/null); if [ -n "$p" ]; then ` + gitDiff + ` --cached "$base" -- ':(top)' ":(top,literal,exclude)$p" 2>/dev/null || printf '\036failed work\n'; fi; ` +
 		commits + `printf '\036end\n'; } | ` + capScript
 }

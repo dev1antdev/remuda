@@ -52,7 +52,10 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   on origin becomes a local branch tracking it), an open **Issue** or
   **PR** read with `gh` on the machine (pasting `#123` or a link jumps to
   the right tab; an issue takes the branch of the pull request already
-  working on it), or a **New** branch from the base you pick; ↻ fetches
+  working on it; a pull request from a fork lands on a branch of its own,
+  `pr-12-main`, so a fork's `main` is never taken for yours; a repository
+  with its issues switched off still lists its pull requests), or a
+  **New** branch from the base you pick; ↻ fetches
   from origin. A line under the branch says exactly what *Create* will do
   before you press it, and the agent's first prompt for an issue or a
   pull request is filled in from the project's template, there to edit.
@@ -90,7 +93,9 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   what it asks read off its screen ("Bash command · rm -rf build") or the
   watchdog's note; a click opens it, nothing is answered from there. Under
   the pointer an agent's age gives way to a pin (always there on a phone):
-  pinned agents stand in their own group at the top, on every device. A
+  pinned agents stand in their own group at the top, on every device, and
+  stay pinned through a sleep, a restart or a reboot that brings them back
+  in the same pane. A
   folded folder or machine still says "2 need you · 1 working", so
   folding never hides a question, a folder's icon glows softly while its
   agents work, and the foot says "5 agents · 2 need you", the second part
@@ -376,8 +381,10 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   **Actions** merges (merge, squash with its message, rebase — what the
   repository allows), merges when ready, cancels that, closes or reopens,
   each behind a card saying in red what still stands in the way; a merge
-  names the head commit you saw, so a push since then is refused rather
-  than merged unseen. Every message to an agent ends by telling it that
+  names the head commit you saw when you chose it, so a push since then
+  is refused rather than merged unseen — and one the panel reads while
+  the card is open is said, the button held back until you look again.
+  Every message to an agent ends by telling it that
   what is quoted from GitHub is data, not instructions, and not to push,
   post or resolve threads unless you ask. GitLab merge requests are not
   in the panel. With no `gh`, or `gh` signed out, the panel says so and
@@ -396,7 +403,8 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   (a branch that diverged is said so and left alone) and waits while an
   agent works or asks in that checkout; a push is never forced and never
   carries tags, and the secret check stands before it as before Approve &
-  open PR — Push anyway… asks first. Nothing waits for a login: git runs
+  open PR — Push anyway… asks first. What goes is what the check read: a
+  commit an agent makes meanwhile waits for the next push. Nothing waits for a login: git runs
   with its prompts off and ssh in batch mode, sixty seconds at most, and
   a failure shows git's own words.
 - **Collision radar** — two agents on one repository, in different
@@ -604,7 +612,8 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   it), and in red what would be lost — uncommitted changes, the branch's
   commits that are on no remote, a submodule's commits pushed nowhere.
   *Remove anyway* then runs `git worktree remove --force`; *Close, keep
-  the folder* closes the workspace alone. It waits while an agent works
+  the folder* closes the workspace alone, and is there too when the
+  worktree cannot be looked at (its folder deleted by hand). It waits while an agent works
   there, says *Close workspace* when another workspace uses the same
   checkout, and looks again when you confirm. *Leftover worktrees…* in a
   machine's ⋯ menu finds the ones left from workspaces closed elsewhere
@@ -1269,7 +1278,9 @@ link or reference and makes a task of it. A click opens the issue
 itself: its timeline — comments with their writer's badge and reactions,
 labels added and removed in one line, a rename, a mention, a commit, a
 close — a comment box with Write and Preview, **Comment**, **Close with
-comment ▾** and **Reopen**, and beside it the assignees, labels,
+comment ▾** and **Reopen** (when GitHub posts the comment but refuses the
+close, as it does to anyone who may comment and not close, it says the
+comment is posted and lets the box go), and beside it the assignees, labels,
 milestone, the pull requests that close it and everyone who took part; a
 link to another issue opens there too, with Back.
 Everything goes through `gh` on the machine of one of the repository's
@@ -1412,7 +1423,8 @@ once, then "Add to Home Screen" — it installs as a PWA.
 - remuda signals a process only when you press **Stop** on a port in the
   status bar and confirm: a SIGTERM to the pid that listens there now,
   looked up afresh — never remuda's, herdr's, ssh's or Tailscale's own, nor
-  another user's.
+  an agent's (Claude Code holds a loopback port of its own), nor another
+  user's.
 
 A second copy beside the real one (to try `-tailscale`, say) gets its own
 token, tasks and push subscriptions with `REMUDA_STATE_DIR=/some/dir`, and
@@ -1486,7 +1498,8 @@ itself again every ten seconds while on screen and soon after the agent did
 something. A row's ⋯ or a right-click: Open, Open in the editor, Show
 changes, Copy relative path, Copy full path, and **Send to agent…** — pick
 an agent, say what it should do, and it gets that with the file's path (not
-its text, so it reads the file as it is by then). A folder lists its first
+its text, so it reads the file as it is by then) — an agent on another
+machine is told which machine the file is on. A folder lists its first
 500 entries. Nothing in the tree writes a file. Hidden on a phone.
 
 **Full screen** (View › Full screen, or the palette): the header,
@@ -1804,7 +1817,8 @@ time it spent thinking in blue, and "Quiet" in light red once three
 minutes pass with no call running and nothing written. Point at a
 stretch, or tap it, and the line under it names it with its kind's icon
 — "Bash · go test ./... · 48 s · failed · 20 min ago"; otherwise the
-line says what the latest turn came to, "1 min 7 s, 18 tools, 1 failed".
+line says what the latest turn came to, "1 min 7 s, 18 tools, 1 failed",
+or "Nothing in the last 30 minutes" when it ended before them.
 A Wall tile reads its last 12 turns, so when those began less than half
 an hour ago the time before them says "not read" rather than idle.
 **Plan** — when the agent keeps a task list (Claude Code's own

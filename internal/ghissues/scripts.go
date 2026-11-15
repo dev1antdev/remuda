@@ -95,6 +95,12 @@ func commentCall(repo string, number int) string {
 	return ghIssue("comment", repo, number, `--body-file "$f"`)
 }
 
+// postedMark is what a close's or a reopen's script prints once the comment that goes first is on GitHub, so a refusal
+// after it is not said as nothing done.
+const postedMark = "\x1eposted"
+
+const postedLine = `printf '\036posted\n'`
+
 // commentScript posts the file's text as a comment.
 func commentScript(repo string, number int, file string) string {
 	return withBody(file, commentCall(repo, number))
@@ -106,7 +112,7 @@ func closeScript(repo string, number int, reason, file string) string {
 	if file == "" {
 		return withBody("", closing)
 	}
-	return withBody(file, commentCall(repo, number), closing)
+	return withBody(file, commentCall(repo, number), postedLine, closing)
 }
 
 // reopenScript reopens the issue, the comment posted first when there is one.
@@ -115,7 +121,7 @@ func reopenScript(repo string, number int, file string) string {
 	if file == "" {
 		return withBody("", reopening)
 	}
-	return withBody(file, commentCall(repo, number), reopening)
+	return withBody(file, commentCall(repo, number), postedLine, reopening)
 }
 
 // assignScript adds or removes the signed-in account among the issue's assignees.

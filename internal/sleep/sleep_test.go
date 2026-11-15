@@ -4,6 +4,7 @@ import (
 	"errors"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/dev1antdev/remuda/internal/herdr"
@@ -61,8 +62,13 @@ func TestSleepAsksEachAgentToLeaveAndKeepsTheOnesThatWouldNotAwake(t *testing.T)
 	snap, _ := f.SessionSnapshot()
 	w, _, _, _ := Plan(snap, "w1")
 	store := Open("")
-	var typed []string
+	var (
+		typedMu sync.Mutex // the agents leave side by side, so what they type is heard from several goroutines at once
+		typed   []string
+	)
 	s := &Service{Store: store, Typed: func(machineID, paneID, text string, keys bool) {
+		typedMu.Lock()
+		defer typedMu.Unlock()
 		typed = append(typed, paneID+" "+text)
 	}}
 	store.put("local", "w1", w)

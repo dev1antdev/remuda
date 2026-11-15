@@ -74,14 +74,15 @@ export const changeKey = (change: Change): string => `${change.kind}-${change.ol
 export const opens = (change: Change | undefined): boolean => !!change && change.old.length > 0;
 
 // codeRows lays the file's lines out with their changes; an open change's old lines come above its first new line, or in
-// place of the thin line a closed removal draws
+// place of the thin line a closed removal draws. A change past the lines shown — a file the viewer's cap cut — draws nothing.
 export function codeRows(lineCount: number, changes: Change[], open: ReadonlySet<string>): CodeRow[] {
   const covering = new Map<number, Change>();
   const starting = new Map<number, Change>();
   const removedAt = new Map<number, Change[]>();
   for (const change of changes) {
+    if (change.line > lineCount) continue;
     if (change.kind === "removed") {
-      const at = Math.min(Math.max(change.line, 0), lineCount);
+      const at = Math.max(change.line, 0);
       removedAt.set(at, [...(removedAt.get(at) ?? []), change]);
       continue;
     }
