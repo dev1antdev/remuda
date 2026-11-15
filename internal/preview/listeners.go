@@ -287,7 +287,7 @@ func Match(list []Listener, folders map[string]string) []Listener {
 
 // unprivate reads a Mac's real path of a temporary folder, /private/tmp or /private/var, the way it is usually written
 func unprivate(dir string) string {
-	if rest, ok := strings.CutPrefix(dir, "/private"); ok && (strings.HasPrefix(rest, "/tmp/") || strings.HasPrefix(rest, "/var/")) {
+	if rest, ok := strings.CutPrefix(dir, "/private"); ok && (rest == "/tmp" || rest == "/var" || strings.HasPrefix(rest, "/tmp/") || strings.HasPrefix(rest, "/var/")) {
 		return rest
 	}
 	return dir

@@ -96,6 +96,10 @@ func TestMatchNamesTheDeepestWorkspace(t *testing.T) {
 	if real[0].Workspace != "w1" || real[1].Workspace != "" || real[2].Workspace != "w3" {
 		t.Fatalf("a Mac's real /private/tmp path, on either side: %+v", real)
 	}
+	top := Match([]Listener{{Port: 1, Dir: "/private/tmp"}, {Port: 2, Dir: "/tmp/x"}}, map[string]string{"w1": "/tmp", "w2": "/private/tmp/y"})
+	if top[0].Workspace != "w1" || top[1].Workspace != "w1" {
+		t.Fatalf("a server in /tmp itself, a workspace on /tmp itself: %+v", top)
+	}
 }
 
 // serveHere starts python3's http.server in a folder of its own on a free loopback port, skipping the test where
