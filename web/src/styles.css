@@ -12,16 +12,21 @@
   --bg-hover: color-mix(in srgb, var(--ctp-text) 8%, transparent);
   --bg-overlay: var(--ctp-overlay);
   --bg-active: var(--ctp-active);
+  /* a quiet control's fill and a text field's well: a tint of the ink over whatever surface the control sits on, and
+     the theme's own recess */
+  --bg-quiet: color-mix(in srgb, var(--ctp-text) 7%, transparent);
+  --bg-quiet-hover: color-mix(in srgb, var(--ctp-text) 12%, transparent);
+  --bg-field: var(--ctp-field);
 
   /* ink */
   --fg: var(--ctp-text);
   --fg-dim: var(--ctp-subtext0);
   --fg-faint: var(--ctp-overlay1);
 
-  /* hairlines */
-  --line: var(--ctp-surface0);
-  --line-strong: var(--ctp-surface1);
-  --line-hover: var(--ctp-surface2);
+  /* hairlines: the ink at a few percent, so a line is as quiet on a raised surface as on the base */
+  --line: color-mix(in srgb, var(--ctp-text) 9%, transparent);
+  --line-strong: color-mix(in srgb, var(--ctp-text) 15%, transparent);
+  --line-hover: color-mix(in srgb, var(--ctp-text) 26%, transparent);
 
   /* colour — the accent is the chosen one of the flavour's fourteen, peach unless the pref says; red means blocked, green done,
      amber a note — each with a soft fill and a ring */
@@ -48,20 +53,20 @@
   --thumb-hover: var(--ctp-surface2);
 
   /* shape */
-  --r-xs: 4px;
-  --r-sm: 6px;
-  --r-md: 8px;
-  --r-lg: 10px;
-  --r-xl: 16px;
+  --r-xs: 5px;
+  --r-sm: 7px;
+  --r-md: 10px;
+  --r-lg: 13px;
+  --r-xl: 18px;
 
   /* depth */
   --shadow-ink: var(--ctp-shadow-ink);
   --shadow-ink-soft: var(--ctp-shadow-ink-soft);
   --shadow-ink-deep: var(--ctp-shadow-ink-deep);
   --sheen: var(--ctp-sheen);
-  --shadow-sm: 0 1px 2px var(--shadow-ink);
-  --shadow-md: 0 6px 18px var(--shadow-ink-soft), 0 1px 2px var(--shadow-ink);
-  --shadow-lg: 0 20px 50px var(--shadow-ink-deep), 0 2px 8px var(--shadow-ink);
+  --shadow-sm: 0 1px 2px var(--shadow-ink-soft);
+  --shadow-md: 0 10px 28px -6px var(--shadow-ink-soft), 0 2px 6px -1px var(--shadow-ink);
+  --shadow-lg: 0 28px 70px -14px var(--shadow-ink-deep), 0 10px 24px -10px var(--shadow-ink-soft), 0 1px 3px var(--shadow-ink);
   --inset-top: inset 0 1px 0 var(--sheen);
   --inset-well: inset 0 1px 2px var(--shadow-ink-soft);
 
@@ -570,6 +575,7 @@
 /* what every dark theme derives from its palette: fields and overlays on its surfaces, black shadows */
 :root {
   --ctp-input: var(--ctp-surface0);
+  --ctp-field: color-mix(in srgb, var(--ctp-crust) 55%, var(--ctp-base));
   --ctp-overlay: var(--ctp-mantle);
   --ctp-active: var(--ctp-surface1);
   --ctp-scrim: color-mix(in srgb, var(--ctp-crust) 60%, transparent);
@@ -586,6 +592,7 @@
    its text as the ink of shadows and the scrim */
 :root[data-theme="light"] {
   --ctp-input: #ffffff;
+  --ctp-field: #ffffff;
   --ctp-overlay: #ffffff;
   --ctp-active: var(--ctp-surface0);
   --ctp-scrim: color-mix(in srgb, var(--ctp-text) 40%, transparent);
@@ -1199,9 +1206,12 @@ button {
 .icon-btn.lg {
   width: var(--ctl-lg);
   height: var(--ctl-lg);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--r-lg);
-  background: var(--bg-input);
+  border-radius: var(--r-md);
+  background: var(--bg-quiet);
+}
+
+.icon-btn.lg:hover {
+  background: var(--bg-quiet-hover);
 }
 
 .icon-btn:hover {
@@ -1251,9 +1261,9 @@ a.btn {
   gap: 6px;
   height: var(--ctl);
   padding: 0 12px;
-  border: 1px solid var(--line-strong);
+  border: 1px solid transparent;
   border-radius: var(--r-md);
-  background: var(--bg-input);
+  background: var(--bg-quiet);
   color: var(--fg);
   font: inherit;
   font-weight: 500;
@@ -1264,8 +1274,11 @@ a.btn {
 
 .btn:hover:not(:disabled),
 .sidebar-head-btn:hover {
-  background: var(--bg-hover);
-  border-color: var(--line-hover);
+  background: var(--bg-quiet-hover);
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(0.5px);
 }
 
 .btn:disabled {
@@ -1365,7 +1378,7 @@ input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="
 textarea,
 .field,
 .sel {
-  background: var(--bg-input);
+  background: var(--bg-field);
   color: var(--fg);
   border: 1px solid var(--line-strong);
   border-radius: var(--r-md);
@@ -1481,8 +1494,7 @@ input[type="checkbox"]:hover:not(:checked) {
   gap: 2px;
   padding: 3px;
   border-radius: var(--r-md);
-  background: var(--bg-input);
-  box-shadow: var(--inset-well);
+  background: var(--bg-quiet);
   flex-shrink: 0;
 }
 
@@ -1520,7 +1532,7 @@ input[type="checkbox"]:hover:not(:checked) {
 .review-scope button.on {
   background: var(--bg-active);
   color: var(--fg);
-  box-shadow: var(--inset-top), var(--shadow-sm);
+  box-shadow: var(--shadow-sm);
 }
 
 .mode-switch button {

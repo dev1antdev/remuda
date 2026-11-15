@@ -6868,11 +6868,16 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   colours, so a tile shows the lens's colours; the tab's badge is drawn
   again on every change of the theme (`useBadge`). Four surface
   layers (`--bg` base → `--bg-raised` mantle → `--bg-input` → `--bg-overlay`,
-  `--bg-active` / `--bg-elev` for a raised chip), hairlines from the
-  surfaces (`--line`, `--line-strong`, `--line-hover`), peach as the
+  `--bg-active` / `--bg-elev` for a raised chip; `--bg-quiet` /
+  `--bg-quiet-hover`, a tint of the ink, is a quiet control's fill — a
+  `btn` and the segmented control's well wear it and no border — and
+  `--bg-field` a text field's recess, the theme's `--ctp-field`), hairlines
+  as the ink at a few percent (`--line` 9, `--line-strong` 15, `--line-hover`
+  26: as quiet on a raised surface as on the base), peach as the
   accent with `--on-accent` ink, every colour with a `-soft` fill and a
   `-ring` mixed from it (`color-mix`), shadows and sheen as inks the
-  theme picks, a radius scale (`--r-xs` 4 … `--r-xl` 16 — never a px radius),
+  theme picks, a radius scale (`--r-xs` 5 … `--r-xl` 18: 5 / 7 / 10 / 13 /
+  18 — never a px radius),
   a type scale as tokens (`--fs-10` … `--fs-20`: 11 / 12 / 13 / 13.5
   body / 15 / 18 / 20, each `calc(Npx * var(--text-scale))` — never a
   literal px size; **Settings › Text size** puts `data-text` on the root,
