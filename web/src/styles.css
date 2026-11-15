@@ -4446,14 +4446,77 @@ body.is-resizing iframe {
 
 /* the person's message: a soft bubble at the column's right edge, its buttons under it rather than in room kept inside */
 .turn-user {
-  align-self: flex-end;
+  align-self: stretch;
   align-items: flex-end;
   gap: 2px;
-  max-width: min(680px, 84%);
+}
+
+/* what the harness wrote into the person's slot — a background task reporting back, an interruption, a compaction's
+   summary (features/chat/notes.ts): a quiet line in the middle of the column, its record folded under it, never a
+   message of the person's */
+.turn-note {
+  align-self: center;
+  max-width: 100%;
+  margin: 2px 0;
+  color: var(--fg-faint);
+  font-size: var(--fs-12);
+}
+
+div.turn-note,
+.turn-note > summary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.turn-note > summary {
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+
+.turn-note > summary::-webkit-details-marker {
+  display: none;
+}
+
+.turn-note > summary:hover {
+  color: var(--fg-dim);
+}
+
+.turn-note .icon {
+  flex-shrink: 0;
+}
+
+.turn-note-words {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.turn-note.is-failed .turn-note-words {
+  color: var(--red);
+}
+
+.turn-note[open] {
+  align-self: stretch;
+}
+
+.turn-note-record {
+  max-height: 320px;
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  overflow: auto;
+  border-radius: var(--r-md);
+  background: var(--bg-quiet);
+  color: var(--fg-dim);
+  font-family: var(--mono);
+  font-size: var(--fs-11);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .turn-bubble {
-  max-width: 100%;
+  max-width: min(680px, 84%);
   padding: 9px 14px;
   border-radius: var(--r-xl) var(--r-xl) var(--r-xs) var(--r-xl);
   background: color-mix(in srgb, var(--accent) 12%, var(--bg-input));
@@ -4990,11 +5053,12 @@ body.is-resizing iframe {
 
 /* ---- attachments ---- */
 /* the files attached to the message: chips at the top of the composer's box */
+/* the chips stand on the field's own left edge, so a picture, the words under it and the tools read as one column */
 .attachments {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  padding: 10px 12px 0;
+  padding: 12px 14px 0;
 }
 
 .attachment {
@@ -5009,11 +5073,15 @@ body.is-resizing iframe {
   font-size: var(--fs-12);
 }
 
+/* a framed square whatever the picture holds: a screenshot that is mostly white still reads as a thumbnail */
 .attachment img {
+  flex-shrink: 0;
   width: 34px;
   height: 34px;
   object-fit: cover;
+  border: 1px solid var(--line-strong);
   border-radius: var(--r-sm);
+  background: var(--bg-active);
 }
 
 .attachment-icon {
@@ -11009,7 +11077,7 @@ body:has(.status-bar) .toasts {
   max-width: none;
 }
 
-.tile .turn-user {
+.tile .turn-bubble {
   max-width: 85%;
 }
 

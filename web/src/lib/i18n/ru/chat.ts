@@ -137,4 +137,8 @@ export const chat: Dictionary = {
   "Resume in a new tab": "Продолжить в новой вкладке",
   "Copy as Markdown": "Скопировать как Markdown",
   "— no agent runs there now, so it reads only": "— агент там сейчас не запущен, так что только чтение",
+  "A background task reported back": "Фоновая задача сообщила о себе",
+  "You stopped the agent": "Вы остановили агента",
+  "You stopped the agent at a tool call": "Вы остановили агента на вызове инструмента",
+  "Compacted: the conversation goes on from this summary of what came before": "Сжато: разговор продолжается с этой сводки предыдущего",
 };

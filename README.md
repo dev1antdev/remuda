@@ -265,6 +265,11 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   eighth taller than with a mouse (a button 36 px, the header's 40, the
   key bar's keys 40), the lens switch's segments are a thumb's, and the
   tab on screen is brought into view in its strip.
+- **Not your words** — what Claude Code writes into your side of the
+  conversation without you — a background task reporting back, an
+  interruption, the summary after a compaction — is a quiet line in the
+  middle of the chat, never a bubble of yours; a long message of yours
+  that Claude Code logged as a paste shows as you wrote it.
 - **Empty places** — a screen with nothing to show says so the same way
   everywhere: an icon, one line and, where it helps, a hint or a button
   (a chat whose agent has written nothing yet offers its terminal).

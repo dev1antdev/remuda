@@ -1,5 +1,7 @@
 // One turn of the transcript: its text as Markdown, its thinking folded, every run of its tool calls one card (ToolCard),
-// a message the person sent while the agent worked in its place, marked so, a foot with what the answer spent and what
+// a message the person sent while the agent worked in its place, marked so, what the harness wrote into the person's
+// slot — a background task reporting back, an interruption, a compaction's summary — as a quiet note outside their
+// bubble (notes.ts), a foot with what the answer spent and what
 // went wrong, a forward button, Undo this turn for an answer whose changes the cockpit kept, a link to the turn and a pin
 // that keeps it in the Pins list.
 
@@ -11,9 +13,10 @@ import { ErrorBoundary, Icon, Notice, Tip } from "@/ui";
 import { Markdown } from "@/ui/Markdown";
 import type { Part, Subagent, Turn } from "./api";
 import { callStats, callWords } from "./calls";
+import { noteOf, type Note } from "./notes";
 import { sameSubagents, subagentsOf } from "./subagents";
 import { Folded, ToolCard } from "./ToolCard";
-import { pieces } from "./toolRuns";
+import { pieces, type Piece } from "./toolRuns";
 import { t } from "@/lib/i18n";
 
 // TurnView re-renders only when the turn's content changed, so a selection in the log survives the polls
@@ -33,7 +36,12 @@ export const TurnView = memo(
     onUndo?: (turn: string) => void;
     live?: boolean; // the turn under way: a call without its result is still running
   }) {
-    const cls = `turn ${turn.role === "user" ? "turn-user" : "turn-assistant"}${pinned ? " turn-pinned" : ""}`;
+    const mine = turn.role === "user";
+    const drawn = pieces(turn.parts);
+    // a text of the person's slot that is the harness's own is a note: drawn outside their bubble, never as their words
+    const noted = (piece: Piece): Note | null => (mine && piece.kind === "part" && piece.item.part.type === "text" ? noteOf(piece.item.part.text ?? "") : null);
+    const own = drawn.filter((piece) => !noted(piece));
+    const cls = `turn ${mine ? "turn-user" : "turn-assistant"}${pinned ? " turn-pinned" : ""}${mine && own.length === 0 ? " is-notes" : ""}`;
     const text = turn.parts
       .filter((p) => p.type === "text")
       .map((p) => p.text ?? "")
@@ -41,7 +49,7 @@ export const TurnView = memo(
       .trim();
     const body = (
       <ErrorBoundary resetKey={turn} fallback={(message) => <Notice tone="error">{t("This turn could not be drawn: {message}", { message })}</Notice>}>
-        {pieces(turn.parts).map((piece) =>
+        {own.map((piece) =>
           piece.kind === "card" ? (
             <ToolCard key={piece.items[0]!.index} items={piece.items} machineId={machineId} onOpenFile={onOpenFile} subagents={subagents} onOpenSubagent={onOpenSubagent} diffs={diffs} live={live} />
           ) : (
@@ -57,9 +65,13 @@ export const TurnView = memo(
             <Icon name="pin" size={12} />
           </span>
         )}
-        {turn.role === "user" ? <div className="turn-bubble">{body}</div> : body}
+        {drawn.map((piece) => {
+          const note = noted(piece);
+          return note && piece.kind === "part" ? <NoteLine key={piece.item.index} note={note} text={piece.item.part.text ?? ""} /> : null;
+        })}
+        {mine ? own.length > 0 && <div className="turn-bubble">{body}</div> : body}
         {turn.role === "assistant" && <Spent turn={turn} />}
-        {(!!(onForward && text && turn.role === "assistant") || !!((onLink || onPin) && turn.ids?.length) || !!(undo && onUndo)) && (
+        {(!mine || own.length > 0) && (!!(onForward && text && turn.role === "assistant") || !!((onLink || onPin) && turn.ids?.length) || !!(undo && onUndo)) && (
           <div className="turn-actions">
             {onForward && text && turn.role === "assistant" && (
               <button type="button" className="linkish turn-forward" title={t("Forward this to another agent")} onClick={() => onForward(text)}>
@@ -154,6 +166,24 @@ function PartView({ part, onOpenFile, diffs }: { part: Part; onOpenFile: OpenFil
     );
   }
   return null;
+}
+
+// NoteLine is what the harness wrote into the person's slot, in a line: what a background task came to, that the agent
+// was stopped, that the conversation was compacted — with the record itself folded under it where it says more
+function NoteLine({ note, text }: { note: Note; text: string }) {
+  const words = (
+    <>
+      <Icon name={note.icon} size={12} />
+      <span className="turn-note-words">{note.words}</span>
+    </>
+  );
+  const cls = `turn-note is-${note.kind}${note.failed ? " is-failed" : ""}`;
+  if (note.kind === "interrupted") return <div className={cls}>{words}</div>;
+  return (
+    <Folded className={cls} summary={words}>
+      <pre className="turn-note-record">{text.trim()}</pre>
+    </Folded>
+  );
 }
 
 // SentPart is a message sent to the agent while it worked, the person's or another agent's, where it reached the agent

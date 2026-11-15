@@ -622,8 +622,16 @@ var (
 	commandTagRe  = regexp.MustCompile(`(?s)<command-message>.*?</command-message>\s*`)
 )
 
-// userText reads a user record as typed: a slash command, which Claude Code logs wrapped in tags, becomes "/name args".
+// pastedTagRe is the wrapper Claude Code puts around what reached its prompt box as a paste. A message sent from a
+// composer arrives so when it is long or has several lines, the person's own words inside the tags.
+var pastedTagRe = regexp.MustCompile(`</?pasted_content(?: id="[^"]*")?>\n?`)
+
+// userText reads a user record as typed: a slash command, which Claude Code logs wrapped in tags, becomes "/name args",
+// and what was pasted into the prompt box stands without its wrapper.
 func userText(t string) string {
+	if strings.Contains(t, "<pasted_content") {
+		t = strings.TrimSpace(pastedTagRe.ReplaceAllString(t, ""))
+	}
 	if !strings.Contains(t, "<command-message>") {
 		return t
 	}
