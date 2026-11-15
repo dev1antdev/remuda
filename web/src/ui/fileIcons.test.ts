@@ -5,6 +5,12 @@ import { fileIconName } from "./fileIcons";
 const svgs = import.meta.glob("../../public/file-icons/*.svg", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
 const shipped = new Map(Object.entries(svgs).map(([path, text]) => [path.split("/").pop()!.replace(/\.svg$/, ""), text]));
 
+// runsSomething says an SVG holds what could run or reach past itself: a script or a foreignObject under any namespace
+// prefix, an event handler, a javascript: link, an href or a url() to anything but its own #id, an @import, a
+// stylesheet instruction or a DOCTYPE with its entities
+const RUNS = [/<([\w.-]+:)?(script|foreignObject)\b/i, /\son[a-z]+\s*=/i, /javascript:/i, /href\s*=\s*(?!["']\s*#)/i, /url\(\s*(?!["']?\s*#)/i, /@import/i, /<\?xml-stylesheet/i, /<!(DOCTYPE|ENTITY)/i];
+const runsSomething = (text: string): boolean => RUNS.some((rule) => rule.test(text));
+
 describe("a file's icon", () => {
   it("is picked as VS Code picks it: a path's end beats a name, a name an extension, the longest extension wins", () => {
     expect(fileIconName("app.ts")).toBe("typescript");
@@ -83,8 +89,28 @@ describe("the icons shipped", () => {
   });
 
   it("run nothing: no script, no handler, no javascript: link, no outside reference", () => {
-    const bad = [...shipped].filter(([, text]) => /<script|\son[a-z]+\s*=|javascript:|<foreignObject|href\s*=\s*["'](?!#)/i.test(text)).map(([icon]) => icon);
+    const bad = [...shipped].filter(([, text]) => runsSomething(text)).map(([icon]) => icon);
     expect(bad).toEqual([]);
+  });
+
+  it("are read by a check that catches what would run or reach out", () => {
+    const svg = (inner: string) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">${inner}</svg>`;
+    for (const bad of [
+      svg(`<script>alert(1)</script>`),
+      svg(`<svg:script xmlns:svg="http://www.w3.org/2000/svg">alert(1)</svg:script>`),
+      svg(`<path d="M0 0" onload="alert(1)"/>`),
+      svg(`<a href="javascript:alert(1)"><path d="M0 0"/></a>`),
+      svg(`<use xlink:href="https://example.invalid/i.svg#a"/>`),
+      svg(`<image href='data:image/svg+xml;base64,AAAA'/>`),
+      svg(`<path d="M0 0" fill="url(https://example.invalid/p.svg#g)"/>`),
+      svg(`<path d="M0 0" style="fill: url( 'https://example.invalid/p.svg#g' )"/>`),
+      svg(`<style>@import "https://example.invalid/x.css";</style>`),
+      svg(`<foreignObject><div/></foreignObject>`),
+      `<?xml-stylesheet href="https://example.invalid/x.css"?>${svg("")}`,
+      `<!DOCTYPE svg [<!ENTITY x SYSTEM "file:///etc/passwd">]>${svg("&x;")}`,
+    ])
+      expect(runsSomething(bad), bad).toBe(true);
+    for (const fine of [svg(`<path fill="url(#g)" d="M0 0"/><use href="#a"/>`), svg(`<path d="M1 1" fill="#4caf50" class="ion"/>`)]) expect(runsSomething(fine), fine).toBe(false);
   });
 
   it("weigh under 600 KB in all", () => {
