@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Pane, Session } from "./api";
-import { priorityOf, prioritySections, ticketPrefix } from "./sections";
+import { prefixSections, priorityOf, prioritySections, ticketPrefix } from "./sections";
 import type { WorkspaceItem } from "./workspaces";
 
 const pane = (radar?: Pane["radar"], agent = "claude"): Pane => ({ id: "p", title: "", agent, cwd: "/x", focused: false, status: "idle", cols: 80, rows: 24, radar }) as Pane;
@@ -34,5 +34,16 @@ describe("priorityOf", () => {
   it("leaves an empty section out and orders a section by activity", () => {
     const sections = prioritySections([item("quiet", [pane({ state: "working" })], 1), item("lively", [pane({ state: "working" })], 9)]);
     expect(sections.map((s) => [s.key, s.items.map((i) => i.session.name)])).toEqual([["priority:working", ["lively", "quiet"]]]);
+  });
+});
+
+describe("prefixSections", () => {
+  it("gathers a workspace the screen-sharing mode hides under no prefix, its own prefix being a piece of its name", () => {
+    const sections = prefixSections([item("ACME-12 login", [pane()]), item("PR-7 docs", [pane()])], (s) => s.name.startsWith("ACME"));
+    expect(sections.map((s) => [s.title, s.items.map((i) => i.session.name)])).toEqual([
+      ["PR-", ["PR-7 docs"]],
+      ["No prefix", ["ACME-12 login"]],
+    ]);
+    expect(prefixSections([item("ACME-12 login", [pane()])]).map((s) => s.title)).toEqual(["ACME-"]);
   });
 });

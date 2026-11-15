@@ -93,7 +93,9 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   what it asks read off its screen ("Bash command · rm -rf build") or the
   watchdog's note; a click opens it, nothing is answered from there. Under
   the pointer an agent's age gives way to a pin (always there on a phone):
-  pinned agents stand in their own group at the top, on every device. A
+  pinned agents stand in their own group at the top, on every device, and
+  stay pinned through a sleep, a restart or a reboot that brings them back
+  in the same pane. A
   folded folder or machine still says "2 need you · 1 working", so
   folding never hides a question, a folder's icon glows softly while its
   agents work, and the foot says "5 agents · 2 need you", the second part
@@ -399,7 +401,8 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   (a branch that diverged is said so and left alone) and waits while an
   agent works or asks in that checkout; a push is never forced and never
   carries tags, and the secret check stands before it as before Approve &
-  open PR — Push anyway… asks first. Nothing waits for a login: git runs
+  open PR — Push anyway… asks first. What goes is what the check read: a
+  commit an agent makes meanwhile waits for the next push. Nothing waits for a login: git runs
   with its prompts off and ssh in batch mode, sixty seconds at most, and
   a failure shows git's own words.
 - **Collision radar** — two agents on one repository, in different
@@ -1416,7 +1419,8 @@ once, then "Add to Home Screen" — it installs as a PWA.
 - remuda signals a process only when you press **Stop** on a port in the
   status bar and confirm: a SIGTERM to the pid that listens there now,
   looked up afresh — never remuda's, herdr's, ssh's or Tailscale's own, nor
-  another user's.
+  an agent's (Claude Code holds a loopback port of its own), nor another
+  user's.
 
 A second copy beside the real one (to try `-tailscale`, say) gets its own
 token, tasks and push subscriptions with `REMUDA_STATE_DIR=/some/dir`, and
@@ -1490,7 +1494,8 @@ itself again every ten seconds while on screen and soon after the agent did
 something. A row's ⋯ or a right-click: Open, Open in the editor, Show
 changes, Copy relative path, Copy full path, and **Send to agent…** — pick
 an agent, say what it should do, and it gets that with the file's path (not
-its text, so it reads the file as it is by then). A folder lists its first
+its text, so it reads the file as it is by then) — an agent on another
+machine is told which machine the file is on. A folder lists its first
 500 entries. Nothing in the tree writes a file. Hidden on a phone.
 
 **Full screen** (View › Full screen, or the palette): the header,

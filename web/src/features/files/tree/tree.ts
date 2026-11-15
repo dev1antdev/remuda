@@ -79,8 +79,9 @@ export function rowActions(entry: TreeEntry, { viewOnly, editor }: { viewOnly: b
 }
 
 // fileMessage is what goes to the agent: the instruction, then the path — never the file's text, so it reads the file as
-// it is by then
-export const fileMessage = (instruction: string, path: string, dir: boolean): string => `${instruction.trim()}\n\n${dir ? "Folder" : "File"}: ${path}`;
+// it is by then — and, for an agent on another machine than the file's (elsewhere: that machine's name), where it lies
+export const fileMessage = (instruction: string, path: string, dir: boolean, elsewhere = ""): string =>
+  `${instruction.trim()}\n\n${dir ? "Folder" : "File"}: ${path}${elsewhere ? `\n(on ${elsewhere}, another machine than yours)` : ""}`;
 
 // moreWords is the line under a folder cut at the cap
 export const moreWords = (): string => t("Showing the first {n}", { n: PER_FOLDER });

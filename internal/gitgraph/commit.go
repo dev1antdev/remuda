@@ -44,6 +44,9 @@ type Detail struct {
 // ErrNoCommit is a hash the repository does not hold.
 var ErrNoCommit = errors.New("the repository holds no such commit")
 
+// ErrOutside is a file of the commit outside the folder a read is kept to.
+var ErrOutside = errors.New("the file is outside the workspace's folder")
+
 // commitPrelude enters the folder and stops with a word of its own when the commit is not there; else $parent is its
 // first parent and $range what the files are counted over.
 func commitPrelude(dir, hash string) string {
@@ -143,8 +146,9 @@ func joinFiles(names, numstat string) []File {
 }
 
 // ReadPatch is one file's patch in a commit against its first parent, git's own diff with rename detection; from is the
-// path it had before a rename, so git sees both sides of it.
-func ReadPatch(host shell.Host, dir, hash, path, from string) (string, error) {
+// path it had before a rename, so git sees both sides of it. The paths are the repository's, as ReadCommit names them,
+// whatever folder of it dir is; inFolder keeps the read to the files under dir (ErrOutside for another).
+func ReadPatch(host shell.Host, dir, hash, path, from string, inFolder bool) (string, error) {
 	if !HashOK(hash) || !PathOK(path) || (from != "" && !PathOK(from)) {
 		return "", ErrInput
 	}
@@ -152,15 +156,24 @@ func ReadPatch(host shell.Host, dir, hash, path, from string) (string, error) {
 	if from != "" && from != path {
 		paths = script.Quote(from) + " " + paths
 	}
-	out, err := shell.Text(host, commitPrelude(dir, hash)+`printf 'patch\n'; `+
+	keep := ""
+	if inFolder {
+		keep = `for p in ` + paths + `; do case "$p" in "$prefix"*) ;; *) printf 'outside\n'; exit 0 ;; esac; done; `
+	}
+	out, err := shell.Text(host, commitPrelude(dir, hash)+
+		`prefix=$(g rev-parse --show-prefix 2>/dev/null); top=$(g rev-parse --show-toplevel 2>/dev/null) && cd "$top" || { printf 'gone\n'; exit 0; }; `+
+		keep+`printf 'patch\n'; `+
 		`if [ -n "$parent" ]; then g diff --no-ext-diff --no-textconv -M "$parent" "$sha" -- `+paths+`; `+
 		`else g show --format= --no-ext-diff --no-textconv -M "$sha" -- `+paths+`; fi 2>/dev/null | head -c `+strconv.Itoa(MaxPatch), readFor)
 	if err != nil {
 		return "", err
 	}
 	word, patch, _ := strings.Cut(out, "\n")
-	if word != "patch" {
-		return "", ErrNoCommit
+	switch word {
+	case "patch":
+		return patch, nil
+	case "outside":
+		return "", ErrOutside
 	}
-	return patch, nil
+	return "", ErrNoCommit
 }

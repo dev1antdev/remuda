@@ -95,7 +95,8 @@ func (s *Server) handleGitDiff(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	patch, err := gitgraph.ReadPatch(mc, dir, q.Get("sha"), q.Get("path"), q.Get("from"))
+	_, viewer := s.viewerFolders(r.Context(), mc) // a viewer reads the files under the workspace's folder alone
+	patch, err := gitgraph.ReadPatch(mc, dir, q.Get("sha"), q.Get("path"), q.Get("from"), viewer)
 	if err != nil {
 		gitReadErr(w, err)
 		return
@@ -109,6 +110,8 @@ func gitReadErr(w http.ResponseWriter, err error) {
 		httpErr(w, 400, err)
 	case errors.Is(err, gitgraph.ErrNoCommit):
 		httpErr(w, 404, err)
+	case errors.Is(err, gitgraph.ErrOutside):
+		httpErr(w, http.StatusForbidden, err)
 	default:
 		httpErr(w, 502, err)
 	}

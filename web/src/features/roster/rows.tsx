@@ -57,7 +57,7 @@ function rowKey(e: KeyboardEvent<HTMLDivElement>, pick: () => void) {
 export function Rows({ machine, ...rest }: RowProps) {
   return (
     <div className="ws-tree">
-      {entries(machine, rest.prefs).map((entry) =>
+      {entries(machine, rest.prefs, (s) => rest.share.sessionHidden(machine.id, s)).map((entry) =>
         entry.kind === "folder" ? (
           <FolderView key={entry.folder.key} machine={machine} folder={entry.folder} {...rest} />
         ) : entry.kind === "section" ? (
@@ -210,8 +210,6 @@ function WorkspaceView({ machine: m, item, group, primary, compact, current, pre
       ].filter(Boolean).join("\n");
   const tip = s.asleep ? `${asleepTip(s.asleep.agents)}\n${ownTip}` : ownTip;
   const card = useCardHover({ machine: m, session: s, leadPaneId: pane?.id, hidden, editable: !!editable, name: s.name, tip });
-  const badges = !!(card.details.note || card.details.ports.length || card.details.prs.length);
-  const sub = branch || primary || sync || words || badges;
   return (
     <div className={`ws-item is-${agent ? d : "shell"}${selected ? " on" : ""}${alert ? " is-alert" : ""}${limited(lead) ? " is-limit" : ""}${group ? " in-repo" : ""}${s.asleep ? " is-asleep" : ""}`}>
       <div className="ws-main" role="button" tabIndex={0} onClick={open} onKeyDown={(e) => rowKey(e, open)} title={card.hoverable ? undefined : tip} {...card.trigger}>
@@ -233,29 +231,27 @@ function WorkspaceView({ machine: m, item, group, primary, compact, current, pre
           <span className="ws-age">{shortAge(since(lead), now)}</span>
           {editable && <RowMenu className="ws-menu-btn" what={t("Workspace actions")} items={() => workspaceMenuItems(m, s, { name: hidden ? share.folderName(m.id, folderOf(s), s.name) : "", masked: hidden })} />}
         </span>
-        {sub && (
-          <span className="ws-sub">
-            {branch && !branchNamesIssue(branch, s.jira?.[0]) && (
-              <span className="ws-branch">
-                <Icon name="git-branch" size={12} />
-                <span>{branch}</span>
-              </span>
-            )}
-            {primary && !hidden && (
-              <span className="primary-tag" title={t("The repository's main checkout; its worktrees are listed beside it")}>
-                {t("primary")}
-              </span>
-            )}
-            {sync && (
-              <span className="ws-sync" title={syncTip(s.sync)}>
-                {sync}
-              </span>
-            )}
-            {!hidden && s.jira?.[0] && <IssueChip issue={s.jira[0]} />}
-            {words && <span className="ws-words">{words}</span>}
-            <CardBadges machine={m} session={s} name={s.name} details={card.details} editable={!!editable} onDetails={card.ask} />
-          </span>
-        )}
+        <span className="ws-sub">
+          {branch && !branchNamesIssue(branch, s.jira?.[0]) && (
+            <span className="ws-branch">
+              <Icon name="git-branch" size={12} />
+              <span>{branch}</span>
+            </span>
+          )}
+          {primary && !hidden && (
+            <span className="primary-tag" title={t("The repository's main checkout; its worktrees are listed beside it")}>
+              {t("primary")}
+            </span>
+          )}
+          {sync && (
+            <span className="ws-sync" title={syncTip(s.sync)}>
+              {sync}
+            </span>
+          )}
+          {!hidden && s.jira?.[0] && <IssueChip issue={s.jira[0]} />}
+          {words && <span className="ws-words">{words}</span>}
+          <CardBadges machine={m} session={s} name={s.name} details={card.details} editable={!!editable} onDetails={card.ask} />
+        </span>
         {card.node}
       </div>
       <AgentLines

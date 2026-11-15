@@ -188,7 +188,7 @@ func summaryScript(dir, baselineHead string) string {
 		`printf '%s\n' "$root"; git rev-parse --abbrev-ref HEAD 2>/dev/null; git rev-parse HEAD 2>/dev/null; printf '\036\n'; ` +
 		`base=` + script.Quote(baselineHead) + `; if [ -n "$base" ] && git cat-file -e "$base^{commit}" 2>/dev/null; then :; else base=HEAD; fi; ` +
 		`if [ "$base" != HEAD ]; then git log --first-parent -n ` + strconv.Itoa(maxCommits) + ` --format='%h%x1f%s%x1f%ct' "$base"..HEAD 2>/dev/null; fi; printf '\036\n'; ` +
-		`git -c core.quotepath=off diff --no-renames --relative --numstat HEAD 2>/dev/null; printf '\036\n'; ` +
+		readGit + ` diff --no-renames --relative --numstat HEAD 2>/dev/null; printf '\036\n'; ` +
 		`git -c core.quotepath=off ls-files --others --exclude-standard 2>/dev/null; printf '\036\n'; ` +
 		blobsScript() + `; printf '\036\n'; ` +
 		`if [ "$base" != HEAD ]; then git -c core.quotepath=off log --first-parent -n ` + strconv.Itoa(maxCommits) + ` --raw --no-renames --no-abbrev --relative --format='%H' "$base"..HEAD 2>/dev/null; fi; printf '\036\n'; ` +
@@ -198,9 +198,10 @@ func summaryScript(dir, baselineHead string) string {
 }
 
 // blobsScript prints "<path>\x1f<blob hash>" per uncommitted file, one per line, "gone" for a deleted one.
-// Paths are relative to the folder; a rename is a deletion plus an addition.
+// Paths are relative to the folder; a rename is a deletion plus an addition. The tracked files are numstat's: unlike
+// --name-only, it leaves out a file only touched without git refreshing its stat in the index (readGit).
 func blobsScript() string {
-	return `{ git -c core.quotepath=off diff --no-renames --relative --name-only HEAD 2>/dev/null; git -c core.quotepath=off ls-files --others --exclude-standard 2>/dev/null; } | ` +
+	return `{ ` + readGit + ` diff --no-renames --relative --numstat HEAD 2>/dev/null | cut -f3-; git -c core.quotepath=off ls-files --others --exclude-standard 2>/dev/null; } | ` +
 		`{ t=$(mktemp 2>/dev/null) || t=/tmp/remuda-blobs.$$; : > "$t"; while IFS= read -r f; do if [ -f "$f" ]; then printf '%s\n' "$f" >> "$t"; else printf '%s\037gone\n' "$f"; fi; done; ` +
 		`if [ -s "$t" ]; then git -c core.quotepath=off hash-object --stdin-paths < "$t" 2>/dev/null | paste -d "$(printf '\037')" "$t" -; fi; rm -f "$t"; }`
 }
