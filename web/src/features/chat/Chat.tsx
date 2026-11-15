@@ -8,6 +8,7 @@ import SendToAgent from "@/features/agents/SendToAgent";
 import type { OpenFile } from "@/features/files/target";
 import { act } from "@/app/act";
 import { createTab, sendKeys, submitPrompt, type PaneUsage } from "@/features/roster/api";
+import { useSharing } from "@/features/roster/useSharing";
 import { copyText } from "@/lib/host";
 import { usePref } from "@/lib/prefs";
 import { errMsg } from "@/lib/text";
@@ -56,6 +57,7 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
 }) {
   const readOnly = !paneId;
   const agents = useAgentTargets();
+  const share = useSharing(); // the notice names a hidden folder's workspace by its neutral name
   // the jump names its pane ("" = the viewer): this chat takes it only when it is that pane's
   const anyJump = app.use((s) => s.jump);
   const jump = anyJump && anyJump.machineId === machineId && anyJump.paneId === paneId ? anyJump : null;
@@ -340,7 +342,8 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
           onSend={async (target, text) => {
             await submitPrompt(target.machineId, target.paneId, text);
             setForward(null);
-            showForwarded(t("Forwarded to {agent} in {workspace}.", { agent: target.agent, workspace: target.sessionName }));
+            const workspace = share.folderName(target.machineId, target.folder ?? "", target.sessionName);
+            showForwarded(t("Forwarded to {agent} in {workspace}.", { agent: target.agent, workspace }));
           }}
         />
       )}

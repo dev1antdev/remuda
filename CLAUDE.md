@@ -4192,7 +4192,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   move to another machine, a new workspace, tab or worktree, the folder
   picker, the arenas, the scenes and their runs, Message several agents and Send to agent (a hidden
   folder's agent by the neutral name and its kind, `targetWords` in
-  `agents/targets.ts`) — (`sharingDialogs.test.ts`; a rename's field keeps
+  `agents/targets.ts`) and the chat's "Forwarded to …" notice after it —
+  (`sharingDialogs.test.ts`; a rename's field keeps
   the name it changes). Nothing sent to or kept by the server changes; pushes,
   webhooks, standup and usage reports are not masked.
 - `internal/said/` — the first line of every finished agent's last answer,
