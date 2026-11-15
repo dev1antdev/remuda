@@ -33,23 +33,43 @@ func (s *Service) Pull(machineID, dir string) Outcome {
 		case p.remote == ".":
 			return Outcome{Action: ActPull, State: Refused, Reason: ReasonLocal, Branch: p.branch}
 		}
-		if s.Busy != nil {
-			if agent, doing := s.Busy(machineID, p.top); agent != "" {
-				return Outcome{Action: ActPull, State: Refused, Reason: ReasonBusy, Agent: agent, Doing: doing, Branch: p.branch}
-			}
+		if refusal, busy := s.busyPull(machineID, p); busy {
+			return refusal
 		}
 		outcome := Outcome{Action: ActPull, Remote: p.remote, Branch: p.branch, Upstream: p.upstream}
-		return s.network(host, style, p, outcome, pullScript(p.remote))
+		if fetched := s.network(host, style, p, outcome, fetchScript(p.remote)); fetched.State != Done {
+			return fetched
+		}
+		if refusal, busy := s.busyPull(machineID, p); busy { // an agent may have begun while the fetch ran
+			return refusal
+		}
+		return s.network(host, style, p, outcome, fastForwardScript)
 	})
+}
+
+// busyPull is a pull's refusal while an agent works, asks or ends a turn in the checkout.
+func (s *Service) busyPull(machineID string, p probe) (Outcome, bool) {
+	if s.Busy == nil {
+		return Outcome{}, false
+	}
+	agent, doing := s.Busy(machineID, p.top)
+	if agent == "" {
+		return Outcome{}, false
+	}
+	return Outcome{Action: ActPull, State: Refused, Reason: ReasonBusy, Agent: agent, Doing: doing, Branch: p.branch}, true
 }
 
 // Push sends the branch to its upstream, or to origin under its own name with the upstream set when it has none; never
 // a force or a tag. The secret check over the commits it would carry (and the work beside them) stands first, its
-// findings or its failure holding the push back until the person says anyway.
-func (s *Service) Push(machineID, dir string, anyway bool) Outcome {
+// findings or its failure holding the push back until the person says anyway; what goes is the commit the check read
+// (Outcome.Head), and anyway names the one its hold showed, refused when the branch moved since (ReasonMoved).
+func (s *Service) Push(machineID, dir string, anyway bool, head string) Outcome {
 	return s.act(ActPush, machineID, dir, func(host shell.Host, style rpath.Style, p probe) Outcome {
 		if p.branch == "" {
 			return refused(ActPush, ReasonDetached)
+		}
+		if anyway && head != "" && head != p.head {
+			return Outcome{Action: ActPush, State: Refused, Reason: ReasonMoved, Branch: p.branch}
 		}
 		remote, target, setUpstream := p.remote, p.merge, false
 		switch {
@@ -64,7 +84,7 @@ func (s *Service) Push(machineID, dir string, anyway bool) Outcome {
 				return Outcome{Action: ActPush, State: Refused, Reason: ReasonWhichRemote, Branch: p.branch}
 			}
 		}
-		outcome := Outcome{Action: ActPush, Remote: remote, Branch: p.branch, Upstream: p.upstream, Ahead: p.ahead}
+		outcome := Outcome{Action: ActPush, Remote: remote, Branch: p.branch, Upstream: p.upstream, Ahead: p.ahead, Head: p.head}
 		if !anyway && s.Check != nil {
 			scan, err := s.Check(host, p.top)
 			if err != nil {
@@ -76,7 +96,7 @@ func (s *Service) Push(machineID, dir string, anyway bool) Outcome {
 				return outcome
 			}
 		}
-		result := s.network(host, style, p, outcome, pushScript(remote, p.branch, target, setUpstream))
+		result := s.network(host, style, p, outcome, pushScript(remote, p.branch, p.head, target, setUpstream))
 		if result.State == Done {
 			result.Count = p.ahead
 			if setUpstream {

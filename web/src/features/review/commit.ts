@@ -47,8 +47,10 @@ export function whyNotCommit(state: CommitState): string {
 // commitHint is the quiet line under the box: what Commit all stages, what Amend rewrites, a pushed commit's warning
 export function commitHint(state: CommitState, amendPushed: boolean, subfolder: boolean): string {
   if (state.mode === "amend") return amendPushed ? t("The latest commit is on the remote already: amending it means a force push to share it.") : t("Amend rewrites the latest commit with what is staged; what is not staged stays as it is.");
-  if (state.staged === 0 && state.toStage > 0) return tn(state.toStage, "Stages the {n} listed file first.", "Stages the {n} listed files first.");
-  if (subfolder && state.staged > 0) return t("The commit takes everything staged in the repository, not only this folder.");
+  // a folder inside the repository commits the whole index, what is staged outside it too, which the lens does not list
+  const whole = subfolder ? t("The commit takes everything staged in the repository, not only this folder.") : "";
+  if (state.staged === 0 && state.toStage > 0) return [tn(state.toStage, "Stages the {n} listed file first.", "Stages the {n} listed files first."), whole].filter(Boolean).join(" ");
+  if (state.staged > 0) return whole;
   return "";
 }
 

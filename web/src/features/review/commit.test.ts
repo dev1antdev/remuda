@@ -11,6 +11,7 @@ describe("the commit box", () => {
     expect(commitLabel(state({ working: true }))).toBe("Committing…");
     expect(commitHint(state({ staged: 0 }), false, false)).toBe("Stages the 2 listed files first.");
     expect(commitHint(state(), false, true)).toBe("The commit takes everything staged in the repository, not only this folder.");
+    expect(commitHint(state({ staged: 0 }), false, true)).toBe("Stages the 2 listed files first. The commit takes everything staged in the repository, not only this folder.");
   });
 
   it("says why it is off, the agent at work first", () => {
