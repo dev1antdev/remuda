@@ -85,6 +85,13 @@ describe("pins", () => {
     expect(livePins([], ["gog|w9:p9"])).toEqual(["gog|w9:p9"]);
     expect(livePins([machine("gog", [])], ["gog|w9:p9"])).toEqual(["gog|w9:p9"]);
   });
+
+  it("keeps the pin of an agent whose pane is a shell for a while: asleep, or restarting onto an update", () => {
+    const resting = pane({ agent: "" });
+    const asleep = [machine("gog", [session("api", [resting])])];
+    expect(livePins(asleep, [agentKey("gog", resting.id)])).toEqual([agentKey("gog", resting.id)]);
+    expect(pinnedRows(asleep, [agentKey("gog", resting.id)])).toEqual([]); // drawn again once it is back
+  });
 });
 
 describe("subagents", () => {

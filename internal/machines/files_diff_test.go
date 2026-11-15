@@ -48,3 +48,42 @@ func TestTheDiffOfAFileGoneWithItsFolderIsReadFromTheFolderStillThere(t *testing
 		t.Fatalf("a file git rm took reads %q", out)
 	}
 }
+
+func TestTheDiffIsOfTheFileItselfWhateverTextconvIsSet(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("no git")
+	}
+	config := filepath.Join(t.TempDir(), "gitconfig")
+	if err := os.WriteFile(config, []byte("[diff \"skipfirst\"]\n\ttextconv = sed 1d\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GIT_CONFIG_GLOBAL", config)
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	dir := t.TempDir()
+	run := func(args ...string) {
+		cmd := exec.Command("git", append([]string{"-c", "user.email=t@remuda.invalid", "-c", "user.name=t"}, args...)...)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	file := filepath.Join(dir, "notes.txt")
+	for _, step := range []struct{ name, text string }{{".gitattributes", "*.txt diff=skipfirst\n"}, {"notes.txt", "one\ntwo\nthree\n"}} {
+		if err := os.WriteFile(filepath.Join(dir, step.name), []byte(step.text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	run("init", "-q")
+	run("add", "-A")
+	run("commit", "-q", "-m", "init")
+	if err := os.WriteFile(file, []byte("one\ntwo\nTHREE\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, err := shell.Text(shell.Local{}, gitDiffScript(dir, script.Quote(file)), 20*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "@@ -1,3 +1,3 @@\n one\n two\n-three\n+THREE\n") {
+		t.Fatalf("the diff's lines are not the file's: %q", out)
+	}
+}
