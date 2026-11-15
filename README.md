@@ -90,7 +90,9 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   what it asks read off its screen ("Bash command · rm -rf build") or the
   watchdog's note; a click opens it, nothing is answered from there. Under
   the pointer an agent's age gives way to a pin (always there on a phone):
-  pinned agents stand in their own group at the top, on every device. A
+  pinned agents stand in their own group at the top, on every device, and
+  stay pinned through a sleep, a restart or a reboot that brings them back
+  in the same pane. A
   folded folder or machine still says "2 need you · 1 working", so
   folding never hides a question, a folder's icon glows softly while its
   agents work, and the foot says "5 agents · 2 need you", the second part

@@ -3993,8 +3993,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   distance from its upstream, "↑2 ↓1" (`session.sync`, `syncWords` /
   `syncTip`), and what the agent it speaks for needs or said
   (`cardWords`: its note, "waiting for your answer", a plan limit, the
-  first line of what it answered; nothing while it only works); a
-  workspace of shells alone shows `$` and its tabs. **Under every card a
+  first line of what it answered; nothing while it only works — the line
+  keeps its height empty, `.ws-sub` always drawn, so no card grows or
+  shrinks as its agent works and rests, and an issue's chip stands there
+  whatever else does); a workspace of shells alone shows `$` and its tabs. **Under every card a
   line per agent**, after Orca's and munza's better-sidebar
   (`AgentLines.tsx`; the pure part `sidebarAgents.ts`, tested): its logo,
   its title (`rowLabel`; muted at rest; a hidden folder's by its kind),
@@ -4009,9 +4011,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   for a viewer): the pinned agents, in pin order, stand in a **Pinned**
   group over the machines (`SidebarGroups.tsx` `PinnedAgents`, its
   workspace and machine quietly after the title), pref `sidebar.pins`
-  (`machine|pane`, on the sync allow-list; `livePins` lets go of an agent
+  (`machine|pane`, on the sync allow-list; `livePins` lets go of a pane
   gone from a connected machine or a machine the fleet lost, since herdr
-  gives a closed pane's id to a new one). **The subagents at work** hang
+  gives a closed pane's id to a new one, and keeps one standing as a bare
+  shell — a workspace asleep, an agent restarting onto an update or
+  resumed after a reboot comes back in that very pane). **The subagents at work** hang
   under their agent on Orca's tree lines (`.sub-elbow`, the last corner
   rounded; `pane.subagents.list`, the oldest five by name and "N more at
   work"), a click opening the transcript viewer on that one's own
@@ -4045,7 +4049,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   most urgent agent, with counts — and **by ticket prefix** (`PR-12`,
   `INS-4`, after `feature/` too, capitals needing only the dash and lower
   case a number; read off the workspace's name, its branch, its named
-  tabs; "No prefix" last) — `sections.ts`, tested, the sections folding
+  tabs; "No prefix" last, where a workspace the screen-sharing mode hides
+  goes too, its prefix being a piece of its name: `entries`' `masked`,
+  which the sidebar, its fold-all, the neutral letters and the walk pass) — `sections.ts`, tested, the sections folding
   like folders (`machine|section:<key>` in `wsFolded`; `foldKey`,
   `entryItems`). **Alt+]** / **Alt+[** (`useWalkKeys` in `app/next.ts`,
   `walkKeyAsked` in `nextKey.ts` with Alt+N's rules — never over the
