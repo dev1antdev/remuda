@@ -728,7 +728,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   look, Read again, Updates…, Fleet setup…, Update everywhere…; an amber or red dot
   from `serverTone` in `concerns.ts`, tested; the palette's "Server ·
   <name>", a viewer's too) and Settings,
-  each an icon with its name under it and a tooltip (the name whole: a
+  each an icon on a pill (`.rail-icon`: a soft one under the pointer, the
+  accent's for the place the page is on) with its name under it and a
+  tooltip, the tools at the rail's foot under a hairline (the name whole: a
   language whose word is too long there gives a shorter one through
   `tc("rail", …)`, "События" for Activity, and the e2e display suite
   fails a cut one; `.rail-label`'s own line-height 1.25 under the

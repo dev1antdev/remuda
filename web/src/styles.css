@@ -1788,8 +1788,9 @@ input[type="checkbox"]:hover:not(:checked) {
 .title {
   flex: 1 1 auto;
   min-width: 0;
+  font-size: var(--fs-15);
   font-weight: 600;
-  letter-spacing: -0.005em;
+  letter-spacing: -0.012em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -12140,8 +12141,11 @@ body.popout {
   gap: 2px;
 }
 
+/* the tools stand apart from the modes: at the rail's foot, a hairline over them */
 .rail-foot {
   margin-top: auto;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
 }
 
 .rail-btn {
@@ -12150,7 +12154,7 @@ body.popout {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 3px;
   min-height: 52px;
   padding: 6px 0;
   border: 0;
@@ -12161,17 +12165,38 @@ body.popout {
   font-weight: 500;
   line-height: 1;
   cursor: pointer;
+  transition: color var(--fast) var(--ease);
+}
+
+/* the place's mark sits on a pill: a soft one under the pointer, the accent's for the place the page is on */
+.rail-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 28px;
+  border-radius: 99px;
   transition: background var(--fast) var(--ease), color var(--fast) var(--ease);
 }
 
 .rail-btn:hover {
-  background: var(--bg-hover);
   color: var(--fg);
 }
 
+.rail-btn:hover .rail-icon {
+  background: var(--bg-hover);
+}
+
 .rail-btn.on {
+  color: var(--fg);
+}
+
+.rail-btn.on .rail-icon {
   background: var(--accent-soft);
   color: var(--accent);
+}
+
+.rail-btn.on .rail-label {
+  font-weight: 600;
 }
 
 .rail-btn:focus-visible {
@@ -12192,8 +12217,8 @@ body.popout {
 .rail-btn.has-bad::after {
   content: "";
   position: absolute;
-  top: 6px;
-  right: calc(50% - 12px);
+  top: 5px;
+  right: calc(50% - 15px);
   width: 7px;
   height: 7px;
   border-radius: 50%;

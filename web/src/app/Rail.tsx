@@ -78,7 +78,9 @@ export default function Rail() {
           side="top"
           trigger={
             <button type="button" className="rail-btn rail-more" aria-label={t("More")}>
-              <Icon name="more" size={18} />
+              <span className="rail-icon">
+                <Icon name="more" size={18} />
+              </span>
               <span className="rail-label">{t("More")}</span>
             </button>
           }
@@ -102,7 +104,9 @@ function RailButton({ place, on, dot = false, tone = "", desk = false, onClick }
   return (
     <Tip text={place.about} side="right">
       <button type="button" className={`rail-btn${on ? " on" : ""}${dot ? " has-news" : ""}${tone ? ` has-${tone}` : ""}${desk ? " rail-desk" : ""}`} aria-pressed={on} aria-label={place.label} onClick={onClick}>
-        <Icon name={place.icon} size={18} />
+        <span className="rail-icon">
+          <Icon name={place.icon} size={18} />
+        </span>
         <span className="rail-label" aria-hidden="true">{place.short ?? place.label}</span>
       </button>
     </Tip>
