@@ -357,10 +357,10 @@ func (mc *Machine) GitDiff(p string) (Diff, error) {
 }
 
 // gitDiffScript prints the repository's root, then tracked or untracked, then the diff: a file HEAD holds counts as
-// tracked though a commit to come deletes it (git rm).
+// tracked though a commit to come deletes it (git rm). A read: git's diff refreshes no stat and writes no index.
 func gitDiffScript(folder, quotedPath string) string {
 	return `d=` + script.Quote(folder) + `; while [ ! -d "$d" ]; do up=$(dirname "$d"); [ "$up" = "$d" ] && exit 0; d=$up; done; ` +
 		`cd "$d" 2>/dev/null || exit 0; root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; ` +
 		`printf '%s\n' "$root"; if git ls-files --error-unmatch -- ` + quotedPath + ` >/dev/null 2>&1 || [ -n "$(git ls-tree --name-only HEAD -- ` + quotedPath + ` 2>/dev/null)" ]; then echo tracked; ` +
-		`git -c color.ui=never diff --no-ext-diff --no-textconv HEAD -- ` + quotedPath + ` | head -c 400000; else echo untracked; fi`
+		`git --no-optional-locks -c diff.autoRefreshIndex=false -c color.ui=never diff --no-ext-diff --no-textconv HEAD -- ` + quotedPath + ` | head -c 400000; else echo untracked; fi`
 }
