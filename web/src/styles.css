@@ -17848,10 +17848,19 @@ textarea.screen-term-field {
   color: var(--blue);
 }
 
+/* the conflict's kind gives way before the path does, cut at its end, its words whole in its title */
 .review-conflict-kind {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: var(--red);
   font-size: var(--fs-12);
   white-space: nowrap;
+}
+
+.review-file.conflict .review-path {
+  min-width: 6ch;
 }
 
 .review-file.conflict {

@@ -90,7 +90,11 @@ export function FileRow({ file, look = {}, open, split, onToggle, load, loadSour
               <Icon name="message" size={12} /> {opinion.length}
             </span>
           )}
-          {look.conflict && <span className="review-conflict-kind">{look.conflict}</span>}
+          {look.conflict && (
+            <span className="review-conflict-kind" title={look.conflict}>
+              {look.conflict}
+            </span>
+          )}
         </button>
         <span className={`review-slot${look.actions ? " has-actions" : ""}`}>
           <span className="review-slot-quiet">
