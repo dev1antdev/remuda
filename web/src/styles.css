@@ -1376,8 +1376,11 @@ a.btn {
   filter: none;
 }
 
-/* text fields: one rule for every input, textarea and select; .field marks a bare element */
-input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+/* text fields: one rule for every input, textarea and select; .field marks a bare element. The inputs are picked
+   inside :where(), so the rule weighs no more than a tag and a place's own rule for its field (.tasks-add input,
+   .palette-head input) wins — written as four :not()s it outweighed every one of them, and a field kept its box inside
+   a box that already drew one */
+input:where(:not([type="checkbox"], [type="radio"], [type="range"], [type="file"])),
 textarea,
 .field,
 .sel {
@@ -4714,8 +4717,18 @@ body.is-resizing iframe {
   border-radius: var(--r-xl) var(--r-xl) 0 0;
   background: transparent;
   box-shadow: none;
-  font-size: var(--fs-13-5);
   resize: none;
+}
+
+/* with a mouse the field is the page's reading size; a touch screen keeps the 16 px that stops iOS zooming into it */
+@media (pointer: fine) {
+  .composer-box textarea {
+    font-size: var(--fs-13-5);
+  }
+
+  .composer.compact .composer-box textarea {
+    font-size: var(--fs-13);
+  }
 }
 
 .composer-tools {
@@ -4799,7 +4812,6 @@ body.is-resizing iframe {
   min-height: 34px;
   padding: 7px 10px;
   border-radius: var(--r-lg);
-  font-size: var(--fs-13);
 }
 
 .composer.compact .composer-tools {
@@ -5637,7 +5649,7 @@ ul.pick-list {
 
 .tasks-nav.on {
   background: var(--bg-input);
-  box-shadow: inset 0 0 0 1px var(--line);
+  box-shadow: var(--shadow-sm);
 }
 
 .tasks-nav-glyph {
@@ -5717,7 +5729,7 @@ ul.pick-list {
   margin: 2px 20px 10px;
   padding: 0 10px 0 12px;
   height: 38px;
-  background: var(--bg-input);
+  background: var(--bg-field);
   border: 1px solid var(--line-strong);
   border-radius: var(--r-lg);
   transition: border-color var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
@@ -5772,7 +5784,7 @@ ul.pick-list {
 
 .tasks-row.is-open {
   background: var(--bg-input);
-  box-shadow: inset 0 0 0 1px var(--line);
+  box-shadow: var(--shadow-sm);
 }
 
 .tasks-row.done .tasks-row-title {
@@ -7107,12 +7119,13 @@ button.usage-row:hover {
   opacity: 0.6;
 }
 
+/* the columns are wells of one height, whatever each holds: a short one is as plain a place to drop a card as a long one */
 .board {
   flex: 1;
   min-width: 0;
   display: flex;
-  align-items: flex-start;
-  gap: 12px;
+  align-items: stretch;
+  gap: 10px;
   padding: 0 20px 12px;
   overflow-x: auto;
   overflow-y: hidden;
@@ -7125,7 +7138,7 @@ button.usage-row:hover {
   display: flex;
   flex-direction: column;
   background: var(--bg-raised);
-  border: 1px solid var(--line);
+  border: 1px solid transparent;
   border-radius: var(--r-lg);
   transition: border-color var(--fast) var(--ease), background var(--fast) var(--ease);
 }
@@ -7171,17 +7184,19 @@ button.usage-row:hover {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 8px 10px;
+  padding: 9px 11px;
   background: var(--bg-input);
-  border: 1px solid var(--line);
+  border: 1px solid transparent;
   border-radius: var(--r-md);
+  box-shadow: var(--shadow-sm);
   cursor: pointer;
-  transition: background var(--fast) var(--ease), border-color var(--fast) var(--ease), box-shadow var(--fast) var(--ease), opacity var(--fast) var(--ease);
+  transition: border-color var(--fast) var(--ease), box-shadow var(--fast) var(--ease), opacity var(--fast) var(--ease), transform var(--fast) var(--ease);
 }
 
+/* a card lifts a little under the pointer */
 .board-card:hover {
-  background: var(--bg-hover);
-  border-color: var(--line-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
 }
 
 .board-card.is-open {

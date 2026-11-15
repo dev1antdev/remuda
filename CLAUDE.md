@@ -6266,7 +6266,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   moved to another project keeps the values whose field there has the
   same name and kind (`carryFields`). `Prompt(task, project, groom)` adds
   a `Title: value` line per `in_prompt` field with a value. UI:
-  `Board.tsx` — a column per status, cards, HTML5 drag-and-drop on a
+  `Board.tsx` — a column per status, each a well of the board's whole
+  height, cards as raised surfaces that lift under the pointer, HTML5 drag-and-drop on a
   mouse, a ⋯ "Move to…" menu on touch, swipe-snapped columns a screen
   wide on a phone, quick add per column; the order shown is the array's
   (a drop reorders it at once, `patchTask({status_id, after})` confirms,
@@ -6917,7 +6918,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   selected sidebar row, tab and split pane too — never
   `.sel`, the Select's own class, whose height, border, padding and type
   would follow it (`features/roster/selected.test.ts`). Fields have one base rule (every input, textarea and `.sel`;
-  `.sm`, `.bare`), one placeholder, one focus ring. Rows share a radius,
+  `.sm`, `.bare`; the inputs are picked inside `:where()`, so the rule
+  weighs no more than a tag and a place's own rule for its field wins —
+  as four `:not()`s it outweighed them all and a field kept a box inside
+  a box that drew one), one placeholder, one focus ring. Rows share a radius,
   hover and focus ring; cards are `.card`; counts are `.badge` (`.quiet`);
   state dots are `.dot.dot-<status>` / `.dot.machine-state.is-<state>`. On
   a coarse pointer the small controls grow and hover-revealed ones stay
