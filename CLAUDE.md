@@ -4133,7 +4133,13 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   worktree, its removal; a viewer's Open alone) and the card's details on
   a touch screen. A line with badges gives the room from its words first,
   then the Jira chip (its status words go, the dot stays), then the
-  branch, and a workspace of several agents drops its "2 agents" there.
+  branch, and a workspace of several agents drops its "2 agents" there;
+  with a chip and a pull request both on it the `primary` tag goes, the
+  tags left are cut last, and nothing runs past the card — the line is
+  clipped at its edge and the sidebar never scrolls sideways
+  (`overflow-x: hidden`; it once did, the whole list, for one long line).
+  The card on screen is a raised surface with the accent along its left
+  edge; "Needs you" is one soft red block.
   **The hover card** (`CardHover.tsx` over `ui/HoverCard.tsx`, the content
   `CardDetails.tsx`, `cardFacts.ts` tested): resting on a card opens, 340
   px beside it, its sections, each only when it has something — the card's

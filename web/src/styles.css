@@ -2037,6 +2037,7 @@ body.is-resizing iframe {
   flex-shrink: 0;
   border-right: 1px solid var(--line);
   background: var(--bg-raised);
+  overflow-x: hidden; /* a line that cannot give way is cut, never a sideways scroll of the whole list */
   overflow-y: auto;
   scrollbar-gutter: stable;
   padding-bottom: 12px;
@@ -2222,9 +2223,22 @@ body.is-resizing iframe {
   transition: background var(--fast) var(--ease);
 }
 
+/* the card on screen: a raised surface, the accent along its edge */
 .ws-item.on {
+  position: relative;
   background: var(--bg-input);
-  box-shadow: inset 0 0 0 1px var(--line);
+  box-shadow: var(--shadow-sm);
+}
+
+.ws-item.on::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 9px;
+  bottom: 9px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--accent);
 }
 
 .ws-main {
@@ -2285,6 +2299,7 @@ body.is-resizing iframe {
   font-size: var(--fs-12);
   line-height: 1.35;
   white-space: nowrap;
+  overflow: hidden; /* the line never runs past its card: what cannot give way is cut at the card's edge */
 }
 
 .ws-item.is-shell > .ws-main .ws-sub {
@@ -2381,7 +2396,20 @@ body.is-resizing iframe {
    (the dot keeps its colour, the tooltip and the hover card say them), then from the branch; with a branch, a chip and
    badges all on it, the words go too — the hover card says them */
 .ws-sub:has(> .ws-tail) > .ws-words {
-  min-width: 2em;
+  min-width: 0;
+}
+
+/* with an issue's chip and a pull request both on the line, the main checkout's tag goes (it stands first in its
+   folder anyway), and the tags left give way last, cut rather than pushing the badges out */
+.ws-sub:has(> .jira-chip):has(.ws-pr-group) > .primary-tag {
+  display: none;
+}
+
+.ws-sub:has(> .ws-tail) > .primary-tag,
+.ws-sub:has(> .ws-tail) > .ws-sync {
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .ws-sub:has(> .ws-tail) .jira-status {
@@ -3138,6 +3166,15 @@ body.is-resizing iframe {
   color: var(--red);
 }
 
+/* the agents waiting for the person: one soft red block over the machines */
+.sidebar-group.needs-you {
+  margin-top: 6px;
+  padding: 2px 2px 4px;
+  border: 0;
+  border-radius: var(--r-lg);
+  background: color-mix(in srgb, var(--red) 9%, transparent);
+}
+
 .inbox-row {
   display: flex;
   align-items: center;
@@ -3155,7 +3192,7 @@ body.is-resizing iframe {
 
 .inbox-row.on {
   background: var(--bg-input);
-  box-shadow: inset 0 0 0 1px var(--line);
+  box-shadow: var(--shadow-sm);
 }
 
 .inbox-text {
