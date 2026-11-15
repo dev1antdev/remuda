@@ -26,7 +26,7 @@ export const isNote = (text: string): boolean => noteKind(text) !== null;
 
 // tagged is what a task's note holds between one of its tags, "" without it; the note is a few lines, so the search
 // for the closing tag is one pass
-function tagged(text: string, tag: string): string {
+export function tagged(text: string, tag: string): string {
   const from = text.indexOf(`<${tag}>`);
   if (from < 0) return "";
   const to = text.indexOf(`</${tag}>`, from);

@@ -4451,6 +4451,79 @@ body.is-resizing iframe {
   gap: 2px;
 }
 
+/* the shells the agent started in the background that still run (features/chat/ShellsLine.tsx): a quiet line over the
+   composer on the conversation's column, each shell a link to the file its output goes to */
+.chat-shells {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin: 0 var(--chat-inset, 18px);
+  padding: 4px 2px;
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
+}
+
+.chat-shells > .icon {
+  flex-shrink: 0;
+  color: var(--green);
+}
+
+.chat-shells-count {
+  font-weight: 500;
+}
+
+.chat-shell {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  color: var(--fg-dim);
+}
+
+.chat-shell-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.5;
+}
+
+.chat-shell-took {
+  flex-shrink: 0;
+  color: var(--fg-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* a call that started a shell in the background says how the shell stands */
+.tool-shell {
+  flex-shrink: 0;
+  color: var(--fg-faint);
+  font-size: var(--fs-11);
+  white-space: nowrap;
+}
+
+.tool-shell.is-running {
+  color: var(--green);
+}
+
+.tool-shell.is-failed,
+.tool-shell.is-killed {
+  color: var(--red);
+}
+
+.tool-shell-end {
+  margin: 6px 0 2px;
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
+}
+
+.tool-shell-output {
+  margin: 4px 0 2px;
+  font-size: var(--fs-12);
+}
+
 /* what the harness wrote into the person's slot — a background task reporting back, an interruption, a compaction's
    summary (features/chat/notes.ts): a quiet line in the middle of the column, its record folded under it, never a
    message of the person's */

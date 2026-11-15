@@ -141,4 +141,12 @@ export const chat: Dictionary = {
   "You stopped the agent": "Вы остановили агента",
   "You stopped the agent at a tool call": "Вы остановили агента на вызове инструмента",
   "Compacted: the conversation goes on from this summary of what came before": "Сжато: разговор продолжается с этой сводки предыдущего",
+  "{n} shells running in the background": ["{n} шелл работает в фоне", "{n} шелла работают в фоне", "{n} шеллов работают в фоне"],
+  "running in the background": "работает в фоне",
+  "ran in the background": "отработал в фоне",
+  "failed in the background": "упал в фоне",
+  killed: "убит",
+  stopped: "остановлен",
+  "How long the shell has run": "Сколько работает шелл",
+  "Open the file its output goes to": "Открыть файл, куда пишется его вывод",
 };

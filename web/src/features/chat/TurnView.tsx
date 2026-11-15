@@ -17,11 +17,12 @@ import { noteOf, type Note } from "./notes";
 import { sameSubagents, subagentsOf } from "./subagents";
 import { Folded, ToolCard } from "./ToolCard";
 import { pieces, type Piece } from "./toolRuns";
+import { sameShells, shellOfCall, type Shell } from "./shells";
 import { t } from "@/lib/i18n";
 
 // TurnView re-renders only when the turn's content changed, so a selection in the log survives the polls
 export const TurnView = memo(
-  function TurnView({ turn, machineId, onOpenFile, onForward, onLink, onPin, pinned, subagents, onOpenSubagent, diffs, undo, onUndo, live }: {
+  function TurnView({ turn, machineId, onOpenFile, onForward, onLink, onPin, pinned, subagents, onOpenSubagent, diffs, undo, onUndo, live, shells }: {
     turn: Turn;
     machineId?: string;
     onOpenFile: OpenFile;
@@ -35,6 +36,7 @@ export const TurnView = memo(
     undo?: string; // the kept turn of the folder this answer is, which its foot offers to undo
     onUndo?: (turn: string) => void;
     live?: boolean; // the turn under way: a call without its result is still running
+    shells?: Shell[]; // the conversation's background shells, for the calls that started them
   }) {
     const mine = turn.role === "user";
     const drawn = pieces(turn.parts);
@@ -51,7 +53,7 @@ export const TurnView = memo(
       <ErrorBoundary resetKey={turn} fallback={(message) => <Notice tone="error">{t("This turn could not be drawn: {message}", { message })}</Notice>}>
         {own.map((piece) =>
           piece.kind === "card" ? (
-            <ToolCard key={piece.items[0]!.index} items={piece.items} machineId={machineId} onOpenFile={onOpenFile} subagents={subagents} onOpenSubagent={onOpenSubagent} diffs={diffs} live={live} />
+            <ToolCard key={piece.items[0]!.index} items={piece.items} machineId={machineId} onOpenFile={onOpenFile} subagents={subagents} onOpenSubagent={onOpenSubagent} diffs={diffs} live={live} shells={shells} />
           ) : (
             <PartView key={piece.item.index} part={piece.item.part} onOpenFile={onOpenFile} diffs={diffs} />
           ),
@@ -114,9 +116,16 @@ export const TurnView = memo(
     a.undo === b.undo &&
     a.onUndo === b.onUndo &&
     a.live === b.live &&
+    sameShellsOf(a.turn, a.shells, b.shells) &&
     sameTurn(a.turn, b.turn) &&
     sameSubagents(subagentsOf(a.turn, a.subagents), subagentsOf(b.turn, b.subagents)),
 );
+
+// sameShellsOf says the shells the turn's calls started stand as they did, so a shell that ended redraws its call alone
+function sameShellsOf(turn: Turn, a: Shell[] | undefined, b: Shell[] | undefined): boolean {
+  if (a === b) return true;
+  return turn.parts.every((part) => part.type !== "tool" || sameShells(shellOfCall(a, part.tool_id), shellOfCall(b, part.tool_id)));
+}
 
 // sameTurn compares content, as every poll brings new objects; a tool's input never changes once written, so it is skipped
 export function sameTurn(a: Turn, b: Turn): boolean {

@@ -270,6 +270,12 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   interruption, the summary after a compaction — is a quiet line in the
   middle of the chat, never a bubble of yours; a long message of yours
   that Claude Code logged as a paste shows as you wrote it.
+- **Background shells** — a command Claude Code started in the
+  background (a dev server, a wait for CI) shows in the chat as it does
+  in the terminal's footer: the call that started it says "running in
+  the background" with its time ticking, then how it ended, and a line
+  over the composer lists the ones still running; a click opens the
+  file its output goes to.
 - **Subagents of a long session** — the chat lists the subagents of the
   calls on screen and the ones still at work, not every one the session
   ever spawned: a conversation with two hundred of them opens at once,
