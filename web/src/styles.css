@@ -3804,7 +3804,7 @@ body.is-resizing iframe {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 14px 0;
+  padding: 10px var(--chat-inset, 14px) 0;
 }
 
 .chat-session-row .chat-session-pick {
@@ -4239,21 +4239,29 @@ body.is-resizing iframe {
 }
 
 /* ---- chat ---- */
+/* the conversation is one column of a readable measure, centred in a wide pane: the log, the bars over it and what
+   stands under it all keep the same inset (a percentage, so each reads it off the lens's own width) */
 .chat {
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  --chat-inset: max(18px, calc((100% - 880px) / 2));
 }
 
 .chat-log {
   flex: 1;
   overflow-y: auto;
   scrollbar-gutter: stable;
-  padding: 16px 16px 16px 20px;
+  padding: 16px var(--chat-inset, 18px);
   display: flex;
   flex-direction: column;
   gap: var(--gap-row);
+}
+
+/* beside the prompts list the log keeps its left edge under the bars and gives its right inset to the list */
+.chat-main:has(> .prompts) > .chat-log {
+  padding-right: 18px;
 }
 
 .chat-empty {
@@ -4261,19 +4269,30 @@ body.is-resizing iframe {
 }
 
 .turn {
-  max-width: 820px;
+  max-width: 100%;
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
+/* the person's message: a soft bubble at the column's right edge, its buttons under it rather than in room kept inside */
 .turn-user {
   align-self: flex-end;
-  background: var(--accent-soft);
-  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+  align-items: flex-end;
+  gap: 2px;
+  max-width: min(680px, 84%);
+}
+
+.turn-bubble {
+  max-width: 100%;
+  padding: 9px 14px;
   border-radius: var(--r-xl) var(--r-xl) var(--r-xs) var(--r-xl);
-  padding: 9px 13px;
-  max-width: min(680px, 80%);
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg-input));
+}
+
+.turn-user > .turn-actions {
+  align-self: flex-end;
+  margin-top: 0;
 }
 
 .turn-assistant {
@@ -7648,7 +7667,7 @@ button.usage-row:hover {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 10px 20px 0;
+  padding: 10px var(--chat-inset, 20px) 0;
 }
 
 .timeline-bar {
@@ -7755,7 +7774,7 @@ button.usage-row:hover {
 }
 
 .chat-ribbon {
-  padding: 8px 20px 0;
+  padding: 8px var(--chat-inset, 20px) 0;
 }
 
 .ribbon-track {
@@ -8164,7 +8183,7 @@ rect.ribbon-s.is-shown {
 }
 
 .chat-notice {
-  margin: 0 14px 8px;
+  margin: 0 var(--chat-inset, 14px) 8px;
 }
 
 .composer-attach.on {
@@ -11995,7 +12014,7 @@ body.popout {
 /* ---- the agent's plan: the bar over the chat, a plan tool's call in a turn, the count on a tile ---- */
 .plan-bar {
   flex-shrink: 0;
-  margin: 0 14px;
+  margin: 0 var(--chat-inset, 14px);
   border-bottom: 1px solid var(--line);
   font-size: var(--fs-12);
   color: var(--fg-dim);
@@ -13522,12 +13541,12 @@ body.popout {
 }
 
 .turn-user.turn-pinned {
-  padding-right: 28px;
+  padding-right: 18px;
 }
 
 .turn-user.turn-pinned .turn-pin-mark {
-  top: 9px;
-  right: 10px;
+  top: 4px;
+  right: 0;
 }
 
 .pins-list {
@@ -18364,7 +18383,7 @@ textarea.screen-term-field {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 0 18px 6px 20px;
+  margin: 0 var(--chat-inset, 18px) 6px;
   min-height: 20px;
   font-size: var(--fs-12);
   color: var(--fg-dim);
