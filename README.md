@@ -1804,7 +1804,8 @@ time it spent thinking in blue, and "Quiet" in light red once three
 minutes pass with no call running and nothing written. Point at a
 stretch, or tap it, and the line under it names it with its kind's icon
 — "Bash · go test ./... · 48 s · failed · 20 min ago"; otherwise the
-line says what the latest turn came to, "1 min 7 s, 18 tools, 1 failed".
+line says what the latest turn came to, "1 min 7 s, 18 tools, 1 failed",
+or "Nothing in the last 30 minutes" when it ended before them.
 A Wall tile reads its last 12 turns, so when those began less than half
 an hour ago the time before them says "not read" rather than idle.
 **Plan** — when the agent keeps a task list (Claude Code's own

@@ -83,6 +83,9 @@ describe("ribbon", () => {
   it("leaves what came before the window out, and what came before the turns read as not read", () => {
     const old = [user(50), answer(49, [call("Read", 49, 5)], 60)];
     expect(ribbon(old, { now: NOW, live: null, cut: false }).stretches).toEqual([]);
+    // the line under an empty ribbon says so, not what a turn long before it came to
+    expect(turnWords(ribbon(old, { now: NOW, live: null, cut: false }).turn)).toBe("Nothing in the last 30 minutes");
+    expect(ribbon(old, { now: NOW, live: "run", cut: false }).turn).toMatchObject({ tools: 1, live: true });
     const long = [...Array.from({ length: 300 }, (_, i) => [user(3000 - i * 5), answer(2999.9 - i * 5, [call("Read", 2999.5 - i * 5, 2)], 60)]).flat(), user(12), answer(11.9, [call("Edit", 11, 3)], 120)];
     const recent = ribbon(long, { now: NOW, live: null, cut: false });
     expect(recent.stretches.filter((s) => s.call).map((s) => s.call!.name)).toEqual(["Edit"]);
