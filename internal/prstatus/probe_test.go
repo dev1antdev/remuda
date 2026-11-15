@@ -94,3 +94,49 @@ func TestAProbeThatSaysNothingMovedKeepsTheReadWhileItStands(t *testing.T) {
 	tr.TouchPane("box", "w1:p1")
 	waitFor(t, "the stand run out", func() bool { return len(views(host)) == 4 })
 }
+
+// A probe that said the request moved, followed by a full read that failed, must not leave the new ETag beside the old
+// read: the next probe's 304 would then keep a read from before the move as if it were the request now.
+func TestAProbesETagIsKeptOnlyWithTheReadThatFollowedIt(t *testing.T) {
+	var mu sync.Mutex
+	current := `"one"` // GitHub's ETag of the pull request as it stands: a probe naming it is answered 304
+	done := strings.NewReplacer(`"conclusion":"","name":"smoke","status":"IN_PROGRESS"`, `"conclusion":"SUCCESS","name":"smoke","status":"COMPLETED"`, `"PENDING"`, `"SUCCESS"`).Replace(mixed)
+	view := done
+	host := &shell.Fake{Name: "box", Answer: func(s string) (string, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		if strings.Contains(s, "gh api -i") {
+			if strings.Contains(s, "If-None-Match: "+current) {
+				return "HTTP/2.0 304 Not Modified\r\n", nil
+			}
+			return "HTTP/2.0 200 OK\r\nETag: " + current + "\r\n", nil
+		}
+		return view, nil
+	}}
+	clock := time.Date(2026, 11, 13, 12, 0, 0, 0, time.UTC)
+	tr := New(func(string) (shell.Shell, bool) { return host, true })
+	tr.now = func() time.Time { mu.Lock(); defer mu.Unlock(); return clock }
+	ref := events.PaneRef{Machine: "box", Pane: "w1:p1"}
+	settled := func() bool { tr.mu.Lock(); defer tr.mu.Unlock(); return !tr.entries[ref].reading }
+	next := func(etag, full string) {
+		mu.Lock()
+		clock = clock.Add(Every)
+		current, view = etag, full
+		mu.Unlock()
+		tr.TouchPane("box", "w1:p1")
+		waitFor(t, "the read", settled)
+	}
+	tr.OnNamed(events.PullRequestNamed{Pane: ref, URL: "https://github.com/o/r/pull/7", Label: "PR #7"})
+	waitFor(t, "the first read", func() bool { return len(views(host)) == 1 })
+	waitFor(t, "the first read kept", settled)
+
+	merged := strings.Replace(done, `"state":"OPEN"`, `"state":"MERGED"`, 1)
+	next(`"two"`, "error connecting to api.github.com\n") // merged on GitHub, but gh pr view could not say so
+	if s, _ := tr.Status("box", "w1:p1"); s.State != "OPEN" {
+		t.Fatalf("a failed read changed the status: %+v", s)
+	}
+	next(`"two"`, merged)
+	if s, _ := tr.Status("box", "w1:p1"); s.State != "MERGED" {
+		t.Fatalf("a 304 on the ETag of a read that failed kept the request from before the merge: %+v (%d full reads)", s, len(views(host)))
+	}
+}
