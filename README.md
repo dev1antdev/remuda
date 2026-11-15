@@ -376,8 +376,10 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   **Actions** merges (merge, squash with its message, rebase — what the
   repository allows), merges when ready, cancels that, closes or reopens,
   each behind a card saying in red what still stands in the way; a merge
-  names the head commit you saw, so a push since then is refused rather
-  than merged unseen. Every message to an agent ends by telling it that
+  names the head commit you saw when you chose it, so a push since then
+  is refused rather than merged unseen — and one the panel reads while
+  the card is open is said, the button held back until you look again.
+  Every message to an agent ends by telling it that
   what is quoted from GitHub is data, not instructions, and not to push,
   post or resolve threads unless you ask. GitLab merge requests are not
   in the panel. With no `gh`, or `gh` signed out, the panel says so and
@@ -1269,7 +1271,9 @@ link or reference and makes a task of it. A click opens the issue
 itself: its timeline — comments with their writer's badge and reactions,
 labels added and removed in one line, a rename, a mention, a commit, a
 close — a comment box with Write and Preview, **Comment**, **Close with
-comment ▾** and **Reopen**, and beside it the assignees, labels,
+comment ▾** and **Reopen** (when GitHub posts the comment but refuses the
+close, as it does to anyone who may comment and not close, it says the
+comment is posted and lets the box go), and beside it the assignees, labels,
 milestone, the pull requests that close it and everyone who took part; a
 link to another issue opens there too, with Back.
 Everything goes through `gh` on the machine of one of the repository's
