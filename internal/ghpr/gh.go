@@ -56,29 +56,24 @@ type answer struct {
 // missingMark is what the script prints when the machine has no gh.
 const missingMark = "\x1enogh"
 
-// ghScript runs gh with the arguments on the machine, its stdout, stderr and exit status printed apart. What gh reads
-// on its stdin is the file inputFile, put on the machine first and removed whatever happens — the script itself is a
-// command line there — else input through a here-document (one line of JSON, which never holds the delimiter on a line
-// of its own), for a shell no file can be put on. keep, when given, is the head or tail command the stdout is cut by on
-// the machine, its output landing in a file first: GNU tail -c on a pipe was seen handing over more than it was asked for.
-func ghScript(args []string, input, inputFile, keep string) string {
+// ghScript runs gh with the arguments on the machine, its stdout, stderr and exit status printed apart; input, when
+// given, goes on its stdin through a here-document (one line of JSON, which never holds the delimiter on a line of its
+// own). keep, when given, is the head or tail command the stdout is cut by on the machine, its output landing in a file
+// first: GNU tail -c on a pipe was seen handing over more than it was asked for.
+func ghScript(args []string, input string, keep string) string {
 	quoted := make([]string, len(args))
 	for i, a := range args {
 		quoted[i] = script.Quote(a)
 	}
-	stdin, head := "", ""
-	if inputFile != "" {
-		stdin = ` <"$in"`
-		head = "in=" + script.Quote(inputFile) + "\ntrap 'rm -f \"$in\"' EXIT\n"
-	}
-	call := "gh " + strings.Join(quoted, " ") + ` 2>"$err"` + stdin
+	call := "gh " + strings.Join(quoted, " ") + ` 2>"$err"`
 	if keep != "" {
-		call = `{ out=$(mktemp) && gh ` + strings.Join(quoted, " ") + ` >"$out" 2>"$err"` + stdin + `; code=$?; ` + keep + ` "$out"; rm -f "$out"; (exit $code); }`
+		call = `{ out=$(mktemp) && gh ` + strings.Join(quoted, " ") + ` >"$out" 2>"$err"; code=$?; ` + keep + ` "$out"; rm -f "$out"; (exit $code); }`
 	}
-	if input != "" && inputFile == "" {
+	if input != "" {
 		call += " <<'REMUDA_INPUT'\n" + input + "\nREMUDA_INPUT"
 	}
-	return script.PATH + "\n" + head + `command -v gh >/dev/null 2>&1 || { printf '\036nogh\n'; exit 0; }
+	return script.PATH + `
+command -v gh >/dev/null 2>&1 || { printf '\036nogh\n'; exit 0; }
 err=$(mktemp 2>/dev/null || echo "${TMPDIR:-/tmp}/remuda-gh.$$")
 ` + call + `
 code=$?
@@ -111,51 +106,15 @@ func parseAnswer(text string) (answer, bool) {
 // run is one gh call on the machine, its stdout when it ended well; a gh not installed or signed out is a Problem,
 // anything else gh's own words.
 func run(host shell.Shell, args []string, input string) (string, error) {
-	return runKept(host, args, input, "", "", Timeout)
-}
-
-// runText is run for a write that carries the person's text: its input goes to the machine as a file first, so the
-// text is never part of the script, which is a command line there (sh -c, or the ssh session's) — read by any other
-// user's ps, and refused by Linux past 128 KB, which a 64 KB comment of markup reaches once JSON spells < as <.
-func runText(host shell.Shell, args []string, input string) (string, error) {
-	file, err := putInput(host, input)
-	if err != nil {
-		return "", err
-	}
-	return runKept(host, args, input, file, "", Timeout)
+	return runKept(host, args, input, "", Timeout)
 }
 
 // lastBytes and firstBytes are the commands runKept cuts a long stdout by.
 func lastBytes(n int) string  { return "tail -c " + strconv.Itoa(n) }
 func firstBytes(n int) string { return "head -c " + strconv.Itoa(n) }
 
-// filer is a machine a file can be put on whole, as a *machines.Machine is.
-type filer interface {
-	PutFile(path string, data []byte, timeout time.Duration) error
-}
-
-// putInput puts gh's input on the machine as a file of its user's alone and names it; "" for a shell no file can be
-// put on, whose input goes through the script's here-document.
-func putInput(host shell.Shell, input string) (string, error) {
-	files, ok := host.(filer)
-	if !ok || input == "" {
-		return "", nil
-	}
-	made, err := host.Run(`mktemp "${TMPDIR:-/tmp}/remuda-gh.XXXXXX"`, Timeout)
-	file := strings.TrimSpace(string(made))
-	if err != nil || file == "" || strings.ContainsAny(file, "\n\x00") {
-		return "", fmt.Errorf("no room on %s for the text: %v", machineOf(host), err)
-	}
-	if err := files.PutFile(file, []byte(input), Timeout); err != nil {
-		_, _ = host.Run("rm -f "+script.Quote(file), Timeout)
-		return "", fmt.Errorf("the text could not be copied to %s: %w", machineOf(host), err)
-	}
-	return file, nil
-}
-
-// runKept is one gh call, its input read from file when one was put on the machine, its stdout cut by keep.
-func runKept(host shell.Shell, args []string, input, file, keep string, timeout time.Duration) (string, error) {
-	text, err := shell.Text(host, ghScript(args, input, file, keep), timeout)
+func runKept(host shell.Shell, args []string, input, keep string, timeout time.Duration) (string, error) {
+	text, err := shell.Text(host, ghScript(args, input, keep), timeout)
 	got, ok := parseAnswer(text)
 	if !ok {
 		return "", &Problem{Kind: "missing", Machine: machineOf(host), Command: "gh auth login"}
@@ -211,19 +170,14 @@ func ghWords(stderr, stdout string) string {
 	return strings.TrimPrefix(strings.Join(lines, "\n"), "gh: ")
 }
 
-// gql is one GraphQL request through gh api graphql, its data decoded into v; a mutation, which carries what the person
-// wrote, goes as a file (runText). GitHub answers a field it cannot resolve with an error beside the rest of the data;
-// such an answer is an error here.
+// gql is one GraphQL request through gh api graphql, its data decoded into v. GitHub answers a field it cannot resolve
+// with an error beside the rest of the data; such an answer is an error here.
 func gql(host shell.Shell, query string, variables map[string]any, v any) error {
 	payload, err := json.Marshal(map[string]any{"query": query, "variables": variables})
 	if err != nil {
 		return err
 	}
-	send := run
-	if strings.HasPrefix(query, "mutation") {
-		send = runText
-	}
-	out, runErr := send(host, []string{"api", "graphql", "--input", "-"}, string(payload))
+	out, runErr := run(host, []string{"api", "graphql", "--input", "-"}, string(payload))
 	if _, problem := AsProblem(runErr); problem {
 		return runErr
 	}
@@ -248,20 +202,19 @@ func gql(host shell.Shell, query string, variables map[string]any, v any) error 
 	return json.Unmarshal(body.Data, v)
 }
 
-// rest is one REST request through gh api, its answer decoded into v when v is not nil; a body, what the person wrote,
-// goes as a file (runText).
+// rest is one REST request through gh api, its answer decoded into v when v is not nil.
 func rest(host shell.Shell, method, path string, body any, v any) error {
 	args := []string{"api", path, "--method", method}
-	send, input := run, ""
+	input := ""
 	if body != nil {
 		payload, err := json.Marshal(body)
 		if err != nil {
 			return err
 		}
 		args = append(args, "--input", "-")
-		send, input = runText, string(payload)
+		input = string(payload)
 	}
-	out, err := send(host, args, input)
+	out, err := run(host, args, input)
 	if err != nil {
 		return err
 	}

@@ -35,7 +35,7 @@ const (
 // ReadFiles reads the files a hundred at a time (GitHub stops at three thousand), each page an array gh prints one after
 // the other; a list cut on the machine keeps the files read whole.
 func ReadFiles(host shell.Shell, repo Repo, number int) (Files, error) {
-	out, err := runKept(host, []string{"api", "--paginate", fmt.Sprintf("repos/%s/pulls/%d/files?per_page=100", repo, number)}, "", "", firstBytes(MaxFilesRead), Timeout)
+	out, err := runKept(host, []string{"api", "--paginate", fmt.Sprintf("repos/%s/pulls/%d/files?per_page=100", repo, number)}, "", firstBytes(MaxFilesRead), Timeout)
 	if err != nil {
 		return Files{}, err
 	}
