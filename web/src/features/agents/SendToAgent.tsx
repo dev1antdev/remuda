@@ -18,7 +18,7 @@ export default function SendToAgent({ title, text: initialText, agents, currentP
   text: string;
   ask?: string; // the box's label, "Message" unless the caller asks something
   about?: ReactNode; // what the message is about, under the box
-  compose?: (text: string) => string; // what goes to the agent for the text typed
+  compose?: (text: string, target: AgentTarget) => string; // what goes to the agent picked for the text typed
   agents: AgentTarget[];
   currentPane: { machineId: string; paneId: string } | null;
   rememberKey: string; // the last target for this key is offered first
@@ -40,7 +40,7 @@ export default function SendToAgent({ title, text: initialText, agents, currentP
   const { busy, err, run } = useSubmit(async () => {
     if (!chosen || !text.trim()) return;
     setRemembered({ ...remembered, [rememberKey]: target }); // before the dialog goes away
-    await onSend(chosen, compose(text));
+    await onSend(chosen, compose(text, chosen));
   });
   return (
     <Dialog

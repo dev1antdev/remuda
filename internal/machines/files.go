@@ -340,7 +340,8 @@ type Diff struct {
 	Diff      string `json:"diff"`
 }
 
-// GitDiff is the file's uncommitted change against HEAD in its repository, git's own diff whatever driver is set, or marks it
+// GitDiff is the file's uncommitted change against HEAD in its repository, git's own diff of the file's own lines whatever
+// driver or textconv is set (the File tab marks its rows by them), or marks it
 // untracked / outside any repo. A file deleted since HEAD, its folder with it, is read from the nearest folder still there.
 func (mc *Machine) GitDiff(p string) (Diff, error) {
 	style := mc.Paths()
@@ -361,5 +362,5 @@ func gitDiffScript(folder, quotedPath string) string {
 	return `d=` + script.Quote(folder) + `; while [ ! -d "$d" ]; do up=$(dirname "$d"); [ "$up" = "$d" ] && exit 0; d=$up; done; ` +
 		`cd "$d" 2>/dev/null || exit 0; root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; ` +
 		`printf '%s\n' "$root"; if git ls-files --error-unmatch -- ` + quotedPath + ` >/dev/null 2>&1 || [ -n "$(git ls-tree --name-only HEAD -- ` + quotedPath + ` 2>/dev/null)" ]; then echo tracked; ` +
-		`git -c color.ui=never diff --no-ext-diff HEAD -- ` + quotedPath + ` | head -c 400000; else echo untracked; fi`
+		`git -c color.ui=never diff --no-ext-diff --no-textconv HEAD -- ` + quotedPath + ` | head -c 400000; else echo untracked; fi`
 }

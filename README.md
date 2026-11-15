@@ -1486,7 +1486,8 @@ itself again every ten seconds while on screen and soon after the agent did
 something. A row's ⋯ or a right-click: Open, Open in the editor, Show
 changes, Copy relative path, Copy full path, and **Send to agent…** — pick
 an agent, say what it should do, and it gets that with the file's path (not
-its text, so it reads the file as it is by then). A folder lists its first
+its text, so it reads the file as it is by then) — an agent on another
+machine is told which machine the file is on. A folder lists its first
 500 entries. Nothing in the tree writes a file. Hidden on a phone.
 
 **Full screen** (View › Full screen, or the palette): the header,

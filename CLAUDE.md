@@ -549,7 +549,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   SSH, plus the one write: `SaveUpload`. `ResolvePath` accepts absolute, `~/`, or pane-relative
   and, on a relative miss, searches the pane folder by suffix (agents say
   `demo.mp4` for `docs/demo.mp4`); several hits come back as `candidates`.
-  `GitDiff` = `git diff --no-ext-diff HEAD -- file` in the file's repo
+  `GitDiff` = `git diff --no-ext-diff --no-textconv HEAD -- file` in the file's repo (the file's own lines, which the File tab's gutter marks)
   (`gitDiffScript`, tested: `untracked` for new files, no `repo` outside git,
   a file HEAD holds counts as tracked though `git rm` took it, read from the
   nearest folder still there when its own went with it). `ListDirs(path, hidden)` lists a folder's
@@ -590,8 +590,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   core.fsmonitor=false status --porcelain=v1 -z --no-renames
   --ignored=matching --untracked-files=normal`, cut at 4 MB, its stderr kept
   as `Git`; `ParseStatus` / `Status.Apply` (`markOf`: `?` untracked, `U` a
-  conflict, `D` deleted, `A` added, `M` the rest; an untracked folder marks
-  what is in it `?`, an ignored one ignores it; `Changes` on every folder
+  conflict, `D` deleted, `A` added — a file `git add -N` named too — `M` the
+  rest; an untracked folder marks what is in it `?`, an ignored one ignores
+  it, the tree's own root among them; `Changes` on every folder
   holding a mark; a file git says was deleted from the folder listed back as
   `Gone`, a folder gone with its files likewise, unless the listing was cut).
   Nothing is written. Route `GET /api/fs/tree?machine&dir&path`
@@ -607,7 +608,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   visible and `CHAT_PAUSE` 3 s after the pane's `chat` event, `watchPane`;
   the menu's actions; Send to agent through `SendToAgent`'s `ask` / `about` /
   `compose` — the instruction then `File: <absolute path>`, never the text,
-  through `/api/submit`, a toast after), `TreeFolder.tsx` (one folder's
+  and to an agent on another machine which machine the file is on — `compose`
+  hears the agent picked — through `/api/submit`, a toast after, naming a
+  hidden folder's workspace by its neutral name), `TreeFolder.tsx` (one folder's
   `useQuery`, read when opened and again at each tick, a loading shape of
   three bars, its empty and error sentences, "Showing the first 500", an open
   folder under it nested under a guide line at its parent's chevron),
@@ -634,9 +637,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   where it has one — `FileIcon` draws it as an `<img>` (an SVG as an image
   runs nothing) with `data-icon`, light while the root's `data-theme` is.
   `fileIcons.test.ts` checks the precedence, the Windows app's files, every
-  icon the rules name shipped and nothing else, no `<script`, `on…=`,
-  `javascript:`, `<foreignObject` or outside `href` in any, under 600 KB in
-  all. Drawn in both tabs of the files rail, the file viewer's head, the
+  icon the rules name shipped and nothing else, no `<script` or
+  `<foreignObject` under any namespace prefix, `on…=`, `javascript:`, an
+  `href` or `url()` to anything but an `#id`, `@import`, a stylesheet
+  instruction or a DOCTYPE in any (the check itself tested on SVGs that
+  carry each), under 600 KB in all. Drawn in both tabs of the files rail, the file viewer's head, the
   folder picker, the Changes lens's file rows and a commit's files in the
   Git lens.
 - `web/src/features/chat/attachments.ts` — `useAttachments` (upload at
@@ -1651,7 +1656,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   change carrying the old lines, added alone an addition, removed alone a
   removal at the line after it; `wholeFile` for a new file; `codeRows` lays
   the lines out with an open change's old lines above its first new line or
-  in place of a closed removal's thin line, `toggled`, `lineCountOf` — drawn
+  in place of a closed removal's thin line, nothing for a change past the
+  lines shown (a file the cap cut), `toggled`, `lineCountOf` — drawn
   as a 3 px bar at the row's edge, green added and amber changed, a 2 px red
   line between rows where lines went; a click on an amber row, its number (a
   `linkish` with `aria-expanded`, the keyboard's way) or the red line shows
