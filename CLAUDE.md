@@ -549,7 +549,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   SSH, plus the one write: `SaveUpload`. `ResolvePath` accepts absolute, `~/`, or pane-relative
   and, on a relative miss, searches the pane folder by suffix (agents say
   `demo.mp4` for `docs/demo.mp4`); several hits come back as `candidates`.
-  `GitDiff` = `git diff --no-ext-diff HEAD -- file` in the file's repo
+  `GitDiff` = `git diff --no-ext-diff --no-textconv HEAD -- file` in the file's repo (the file's own lines, which the File tab's gutter marks)
   (`gitDiffScript`, tested: `untracked` for new files, no `repo` outside git,
   a file HEAD holds counts as tracked though `git rm` took it, read from the
   nearest folder still there when its own went with it). `ListDirs(path, hidden)` lists a folder's
@@ -590,8 +590,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   core.fsmonitor=false status --porcelain=v1 -z --no-renames
   --ignored=matching --untracked-files=normal`, cut at 4 MB, its stderr kept
   as `Git`; `ParseStatus` / `Status.Apply` (`markOf`: `?` untracked, `U` a
-  conflict, `D` deleted, `A` added, `M` the rest; an untracked folder marks
-  what is in it `?`, an ignored one ignores it; `Changes` on every folder
+  conflict, `D` deleted, `A` added — a file `git add -N` named too — `M` the
+  rest; an untracked folder marks what is in it `?`, an ignored one ignores
+  it, the tree's own root among them; `Changes` on every folder
   holding a mark; a file git says was deleted from the folder listed back as
   `Gone`, a folder gone with its files likewise, unless the listing was cut).
   Nothing is written. Route `GET /api/fs/tree?machine&dir&path`
@@ -607,7 +608,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   visible and `CHAT_PAUSE` 3 s after the pane's `chat` event, `watchPane`;
   the menu's actions; Send to agent through `SendToAgent`'s `ask` / `about` /
   `compose` — the instruction then `File: <absolute path>`, never the text,
-  through `/api/submit`, a toast after), `TreeFolder.tsx` (one folder's
+  and to an agent on another machine which machine the file is on — `compose`
+  hears the agent picked — through `/api/submit`, a toast after, naming a
+  hidden folder's workspace by its neutral name), `TreeFolder.tsx` (one folder's
   `useQuery`, read when opened and again at each tick, a loading shape of
   three bars, its empty and error sentences, "Showing the first 500", an open
   folder under it nested under a guide line at its parent's chevron),
@@ -634,9 +637,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   where it has one — `FileIcon` draws it as an `<img>` (an SVG as an image
   runs nothing) with `data-icon`, light while the root's `data-theme` is.
   `fileIcons.test.ts` checks the precedence, the Windows app's files, every
-  icon the rules name shipped and nothing else, no `<script`, `on…=`,
-  `javascript:`, `<foreignObject` or outside `href` in any, under 600 KB in
-  all. Drawn in both tabs of the files rail, the file viewer's head, the
+  icon the rules name shipped and nothing else, no `<script` or
+  `<foreignObject` under any namespace prefix, `on…=`, `javascript:`, an
+  `href` or `url()` to anything but an `#id`, `@import`, a stylesheet
+  instruction or a DOCTYPE in any (the check itself tested on SVGs that
+  carry each), under 600 KB in all. Drawn in both tabs of the files rail, the file viewer's head, the
   folder picker, the Changes lens's file rows and a commit's files in the
   Git lens.
 - `web/src/features/chat/attachments.ts` — `useAttachments` (upload at
@@ -1658,7 +1663,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   change carrying the old lines, added alone an addition, removed alone a
   removal at the line after it; `wholeFile` for a new file; `codeRows` lays
   the lines out with an open change's old lines above its first new line or
-  in place of a closed removal's thin line, `toggled`, `lineCountOf` — drawn
+  in place of a closed removal's thin line, nothing for a change past the
+  lines shown (a file the cap cut), `toggled`, `lineCountOf` — drawn
   as a 3 px bar at the row's edge, green added and amber changed, a 2 px red
   line between rows where lines went; a click on an amber row, its number (a
   `linkish` with `aria-expanded`, the keyboard's way) or the red line shows
@@ -1686,7 +1692,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   request), `query.ts` (`useQuery(fn, deps, {every, enabled, keep})` —
   the one way a screen reads the server: a fetch that follows its inputs,
   polls while enabled and the page is visible — `visibility.ts`:
-  this document or the pop-out's, `watchVisibility` for a change — and
+  this document or the pop-out's, `watchVisibility` for a change, `documentVisible` for what only this document draws — and
   reads at once when enabled again (`resumes`, tested: a question card
   back on screen once kept a closed dialog's choices up to ten seconds;
   `useChat` leaves coming on screen to it), drops an answer that
@@ -1861,7 +1867,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   "Hide idle", the idle ones past the radar's fresh tier, and with **Needs me** (pref `needsMe`, `needsMe` in wall.ts) everyone but the agents waiting for the person — a question open, a watchdog note, a finish not looked at — "Nobody needs you right now" when that leaves none; a tile that needs one wears a pulsing ring (red for a question, amber for a note), a finished one a green edge; the two filters and the view are palette commands too, and **Alt+N** (`app/next.ts`, by key code — never over the terminal, nor over a field on a Mac, where Option+N is the tilde's dead key: `nextKey.ts`, tested; the palette row "Go to the next agent that needs you") walks the agents that need the person in the roster's order, round and round (`nextNeedingMe` in wall.ts, tested): on the Wall the tile takes the wall, a tile hidden by hand passed over, elsewhere the pane opens on its chat, a toast when nobody needs one; pref `wall` holds
   the size S/M/L (`TILE_MIN` 360/460/600 px, an auto-fill grid) and the idle
   switch; no sidebar in the mode, "+ Agent" opens the New workspace
-  dialog; **the zoo** is the third view (`view` = `zoo`, the bar's Zoo, the palette's "Zoo on the Wall", allowed to a viewer): `app/zoo/` — `Zoo.tsx` stands every shown tile as a creature in a **pen per machine** (`pensOf` in `features/roster/zooPens.ts`, tested; a `section.zoo-pen` with a sign — the machine's name (`useSharing().machineLabel`), its hue on the sign's edge, its weather as icons and words (`weatherOf` / `weatherWords`: warm from 75 °C, hot from 85 °C — the vitals' `WARM` / `HOT` — a storm for under-voltage now, boxes under 10 % disk free, dust past one load per core, a lamp while kept awake), a fence along its foot; the pens side by side as wide as their creatures want, each its own `.zoo-grid`, a bubbles' row only while one of its creatures talks) under **the sky of the viewer's hour** (`skyOf`: dawn, day, dusk, night; `Sky.tsx` — the gradient behind, the sun or the moon and stars in a strip over the pens) and over **the foot** (`ZooFoot.tsx`: `tickerFacts` in `features/roster/zooLife.ts`, tested — answers, waits, spend, merges, who worked longest by `recap.took` — from `GET /api/standup` since this device's midnight, read every `DAY_EVERY` (5 min: the standup reads every agent's conversation on every machine) while in view and on coming back into view (`useDay`, `dayDue`), running along like a ticker only when longer than the screen; the voices' `icon-btn` beside it, pref `zoo.voices`, off, per device: `voices.ts` synthesizes a species' chirp through WebAudio — `voiceOf`, `TUNES` — for a question, a finish, a merge, the audio context made inside the switch's click, or after a reload with them on at the page's next click or key, and suspended while they are off or the zoo is not on screen: `armVoices` / `useVoices`, tested on a stand-in context); `ZooCreature.tsx` is one figure, `Creature.tsx` the SVG in 120 × 128 units assembled from `bodies.tsx` (the species, `speciesOf` in `features/roster/zooWear.ts`: Claude Code a round critter with antennae, Codex a boxy robot with an aerial and a panel of LEDs, Gemini CLI an egg between two sparkles, Kimi Code a moon rabbit, any other agent a tufted blob; the skin and belly in `.cr-fat`, widened by `--zoo-girth`), `face.tsx` (a face and arms per pose; an `Eye` blinks at a seeded moment and its pupils follow the pointer — `useGaze.ts`, a fine pointer only and never under reduced motion, `gaze` sets `--gx` / `--gy` once a frame, every box measured before any is written so a frame lays the page out once), `wear.tsx` (`hatOf` the model's family — Opus a top hat, Fable a wizard's, Sonnet a beret, Haiku a sprout and a size smaller (`smallModel`), Mythos a laurel, OpenAI's models a cap — a crown once its pull request is merged; a trinket each — glasses, a bow, a scarf, a bow tie, freckles, a mustache, spots — `outfits` giving no two creatures of a species the same one while there are some left, by `seedOf` its key in the roster's order, dressed over every agent of the roster (`wearersOf`, tested) so a filter, a tile hidden by hand or the pop-out never changes a creature's trinket) and `props.tsx` (the laptop, confetti, the sign — "?", the "!" board, z's, "…", an empty battery — at the top right clear of the hats, and what `features/roster/zooBody.ts` (tested) reads off the roster: `girthOf` the context's share, a belt from `BELT_AT` 0.8; `coinsOf` the cost as up to six coins, tinted amber or red by the tightest budget over its machine and folder; `flagOf` its pull request's flag — failed, running, passed, a draft, open — and the crown; `workExtras` a mug after `COFFEE_AFTER` 20 min of work, sweat after `SWEAT_AFTER` an hour or in a hot pen; `drainedUntil` when an agent stopped on its plan limit carries on, its booked continue or the reset `resetForHit` names, in the caption; `babiesOf` its subagents at work from the roster's `pane.subagents` (`internal/subagents`), up to `MAX_BABIES` 3 hopping at its feet at little laptops and the rest counted — a quiet one is no baby, it may never finish); a pose per state from `features/roster/zoo.ts` (tested: `lookOf` — working → busy at a laptop at the spinner's rhythm, blocked → a hand up under a pulsing "?", a watchdog note → worried under an amber "!" board, done → dancing with confetti, idle → asleep with "z" (under a blanket at night), idle_stale → asleep and dim, unknown → puzzled under "…", a plan limit hit and at rest → drained, slumped under an empty battery — `poseWord` the caption's word, `stateSince`, `bubbleOf` the answer's first line in a speech bubble once it finished or rests, cut at `BUBBLE_MAX` by `cutAt`, `CREATURE_SIZE` / `cellMin` per S/M/L); an asking creature's bubble holds what it asks (`features/roster/useQuestions.ts`, shared with the sidebar's "Needs you", over `questions.ts`, tested: `GET /api/question` for the asking ones alone, at most `MAX_ASKING` 8, every 10 s while in view, a round never begun while the last is out, an unchanged reading drawing nothing (`sameQuestions`); `questionBubble`, a red-edged `zoo-bubble is-question`); the vendor's logo as a badge, its name (`rowLabel`), folder (with its icon) and "working · 6 min" under it, its model, cost, context, flag and babies in its tooltip; **between readings** (`useZooLife.ts` over `happenings` in `zooLife.ts`, tested: only moves seen on this page — the first reading seeds — and a merge only of a request it saw open, its state kept while a remuda just restarted has not read it again (`carried`), so a restart sets off no fireworks for an old merge) a finish has the resting and the puzzled ones clap (`joinsApplause`, `CHEER_MS`), a merge sets off `Fireworks` over the zoo (`FIREWORKS_MS`), a compaction puffs (`compacted`, `PUFF_MS`); a click is `actions.openPane` (the open.lens rule), a hover is a `Tip` with `stateWords`, a long press (`ui/press.ts`) shows them under it for 3 s; **the talking zoo**: a long press, or the `icon-btn` Tell me beside its name (revealed under the pointer, always there on a touch screen), has the creature say what its agent did today — `app/zoo/useTell.ts` reads the pane's recap since this device's midnight (`GET /api/recap?…&since`), `creatureTalk` in `features/roster/zooTalk.ts` (tested) makes it a sentence or two in the first person ("Today I answered 3 times and edited app.go and README.md.", then how it stands — waiting for your answer, still at it, its last answer quoted once it rests), spoken by `lib/speech.ts` at its species' pitch and pace (`speechOf`, from the chirp's `voiceOf`: a gemini high, a robot low and a little slow), the sentence being said in its bubble (`.zoo-bubble.is-telling`), one creature at a time and the same one again to stop; never for a folder hidden under the screen-sharing mode; two abreast under 600 px; under the screen-sharing mode a hidden folder's creature flies no flag, holds up no question and the ticker names it by the neutral name; office mode shows the featured one large beside small ones whose click pins, under the same sky and over the same foot, the pop-out shows the popped agent large; `prefers-reduced-motion` stops every animation, a pen's storm flash (a pseudo-element) too (`zooMotion.test.ts`), the ticker is cut rather than run, no fireworks, and the poses stay; the wall's spinner does not tick while the zoo is shown (`spinsFor` in wall.ts, tested), since every creature would be drawn again several times a second for nothing; the tile itself is `Tile.tsx`, `TileView`; a tile shows the chat or, in the **Screen** view (`view` in pref `wall`: the Chat | Screen pair in the wall's bar, "Wall of screens" in the palette, the pop-out follows it), the pane's terminal as it is — `features/terminal/Screen.tsx` reads `GET /api/screen?machine&pane` (`internal/server/screen.go` → `herdr.Client.PaneScreen`, `pane.read` with `format: ansi`, read from herdr on demand at the tiles' pace, 3 s / 15 s, an ETag over the text so an unchanged screen is a 304; no attach, so no slot is taken and the shared pane is never resized) and draws the rows through `features/terminal/ansi.ts` (`parseAnsi`, tested: SGR colours in xterm's palette, 256 and true colour, bold / dim / italic / underline / inverse, every other escape dropped) at the font that fits the pane's columns in the tile's width (`thumbFont`, `engine/geometry.ts`), the bottom rows kept when the height runs out; a click opens the terminal lens, the head the lens of the view; `TailAnswer` (chat/Tail.tsx) is the foot under either view — the keys for a question and the compact composer; under the head a **state line** that is always there, `TileState` in `chat/Tail.tsx` — `stateWords` with how long the state has lasted (`radar.since`, `elapsed` in `lib/time.ts`) and, while the agent works in the chat view, what it does this second from the end of its tail (`features/chat/doing.ts`, tested: the tool call still without a result through `toolLabel`, now in `footprint.ts`, and how long it has run — `Running` in `Tail.tsx`, a second at a time through `useNow` in `lib/clock.ts`, amber past `LONG_CALL` 60 s — else thinking or writing; an Agent call without its result reads as waiting on its subagents, and the line says how many of the conversation's still work, "2 subagents working", from the answer's `subagents`), while its plan has open items how far it is, "3/7" (`progressWords` in `chat/plan.ts`, from the tail's `plan`), and once it has finished or sits idle, **what it answered**: the first line of the text its last turn ended with, in the quiet colour — the chat view reads it from the tail (`features/chat/said.ts`, tested: marks stripped, cut at a word by 120 characters), the screen view and the strip from the roster's `pane.said` (`internal/said`, the same cut)), and under it the agent's **activity ribbon** of the last half hour (`chat/ActivityRibbon.tsx`, in both views, none in office mode's cards or on a hidden folder's tile), **the pop-out**
+  dialog; **the zoo** is the third view (`view` = `zoo`, the bar's Zoo, the palette's "Zoo on the Wall", allowed to a viewer): `app/zoo/` — `Zoo.tsx` stands every shown tile as a creature in a **pen per machine** (`pensOf` in `features/roster/zooPens.ts`, tested; a `section.zoo-pen` with a sign — the machine's name (`useSharing().machineLabel`), its hue on the sign's edge, its weather as icons and words (`weatherOf` / `weatherWords`: warm from 75 °C, hot from 85 °C — the vitals' `WARM` / `HOT` — a storm for under-voltage now, boxes under 10 % disk free, dust past one load per core, a lamp while kept awake), a fence along its foot; the pens side by side as wide as their creatures want, each its own `.zoo-grid`, a bubbles' row only while one of its creatures talks) under **the sky of the viewer's hour** (`skyOf`: dawn, day, dusk, night; `Sky.tsx` — the gradient behind, the sun or the moon and stars in a strip over the pens) and over **the foot** (`ZooFoot.tsx`: `tickerFacts` in `features/roster/zooLife.ts`, tested — answers, waits, spend, merges, who worked longest by `recap.took` — from `GET /api/standup` since this device's midnight, read every `DAY_EVERY` (5 min: the standup reads every agent's conversation on every machine) while in view and on coming back into view (`useDay`, `dayDue`), running along like a ticker only when longer than the screen; the voices' `icon-btn` beside it, pref `zoo.voices`, off, per device: `voices.ts` synthesizes a species' chirp through WebAudio — `voiceOf`, `TUNES` — for a question, a finish, a merge, the audio context made inside the switch's click, or after a reload with them on at the page's next click or key, and suspended while they are off or the zoo is not on screen: `armVoices` / `useVoices`, tested on a stand-in context); `ZooCreature.tsx` is one figure, `Creature.tsx` the SVG in 120 × 128 units assembled from `bodies.tsx` (the species, `speciesOf` in `features/roster/zooWear.ts`: Claude Code a round critter with antennae, Codex a boxy robot with an aerial and a panel of LEDs, Gemini CLI an egg between two sparkles, Kimi Code a moon rabbit, any other agent a tufted blob; the skin and belly in `.cr-fat`, widened by `--zoo-girth`), `face.tsx` (a face and arms per pose; an `Eye` blinks at a seeded moment and its pupils follow the pointer — `useGaze.ts`, a fine pointer only and never under reduced motion, `gaze` sets `--gx` / `--gy` once a frame, every box measured before any is written so a frame lays the page out once), `wear.tsx` (`hatOf` the model's family — Opus a top hat, Fable a wizard's, Sonnet a beret, Haiku a sprout and a size smaller (`smallModel`), Mythos a laurel, OpenAI's models a cap — a crown once its pull request is merged; a trinket each — glasses, a bow, a scarf, a bow tie, freckles, a mustache, spots — `outfits` giving no two creatures of a species the same one while there are some left, by `seedOf` its key in the roster's order, dressed over every agent of the roster (`wearersOf`, tested) so a filter, a tile hidden by hand or the pop-out never changes a creature's trinket) and `props.tsx` (the laptop, confetti, the sign — "?", the "!" board, z's, "…", an empty battery — at the top right clear of the hats, and what `features/roster/zooBody.ts` (tested) reads off the roster: `girthOf` the context's share, a belt from `BELT_AT` 0.8; `coinsOf` the cost as up to six coins, tinted amber or red by the tightest budget over its machine and folder; `flagOf` its pull request's flag — failed, running, passed, a draft, open — and the crown; `workExtras` a mug after `COFFEE_AFTER` 20 min of work, sweat after `SWEAT_AFTER` an hour or in a hot pen; `drainedUntil` when an agent stopped on its plan limit carries on, its booked continue or the reset `resetForHit` names, in the caption; `babiesOf` its subagents at work from the roster's `pane.subagents` (`internal/subagents`), up to `MAX_BABIES` 3 hopping at its feet at little laptops and the rest counted — a quiet one is no baby, it may never finish); a pose per state from `features/roster/zoo.ts` (tested: `lookOf` — working → busy at a laptop at the spinner's rhythm, blocked → a hand up under a pulsing "?", a watchdog note → worried under an amber "!" board, done → dancing with confetti, idle → asleep with "z" (under a blanket at night), idle_stale → asleep and dim, unknown → puzzled under "…", a plan limit hit and at rest → drained, slumped under an empty battery — `poseWord` the caption's word, `stateSince`, `bubbleOf` the answer's first line in a speech bubble once it finished or rests, cut at `BUBBLE_MAX` by `cutAt`, `CREATURE_SIZE` / `cellMin` per S/M/L); an asking creature's bubble holds what it asks (`features/roster/useQuestions.ts`, shared with the sidebar's "Needs you", over `questions.ts`, tested: `GET /api/question` for the asking ones alone, at most `MAX_ASKING` 8, every 10 s while this very document is on screen (`documentVisible` in `lib/visibility.ts`, not `pageVisible`, which the Mac app's shut window and a pop-out over a hidden tab keep true), a round never begun while the last is out, an unchanged reading drawing nothing (`sameQuestions`); `questionBubble`, a red-edged `zoo-bubble is-question`); the vendor's logo as a badge, its name (`rowLabel`), folder (with its icon) and "working · 6 min" under it, its model, cost, context, flag and babies in its tooltip; **between readings** (`useZooLife.ts` over `happenings` in `zooLife.ts`, tested: only moves seen on this page — the first reading seeds — and a merge only of a request it saw open, its state kept while a remuda just restarted has not read it again (`carried`), so a restart sets off no fireworks for an old merge) a finish has the resting and the puzzled ones clap (`joinsApplause`, `CHEER_MS`), a merge sets off `Fireworks` over the zoo (`FIREWORKS_MS`), a compaction puffs (`compacted`, `PUFF_MS`); a click is `actions.openPane` (the open.lens rule), a hover is a `Tip` with `stateWords`, a long press (`ui/press.ts`) shows them under it for 3 s; **the talking zoo**: a long press, or the `icon-btn` Tell me beside its name (revealed under the pointer, always there on a touch screen), has the creature say what its agent did today — `app/zoo/useTell.ts` reads the pane's recap since this device's midnight (`GET /api/recap?…&since`), `creatureTalk` in `features/roster/zooTalk.ts` (tested) makes it a sentence or two in the first person ("Today I answered 3 times and edited app.go and README.md.", then how it stands — waiting for your answer, still at it, its last answer quoted once it rests), spoken by `lib/speech.ts` at its species' pitch and pace (`speechOf`, from the chirp's `voiceOf`: a gemini high, a robot low and a little slow), the sentence being said in its bubble (`.zoo-bubble.is-telling`), one creature at a time and the same one again to stop; never for a folder hidden under the screen-sharing mode; two abreast under 600 px; under the screen-sharing mode a hidden folder's creature flies no flag, holds up no question and the ticker names it by the neutral name; office mode shows the featured one large beside small ones whose click pins, under the same sky and over the same foot, the pop-out shows the popped agent large; `prefers-reduced-motion` stops every animation, a pen's storm flash (a pseudo-element) too (`zooMotion.test.ts`), the ticker is cut rather than run, no fireworks, and the poses stay; the wall's spinner does not tick while the zoo is shown (`spinsFor` in wall.ts, tested), since every creature would be drawn again several times a second for nothing; the tile itself is `Tile.tsx`, `TileView`; a tile shows the chat or, in the **Screen** view (`view` in pref `wall`: the Chat | Screen pair in the wall's bar, "Wall of screens" in the palette, the pop-out follows it), the pane's terminal as it is — `features/terminal/Screen.tsx` reads `GET /api/screen?machine&pane` (`internal/server/screen.go` → `herdr.Client.PaneScreen`, `pane.read` with `format: ansi`, read from herdr on demand at the tiles' pace, 3 s / 15 s, an ETag over the text so an unchanged screen is a 304; no attach, so no slot is taken and the shared pane is never resized) and draws the rows through `features/terminal/ansi.ts` (`parseAnsi`, tested: SGR colours in xterm's palette, 256 and true colour, bold / dim / italic / underline / inverse, every other escape dropped) at the font that fits the pane's columns in the tile's width (`thumbFont`, `engine/geometry.ts`), the bottom rows kept when the height runs out; a click opens the terminal lens, the head the lens of the view; `TailAnswer` (chat/Tail.tsx) is the foot under either view — the keys for a question and the compact composer; under the head a **state line** that is always there, `TileState` in `chat/Tail.tsx` — `stateWords` with how long the state has lasted (`radar.since`, `elapsed` in `lib/time.ts`) and, while the agent works in the chat view, what it does this second from the end of its tail (`features/chat/doing.ts`, tested: the tool call still without a result through `toolLabel`, now in `footprint.ts`, and how long it has run — `Running` in `Tail.tsx`, a second at a time through `useNow` in `lib/clock.ts`, amber past `LONG_CALL` 60 s — else thinking or writing; an Agent call without its result reads as waiting on its subagents, and the line says how many of the conversation's still work, "2 subagents working", from the answer's `subagents`), while its plan has open items how far it is, "3/7" (`progressWords` in `chat/plan.ts`, from the tail's `plan`), and once it has finished or sits idle, **what it answered**: the first line of the text its last turn ended with, in the quiet colour — the chat view reads it from the tail (`features/chat/said.ts`, tested: marks stripped, cut at a word by 120 characters), the screen view and the strip from the roster's `pane.said` (`internal/said`, the same cut)), and under it the agent's **activity ribbon** of the last half hour (`chat/ActivityRibbon.tsx`, in both views, none in office mode's cards or on a hidden folder's tile), **the pop-out**
   (`pip.ts` owns the one small window Chrome's Document
   Picture-in-Picture gives — `popOut(selection)` from the click itself,
   the page's stylesheets copied in, `pagehide` clears the store; one
@@ -1965,8 +1971,14 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   --no-renames --untracked-files=no -- .` (its paths from the repository's
   top, the folder's `--show-prefix` cut off) and the staged and unstaged
   `--numstat -z --relative` (`statusScript`, every read through `readGit`:
-  `--no-optional-locks -c core.fsmonitor=false`, so a read never writes
-  the index) — each `File` carries `index` / `work` (git's letters, M A D
+  `--no-optional-locks -c core.fsmonitor=false -c
+  diff.autoRefreshIndex=false`, so a read never writes the index — without
+  the last, git's diff refreshes the stat of a file only touched and
+  writes the index back under the `index.lock` an agent's own git add or
+  commit may want; the summary's numstat, the uncommitted files' list for
+  their blobs (numstat's paths, which leave such a file out as
+  `--name-only` would not), the sidebar sweep's numstat and the file
+  viewer's diff read the same way, `readlock_test.go`) — each `File` carries `index` / `work` (git's letters, M A D
   T), `conflict` (an unmerged file's two letters, UU both edited, AA, DD,
   AU, UA, DU, UD) and `staged` / `unstaged` (`Stat{added, removed,
   binary}`, a file partly staged holding both), and a file the diff
@@ -2895,9 +2907,13 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   folder (its parent's when it has none) and arguments; `Parse` keeps one
   per port (the IPv4 loopback's socket first), leaves out the ports given
   (the cockpit's own `-addr`, 7317, the door 7318, code-server's), the
-  processes remuda, herdr, ssh and Tailscale run, and any whose folder is
-  `/` or unknown (a system daemon, another user's), names what it is from
-  its arguments (`labelOf`: vite, next, http.server, uvicorn …) and where
+  processes remuda, herdr, ssh and Tailscale run, an agent's own
+  (`agentProgram`: claude, codex, gemini or kimi as the program or the
+  script node or python runs — Claude Code holds a loopback port in its
+  workspace's folder, never a server to preview, count or stop), and any
+  whose folder is `/` or unknown (a system daemon, another user's), names
+  what it is from its arguments (`labelOf`: vite, next, http.server,
+  uvicorn …) and where
   the machine reaches it (`Dial`: 127.0.0.1 for a wildcard, ::1 for an
   IPv6 one — a Mac's Vite listens on `[::1]` alone — else the address);
   `Match` names the deepest workspace folder holding it (a Mac's
@@ -3022,18 +3038,23 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `Recall`, `Parse` with `Server.PreviewSkip`, `Match` against
   `previewFolders`, the floating terminal's and the concierge's left out)
   every `Every` 15 s while the roster was read within `WatchedFor` a minute
-  (`Touch`, from the roster handler) and every `QuickEvery` 5 s while the
-  status bar asked within `QuickFor` 20 s (`Hurry`, from `/api/resources`
-  and `/api/ports`); one read at a time per machine, a failed read keeping
-  the ports before it with its reason (logged once an hour), `OnChange` the
-  live hub's `RosterChanged`. `For` is a workspace's `[]Port{port, process,
-  label, pid, address}` — `AddressOf`: localhost:5173, *:8080 — the
-  roster's `session.ports` (nothing once a reading is older than
-  `StaleAfter` 2 min), the contract the sidebar's card shares; `Of` the
-  machine's whole reading, its other listeners too. `Stop(host, skip, pid,
+  (`Touch`, from the roster handler) and, for the machine the status bar
+  shows alone, every `QuickEvery` 5 s while the bar asked about it within
+  `QuickFor` 20 s (`Hurry(machine)`, from `/api/resources` and `/api/ports`:
+  the others keep the roster's pace, so a bar on a Pi's page does not
+  triple the looks at every machine of the fleet); one read at a time per
+  machine, a failed read keeping the ports before it with its reason and
+  the time they were read (logged once an hour), `OnChange` the live hub's `RosterChanged` — also when a
+  read follows a stale reading, whose ports the roster had dropped. `For`
+  is a workspace's `[]Port{port, process, label, pid, address}` —
+  `AddressOf`: localhost:5173, *:8080 — the roster's `session.ports`
+  (nothing once a reading is older than `StaleAfter` 2 min), the contract
+  the sidebar's card shares; `Of` the machine's whole reading, its other
+  listeners too, not read while stale (the bar then counts "…", not 0, and
+  `/api/ports` names no `at` until a reading). `Stop(host, skip, pid,
   port)` looks afresh and sends `kill -TERM` only to that very pid on that
   very port among the listeners the person may stop — never remuda's,
-  herdr's, ssh's, Tailscale's, a skipped port's or another user's
+  herdr's, ssh's, Tailscale's, an agent's, a skipped port's or another user's
   (`ErrNotListening`, a 404). Routes `GET /api/ports?machine` and `POST
   /api/ports/stop {machine, pid, port}`, the person's only, at the page's
   press after its confirm.
@@ -4009,8 +4030,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   distance from its upstream, "↑2 ↓1" (`session.sync`, `syncWords` /
   `syncTip`), and what the agent it speaks for needs or said
   (`cardWords`: its note, "waiting for your answer", a plan limit, the
-  first line of what it answered; nothing while it only works); a
-  workspace of shells alone shows `$` and its tabs. **Under every card a
+  first line of what it answered; nothing while it only works — the line
+  keeps its height empty, `.ws-sub` always drawn, so no card grows or
+  shrinks as its agent works and rests, and an issue's chip stands there
+  whatever else does); a workspace of shells alone shows `$` and its tabs. **Under every card a
   line per agent**, after Orca's and munza's better-sidebar
   (`AgentLines.tsx`; the pure part `sidebarAgents.ts`, tested): its logo,
   its title (`rowLabel`; muted at rest; a hidden folder's by its kind),
@@ -4025,9 +4048,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   for a viewer): the pinned agents, in pin order, stand in a **Pinned**
   group over the machines (`SidebarGroups.tsx` `PinnedAgents`, its
   workspace and machine quietly after the title), pref `sidebar.pins`
-  (`machine|pane`, on the sync allow-list; `livePins` lets go of an agent
+  (`machine|pane`, on the sync allow-list; `livePins` lets go of a pane
   gone from a connected machine or a machine the fleet lost, since herdr
-  gives a closed pane's id to a new one). **The subagents at work** hang
+  gives a closed pane's id to a new one, and keeps one standing as a bare
+  shell — a workspace asleep, an agent restarting onto an update or
+  resumed after a reboot comes back in that very pane). **The subagents at work** hang
   under their agent on Orca's tree lines (`.sub-elbow`, the last corner
   rounded; `pane.subagents.list`, the oldest five by name and "N more at
   work"), a click opening the transcript viewer on that one's own
@@ -4061,7 +4086,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   most urgent agent, with counts — and **by ticket prefix** (`PR-12`,
   `INS-4`, after `feature/` too, capitals needing only the dash and lower
   case a number; read off the workspace's name, its branch, its named
-  tabs; "No prefix" last) — `sections.ts`, tested, the sections folding
+  tabs; "No prefix" last, where a workspace the screen-sharing mode hides
+  goes too, its prefix being a piece of its name: `entries`' `masked`,
+  which the sidebar, its fold-all, the neutral letters and the walk pass) — `sections.ts`, tested, the sections folding
   like folders (`machine|section:<key>` in `wsFolded`; `foldKey`,
   `entryItems`). **Alt+]** / **Alt+[** (`useWalkKeys` in `app/next.ts`,
   `walkKeyAsked` in `nextKey.ts` with Alt+N's rules — never over the

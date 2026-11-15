@@ -15,12 +15,12 @@ import (
 var StopTimeout = 20 * time.Second
 
 // ErrNotListening is a stop of a port the process asked about does not listen on now — gone already, or never a
-// listener the person could stop: remuda's, herdr's, ssh's, Tailscale's, or another user's.
+// listener the person could stop: remuda's, herdr's, ssh's, Tailscale's, an agent's own, or another user's.
 var ErrNotListening = errors.New("nothing of yours listens there now")
 
 // Stop sends SIGTERM to the process listening on the machine's port, once a fresh look finds that very pid there
-// among the listeners the person may stop — never one in skip, never remuda's, herdr's, ssh's or Tailscale's — and
-// answers what it stopped.
+// among the listeners the person may stop — never one in skip, never remuda's, herdr's, ssh's, Tailscale's or an
+// agent's (Claude Code holds a loopback port of its own) — and answers what it stopped.
 func Stop(host shell.Shell, skip map[int]bool, pid, port int) (preview.Listener, error) {
 	if pid <= 1 {
 		return preview.Listener{}, ErrNotListening

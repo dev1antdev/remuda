@@ -43,23 +43,20 @@ func (r *recorded) reads() int {
 	return len(r.scripts)
 }
 
-// settle runs a sweep and waits for its reads
+// settle runs a sweep and waits for its reads to end, what they tell OnChange included
 func settle(t *testing.T, tracker *Tracker) {
 	t.Helper()
 	tracker.Sweep()
-	for i := 0; i < 200; i++ {
-		tracker.mu.Lock()
-		busy := false
-		for _, m := range tracker.machines {
-			busy = busy || m.busy
-		}
-		tracker.mu.Unlock()
-		if !busy {
-			return
-		}
-		time.Sleep(5 * time.Millisecond)
+	ended := make(chan struct{})
+	go func() {
+		tracker.reads.Wait()
+		close(ended)
+	}()
+	select {
+	case <-ended:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the reads did not end")
 	}
-	t.Fatal("the reads did not end")
 }
 
 func TestTheTrackerReadsOnlyWhileAPageLooks(t *testing.T) {
@@ -97,7 +94,7 @@ func TestTheTrackerReadsOnlyWhileAPageLooks(t *testing.T) {
 	if gog.reads() != 1 {
 		t.Fatal("the roster's pace is slower than the status bar's")
 	}
-	tracker.Hurry()
+	tracker.Hurry("gog")
 	settle(t, tracker)
 	if gog.reads() != 2 || changes != 1 {
 		t.Fatalf("the status bar's pace: %d reads, %d changes for ports that stood", gog.reads(), changes)
@@ -117,6 +114,92 @@ func TestTheTrackerReadsOnlyWhileAPageLooks(t *testing.T) {
 	clock = clock.Add(StaleAfter + time.Second)
 	if tracker.For("gog", "w1") != nil {
 		t.Fatal("a reading nobody refreshed for long says nothing on the roster")
+	}
+}
+
+// A page back after a while away: the reading went stale, so the roster carried no ports and the machine's reading
+// said it was not read; the next read brings them back to the roster at once, though they did not move.
+func TestAReadAfterAStaleOneMovesTheRoster(t *testing.T) {
+	gog := &recorded{answer: gogAnswer}
+	host := gog.host()
+	clock := time.Unix(1000, 0)
+	tracker := New(func() []Target { return []Target{{ID: "gog", Host: host, Folders: folders}} }, func() map[int]bool { return nil })
+	tracker.now = func() time.Time { return clock }
+	changes := 0
+	tracker.OnChange = func() { changes++ }
+	tracker.Touch()
+	settle(t, tracker)
+	if changes != 1 || tracker.For("gog", "w1") == nil {
+		t.Fatalf("the first read: %d changes", changes)
+	}
+
+	clock = clock.Add(StaleAfter + time.Second)
+	if tracker.For("gog", "w1") != nil {
+		t.Fatal("a stale reading is on the roster")
+	}
+	if _, read := tracker.Of("gog"); read {
+		t.Fatal("a stale reading counts as read: the status bar would count 0 ports from a roster that carries none")
+	}
+	tracker.Touch()
+	settle(t, tracker)
+	if changes != 2 {
+		t.Fatalf("the ports came back to the roster with %d changes told: the page keeps none until something else moves", changes)
+	}
+	if _, read := tracker.Of("gog"); !read || tracker.For("gog", "w1") == nil {
+		t.Fatal("the fresh reading")
+	}
+
+	// away again, and the first read back fails: the old ports stay as old as they are, never on the roster as fresh
+	gog.mu.Lock()
+	gog.err, gog.answer = errors.New("ssh: connection lost"), ""
+	gog.mu.Unlock()
+	clock = clock.Add(StaleAfter + time.Second)
+	tracker.Touch()
+	settle(t, tracker)
+	if tracker.For("gog", "w1") != nil {
+		t.Fatal("a failed read put ports read minutes ago on the roster as fresh")
+	}
+	if whole, read := tracker.Of("gog"); read || whole.Error == "" {
+		t.Fatalf("a failed read after a stale one: read %v, %+v", read, whole)
+	}
+}
+
+// The status bar shows one machine's ports: that machine is read at its pace, every other at the roster's, so a bar
+// on the Raspberry Pi's page does not triple the looks at every machine of the fleet.
+func TestTheStatusBarHurriesItsMachineAlone(t *testing.T) {
+	counts := map[string]*recorded{"gog": {}, "mac": {}, "pi": {}}
+	var targets []Target
+	for _, id := range []string{"gog", "mac", "pi"} {
+		targets = append(targets, Target{ID: id, Host: counts[id].host()})
+	}
+	for _, focused := range []bool{true, false} {
+		for _, r := range counts {
+			r.scripts = nil
+		}
+		tracker := New(func() []Target { return targets }, func() map[int]bool { return nil })
+		clock := time.Unix(1000, 0)
+		tracker.now = func() time.Time { return clock }
+		every := 5 // the bar's poll while the window has the focus, else 30 s
+		if !focused {
+			every = 30
+		}
+		for second := 0; second < 60; second++ {
+			if second%3 == 0 {
+				tracker.Touch()
+			}
+			if second%every == 0 {
+				tracker.Hurry("gog")
+			}
+			settle(t, tracker)
+			clock = clock.Add(time.Second)
+		}
+		gog, mac, pi := counts["gog"].reads(), counts["mac"].reads(), counts["pi"].reads()
+		if focused && gog != 12 || !focused && gog != 8 {
+			t.Fatalf("focused %v: the bar's machine is read %d times a minute", focused, gog)
+		}
+		if mac != 4 || pi != 4 {
+			t.Fatalf("focused %v: the machines the bar does not show are read %d and %d times a minute, the roster's pace is 4", focused, mac, pi)
+		}
 	}
 }
 
@@ -146,6 +229,16 @@ func TestStopSignalsOnlyThePidThatListensThere(t *testing.T) {
 		if strings.HasPrefix(s, "kill") {
 			t.Fatalf("a pid that does not listen there was signalled: %q", s)
 		}
+	}
+	// Claude Code holds a loopback port in its workspace's folder: the agent herdr runs is never stopped from here
+	agent := &shell.Fake{Name: "gog", Remote: true, Answer: func(script string) (string, error) {
+		if strings.HasPrefix(script, "kill ") {
+			t.Fatalf("the agent was signalled: %q", script)
+		}
+		return gogAnswer + line("49778", "127.0.0.1", "1813", "2.1.323", "/home/me/code/app", "/home/me/code/app", "claude --resume 0b6f2c1e-7d0a-4c55-9a1e-3f2d8c4b5a61"), nil
+	}}
+	if _, err := Stop(agent, nil, 1813, 49778); !errors.Is(err, ErrNotListening) {
+		t.Fatalf("an agent's own port: %v", err)
 	}
 }
 

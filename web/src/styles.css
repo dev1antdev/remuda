@@ -2252,12 +2252,14 @@ body.is-resizing iframe {
   font-variant-numeric: tabular-nums;
 }
 
-/* the second line sits under the name; a shell's card, under the name past its "$" */
+/* the second line sits under the name; a shell's card, under the name past its "$". It keeps its height with nothing
+   on it — an agent at work says nothing there — so a card never grows or shrinks as its agent works and rests */
 .ws-sub {
   display: flex;
   align-items: center;
   gap: 6px;
   min-width: 0;
+  min-height: 1.35em;
   padding-left: 0;
   color: var(--fg-faint);
   font-size: var(--fs-12);

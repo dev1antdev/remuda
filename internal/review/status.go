@@ -13,8 +13,9 @@ type Stat struct {
 	Binary  bool `json:"binary,omitempty"`
 }
 
-// readGit is how every read here calls git: no optional lock, so a read never writes the index, and no fsmonitor helper.
-const readGit = `git --no-optional-locks -c core.fsmonitor=false -c core.quotepath=off`
+// readGit is how every read here calls git: no optional lock and no refresh of a touched file's stat by diff, so a read
+// never writes the index, and no fsmonitor helper.
+const readGit = `git --no-optional-locks -c core.fsmonitor=false -c diff.autoRefreshIndex=false -c core.quotepath=off`
 
 // statusScript prints the folder's place in the repository (its prefix), then, apart by lines of GS, git's porcelain v2
 // status of the folder, the staged numstat (HEAD against the index) and the unstaged one (the index against the
