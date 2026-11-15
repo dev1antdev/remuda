@@ -51,6 +51,31 @@ describe("prompt cards", () => {
     expect(cards[1]!.reply).toBe("Done. Staging signs webhooks with the old secret; I rotated it and replayed the failed ones.");
   });
 
+  it("finds the prompt a compaction's summary or an interruption's note shares its turn with, and no prompt in a background task's note", () => {
+    // Claude Code writes the summary, the note and the person's next prompt as records of their own; with no answer
+    // between them they make one user turn
+    const cards = promptCards([
+      { role: "user", ts: "2026-11-13T09:00:00Z", ids: ["u1"], parts: [text("rename the flag")] },
+      { role: "assistant", ts: "2026-11-13T09:00:04Z", took: 10, output: 100, parts: [tool("Bash", { command: "go build ./... &" }), text("Renamed.")] },
+      { role: "user", ts: "2026-11-13T09:05:00Z", ids: ["n1"], parts: [text("<task-notification>\n<task-id>b1</task-id>\n<status>completed</status>\n<summary>Background command finished</summary>\n</task-notification>")] },
+      { role: "assistant", ts: "2026-11-13T09:05:02Z", took: 5, output: 50, parts: [text("The build passed.")] },
+      { role: "user", ts: "2026-11-13T10:00:00Z", ids: ["s1"], parts: [text("This session is being continued from a previous conversation that ran out of context. The summary below covers it."), text("now fix the **build**")] },
+      { role: "assistant", ts: "2026-11-13T10:00:03Z", took: 30, output: 300, parts: [tool("Bash", { command: "go build ./..." }), text("Fixed.")] },
+      { role: "user", ts: "2026-11-13T10:05:00Z", ids: ["i1"], parts: [text("[Request interrupted by user for tool use]"), text("try again without the cache")] },
+      { role: "assistant", ts: "2026-11-13T10:05:02Z", took: 20, output: 200, parts: [text("Done.")] },
+    ]);
+    expect(cards.map((c) => [c.n, c.id, c.text])).toEqual([
+      [1, "u1", "rename the flag"],
+      [2, "s1", "now fix the **build**"],
+      [3, "i1", "try again without the cache"],
+    ]);
+    expect(cards.map((c) => [c.output, c.commands, c.reply])).toEqual([
+      [150, 1, "Renamed.\n\nThe build passed."],
+      [300, 1, "Fixed."],
+      [200, 0, "Done."],
+    ]);
+  });
+
   it("starts with the person's words even when a mid-turn message comes first", () => {
     const cards = promptCards([{ role: "user", ts: "2026-11-13T09:00:00Z", ids: ["m0"], parts: [{ type: "queued", text: "and this" }] }]);
     expect(cards).toHaveLength(1);
