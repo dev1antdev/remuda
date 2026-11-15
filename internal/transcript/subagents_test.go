@@ -168,3 +168,97 @@ func TestTheSubagentCacheLetsGoOfTheSummaryAskedForLongestAgo(t *testing.T) {
 		t.Fatal("the summary asked for longest ago goes, the one just asked for again stays")
 	}
 }
+
+// twoSubagents is a session with the subagent toolu_1 spawned and another, toolu_2's, both silent for an hour.
+func twoSubagents(t *testing.T) (session, first, second string) {
+	t.Helper()
+	session, dir := sessionWithSubagent(t, metaDone, forkRef, subTool, subResult, subReport)
+	first = filepath.Join(dir, "agent-a1.jsonl")
+	second = filepath.Join(dir, "agent-old.jsonl")
+	if err := os.WriteFile(second, []byte(forkRef+"\n"+subTool+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "agent-old.meta.json"), []byte(strings.Replace(metaDone, "toolu_1", "toolu_2", 1)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	long := time.Now().Add(-time.Hour)
+	for _, name := range []string{"agent-a1.jsonl", "agent-a1.meta.json", "agent-old.jsonl", "agent-old.meta.json"} {
+		if err := os.Chtimes(filepath.Join(dir, name), long, long); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return session, first, second
+}
+
+// A chat reads the subagents its turns' calls spawned and the ones that may still work, never the session's every one.
+func TestSubagentsForReadsOnlyTheOnesAChatNeeds(t *testing.T) {
+	session, first, second := twoSubagents(t)
+	reader := NewReader(shell.Local{})
+
+	none, err := reader.SubagentsFor(session, nil, time.Now())
+	if err != nil || len(none) != 0 || len(reader.subagents) != 0 {
+		t.Fatalf("with no call on screen and nothing at work: %+v, %v, read %d", none, err, len(reader.subagents))
+	}
+	subs, err := reader.SubagentsFor(session, map[string]bool{"toolu_1": true}, time.Now())
+	if err != nil || len(subs) != 1 || subs[0].ID != "agent-a1" || subs[0].ToolID != "toolu_1" || subs[0].Status != SubagentDone {
+		t.Fatalf("the call's subagent = %+v, %v", subs, err)
+	}
+	if _, read := reader.subagents[second]; read {
+		t.Error("a subagent no call on screen spawned was read")
+	}
+	if _, read := reader.subagents[first]; !read {
+		t.Error("the call's subagent was not kept")
+	}
+	// one whose transcript just moved may be at work: it is answered whatever the calls on screen
+	now := time.Now()
+	if err := os.Chtimes(second, now, now); err != nil {
+		t.Fatal(err)
+	}
+	recent, err := reader.SubagentsFor(session, nil, now)
+	if err != nil || len(recent) != 1 || recent[0].ID != "agent-old" {
+		t.Fatalf("the one that may be at work = %+v, %v", recent, err)
+	}
+	if !reader.HasSubagent(session, "agent-old", now) || reader.HasSubagent(session, "agent-zz", now) || reader.HasSubagent(session, "../s", now) {
+		t.Error("HasSubagent does not go by the folder's listing")
+	}
+}
+
+// On a remote the folder's meta files come in one round trip, and a transcript nobody asked for is never fetched.
+func TestSubagentsForReadsARemoteFolderInFewRoundTrips(t *testing.T) {
+	session, _, second := twoSubagents(t)
+	host := remoteHere(t.TempDir())
+	reader := NewReader(host)
+
+	subs, err := reader.SubagentsFor(session, map[string]bool{"toolu_1": true}, time.Now())
+	if err != nil || len(subs) != 1 || subs[0].ID != "agent-a1" || subs[0].Description != "PR: quiet hours" {
+		t.Fatalf("the call's subagent over ssh = %+v, %v", subs, err)
+	}
+	metas := 0
+	for _, script := range host.Scripts() {
+		if strings.Contains(script, "cat \"$f\"") { // the script that prints every meta file, not the folder's listing
+			metas++
+		}
+		if strings.Contains(script, second) {
+			t.Errorf("a transcript nobody asked for was read: %s", script)
+		}
+	}
+	if metas != 1 {
+		t.Errorf("the folder's meta files were read in %d round trips", metas)
+	}
+	before := len(host.Scripts())
+	if again, err := reader.SubagentsFor(session, map[string]bool{"toolu_1": true}, time.Now()); err != nil || len(again) != 1 {
+		t.Fatalf("asked again: %+v, %v", again, err)
+	}
+	if after := len(host.Scripts()); after != before {
+		t.Errorf("asked again a moment later, %d more scripts ran", after-before)
+	}
+}
+
+func TestParseMetasReadsEachFileByItsName(t *testing.T) {
+	answer := "\x1eagent-a1.meta.json\x1f" + metaDone + "\x1eagent-b2.meta.json\x1f{\"toolUseId\":\"toolu_9\",\"description\":\"cut sho" +
+		"\x1e../evil.meta.json\x1f{\"toolUseId\":\"x\"}\x1enotes.txt\x1f{}"
+	metas := parseMetas(answer)
+	if len(metas) != 1 || metas["agent-a1.meta.json"].ToolUseID != "toolu_1" {
+		t.Fatalf("metas = %+v", metas)
+	}
+}

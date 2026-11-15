@@ -254,12 +254,11 @@ func (c *Service) LastAnswer(machineID, paneID string) (string, string) {
 
 // Conversation is what the chat lens shows: one session file and its neighbours in the folder.
 type Conversation struct {
-	ID        string
-	Path      string // "" when the pane has no conversation yet
-	Dir       string
-	Version   transcript.Version
-	Sessions  []transcript.SessionInfo
-	Subagents []transcript.Subagent // the agents it spawned, as they stand
+	ID       string
+	Path     string // "" when the pane has no conversation yet
+	Dir      string
+	Version  transcript.Version
+	Sessions []transcript.SessionInfo
 
 	reader *transcript.Reader
 	tails  *tailCache
@@ -274,13 +273,31 @@ func (conv Conversation) ETag() string {
 	return fmt.Sprintf(`"%s-%s"`, conv.ID, conv.Version)
 }
 
+// spawnTools are the tools whose call starts a subagent: Agent today, Task in older transcripts.
+var spawnTools = map[string]bool{"Agent": true, "Task": true}
+
+// SubagentsOf is the conversation's subagents the turns given have a use for, as they stand: the ones their Agent
+// calls spawned, and the ones that may still be at work (transcript.Reader.SubagentsFor) — never every subagent of a
+// long session, whose transcripts weigh a gigabyte between them.
+func (conv Conversation) SubagentsOf(turns []transcript.Turn) []transcript.Subagent {
+	if conv.reader == nil || conv.Path == "" {
+		return nil
+	}
+	spawnedBy := map[string]bool{}
+	for _, turn := range turns {
+		for _, part := range turn.Parts {
+			if part.Type == "tool" && part.ToolID != "" && spawnTools[part.ToolName] {
+				spawnedBy[part.ToolID] = true
+			}
+		}
+	}
+	list, _ := conv.reader.SubagentsFor(conv.Path, spawnedBy, time.Now())
+	return list
+}
+
 // Subagent is one of the conversation's subagents on its own, for the viewer: its turns priced, with its file's version.
 func (conv Conversation) Subagent(id string) ([]transcript.Turn, transcript.Version, error) {
-	known := false
-	for _, s := range conv.Subagents {
-		known = known || s.ID == id
-	}
-	if !known {
+	if conv.reader == nil || !conv.reader.HasSubagent(conv.Path, id, time.Now()) {
 		return nil, transcript.Version{}, &NotFoundError{fmt.Errorf("subagent %s not found", id)}
 	}
 	turns, version, err := conv.reader.SubagentTurns(conv.Path, id)
@@ -427,7 +444,7 @@ func (c *Service) Open(mc *machines.Machine, paneID, sessionID, dir string, tail
 	}
 	conv.Version = version
 	conv.ID = transcript.SessionID(conv.Path)
-	conv.Subagents, conv.stamp, _ = mc.Transcripts.Subagents(conv.Path, time.Now())
+	conv.stamp = mc.Transcripts.SubagentsStamp(conv.Path, time.Now())
 	if conv.Sessions == nil && mc.Local() && paneID != "" && !tail {
 		conv.Sessions, _ = transcript.Sessions(transcript.FormatOf(conv.Path), conv.Dir)
 	}

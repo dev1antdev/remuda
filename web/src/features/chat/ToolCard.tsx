@@ -19,6 +19,7 @@ import { PLAN_TOOLS, planCallWords } from "./plan";
 import { PLAN_MARK } from "./PlanBar";
 import { SubagentRow } from "./SubagentRow";
 import { callState, type CallState, type Indexed } from "./toolRuns";
+import { shellOfCall, shellSeconds, type Shell, type ShellStatus } from "./shells";
 
 export type CallsProps = {
   machineId?: string;
@@ -27,6 +28,16 @@ export type CallsProps = {
   onOpenSubagent?: (s: Subagent) => void;
   diffs?: boolean; // an Edit's change under its line: the lens, not a tile
   live?: boolean; // the turn under way: a call without its result is running
+  shells?: Shell[]; // the conversation's background shells: the call that started one says how it stands
+};
+
+// SHELL_WORDS is how a call says the shell it started stands
+const SHELL_WORDS: Record<ShellStatus, () => string> = {
+  running: () => t("running in the background"),
+  completed: () => t("ran in the background"),
+  failed: () => t("failed in the background"),
+  killed: () => t("killed"),
+  stopped: () => t("stopped"),
 };
 
 export function ToolCard({ items, ...props }: CallsProps & { items: Indexed[] }) {
@@ -73,9 +84,12 @@ function PlanLine({ part }: { part: Part }) {
   );
 }
 
-function CallLine({ part, machineId, onOpenFile, subagents, onOpenSubagent, diffs, live = false }: CallsProps & { part: Part }) {
+function CallLine({ part, machineId, onOpenFile, subagents, onOpenSubagent, diffs, live = false, shells }: CallsProps & { part: Part }) {
   const { name, hint, file } = toolLabel(part);
-  const state = callState(part, live);
+  // a call that started a shell in the background got its result at once: its mark goes by the shell, still running
+  // until Claude Code says how it ended
+  const shell = shellOfCall(shells, part.tool_id);
+  const state: CallState = shell ? (shell.status === "running" ? "running" : shell.status === "failed" || shell.status === "killed" ? "failed" : "done") : callState(part, live);
   const picture = machineId ? imagePath(part) : null;
   const spawned = part.tool_id && subagents ? subagents.filter((s) => s.tool_id === part.tool_id) : [];
   const diffed = !!diffs && EDIT_CHANGE_TOOLS.has(name);
@@ -106,8 +120,13 @@ function CallLine({ part, machineId, onOpenFile, subagents, onOpenSubagent, diff
               </span>
             )}
             {everywhere && <span className="tool-every">{t("· every occurrence")}</span>}
-            <span className="tool-took" title={state === "failed" ? t("The call failed, and how long it took") : t("How long the call took")}>
-              {state === "running" && part.at ? <Elapsed since={part.at} /> : part.took ? took(part.took) : ""}
+            {shell && (
+              <span className={`tool-shell is-${shell.status}`} title={shell.summary || undefined}>
+                {SHELL_WORDS[shell.status]()}
+              </span>
+            )}
+            <span className="tool-took" title={shell ? t("How long the shell has run") : state === "failed" ? t("The call failed, and how long it took") : t("How long the call took")}>
+              {shell ? <ShellTook shell={shell} /> : state === "running" && part.at ? <Elapsed since={part.at} /> : part.took ? took(part.took) : ""}
             </span>
             <Icon name="chevron-right" size={12} className="tool-chevron" />
           </>
@@ -115,6 +134,12 @@ function CallLine({ part, machineId, onOpenFile, subagents, onOpenSubagent, diff
       >
         {part.input !== undefined && <pre className="tool-io">{pretty(part.input)}</pre>}
         {part.output && <pre className="tool-io">{part.output}</pre>}
+        {shell?.summary && <div className="tool-shell-end">{shell.summary}</div>}
+        {shell?.output && (
+          <button type="button" className="linkish tool-shell-output" onClick={() => onOpenFile({ path: shell.output, prefer: "file" })}>
+            <Icon name="file" size={12} /> {t("Open the file its output goes to")}
+          </button>
+        )}
       </Folded>
       {diffed && <EditChange part={part} />}
       {spawned.map((s) => (
@@ -133,6 +158,13 @@ function StateMark({ state }: { state: CallState }) {
       {state === "done" ? <Icon name="check" size={14} /> : state === "failed" ? <Icon name="x" size={14} /> : state === "running" ? <span className="tool-spin" /> : <span className="tool-dot" />}
     </span>
   );
+}
+
+// ShellTook is how long a background shell ran, counting on a second at a time while it runs
+function ShellTook({ shell }: { shell: Shell }) {
+  const now = useNow(shell.status === "running" ? 1000 : 3_600_000);
+  const seconds = shellSeconds(shell, now);
+  return seconds === null ? null : <>{took(seconds)}</>;
 }
 
 // Elapsed counts how long a running call has run, a second at a time

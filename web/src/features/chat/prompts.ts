@@ -6,7 +6,7 @@ import { tokFine } from "@/features/usage/format";
 import { t, tn } from "@/lib/i18n";
 import { spent } from "@/lib/time";
 import type { Turn } from "./api";
-import { COMPACTION_PREFIX } from "./timeline";
+import { isNote } from "./notes";
 import { EDIT_TOOLS, toolPath } from "./footprint";
 import { plain } from "./said";
 
@@ -29,7 +29,6 @@ export type PromptCard = {
 export const GIST_MAX = 140;
 const SHORT_SENTENCE = 25;
 const SHELL_TOOLS = new Set(["Bash", "exec_command", "shell", "local_shell"]);
-const NOT_A_PROMPT = [COMPACTION_PREFIX, "[Request interrupted", "<task-notification>"];
 
 // promptOf is what the person wrote in a user turn: its texts but an interruption's note, a compaction's summary and a
 // background task's note, which Claude Code writes as records of their own that the prompt after them shares a turn with
@@ -37,7 +36,7 @@ const promptOf = (turn: Turn) =>
   turn.parts
     .filter((p) => p.type === "text")
     .map((p) => (p.text ?? "").trim())
-    .filter((text) => text !== "" && !NOT_A_PROMPT.some((prefix) => text.startsWith(prefix)))
+    .filter((text) => text !== "" && !isNote(text))
     .join("\n\n");
 
 // promptCards reads the turns as one card per prompt of the person's, oldest first; an interruption's note, a

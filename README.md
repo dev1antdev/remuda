@@ -265,6 +265,21 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   eighth taller than with a mouse (a button 36 px, the header's 40, the
   key bar's keys 40), the lens switch's segments are a thumb's, and the
   tab on screen is brought into view in its strip.
+- **Not your words** — what Claude Code writes into your side of the
+  conversation without you — a background task reporting back, an
+  interruption, the summary after a compaction — is a quiet line in the
+  middle of the chat, never a bubble of yours; a long message of yours
+  that Claude Code logged as a paste shows as you wrote it.
+- **Background shells** — a command Claude Code started in the
+  background (a dev server, a wait for CI) shows in the chat as it does
+  in the terminal's footer: the call that started it says "running in
+  the background" with its time ticking, then how it ended, and a line
+  over the composer lists the ones still running; a click opens the
+  file its output goes to.
+- **Subagents of a long session** — the chat lists the subagents of the
+  calls on screen and the ones still at work, not every one the session
+  ever spawned: a conversation with two hundred of them opens at once,
+  on a remote machine too.
 - **Empty places** — a screen with nothing to show says so the same way
   everywhere: an icon, one line and, where it helps, a hint or a button
   (a chat whose agent has written nothing yet offers its terminal).

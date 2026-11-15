@@ -306,11 +306,21 @@ func (in *Input) lock(ref events.PaneRef) *sync.Mutex {
 	return in.locks[ref]
 }
 
-// Submit delivers text to a pane the way the chat does: herdr's own submit for an agent, typing like a keyboard for a shell.
+// Submit delivers text to a pane the way the chat does: herdr's own submit for an agent, typing like a keyboard for a
+// shell; a message that names a picture goes to Claude Code as a paste and an Enter once the paste is in (settle.go).
 func (in *Input) Submit(client Prompter, ref events.PaneRef, text string) error {
 	lock := in.lock(ref)
 	lock.Lock()
 	defer lock.Unlock()
+	// a message naming a picture goes to Claude Code as a paste and, once that is in, an Enter (settle.go)
+	if two, ok := client.(interface {
+		Settler
+		Prompter
+	}); ok && NamesPicture(text) {
+		if handled, err := pasteThenEnter(two, ref.Pane, text); handled {
+			return err
+		}
+	}
 	err := client.AgentPrompt(ref.Pane, text)
 	switch {
 	case err == nil:

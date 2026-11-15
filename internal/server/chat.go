@@ -112,7 +112,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("ETag", etag)
 	w.Header().Set("Cache-Control", "no-store")
-	answer["subagents"] = subagentsOf(conv)
+	answer["subagents"] = subagentsOf(conv, tail.Turns)
 	writeJSON(w, answer)
 }
 
@@ -135,12 +135,13 @@ func (s *Server) writeSubagent(w http.ResponseWriter, r *http.Request, conv chat
 	}
 	w.Header().Set("ETag", etag)
 	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, map[string]any{"session_id": conv.ID, "subagent": id, "sessions": []any{}, "turns": turns, "subagents": subagentsOf(conv)})
+	writeJSON(w, map[string]any{"session_id": conv.ID, "subagent": id, "sessions": []any{}, "turns": turns, "subagents": subagentsOf(conv, turns)})
 }
 
-func subagentsOf(conv chat.Conversation) []transcript.Subagent {
-	if conv.Subagents == nil {
-		return []transcript.Subagent{}
+// subagentsOf is the conversation's subagents the turns answered have a use for, never null on the wire.
+func subagentsOf(conv chat.Conversation, turns []transcript.Turn) []transcript.Subagent {
+	if list := conv.SubagentsOf(turns); list != nil {
+		return list
 	}
-	return conv.Subagents
+	return []transcript.Subagent{}
 }

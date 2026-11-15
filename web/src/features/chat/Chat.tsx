@@ -17,6 +17,8 @@ import { Empty, Icon, Notice, Select, useTimedNotice } from "@/ui";
 import type { Subagent, Turn } from "./api";
 import Composer from "./Composer";
 import { DeniedNotice } from "./DeniedNotice";
+import { ShellsLine } from "./ShellsLine";
+import { shellsOf } from "./shells";
 import { ALL_REVEALED, anchorsItself, hiddenCount, idle, nextReveal } from "./mount";
 import { isPinned, pinKey, pinOf, togglePin, type Pin } from "./pins";
 import { PlanBar } from "./PlanBar";
@@ -90,6 +92,8 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
   // a long conversation mounts from its end: the last turns at once, the earlier ones in idle slices; the find bar and a
   // jump to an earlier turn want them all at once. `revealed` belongs to one session, so a switch starts over.
   const turns = chat?.turns ?? [];
+  // the shells the agent started in the background, as the turns shown tell of them
+  const shells = useMemo(() => shellsOf(chat?.turns ?? []), [chat?.turns]);
   const loaded = chat?.session_id; // the file on screen, which the revealed count belongs to
   const [reveal, setReveal] = useState<{ session?: string; n: number }>({ n: 0 });
   const revealed = reveal.session === loaded ? reveal.n : 0;
@@ -281,6 +285,7 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
               pinned={!!t.ids?.[0] && pinnedIds.has(t.ids[0])}
               subagents={chat?.subagents}
               onOpenSubagent={onOpenSubagent}
+              shells={shells}
               diffs
               undo={t.ids?.[0] ? undo.byAnswer.get(t.ids[0]) : undefined}
               onUndo={undo.onUndo}
@@ -335,6 +340,7 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
           <Icon name="message" size={12} /> {t("Quote")}
         </button>
       )}
+      {!readOnly && !older && <ShellsLine shells={shells} onOpen={viewOnly ? undefined : (shell) => onOpenFile({ path: shell.output, prefer: "file" })} />}
       {underWay && <ProgressLine live={underWay} />}
       {!readOnly && !viewOnly && <Composer machineId={machineId} paneId={paneId} working={working} dir={dir} agent={agent} quote={quote} screen={claude ? { mode: screen.read?.mode, reread: screen.reload } : undefined} />}
       {!readOnly && viewOnly && <div className="chat-viewonly">{t("Viewing only")}</div>}

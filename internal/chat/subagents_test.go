@@ -23,7 +23,7 @@ func TestETagMovesWithTheSubagents(t *testing.T) {
 }
 
 func TestSubagentUnknownToTheConversationIsNotFound(t *testing.T) {
-	conv := Conversation{Path: "/nowhere/s.jsonl", Subagents: []transcript.Subagent{{ID: "agent-a1"}}, reader: transcript.NewReader(shell.Local{})}
+	conv := Conversation{Path: "/nowhere/s.jsonl", reader: transcript.NewReader(shell.Local{})}
 	_, _, err := conv.Subagent("agent-zz")
 	var notFound *NotFoundError
 	if !errors.As(err, &notFound) {
