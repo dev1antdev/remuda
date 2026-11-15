@@ -13,7 +13,7 @@ import { copyText } from "@/lib/host";
 import { usePref } from "@/lib/prefs";
 import { errMsg } from "@/lib/text";
 import { whenShort } from "@/lib/time";
-import { Icon, Notice, Select, useTimedNotice } from "@/ui";
+import { Empty, Icon, Notice, Select, useTimedNotice } from "@/ui";
 import type { Subagent, Turn } from "./api";
 import Composer from "./Composer";
 import { DeniedNotice } from "./DeniedNotice";
@@ -255,7 +255,20 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
       <PlanBar plan={chat?.plan} />
       <div className="chat-main">
         <div className="chat-log" ref={logRef} onScroll={follow.onScroll}>
-          {turns.length === 0 && <div className="empty chat-empty">{chat === null ? t("Loading…") : readOnly ? t("This transcript is empty.") : t("No transcript for this pane's folder yet.")}</div>}
+          {turns.length === 0 && chat === null && <div className="empty chat-empty">{t("Loading…")}</div>}
+          {turns.length === 0 && chat !== null && readOnly && <Empty icon="message" title={t("This transcript is empty.")} />}
+          {turns.length === 0 && chat !== null && !readOnly && (
+            <Empty
+              icon="message"
+              title={t("No transcript for this pane's folder yet.")}
+              hint={t("The agent has written nothing here so far. Its terminal shows what it is doing.")}
+              action={
+                <button type="button" className="btn sm" onClick={() => actions.setLens("terminal")}>
+                  <Icon name="terminal" size={14} /> {t("Show the terminal")}
+                </button>
+              }
+            />
+          )}
           {turns.slice(hidden).map((t, i) => (
             <TurnView
               key={t.ids?.[0] || hidden + i}

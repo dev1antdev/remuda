@@ -8,7 +8,7 @@ import { useRoster } from "@/features/roster/useRoster";
 import { useQuery } from "@/lib/query";
 import { basename, errMsg } from "@/lib/text";
 import { ago, whenAhead } from "@/lib/time";
-import { Dialog, Icon, Logo, Notice, Tip } from "@/ui";
+import { Dialog, Empty, Icon, Logo, Notice, Tip } from "@/ui";
 import { agentWords, deniedWords, watchedWords } from "./agent";
 import { deleteSchedule, fetchSchedules, putSchedule, runSchedule, type Schedule } from "./api";
 import { NEVER } from "./cron";
@@ -67,7 +67,7 @@ export default function Schedules({ machines, onClose, ask }: {
           {error}
         </Notice>
       )}
-      {items && items.length === 0 && !editing && <div className="empty">{t("No schedules yet.")}</div>}
+      {items && items.length === 0 && !editing && <Empty small icon="calendar" title={t("No schedules yet.")} />}
       <div className="schedules-list">
         {items?.map((s) => (
           <div key={s.id} className={`schedule${s.enabled ? "" : " off"}`}>

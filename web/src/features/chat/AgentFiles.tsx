@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { OpenFile } from "@/features/files/target";
 import { basename, dirname, plural } from "@/lib/text";
 import { ago } from "@/lib/time";
-import { Icon, Tip } from "@/ui";
+import { Empty, Icon, Tip } from "@/ui";
 import { FileIcon } from "@/ui/FileIcon";
 import { footprint, shownPath, type Touch } from "./footprint";
 import { useChat } from "./useChat";
@@ -45,7 +45,7 @@ export default function AgentFiles({ machineId, paneId, status, dir, active, onO
     <div className="footprint-list">
       {chat === null && !error && <div className="empty">{t("Loading…")}</div>}
       {error && <div className="empty">{error}</div>}
-      {chat && edited.length === 0 && read.length === 0 && <div className="empty">{t("No file touched yet.")}</div>}
+      {chat && edited.length === 0 && read.length === 0 && <Empty small icon="file" title={t("No file touched yet.")} hint={t("The files the agent edits or reads in this conversation are listed here.")} />}
       {edited.map(row)}
       {read.length > 0 && (
         <div className="fp-fold">

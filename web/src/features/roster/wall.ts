@@ -2,6 +2,9 @@
 
 import type { Machine, Pane, Session, Tab } from "./api";
 import { displayOf, type RadarPrefs } from "./radar";
+import { NO_MACHINES } from "./server";
+import { t } from "@/lib/i18n";
+import type { IconName } from "@/ui/icons";
 
 export type WallView = "chat" | "screen" | "zoo"; // what a tile shows: the last turns of the conversation, the terminal as it is, or the agent as a creature (app/zoo)
 export type WallPrefs = { size: "s" | "m" | "l"; hideIdle: boolean; needsMe: boolean; view: WallView };
@@ -14,6 +17,15 @@ export type Tile = { key: string; machine: Machine; session: Session; tab: Tab; 
 export type Tiles = { shown: Tile[]; hidden: number; idle: number; calm: number };
 
 export const tileKey = (machineId: string, paneId: string) => `${machineId}|${paneId}`;
+
+// emptyWall is what the Wall says with no tile to show, in an icon and a line: no machine of the fleet yet (a remuda that
+// serves the page only), none connected, nobody waiting under Needs me, every agent hidden or idle, or no agent at all
+export function emptyWall(machines: Machine[], list: Tiles, serverOnly: boolean): { icon: IconName; title: string; hint?: string } {
+  if (!machines.some((machine) => machine.state === "connected")) return serverOnly && machines.length === 0 ? { icon: "server", title: t("No machine yet."), hint: t(NO_MACHINES) } : { icon: "plug", title: t("No machine connected.") };
+  if (list.calm) return { icon: "circle-check", title: t("Nobody needs you right now.") };
+  if (list.hidden || list.idle) return { icon: "eye-off", title: t("Every agent is hidden or idle.") };
+  return { icon: "layers", title: t("No agent runs anywhere.") };
+}
 
 // spinsFor says whether the wall's spinner ticks: the chat and screen tiles draw its frames while an agent works or asks,
 // while the zoo's creatures move by CSS alone — a tick there would draw every creature again several times a second

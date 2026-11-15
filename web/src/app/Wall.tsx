@@ -8,11 +8,11 @@
 import { useEffect, useMemo, type CSSProperties } from "react";
 import { DEFAULT_RADAR, type RadarPrefs } from "@/features/roster/radar";
 import { moving, useClock, useSpinner } from "@/features/roster/useClocks";
-import { NO_MACHINES, startOn } from "@/features/roster/server";
+import { startOn } from "@/features/roster/server";
 import { useRoster } from "@/features/roster/useRoster";
-import { DEFAULT_WALL, TILE_MIN, spinsFor, tiles, withFocus, type Tile, type WallPrefs, type WallView } from "@/features/roster/wall";
+import { DEFAULT_WALL, TILE_MIN, emptyWall, spinsFor, tiles, withFocus, type Tile, type WallPrefs, type WallView } from "@/features/roster/wall";
 import { usePref } from "@/lib/prefs";
-import { Icon } from "@/ui";
+import { Empty, Icon } from "@/ui";
 import { enterFull, leaveFull } from "./full";
 import { popOut, popOutSupported } from "./pip";
 import { escapeIsFree, overlayOpen } from "./escape";
@@ -139,12 +139,17 @@ export default function Wall() {
         </button>}
       </div>
       {n === 0 ? (
-        <div className="placeholder">
-          <p>{machines.some((m) => m.state === "connected") ? (list.calm ? t("Nobody needs you right now.") : list.hidden || list.idle ? t("Every agent is hidden or idle.") : t("No agent runs anywhere.")) : server && machines.length === 0 ? t(NO_MACHINES) : t("No machine connected.")}</p>
-          {!viewOnly && machines.length > 0 && <button type="button" className="btn" onClick={() => actions.openDialog({ kind: "workspace", machineId: startOn(machines) })}>
-            {t("Start an agent")}
-          </button>}
-        </div>
+        <Empty
+          {...emptyWall(machines, list, !!server)}
+          action={
+            !viewOnly &&
+            machines.length > 0 && (
+              <button type="button" className="btn" onClick={() => actions.openDialog({ kind: "workspace", machineId: startOn(machines) })}>
+                <Icon name="plus" size={14} /> {t("Start an agent")}
+              </button>
+            )
+          }
+        />
       ) : prefs.view === "zoo" ? (
         <Zoo shown={list.shown} size={prefs.size} radar={radar} now={now} office={office ? show : null} />
       ) : featuredTile ? (

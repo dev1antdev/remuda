@@ -78,7 +78,6 @@ export const tasks: Dictionary = {
   "No labels yet": "Меток пока нет",
   "No options yet — add some in the project's settings.": "Вариантов пока нет — добавьте их в настройках проекта.",
   "Nothing here.": "Здесь пусто.",
-  "Nothing proposed: a task an agent files lands here for you to accept or decline.": "Предложений нет: задача, которую заводит агент, попадает сюда, чтобы вы приняли или отклонили её.",
   Number: "Число",
   "One choice": "Один вариант",
   Open: "Открыть",

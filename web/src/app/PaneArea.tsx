@@ -29,7 +29,7 @@ import { timelapseRows } from "@/features/terminal/timelapse/row";
 import { Screen } from "@/features/terminal/Screen";
 import { LimitNotice } from "@/features/usage/LimitNotice";
 import { accountWindows } from "@/features/usage/limits";
-import { Icon, Notice, PANELS, Resizer } from "@/ui";
+import { Empty, Icon, Notice, PANELS, Resizer } from "@/ui";
 import { WindowsPaths } from "@/ui/Markdown";
 import FollowPRLinks from "@/features/pr/FollowPRLinks";
 import { act } from "./act";
@@ -153,14 +153,23 @@ export default function PaneArea({ current }: { current: Located | null }) {
   if (!current) {
     return (
       <main className="pane-area">
-        <div className="placeholder">
-          <p>{server && machines.length === 0 ? tr(NO_MACHINES) : tr("No pane selected.")}</p>
-          {!viewOnly && machines.length > 0 && (
-            <button type="button" className="btn" onClick={() => actions.openDialog({ kind: "workspace", machineId: startOn(machines) })}>
-              {tr("Start an agent")}
-            </button>
-          )}
-        </div>
+        {server && machines.length === 0 ? (
+          <Empty icon="server" title={tr("No machine yet.")} hint={tr(NO_MACHINES)} />
+        ) : (
+          <Empty
+            icon="terminal"
+            title={tr("No pane selected.")}
+            hint={tr("Pick an agent in the sidebar to see its chat, its terminal and its changes.")}
+            action={
+              !viewOnly &&
+              machines.length > 0 && (
+                <button type="button" className="btn" onClick={() => actions.openDialog({ kind: "workspace", machineId: startOn(machines) })}>
+                  <Icon name="plus" size={14} /> {tr("Start an agent")}
+                </button>
+              )
+            }
+          />
+        )}
       </main>
     );
   }

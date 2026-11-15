@@ -6950,7 +6950,20 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   sizes sm/md/lg), `FormDialog`, `ConfirmDialog`, `Notice` (tones
   error/success/warn/info/hint, optional icon, action and dismiss),
   `Toasts`, `useTimedNotice`, `useDismiss` (popovers), `useSubmit`,
-  `useDebounced`, `StatusDot`, `Logo`, `brand.ts`, `Markdown`.
+  `useDebounced`, `StatusDot`, `Logo`, `brand.ts`, `Markdown`, and
+  `Empty` (`ui/Empty.tsx`, `.empty-state`: what a place says while it has
+  nothing to show — an icon on a soft tile, one line, and where it helps
+  a hint and a button; `small` in a rail, a wall tile or a panel's list:
+  a chat with no transcript, which offers the terminal, a tile's and the
+  files rail's, the pane area with nothing picked, the Wall with no tile
+  (`emptyWall` in `features/roster/wall.ts`, tested), an empty task list,
+  the review with nothing picked or nothing uncommitted, the schedules,
+  the pop-out's gone pane and the Git lens's `GitEmpty`; a line inside a
+  list that is only a note stays a plain `.empty`). **Every loading
+  shape's bars wear one shimmer** — `.bone`, and with it the Git lens's
+  rows and files, the project tree's bars, an issue's and a pull
+  request's — a band of light crossing a quiet fill (`shimmer`), still
+  under reduced motion.
   `lib/time.ts` (`ago`, `whenShort`, `fmtDate`, `fmtDay`) and
   `features/roster/options.tsx` (`machineOptions`, `folderOptions`,
   `machineLabel`) are the one way to say a time or build a roster select.
