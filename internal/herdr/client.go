@@ -432,7 +432,25 @@ func (c *Client) PaneSendInput(paneID, text string, keys []string) error {
 	return c.Call("pane.send_input", params, nil)
 }
 
-// AgentPrompt is herdr's own submit: bracketed paste, then Enter 300ms later.
+// AgentInfo is what herdr says of the agent in a pane: its kind and how it stands.
+type AgentInfo struct {
+	Agent  string `json:"agent"`
+	Status string `json:"agent_status"`
+}
+
+// AgentGet is agent.get: the agent of a pane as herdr sees it now, without the wait for the watcher's next snapshot.
+func (c *Client) AgentGet(target string) (AgentInfo, error) {
+	var out struct {
+		Agent AgentInfo `json:"agent"`
+	}
+	if err := c.Call("agent.get", map[string]any{"target": target}, &out); err != nil {
+		return AgentInfo{}, err
+	}
+	return out.Agent, nil
+}
+
+// AgentPrompt is herdr's own submit: the text as a bracketed paste and Enter after it, one ordered write since 0.9.5
+// (a gap of 300 ms before).
 // It refuses with agent_blocked while the agent waits on a menu, agent_not_found / agent_not_ready without an agent.
 func (c *Client) AgentPrompt(target, text string) error {
 	return c.Call("agent.prompt", map[string]any{"target": target, "text": text}, nil)
