@@ -3,6 +3,7 @@
 // a folder as in feature/INS-4), "No prefix" last. Pure; workspaces.ts lays them out.
 
 import { t } from "@/lib/i18n";
+import type { Session } from "./api";
 import type { WorkspaceItem } from "./workspaces";
 
 // Priority is a section of the priority order, the most urgent first: a question or a watchdog note, a finish, work, rest
@@ -68,11 +69,12 @@ export function prioritySections(items: WorkspaceItem[]): Section[] {
 }
 
 // prefixSections gathers the workspaces by their ticket's prefix, the prefixes in alphabetical order and the ones with
-// none last, each section by activity
-export function prefixSections(items: WorkspaceItem[]): Section[] {
+// none last, each section by activity; a workspace the screen-sharing mode hides (masked) goes with the ones that have
+// none, since its prefix is a piece of the name the mode hides
+export function prefixSections(items: WorkspaceItem[], masked?: (s: Session) => boolean): Section[] {
   const gathered = new Map<string, WorkspaceItem[]>();
   for (const item of items) {
-    const prefix = prefixOf(item) ?? "";
+    const prefix = (masked?.(item.session) ? null : prefixOf(item)) ?? "";
     gathered.set(prefix, [...(gathered.get(prefix) ?? []), item]);
   }
   const prefixes = [...gathered.keys()].sort((a, b) => Number(a === "") - Number(b === "") || a.localeCompare(b));

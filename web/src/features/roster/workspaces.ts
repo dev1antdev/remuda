@@ -35,11 +35,12 @@ function itemOf(s: Session, prefs: RadarPrefs): WorkspaceItem {
 
 // entries lays out a machine: every folder with its workspaces under it, the main checkout first and the rest by
 // activity, the folders by their liveliest agent (herdr's order for the ones with none, or with that order picked);
-// the flat order lists the workspaces alone by activity; priority and prefix gather them in sections instead
-export function entries(m: Machine, prefs: RadarPrefs): Entry[] {
+// the flat order lists the workspaces alone by activity; priority and prefix gather them in sections instead, the
+// workspaces the screen-sharing mode hides (masked) gathered under no prefix
+export function entries(m: Machine, prefs: RadarPrefs, masked?: (s: Session) => boolean): Entry[] {
   const items = m.sessions.filter((s) => !s.scratch).map((s) => itemOf(s, prefs)); // the floating terminal's shell is the drawer's
   if (prefs.order === "priority") return prioritySections(items).map((section) => ({ kind: "section", section }));
-  if (prefs.order === "prefix") return prefixSections(items).map((section) => ({ kind: "section", section }));
+  if (prefs.order === "prefix") return prefixSections(items, masked).map((section) => ({ kind: "section", section }));
   if (prefs.order === "recent") {
     const order = new Map(items.map((item, i) => [item, i]));
     return [...items].sort((a, b) => b.best - a.best || order.get(a)! - order.get(b)!).map((item) => ({ kind: "workspace", item }));

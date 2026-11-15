@@ -86,11 +86,11 @@ describe("pins", () => {
     expect(livePins([machine("gog", [])], ["gog|w9:p9"])).toEqual(["gog|w9:p9"]);
   });
 
-  it("keeps the pin of an agent whose pane is a shell for a while: asleep, or restarting onto an update", () => {
-    const resting = pane({ agent: "" });
-    const asleep = [machine("gog", [session("api", [resting])])];
-    expect(livePins(asleep, [agentKey("gog", resting.id)])).toEqual([agentKey("gog", resting.id)]);
-    expect(pinnedRows(asleep, [agentKey("gog", resting.id)])).toEqual([]); // drawn again once it is back
+  it("keeps the pin of an agent whose pane stands as a bare shell for a while: asleep, restarting, after a reboot", () => {
+    const asleep = pane({ agent: "" }); // its agent left, its shell stays, and waking starts it again in the same pane
+    const fleet = [machine("gog", [session("api", [asleep], { asleep: { at: "2026-11-15T09:00:00Z", agents: 1 } })])];
+    expect(livePins(fleet, [agentKey("gog", asleep.id)])).toEqual([agentKey("gog", asleep.id)]);
+    expect(pinnedRows(fleet, [agentKey("gog", asleep.id)])).toEqual([]); // drawn again once an agent runs there
   });
 });
 
@@ -114,6 +114,16 @@ describe("the walk", () => {
   it("goes through every agent in the order drawn, the pinned first, each once, shells left out", () => {
     const order = walkOrder(machines, DEFAULT_RADAR, [agentKey("mac", third.id)]).map((a) => agentKey(a.machineId, a.paneId));
     expect(order).toEqual([agentKey("mac", third.id), agentKey("gog", second.id), agentKey("gog", first.id)]);
+  });
+
+  it("walks the order by ticket prefix as drawn while the screen-sharing mode hides a workspace: under no prefix", () => {
+    const acme = pane({ radar: { state: "idle" } });
+    const docs = pane({ radar: { state: "idle" } });
+    const fleet = [machine("gog", [session("ACME-12 login", [acme]), session("PR-7 docs", [docs])])];
+    const prefixes = { ...DEFAULT_RADAR, order: "prefix" as const };
+    const keys = (masked?: (machineId: string, s: Session) => boolean) => walkOrder(fleet, prefixes, [], masked).map((a) => a.paneId);
+    expect(keys()).toEqual([acme.id, docs.id]);
+    expect(keys((_m, s) => s.name.startsWith("ACME"))).toEqual([docs.id, acme.id]);
   });
 
   it("steps round and round, from the first when the pane on screen is none of them", () => {

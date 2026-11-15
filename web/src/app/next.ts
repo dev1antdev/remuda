@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { PINS_KEY, agentKey, stepAgent, walkOrder } from "@/features/roster/sidebarAgents";
 import { DEFAULT_RADAR, type RadarPrefs } from "@/features/roster/radar";
 import { useRoster } from "@/features/roster/useRoster";
+import { useSharing } from "@/features/roster/useSharing";
 import { nextNeedingMe, tileKey } from "@/features/roster/wall";
 import { isMac, usePref } from "@/lib/prefs";
 import { useCurrent } from "./current";
@@ -49,17 +50,18 @@ export function useWalkKeys(): void {
   const current = useCurrent();
   const [radar] = usePref<RadarPrefs>("radar", DEFAULT_RADAR);
   const [pins] = usePref<string[]>(PINS_KEY, []);
+  const share = useSharing();
   const from = current ? agentKey(current.machine.id, current.pane.id) : "";
-  const walk = useRef({ machines, radar, pins, from });
-  walk.current = { machines, radar, pins, from };
+  const walk = useRef({ machines, radar, pins, from, share });
+  walk.current = { machines, radar, pins, from, share };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const press: KeyPress = { code: e.code, altKey: e.altKey, metaKey: e.metaKey, ctrlKey: e.ctrlKey, shiftKey: e.shiftKey, target: e.target as Element | null };
       const step = walkKeyAsked(press, !!app.get().dialog, isMac);
       if (!step) return;
       e.preventDefault();
-      const { machines, radar, pins, from } = walk.current;
-      const next = stepAgent(walkOrder(machines, radar, pins), from, step);
+      const { machines, radar, pins, from, share } = walk.current;
+      const next = stepAgent(walkOrder(machines, radar, pins, share.sessionHidden), from, step);
       if (next) actions.selectPane(next.machineId, next.paneId);
     };
     window.addEventListener("keydown", onKey, true);
