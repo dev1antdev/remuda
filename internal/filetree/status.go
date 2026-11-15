@@ -58,13 +58,10 @@ func ParseStatus(out string) Status {
 		xy, path := record[:2], record[3:]
 		mark := markOf(xy)
 		rel, inside := strings.CutPrefix(path, prefix)
-		if !inside {
+		if !inside || rel == "" { // the root itself, or a folder it lies in: a new or ignored one marks the whole tree
 			if strings.HasSuffix(path, "/") && strings.HasPrefix(prefix, path) && (mark == "?" || mark == "!") {
 				st.whole = mark
 			}
-			continue
-		}
-		if rel == "" {
 			continue
 		}
 		if mark == "!" {
@@ -90,7 +87,7 @@ func markOf(xy string) string {
 		return "U"
 	case strings.Contains(xy, "D"):
 		return "D"
-	case xy[0] == 'A':
+	case xy[0] == 'A' || xy[1] == 'A': // " A" is a file git add -N named
 		return "A"
 	}
 	return "M"

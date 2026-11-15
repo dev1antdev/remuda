@@ -20,11 +20,11 @@ import (
 var (
 	// Every is the pace of the reads while a page reads the roster.
 	Every = 15 * time.Second
-	// QuickEvery is the pace while the status bar asks.
+	// QuickEvery is the pace of the machine the status bar asks about.
 	QuickEvery = 5 * time.Second
 	// WatchedFor is how long after the roster was last asked for the reads go on.
 	WatchedFor = time.Minute
-	// QuickFor is how long after the status bar last asked the quicker pace holds.
+	// QuickFor is how long after the status bar last asked about a machine its quicker pace holds.
 	QuickFor = 20 * time.Second
 	// StaleAfter is how old a reading may be for the roster to carry it: once nobody looked for a while it says nothing.
 	StaleAfter = 2 * time.Minute
@@ -45,7 +45,8 @@ type Port struct {
 	Workspace string `json:"workspace,omitempty"` // the workspace whose folder holds it, "" for one outside them
 }
 
-// Reading is a machine's ports as last read, and why the last read failed when it did: the ports before it stand.
+// Reading is a machine's ports as last read — At is when they were — and why the last read failed when it did: the
+// ports before it stand, as old as they are.
 type Reading struct {
 	At    time.Time `json:"at"`
 	Ports []Port    `json:"ports"`
@@ -70,8 +71,9 @@ type Tracker struct {
 	mu         sync.Mutex
 	machines   map[string]*machine
 	touched    time.Time
-	hurried    time.Time
+	hurried    map[string]time.Time // by machine: the status bar shows one machine's ports, the others keep the roster's pace
 	complained map[string]time.Time
+	reads      sync.WaitGroup // the reads under way, OnChange included
 }
 
 // machine is one machine's reading, what its listeners' processes were found to be, and whether a read runs
@@ -84,7 +86,7 @@ type machine struct {
 
 // New is a tracker over the targets the app lists, never offering the ports skip names.
 func New(targets func() []Target, skip func() map[int]bool) *Tracker {
-	return &Tracker{targets: targets, skip: skip, now: time.Now, machines: map[string]*machine{}, complained: map[string]time.Time{}}
+	return &Tracker{targets: targets, skip: skip, now: time.Now, machines: map[string]*machine{}, hurried: map[string]time.Time{}, complained: map[string]time.Time{}}
 }
 
 // Touch says the roster was just read: the reads go on for WatchedFor.
@@ -97,13 +99,15 @@ func (t *Tracker) Touch() {
 	t.mu.Unlock()
 }
 
-// Hurry says the status bar shows: the reads go at QuickEvery for QuickFor.
-func (t *Tracker) Hurry() {
+// Hurry says the status bar shows the machine's ports: that machine's reads go at QuickEvery for QuickFor, the
+// others' at the roster's pace.
+func (t *Tracker) Hurry(machineID string) {
 	if t == nil {
 		return
 	}
 	t.mu.Lock()
-	t.touched, t.hurried = t.now(), t.now()
+	now := t.now()
+	t.touched, t.hurried[machineID] = now, now
 	t.mu.Unlock()
 }
 
@@ -128,7 +132,8 @@ func (t *Tracker) For(machineID, workspaceID string) []Port {
 	return out
 }
 
-// Of is the machine's whole reading, its ports outside every workspace too; a machine never read has none.
+// Of is the machine's whole reading, its ports outside every workspace too; a machine never read has none, and one
+// whose reading is older than StaleAfter counts as not read, as the roster then carries none of its ports.
 func (t *Tracker) Of(machineID string) (Reading, bool) {
 	if t == nil {
 		return Reading{}, false
@@ -138,6 +143,9 @@ func (t *Tracker) Of(machineID string) (Reading, bool) {
 	m := t.machines[machineID]
 	if m == nil || m.readAt.IsZero() {
 		return Reading{Ports: []Port{}}, false
+	}
+	if t.now().Sub(m.reading.At) > StaleAfter {
+		return Reading{Ports: []Port{}, Error: m.reading.Error}, false
 	}
 	reading := m.reading
 	reading.Ports = append([]Port{}, m.reading.Ports...)
@@ -149,6 +157,7 @@ func (t *Tracker) Forget(machineID string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	delete(t.machines, machineID)
+	delete(t.hurried, machineID)
 	delete(t.complained, machineID)
 }
 
@@ -184,10 +193,6 @@ func (t *Tracker) Sweep() {
 	now := t.now()
 	t.mu.Lock()
 	watched := !t.touched.IsZero() && now.Sub(t.touched) < WatchedFor
-	every := Every
-	if !t.hurried.IsZero() && now.Sub(t.hurried) < QuickFor {
-		every = QuickEvery
-	}
 	t.mu.Unlock()
 	if !watched {
 		return
@@ -203,6 +208,10 @@ func (t *Tracker) Sweep() {
 			m = &machine{seen: map[int]preview.Seen{}}
 			t.machines[target.ID] = m
 		}
+		every := Every
+		if at, ok := t.hurried[target.ID]; ok && now.Sub(at) < QuickFor {
+			every = QuickEvery
+		}
 		if !m.busy && (m.readAt.IsZero() || now.Sub(m.readAt) >= every) {
 			m.busy = true
 			due = append(due, target)
@@ -213,6 +222,12 @@ func (t *Tracker) Sweep() {
 			delete(t.machines, id)
 		}
 	}
+	for id, at := range t.hurried {
+		if now.Sub(at) >= QuickFor {
+			delete(t.hurried, id)
+		}
+	}
+	t.reads.Add(len(due))
 	t.mu.Unlock()
 	for _, target := range due {
 		go t.read(target)
@@ -220,8 +235,10 @@ func (t *Tracker) Sweep() {
 }
 
 // read looks at one machine's listeners — a known process's folder not looked up again — and keeps them, telling
-// OnChange when they moved; a failed read keeps the ports before it and is logged at most every ComplainEvery
+// OnChange when they moved; a failed read keeps the ports before it, and when they were read, and is logged at most
+// every ComplainEvery
 func (t *Tracker) read(target Target) {
+	defer t.reads.Done()
 	t.mu.Lock()
 	m := t.machines[target.ID]
 	t.mu.Unlock()
@@ -249,7 +266,7 @@ func (t *Tracker) read(target Target) {
 	changed, complain := false, false
 	if failed {
 		changed = m.reading.Error == ""
-		m.reading.At, m.reading.Error = now, err.Error()
+		m.reading.Error = err.Error()
 		if m.reading.Ports == nil {
 			m.reading.Ports = []Port{}
 		}
@@ -258,7 +275,8 @@ func (t *Tracker) read(target Target) {
 			t.complained[target.ID] = now
 		}
 	} else {
-		changed = m.reading.Error != "" || !slices.Equal(m.reading.Ports, list)
+		// a stale reading put none of its ports on the roster, so ports that did not move are news there all the same
+		changed = m.reading.Error != "" || !slices.Equal(m.reading.Ports, list) || now.Sub(m.reading.At) > StaleAfter
 		m.reading = Reading{At: now, Ports: list}
 	}
 	t.mu.Unlock()

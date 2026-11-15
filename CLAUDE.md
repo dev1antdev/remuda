@@ -549,7 +549,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   SSH, plus the one write: `SaveUpload`. `ResolvePath` accepts absolute, `~/`, or pane-relative
   and, on a relative miss, searches the pane folder by suffix (agents say
   `demo.mp4` for `docs/demo.mp4`); several hits come back as `candidates`.
-  `GitDiff` = `git diff --no-ext-diff HEAD -- file` in the file's repo
+  `GitDiff` = `git diff --no-ext-diff --no-textconv HEAD -- file` in the file's repo (the file's own lines, which the File tab's gutter marks)
   (`gitDiffScript`, tested: `untracked` for new files, no `repo` outside git,
   a file HEAD holds counts as tracked though `git rm` took it, read from the
   nearest folder still there when its own went with it). `ListDirs(path, hidden)` lists a folder's
@@ -590,8 +590,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   core.fsmonitor=false status --porcelain=v1 -z --no-renames
   --ignored=matching --untracked-files=normal`, cut at 4 MB, its stderr kept
   as `Git`; `ParseStatus` / `Status.Apply` (`markOf`: `?` untracked, `U` a
-  conflict, `D` deleted, `A` added, `M` the rest; an untracked folder marks
-  what is in it `?`, an ignored one ignores it; `Changes` on every folder
+  conflict, `D` deleted, `A` added — a file `git add -N` named too — `M` the
+  rest; an untracked folder marks what is in it `?`, an ignored one ignores
+  it, the tree's own root among them; `Changes` on every folder
   holding a mark; a file git says was deleted from the folder listed back as
   `Gone`, a folder gone with its files likewise, unless the listing was cut).
   Nothing is written. Route `GET /api/fs/tree?machine&dir&path`
@@ -607,7 +608,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   visible and `CHAT_PAUSE` 3 s after the pane's `chat` event, `watchPane`;
   the menu's actions; Send to agent through `SendToAgent`'s `ask` / `about` /
   `compose` — the instruction then `File: <absolute path>`, never the text,
-  through `/api/submit`, a toast after), `TreeFolder.tsx` (one folder's
+  and to an agent on another machine which machine the file is on — `compose`
+  hears the agent picked — through `/api/submit`, a toast after, naming a
+  hidden folder's workspace by its neutral name), `TreeFolder.tsx` (one folder's
   `useQuery`, read when opened and again at each tick, a loading shape of
   three bars, its empty and error sentences, "Showing the first 500", an open
   folder under it nested under a guide line at its parent's chevron),
@@ -634,9 +637,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   where it has one — `FileIcon` draws it as an `<img>` (an SVG as an image
   runs nothing) with `data-icon`, light while the root's `data-theme` is.
   `fileIcons.test.ts` checks the precedence, the Windows app's files, every
-  icon the rules name shipped and nothing else, no `<script`, `on…=`,
-  `javascript:`, `<foreignObject` or outside `href` in any, under 600 KB in
-  all. Drawn in both tabs of the files rail, the file viewer's head, the
+  icon the rules name shipped and nothing else, no `<script` or
+  `<foreignObject` under any namespace prefix, `on…=`, `javascript:`, an
+  `href` or `url()` to anything but an `#id`, `@import`, a stylesheet
+  instruction or a DOCTYPE in any (the check itself tested on SVGs that
+  carry each), under 600 KB in all. Drawn in both tabs of the files rail, the file viewer's head, the
   folder picker, the Changes lens's file rows and a commit's files in the
   Git lens.
 - `web/src/features/chat/attachments.ts` — `useAttachments` (upload at
@@ -1651,7 +1656,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   change carrying the old lines, added alone an addition, removed alone a
   removal at the line after it; `wholeFile` for a new file; `codeRows` lays
   the lines out with an open change's old lines above its first new line or
-  in place of a closed removal's thin line, `toggled`, `lineCountOf` — drawn
+  in place of a closed removal's thin line, nothing for a change past the
+  lines shown (a file the cap cut), `toggled`, `lineCountOf` — drawn
   as a 3 px bar at the row's edge, green added and amber changed, a 2 px red
   line between rows where lines went; a click on an amber row, its number (a
   `linkish` with `aria-expanded`, the keyboard's way) or the red line shows
@@ -1958,8 +1964,14 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   --no-renames --untracked-files=no -- .` (its paths from the repository's
   top, the folder's `--show-prefix` cut off) and the staged and unstaged
   `--numstat -z --relative` (`statusScript`, every read through `readGit`:
-  `--no-optional-locks -c core.fsmonitor=false`, so a read never writes
-  the index) — each `File` carries `index` / `work` (git's letters, M A D
+  `--no-optional-locks -c core.fsmonitor=false -c
+  diff.autoRefreshIndex=false`, so a read never writes the index — without
+  the last, git's diff refreshes the stat of a file only touched and
+  writes the index back under the `index.lock` an agent's own git add or
+  commit may want; the summary's numstat, the uncommitted files' list for
+  their blobs (numstat's paths, which leave such a file out as
+  `--name-only` would not), the sidebar sweep's numstat and the file
+  viewer's diff read the same way, `readlock_test.go`) — each `File` carries `index` / `work` (git's letters, M A D
   T), `conflict` (an unmerged file's two letters, UU both edited, AA, DD,
   AU, UA, DU, UD) and `staged` / `unstaged` (`Stat{added, removed,
   binary}`, a file partly staged holding both), and a file the diff
@@ -2879,9 +2891,13 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   folder (its parent's when it has none) and arguments; `Parse` keeps one
   per port (the IPv4 loopback's socket first), leaves out the ports given
   (the cockpit's own `-addr`, 7317, the door 7318, code-server's), the
-  processes remuda, herdr, ssh and Tailscale run, and any whose folder is
-  `/` or unknown (a system daemon, another user's), names what it is from
-  its arguments (`labelOf`: vite, next, http.server, uvicorn …) and where
+  processes remuda, herdr, ssh and Tailscale run, an agent's own
+  (`agentProgram`: claude, codex, gemini or kimi as the program or the
+  script node or python runs — Claude Code holds a loopback port in its
+  workspace's folder, never a server to preview, count or stop), and any
+  whose folder is `/` or unknown (a system daemon, another user's), names
+  what it is from its arguments (`labelOf`: vite, next, http.server,
+  uvicorn …) and where
   the machine reaches it (`Dial`: 127.0.0.1 for a wildcard, ::1 for an
   IPv6 one — a Mac's Vite listens on `[::1]` alone — else the address);
   `Match` names the deepest workspace folder holding it (a Mac's
@@ -3006,18 +3022,23 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `Recall`, `Parse` with `Server.PreviewSkip`, `Match` against
   `previewFolders`, the floating terminal's and the concierge's left out)
   every `Every` 15 s while the roster was read within `WatchedFor` a minute
-  (`Touch`, from the roster handler) and every `QuickEvery` 5 s while the
-  status bar asked within `QuickFor` 20 s (`Hurry`, from `/api/resources`
-  and `/api/ports`); one read at a time per machine, a failed read keeping
-  the ports before it with its reason (logged once an hour), `OnChange` the
-  live hub's `RosterChanged`. `For` is a workspace's `[]Port{port, process,
-  label, pid, address}` — `AddressOf`: localhost:5173, *:8080 — the
-  roster's `session.ports` (nothing once a reading is older than
-  `StaleAfter` 2 min), the contract the sidebar's card shares; `Of` the
-  machine's whole reading, its other listeners too. `Stop(host, skip, pid,
+  (`Touch`, from the roster handler) and, for the machine the status bar
+  shows alone, every `QuickEvery` 5 s while the bar asked about it within
+  `QuickFor` 20 s (`Hurry(machine)`, from `/api/resources` and `/api/ports`:
+  the others keep the roster's pace, so a bar on a Pi's page does not
+  triple the looks at every machine of the fleet); one read at a time per
+  machine, a failed read keeping the ports before it with its reason and
+  the time they were read (logged once an hour), `OnChange` the live hub's `RosterChanged` — also when a
+  read follows a stale reading, whose ports the roster had dropped. `For`
+  is a workspace's `[]Port{port, process, label, pid, address}` —
+  `AddressOf`: localhost:5173, *:8080 — the roster's `session.ports`
+  (nothing once a reading is older than `StaleAfter` 2 min), the contract
+  the sidebar's card shares; `Of` the machine's whole reading, its other
+  listeners too, not read while stale (the bar then counts "…", not 0, and
+  `/api/ports` names no `at` until a reading). `Stop(host, skip, pid,
   port)` looks afresh and sends `kill -TERM` only to that very pid on that
   very port among the listeners the person may stop — never remuda's,
-  herdr's, ssh's, Tailscale's, a skipped port's or another user's
+  herdr's, ssh's, Tailscale's, an agent's, a skipped port's or another user's
   (`ErrNotListening`, a 404). Routes `GET /api/ports?machine` and `POST
   /api/ports/stop {machine, pid, port}`, the person's only, at the page's
   press after its confirm.

@@ -2,11 +2,16 @@ package server
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/ports"
 	"github.com/dev1antdev/remuda/internal/radar"
 	"github.com/dev1antdev/remuda/internal/review"
@@ -50,5 +55,29 @@ func TestRosterCarriesTheWorkspacesPorts(t *testing.T) {
 	}
 	if strings.Contains(got["w2"], `"ports"`) {
 		t.Fatalf("a workspace with none carries the field: %s", got["w2"])
+	}
+}
+
+// The status bar's ports before the machine's first reading: nothing read, so no time of a reading either — the zero
+// time came out as "Read 739,000 days ago" under the popup.
+func TestPortsNotReadYetSayNoTime(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("a Windows machine reads no ports")
+	}
+	fleet := machines.NewManager(t.TempDir(), filepath.Join(t.TempDir(), "none.sock"), "herdr", nil)
+	s := &Server{Machines: fleet, Ports: ports.New(func() []ports.Target { return nil }, func() map[int]bool { return nil })}
+	mux := http.NewServeMux()
+	s.resourceRoutes(mux)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest("GET", "/api/ports?machine=local", nil))
+	var body map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("%d %s", rec.Code, rec.Body)
+	}
+	if body["read"] != false {
+		t.Fatalf("read: %s", rec.Body)
+	}
+	if at, ok := body["at"]; ok {
+		t.Fatalf("a machine never read says it was read at %v", at)
 	}
 }
