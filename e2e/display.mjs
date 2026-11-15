@@ -150,9 +150,18 @@ async function hover(selector) {
   if (at && !pass.phone) await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: at[0], y: at[1] });
   return !!at;
 }
+// underToast says whether a toast lies over the point a press at the selector would land on, the selector's own toast aside
+const underToast = (selector, [x, y]) =>
+  evaluate(`(() => { const toast = document.elementFromPoint(${x}, ${y})?.closest(".toast"); return !!toast && ![...document.querySelectorAll(${JSON.stringify(selector)})].some((el) => toast.contains(el)); })()`);
+// tap presses what the selector names. A toast over it is let go first: on a phone a write's toast lies over a lens's
+// lowest rows for its seconds and would take the press
 async function tap(selector) {
-  const at = await centre(selector);
+  let at = await centre(selector);
   if (!at) throw new Error(`nothing to press at ${selector}`);
+  if (await underToast(selector, at)) {
+    await until(async () => !(await underToast(selector, at)), 8);
+    at = (await centre(selector)) ?? at;
+  }
   await press(at);
 }
 const key = async (name, code, modifiers = 0) => {
@@ -2070,10 +2079,8 @@ const rowOf = (key) => `${LENS} .review-file[data-key=${JSON.stringify(key)}]`;
 const actionOf = (key, action) => `${rowOf(key)} .review-act.is-${action}`;
 const inGroup = (group) => count(`${LENS} .review-group.is-${group} .review-file`);
 const gitStatus = () => execFileSync("git", ["status", "--porcelain=v1"], { cwd: appDir, encoding: "utf8" });
-// pressRow presses a row's button: the pointer over the row first, where its counts give way to its buttons. On a
-// phone the toast of the write before lies over the lens's lowest rows for its two seconds, so it is let go first
+// pressRow presses a row's button: the pointer over the row first, where its counts give way to its buttons
 async function pressRow(key, action) {
-  if (pass.phone) await until(async () => !(await present('[data-toast="notice"]')), 8);
   await hover(`${rowOf(key)} .review-file-row`);
   await tap(actionOf(key, action));
 }

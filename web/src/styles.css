@@ -8720,6 +8720,17 @@ rect.ribbon-s.is-shown {
     flex-wrap: wrap;
   }
 
+  /* the tabs take a row of their own under the file's name, as the lens switch does under the header: beside it
+     they squeezed the name to nothing in a language with longer words */
+  .fv-head .fv-tabs {
+    order: 10;
+    flex: 1 0 100%;
+  }
+
+  .fv-head .fv-tabs button {
+    flex: 1;
+  }
+
   .fv-ln {
     flex-basis: 40px;
     padding-right: 8px;
