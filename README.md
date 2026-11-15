@@ -255,6 +255,13 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   on this device — each shows in its own face in the list, an
   uninstalled one falls back to the system's monospace. Nothing is
   downloaded: no web fonts.
+- **Under a finger** — on a phone or a tablet every control is an
+  eighth taller than with a mouse (a button 36 px, the header's 40, the
+  key bar's keys 40), the lens switch's segments are a thumb's, and the
+  tab on screen is brought into view in its strip.
+- **Empty places** — a screen with nothing to show says so the same way
+  everywhere: an icon, one line and, where it helps, a hint or a button
+  (a chat whose agent has written nothing yet offers its terminal).
 - **Panels** — the sidebar, the files rail, the Review queue and a
   task's detail each have a draggable edge: pull it to the width you
   like and it stays that way on this device; Tab to the edge and use
