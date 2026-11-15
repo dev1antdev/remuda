@@ -10536,10 +10536,39 @@ body:has(.status-bar) .toasts {
   flex: 1;
 }
 
+/* the view and the size are each a pick of one: a well with one raised segment, like the lens switch */
 .wall-sizes,
 .wall-views {
   display: inline-flex;
   gap: 2px;
+  padding: 3px;
+  border-radius: var(--r-md);
+  background: var(--bg-quiet);
+}
+
+.wall-sizes .btn,
+.wall-views .btn {
+  height: 24px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--fg-dim);
+}
+
+.wall-sizes .btn:hover:not(:disabled),
+.wall-views .btn:hover:not(:disabled) {
+  background: transparent;
+  color: var(--fg);
+}
+
+.wall-sizes .btn.on,
+.wall-views .btn.on,
+.wall-sizes .btn.on:hover:not(:disabled),
+.wall-views .btn.on:hover:not(:disabled) {
+  background: var(--bg-active);
+  color: var(--fg);
+  box-shadow: var(--shadow-sm);
 }
 
 .wall-grid {
@@ -10596,6 +10625,7 @@ body:has(.status-bar) .toasts {
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
   background: var(--bg-raised);
+  box-shadow: var(--shadow-sm);
   overflow: hidden;
 }
 
@@ -10628,14 +10658,15 @@ body:has(.status-bar) .toasts {
   animation: ring 1.6s ease-in-out infinite;
 }
 
+/* one ring, breathing: the tile's own edge in the state's colour and a hair of the same around it */
 .tile.is-blocked {
   border-color: var(--red-ring);
-  box-shadow: 0 0 0 2px var(--red-ring);
+  box-shadow: 0 0 0 1px var(--red-ring);
 }
 
 .tile.is-alert {
   border-color: var(--amber-ring);
-  box-shadow: 0 0 0 2px var(--amber-ring);
+  box-shadow: 0 0 0 1px var(--amber-ring);
 }
 
 .tile.is-done {
@@ -10644,16 +10675,16 @@ body:has(.status-bar) .toasts {
 
 @keyframes ring {
   50% {
-    box-shadow: 0 0 0 2px transparent;
+    box-shadow: 0 0 0 1px transparent;
   }
 }
 
+/* the head, the state line and the ribbon are one block: no rule between them, one under the last */
 .tile-head {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: var(--tile-pad-y) 6px var(--tile-pad-y) 8px;
-  border-bottom: 1px solid var(--line);
+  padding: calc(var(--tile-pad-y) + 2px) 6px var(--tile-pad-y) 8px;
   flex-shrink: 0;
 }
 

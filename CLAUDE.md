@@ -6912,7 +6912,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `btn` (quiet), `btn primary` (the one filled button of a surface), `btn
   danger`, `btn ghost`, `icon-btn` (+ `sm`/`lg`), or `linkish`; `.on` marks a
   toggled one — the accent fill and ring on a quiet `btn`, kept under the
-  pointer (the Wall's views, sizes and filters, a picked choice) — and the
+  pointer (the Wall's filters, a picked choice; the Wall's view and its size,
+  each a pick of one, are a segmented well like the lens switch) — and the
   selected sidebar row, tab and split pane too — never
   `.sel`, the Select's own class, whose height, border, padding and type
   would follow it (`features/roster/selected.test.ts`). Fields have one base rule (every input, textarea and `.sel`;
