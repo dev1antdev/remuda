@@ -375,3 +375,21 @@ func TestAMoveWhileThePushGoesOutStillTakesItBack(t *testing.T) {
 		})
 	}
 }
+
+// A device the alert raised under a withdrawn tag did not reach — inside its quiet hours — still shows the one taken
+// back, and is still owed it.
+func TestADeviceTheNewAlertMissedIsStillOwedTheOld(t *testing.T) {
+	s, _, _, frames := fleetOfDevices(t)
+	s.Notify(Payload{Machine: "local", Pane: "w1:p1", Kind: "input", Title: "Task #3: the agent asks something first", Tag: "task|3"})
+	nextFrame(t, frames)
+	s.OnStatus(status("blocked", "working"))
+	nextFrame(t, frames)
+	quiet := Subscription{Endpoint: phone, Prefs: Prefs{Input: true, Done: "always", Quiet: &Quiet{From: "00:00", To: "23:59", TZ: "UTC"}}}
+	quiet.Keys.P256dh, quiet.Keys.Auth = "p", "a"
+	s.Subscribe(quiet, "")
+	s.Notify(Payload{Machine: "local", Pane: "w1:p1", Kind: "task", Title: "Task #3: the agent answered", Tag: "task|3"})
+	nextFrame(t, frames)
+	if owed := s.OwedTo(phone); len(owed) != 1 || owed[0] != "task|3" {
+		t.Fatalf("the phone in its quiet hours is owed %v, want the question it still shows", owed)
+	}
+}

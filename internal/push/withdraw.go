@@ -124,8 +124,10 @@ func (w *withdrawals) stand(p Payload, devices []string, since uint64, now time.
 	defer w.mu.Unlock()
 	w.pruneLocked(now)
 	w.recent = without(w.recent, p.Tag)
-	for endpoint, owed := range w.owed {
-		w.owed[endpoint] = without(owed, p.Tag)
+	for _, endpoint := range devices { // a device the new alert did not reach still shows the old one, and is owed it
+		if owed, ok := w.owed[endpoint]; ok {
+			w.owed[endpoint] = without(owed, p.Tag)
+		}
 	}
 	if p.Machine == "" || p.Pane == "" || standsWhile[p.Kind] == "" {
 		return nil

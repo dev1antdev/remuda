@@ -3656,9 +3656,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   as `withdrawn` (`Service.Withdrawn`, the newest `maxWithdrawn` 50) for
   every page to close in its browser, `OnWithdraw` moving it. A tag
   raised again after it was taken back (a task's "asks first" note, no
-  episode's) leaves both lists, whatever the new alert's kind — a task's
-  finish or pull request shows under the tag its question was taken back
-  by — and stands again when its kind does. Nothing is kept on disk: a
+  episode's) leaves the roster's list and the owed lists of the devices it
+  reached (one inside its quiet hours still shows the old one, and is
+  still owed it), whatever the new alert's kind — a task's finish or pull
+  request shows under the tag its question was taken back by — and stands
+  again when its kind does. Nothing is kept on disk: a
   restart forgets what stands.
   **Quiet hours** (`quiet.go`): a device's prefs may carry `quiet {from,
   to, tz}` — "HH:MM" by its own IANA zone, the zone database embedded so
