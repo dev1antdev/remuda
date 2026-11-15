@@ -20,6 +20,7 @@ export type Outcome = {
   upstream?: string;
   ahead?: number;
   behind?: number;
+  head?: string; // the commit a push sends, the one its secret check read: Push anyway names it back
   count?: number; // the commits a pull brought or a push sent
   output?: string; // git's last lines when it failed, or why the machine is away
   scan?: SecretScan; // what the secret check found, for a held push
@@ -31,12 +32,13 @@ export const fetchRepo = (machine: string, dir: string): Promise<Outcome> => sen
 // pullRepo fast-forwards only, and is refused while an agent works, asks or ends a turn in the checkout
 export const pullRepo = (machine: string, dir: string): Promise<Outcome> => sendJSON("POST", "/api/repos/pull", { machine, dir });
 
-// pushRepo never forces; the secret check holds it back ("held") until anyway says so, after the person confirmed
-export const pushRepo = (machine: string, dir: string, anyway = false): Promise<Outcome> => sendJSON("POST", "/api/repos/push", { machine, dir, anyway });
+// pushRepo never forces; the secret check holds it back ("held") until anyway says so, after the person confirmed,
+// naming the held push's head: a branch that moved since is refused ("moved"), its new commits never read
+export const pushRepo = (machine: string, dir: string, anyway = false, head = ""): Promise<Outcome> => sendJSON("POST", "/api/repos/push", { machine, dir, anyway, head });
 
-// syncRepo is any of the three by name
-export function syncRepo(action: SyncAction, machine: string, dir: string, anyway = false): Promise<Outcome> {
+// syncRepo is any of the three by name; held is the push the person pressed Push anyway on
+export function syncRepo(action: SyncAction, machine: string, dir: string, held?: Outcome): Promise<Outcome> {
   if (action === "fetch") return fetchRepo(machine, dir);
   if (action === "pull") return pullRepo(machine, dir);
-  return pushRepo(machine, dir, anyway);
+  return pushRepo(machine, dir, !!held, held?.head ?? "");
 }

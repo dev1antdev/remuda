@@ -391,3 +391,48 @@ func TestATreeInsideAnIgnoredFolderIsIgnoredWhole(t *testing.T) {
 		t.Errorf("a file under an ignored root reads %+v", entries[0])
 	}
 }
+
+func TestATreeRootedAtANewOrIgnoredFolderMarksWhatIsInIt(t *testing.T) {
+	dir := repo(t)
+	write(t, dir+"/.gitignore", "cache/\n")
+	write(t, dir+"/a.txt", "a\n")
+	gitIn(t, dir, "add", "-A")
+	gitIn(t, dir, "commit", "-q", "-m", "init")
+	write(t, dir+"/newpkg/main.go", "package main\n")
+	write(t, dir+"/newpkg/sub/x.go", "package sub\n")
+	write(t, dir+"/cache/blob.bin", "x\n")
+
+	var svc Service
+	fresh, err := svc.List(shell.Local{Name: "local"}, dir+"/newpkg", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := byName(fresh.Entries)
+	if got["main.go"].Mark != "?" || got["sub"].Mark != "?" {
+		t.Errorf("a tree rooted at a new folder reads %+v", fresh.Entries)
+	}
+	cache, err := svc.List(shell.Local{Name: "local"}, dir+"/cache", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !byName(cache.Entries)["blob.bin"].Ignored {
+		t.Errorf("a tree rooted at an ignored folder reads %+v", cache.Entries)
+	}
+}
+
+func TestAFileAddedWithIntentToAddReadsAsAdded(t *testing.T) {
+	dir := repo(t)
+	write(t, dir+"/a.txt", "a\n")
+	gitIn(t, dir, "add", "-A")
+	gitIn(t, dir, "commit", "-q", "-m", "init")
+	write(t, dir+"/planned.go", "package main\n")
+	gitIn(t, dir, "add", "-N", "planned.go")
+	var svc Service
+	root, err := svc.List(shell.Local{Name: "local"}, dir, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := byName(root.Entries)["planned.go"].Mark; got != "A" {
+		t.Errorf("a file git add -N named reads %q", got)
+	}
+}

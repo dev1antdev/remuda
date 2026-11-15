@@ -108,9 +108,11 @@ export function pinnedRows(machines: Machine[], pins: string[]): Pinned[] {
   return pins.flatMap((key) => found.get(key) ?? []);
 }
 
-// livePins drops the pins of agents gone: their machine is connected, shows its workspaces and has no such agent, or the
+// livePins drops the pins of agents gone: their machine is connected, shows its workspaces and has no such pane, or the
 // fleet no longer has the machine; a machine away, still connecting or not read yet keeps its pins, since its agents may
 // well be there. Herdr gives a closed pane's id to a new one later, which a stale pin would otherwise take for the old agent.
+// A pane that stands as a bare shell keeps its pin: a workspace asleep, an agent restarting onto an update or resumed
+// after a reboot comes back in that very pane, and the pinned group draws it again then.
 export function livePins(machines: Machine[], pins: string[]): string[] {
   if (machines.length === 0) return pins;
   const byId = new Map(machines.map((m) => [m.id, m]));
@@ -120,7 +122,7 @@ export function livePins(machines: Machine[], pins: string[]): string[] {
     if (!machine) return false;
     if (machine.state !== "connected" || machine.sessions.length === 0) return true;
     const pane = key.slice(at + 1);
-    return machine.sessions.some((s) => s.tabs.some((tab) => tab.panes.some((p) => p.id === pane && !!p.agent)));
+    return machine.sessions.some((s) => s.tabs.some((tab) => tab.panes.some((p) => p.id === pane)));
   });
 }
 
@@ -144,8 +146,9 @@ export const elbowOf = (index: number, count: number): "├" | "└" => (index =
 // ---- the walk ----
 
 // walkOrder is every agent in the order the sidebar draws them — the pinned ones first, then each connected machine's
-// workspaces as its order lays them out, an agent's subagents' parent among them — each once
-export function walkOrder(machines: Machine[], prefs: RadarPrefs, pins: string[]): { machineId: string; paneId: string }[] {
+// workspaces as its order lays them out (masked: the ones the screen-sharing mode hides), an agent's subagents' parent
+// among them — each once
+export function walkOrder(machines: Machine[], prefs: RadarPrefs, pins: string[], masked?: (machineId: string, s: Session) => boolean): { machineId: string; paneId: string }[] {
   const seen = new Set<string>();
   const out: { machineId: string; paneId: string }[] = [];
   const add = (machineId: string, paneId: string) => {
@@ -157,7 +160,7 @@ export function walkOrder(machines: Machine[], prefs: RadarPrefs, pins: string[]
   for (const pinned of pinnedRows(machines, pins)) add(pinned.machine.id, pinned.row.pane.id);
   for (const machine of machines) {
     if (machine.state !== "connected") continue;
-    for (const entry of entries(machine, prefs)) for (const item of entryItems(entry)) for (const r of item.rows) if (r.pane.agent) add(machine.id, r.pane.id);
+    for (const entry of entries(machine, prefs, masked && ((s) => masked(machine.id, s)))) for (const item of entryItems(entry)) for (const r of item.rows) if (r.pane.agent) add(machine.id, r.pane.id);
   }
   return out;
 }

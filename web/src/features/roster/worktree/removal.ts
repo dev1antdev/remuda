@@ -51,3 +51,10 @@ export function buttonWords(rm: Removal, deleteBranch: boolean, busy: boolean): 
 export function blockedWords(rm: Removal): string {
   return rm.working && !sharedHere(rm) ? t("{why}: let it finish, or stop it, before its worktree goes.", { why: rm.working }) : "";
 }
+
+// keepFolderOffered says whether the dialog offers Close, keep the folder: beside a loss, and when the worktree could not
+// be looked at (its folder deleted behind herdr's back), the one way left to close its workspace
+export function keepFolderOffered(rm: Removal | null | undefined, lookFailed: boolean, deleteBranch = false): boolean {
+  if (!rm) return lookFailed;
+  return !sharedHere(rm) && warnings(rm, deleteBranch).length > 0;
+}

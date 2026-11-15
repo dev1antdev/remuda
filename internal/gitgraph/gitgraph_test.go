@@ -285,11 +285,11 @@ func TestACommitsDetailAndAFilesPatch(t *testing.T) {
 	if f := byPath["notes.md"]; f.Status != "R" || f.From != "README.md" {
 		t.Errorf("the rename is %+v", f)
 	}
-	patch, err := ReadPatch(host, dir, head, "src/a.go", "")
+	patch, err := ReadPatch(host, dir, head, "src/a.go", "", false)
 	if err != nil || !strings.Contains(patch, "+func A() {}") || !strings.Contains(patch, "@@") {
 		t.Fatalf("the patch is %q, %v", patch, err)
 	}
-	renamed, err := ReadPatch(host, dir, head, "notes.md", "README.md")
+	renamed, err := ReadPatch(host, dir, head, "notes.md", "README.md", false)
 	if err != nil || !strings.Contains(renamed, "rename from README.md") {
 		t.Fatalf("the rename's patch is %q, %v", renamed, err)
 	}
@@ -300,6 +300,32 @@ func TestACommitsDetailAndAFilesPatch(t *testing.T) {
 	}
 	if _, err := ReadCommit(host, dir, strings.Repeat("0", 40)); err != ErrNoCommit {
 		t.Fatalf("a hash the repository lacks answered %v", err)
+	}
+}
+
+func TestAFilesPatchOpensFromAFolderInsideTheRepository(t *testing.T) {
+	dir := history(t)
+	write(t, dir, "web/src/a.go", "package a\n\nfunc A() {}\n")
+	write(t, dir, "server/b.go", "package b\n\nfunc B() {}\n")
+	run(t, dir, "add", "-A")
+	run(t, dir, "commit", "-qm", "grow web and server")
+	head := run(t, dir, "rev-parse", "HEAD")
+	web := filepath.Join(dir, "web")
+	detail, err := ReadCommit(host, web, head)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range detail.Files {
+		patch, err := ReadPatch(host, web, head, file.Path, file.From, false)
+		if err != nil || !strings.Contains(patch, "+func ") {
+			t.Errorf("the patch of %s, as the commit names it from web/, is %q, %v", file.Path, patch, err)
+		}
+	}
+	if patch, err := ReadPatch(host, web, head, "web/src/a.go", "", true); err != nil || !strings.Contains(patch, "+func A() {}") {
+		t.Errorf("a file inside the folder, kept to it: %q, %v", patch, err)
+	}
+	if patch, err := ReadPatch(host, web, head, "server/b.go", "", true); err != ErrOutside || patch != "" {
+		t.Errorf("a file outside the folder, kept to it, answered %q, %v", patch, err)
 	}
 }
 
@@ -314,7 +340,7 @@ func TestInputsThatCouldReachGitAsSomethingElseAreRefused(t *testing.T) {
 			t.Errorf("%q passes as a path", path)
 		}
 	}
-	if _, err := ReadPatch(host, t.TempDir(), "abcdef1", "--output=x", ""); err != ErrInput {
+	if _, err := ReadPatch(host, t.TempDir(), "abcdef1", "--output=x", "", false); err != ErrInput {
 		t.Fatalf("an option as a path answered %v", err)
 	}
 }

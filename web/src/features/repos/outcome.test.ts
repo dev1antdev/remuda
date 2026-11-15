@@ -22,6 +22,7 @@ describe("outcomeWords", () => {
     expect(said({ action: "pull", state: "refused", reason: "diverged", ahead: 1, behind: 2 }).text).toContain("1 commit of its own, 2 commits not pulled");
     expect(said({ action: "fetch", state: "refused", reason: "away", output: "GOG is away: no route" }).text).toBe("GOG is away: no route");
     expect(said({ action: "push", state: "failed", output: "! [rejected] main -> main (fetch first)" }).text).toBe("The push of app failed: ! [rejected] main -> main (fetch first)");
+    expect(said({ action: "push", state: "refused", reason: "moved", branch: "main" })).toEqual({ text: "app has new commits since its secret check: nothing was pushed. Push again to check them too.", error: true });
   });
 
   it("words a held push and its confirm", () => {

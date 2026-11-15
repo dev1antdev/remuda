@@ -22,7 +22,7 @@ func (s *Server) resourceRoutes(api *http.ServeMux) {
 }
 
 // handleResources is GET /api/resources?machine=: the machine's load as its herdr panes make it, by workspace. The
-// status bar asks it every few seconds, so the ports are read at the quicker pace meanwhile.
+// status bar asks it every few seconds, so that machine's ports are read at the quicker pace meanwhile.
 func (s *Server) handleResources(w http.ResponseWriter, r *http.Request) {
 	if s.Resources == nil {
 		httpErr(w, http.StatusNotFound, errors.New("the load is not read on this remuda"))
@@ -32,7 +32,7 @@ func (s *Server) handleResources(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	s.Ports.Hurry()
+	s.Ports.Hurry(mc.ID())
 	if mc.Windows() {
 		httpErr(w, http.StatusConflict, errors.New(resources.NotOnWindows))
 		return
@@ -47,21 +47,25 @@ func (s *Server) handleResources(w http.ResponseWriter, r *http.Request) {
 }
 
 // handlePorts is GET /api/ports?machine=: the machine's listening ports as last read, the ones outside every
-// workspace too; read says whether they were read at all yet.
+// workspace too, and when; read says whether they were read lately enough for the roster to carry them.
 func (s *Server) handlePorts(w http.ResponseWriter, r *http.Request) {
 	mc, err := s.machineFor(r, "")
 	if err != nil {
 		httpErr(w, http.StatusNotFound, err)
 		return
 	}
-	s.Ports.Hurry()
+	s.Ports.Hurry(mc.ID())
 	if mc.Windows() {
 		writeJSON(w, map[string]any{"ports": []ports.Port{}, "read": false, "unsupported": preview.NotOnWindows})
 		return
 	}
 	reading, read := s.Ports.Of(mc.ID())
+	answer := map[string]any{"ports": reading.Ports, "error": reading.Error, "read": read}
+	if read {
+		answer["at"] = reading.At
+	}
 	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, map[string]any{"at": reading.At, "ports": reading.Ports, "error": reading.Error, "read": read})
+	writeJSON(w, answer)
 }
 
 // handlePortStop is POST /api/ports/stop {machine, pid, port}: SIGTERM to that very process, once a fresh look finds

@@ -7,6 +7,8 @@ import { actions } from "@/app/store";
 import SendToAgent from "@/features/agents/SendToAgent";
 import { useAgentTargets } from "@/features/agents/useAgentTargets";
 import { submitPrompt } from "@/features/roster/api";
+import { useRoster } from "@/features/roster/useRoster";
+import { useSharing } from "@/features/roster/useSharing";
 import type { OpenFile } from "@/features/files/target";
 import { copyText } from "@/lib/host";
 import { t } from "@/lib/i18n";
@@ -46,6 +48,9 @@ export default function ProjectTree({ machineId, paneId, dir, active, viewOnly, 
   const tick = useTick(machineId, paneId, active);
   const [sending, setSending] = useState<Sending | null>(null);
   const agents = useAgentTargets();
+  const { machines } = useRoster();
+  const machineName = machines.find((machine) => machine.id === machineId)?.label ?? machineId; // an agent on another machine is told the file lies on this one
+  const share = useSharing(); // the toast names a hidden folder's workspace by its neutral name
 
   const run = useCallback(
     (action: RowAction, entry: TreeEntry, rel: string) => {
@@ -87,7 +92,7 @@ export default function ProjectTree({ machineId, paneId, dir, active, viewOnly, 
               {sending.entry.dir ? t("Folder") : t("File")}: <code>{sending.path}</code>
             </>
           }
-          compose={(instruction) => fileMessage(instruction, sending.path, !!sending.entry.dir)}
+          compose={(instruction, target) => fileMessage(instruction, sending.path, !!sending.entry.dir, target.machineId === machineId ? "" : machineName)}
           agents={agents}
           currentPane={paneId ? { machineId, paneId } : null}
           rememberKey={`file:${machineId}|${paneId}`}
@@ -95,7 +100,8 @@ export default function ProjectTree({ machineId, paneId, dir, active, viewOnly, 
           onSend={async (target, text) => {
             await submitPrompt(target.machineId, target.paneId, text);
             setSending(null);
-            actions.notify(t("Sent to {agent} in {workspace}: {name}", { name: sending.entry.name, agent: target.agent, workspace: target.sessionName }), { brief: true });
+            const workspace = share.folderName(target.machineId, target.folder ?? "", target.sessionName);
+            actions.notify(t("Sent to {agent} in {workspace}: {name}", { name: sending.entry.name, agent: target.agent, workspace }), { brief: true });
           }}
         />
       )}

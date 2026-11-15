@@ -56,4 +56,7 @@ describe("a file handed to an agent", () => {
     expect(fileMessage("  Add a test for this  ", "/home/me/app/src/app.go", false)).toBe("Add a test for this\n\nFile: /home/me/app/src/app.go");
     expect(fileMessage("Tidy it", "/home/me/app/src", true)).toBe("Tidy it\n\nFolder: /home/me/app/src");
   });
+  it("says which machine the path is on to an agent on another one", () => {
+    expect(fileMessage("Review it", "/Users/me/app/x.go", false, "Mac Studio")).toBe("Review it\n\nFile: /Users/me/app/x.go\n(on Mac Studio, another machine than yours)");
+  });
 });
