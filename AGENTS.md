@@ -136,8 +136,11 @@ not style.
   queue, a trigger, an agent's key or a viewer link (403); refused while
   an agent works, asks or ends a turn in that checkout, the refusal naming
   who; never a force push (`--force`, `--force-with-lease`), never `git
-  clean -fdx` past the one path the person picked; git's own words shown
-  when it fails; the secret check before a commit and a push. Every read
+  clean -fdx` past the one path the person picked; `--no-verify` (the
+  repository's own hooks skipped) only on the one commit or push the
+  person picked it for, never remembered; git's own words shown
+  when it fails; the secret check before a commit and a push, hooks
+  skipped or not. Every read
   of the Git lens and the Changes lens runs `git --no-optional-locks -c
   core.fsmonitor=false -c diff.autoRefreshIndex=false`, so a look never
   touches the index (the first two alone still let git's diff write it).

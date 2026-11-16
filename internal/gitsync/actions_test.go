@@ -135,7 +135,7 @@ func TestPushSendsTheBranchAndSetsAnUpstreamForANewOne(t *testing.T) {
 	commit(t, mine, "one.txt", "one\n")
 	place := service(t, idle, func(shell.Host, string) (review.SecretScan, error) { return review.SecretScan{}, nil })
 
-	pushed := place.Push("local", mine, false, "")
+	pushed := place.Push("local", mine, PushAsk{})
 	if pushed.State != Done || pushed.Count != 1 || pushed.Reason != "" || pushed.Repo == nil || pushed.Repo.Ahead != 0 {
 		t.Fatalf("push: %+v", pushed)
 	}
@@ -145,7 +145,7 @@ func TestPushSendsTheBranchAndSetsAnUpstreamForANewOne(t *testing.T) {
 
 	gitIn(t, mine, "checkout", "-q", "-b", "feature/x")
 	commit(t, mine, "two.txt", "two\n")
-	fresh := place.Push("local", mine, false, "")
+	fresh := place.Push("local", mine, PushAsk{})
 	if fresh.State != Done || fresh.Reason != ReasonNewBranch || fresh.Remote != "origin" || fresh.Repo == nil || fresh.Repo.Upstream != "origin/feature/x" {
 		t.Fatalf("a new branch's push: %+v", fresh)
 	}
@@ -166,7 +166,7 @@ func TestPushNeverForcesNorSendsTags(t *testing.T) {
 	gitIn(t, mine, "tag", "-a", "-m", "a tag", "v1")
 	place := service(t, idle, nil)
 
-	rejected := place.Push("local", mine, false, "")
+	rejected := place.Push("local", mine, PushAsk{})
 	if rejected.State != Failed || !strings.Contains(rejected.Output, "rejected") {
 		t.Fatalf("a push the remote must refuse: %+v", rejected)
 	}
@@ -176,7 +176,7 @@ func TestPushNeverForcesNorSendsTags(t *testing.T) {
 
 	gitIn(t, mine, "fetch", "-q")
 	gitIn(t, mine, "rebase", "-q", "origin/main")
-	if outcome := place.Push("local", mine, false, ""); outcome.State != Done {
+	if outcome := place.Push("local", mine, PushAsk{}); outcome.State != Done {
 		t.Fatalf("the push after a rebase: %+v", outcome)
 	}
 	if tags := gitIn(t, bare, "tag"); tags != "" {
@@ -194,7 +194,7 @@ func TestTheSecretCheckHoldsAPushUntilTheyPushAnyway(t *testing.T) {
 	var checked string
 	place := service(t, idle, func(_ shell.Host, dir string) (review.SecretScan, error) { checked = dir; return found, nil })
 
-	held := place.Push("local", mine, false, "")
+	held := place.Push("local", mine, PushAsk{})
 	if held.State != Held || held.Reason != ReasonSecretsFound || held.Scan == nil || len(held.Scan.Findings) != 1 || checked != mine {
 		t.Fatalf("a push with a secret: %+v (checked %q)", held, checked)
 	}
@@ -204,14 +204,51 @@ func TestTheSecretCheckHoldsAPushUntilTheyPushAnyway(t *testing.T) {
 	failing := service(t, idle, func(shell.Host, string) (review.SecretScan, error) {
 		return review.SecretScan{}, errors.New("it took longer than 45s")
 	})
-	if outcome := failing.Push("local", mine, false, ""); outcome.State != Held || outcome.Reason != ReasonCheckFailed || outcome.Output == "" {
+	if outcome := failing.Push("local", mine, PushAsk{}); outcome.State != Held || outcome.Reason != ReasonCheckFailed || outcome.Output == "" {
 		t.Fatalf("a push whose check failed: %+v", outcome)
 	}
-	if outcome := place.Push("local", mine, true, ""); outcome.State != Done {
+	if outcome := place.Push("local", mine, PushAsk{Anyway: true}); outcome.State != Done {
 		t.Fatalf("push anyway: %+v", outcome)
 	}
 	if gitIn(t, bare, "rev-parse", "main") == before {
 		t.Fatal("push anyway did not push")
+	}
+}
+
+func TestNoVerifySkipsThePrePushHookButNotTheSecretCheck(t *testing.T) {
+	home := sandbox(t)
+	bare, clones := remoteAndClones(t, home, 1)
+	mine := clones[0]
+	hooks := filepath.Join(mine, ".git", "hooks")
+	_ = os.MkdirAll(hooks, 0o755)
+	if err := os.WriteFile(filepath.Join(hooks, "pre-push"), []byte("#!/bin/sh\necho 'tests failed: 3 of 120'\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	commit(t, mine, "one.txt", "one\n")
+	before := gitIn(t, bare, "rev-parse", "main")
+	found := review.SecretScan{Findings: []secrets.Finding{{File: "one.txt", Line: 1, Rule: secrets.RuleAWS, Excerpt: "AKIA••••••••"}}, Commits: 1, Push: true}
+	clean := func(shell.Host, string) (review.SecretScan, error) { return review.SecretScan{Push: true}, nil }
+	place := service(t, idle, clean)
+
+	stopped := place.Push("local", mine, PushAsk{})
+	if stopped.State != Failed || !strings.Contains(stopped.Output, "tests failed: 3 of 120") || stopped.NoVerify {
+		t.Fatalf("a push the hook refuses: %+v", stopped)
+	}
+	place.Check = func(shell.Host, string) (review.SecretScan, error) { return found, nil }
+	held := place.Push("local", mine, PushAsk{NoVerify: true})
+	if held.State != Held || !held.NoVerify {
+		t.Fatalf("a push past the hook is still held by the secret check, and says it skips the hook: %+v", held)
+	}
+	if gitIn(t, bare, "rev-parse", "main") != before {
+		t.Fatal("a held push reached the remote")
+	}
+	place.Check = clean
+	pushed := place.Push("local", mine, PushAsk{NoVerify: true})
+	if pushed.State != Done || !pushed.NoVerify || pushed.Count != 1 {
+		t.Fatalf("a push past the hook: %+v", pushed)
+	}
+	if gitIn(t, bare, "rev-parse", "main") != gitIn(t, mine, "rev-parse", "HEAD") {
+		t.Fatal("the remote does not hold the commit")
 	}
 }
 
@@ -228,7 +265,7 @@ func TestAPushSendsOnlyWhatTheSecretCheckRead(t *testing.T) {
 		}
 		return review.SecretScan{Push: true}, nil
 	})
-	pushed := place.Push("local", mine, false, "")
+	pushed := place.Push("local", mine, PushAsk{})
 	if pushed.State != Done || pushed.Count != 1 {
 		t.Fatalf("push: %+v", pushed)
 	}
@@ -242,23 +279,23 @@ func TestAPushSendsOnlyWhatTheSecretCheckRead(t *testing.T) {
 	agentCommits = false
 	found := review.SecretScan{Findings: []secrets.Finding{{File: "agent.txt", Line: 1, Rule: secrets.RuleAWS, Excerpt: "AKIA••••••••"}}, Commits: 1, Push: true}
 	place.Check = func(shell.Host, string) (review.SecretScan, error) { return found, nil }
-	held := place.Push("local", mine, false, "")
+	held := place.Push("local", mine, PushAsk{})
 	if held.State != Held || held.Head != gitIn(t, mine, "rev-parse", "HEAD") {
 		t.Fatalf("a held push names the commit its check read: %+v", held)
 	}
 	commit(t, mine, "later.txt", "made after the person saw the findings\n")
-	moved := place.Push("local", mine, true, held.Head)
+	moved := place.Push("local", mine, PushAsk{Anyway: true, Head: held.Head})
 	if moved.State != Refused || moved.Reason != ReasonMoved {
 		t.Fatalf("push anyway of a branch that moved since its check: %+v", moved)
 	}
 	if got := gitIn(t, bare, "rev-parse", "main"); got != checked {
 		t.Fatalf("push anyway sent %s, which the person never saw checked", got)
 	}
-	again := place.Push("local", mine, false, "")
+	again := place.Push("local", mine, PushAsk{})
 	if again.State != Held {
 		t.Fatalf("the push asked again: %+v", again)
 	}
-	if outcome := place.Push("local", mine, true, again.Head); outcome.State != Done || gitIn(t, bare, "rev-parse", "main") != again.Head {
+	if outcome := place.Push("local", mine, PushAsk{Anyway: true, Head: again.Head}); outcome.State != Done || gitIn(t, bare, "rev-parse", "main") != again.Head {
 		t.Fatalf("push anyway of what the person saw: %+v", outcome)
 	}
 }
@@ -282,7 +319,7 @@ func TestActionsSayWhyTheyDoNothing(t *testing.T) {
 		reason  string
 	}{
 		{"a fetch with no remote", place.Fetch("local", alone), ReasonNoRemote},
-		{"a push with no remote", place.Push("local", alone, true, ""), ReasonNoRemote},
+		{"a push with no remote", place.Push("local", alone, PushAsk{Anyway: true}), ReasonNoRemote},
 		{"a pull with no remote", place.Pull("local", alone), ReasonNoRemote},
 		{"a folder outside git", place.Fetch("local", plain), ReasonNotRepo},
 		{"a folder that is not there", place.Pull("local", filepath.Join(home, "gone")), ReasonMissing},
@@ -296,7 +333,7 @@ func TestActionsSayWhyTheyDoNothing(t *testing.T) {
 	if outcome := place.Pull("local", mine); outcome.Reason != ReasonDetached {
 		t.Errorf("a detached pull: %+v", outcome)
 	}
-	if outcome := place.Push("local", mine, true, ""); outcome.Reason != ReasonDetached {
+	if outcome := place.Push("local", mine, PushAsk{Anyway: true}); outcome.Reason != ReasonDetached {
 		t.Errorf("a detached push: %+v", outcome)
 	}
 	gitIn(t, mine, "checkout", "-q", "-b", "local-only")

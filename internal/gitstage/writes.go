@@ -138,13 +138,15 @@ func (s *Service) Discard(host shell.Host, dir, path, kind string) error {
 	return err
 }
 
-// CommitRequest is a commit as the person asked for it: the message, the files to stage first (Commit all), and for an
-// amend the HEAD it was chosen on.
+// CommitRequest is a commit as the person asked for it: the message, the files to stage first (Commit all), for an
+// amend the HEAD it was chosen on, and NoVerify when the person chose to skip the repository's pre-commit and
+// commit-msg hooks (git commit --no-verify) for this commit.
 type CommitRequest struct {
-	Message string   `json:"message"`
-	Stage   []string `json:"stage,omitempty"`
-	Amend   bool     `json:"amend,omitempty"`
-	Head    string   `json:"head,omitempty"`
+	Message  string   `json:"message"`
+	Stage    []string `json:"stage,omitempty"`
+	Amend    bool     `json:"amend,omitempty"`
+	Head     string   `json:"head,omitempty"`
+	NoVerify bool     `json:"no_verify,omitempty"`
 }
 
 // Committed is the commit made.
@@ -164,7 +166,8 @@ const (
 )
 
 // Commit records what is staged — with Stage, those files staged first — as a new commit, or as the last one amended
-// when HEAD is still the one the amend was chosen on; never while a file of the folder is in conflict.
+// when HEAD is still the one the amend was chosen on; never while a file of the folder is in conflict. The
+// repository's hooks run as they are unless NoVerify skips them; signing is git's own either way.
 func (s *Service) Commit(host shell.Host, dir string, req CommitRequest) (Committed, error) {
 	message := strings.TrimRight(req.Message, " \t\r\n")
 	switch {
@@ -199,14 +202,17 @@ func (s *Service) Commit(host shell.Host, dir string, req CommitRequest) (Commit
 	if len(take) > 0 {
 		body.WriteString(inChunks(writeGit+" add", take))
 	}
-	amend := ""
+	flags := ""
 	if req.Amend {
-		amend = " --amend"
+		flags = " --amend"
 	} else {
 		body.WriteString(`if git diff --cached --quiet 2>/dev/null; then printf '\036nothing'; exit 4; fi; `)
 	}
+	if req.NoVerify {
+		flags += " --no-verify"
+	}
 	body.WriteString(`t=$(mktemp "${TMPDIR:-/tmp}/remuda-commit.XXXXXX") || exit 1; printf '%s\n' ` + script.Quote(message) + ` > "$t"; ` +
-		writeGit + ` commit -q` + amend + ` -F "$t"; c=$?; rm -f "$t"; [ "$c" = 0 ] || exit "$c"; ` +
+		writeGit + ` commit -q` + flags + ` -F "$t"; c=$?; rm -f "$t"; [ "$c" = 0 ] || exit "$c"; ` +
 		`printf '\035'; git log -1 --format='%H%x1f%h%x1f%s'`)
 	output, err := run(host, dir, body.String(), commitFor)
 	switch {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Session } from "@/features/roster/api";
 import type { Listed, Repo } from "./api";
-import { fetchable, groupsOf, machineWords, paneOf, replaced, scanWords, syncLabel, syncOf, syncOffers, syncTip, workspaceOn } from "./repos";
+import { fetchable, groupsOf, machineWords, paneOf, pushWithoutHooks, replaced, scanWords, syncLabel, syncOf, syncOffers, syncTip, workspaceOn } from "./repos";
 
 const repo = (over: Partial<Repo> = {}): Repo => ({ path: "/code/app", name: "app", parent: "~/code", ahead: 0, behind: 0, dirty: 0, remote: true, branch: "main", upstream: "origin/main", ...over });
 
@@ -53,6 +53,12 @@ describe("syncOffers", () => {
     expect(order(repo({ remote: false, upstream: undefined }))).toEqual([]);
     expect(order(repo({ error: "fatal" }))).toEqual([]);
     expect(fetchable(repo({ remote: false }))).toBe(false);
+  });
+
+  it("offers the push again without its pre-push hook, worded as the push is", () => {
+    expect(pushWithoutHooks(repo())).toEqual({ action: "push", label: "Push without hooks", noVerify: true });
+    expect(pushWithoutHooks(repo({ upstream: undefined })).label).toBe("Push and set upstream without hooks");
+    expect(pushWithoutHooks(repo({ gone: true })).label).toBe("Push and set upstream without hooks");
   });
 });
 

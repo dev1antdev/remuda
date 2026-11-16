@@ -59,16 +59,25 @@ func (s *Service) busyPull(machineID string, p probe) (Outcome, bool) {
 	return Outcome{Action: ActPull, State: Refused, Reason: ReasonBusy, Agent: agent, Doing: doing, Branch: p.branch}, true
 }
 
+// PushAsk is a push as the person asked for it: Anyway past the secret check that held it, naming Head, the commit its
+// hold showed; NoVerify when the person chose to skip the repository's pre-push hook (git push --no-verify). remuda's
+// own secret check is no hook of the repository's and stands either way.
+type PushAsk struct {
+	Anyway   bool   `json:"anyway,omitempty"`
+	Head     string `json:"head,omitempty"`
+	NoVerify bool   `json:"no_verify,omitempty"`
+}
+
 // Push sends the branch to its upstream, or to origin under its own name with the upstream set when it has none; never
 // a force or a tag. The secret check over the commits it would carry (and the work beside them) stands first, its
 // findings or its failure holding the push back until the person says anyway; what goes is the commit the check read
 // (Outcome.Head), and anyway names the one its hold showed, refused when the branch moved since (ReasonMoved).
-func (s *Service) Push(machineID, dir string, anyway bool, head string) Outcome {
+func (s *Service) Push(machineID, dir string, ask PushAsk) Outcome {
 	return s.act(ActPush, machineID, dir, func(host shell.Host, style rpath.Style, p probe) Outcome {
 		if p.branch == "" {
 			return refused(ActPush, ReasonDetached)
 		}
-		if anyway && head != "" && head != p.head {
+		if ask.Anyway && ask.Head != "" && ask.Head != p.head {
 			return Outcome{Action: ActPush, State: Refused, Reason: ReasonMoved, Branch: p.branch}
 		}
 		remote, target, setUpstream := p.remote, p.merge, false
@@ -84,8 +93,8 @@ func (s *Service) Push(machineID, dir string, anyway bool, head string) Outcome 
 				return Outcome{Action: ActPush, State: Refused, Reason: ReasonWhichRemote, Branch: p.branch}
 			}
 		}
-		outcome := Outcome{Action: ActPush, Remote: remote, Branch: p.branch, Upstream: p.upstream, Ahead: p.ahead, Head: p.head}
-		if !anyway && s.Check != nil {
+		outcome := Outcome{Action: ActPush, Remote: remote, Branch: p.branch, Upstream: p.upstream, Ahead: p.ahead, Head: p.head, NoVerify: ask.NoVerify}
+		if !ask.Anyway && s.Check != nil {
 			scan, err := s.Check(host, p.top)
 			if err != nil {
 				outcome.State, outcome.Reason, outcome.Output = Held, ReasonCheckFailed, err.Error()
@@ -96,7 +105,7 @@ func (s *Service) Push(machineID, dir string, anyway bool, head string) Outcome 
 				return outcome
 			}
 		}
-		result := s.network(host, style, p, outcome, pushScript(remote, p.branch, p.head, target, setUpstream))
+		result := s.network(host, style, p, outcome, pushScript(remote, p.branch, p.head, target, setUpstream, ask.NoVerify))
 		if result.State == Done {
 			result.Count = p.ahead
 			if setUpstream {

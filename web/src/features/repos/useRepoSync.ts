@@ -45,13 +45,14 @@ export function useRepoSync(mutate: (fn: (data: { machines: Listed[] } | null) =
     [mutate],
   );
 
-  // act runs one action on one row; held is the push the secret check held back, let past it after the person's confirm
+  // act runs one action on one row; held is the push the secret check held back, let past it after the person's confirm;
+  // noVerify a push without the repository's pre-push hook
   const act = useCallback(
-    async (machineId: string, repo: Repo, action: SyncAction, held?: Outcome) => {
+    async (machineId: string, repo: Repo, action: SyncAction, held?: Outcome, noVerify = false) => {
       const key = keyOf(machineId, repo.path);
       mark(key, true);
       try {
-        const outcome = await syncRepo(action, machineId, repo.path, held);
+        const outcome = await syncRepo(action, machineId, repo.path, held, noVerify);
         landed(machineId, outcome);
         if (action === "fetch" || action === "pull") noteFetch(key, outcome.state === "failed" ? (outcome.output ?? "") : "");
         if (outcome.state === "held") setHeld({ machineId, repo, outcome });

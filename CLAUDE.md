@@ -1076,8 +1076,13 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   remote) under its own name with its upstream then set in the config as
   `--set-upstream` would when it has none (`ReasonNewBranch`; several remotes
   and no origin is `ReasonWhichRemote`);
-  never `--force`, never a tag (`push.followTags` off); **the secret check
-  stands first** (`Service.Check` = `review.ScanWork(host, top, true)`: the
+  never `--force`, never a tag (`push.followTags` off); `--no-verify` only
+  when the person asked for that push (`PushAsk{anyway, head, no_verify}`,
+  the menus' Push without hooks): the repository's pre-push hook does not
+  run, the outcome says `no_verify`, and a push the check holds keeps it,
+  so Push anyway asks it again (tested: a refusing pre-push hook passed
+  only so, the check still holding); **the secret check
+  stands first, hooks skipped or not** (`Service.Check` = `review.ScanWork(host, top, true)`: the
   commits on no remote-tracking branch and the work beside them, any finding
   holding it): findings are `Held` with the scan (`ReasonSecretsFound`), a
   check that failed `Held` with why (`ReasonCheckFailed`), each naming the commit
@@ -1087,7 +1092,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   the person's only — neither `viewerRoutes` nor an agent key's, tested in
   `internal/auth/repos_test.go`): `GET /api/repos[?fresh=1]` (`{machines}`),
   `PUT /api/repos/scan {machine, folder, depth}` (an empty folder stops it,
-  400 with why), `POST /api/repos/fetch|pull|push {machine, dir, anyway, head}` (an
+  400 with why), `POST /api/repos/fetch|pull|push {machine, dir, anyway, head, no_verify}` (an
   absolute folder, any checkout — the Git lens's too; 200 with the outcome,
   whatever it came to). **The page**: `features/repos/` — `ReposPanel.tsx`
   (panel `repos`: the rail's Repositories, More on a phone, the palette's
@@ -1102,7 +1107,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   whole state in its `Tip` ("3 not pulled from origin/main", better-changes'
   words); a click opens its `Menu` (`repoMenu.ts`): Fetch / Pull / Push in the
   order its arrows suggest (`syncOffers`, Manygit's: behind pulls first, ahead
-  pushes first, no upstream "Push and set upstream"), New agent here… (the New
+  pushes first, no upstream "Push and set upstream"), the push again right
+  after it without the pre-push hook (`pushWithoutHooks`: "Push without
+  hooks", "Push and set upstream without hooks"), New agent here… (the New
   workspace dialog on its folder), New terminal here (a shell workspace there,
   opened), Open Changes (its workspace's pane on the Changes lens, when one
   stands on it), Open in the editor (never a Windows PC's), Copy path, Copy
@@ -2177,11 +2184,14 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   untracked file listed first, `commitAllPaths`; Amend, which loads the
   last message into an empty box through `GET /api/review/last-commit`,
   takes it back on Commit unless it was edited, and sends the HEAD it was
-  chosen on), `whyNotCommit` (the agent at work, conflicts, the amend's
+  chosen on; under a separator **Skip hooks (--no-verify)**, a checked row
+  that sends `no_verify` with the next commit alone — off again once it
+  lands, the toast ending "· hooks skipped"), `whyNotCommit` (the agent at work, conflicts, the amend's
   read, nothing to commit, no message) under it, else `commitHint` (what
   Commit all stages, what Amend rewrites, a pushed HEAD's force push, a
   subfolder's whole index — said for Commit all too, which also carries
-  what is staged outside the folder); its own `useSecretCheck` stands before it as
+  what is staged outside the folder — then, while Skip hooks is on, that
+  the pre-commit and commit-msg hooks will not run); its own `useSecretCheck` stands before it as
   before Approve & commit — asked once the button would be on, renewed
   after every look (`ask(…, renew)`), its findings holding the button
   with Commit anyway… behind `commitAnywayAsk`'s confirm, `SecretsCheck`
@@ -2364,10 +2374,14 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   index's copy, `all` checks out HEAD's (a file HEAD lacks is `git rm
   -f`'d), `untracked` deletes the one file with `git clean -f -q --`
   after checking git tracks it not and it is a file; `Commit(CommitRequest
-  {message, stage, amend, head})` stages `stage` first (Commit all),
+  {message, stage, amend, head, no_verify})` stages `stage` first (Commit all),
   refuses nothing staged, writes the message to a temp file (`MaxMessage`
   16 KB, it travels inside the script) and runs `git commit -q -F`, the
-  repository's hooks and signing as they are, 2 minutes at most; an amend
+  repository's hooks and signing as they are — `no_verify` (the commit
+  box's Skip hooks, for that one commit) adds `--no-verify`, so its
+  pre-commit and commit-msg hooks do not run; signing stays git's and the
+  secret check, the page's own, stands — 2 minutes at most (tested: a
+  commit and an amend past a refusing pre-commit and commit-msg hook); an amend
   goes only while HEAD is the `head` it was chosen on ("choose Amend
   again"); `LastCommit` is HEAD and its message. Every write first reads
   the checkout (`probeScript`: its top, whether there is a commit, the
@@ -2387,7 +2401,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   link nor an agent key reaches them, tested): `POST /api/review/stage`
   and `/unstage {machine, dir, paths, bulk}`, `POST /api/review/discard
   {machine, dir, path, kind}`, `POST /api/review/commit {machine, dir,
-  message, stage?, amend?, head?}`, `GET /api/review/last-commit`; after
+  message, stage?, amend?, head?, no_verify?}`, `GET /api/review/last-commit`; after
   each write the folder's badge is read again and the roster moves.
 - `web/src/lib/legible.ts` — **legible colours on tinted rows**, after
   gitview (tested on every theme): a syntax colour, or a tinted row's own,
@@ -2748,7 +2762,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   **Fetch, pull or push** — one `Menu` behind a cloud `icon-btn`, the
   person's alone, `syncMenu.ts` tested: the Repositories place's own calls
   and words (`features/repos/syncApi.ts`, `outcome.ts`) on the lens's
-  checkout through `useSync.ts`, one at a time, pull and push off while
+  checkout through `useSync.ts`, one at a time, Fetch, Pull, Push and Push
+  without hooks (`--no-verify`, the pre-push hook not run), pull and push off while
   HEAD is detached, a push the secret check holds opening the place's
   `PushHeldDialog`, the history read again after each; Read the history
   again), `GitStopped` (`GitStates.tsx`: "A merge

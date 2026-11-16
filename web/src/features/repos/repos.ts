@@ -76,8 +76,15 @@ export function dirtyWords(repo: Repo): string {
   return parts.join(" · ");
 }
 
-// Offer is one of fetch, pull and push as a row's menu lists it
-export type Offer = { action: SyncAction; label: string };
+// Offer is one of fetch, pull and push as a row's menu lists it; noVerify a push past the repository's pre-push hook
+export type Offer = { action: SyncAction; label: string; noVerify?: boolean };
+
+// pushWithoutHooks is the row's push with git's --no-verify, its pre-push hook not run, offered right after its push
+export const pushWithoutHooks = (repo: Repo): Offer => ({
+  action: "push",
+  label: repo.upstream && !repo.gone ? t("Push without hooks") : t("Push and set upstream without hooks"),
+  noVerify: true,
+});
 
 // syncOffers is fetch, pull and push in the order the row's ↑ ↓ suggests: behind pulls first, ahead pushes first, a
 // branch with no upstream pushes; only what can run there

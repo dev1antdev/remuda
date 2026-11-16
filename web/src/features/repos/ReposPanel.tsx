@@ -121,7 +121,7 @@ function MachineRepos({ listed, machine, sync, now, nameOf, onScan, reload }: { 
                 busy={sync.busy.has(key)}
                 fetchFailed={sync.failed.get(key) ?? ""}
                 now={now}
-                menu={() => repoMenu(listed.id, machine, repo, (action) => void sync.act(listed.id, repo, action))}
+                menu={() => repoMenu(listed.id, machine, repo, (action, noVerify) => void sync.act(listed.id, repo, action, undefined, noVerify))}
               />
             );
           })}

@@ -59,11 +59,12 @@ type Outcome struct {
 	Upstream string             `json:"upstream,omitempty"`
 	Ahead    int                `json:"ahead,omitempty"`
 	Behind   int                `json:"behind,omitempty"`
-	Head     string             `json:"head,omitempty"`   // the commit a push sends, the one its secret check read
-	Count    int                `json:"count,omitempty"`  // the commits a pull brought or a push sent
-	Output   string             `json:"output,omitempty"` // git's last lines when it failed, or why the machine is away
-	Scan     *review.SecretScan `json:"scan,omitempty"`   // what the secret check found, for a held push
-	Repo     *Repo              `json:"repo,omitempty"`   // the checkout read again after
+	Head     string             `json:"head,omitempty"`      // the commit a push sends, the one its secret check read
+	NoVerify bool               `json:"no_verify,omitempty"` // a push that skips the pre-push hook, as the person asked; a held one asks it again
+	Count    int                `json:"count,omitempty"`     // the commits a pull brought or a push sent
+	Output   string             `json:"output,omitempty"`    // git's last lines when it failed, or why the machine is away
+	Scan     *review.SecretScan `json:"scan,omitempty"`      // what the secret check found, for a held push
+	Repo     *Repo              `json:"repo,omitempty"`      // the checkout read again after
 }
 
 func refused(action, reason string) Outcome {
@@ -85,8 +86,8 @@ const fastForwardScript = `rc=0; c=$(` + read + ` rev-list --left-right --count 
 
 // pushScript sends the branch to the remote's branch it names, as far as the commit head — the one its secret check
 // read, so a commit made since is not carried unread — never a force, never a tag (push.followTags off); its upstream
-// set when it had none, as --set-upstream would.
-func pushScript(remote, branch, head, target string, setUpstream bool) string {
+// set when it had none, as --set-upstream would; the repository's pre-push hook skipped when noVerify says so.
+func pushScript(remote, branch, head, target string, setUpstream, noVerify bool) string {
 	source := "refs/heads/" + branch
 	if head != "" {
 		source = head
@@ -99,7 +100,11 @@ func pushScript(remote, branch, head, target string, setUpstream bool) string {
 		upstream = `if [ "$rc" -eq 0 ]; then git config ` + script.Quote("branch."+branch+".remote") + ` ` + script.Quote(remote) + ` && ` +
 			`git config ` + script.Quote("branch."+branch+".merge") + ` ` + script.Quote(target) + `; fi; `
 	}
-	return `git -c push.followTags=false push -- ` + script.Quote(remote) + ` ` + script.Quote(source+":"+target) + ` </dev/null 2>&1; rc=$?; ` + upstream
+	skip := ""
+	if noVerify {
+		skip = "--no-verify "
+	}
+	return `git -c push.followTags=false push ` + skip + `-- ` + script.Quote(remote) + ` ` + script.Quote(source+":"+target) + ` </dev/null 2>&1; rc=$?; ` + upstream
 }
 
 // run runs an action's git part in the checkout without a prompt, then reads the checkout again; the read follows a
