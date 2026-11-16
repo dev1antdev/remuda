@@ -29,6 +29,19 @@ func TestOnWindowsTheMachineIsReadAsTheConnectionReadsIt(t *testing.T) {
 	}
 }
 
+// TestOnWindowsALongScriptTravelsOnStdin: a script past the command line's length (sshx.Remote) goes on stdin under a
+// short line, and Git Bash behind Windows' OpenSSH runs it as it would have run it on that line.
+func TestOnWindowsALongScriptTravelsOnStdin(t *testing.T) {
+	wintest.Live(t)
+	long := "# " + strings.Repeat("x", 20000) + "\n" +
+		`say() { printf '%s|' "$1"; }; say "it's"; say "$(uname -s | cut -c1-5)"` + "\n" +
+		"cat <<'EOF'\nheredoc $HOME\nEOF\n" +
+		`if read -r rest; then echo "read $rest"; else echo "stdin ended"; fi` + "\n"
+	if got := wintest.Text(t, wintest.Remote(t), long); got != "it's|MINGW|heredoc $HOME\nstdin ended\n" {
+		t.Fatalf("the long script said %q", got)
+	}
+}
+
 // TestOnWindowsHerdrIsReachedThroughRemudaBridgeOverSSH is a cockpit's whole RPC to a Windows herdr: every request one exec of
 // remuda.exe bridge over ssh, the event stream one that stays, a shell workspace made, typed into, read and closed.
 func TestOnWindowsHerdrIsReachedThroughRemudaBridgeOverSSH(t *testing.T) {

@@ -295,7 +295,17 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `RemoteCommand(script)` is the one command line a script travels as,
   `sh -c '<script>'` — Windows' OpenSSH hands it to Git Bash with its
   quotes whole, while a line that begins with a quoted word is cut there
-  (seen on the Windows runner); `CommandConn` is an exec as a `net.Conn`
+  (seen on the Windows runner); **a script past `MaxCommandLine` (8 KB)
+  travels on the session's stdin** (`Remote`: the line is then `sh -c
+  'eval "$(cat)"'`, the script running with its stdin at its end as on the
+  line), since Dropbear drops the whole connection — the master, the event
+  stream, every session — over a command past 9000 bytes ("String too
+  long"; the review's badge sweep of five folders is 10 KB, seen on a Mac
+  whose sshd is Dropbear); `run` and `Stream` go through it, a script with
+  data for its stdin (`RunWithInput`, `Put`) keeps the line, its scripts
+  being short (`stdin_test.go` on an `ssh` stand-in refusing as Dropbear
+  does; `TestOnWindowsALongScriptTravelsOnStdin` on the runner, whose
+  `wintest.SSH` goes through `Remote` too); `CommandConn` is an exec as a `net.Conn`
   (the `nc -U` and `remuda bridge` transports, and the Windows tests);
   `Put` cuts a Windows path at its own separator (`rpath.For`).
   remuda implements no SSH itself.

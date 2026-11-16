@@ -63,12 +63,14 @@ func (s SSH) Run(script string, timeout time.Duration) ([]byte, error) {
 
 // RunWithInput runs a script with data on its stdin, as a cockpit hands a key over.
 func (s SSH) RunWithInput(script string, input []byte, timeout time.Duration) ([]byte, error) {
-	cmd := s.command(sshx.RemoteCommand(script))
+	line, stdin := sshx.Remote(script)
+	if input != nil {
+		line, stdin = sshx.RemoteCommand(script), bytes.NewReader(input)
+	}
+	cmd := s.command(line)
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errb
-	if input != nil {
-		cmd.Stdin = bytes.NewReader(input)
-	}
+	cmd.Stdin = stdin
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
