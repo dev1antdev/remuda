@@ -1,5 +1,6 @@
 // The commit box at the foot of the file list, as better-changes has it: a message that grows to eight rows, Commit staged
-// (or Commit all, the listed files staged first) with Amend behind its chevron, and the secret check standing before it
+// (or Commit all, the listed files staged first) with Amend and Skip hooks (--no-verify, for the next commit alone)
+// behind its chevron, and the secret check — remuda's own, no hook of the repository's — standing before it
 // as it stands before Approve & commit — findings hold the button back, Commit anyway… asks first. A failure keeps the
 // message and shows git's own words.
 
@@ -38,8 +39,9 @@ export function CommitBox({ machineId, dir, groups, busy, outgoing, subfolder, l
   const [amend, setAmend] = useState<Amend>(NO_AMEND);
   const [working, setWorking] = useState(false);
   const [failure, setFailure] = useState("");
+  const [noVerify, setNoVerify] = useState(false);
   const toStage = commitAllPaths(groups);
-  const state = { message, mode, staged: groups.staged.length, toStage: toStage.length, conflicts: groups.conflict.length, busy, amendHead: amend.head, loadingAmend: amend.loading, working };
+  const state = { message, mode, staged: groups.staged.length, toStage: toStage.length, conflicts: groups.conflict.length, busy, amendHead: amend.head, loadingAmend: amend.loading, working, noVerify };
   const whyNot = whyNotCommit(state);
   const { ask } = check;
   useEffect(() => {
@@ -83,12 +85,13 @@ export function CommitBox({ machineId, dir, groups, busy, outgoing, subfolder, l
     setFailure("");
     const sent = message;
     try {
-      const made = await commitWork(machineId, dir, { message: sent, stage: mode === "commit" && state.staged === 0 ? toStage : undefined, amend: mode === "amend", head: amend.head ?? undefined });
+      const made = await commitWork(machineId, dir, { message: sent, stage: mode === "commit" && state.staged === 0 ? toStage : undefined, amend: mode === "amend", head: amend.head ?? undefined, no_verify: noVerify || undefined });
       setMessage((current) => (current === sent ? "" : current));
       setMode("commit");
       setAmend(NO_AMEND);
+      setNoVerify(false);
       check.clear();
-      actions.notify(committedWords(made.short, made.subject, mode === "amend"), { brief: true });
+      actions.notify(committedWords(made.short, made.subject, mode === "amend", noVerify), { brief: true });
       onCommitted();
     } catch (error) {
       setFailure(errMsg(error));
@@ -123,6 +126,8 @@ export function CommitBox({ machineId, dir, groups, busy, outgoing, subfolder, l
             items={[
               { label: t("Commit"), icon: "git-commit", checked: mode === "commit", hint: t("a new commit of what is staged"), onSelect: () => choose("commit") },
               { label: t("Amend"), icon: "edit", checked: mode === "amend", hint: t("rewrite the latest commit"), onSelect: () => choose("amend") },
+              { sep: true },
+              { label: t("Skip hooks (--no-verify)"), icon: "circle-slash", checked: noVerify, hint: t("the pre-commit and commit-msg hooks do not run"), onSelect: () => setNoVerify((on) => !on) },
             ]}
           />
         </span>

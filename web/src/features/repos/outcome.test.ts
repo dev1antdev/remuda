@@ -12,6 +12,7 @@ describe("outcomeWords", () => {
     expect(said({ action: "pull", state: "done", reason: "up-to-date" }).text).toBe("app is up to date");
     expect(said({ action: "push", state: "done", count: 1, branch: "main", remote: "origin" }).text).toBe("Pushed 1 commit of main to origin");
     expect(said({ action: "push", state: "done", reason: "new-branch", branch: "x", remote: "origin" }).text).toBe("Pushed x to origin, its upstream from now on");
+    expect(said({ action: "push", state: "done", count: 2, branch: "main", remote: "origin", no_verify: true }).text).toBe("Pushed 2 commits of main to origin · hooks skipped");
   });
 
   it("says why nothing was done, as an error", () => {

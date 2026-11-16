@@ -436,7 +436,10 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   (a branch that diverged is said so and left alone) and waits while an
   agent works or asks in that checkout; a push is never forced and never
   carries tags, and the secret check stands before it as before Approve &
-  open PR — Push anyway… asks first. What goes is what the check read: a
+  open PR — Push anyway… asks first. **Push without hooks**, right under
+  Push here and in the Git lens's menu, is the same push with
+  `--no-verify`: the repository's pre-push hook does not run, the secret
+  check still does. What goes is what the check read: a
   commit an agent makes meanwhile waits for the next push. Nothing waits for a login: git runs
   with its prompts off and ssh in batch mode, sixty seconds at most, and
   a failure shows git's own words.
@@ -1689,7 +1692,10 @@ beside the columns' — a folder holding one folder folded into one row. At
 the foot of the files is the commit box: a message, **Commit staged** (or
 **Commit all**, which stages the listed files first) and **Amend** behind
 its chevron, which loads the last message into an empty box and refuses if
-the latest commit moved since. The secret check stands before a commit as
+the latest commit moved since. **Skip hooks (--no-verify)** in the same
+menu makes the next commit without the repository's pre-commit and
+commit-msg hooks — for that commit alone, said under the box until it
+lands. The secret check stands before a commit as
 before Approve & commit: findings hold the button back and **Commit
 anyway…** asks first. A failure keeps your message and shows git's own
 words. Nothing is written while an agent works, asks or ends a turn in that

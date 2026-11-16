@@ -212,6 +212,36 @@ func TestACommitHookRefusalIsGitsOwnWords(t *testing.T) {
 	}
 }
 
+func TestNoVerifySkipsTheCommitHooks(t *testing.T) {
+	dir, git, write := scratch(t)
+	write("a.go", "a\n")
+	git("add", "-A")
+	git("commit", "-qm", "init")
+	hooks := filepath.Join(dir, ".git", "hooks")
+	_ = os.MkdirAll(hooks, 0o755)
+	_ = os.WriteFile(filepath.Join(hooks, "pre-commit"), []byte("#!/bin/sh\necho 'lint: a.go is not formatted'\nexit 1\n"), 0o755)
+	_ = os.WriteFile(filepath.Join(hooks, "commit-msg"), []byte("#!/bin/sh\necho 'the message names no ticket'\nexit 1\n"), 0o755)
+	write("a.go", "a2\n")
+	s := &Service{}
+	if _, err := s.Commit(host, dir, CommitRequest{Message: "Format later", Stage: []string{"a.go"}}); err == nil {
+		t.Fatal("the hooks should refuse a commit that does not skip them")
+	}
+	made, err := s.Commit(host, dir, CommitRequest{Message: "Format later", Stage: []string{"a.go"}, NoVerify: true})
+	if err != nil || made.Subject != "Format later" {
+		t.Fatalf("a commit past the hooks: %+v %v", made, err)
+	}
+	if got := git("log", "-1", "--format=%s"); got != "Format later" {
+		t.Fatalf("HEAD is %q", got)
+	}
+	write("a.go", "a3\n")
+	git("add", "a.go")
+	head := git("rev-parse", "HEAD")
+	amended, err := s.Commit(host, dir, CommitRequest{Message: "Format later, and more", Amend: true, Head: head, NoVerify: true})
+	if err != nil || amended.Subject != "Format later, and more" || git("rev-list", "--count", "HEAD") != "2" {
+		t.Fatalf("an amend past the hooks: %+v %v", amended, err)
+	}
+}
+
 func TestAConflictIsLeftToThePerson(t *testing.T) {
 	dir, git, write := scratch(t)
 	write("c.go", "base\n")

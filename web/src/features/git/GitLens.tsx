@@ -136,7 +136,7 @@ export function GitLens({ machineId, dir, active, viewOnly, onChanges }: { machi
   );
   return (
     <div className="git-lens" onKeyDown={(e) => e.key === "Escape" && selected && !e.defaultPrevented && setSelected(null)}>
-      <GitHeader branch={state?.branch} head={state?.head} scope={scope} onScope={setScope} count={history?.log.repo ? commitsWords(history.commits.length, history.log.more) : "…"} fetching={fetching || !!sync.running} sync={viewOnly || !dir ? undefined : syncRows(state?.branch ?? "", sync.running, (action) => void sync.run(action))} onRefresh={refresh} />
+      <GitHeader branch={state?.branch} head={state?.head} scope={scope} onScope={setScope} count={history?.log.repo ? commitsWords(history.commits.length, history.log.more) : "…"} fetching={fetching || !!sync.running} sync={viewOnly || !dir ? undefined : syncRows(state?.branch ?? "", sync.running, (action, noVerify) => void sync.run(action, undefined, noVerify))} onRefresh={refresh} />
       {state?.operation && <GitStopped operation={state.operation} conflicts={state.conflicts} readOnly={viewOnly} onAbort={abort} onChanges={onChanges} />}
       {body}
       {picked && <CommitDetails key={picked.hash} machineId={machineId} dir={dir} commit={picked} now={now} onClose={() => setSelected(null)} />}

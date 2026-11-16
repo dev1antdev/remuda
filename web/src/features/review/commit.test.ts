@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { boxRows, commitAnywayAsk, commitHint, commitLabel, committedWords, leaveAmend, loadAmend, whyNotCommit, type CommitState } from "./commit";
 
-const state = (more: Partial<CommitState> = {}): CommitState => ({ message: "Say hello", mode: "commit", staged: 1, toStage: 2, conflicts: 0, busy: "", amendHead: null, loadingAmend: false, working: false, ...more });
+const state = (more: Partial<CommitState> = {}): CommitState => ({ message: "Say hello", mode: "commit", staged: 1, toStage: 2, conflicts: 0, busy: "", amendHead: null, loadingAmend: false, working: false, noVerify: false, ...more });
 
 describe("the commit box", () => {
   it("commits what is staged, else everything listed", () => {
@@ -12,6 +12,14 @@ describe("the commit box", () => {
     expect(commitHint(state({ staged: 0 }), false, false)).toBe("Stages the 2 listed files first.");
     expect(commitHint(state(), false, true)).toBe("The commit takes everything staged in the repository, not only this folder.");
     expect(commitHint(state({ staged: 0 }), false, true)).toBe("Stages the 2 listed files first. The commit takes everything staged in the repository, not only this folder.");
+  });
+
+  it("says when the hooks are skipped, after what the mode says", () => {
+    expect(commitHint(state({ noVerify: true }), false, false)).toBe("The pre-commit and commit-msg hooks will not run (--no-verify).");
+    expect(commitHint(state({ staged: 0, noVerify: true }), false, false)).toBe("Stages the 2 listed files first. The pre-commit and commit-msg hooks will not run (--no-verify).");
+    expect(commitHint(state({ mode: "amend", noVerify: true }), false, false)).toMatch(/^Amend rewrites .* The pre-commit and commit-msg hooks will not run \(--no-verify\)\.$/);
+    expect(committedWords("1a2b3c4", "Say hello", false, true)).toBe("Committed 1a2b3c4: Say hello · hooks skipped");
+    expect(committedWords("1a2b3c4", "Say hello", true, true)).toBe("Amended 1a2b3c4: Say hello · hooks skipped");
   });
 
   it("says why it is off, the agent at work first", () => {

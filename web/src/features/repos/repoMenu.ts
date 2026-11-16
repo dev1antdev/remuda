@@ -1,4 +1,5 @@
-// A repository row's menu: fetch, pull and push in the order its ↑ ↓ suggests, a new agent or terminal there, its
+// A repository row's menu: fetch, pull and push in the order its ↑ ↓ suggests (the push again without its pre-push
+// hook right after it), a new agent or terminal there, its
 // workspace's Changes, the editor, and its path and branch to copy.
 
 import { act } from "@/app/act";
@@ -9,18 +10,25 @@ import { copyText } from "@/lib/host";
 import { t } from "@/lib/i18n";
 import type { IconName, MenuItem } from "@/ui";
 import type { Repo } from "./api";
-import { paneOf, syncOffers, workspaceOn } from "./repos";
+import { paneOf, pushWithoutHooks, syncOffers, workspaceOn } from "./repos";
 import type { SyncAction } from "./syncApi";
 
 const ICONS: Record<SyncAction, IconName> = { fetch: "refresh-cw", pull: "arrow-down-to-line", push: "arrow-up-from-line" };
 
 const copy = (text: string) => void copyText(text).then((ok) => actions.notify(ok ? t("Copied {text}", { text }) : t("Could not copy"), { error: !ok, brief: ok }));
 
-// repoMenu is the row's rows; machine is the roster's (absent while the roster does not list it), onAct runs an action
-export function repoMenu(machineId: string, machine: Machine | undefined, repo: Repo, onAct: (action: SyncAction) => void): MenuItem[] {
+// repoMenu is the row's rows; machine is the roster's (absent while the roster does not list it), onAct runs an action,
+// noVerify a push without the repository's pre-push hook
+export function repoMenu(machineId: string, machine: Machine | undefined, repo: Repo, onAct: (action: SyncAction, noVerify?: boolean) => void): MenuItem[] {
   const session = machine ? workspaceOn(machine.sessions, repo.path) : undefined;
   const pane = session ? paneOf(session) : undefined;
-  const items: MenuItem[] = syncOffers(repo).map((offer) => ({ label: offer.label, icon: ICONS[offer.action], onSelect: () => onAct(offer.action) }));
+  const offers = syncOffers(repo).flatMap((offer) => (offer.action === "push" ? [offer, pushWithoutHooks(repo)] : [offer]));
+  const items: MenuItem[] = offers.map((offer) => ({
+    label: offer.label,
+    icon: ICONS[offer.action],
+    hint: offer.noVerify ? t("--no-verify: the pre-push hook does not run") : undefined,
+    onSelect: () => onAct(offer.action, offer.noVerify),
+  }));
   if (items.length) items.push({ sep: true });
   items.push(
     {

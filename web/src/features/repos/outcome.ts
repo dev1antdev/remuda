@@ -73,9 +73,14 @@ export function outcomeWords(o: Outcome, name: string): Said {
     if (o.reason === "up-to-date") return { text: t("{name} is up to date", { name }), error: false };
     return { text: t("Pulled {commits} into {name}", { commits: tn(o.count ?? 0, "{n} commit", "{n} commits"), name }), error: false };
   }
-  if (o.reason === "new-branch") return { text: t("Pushed {branch} to {remote}, its upstream from now on", { branch: o.branch ?? "", remote: o.remote ?? "" }), error: false };
-  if (!o.count) return { text: t("Pushed {branch} to {remote}", { branch: o.branch ?? "", remote: o.remote ?? "" }), error: false };
-  return { text: t("Pushed {commits} of {branch} to {remote}", { commits: tn(o.count, "{n} commit", "{n} commits"), branch: o.branch ?? "", remote: o.remote ?? "" }), error: false };
+  const pushed = pushedWords(o);
+  return { text: o.no_verify ? `${pushed} · ${t("hooks skipped")}` : pushed, error: false };
+}
+
+function pushedWords(o: Outcome): string {
+  if (o.reason === "new-branch") return t("Pushed {branch} to {remote}, its upstream from now on", { branch: o.branch ?? "", remote: o.remote ?? "" });
+  if (!o.count) return t("Pushed {branch} to {remote}", { branch: o.branch ?? "", remote: o.remote ?? "" });
+  return t("Pushed {commits} of {branch} to {remote}", { commits: tn(o.count, "{n} commit", "{n} commits"), branch: o.branch ?? "", remote: o.remote ?? "" });
 }
 
 // FetchRun is Fetch all as it goes: how many of how many, and the repositories that failed with git's line

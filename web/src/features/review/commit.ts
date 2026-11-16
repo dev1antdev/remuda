@@ -23,6 +23,7 @@ export type CommitState = {
   amendHead: string | null;
   loadingAmend: boolean;
   working: boolean;
+  noVerify: boolean; // the repository's commit hooks skipped, as the person chose for this commit
 };
 
 // commitLabel is the button's word: what it would do right now
@@ -44,8 +45,14 @@ export function whyNotCommit(state: CommitState): string {
   return "";
 }
 
-// commitHint is the quiet line under the box: what Commit all stages, what Amend rewrites, a pushed commit's warning
+// commitHint is the quiet line under the box: what Commit all stages, what Amend rewrites, a pushed commit's warning,
+// and the hooks skipped when the person chose so
 export function commitHint(state: CommitState, amendPushed: boolean, subfolder: boolean): string {
+  const skipped = state.noVerify ? t("The pre-commit and commit-msg hooks will not run (--no-verify).") : "";
+  return [modeHint(state, amendPushed, subfolder), skipped].filter(Boolean).join(" ");
+}
+
+function modeHint(state: CommitState, amendPushed: boolean, subfolder: boolean): string {
   if (state.mode === "amend") return amendPushed ? t("The latest commit is on the remote already: amending it means a force push to share it.") : t("Amend rewrites the latest commit with what is staged; what is not staged stays as it is.");
   // a folder inside the repository commits the whole index, what is staged outside it too, which the lens does not list
   const whole = subfolder ? t("The commit takes everything staged in the repository, not only this folder.") : "";
@@ -60,9 +67,11 @@ export const loadAmend = (current: string, last: string): string | null => (curr
 // leaveAmend is the box once Commit is chosen again: the message Amend loaded taken back, unless it was edited
 export const leaveAmend = (current: string, loaded: string | null): string => (loaded !== null && current === loaded ? "" : current);
 
-// committedWords is the toast after a commit
-export const committedWords = (short: string, subject: string, amended: boolean): string =>
-  amended ? t("Amended {sha}: {subject}", { sha: short, subject }) : t("Committed {sha}: {subject}", { sha: short, subject });
+// committedWords is the toast after a commit, saying so when its hooks were skipped
+export function committedWords(short: string, subject: string, amended: boolean, noVerify = false): string {
+  const made = amended ? t("Amended {sha}: {subject}", { sha: short, subject }) : t("Committed {sha}: {subject}", { sha: short, subject });
+  return noVerify ? `${made} · ${t("hooks skipped")}` : made;
+}
 
 // commitAnywayAsk is the confirm before committing past what the secret check found, or past a check that failed
 export function commitAnywayAsk(state: CheckState, scan: SecretScan | null): string {
