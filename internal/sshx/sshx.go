@@ -140,15 +140,37 @@ func RemoteCommand(command string) string {
 	return "sh -c " + script.Quote(command)
 }
 
+// MaxCommandLine is the longest command line a script travels as. Dropbear refuses a command past 9000 bytes by
+// dropping the whole connection ("String too long"): the master, the event stream and every session on it.
+const MaxCommandLine = 8192
+
+// readScript is the command line of a script sent on stdin: read whole, then run with stdin at its end, as a script
+// on the command line finds it.
+var readScript = RemoteCommand(`eval "$(cat)"`)
+
+// Remote is how a script travels to a machine: as its command line while it is short, else on stdin under a short one.
+func Remote(command string) (line string, stdin io.Reader) {
+	line = RemoteCommand(command)
+	if len(line) <= MaxCommandLine {
+		return line, nil
+	}
+	return readScript, strings.NewReader(command)
+}
+
 // CommandConn starts the command and exposes its stdin and stdout as a net.Conn that the deadline ends: the way an
 // exec over ssh (nc -U, remuda bridge) carries herdr's RPC.
 func CommandConn(cmd *exec.Cmd, timeout time.Duration) (net.Conn, error) {
 	return newCmdConn(cmd, timeout)
 }
 
-// run executes a remote command over the master with a deadline, stdin streamed to it when given.
+// run executes a remote command over the master with a deadline, stdin streamed to it when given; without stdin a
+// long script travels on it (Remote), one with stdin on the command line, its scripts being short.
 func (c *Conn) run(command string, timeout time.Duration, stdin io.Reader) ([]byte, error) {
-	cmd := c.session(c.Host, RemoteCommand(command))
+	line := RemoteCommand(command)
+	if stdin == nil {
+		line, stdin = Remote(command)
+	}
+	cmd := c.session(c.Host, line)
 	var out, errb bytes.Buffer
 	cmd.Stdin = stdin
 	cmd.Stdout, cmd.Stderr = &out, &errb
@@ -176,7 +198,9 @@ func (c *Conn) run(command string, timeout time.Duration, stdin io.Reader) ([]by
 
 // Stream runs a remote command, handing sink its output (stdout and stderr) as it comes; the exit status is the error.
 func (c *Conn) Stream(command string, timeout time.Duration, sink func([]byte)) error {
-	cmd := c.session(c.Host, RemoteCommand("exec 2>&1; "+command))
+	line, stdin := Remote("exec 2>&1; " + command)
+	cmd := c.session(c.Host, line)
+	cmd.Stdin = stdin
 	pr, pw := io.Pipe()
 	cmd.Stdout, cmd.Stderr = pw, pw
 	if err := cmd.Start(); err != nil {

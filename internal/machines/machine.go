@@ -232,7 +232,7 @@ func (mc *Machine) transportError(err error) {
 	mc.lastAlive = time.Now() // stamped only when a check actually runs
 	mc.mu.Unlock()
 	if !conn.Alive() {
-		mc.fail(fmt.Errorf("connection lost: %v", err))
+		mc.fail(fmt.Errorf("ssh connection lost: %v", err))
 	}
 }
 
