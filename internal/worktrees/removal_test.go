@@ -3,6 +3,7 @@ package worktrees
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -94,4 +95,61 @@ func TestAWorktreeWithSubmodulesIsRemovedPastGitsRefusal(t *testing.T) {
 		t.Errorf("the removal answered %+v", out)
 	}
 	_ = main
+}
+
+// TestWorkSavedAfterTheConfirmationStays: the check runs again in the script that removes, after the workspace closed.
+func TestWorkSavedAfterTheConfirmationStays(t *testing.T) {
+	host, _, trees := madeRepo(t, "work")
+	draft := filepath.Join(trees["work"], "draft.txt")
+	write(t, draft, "first\n")
+	look, err := LookAt(host, trees["work"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	write(t, draft, "saved since\n")
+	got := RemoveAsShown(host, look, false)
+	if got.Removed || !strings.Contains(got.Kept, "changed since you confirmed") {
+		t.Fatalf("outcome %+v", got)
+	}
+	if text, err := os.ReadFile(draft); err != nil || string(text) != "saved since\n" {
+		t.Errorf("the draft reads %q, %v", text, err)
+	}
+	look, err = LookAt(host, trees["work"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := RemoveAsShown(host, look, false); !got.Removed {
+		t.Errorf("work unchanged since the look stays: %+v", got)
+	}
+}
+
+func TestTheStampFollowsUncommittedWorkInASubmodule(t *testing.T) {
+	host, _, trees := madeRepo(t, "subs")
+	lib := filepath.Join(host.home, "lib")
+	if err := os.MkdirAll(lib, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	gitIn(t, lib, "init", "-q", "-b", "main")
+	write(t, filepath.Join(lib, "l.txt"), "l\n")
+	gitIn(t, lib, "add", "l.txt")
+	gitIn(t, lib, "commit", "-qm", "lib")
+	gitIn(t, trees["subs"], "-c", "protocol.file.allow=always", "submodule", "add", "-q", lib, "lib")
+	gitIn(t, trees["subs"], "commit", "-qm", "the lib")
+	stamp := func() string {
+		t.Helper()
+		look, err := LookAt(host, trees["subs"])
+		if err != nil {
+			t.Fatal(err)
+		}
+		return look.Stamp()
+	}
+	inside := filepath.Join(trees["subs"], "lib")
+	for _, name := range []string{"l.txt", "new.txt"} {
+		write(t, filepath.Join(inside, name), "first\n")
+		seen := stamp()
+		write(t, filepath.Join(inside, name), "second\n")
+		if stamp() == seen {
+			t.Errorf("more work in the submodule's %s reads as what was shown", name)
+		}
+	}
 }

@@ -4589,7 +4589,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   (`unpushed`) and of those the ones the main checkout's HEAD lacks too
   (`unmerged`: lost with the branch), the commit it ends on (`Tip`, in the
   stamp and what a confirmed delete goes by), a checksum of the uncommitted
-  work's contents (`Changes`, in the stamp), whether that HEAD holds the branch
+  work's contents, submodules included (`Changes`, in the stamp, and read
+  again by the script that removes with `--force`, after the close), whether that HEAD holds the branch
   (`merged`), a `.gitmodules`, and every submodule (`git submodule
   foreach --recursive`) with a commit on no remote — plus, from the
   server (`internal/server/worktree_remove.go`), the other workspaces on
@@ -4602,7 +4603,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   folder was deleted behind herdr's back, which herdr still marks a linked
   worktree and no look can read, still closes); else it looks again: an
   agent at work is a 409, another workspace on the checkout closes this
-  workspace alone, a stamp that is not the fresh look's (sharing is in it)
+  workspace alone, a stamp that is not the fresh look's (`removalStamp`: sharing and
+  `merged_pr` are in it)
   is a 409 ("it changed since this opened"), else herdr closes the workspace and
   `RemoveAsShown` runs `git worktree remove`, with `--force` only for the
   uncommitted work or the submodules the dialog named (the person's

@@ -52,9 +52,17 @@ func LookScript(path string) string {
 		"else printf '0\\n0\\nopen\\n'; fi\nprintf '\\036\\n'\n" +
 		"[ -f .gitmodules ] && echo submodules\n" +
 		git + " submodule foreach --quiet --recursive 'if [ -n \"$(git rev-list -n1 HEAD --not --remotes 2>/dev/null)\" ]; then printf \"lost %s\\n\" \"$displaypath\"; fi' 2>/dev/null\n" +
-		"printf '\\036\\n'\n" +
-		"{ " + git + " diff " + script.PatchForm + " --binary; " + git + " diff --cached " + script.PatchForm + " --binary; " +
-		git + " ls-files -z -o --exclude-standard | xargs -0 cksum --; } 2>/dev/null | cksum\n"
+		"printf '\\036\\n'\n" + changesScript() + "\n"
+}
+
+// changesScript prints a checksum of the uncommitted work in the folder it runs in and in its submodules: staged,
+// unstaged and the contents of new files.
+func changesScript() string {
+	work := func(git string) string {
+		return git + " diff " + script.PatchForm + " --binary; " + git + " diff --cached " + script.PatchForm + " --binary; " +
+			git + " ls-files -z -o --exclude-standard | xargs -0 cksum --"
+	}
+	return "{ " + work(repos.Git) + "; " + repos.Git + " submodule foreach --quiet --recursive '" + work("git") + "; true'; } 2>/dev/null | cksum"
 }
 
 // ParseLook reads the script's answer.
@@ -124,8 +132,12 @@ func ForceScript(look Look, deleteBranch bool) string {
 	if look.Dirty > 0 || look.HasSubmodules {
 		force = "--force "
 	}
-	s := script.PATH + "\ncd " + script.Quote(look.Repo) + " 2>/dev/null || { echo 'the repository is not there'; exit 3; }\n" +
-		"git worktree remove " + force + script.Quote(look.Path) + " 2>&1 || exit 4\n"
+	s := script.PATH + "\ncd " + script.Quote(look.Repo) + " 2>/dev/null || { echo 'the repository is not there'; exit 3; }\n"
+	if force != "" { // the look was before the workspace closed: work saved since is not what the person agreed to lose
+		s += "now=$(cd " + script.Quote(look.Path) + " && " + changesScript() + ")\n" +
+			"[ \"$now\" = " + script.Quote(look.Changes) + " ] || { echo 'its uncommitted work changed since you confirmed'; exit 4; }\n"
+	}
+	s += "git worktree remove " + force + script.Quote(look.Path) + " 2>&1 || exit 4\n"
 	switch {
 	case !deleteBranch || look.Branch == "":
 	case look.Tip != "":

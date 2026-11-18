@@ -11,6 +11,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/repos"
 	"github.com/dev1antdev/remuda/internal/undo"
+	"github.com/dev1antdev/remuda/internal/worktrees"
 )
 
 func TestAProjectsSettingsAreKeptAndReadBack(t *testing.T) {
@@ -98,5 +99,16 @@ func TestTheNewRoutesAreThePersonsAlone(t *testing.T) {
 		if key.Allows(route[0], route[1]) {
 			t.Errorf("an agent's key reaches %s %s", route[0], route[1])
 		}
+	}
+}
+
+func TestAConfirmationAnswersForWhatTheDialogSaid(t *testing.T) {
+	look := worktrees.Look{Branch: "work", Tip: "abc"}
+	plain := removalStamp(look, false, false)
+	if plain == removalStamp(look, true, false) {
+		t.Error("a close alone reads as a removal once the others left")
+	}
+	if plain == removalStamp(look, false, true) {
+		t.Error("a branch the dialog called safe reads the same once its merged request is forgotten")
 	}
 }
