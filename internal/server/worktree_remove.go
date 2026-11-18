@@ -47,8 +47,14 @@ func (s *Server) removal(mc *machines.Machine, id string) (*Removal, int, error)
 	rm := &Removal{Look: look, Workspace: id, Name: ws.Label, RepoName: ws.Worktree.RepoName, Made: worktrees.Made(mc.Home(), tree), Shared: sharers(snap, id, tree), Home: mc.Home()}
 	rm.Working = s.busyIn(mc.ID(), tree)
 	rm.MergedPR = worktrees.LandedAt(s.landedIn(mc, id), look.Branch, look.Tip)
-	rm.Stamp = look.Stamp()
+	rm.Stamp = removalStamp(look, len(rm.Shared) > 0, rm.MergedPR)
 	return rm, 0, nil
+}
+
+// removalStamp is what a confirmation answers for: the look, and what the dialog said from beyond it, a close alone for
+// a shared checkout and no loss for a branch ending where its merged request ended.
+func removalStamp(look worktrees.Look, shared, mergedPR bool) string {
+	return fmt.Sprintf("%s\x1f%t\x1f%t", look.Stamp(), shared, mergedPR)
 }
 
 // sharers names the other workspaces that stand on the worktree or have a pane inside it.
@@ -146,6 +152,10 @@ func (s *Server) handleWorktreeRemoveAsShown(w http.ResponseWriter, r *http.Requ
 		rpcErr(w, err)
 		return
 	}
-	s.Watch.Refresh(mc)
+	// herdr's word from after the close: a workspace that came to the checkout meanwhile keeps it, as does not knowing
+	if snap, _ := s.Watch.Refresh(mc); snap == nil || len(sharers(snap, id, rm.Path)) > 0 {
+		writeJSON(w, map[string]any{"closed": true, "kept": true})
+		return
+	}
 	writeJSON(w, map[string]any{"closed": true, "worktree": worktrees.RemoveAsShown(mc, rm.Look, req.DeleteBranch)})
 }

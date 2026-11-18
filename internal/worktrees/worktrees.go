@@ -1,10 +1,9 @@
 // Package worktrees takes a linked git worktree down with its branch, on the machine, as the person — the one thing
-// remuda ever deletes from a repository, and only when asked: once the work's pull request is merged, when the
-// workspace on a worktree herdr or remuda made is closed (Tidy, tidy.go), or for an arena's lanes the person did not keep. A look first (Inspect) refuses a worktree with uncommitted changes before anything is
-// closed; the removal (Remove) never passes --force to git, and deletes a branch that git does not see as merged only
-// when the caller says the request was. Discard is one exception, an arena's losing lane: its work saved as a
-// patch by the caller first, after a confirm that says so, then git's --force and -D; the remove dialog's removal is
-// the other (RemoveAsShown, removal.go): --force past exactly what the person was shown and confirmed.
+// remuda ever deletes from a repository, and only when asked. The remove dialog (RemoveAsShown, removal.go) goes with
+// --force past exactly what the person was shown and confirmed. The close of a workspace on a worktree herdr or remuda
+// made (Tidy, tidy.go) looks first (Inspect), keeps a worktree with uncommitted changes and never passes --force, and
+// deletes a branch git does not see as merged only at the commit a merged request of it ended on. Discard is an arena's
+// losing lane: its work saved as a patch by the caller first, after a confirm that says so, then git's --force and -D.
 // A worktree remuda makes gets the ignored files its repository's .worktreeinclude lists (Include, include.go), and is
 // made the way the New worktree dialog asks (create.go), its setup script run in its terminal (setup.go).
 package worktrees
@@ -128,19 +127,6 @@ func RemoveScript(info Info, landed []Landed) string {
 	return s + "tip=$(git rev-parse --verify -q " + script.Quote("refs/heads/"+info.Branch) + ")\n" +
 		"case " + script.Quote(" "+strings.Join(commits, " ")+" ") + " in\n*\" ${tip:-none} \"*)\n" +
 		deleteBranchAt(info.Branch, `"$tip"`) + ";;\n*)\n" + plain + ";;\nesac\n"
-}
-
-// Remove takes the worktree down on the machine; the error is git's own line.
-func Remove(host shell.Shell, info Info, landed []Landed) error {
-	out, err := shell.Text(host, RemoveScript(info, landed), Timeout)
-	if err == nil {
-		return nil
-	}
-	var exit *shell.ExitError
-	if errors.As(err, &exit) && exit.Code == 5 {
-		return errors.New("the worktree is removed; the branch stays: " + lastLine(out, err.Error()))
-	}
-	return errors.New(lastLine(out, err.Error()))
 }
 
 // DiscardScript removes a worktree whose work the caller has saved, uncommitted changes and all, and deletes its branch.

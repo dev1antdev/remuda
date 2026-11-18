@@ -636,18 +636,15 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   instance) is followed the same way through `glab` on that machine: its
   pipeline's jobs as the checks, its approvals, its threads still open,
   the failed job's log and the open threads handed to the agent from the
-  same menu, and the merge moving the task to *Done*. Once merged, the
-  workspace's ⋯ menu offers *Remove the worktree and its branch…*,
-  which closes the workspace and removes the worktree on the machine,
-  refusing one with uncommitted changes before anything closes. The branch
-  goes when it still ends where the merged request ended, or when git
-  sees it merged; a commit made since keeps it.
+  same menu, and the merge moving the task to *Done*. Once merged, its menu
+  on the tile offers *Close & remove worktree…*, the table below.
   Closing a workspace that stands on a worktree herdr or remuda made
   (under `~/.herdr/worktrees`), or *Close & remove worktree…* in its ⋯
   menu, opens a table of what goes, after Orca's: the folder *Deleted*,
   the branch *Kept* or *Deleted* (deleted once merged; a click flips
   it), and in red what would be lost — uncommitted changes, the branch's
-  commits that are on no remote, a submodule's commits pushed nowhere.
+  commits that are on no remote, a submodule's commits pushed nowhere,
+  and that a worktree has submodules at all.
   *Remove anyway* then runs `git worktree remove --force`; *Close, keep
   the folder* closes the workspace alone, and is there too when the
   worktree cannot be looked at (its folder deleted by hand). It waits while an agent works

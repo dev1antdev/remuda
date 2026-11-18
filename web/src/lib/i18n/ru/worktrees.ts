@@ -73,6 +73,7 @@ export const worktrees: Dictionary = {
     "{n} коммитов в {branch} нет ни на одном remote и ни в одной другой ветке: с веткой они пропадут.",
   ],
   "Submodule {name} has commits that aren't pushed anywhere: they will be lost.": "В сабмодуле {name} есть коммиты, которые никуда не отправлены: они пропадут.",
+  "This worktree has submodules: whatever only they hold goes with it.": "В этом worktree есть сабмодули: всё, что есть только в них, удалится вместе с ним.",
   "{names} also use this worktree, so it stays. Only this workspace closes.": [
     "{names} тоже пользуется этим worktree, поэтому он остаётся. Закроется только это пространство.",
     "{names} тоже пользуются этим worktree, поэтому он остаётся. Закроется только это пространство.",

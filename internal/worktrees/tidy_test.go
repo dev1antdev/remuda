@@ -166,6 +166,42 @@ func TestAMergedRequestVouchesOnlyForItsOwnBranchAtItsOwnCommit(t *testing.T) {
 	}
 }
 
+// TestTheStampFollowsTheContentsOfUncommittedWork: what the person agreed to lose is what they were shown.
+func TestTheStampFollowsTheContentsOfUncommittedWork(t *testing.T) {
+	host, _, trees := madeRepo(t, "work")
+	tree := trees["work"]
+	stamp := func() string {
+		t.Helper()
+		look, err := LookAt(host, tree)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return look.Stamp()
+	}
+	write(t, filepath.Join(tree, "a.txt"), "first\n")
+	write(t, filepath.Join(tree, "new.txt"), "first\n")
+	write(t, filepath.Join(tree, "-odd.txt"), "first\n")
+	seen := stamp()
+	if again := stamp(); again != seen {
+		t.Fatalf("nothing changed and the stamp did: %q, %q", seen, again)
+	}
+	for _, name := range []string{"a.txt", "new.txt", "-odd.txt"} {
+		write(t, filepath.Join(tree, name), "second\n")
+		now := stamp()
+		if now == seen {
+			t.Errorf("more work in %s reads as what was shown", name)
+		}
+		seen = now
+	}
+	gitIn(t, tree, "add", "a.txt")
+	seen = stamp()
+	write(t, filepath.Join(tree, "a.txt"), "third\n")
+	gitIn(t, tree, "add", "a.txt")
+	if stamp() == seen {
+		t.Error("work staged since reads as what was shown")
+	}
+}
+
 // TestABranchThatMovedStays: what the person was shown, or what the merged request ended on, is what may go.
 func TestABranchThatMovedStays(t *testing.T) {
 	host, main, trees := madeRepo(t, "work")
@@ -202,9 +238,9 @@ func TestABranchCheckedOutElsewhereStays(t *testing.T) {
 	tip := gitOut(t, trees["work"], "rev-parse", "HEAD")
 	gitIn(t, trees["work"], "switch", "-q", "--detach")
 	gitIn(t, main, "switch", "-q", "work")
-	err := Remove(host, Info{Path: trees["work"], Repo: main, Branch: "work"}, []Landed{{Branch: "work", Commit: tip}})
-	if err == nil || !strings.Contains(err.Error(), "in use in another worktree") || !strings.Contains(branches(t, main), "work") {
-		t.Fatalf("%v", err)
+	got := RemoveAsShown(host, Look{Path: trees["work"], Repo: main, Branch: "work", Tip: tip}, true)
+	if !strings.Contains(got.BranchKept, "in use in another worktree") || !strings.Contains(branches(t, main), "work") {
+		t.Fatalf("%+v", got)
 	}
 }
 
@@ -222,9 +258,9 @@ func TestABranchBeingRebasedElsewhereStays(t *testing.T) {
 	if out, err := rebase.CombinedOutput(); err == nil {
 		t.Fatalf("the rebase was to stop on its conflict: %s", out)
 	}
-	err := Remove(host, Info{Path: trees["work"], Repo: main, Branch: "work"}, []Landed{{Branch: "work", Commit: tip}})
-	if err == nil || !strings.Contains(err.Error(), "in use in another worktree") || gitOut(t, main, "rev-parse", "refs/heads/work") != tip {
-		t.Fatalf("%v", err)
+	got := RemoveAsShown(host, Look{Path: trees["work"], Repo: main, Branch: "work", Tip: tip}, true)
+	if !strings.Contains(got.BranchKept, "in use in another worktree") || gitOut(t, main, "rev-parse", "refs/heads/work") != tip {
+		t.Fatalf("%+v", got)
 	}
 }
 
@@ -246,9 +282,9 @@ func TestABranchAStackedRebaseWillMoveStays(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(record, "update-refs"), []byte("refs/heads/work\n"+tip+"\n"+tip+"\n"), mode); err != nil {
 				t.Fatal(err)
 			}
-			err := Remove(host, Info{Path: trees["work"], Repo: main, Branch: "work"}, []Landed{{Branch: "work", Commit: tip}})
-			if err == nil || !strings.Contains(err.Error(), "in use in another worktree") {
-				t.Fatalf("%v", err)
+			got := RemoveAsShown(host, Look{Path: trees["work"], Repo: main, Branch: "work", Tip: tip}, true)
+			if !strings.Contains(got.BranchKept, "in use in another worktree") {
+				t.Fatalf("%+v", got)
 			}
 		})
 	}
@@ -261,9 +297,9 @@ func TestABranchBeingBisectedElsewhereStays(t *testing.T) {
 	gitIn(t, trees["other"], "switch", "-q", "work")
 	gitIn(t, trees["other"], "bisect", "start")
 	gitIn(t, trees["other"], "switch", "-q", "--detach")
-	err := Remove(host, Info{Path: trees["work"], Repo: main, Branch: "work"}, []Landed{{Branch: "work", Commit: tip}})
-	if err == nil || !strings.Contains(err.Error(), "in use in another worktree") {
-		t.Fatalf("%v", err)
+	got := RemoveAsShown(host, Look{Path: trees["work"], Repo: main, Branch: "work", Tip: tip}, true)
+	if !strings.Contains(got.BranchKept, "in use in another worktree") {
+		t.Fatalf("%+v", got)
 	}
 }
 

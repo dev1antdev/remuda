@@ -22,16 +22,17 @@ var RemoveTimeout = 10 * time.Minute
 // Look is a linked worktree as its removal would find it.
 type Look struct {
 	Path          string   `json:"path"`
-	Branch        string   `json:"branch,omitempty"` // "" when detached
-	Repo          string   `json:"repo"`             // the repository's main checkout, where the removal runs
-	Dirty         int      `json:"dirty"`            // uncommitted entries, new files too
-	First         string   `json:"first,omitempty"`  // the first of them
-	Unpushed      int      `json:"unpushed"`         // the branch's commits on no remote
-	Unmerged      int      `json:"unmerged"`         // of those, the ones the main checkout's HEAD lacks too: lost with the branch
-	Merged        bool     `json:"merged"`           // the main checkout's HEAD holds the branch
-	Tip           string   `json:"-"`                // the commit the branch ends on
-	HasSubmodules bool     `json:"has_submodules,omitempty"`
-	Submodules    []string `json:"submodules,omitempty"` // the ones with commits pushed nowhere
+	Branch        string   `json:"branch,omitempty"`         // "" when detached
+	Repo          string   `json:"repo"`                     // the repository's main checkout, where the removal runs
+	Dirty         int      `json:"dirty"`                    // uncommitted entries, new files too
+	First         string   `json:"first,omitempty"`          // the first of them
+	Unpushed      int      `json:"unpushed"`                 // the branch's commits on no remote
+	Unmerged      int      `json:"unmerged"`                 // of those, the ones the main checkout's HEAD lacks too: lost with the branch
+	Merged        bool     `json:"merged"`                   // the main checkout's HEAD holds the branch
+	Tip           string   `json:"-"`                        // the commit the branch ends on
+	Changes       string   `json:"-"`                        // a checksum of the uncommitted work's contents
+	HasSubmodules bool     `json:"has_submodules,omitempty"` // named by .gitmodules, or kept in the worktree's git folder
+	Submodules    []string `json:"submodules,omitempty"`     // the ones with commits pushed nowhere
 }
 
 // LookScript reads the worktree: its branch and repository, its status, the branch's reach, its submodules.
@@ -42,15 +43,28 @@ func LookScript(path string) string {
 		"branch=$(" + git + " symbolic-ref --short -q HEAD 2>/dev/null)\n" +
 		"main=$(" + git + " worktree list --porcelain | sed -n '1s/^worktree //p')\n" +
 		"printf '%s\\n%s\\n\\036\\n' \"$branch\" \"$main\"\n" +
-		git + " status --porcelain --untracked-files=normal 2>/dev/null\nprintf '\\036\\n'\n" +
+		git + " status --porcelain --untracked-files=normal --ignore-submodules=none 2>/dev/null\nprintf '\\036\\n'\n" +
 		"if [ -n \"$branch\" ]; then\n" +
 		"  " + git + " rev-list --count \"refs/heads/$branch\" --not --remotes 2>/dev/null || echo 0\n" +
 		"  " + git + " -C \"$main\" rev-list --count \"refs/heads/$branch\" --not --remotes HEAD 2>/dev/null || echo 0\n" +
 		"  if " + git + " -C \"$main\" merge-base --is-ancestor \"refs/heads/$branch\" HEAD 2>/dev/null; then echo merged; else echo open; fi\n" +
 		"  " + git + " rev-parse --verify -q \"refs/heads/$branch\" 2>/dev/null\n" +
 		"else printf '0\\n0\\nopen\\n'; fi\nprintf '\\036\\n'\n" +
-		"[ -f .gitmodules ] && echo submodules\n" +
-		git + " submodule foreach --quiet --recursive 'if [ -n \"$(git rev-list -n1 HEAD --not --remotes 2>/dev/null)\" ]; then printf \"lost %s\\n\" \"$displaypath\"; fi' 2>/dev/null\ntrue\n"
+		"{ [ -f .gitmodules ] || [ -n \"$(ls -A \"$(" + git + " rev-parse --git-path modules)\" 2>/dev/null)\" ]; } && echo submodules\n" +
+		git + " submodule foreach --quiet --recursive 'if [ -n \"$(git rev-list -n1 HEAD --branches $(git rev-parse -q --verify refs/stash) --not --remotes 2>/dev/null)\" ]; then printf \"lost %s\\n\" \"$displaypath\"; fi' 2>/dev/null\n" +
+		"printf '\\036\\n'\n" + changesScript() + "\n"
+}
+
+// changesScript prints a checksum of the uncommitted work in the folder it runs in and in its submodules: staged,
+// unstaged, the contents of new files and where new links point, all of a repository git lists as one new folder, and
+// what a submodule's own branches and stash hold, which go with its folder. What it cannot read adds the shell's process id, so no two looks agree and nothing goes past --force unseen.
+func changesScript() string {
+	work := func(git string) string {
+		return git + " diff " + script.PatchForm + " --binary || echo $$; " + git + " diff --cached " + script.PatchForm + " --binary || echo $$; " +
+			git + " ls-files -o --exclude-standard >/dev/null || echo $$; " +
+			git + ` ls-files -z -o --exclude-standard | xargs -0 sh -c "for p; do find \"./\$p\" -type f -exec cksum {} + && find \"./\$p\" -type l -exec ls -ld {} + || echo \$\$; done" sh`
+	}
+	return "{ " + work(repos.Git) + "; " + repos.Git + " submodule foreach --quiet --recursive '" + work("git") + "; git rev-parse HEAD; git for-each-ref refs/heads refs/stash; true' || echo $$; } 2>/dev/null | cksum"
 }
 
 // ParseLook reads the script's answer.
@@ -90,6 +104,9 @@ func ParseLook(path, out string) (Look, error) {
 			look.Submodules = append(look.Submodules, strings.TrimSpace(strings.TrimPrefix(line, "lost ")))
 		}
 	}
+	if len(parts) > 4 {
+		look.Changes = strings.TrimSpace(parts[4])
+	}
 	return look, nil
 }
 
@@ -104,7 +121,7 @@ func LookAt(host shell.Shell, path string) (Look, error) {
 
 // Stamp is what the person was shown of the risk; a removal finding another refuses until it is seen.
 func (l Look) Stamp() string {
-	return strings.Join([]string{strconv.Itoa(l.Dirty), l.First, strconv.Itoa(l.Unmerged), l.Branch, l.Tip, strings.Join(l.Submodules, ",")}, "|")
+	return strings.Join([]string{strconv.Itoa(l.Dirty), l.First, strconv.Itoa(l.Unmerged), l.Branch, l.Tip, l.Changes, strconv.FormatBool(l.HasSubmodules), strings.Join(l.Submodules, ",")}, "|")
 }
 
 // Loses says whether removing the folder loses work: uncommitted changes, or a submodule's commits pushed nowhere.
@@ -117,8 +134,12 @@ func ForceScript(look Look, deleteBranch bool) string {
 	if look.Dirty > 0 || look.HasSubmodules {
 		force = "--force "
 	}
-	s := script.PATH + "\ncd " + script.Quote(look.Repo) + " 2>/dev/null || { echo 'the repository is not there'; exit 3; }\n" +
-		"git worktree remove " + force + script.Quote(look.Path) + " 2>&1 || exit 4\n"
+	s := script.PATH + "\ncd " + script.Quote(look.Repo) + " 2>/dev/null || { echo 'the repository is not there'; exit 3; }\n"
+	if force != "" { // the look was before the workspace closed: work saved since is not what the person agreed to lose
+		s += "now=$(cd " + script.Quote(look.Path) + " && " + changesScript() + ")\n" +
+			"[ \"$now\" = " + script.Quote(look.Changes) + " ] || { echo 'its uncommitted work changed since you confirmed'; exit 4; }\n"
+	}
+	s += "git worktree remove " + force + script.Quote(look.Path) + " 2>&1 || exit 4\n"
 	switch {
 	case !deleteBranch || look.Branch == "":
 	case look.Tip != "":

@@ -29,11 +29,16 @@ describe("the remove dialog", () => {
     expect(branchGoesByDefault({ ...clean, merged: false, merged_pr: true })).toBe(true);
   });
   it("says in red what would be lost", () => {
+    const squashed: Removal = { ...clean, unmerged: 2, merged: false, merged_pr: true };
+    expect(warnings(squashed, true)).toEqual([]);
+    expect(buttonWords(squashed, true, false)).toBe("Remove");
     const risky: Removal = { ...clean, dirty: 3, unmerged: 2, merged: false, submodules: ["lib"] };
     expect(warnings(risky, false)).toEqual(["Uncommitted changes in this worktree will be lost.", "Submodule lib has commits that aren't pushed anywhere: they will be lost."]);
     expect(warnings(risky, true)[1]).toBe("2 commits on fix are on no remote and in no other branch: deleting the branch loses them.");
     expect(buttonWords(risky, false, false)).toBe("Remove anyway");
     expect(buttonWords(clean, true, false)).toBe("Remove");
+    expect(warnings({ ...clean, has_submodules: true }, false)).toEqual(["This worktree has submodules: whatever only they hold goes with it."]);
+    expect(buttonWords({ ...clean, has_submodules: true }, false, false)).toBe("Remove anyway");
     expect(buttonWords(clean, true, true)).toBe("Removing…");
   });
   it("closes the workspace alone when another one uses the checkout", () => {

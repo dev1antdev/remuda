@@ -14,6 +14,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/repos"
 	"github.com/dev1antdev/remuda/internal/sessions"
+	"github.com/dev1antdev/remuda/internal/undo"
 	"github.com/dev1antdev/remuda/internal/watch"
 )
 
@@ -88,6 +89,7 @@ func TestOpeningACheckoutHerdrHasOpenAlreadyStartsNothingThere(t *testing.T) {
 // such a workspace goes through that dialog alone.
 func TestAWorkspaceWhoseWorktreeFolderIsGoneStillCloses(t *testing.T) {
 	s, api, client, mc, _, mainWS := worktreeServer(t)
+	s.prRoutes(api)
 	made, err := client.WorktreeCreateAt(mainWS, "feat-x", "", "x", "")
 	if err != nil {
 		t.Fatal(err)
@@ -101,6 +103,9 @@ func TestAWorkspaceWhoseWorktreeFolderIsGoneStillCloses(t *testing.T) {
 	id := made.Workspace.WorkspaceID
 	if rec := ask(api, "GET", "/api/worktrees/"+id+"/removal?machine=local", ""); rec.Code == 200 {
 		t.Fatalf("a worktree whose folder is gone was looked at: %s", rec.Body)
+	}
+	if rec := ask(api, "DELETE", "/api/worktrees/"+id+"?machine=local", ""); rec.Code == 200 {
+		t.Fatalf("a worktree went past the dialog's checks: %s", rec.Body)
 	}
 	rec := ask(api, "POST", "/api/worktrees/"+id+"/remove", `{"machine":"local","keep_folder":true}`)
 	if rec.Code != 200 {
@@ -118,5 +123,105 @@ func TestAWorkspaceWhoseWorktreeFolderIsGoneStillCloses(t *testing.T) {
 	}
 	if snap.Workspace(id) != nil {
 		t.Errorf("the workspace %s is still open", id)
+	}
+}
+
+// TestCloseWorkspaceDoesNotBecomeARemovalWhenTheOthersLeave: the dialog said the folder stays.
+func TestCloseWorkspaceDoesNotBecomeARemovalWhenTheOthersLeave(t *testing.T) {
+	s, api, client, mc, _, mainWS := worktreeServer(t)
+	home, err := filepath.EvalSymlinks(os.Getenv("HOME")) // panes report the real path, and a temp folder may be behind a link
+	if err != nil {
+		t.Fatal(err)
+	}
+	made, err := client.WorktreeCreateAt(mainWS, "feat-x", "", "x", filepath.Join(home, ".herdr", "worktrees", "app", "feat-x"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	draft := filepath.Join(made.Worktree.Path, "draft.txt")
+	if err := os.WriteFile(draft, []byte("work\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	other, err := client.WorkspaceCreate(made.Worktree.Path, "other")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Watch.Refresh(mc); err != nil {
+		t.Fatal(err)
+	}
+	id := made.Workspace.WorkspaceID
+	rec := ask(api, "GET", "/api/worktrees/"+id+"/removal?machine=local", "")
+	var shown Removal
+	if err := json.Unmarshal(rec.Body.Bytes(), &shown); err != nil || len(shown.Shared) == 0 {
+		t.Fatalf("the look is %d %s", rec.Code, rec.Body)
+	}
+	if err := client.WorkspaceClose(other.Workspace.WorkspaceID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Watch.Refresh(mc); err != nil {
+		t.Fatal(err)
+	}
+	body, _ := json.Marshal(map[string]any{"machine": "local", "stamp": shown.Stamp})
+	if rec := ask(api, "POST", "/api/worktrees/"+id+"/remove", string(body)); rec.Code != http.StatusConflict {
+		t.Errorf("answered %d %s", rec.Code, rec.Body)
+	}
+	if _, err := os.Stat(draft); err != nil {
+		t.Errorf("the uncommitted work is gone: %v", err)
+	}
+}
+
+// TestClosingAWorkspaceLeavesTheWorktreeAnAgentWorksIn: the close takes the workspace, the folder stays for later.
+func TestClosingAWorkspaceLeavesTheWorktreeAnAgentWorksIn(t *testing.T) {
+	s, _, client, mc, _, mainWS := worktreeServer(t)
+	path := filepath.Join(os.Getenv("HOME"), ".herdr", "worktrees", "app", "feat-y")
+	made, err := client.WorktreeCreateAt(mainWS, "feat-y", "", "y", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Watch.Refresh(mc); err != nil {
+		t.Fatal(err)
+	}
+	id := made.Workspace.WorkspaceID
+	if tree, _ := s.madeWorktree(mc, id); tree == "" {
+		t.Fatal("a made worktree nobody works in does not go with its workspace")
+	}
+	s.Undo = &undo.Service{Working: func(string, string) string { return "claude" }}
+	if tree, _ := s.madeWorktree(mc, id); tree != "" {
+		t.Errorf("%s goes while an agent works there", tree)
+	}
+}
+
+// TestAWorkspaceArrivingDuringTheRemovalKeepsTheFolder: the roster read before the close does not know of it.
+func TestAWorkspaceArrivingDuringTheRemovalKeepsTheFolder(t *testing.T) {
+	s, api, client, mc, _, mainWS := worktreeServer(t)
+	home, err := filepath.EvalSymlinks(os.Getenv("HOME"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	made, err := client.WorktreeCreateAt(mainWS, "feat-z", "", "z", filepath.Join(home, ".herdr", "worktrees", "app", "feat-z"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Watch.Refresh(mc); err != nil {
+		t.Fatal(err)
+	}
+	id := made.Workspace.WorkspaceID
+	var shown Removal
+	if rec := ask(api, "GET", "/api/worktrees/"+id+"/removal?machine=local", ""); json.Unmarshal(rec.Body.Bytes(), &shown) != nil {
+		t.Fatalf("the look is %d %s", rec.Code, rec.Body)
+	}
+	if _, err := client.WorkspaceCreate(made.Worktree.Path, "arrived"); err != nil {
+		t.Fatal(err)
+	}
+	body, _ := json.Marshal(map[string]any{"machine": "local", "stamp": shown.Stamp})
+	rec := ask(api, "POST", "/api/worktrees/"+id+"/remove", string(body))
+	var answer struct {
+		Closed bool `json:"closed"`
+		Kept   bool `json:"kept"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &answer); err != nil || !answer.Closed || !answer.Kept {
+		t.Errorf("answered %d %s", rec.Code, rec.Body)
+	}
+	if _, err := os.Stat(made.Worktree.Path); err != nil {
+		t.Errorf("the checkout is gone: %v", err)
 	}
 }

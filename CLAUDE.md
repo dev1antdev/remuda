@@ -4558,16 +4558,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   text through `sessions.Input.SubmitToAgent` — 409 for a pane whose
   agent left, an agent waiting on a question or nothing to send, 502 with gh's (or
   glab's) line, 400 for a link that is neither.
-  **A merged worktree goes** (`internal/worktrees`, tested on
-  `shell.Fake`): `DELETE /api/worktrees/{id}` for a workspace herdr
-  marks a linked worktree — `Inspect` (the branch, the repository's main
-  worktree, the first line of `git status`; uncommitted changes are a
-  409 before anything closes), herdr `workspace.close`, then `Remove`:
-  `git worktree remove` (never `--force`) and `git branch -d`, or `-D`
-  only when an agent pane of the workspace named a request gh or glab read
-  as merged with the branch ending on the commit it ended on (`landedIn`,
-  `worktrees.Landed`, checked in the script), since a squash leaves git unsure; a branch it
-  refuses is reported with the worktree already gone. **A workspace's
+  **A merged worktree goes** through the remove dialog below: the
+  request's menu on the tile (`askRemoveWorktree`) opens it.
+  **A workspace's
   close takes its worktree with it** (`tidy.go`, tested on real
   repositories in a temp home; `DELETE /api/sessions/{id}` →
   `handleWorkspaceClose`): when herdr marks the workspace a linked
@@ -4580,7 +4573,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   in the answer's `worktree.kept`), its branch by git's `-d`, or removed at
   its commit when that is where its merged request ended (`RemoveScript`,
   `deleteBranchAt`: compared and removed in one step, never a branch
-  checked out, rebased, bisected or awaited by a stacked rebase elsewhere), else kept (`branch_kept`) — and the
+  checked out, rebased, bisected or awaited by a stacked rebase elsewhere), else kept (`branch_kept`); an agent at work there
+  (`busyIn`) keeps the folder for *Leftover worktrees* — and the
   page's confirm says so (`closeAsk`, `madeWorktree` in
   `features/roster/tidy.ts`, tested) and its toast what became of it
   (`tidyWords`) — the API's way and the e2e's; the page's own close of
@@ -4594,9 +4588,11 @@ components and icons as rules for whoever changes it: @docs/design.md
   entry (`dirty`, `first`), the branch's commits on no remote
   (`unpushed`) and of those the ones the main checkout's HEAD lacks too
   (`unmerged`: lost with the branch), the commit it ends on (`Tip`, in the
-  stamp and what a confirmed delete goes by), whether that HEAD holds the branch
+  stamp and what a confirmed delete goes by), a checksum of the uncommitted
+  work's contents, submodules included (`Changes`, in the stamp, and read
+  again by the script that removes with `--force`, after the close), whether that HEAD holds the branch
   (`merged`), a `.gitmodules`, and every submodule (`git submodule
-  foreach --recursive`) with a commit on no remote — plus, from the
+  foreach --recursive`) whose HEAD, branches or stash hold a commit on no remote — plus, from the
   server (`internal/server/worktree_remove.go`), the other workspaces on
   the checkout or with a pane in it (`sharers`), an agent working or
   asking there or a turn still ending (`busyIn`: `undo.Service.Working`
@@ -4607,18 +4603,21 @@ components and icons as rules for whoever changes it: @docs/design.md
   folder was deleted behind herdr's back, which herdr still marks a linked
   worktree and no look can read, still closes); else it looks again: an
   agent at work is a 409, another workspace on the checkout closes this
-  workspace alone, a stamp that is not the fresh look's is a 409 ("it
-  changed since this opened"), else herdr closes the workspace and
-  `RemoveAsShown` runs `git worktree remove`, with `--force` only for the
+  workspace alone, a stamp that is not the fresh look's (`removalStamp`: sharing and
+  `merged_pr` are in it)
+  is a 409 ("it changed since this opened"), else herdr closes the workspace, a
+  workspace found on the checkout right after (or no answer) keeps the
+  folder, and `RemoveAsShown` runs `git worktree remove`, with `--force` only for the
   uncommitted work or the submodules the dialog named (the person's
   decision of 2026-11-13: git's writes at their press, a loss behind a
-  danger button that says it), and `git branch -D` when they flipped the
-  branch to Deleted (`RemoveTimeout` 10 min: a node_modules). The page:
+  danger button that says it), and `deleteBranchAt` at the commit the look
+  read when they flipped the branch to Deleted (`RemoveTimeout` 10 min: a node_modules). The page:
   `features/roster/worktree/RemoveWorktreeDialog.tsx` (dialog kind
   `remove-worktree`: "Close & remove worktree…" in a linked worktree's ⋯
-  and the palette, and the close of a made one): a red trash tile, the
+  and the palette, the merged request's menu, and the close of a made one): a red trash tile, the
   table — Folder *Deleted*, Branch *Kept* or *Deleted* (deleted by default
-  once merged, a click flips it) — the losses in red, *Remove* / *Remove
+  once merged, a click flips it) — the losses in red (any submodule among them, since a nested or
+  deinitialized one cannot be looked into), *Remove* / *Remove
   anyway* (`btn danger`), *Close, keep the folder* beside a loss and when
   the look failed (`keepFolderOffered`: the one way left to close a
   workspace whose folder is gone), *Close
@@ -4635,7 +4634,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   `Tidy`, the rest left alone and said so; the clean ones come ticked,
   the button says how much goes (`removedWords`, `leftoverWords`,
   `sizeWords`). The deletions remuda makes in a repository are these,
-  each at the person's word — a close, the menu row, the dialog's button,
+  each at the person's word — a close, the dialog's button,
   the remove dialog's *Remove anyway* past what it named;
   `Discard`
   (`git worktree remove --force` and `git branch -D`) is kept for an
@@ -4773,10 +4772,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   `features/roster/prActions.ts` (tested: `canHandFailure` an open
   request with a failed check, `canSendReview` an open request,
   `canRemoveWorktree` a linked worktree whose request is merged,
-  `actionsFor`, the rows' and toasts' words, `removeAsk`,
-  `removedWords`), `prMenu.tsx` (`prMenuItems`, `handPR` with its two
-  toasts, `askRemoveWorktree` behind the confirm, then `act` so the
-  roster drops the workspace): in a wall tile the two chips are one
+  `actionsFor`, the rows' and toasts' words), `prMenu.tsx`
+  (`prMenuItems`, `handPR` with its two toasts, `askRemoveWorktree`
+  opening the remove dialog): in a wall tile the two chips are one
   `.pr-chips` button that opens a `Menu` — Open with the state as its
   hint, then (after the separator, so a viewer's menu ends before them,
   `viewerMenu`) "Pull request panel" for a GitHub one (`prPanelRow`) and
