@@ -87,6 +87,7 @@ type sshdAtTheDoor struct {
 	heldFor   int    // how many asks for 7318 its sshd refuses
 	script    string // what DoorScript answers there, placed by default
 	forbidden bool   // its sshd refuses a port of its own choice too
+	noKey     bool   // this remuda cannot make a key
 }
 
 // doorRun is what came of opening the door: the scripts that placed it, and the forwards cancelled.
@@ -133,7 +134,13 @@ echo "${DOOR_SCRIPT:-placed}"
 		t.Fatal(err)
 	}
 	t.Cleanup(conn.Close)
-	mc := &Machine{conn: conn, door: &Door{LocalPort: 7317, Key: func(string, string) (string, error) { return "rk_door", nil }}}
+	key := func(string, string) (string, error) {
+		if sshd.noKey {
+			return "", errors.New("the disk is full")
+		}
+		return "rk_door", nil
+	}
+	mc := &Machine{conn: conn, door: &Door{LocalPort: 7317, Key: key}}
 	mc.openDoor(conn)
 	placed, _ := os.ReadFile(kept)
 	cancelled, _ := os.ReadFile(cancels)
@@ -175,9 +182,11 @@ func TestADoorWhosePortIsHeldOpensOnAnother(t *testing.T) {
 // TestAForwardNoDoorCameOfIsLetGo: the machine kept another door, or stayed busy, and the forward goes.
 func TestAForwardNoDoorCameOfIsLetGo(t *testing.T) {
 	for name, sshd := range map[string]sshdAtTheDoor{
-		"taken, on 7318":              {script: doorTaken},
-		"busy, on 7318":               {script: doorBusy},
-		"taken, on a port of its own": {heldFor: heldForGood, script: doorTaken},
+		"taken, on 7318":               {script: doorTaken},
+		"busy, on 7318":                {script: doorBusy},
+		"taken, on a port of its own":  {heldFor: heldForGood, script: doorTaken},
+		"no key, on 7318":              {noKey: true},
+		"no key, on a port of its own": {heldFor: heldForGood, noKey: true},
 	} {
 		t.Run(name, func(t *testing.T) {
 			run := doorOverSSH(t, sshd)
@@ -383,6 +392,32 @@ func TestDoorScriptGoesOneAtATime(t *testing.T) {
 	}
 	if winner == "" || home.read("agent-url") != winner || home.read("agent-door-moved") != winner {
 		t.Fatalf("winner %q, url %q, moved %q", winner, home.read("agent-url"), home.read("agent-door-moved"))
+	}
+}
+
+// TestDoorScriptHeldUpPastItsLocksPlacesNothing: its look took so long that another cockpit may hold the door by now.
+func TestDoorScriptHeldUpPastItsLocksPlacesNothing(t *testing.T) {
+	home := newDoorHome(t)
+	home.write("agent-url", "http://127.0.0.1:9")
+	home.write("agent-key", "rk_old")
+	tools, clock := t.TempDir(), filepath.Join(t.TempDir(), "clock")
+	if err := os.WriteFile(clock, []byte("3000\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for name, stub := range map[string]string{
+		"date": "#!/bin/sh\ncat " + script.Quote(clock) + "\n",
+		"curl": "#!/bin/sh\necho 3120 > " + script.Quote(clock) + "\n",
+	} {
+		if err := os.WriteFile(filepath.Join(tools, name), []byte(stub), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", tools+string(os.PathListSeparator)+os.Getenv("PATH"))
+	if got := home.place(doorURL(50236)); got != doorBusy {
+		t.Fatalf("answered %s", got)
+	}
+	if url, key := home.read("agent-url"), home.read("agent-key"); url != "http://127.0.0.1:9" || key != "rk_old" {
+		t.Fatalf("url %q key %q", url, key)
 	}
 }
 

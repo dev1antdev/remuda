@@ -403,13 +403,13 @@ components and icons as rules for whoever changes it: @docs/design.md
   state dir, 0600 — the files `remuda mcp` and `remuda tasks` read there.
   **Cockpits sharing a machine**: the script looks and places under one
   lock (`agent-door.lock.<half minute>`, this one and the next, so runs
-  close in time share one and a dead script's lapse) and answers `placed`,
-  `taken` or `busy`. A door that answers `/api/health` — asked straight, past any
+  close in time share one and a dead script's lapse, a script held up past
+  them placing nothing) and answers `placed`, `taken` or `busy`. A door that answers `/api/health` — asked straight, past any
   proxy; one nobody could ask counts — stays against a door that would
   move, and one on a port of its own (`agent-door-moved` names it, so a
   cockpit on the machine itself, whose `agent-url` is its own `-addr`, is
-  none) stays against 7318 too; the forward no door came of is cancelled
-  (`CancelForwardBack`). `Door{LocalPort, Key}` is the manager's, given by
+  none) stays against 7318 too; a forward no door came of, for whatever
+  reason, is cancelled (`CancelForwardBack`). `Door{LocalPort, Key}` is the manager's, given by
   `internal/app`; a step that failed is asked again for a minute while the
   connection stands (`trySoon`), then a sshd that forbids the forward is a
   log line, not a failure of the connection. **Two RPC

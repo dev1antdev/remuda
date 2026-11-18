@@ -37,7 +37,8 @@ func doorURL(port int) string { return fmt.Sprintf("http://127.0.0.1:%d", port) 
 // DoorScript places the door at url in the machine's state dir, private to the user: the dir remuda keeps there
 // (`state.Dir()` computed in sh), the key read on stdin, never on a command line, each file replaced whole since a
 // running `remuda mcp` reads them for every call. Cockpits sharing the machine go one at a time under the locks of this
-// half minute and the next, any two runs close in time sharing one, and those of a script that died lapse by themselves.
+// half minute and the next, any two runs close in time sharing one, and those of a script that died lapse by themselves;
+// one that was held up past them places nothing (sh has no lock that dies with its process on both macOS and Linux).
 // A door that answers stays — asked straight, past any proxy, and when nobody
 // can ask too: one on a port of its own (agent-door-moved names it, so a cockpit on the machine itself is none) against
 // any newcomer, any other against a door that would move. The port of a connection the network lost says nothing.
@@ -50,13 +51,14 @@ now=$(($(date +%s) / 30))
 for old in "$d"/agent-door.lock.*; do [ "${old##*.}" -ge "$now" ] 2>/dev/null || rmdir "$old" 2>/dev/null; done
 mkdir "$d/agent-door.lock.$now" 2>/dev/null || { echo ` + doorBusy + `; exit 0; }
 mkdir "$d/agent-door.lock.$((now + 1))" 2>/dev/null || { rmdir "$d/agent-door.lock.$now"; echo ` + doorBusy + `; exit 0; }
-trap 'rmdir "$d/agent-door.lock.$now" "$d/agent-door.lock.$((now + 1))"' EXIT
+trap 'rmdir "$d/agent-door.lock.$now" "$d/agent-door.lock.$((now + 1))" 2>/dev/null' EXIT
 was=$(head -n 1 "$d/agent-url" 2>/dev/null)
 moved=$(head -n 1 "$d/agent-door-moved" 2>/dev/null)
 if [ -n "$was" ] && [ "$was" != "$url" ] && { [ "$url" != "$usual" ] || [ "$was" = "$moved" ]; }; then
   command -v curl >/dev/null 2>&1 || { echo ` + doorTaken + `; exit 0; }
   case "$(curl -q -s -m 2 --noproxy '*' "$was/api/health" 2>/dev/null)" in *'"ok":true'*) echo ` + doorTaken + `; exit 0 ;; esac
 fi
+[ $(($(date +%s) / 30)) -le $((now + 1)) ] || { echo ` + doorBusy + `; exit 0; }
 if [ "$url" = "$usual" ]; then
   rm -f "$d/agent-door-moved"
 else
@@ -127,6 +129,17 @@ func (mc *Machine) openDoor(conn *sshx.Conn) {
 		log.Printf("%s: no door for its agents to the tasks here: %v", mc.Cfg.Host, err)
 		return
 	}
+	placed := false
+	defer func() {
+		if placed {
+			return
+		}
+		forwarded := port
+		if port != DoorPort {
+			forwarded = 0
+		}
+		conn.CancelForwardBack(forwarded, door.LocalPort)
+	}()
 	mc.mu.Lock()
 	have := mc.doorKey
 	mc.mu.Unlock()
@@ -154,16 +167,11 @@ func (mc *Machine) openDoor(conn *sshx.Conn) {
 		return nil
 	}
 	err = trySoon(place, current)
-	if err == nil && answer == doorPlaced {
+	if placed = err == nil && answer == doorPlaced; placed {
 		return
 	}
 	if err == nil {
 		err = errors.New("a live door stands there, or it could not be looked at, so it stays as it is")
 	}
 	log.Printf("%s: the door files for its agents were not placed: %v", mc.Cfg.Host, err)
-	forwarded := port
-	if port != DoorPort {
-		forwarded = 0
-	}
-	conn.CancelForwardBack(forwarded, door.LocalPort)
 }
