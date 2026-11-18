@@ -2382,10 +2382,14 @@ components and icons as rules for whoever changes it: @docs/design.md
   staged outside it too, named from the top — `':(top)'
   ':(top,literal,exclude)<prefix>'` — since a commit from the folder
   carries the whole index, once committed unread, the fourth audit) — and, for a pull request (`push`), the whole patches of
-  the commits on no remote-tracking branch (`git log -p --no-merges -n 200
+  the commits on no remote-tracking branch (`git log -p --remerge-diff -n 200
   HEAD --not --remotes`, each after `\036commit <sha>`, outside the folder
   too, paths the repository's: a push sends whole commits; the ones past
-  200 counted, `\036older N`): what the push would send. The awk drops a diff's removed lines, cuts each
+  200 counted, `\036older N`; a merge shows what it brought itself, a
+  conflict's resolution among it, and nothing when it only merged; a git
+  before 2.35 reads the rest with `--no-merges` and names a merge with
+  changes of its own, by `--cc --name-only`, as `\036merge <sha>`, unread):
+  what the push would send. The awk drops a diff's removed lines, cuts each
   file at 1 MB (`\036partly`) and the stream at `scanTotal` 8 MB, the commits' own 8 MB after the work's
   (`\036budget <path>` / `\036unread <path>` for the rest), so a remote
   sends megabytes at most; `readScan` feeds the added lines, with their

@@ -10,7 +10,7 @@ import type { VerdictAsk } from "./draft";
 // commit is the commit that adds it, or STAGED when only the index holds it (what git commit carries all the same)
 export type SecretFinding = { file: string; line: number; rule: string; excerpt: string; commit?: string };
 export const STAGED = "staged";
-export type SkipReason = "binary" | "large" | "partly" | "budget" | "many" | "older";
+export type SkipReason = "binary" | "large" | "partly" | "budget" | "many" | "older" | "merge";
 export type SkippedFile = { path?: string; why: SkipReason; count?: number; in_commit?: boolean }; // count: the untracked files past the cap, or the commits
 // SecretScan is the server's answer: the findings, what it did not read, how many files and commits it read
 export type SecretScan = { findings: SecretFinding[]; more?: number; skipped?: SkippedFile[]; incomplete?: boolean; files: number; commits?: number; push?: boolean; at: string };
@@ -120,6 +120,7 @@ const SKIPS: { why: SkipReason; words: (n: number) => string }[] = [
   { why: "budget", words: (n) => tn(n, "{n} file past the 8 MB read in all", "{n} files past the 8 MB read in all") },
   { why: "many", words: (n) => tn(n, "{n} more untracked file", "{n} more untracked files") },
   { why: "older", words: (n) => tn(n, "{n} older commit not pushed yet", "{n} older commits not pushed yet") },
+  { why: "merge", words: (n) => tn(n, "{n} merge commit with changes of its own", "{n} merge commits with changes of their own") },
 ];
 
 const COUNTED: SkipReason[] = ["many", "older"]; // skips that count many at once

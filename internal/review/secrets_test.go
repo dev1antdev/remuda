@@ -3,6 +3,7 @@ package review
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -645,4 +646,97 @@ func TestWorkBesideTheCommitsLeavesThemTheirBudget(t *testing.T) {
 	if !found {
 		t.Errorf("the commit went unread: %+v", scan.Findings)
 	}
+}
+
+// conflictedMerge is a checkout whose unpushed merge resolved a conflict with a line only the merge holds.
+func conflictedMerge(t *testing.T, resolution string) string {
+	t.Helper()
+	dir, git, write := scratchCheckout(t)
+	write("a.txt", "one\ntwo\n")
+	git("add", "-A")
+	git("commit", "-qm", "init")
+	git("branch", "-M", "main")
+	git("checkout", "-qb", "side")
+	write("a.txt", "one\nside\n")
+	git("commit", "-qam", "side")
+	git("checkout", "-q", "main")
+	write("a.txt", "one\nmain\n")
+	git("commit", "-qam", "main")
+	cmd := exec.Command("git", "-c", "user.email=t@t", "-c", "user.name=t", "merge", "-q", "side")
+	cmd.Dir = dir
+	_ = cmd.Run() // it stops at the conflict
+	write("a.txt", "one\n"+resolution+"\n")
+	git("add", "-A")
+	git("commit", "-qm", "merged")
+	return dir
+}
+
+func TestASecretOnlyAMergeCommitHoldsIsFound(t *testing.T) {
+	ownGitConfig(t)
+	secret := "export NPM_TOKEN=" + "npm_" + fakeKey(23, 36)
+	scan, err := ScanWork(shell.Local{Name: "local"}, conflictedMerge(t, secret), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(scan.Findings) != 1 || scan.Findings[0].File != "a.txt" || scan.Findings[0].Commit == "" {
+		t.Errorf("the conflict's resolution went unread: %+v", scan.Findings)
+	}
+}
+
+func TestAMergeThatOnlyMergedHoldsNoPush(t *testing.T) {
+	ownGitConfig(t)
+	dir, git, write := scratchCheckout(t)
+	write("a.txt", "a\n")
+	git("add", "-A")
+	git("commit", "-qm", "init")
+	git("branch", "-M", "main")
+	git("checkout", "-qb", "side")
+	write("b.txt", "b\n")
+	git("add", "-A")
+	git("commit", "-qm", "side")
+	git("checkout", "-q", "main")
+	write("c.txt", "c\n")
+	git("add", "-A")
+	git("commit", "-qm", "main")
+	git("merge", "-q", "--no-edit", "side")
+	for name, withOldGit := range map[string]bool{"this git": false, "a git before 2.35": true} {
+		if withOldGit {
+			gitWithoutRemergeDiff(t)
+		}
+		scan, err := ScanWork(shell.Local{Name: "local"}, dir, true)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if scan.Incomplete || scan.PushUnread() || len(scan.Findings) != 0 {
+			t.Errorf("%s: %+v", name, scan)
+		}
+	}
+}
+
+func TestAGitTooOldForMergesLeavesThemUnread(t *testing.T) {
+	ownGitConfig(t)
+	dir := conflictedMerge(t, "resolved by hand")
+	gitWithoutRemergeDiff(t)
+	scan, err := ScanWork(shell.Local{Name: "local"}, dir, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !scan.Incomplete || !scan.PushUnread() || len(scan.Skipped) != 1 || scan.Skipped[0].Why != SkipMerge || scan.Skipped[0].Path == "" {
+		t.Errorf("a merge nobody read counted as clean: %+v", scan)
+	}
+}
+
+// gitWithoutRemergeDiff puts a git first on PATH that refuses --remerge-diff as a git before 2.35 does.
+func gitWithoutRemergeDiff(t *testing.T) {
+	t.Helper()
+	real, err := exec.LookPath("git")
+	if err != nil {
+		t.Skip("no git")
+	}
+	bin := t.TempDir()
+	stand := "#!/bin/sh\nfor a in \"$@\"; do [ \"$a\" = --remerge-diff ] && { echo 'fatal: unrecognized argument: --remerge-diff' >&2; exit 128; }; done\nexec " + script.Quote(real) + " \"$@\"\n"
+	if err := os.WriteFile(filepath.Join(bin, "git"), []byte(stand), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 }

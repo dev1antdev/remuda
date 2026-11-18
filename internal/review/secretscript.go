@@ -57,21 +57,35 @@ var untrackedScript = `list=$(git ls-files -z --others --exclude-standard 2>/dev
 	`grep --untracked --no-color -G -n -z -e '' -- 2>/dev/null | tr '\0' '\037'; ` +
 	`fi; `
 
+// unpushedLog is the commits a push would send with their patches, merges read as mergeForm says.
+func unpushedLog(mergeForm string) string {
+	return readGit + ` -c diff.relative=false -c log.showRoot=true -c log.showSignature=false log ` + mergeForm + ` -n ` + strconv.Itoa(scanCommits) +
+		` -p ` + plainPatch + ` --format='%x1ecommit %h' HEAD --not --remotes 2>/dev/null`
+}
+
+// unpushedScript prints the commits a push would send. --remerge-diff (git 2.35) shows what a merge itself brought, its
+// conflicts' resolutions and anything else beside the automatic result, and nothing for a merge that only merged. A git
+// without it reads the other commits and names each merge holding changes of its own ("\036merge <short sha>"): its
+// combined diff tells such a merge from a plain one, not what it added in a form the check can read.
+var unpushedScript = `c=$(git rev-list --max-count=` + strconv.Itoa(countCommits) + ` HEAD --not --remotes 2>/dev/null | wc -l | tr -d ' '); ` +
+	`if [ "${c:-0}" -gt ` + strconv.Itoa(scanCommits) + ` ]; then printf '\036older %s\n' "$((c - ` + strconv.Itoa(scanCommits) + `))"; fi; ` +
+	unpushedLog(`--remerge-diff`) + ` || { ` +
+	unpushedLog(`--no-merges`) + ` || printf '\036failed commits\n'; ` +
+	`m=$(` + readGit + ` log --merges -n ` + strconv.Itoa(scanCommits) + ` --cc --name-only --no-color --format='%x1emerge %h' HEAD --not --remotes 2>/dev/null) || printf '\036failed commits\n'; ` +
+	`printf '%s\n' "$m" | LC_ALL=C awk '/^\036merge /{ m = $0; next } NF && m != "" { print m; m = "" }'; }; `
+
 // secretScript prints, in one stream through capScript, the diff of the work against HEAD (the empty tree before the
 // first commit) with only the lines added, every untracked file git does not ignore (untrackedScript), after a line
 // "\036staged" the index's diff against HEAD — what git commit carries, though a staged file may have changed or gone
-// since — and, for a push, the commits on no remote-tracking branch with their whole patches — a push sends the whole commit, whatever
-// folder the work is in — each after a line "\036commit <short sha>", those past scanCommits counted ("\036older N").
+// since — and, for a push, the commits on no remote-tracking branch with their whole patches (unpushedScript) — a push
+// sends the whole commit, whatever folder the work is in — each after a line "\036commit <short sha>", those past
+// scanCommits counted ("\036older N").
 // A line "\036failed <what>" says git could not read the folder, the work or the commits, and "\036end" closes a
 // stream that ran to its end: without it nothing is known, and the check is no clean one.
 func secretScript(dir string, push bool) string {
 	commits := ""
 	if push {
-		commits = `if [ "$base" = HEAD ]; then ` +
-			`c=$(git rev-list --no-merges --max-count=` + strconv.Itoa(countCommits) + ` HEAD --not --remotes 2>/dev/null | wc -l | tr -d ' '); ` +
-			`if [ "${c:-0}" -gt ` + strconv.Itoa(scanCommits) + ` ]; then printf '\036older %s\n' "$((c - ` + strconv.Itoa(scanCommits) + `))"; fi; ` +
-			readGit + ` -c diff.relative=false -c log.showRoot=true -c log.showSignature=false log --no-merges -n ` + strconv.Itoa(scanCommits) +
-			` -p ` + plainPatch + ` --format='%x1ecommit %h' HEAD --not --remotes 2>/dev/null || printf '\036failed commits\n'; fi; `
+		commits = `if [ "$base" = HEAD ]; then ` + unpushedScript + `fi; `
 	}
 	return `cd ` + script.Quote(dir) + ` 2>/dev/null || { printf '\036failed folder\n'; exit 0; }; ` +
 		`git rev-parse --show-toplevel >/dev/null 2>&1 || { printf '\036failed repository\n'; exit 0; }; ` +

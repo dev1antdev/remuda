@@ -49,6 +49,7 @@ const (
 	SkipBudget = "budget" // past scanTotal, for the work or for the commits, not read
 	SkipMany   = "many"   // untracked files past scanUntracked
 	SkipOlder  = "older"  // commits not pushed yet past scanCommits, for a push
+	SkipMerge  = "merge"  // a merge with changes of its own, on a git too old to show them, for a push
 )
 
 // The bounds of one check: what crosses from a remote machine stays a few megabytes, and the person waits seconds.
@@ -145,6 +146,8 @@ func readScan(output string, push bool) (SecretScan, error) {
 			case SkipMany, SkipOlder:
 				count, _ := strconv.Atoi(value)
 				scan.Skipped = append(scan.Skipped, Skipped{Why: word, Count: count, InCommit: word == SkipOlder})
+			case SkipMerge:
+				scan.Skipped = append(scan.Skipped, Skipped{Path: value, Why: SkipMerge, InCommit: true})
 			case "failed":
 				if why, known := failures[value]; known {
 					return SecretScan{}, errors.New(why)

@@ -90,6 +90,7 @@ describe("the check's words", () => {
     expect(skippedWords([{ path: "a.png", why: "binary" }, { path: "b.png", why: "binary" }, { path: "dump.sql", why: "large" }, { why: "many", count: 12 }])).toBe(
       "Not read: 2 binary files, 1 file over 1 MB, 12 more untracked files.",
     );
+    expect(skippedWords([{ path: "abc1234", why: "merge", in_commit: true }])).toBe("Not read: 1 merge commit with changes of its own.");
     expect(skippedWords([{ why: "older", count: 340 }])).toBe("Not read: 340 older commits not pushed yet.");
   });
 });
