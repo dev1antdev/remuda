@@ -6895,9 +6895,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   (`stillPasting`, a look every `SettlePoll` 150 ms, `SettleFor` 10 s at
   most), looks again — a question put up meanwhile gets no Enter,
   `ErrAskedMeanwhile`; an agent gone or a shell back at its prompt none
-  either, `ErrLeftMeanwhile`; both a 409 — and, only while the prompt box
-  still shows "[Pasted text" (`stillUnsent`), presses Enter alone through
-  `pane.send_keys`),
+  either, `ErrLeftMeanwhile`; both a 409 — and reads the prompt box (`promptBox`): empty, the message went; the
+  paste still in it with the agent idle or done, Enter alone through
+  `pane.send_keys`; anything else, an agent at work or a screen unread
+  included, presses nothing and says to look, `ErrNotEntered`, a 409 too),
   `SendKeys`
   (herdr 0.9.5 refuses `home`, `end`, `pageup`, `pagedown` and `delete` as
   `invalid_key`, so those go as a terminal's bytes through `send_text`:

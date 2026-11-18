@@ -20,7 +20,9 @@ type paper struct {
 	calls   []string
 
 	promptErr  error // what agent.prompt answers
-	atPrompt   bool  // the shell holds the terminal
+	readErr    error // what pane.read answers from its second call
+	reads      int
+	atPrompt   bool // the shell holds the terminal
 	atErr      error
 	leaveAfter error // what agent.get answers from its second call
 	gets       int
@@ -53,6 +55,10 @@ func (p *paper) PaneAtPrompt(string) (bool, error) { return p.atPrompt, p.atErr 
 
 func (p *paper) PaneRead(string) (string, error) {
 	p.calls = append(p.calls, "read")
+	p.reads++
+	if p.reads > 1 && p.readErr != nil {
+		return "", p.readErr
+	}
 	return p.next(&p.screens), nil
 }
 
@@ -136,15 +142,42 @@ func TestAQuestionNeverGetsTheEnter(t *testing.T) {
 	}
 }
 
-// A message that went with herdr's Enter leaves the box empty: what is on the screen then gets no second one.
+// A message that went with herdr's Enter leaves the box empty, and no second Enter follows.
 func TestASentMessageGetsNoSecondEnter(t *testing.T) {
 	quick(t)
 	for name, screen := range map[string]string{
-		"an empty box": "╭────╮\n│ >  │\n╰────╯\n  ⏵⏵ accept edits on",
-		"a dialog":     "Do you want to proceed?\n❯ 1. Yes\n  2. No",
+		"a bordered box": "╭────╮\n│ >  │\n╰────╯\n  ⏵⏵ accept edits on",
+		"a bare box":     "────\n❯ \n────\n  ? for shortcuts",
 	} {
 		p := &paper{agent: "claude", status: []string{"working"}, screens: []string{screen}}
 		if err := submit(p, shot); err != nil || strings.Contains(strings.Join(p.calls, "|"), "keys:") {
+			t.Errorf("%s: %v, %v", name, err, p.calls)
+		}
+	}
+}
+
+// The paste is found behind what the person had in the box already.
+func TestAPasteBehindOtherTextGetsItsEnter(t *testing.T) {
+	quick(t)
+	p := &paper{agent: "claude", status: []string{"idle"}, screens: []string{"────\n❯ first this [Pasted text #1]\n────"}}
+	if err := submit(p, shot); err != nil || !strings.HasSuffix(strings.Join(p.calls, "|"), "keys:enter") {
+		t.Errorf("%v, %v", err, p.calls)
+	}
+}
+
+// What cannot be made sure of gets no Enter either, and the person is told to look.
+func TestAnUnsureMessageGetsNoEnterAndIsSaidSo(t *testing.T) {
+	quick(t)
+	for name, p := range map[string]*paper{
+		"an agent at work":            {agent: "claude", status: []string{"idle", "working"}, screens: []string{idleBox}},
+		"a state not known":           {agent: "claude", status: []string{"idle", "unknown"}, screens: []string{idleBox}},
+		"the screen unread":           {agent: "claude", status: []string{"idle"}, screens: []string{idleBox}, readErr: errors.New("no answer")},
+		"a dialog":                    {agent: "claude", status: []string{"idle"}, screens: []string{"Do you want to proceed?\n❯ 1. Yes\n  2. No"}},
+		"a dialog quoting the marker": {agent: "claude", status: []string{"idle", "working"}, screens: []string{"Run this?\n  grep '[Pasted text' a.go\n❯ 1. Yes\n  2. No"}},
+		"the person's text":           {agent: "claude", status: []string{"idle"}, screens: []string{"────\n❯ something else\n────"}},
+	} {
+		err := submit(p, shot)
+		if !errors.Is(err, ErrNotEntered) || !NotDelivered(err) || strings.Contains(strings.Join(p.calls, "|"), "keys:") {
 			t.Errorf("%s: %v, %v", name, err, p.calls)
 		}
 	}

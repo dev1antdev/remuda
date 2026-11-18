@@ -57,6 +57,7 @@ func NotDelivered(err error) bool {
 const (
 	claudeAgent   = "claude"
 	pastingWords  = "Pasting"
+	unsentWords   = "[Pasted text"
 	footerRows    = 6
 	statusBlocked = "blocked"
 )
@@ -64,8 +65,8 @@ const (
 // pictureRe is a file name Claude Code may take for a picture in a paste.
 var pictureRe = regexp.MustCompile(`(?i)\.(png|jpe?g|gif|webp|bmp|tiff?|heic|heif|avif)\b`)
 
-// unsentRe is the prompt box holding a paste: its marker right after the prompt sign, a border before it at most.
-var unsentRe = regexp.MustCompile(`^[\s│|]*[>❯]\s*\[Pasted text`)
+// promptRe is the prompt box's row: its sign, a border before it at most, and what the box holds.
+var promptRe = regexp.MustCompile(`^[\s│|]*[>❯](.*?)[\s│|]*$`)
 
 // NamesPicture says the text names a picture file, the paste Claude Code takes in at its own pace.
 func NamesPicture(text string) bool {
@@ -77,8 +78,27 @@ func stillPasting(screen string) bool {
 	return slices.ContainsFunc(footer(screen), func(row string) bool { return strings.Contains(row, pastingWords) })
 }
 
-// stillUnsent reads the prompt box off a screen: true while the paste sits in it, waiting for its Enter.
-func stillUnsent(screen string) bool { return slices.ContainsFunc(footer(screen), unsentRe.MatchString) }
+// The prompt box as a screen shows it.
+const (
+	boxUnclear = iota // no empty box and no paste in one: a dialog, or text of the person's
+	boxEmpty          // the message went
+	boxUnsent         // the paste sits in it, waiting for its Enter
+)
+
+func promptBox(screen string) int {
+	box := boxUnclear
+	for _, row := range footer(screen) {
+		match := promptRe.FindStringSubmatch(row)
+		switch {
+		case match == nil:
+		case strings.Contains(match[1], unsentWords):
+			return boxUnsent
+		case strings.TrimSpace(match[1]) == "":
+			box = boxEmpty
+		}
+	}
+	return box
+}
 
 // footer is the last rows of a screen, where Claude Code keeps its prompt box and what it says under it.
 func footer(screen string) []string {
@@ -125,11 +145,11 @@ func enterAfterPaste(client interface {
 	if err != nil {
 		return ErrNotEntered
 	}
-	if !stillUnsent(screen) { // sent already, or something else is up: an Enter could only answer that
+	switch box := promptBox(screen); {
+	case box == boxEmpty:
 		return nil
+	case box == boxUnsent && (agent.Status == herdr.StatusIdle || agent.Status == herdr.StatusDone):
+		return client.PaneSendKeys(pane, []string{"enter"})
 	}
-	if agent.Status == herdr.StatusWorking { // a turn can put a question up at any moment, and the Enter would answer it
-		return ErrNotEntered
-	}
-	return client.PaneSendKeys(pane, []string{"enter"})
+	return ErrNotEntered // a turn can put a question up at any moment, and an Enter would answer it
 }
