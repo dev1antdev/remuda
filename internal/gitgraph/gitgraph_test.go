@@ -80,6 +80,29 @@ func history(t *testing.T) string {
 
 var host = shell.Local{Name: "local"}
 
+// TestAPatchLabelsItsPathsTheSameWhateverTheRepositorySays: what reads a patch's headers relies on a/ and b/.
+func TestAPatchLabelsItsPathsTheSameWhateverTheRepositorySays(t *testing.T) {
+	needGit(t)
+	root := t.TempDir()
+	run(t, root, "init", "-q")
+	run(t, root, "config", "diff.srcPrefix", "x")
+	run(t, root, "config", "diff.dstPrefix", "y")
+	run(t, root, "config", "diff.noprefix", "true")
+	write(t, root, "token", "one\n")
+	run(t, root, "add", ".")
+	run(t, root, "commit", "-q", "-m", "first")
+	first := run(t, root, "rev-parse", "HEAD")
+	write(t, root, "token", "two\n")
+	run(t, root, "commit", "-q", "-am", "second")
+	second := run(t, root, "rev-parse", "HEAD")
+	for sha, want := range map[string]string{first: "+++ b/token", second: "--- a/token\n+++ b/token"} {
+		patch, err := ReadPatch(host, root, sha, "token", "", false)
+		if err != nil || !strings.Contains(patch, want) {
+			t.Errorf("%s: %v\n%s", sha, err, patch)
+		}
+	}
+}
+
 // TestToplevelIsTheCheckoutAFolderLiesIn: a read of a folder answers for the whole checkout above it.
 func TestToplevelIsTheCheckoutAFolderLiesIn(t *testing.T) {
 	root, err := filepath.EvalSymlinks(t.TempDir())

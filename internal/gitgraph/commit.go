@@ -151,6 +151,10 @@ func joinFiles(names, numstat string) []File {
 	return files
 }
 
+// patchPrefixes are the labels of a patch's paths whatever the repository's diff.srcPrefix, diff.noprefix and the like say:
+// what reads its headers can count on them.
+const patchPrefixes = `--src-prefix=a/ --dst-prefix=b/`
+
 // ReadPatch is one file's patch in a commit against its first parent, git's own diff with rename detection; from is the
 // path it had before a rename, so git sees both sides of it. The paths are the repository's, as ReadCommit names them,
 // whatever folder of it dir is; inFolder keeps the read to the files under dir (ErrOutside for another).
@@ -169,8 +173,8 @@ func ReadPatch(host shell.Host, dir, hash, path, from string, inFolder bool) (st
 	out, err := shell.Text(host, commitPrelude(dir, hash)+
 		`prefix=$(g rev-parse --show-prefix 2>/dev/null); top=$(g rev-parse --show-toplevel 2>/dev/null) && cd "$top" || { printf 'gone\n'; exit 0; }; `+
 		keep+`printf 'patch\n'; `+
-		`if [ -n "$parent" ]; then g diff --no-ext-diff --no-textconv -M "$parent" "$sha" -- `+paths+`; `+
-		`else g show --format= --no-ext-diff --no-textconv -M "$sha" -- `+paths+`; fi 2>/dev/null | head -c `+strconv.Itoa(MaxPatch), readFor)
+		`if [ -n "$parent" ]; then g diff --no-ext-diff --no-textconv `+patchPrefixes+` -M "$parent" "$sha" -- `+paths+`; `+
+		`else g show --format= --no-ext-diff --no-textconv `+patchPrefixes+` -M "$sha" -- `+paths+`; fi 2>/dev/null | head -c `+strconv.Itoa(MaxPatch), readFor)
 	if err != nil {
 		return "", err
 	}
