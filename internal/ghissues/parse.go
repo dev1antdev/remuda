@@ -3,6 +3,7 @@ package ghissues
 import (
 	"encoding/json"
 	"errors"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -128,6 +129,26 @@ func parseList(text, query string) ([]Item, error) {
 		sort.SliceStable(items, func(i, j int) bool { return items[i].Updated.After(items[j].Updated) })
 	}
 	return items, nil
+}
+
+// scopeRe is a search naming where to look, which can reach past the repository the list was asked of.
+var scopeRe = regexp.MustCompile(`(?i)(^|\s)-?(repo|org|user|owner):`)
+
+// ownItems leaves a search that names where to look only the repository's own issues: the panel acts on its repository
+// by number, and another's #12 would be taken for this one's. A plain search is left alone: a renamed repository's
+// issues answer under its new name.
+func ownItems(items []Item, repo, query string) []Item {
+	if !scopeRe.MatchString(query) {
+		return items
+	}
+	prefix := "https://github.com/" + strings.ToLower(repo) + "/issues/"
+	own := []Item{}
+	for _, item := range items {
+		if strings.HasPrefix(strings.ToLower(item.URL), prefix) {
+			own = append(own, item)
+		}
+	}
+	return own
 }
 
 // Reaction is how many reacted with one of GitHub's eight reactions: +1, -1, laugh, hooray, confused, heart, rocket, eyes.

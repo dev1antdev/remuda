@@ -12,7 +12,7 @@ import { useQuery } from "@/lib/query";
 import { errMsg } from "@/lib/text";
 import { Dialog, Icon, Tip } from "@/ui";
 import { t } from "@/lib/i18n";
-import { assignIssue, closeIssue, fetchIssues, fetchRepos, reopenIssue, troubleOf, type Item, type List, type Repo } from "./api";
+import { assignIssue, closeIssue, fetchIssues, fetchRepos, reopenIssue, troubleOf, type Answer, type Item, type List, type Repo, type Repos } from "./api";
 import IssueTable from "./IssueTable";
 import IssueViewer, { type Viewed } from "./IssueViewer";
 import type { RowActions } from "./IssueRow";
@@ -20,9 +20,12 @@ import { openWorkspace, paneOf, startFrom } from "./links";
 import { issuePrompt, issueURL } from "./prompt";
 import { OPEN_QUERY } from "./query";
 import RepoPicker from "./RepoPicker";
-import { PICKED_KEY, RECENT_KEY, remember, type Picked, type Recent } from "./repos";
+import { PICKED_KEY, RECENT_KEY, answerAt, failureAt, placeOf, readAt, remember, type Picked, type Placed, type Recent } from "./repos";
 import { TroubleNote } from "./pieces";
 import { whyNoRepo } from "./words";
+
+type PlacedRepos = Placed<Repos> & { machine: string };
+type PlacedList = Placed<Answer<List>>;
 
 export default function IssuesPanel({ onClose }: { onClose: () => void }) {
   const { machines } = useRoster();
@@ -37,26 +40,42 @@ export default function IssuesPanel({ onClose }: { onClose: () => void }) {
   const machine = machines.find((m) => m.id === machineId);
   const machineLabel = (id: string) => machines.find((m) => m.id === id)?.label ?? id;
   const followDir = follow && follow.machineId === machineId ? follow.dir : ""; // the pane's folder, asked about on its own machine only
-  const repos = useQuery(() => fetchRepos(machineId, followDir || undefined), [machineId, followDir], { keep: true });
-  const following = repos.data?.here?.repo ?? "";
+  const folderPlace = placeOf(machineId, followDir);
+  const repos = useQuery<PlacedRepos>(
+    async (): Promise<PlacedRepos> => {
+      // the machine's checkouts stay when one folder cannot be read: a repository picked by hand still has them
+      const last = repos.data?.machine === machineId ? { ...repos.data, place: folderPlace } : null;
+      return { machine: machineId, ...(await readAt(folderPlace, last, () => fetchRepos(machineId, followDir || undefined))) };
+    },
+    [machineId, followDir],
+    { keep: true },
+  );
+  const seen = repos.data?.machine === machineId ? repos.data : null; // another machine's repositories are not this one's
+  const known = seen?.answer;
+  const reposError = failureAt(seen, folderPlace);
+  const following = seen?.failed ? "" : (known?.here?.repo ?? ""); // a folder that could not be read follows nothing
   const repo = choice?.repo ?? following;
-  const entry: Repo | undefined = repos.data?.repos.find((r) => r.repo.toLowerCase() === repo.toLowerCase());
+  const entry: Repo | undefined = known?.repos.find((r) => r.repo.toLowerCase() === repo.toLowerCase());
   const [query, setQuery] = useState(OPEN_QUERY);
   const [viewing, setViewing] = useState<Viewed[]>([]);
-  const [busy, setBusy] = useState<number | null>(null);
+  const [writes, setWrites] = useState<{ place: string; number: number }[]>([]); // under way, wherever they were started
   const fresh = useRef(false);
-  const list = useQuery(
-    () => {
+  const place = placeOf(machineId, repo);
+  const list = useQuery<PlacedList>(
+    async (): Promise<PlacedList | undefined> => {
       const ask = fresh.current;
       fresh.current = false;
-      return repo ? fetchIssues(machineId, repo, query, ask) : Promise.resolve(undefined);
+      return repo ? readAt(place, list.data, () => fetchIssues(machineId, repo, query, ask)) : undefined;
     },
     [machineId, repo, query],
     { every: 60_000, enabled: !!repo && viewing.length === 0, keep: true },
   );
   useEffect(() => setViewing([]), [machineId, repo]);
-  const trouble = troubleOf(list.data ?? undefined);
-  const shown = list.data && !trouble ? (list.data as List) : null;
+  const listError = failureAt(list.data, place);
+  const busy = writes.filter((write) => write.place === place).map((write) => write.number);
+  const answer = answerAt(list.data, place); // the rows of the place their actions go to, and no other's
+  const trouble = troubleOf(answer);
+  const shown = answer && !trouble ? (answer as List) : null;
   const again = () => {
     fresh.current = true;
     list.reload();
@@ -84,14 +103,15 @@ export default function IssuesPanel({ onClose }: { onClose: () => void }) {
     actions.selectPane(machineId, paneOf(session));
   };
   const rowWrite = async (item: Item, run: () => Promise<unknown>, after?: () => void) => {
-    setBusy(item.number);
+    const write = { place, number: item.number };
+    setWrites((all) => [...all, write]);
     try {
       await run();
       after?.();
     } catch (e) {
       actions.notify(errMsg(e), { error: true });
     } finally {
-      setBusy(null);
+      setWrites((all) => all.filter((other) => other !== write));
       again();
     }
   };
@@ -112,12 +132,12 @@ export default function IssuesPanel({ onClose }: { onClose: () => void }) {
     [machineId, repo, entry, machine],
   );
   const at = viewing[viewing.length - 1];
-  const picker = <RepoPicker repo={repo} picked={choice} machine={machineId} following={following} recent={recent} repos={repos.data?.repos ?? []} machineLabel={machineLabel} onPick={pick} />;
+  const picker = <RepoPicker repo={repo} picked={choice} machine={machineId} following={following} recent={recent} repos={known?.repos ?? []} machineLabel={machineLabel} onPick={pick} />;
   const go = (r: string, n: number) => {
     if (at && r.toLowerCase() === at.repo.toLowerCase() && n === at.number) return;
     setViewing([...viewing, { repo: r, number: n }]);
   };
-  const why = !repo && repos.data ? whyNoRepo(repos.data.here, machineLabel(machineId)) : null;
+  const why = !repo && known ? whyNoRepo(known.here, machineLabel(machineId)) : null;
   const crumbs = ["GitHub", machineLabel(machineId), repo || t("no repository")];
 
   return (
@@ -167,12 +187,12 @@ export default function IssuesPanel({ onClose }: { onClose: () => void }) {
       ) : repo ? (
         <>
           {trouble && <TroubleNote trouble={trouble} onRetry={again} />}
-          {list.error && <TroubleNote trouble={{ kind: "failed", text: list.error }} onRetry={again} />}
+          {listError && <TroubleNote trouble={{ kind: "failed", text: listError }} onRetry={again} />}
           <IssueTable
             query={query}
             onQuery={(q) => setQuery(q.trim() || OPEN_QUERY)}
             list={shown}
-            loading={!shown && !trouble && !list.error}
+            loading={!shown && !trouble && !listError}
             repo={repo}
             isLinked={(n) => !!openSession(n)}
             busy={busy}
@@ -183,8 +203,8 @@ export default function IssuesPanel({ onClose }: { onClose: () => void }) {
       ) : (
         <div className="issue-list">
           <div className="issue-bar">{picker}</div>
-          {repos.error ? (
-            <TroubleNote trouble={{ kind: "failed", text: repos.error }} onRetry={repos.reload} />
+          {reposError ? (
+            <TroubleNote trouble={{ kind: "failed", text: reposError }} onRetry={repos.reload} />
           ) : why ? (
             <TroubleNote trouble={{ kind: "failed", text: why.text, run: why.run }} onRetry={repos.reload} />
           ) : (

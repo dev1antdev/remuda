@@ -1307,7 +1307,8 @@ repository by default, the ones you picked lately, the machine's other
 checkouts), the **Open** and **Assigned to me** chips, a **Filters**
 menu and a search field that both write GitHub's own qualifiers
 (`assignee:@me`, `author:@me`, `no:assignee`, `label:`, `sort:`) into
-the query you see, 25 issues a page. A row shows the number, the title
+the query you see, 25 issues a page. The panel stays on its repository:
+a search naming another one shows only this one's issues. A row shows the number, the title
 with its author and labels in their own colours, the assignees (assign or
 unassign yourself from there), the state (close as completed or not
 planned, or reopen, from there), how long ago it moved, and **Start** —

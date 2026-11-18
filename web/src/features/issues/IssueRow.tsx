@@ -122,7 +122,7 @@ export const IssueRow = memo(function IssueRow({ item, repo, me, linked, busy, a
   );
 });
 
-// SkeletonRows stand where the rows will be while the first list is read, shaped like them
+// SkeletonRows stand where the rows will be while a repository's first list is read, shaped like them
 export function SkeletonRows({ n = 4 }: { n?: number }) {
   return (
     <>

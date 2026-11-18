@@ -41,7 +41,7 @@ type Item struct {
 // List is what a search of the repository's issues found, at most Limit of them.
 type List struct {
 	Items  []Item    `json:"items"`
-	More   bool      `json:"more"` // the search found Limit or more: the newest Limit are listed
+	More   bool      `json:"more"` // the search found Limit or more, before keeping to the repository: the newest are listed
 	Me     string    `json:"me"`   // the login gh is signed in with on the machine
 	At     time.Time `json:"at"`   // when GitHub last confirmed it
 	Source string    `json:"source"`
