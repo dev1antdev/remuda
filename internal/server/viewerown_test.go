@@ -138,18 +138,31 @@ func TestAViewerNeverReachesRemudasOwnWorkspaces(t *testing.T) {
 	s.Feed.Add(sent.Entry("Phone", "the-secret", false, machines.LocalID, ownPane, scratch.Label))
 	s.Feed.Add(sent.Entry("Phone", "gone-pane-secret", false, machines.LocalID, "w99:p9", ""))
 	s.Feed.Add(sent.Entry("Phone", "hello", false, machines.LocalID, appPane, "app"))
+	s.Feed.Add(feed.Entry{Kind: "done", Machine: machines.LocalID, Pane: "w98:p1", Title: "own-secret, its pane gone", Own: true})
+	s.Feed.Add(feed.Entry{Kind: "done", Machine: machines.LocalID, Pane: "w97:p1", Title: "finished, its pane closed since"})
 	_, body := fileCall(h, "/api/feed", true)
-	if strings.Contains(body, "secret") || !strings.Contains(body, "hello") {
+	if strings.Contains(body, "secret") || !strings.Contains(body, "hello") || !strings.Contains(body, "finished") {
 		t.Errorf("a viewer's activity: %s", body)
 	}
-	if all := s.Feed.List(0); len(all) != 3 {
+	if all := s.Feed.List(0); len(all) != 5 {
 		t.Errorf("the person's activity lost rows: %+v", all)
+	}
+
+	// ended, and still on the watcher's last snapshot
+	if err := s.Scratch.Close(machines.LocalID, client, nil); err != nil {
+		t.Fatal(err)
+	}
+	if code, _ := fileCall(h, "/api/screen?machine=local&pane="+url.QueryEscape(ownPane), true); code != http.StatusNotFound {
+		t.Errorf("the floating terminal just ended: %d", code)
+	}
+	if ended, _ := s.rosterFor(true); strings.Contains(string(ended), ownPane) {
+		t.Errorf("a viewer's roster shows the floating terminal just ended: %s", ended)
 	}
 }
 
 func TestAViewerGetsNoRecordingOfRemudasOwnWorkspaces(t *testing.T) {
-	for _, label := range []string{scratch.Label, concierge.Label} {
-		_, api, meta := recordedIn(t, label)
+	for label, own := range map[string]bool{scratch.Label: false, concierge.Label: false, "renamed by hand": true} {
+		_, api, meta := recordedIn(t, label, own)
 		for _, path := range []string{"/api/timelapse/recordings?machine=local&pane=w1:p1", "/api/timelapse/search?q=step"} {
 			if rec := ask(api, "GET", path, ""); !strings.Contains(rec.Body.String(), meta.ID) {
 				t.Fatalf("%s for the person: %s", path, rec.Body)

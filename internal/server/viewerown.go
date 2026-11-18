@@ -13,6 +13,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/scratch"
+	"github.com/dev1antdev/remuda/internal/sent"
 	"github.com/dev1antdev/remuda/internal/timelapse"
 	"github.com/dev1antdev/remuda/internal/transcript"
 	"github.com/dev1antdev/remuda/internal/usage"
@@ -104,16 +105,22 @@ func (s *Server) paneOf(machineID, paneID string) (*herdr.Snapshot, *herdr.PaneI
 	return snap, snap.Pane(paneID)
 }
 
+// viewerOwn says a viewer does not get the workspace: one of remuda's own, or a floating terminal just ended that the
+// watcher's last snapshot still shows.
+func (s *Server) viewerOwn(machineID, workspaceID string) bool {
+	return s.ownWorkspace(machineID, workspaceID) || (s.Scratch != nil && s.Scratch.Ended(machineID, workspaceID))
+}
+
 // viewerSeesPane says the pane is on the roster a viewer gets.
 func (s *Server) viewerSeesPane(machineID, paneID string) bool {
 	_, pane := s.paneOf(machineID, paneID)
-	return pane != nil && !s.ownWorkspace(machineID, pane.WorkspaceID)
+	return pane != nil && !s.viewerOwn(machineID, pane.WorkspaceID)
 }
 
 // ownPane says the pane stands in one of remuda's own workspaces now.
 func (s *Server) ownPane(machineID, paneID string) bool {
 	_, pane := s.paneOf(machineID, paneID)
-	return pane != nil && s.ownWorkspace(machineID, pane.WorkspaceID)
+	return pane != nil && s.viewerOwn(machineID, pane.WorkspaceID)
 }
 
 // ownFolder says only remuda's own workspaces stand in the folder: the floating terminal's is the home, which a
@@ -128,16 +135,22 @@ func (s *Server) ownFolder(machineID, dir string) bool {
 	return slices.ContainsFunc(snap.WorkspaceDirs(), same) && !slices.ContainsFunc(s.editorFolders(machineID, snap), same)
 }
 
-// ownRecording says a timelapse is of remuda's own workspaces: by the name they are made under, which outlasts them
-// and every recording made before this check, or by the pane and folder they hold now.
+// ownRecording says a timelapse is of remuda's own workspaces: marked so when it began; one made before the mark goes by
+// the name they are made under, or by the pane and folder they hold now, and a workspace of the person's under such a
+// name stays out with it.
 func (s *Server) ownRecording(m timelapse.Meta) bool {
-	return m.Workspace == scratch.Label || m.Workspace == concierge.Label || s.ownPane(m.Machine, m.Pane) || s.ownFolder(m.Machine, m.Dir)
+	return m.Own || m.Workspace == scratch.Label || m.Workspace == concierge.Label || s.ownPane(m.Machine, m.Pane) || s.ownFolder(m.Machine, m.Dir)
 }
 
-// viewerFeed is the activity of the panes a viewer sees and of no pane at all: a row of a pane gone since cannot be told
-// from one of the floating terminal's, and may quote what was typed or answered there.
+// viewerFeed is the activity without remuda's own workspaces. What was typed, in a row written before rows were marked,
+// is kept from a viewer also for a pane no longer there to be told apart.
 func (s *Server) viewerFeed(entries []feed.Entry) []feed.Entry {
-	return slices.DeleteFunc(entries, func(e feed.Entry) bool { return e.Pane != "" && !s.viewerSeesPane(e.Machine, e.Pane) })
+	return slices.DeleteFunc(entries, func(e feed.Entry) bool {
+		if e.Pane == "" {
+			return false
+		}
+		return e.Own || s.ownPane(e.Machine, e.Pane) || (e.Kind == sent.Kind && !s.viewerSeesPane(e.Machine, e.Pane))
+	})
 }
 
 // viewerUsage leaves out the folders a viewer may not know of, and with them the sessions a chat could be opened by.

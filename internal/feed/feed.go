@@ -28,6 +28,7 @@ type Entry struct {
 	Body    string    `json:"body,omitempty"`
 	Quiet   bool      `json:"quiet,omitempty"`  // no news: what a device sent through remuda; the bell's dot skips it
 	Worked  int64     `json:"worked,omitempty"` // a finish: the turn's seconds, for a page's own "long turns only"
+	Own     bool      `json:"own,omitempty"`    // of a workspace remuda keeps for itself, as it stood when written: never a viewer's
 }
 
 // Service is the list, loaded once and saved on every addition.

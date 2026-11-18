@@ -21,17 +21,17 @@ import (
 // recordedServer is a server whose recorder holds one finished turn of the local pane w1:p1
 func recordedServer(t *testing.T) (*Server, *http.ServeMux, timelapse.Meta) {
 	t.Helper()
-	return recordedIn(t, "app")
+	return recordedIn(t, "app", false)
 }
 
-// recordedIn is the same with the turn recorded in a workspace of that name
-func recordedIn(t *testing.T, workspace string) (*Server, *http.ServeMux, timelapse.Meta) {
+// recordedIn is the same with the turn recorded in a workspace of that name, one of remuda's own or not
+func recordedIn(t *testing.T, workspace string, own bool) (*Server, *http.ServeMux, timelapse.Meta) {
 	t.Helper()
 	dir := t.TempDir()
 	var reads atomic.Int32
 	recorder := timelapse.Open(dir, timelapse.Inputs{Screen: func(machineID, paneID string) (string, error) {
 		return fmt.Sprintf("\x1b[32mstep %d\x1b[0m", reads.Add(1)), nil
-	}})
+	}, Own: func(string, string) bool { return own }})
 	t.Cleanup(recorder.Close)
 	s := &Server{Machines: machines.NewManager(dir, filepath.Join(dir, "no-herdr.sock"), "herdr", nil), Timelapse: recorder}
 	pane := func(status string) *herdr.Snapshot {

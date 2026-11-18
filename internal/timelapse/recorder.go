@@ -146,6 +146,7 @@ func (r *Recorder) awayLocked(machineID string) []job {
 // begin is a new take of a pane seen working, named after the moment.
 func (r *Recorder) begin(machineID string, snap *herdr.Snapshot, pane *herdr.PaneInfo, at time.Time) *take {
 	meta := Meta{ID: newID(at), Machine: machineID, Pane: pane.PaneID, Agent: pane.Agent, Title: clip(pane.DisplayTitle()), Start: at}
+	meta.Own = r.in.Own != nil && r.in.Own(machineID, pane.WorkspaceID)
 	if ws := snap.Workspace(pane.WorkspaceID); ws != nil {
 		meta.Workspace = clip(ws.Label)
 		meta.Dir = clip(snap.WorkspaceDir(ws))

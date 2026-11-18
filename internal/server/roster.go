@@ -369,7 +369,7 @@ func (s *Server) rosterFor(viewer bool) ([]byte, string) {
 			if snap != nil {
 				entry.Sessions = s.sessionsFromSnapshot(mc.ID(), snap)
 				if viewer {
-					entry.Sessions = slices.DeleteFunc(entry.Sessions, func(x rosterSession) bool { return x.Scratch || x.Concierge })
+					entry.Sessions = slices.DeleteFunc(entry.Sessions, func(x rosterSession) bool { return s.viewerOwn(mc.ID(), x.ID) })
 				}
 			}
 			if err != nil {

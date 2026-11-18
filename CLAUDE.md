@@ -6764,10 +6764,15 @@ components and icons as rules for whoever changes it: @docs/design.md
   shown, on the routes that read a pane by its id; the chat and the recap
   also to a state dir, and to a session id found in one, since a session
   is looked for in every project folder), their timelapses are left out of
-  the list, the search and the id (`ownRecording`: by the name the workspace
-  is made under, which outlasts it), the usage report drops their folders
-  and sessions, the standup their rows, the feed every row of a pane the
-  viewer does not see, and its event stream watches none of them. `ViewerAllows(method, path)`
+  the list, the search and the id (`ownRecording`: `Meta.Own`, set when the
+  take begins; an older one by the name the workspace is made under), the
+  usage report drops their folders and sessions (its totals still count
+  them), the standup their rows, the feed the rows marked `Own` when written
+  (and an older row of what was typed, for a pane gone), and its event
+  stream watches none of them; a floating terminal just ended stays hidden
+  (`scratch.Store.Ended`) while the last snapshot shows it. A conversation
+  run from the floating terminal inside a folder a visible workspace also
+  uses is that folder's like any other: nothing tells them apart. `ViewerAllows(method, path)`
   is a GET of `viewerRoutes` — the roster, the chat, the screen, the
   scrollback, a recap, the standup, the feed, a file, its stat and a folder of the project tree (kept
   by `internal/viewer`, tested: `Reach` is the machine's workspace folders

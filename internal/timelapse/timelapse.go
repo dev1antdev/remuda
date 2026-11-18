@@ -60,9 +60,10 @@ type Meta struct {
 	Rows      int       `json:"rows"`
 	Start     time.Time `json:"start"`
 	End       time.Time `json:"end"`
-	Count     int       `json:"count"` // frames
-	Ended     string    `json:"ended"` // the status it rested in (done, idle, blocked), or EndedGone, EndedStopped, EndedCut
-	Size      int64     `json:"size"`  // the file's bytes, read off the disk
+	Count     int       `json:"count"`         // frames
+	Ended     string    `json:"ended"`         // the status it rested in (done, idle, blocked), or EndedGone, EndedStopped, EndedCut
+	Size      int64     `json:"size"`          // the file's bytes, read off the disk
+	Own       bool      `json:"own,omitempty"` // of a workspace remuda keeps for itself: never a viewer's
 }
 
 // Recording is a recording whole: its frames, each the rows that changed since the one before.
@@ -90,6 +91,7 @@ type Row struct {
 type Inputs struct {
 	Screen func(machineID, paneID string) (string, error)                     // the pane's visible screen with its colours
 	Folder func(machineID, dir string, workspace *herdr.WorkspaceInfo) string // the sidebar's folder of a workspace; nil reads dir
+	Own    func(machineID, workspaceID string) bool                           // a workspace remuda keeps for itself; nil knows none
 }
 
 // Stats is what the folder holds, for Settings.
