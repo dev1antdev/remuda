@@ -45,7 +45,7 @@ func Script(dirs []string) string {
 			`top=$(git rev-parse --show-toplevel 2>/dev/null) && cd "$top" && { ` + mainScript + `; ` +
 			`if [ -n "$m" ] && mb=$(git merge-base HEAD "$m" 2>/dev/null); then ` +
 			`printf '%s\037%s\037%s\n' "$top" "$m" "$mb"; ` +
-			`git -c core.quotepath=off -c color.ui=never diff -U0 --no-ext-diff --no-textconv --no-renames --full-index "$mb" 2>/dev/null | ` + diffAwk + `; ` +
+			`git -c core.quotepath=off diff ` + script.PatchForm + ` -U0 --no-renames --full-index "$mb" 2>/dev/null | ` + diffAwk + `; ` +
 			`printf '\036\n'; git -c core.quotepath=off ls-files --others --exclude-standard 2>/dev/null | head -n ` + strconv.Itoa(maxUntracked) + `; ` +
 			`fi; }; printf '\035\n' ); `)
 	}

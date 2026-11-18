@@ -6,8 +6,11 @@ import (
 	"github.com/dev1antdev/remuda/internal/script"
 )
 
-// gitDiff is git's diff as the check reads it: no colour, no external driver or textconv, no renames, no context.
-const gitDiff = `git -c core.quotepath=off -c color.ui=never diff --no-ext-diff --no-textconv --no-renames -U0`
+// plainPatch is a patch in the one form readScan reads: no renames, no context.
+const plainPatch = script.PatchForm + ` --no-renames -U0`
+
+// gitDiff is git's diff as the check reads it, writing nothing; each call says itself whether it is relative to the folder.
+const gitDiff = readGit + ` -c diff.relative=false diff ` + plainPatch
 
 // capScript cuts the stream on its way out: each file's lines at scanPerFile (a line "\036partly" says where), and
 // every file once scanTotal is spent (each named on a line "\036budget <path>", "\036unread <path>" for an untracked
@@ -65,8 +68,8 @@ func secretScript(dir string, push bool) string {
 		commits = `if [ "$base" = HEAD ]; then ` +
 			`c=$(git rev-list --no-merges --max-count=` + strconv.Itoa(countCommits) + ` HEAD --not --remotes 2>/dev/null | wc -l | tr -d ' '); ` +
 			`if [ "${c:-0}" -gt ` + strconv.Itoa(scanCommits) + ` ]; then printf '\036older %s\n' "$((c - ` + strconv.Itoa(scanCommits) + `))"; fi; ` +
-			`git -c core.quotepath=off -c color.ui=never log --no-merges -n ` + strconv.Itoa(scanCommits) +
-			` -p -U0 --no-ext-diff --no-textconv --no-renames --format='%x1ecommit %h' HEAD --not --remotes 2>/dev/null || printf '\036failed commits\n'; fi; `
+			readGit + ` -c diff.relative=false -c log.showRoot=true -c log.showSignature=false log --no-merges -n ` + strconv.Itoa(scanCommits) +
+			` -p ` + plainPatch + ` --format='%x1ecommit %h' HEAD --not --remotes 2>/dev/null || printf '\036failed commits\n'; fi; `
 	}
 	return `cd ` + script.Quote(dir) + ` 2>/dev/null || { printf '\036failed folder\n'; exit 0; }; ` +
 		`git rev-parse --show-toplevel >/dev/null 2>&1 || { printf '\036failed repository\n'; exit 0; }; ` +

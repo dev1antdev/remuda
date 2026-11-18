@@ -74,6 +74,9 @@ var failures = map[string]string{
 // errUnfinished is a stream that stopped before its end: a script cut off, or one that never ran.
 var errUnfinished = errors.New("it stopped before it had read everything")
 
+// errUnreadable is a stream with a line no diff holds: what cannot be read has not been checked.
+var errUnreadable = errors.New("git's answer could not be read")
+
 // readScan reads secretScript's stream: the lines each diff adds, and every line of an untracked file, go to the
 // scanner with their numbers in the new file. A stream that says git failed, or that never reached its end, is an
 // error, never a scan that found nothing.
@@ -153,6 +156,9 @@ func readScan(output string, push bool) (SecretScan, error) {
 			number++
 		case !header && strings.HasPrefix(line, " "):
 			number++
+		case strings.HasPrefix(line, "* Unmerged path "): // the index's word on a conflict: the work's copy was read above
+		case !header && line != "" && !strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "-") && !strings.HasPrefix(line, `\`):
+			return SecretScan{}, errUnreadable
 		}
 	}
 	if !ended {

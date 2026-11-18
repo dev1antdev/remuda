@@ -88,6 +88,7 @@ func TestAPatchLabelsItsPathsTheSameWhateverTheRepositorySays(t *testing.T) {
 	run(t, root, "config", "diff.srcPrefix", "x")
 	run(t, root, "config", "diff.dstPrefix", "y")
 	run(t, root, "config", "diff.noprefix", "true")
+	run(t, root, "config", "color.diff", "always")
 	write(t, root, "token", "one\n")
 	run(t, root, "add", ".")
 	run(t, root, "commit", "-q", "-m", "first")
@@ -97,8 +98,8 @@ func TestAPatchLabelsItsPathsTheSameWhateverTheRepositorySays(t *testing.T) {
 	second := run(t, root, "rev-parse", "HEAD")
 	for sha, want := range map[string]string{first: "+++ b/token", second: "--- a/token\n+++ b/token"} {
 		patch, err := ReadPatch(host, root, sha, "token", "", false)
-		if err != nil || !strings.Contains(patch, want) {
-			t.Errorf("%s: %v\n%s", sha, err, patch)
+		if err != nil || !strings.Contains(patch, want) || !strings.HasPrefix(patch, "diff --git ") {
+			t.Errorf("%s: %v\n%q", sha, err, patch)
 		}
 	}
 }

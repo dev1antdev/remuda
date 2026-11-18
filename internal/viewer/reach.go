@@ -126,13 +126,14 @@ func (r Reach) inClosed(path string) bool {
 
 // PatchAllowed says a viewer may read a commit's patch: none of the files it shows, on either side of a rename, under
 // any folder asked for, is one of remuda's secrets or lies in a .ssh or a remuda folder, as any commit may have kept one.
-// The names are read from each file's header, where a line holds one path whole; the changed lines are left alone.
+// The names are read from each file's header, where a line holds one path whole; the changed lines are left alone. A
+// patch with no header this can read shows nothing it can vouch for.
 func PatchAllowed(patch string) bool {
-	inHeader := false
+	inHeader, read := false, false
 	for _, line := range strings.Split(patch, "\n") {
 		switch {
 		case strings.HasPrefix(line, "diff --git "):
-			inHeader = true
+			inHeader, read = true, true
 		case strings.HasPrefix(line, "@@ "):
 			inHeader = false
 		case inHeader:
@@ -143,7 +144,7 @@ func PatchAllowed(patch string) bool {
 			}
 		}
 	}
-	return true
+	return read || strings.TrimSpace(patch) == ""
 }
 
 // closedPatchPath reads a path as a patch header spells it, quoted when git had to, with a tab after a name with spaces.
