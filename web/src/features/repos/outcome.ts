@@ -101,9 +101,10 @@ export function ranWords(run: FetchRun): Said {
   return { text: `${t("Fetched {done} of {repositories}.", { done: run.total - run.failed.length, repositories: repositories(run.total) })} ${named}${rest}`, error: true };
 }
 
-// heldWords is the held push's head: how many findings, or that the check could not clear it
+// heldWords is the held push's head: how many findings, or that the check could not clear it or read all of it
 export function heldWords(o: Outcome, name: string): string {
   if (o.reason === "check-failed") return t("The secret check could not read what {name} would push: {why}. Nothing is known about it.", { name, why: o.output || t("no reason given") });
+  if (o.reason === "check-incomplete") return t("The secret check found nothing, but could not read all of what {name} would push.", { name });
   const found = (o.scan?.findings.length ?? 0) + (o.scan?.more ?? 0);
   return tn(found, "The secret check found {n} thing in what {name} would push, or in its work beside it, that looks like a secret.", "The secret check found {n} things in what {name} would push, or in its work beside it, that look like secrets.", { name });
 }
@@ -111,6 +112,7 @@ export function heldWords(o: Outcome, name: string): string {
 // pushAnywayAsk is the confirm before a push the check held back
 export function pushAnywayAsk(o: Outcome, name: string): string {
   if (o.reason === "check-failed") return t("Push {name} with no secret check? Nothing is known about what it carries.", { name });
+  if (o.reason === "check-incomplete") return t("Push {name} with part of it unread by the secret check?", { name });
   const found = (o.scan?.findings.length ?? 0) + (o.scan?.more ?? 0);
   return tn(found, "Push {name} with {n} finding? Once on the remote a secret has to be revoked, not just deleted.", "Push {name} with {n} findings? Once on the remote a secret has to be revoked, not just deleted.", { name });
 }

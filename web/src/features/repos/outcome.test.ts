@@ -33,6 +33,9 @@ describe("outcomeWords", () => {
     const failed: Outcome = { action: "push", state: "held", reason: "check-failed", output: "it took longer than 45s" };
     expect(heldWords(failed, "app")).toContain("it took longer than 45s");
     expect(pushAnywayAsk(failed, "app")).toContain("no secret check");
+    const partial: Outcome = { action: "push", state: "held", reason: "check-incomplete", scan: { findings: [], files: 1, at: "", incomplete: true, skipped: [{ why: "older", count: 150 }] } };
+    expect(heldWords(partial, "app")).toContain("could not read all of what app would push");
+    expect(pushAnywayAsk(partial, "app")).toContain("part of it unread");
   });
 });
 

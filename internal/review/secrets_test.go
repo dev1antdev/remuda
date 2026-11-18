@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -168,6 +169,9 @@ func TestTheSecretCheckReadsTheScriptsAnswer(t *testing.T) {
 	}
 	if scan.Files != 6 || scan.Commits != 1 || !scan.Push {
 		t.Errorf("read %d files, %d commits, push %v", scan.Files, scan.Commits, scan.Push)
+	}
+	if !scan.Incomplete {
+		t.Error("a check that left files unread reads as complete")
 	}
 	scripts := host.Scripts()
 	if len(scripts) != 1 || !strings.Contains(scripts[0], "cd '/repo'") || !strings.Contains(scripts[0], "--not --remotes") || !strings.Contains(scripts[0], "--no-textconv") {
@@ -530,5 +534,115 @@ func TestTheSettingsSectionIsRead(t *testing.T) {
 	if len(audits) != 2 || !audits[0].Local || audits[0].Tracked || audits[0].Ignored || len(audits[0].Findings) != 1 ||
 		audits[1].Local || !audits[1].Tracked || audits[1].Path != "/repo/.claude/settings.json" {
 		t.Errorf("%+v", audits)
+	}
+}
+
+// TestRemovedLinesCostTheCheckNothing: a big deletion leaves the lines added beside it read.
+func TestRemovedLinesCostTheCheckNothing(t *testing.T) {
+	ownGitConfig(t)
+	_, git, write := scratchCheckout(t)
+	write("data.txt", strings.Repeat("an old line of data\n", scanPerFile/10))
+	git("add", "-A")
+	git("commit", "-qm", "init")
+	write("data.txt", "export NPM_TOKEN="+"npm_"+fakeKey(21, 36)+"\n")
+	dir := strings.TrimSpace(git("rev-parse", "--show-toplevel"))
+	scan, err := ScanWork(shell.Local{Name: "local"}, dir, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(scan.Findings) != 1 || scan.Incomplete || len(scan.Skipped) != 0 {
+		t.Errorf("scan: %+v", scan)
+	}
+}
+
+func TestABinaryFileAloneLeavesTheCheckComplete(t *testing.T) {
+	scan, err := readScan("diff --git a/logo.png b/logo.png\nBinary files /dev/null and b/logo.png differ\n"+script.RS+"end\n", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if scan.Incomplete || len(scan.Skipped) != 1 {
+		t.Errorf("scan: %+v", scan)
+	}
+}
+
+func TestABigUntrackedFileIsCalledBinaryOnlyWhenItIs(t *testing.T) {
+	ownGitConfig(t)
+	dir, git, write := scratchCheckout(t)
+	write("a.txt", "a\n")
+	git("add", "-A")
+	git("commit", "-qm", "init")
+	write("shot.png", "\x00"+strings.Repeat("x", scanPerFile+1))
+	scan, err := ScanWork(shell.Local{Name: "local"}, dir, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if scan.Incomplete || len(scan.Skipped) != 1 || scan.Skipped[0] != (Skipped{Path: "shot.png", Why: SkipBinary}) {
+		t.Errorf("a big binary: %+v", scan)
+	}
+	write("dump.sql", strings.Repeat("insert\n", scanPerFile/7+1))
+	if scan, err = ScanWork(shell.Local{Name: "local"}, dir, false); err != nil {
+		t.Fatal(err)
+	}
+	if !scan.Incomplete {
+		t.Errorf("big text left unread reads as complete: %+v", scan)
+	}
+}
+
+// TestAKeystorePastTheBudgetIsStillFound, and what a push would send past it counts against the push.
+func TestAKeystorePastTheBudgetIsStillFound(t *testing.T) {
+	ownGitConfig(t)
+	dir, git, write := scratchCheckout(t)
+	write("a.txt", "a\n")
+	git("add", "-A")
+	git("commit", "-qm", "init")
+	for i := range scanTotal/scanPerFile + 2 {
+		write("part"+strconv.Itoa(i+10)+".txt", strings.Repeat("a line\n", scanPerFile/7-1))
+	}
+	write("z.txt", "after the budget\n")
+	write("z.p12", "\x00\x01 a keystore")
+	git("add", "-A")
+	git("commit", "-qm", "a lot")
+	scan, err := ScanWork(shell.Local{Name: "local"}, dir, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, finding := range scan.Findings {
+		found = found || finding.File == "z.p12"
+	}
+	if !found {
+		t.Errorf("the keystore went unnoticed: %+v", scan.Findings)
+	}
+	if !scan.Incomplete || !scan.PushUnread() {
+		t.Errorf("text past the budget reads as read: %+v", scan.Skipped)
+	}
+}
+
+// TestWorkBesideTheCommitsLeavesThemTheirBudget: what a push does not send cannot leave what it sends unread.
+func TestWorkBesideTheCommitsLeavesThemTheirBudget(t *testing.T) {
+	ownGitConfig(t)
+	dir, git, write := scratchCheckout(t)
+	write("a.txt", "a\n")
+	git("add", "-A")
+	git("commit", "-qm", "init")
+	write("sent.txt", "export NPM_TOKEN="+"npm_"+fakeKey(22, 36)+"\n")
+	git("add", "-A")
+	git("commit", "-qm", "the commit a push sends")
+	for i := range scanTotal/scanPerFile + 2 {
+		write("scratch"+strconv.Itoa(i+10)+".txt", strings.Repeat("a line\n", scanPerFile/7-1))
+	}
+	scan, err := ScanWork(shell.Local{Name: "local"}, dir, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !scan.Incomplete || scan.PushUnread() {
+		t.Errorf("skipped: %+v", scan.Skipped)
+	}
+	found := false
+	for _, finding := range scan.Findings {
+		found = found || finding.File == "sent.txt"
+	}
+	if !found {
+		t.Errorf("the commit went unread: %+v", scan.Findings)
 	}
 }

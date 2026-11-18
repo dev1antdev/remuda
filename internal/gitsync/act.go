@@ -28,23 +28,24 @@ const (
 
 // Why an action was refused, or what a done one came to beyond the plain case.
 const (
-	ReasonAway         = "away"           // the machine cannot be reached now
-	ReasonMissing      = "missing"        // the folder is not there
-	ReasonNotRepo      = "not-repository" // the folder is no git checkout
-	ReasonRunning      = "running"        // another action on the checkout is under way
-	ReasonDetached     = "detached"       // HEAD is on no branch
-	ReasonNoRemote     = "no-remote"      // the repository has no remote to reach
-	ReasonWhichRemote  = "which-remote"   // a branch with no upstream, several remotes and no origin
-	ReasonNoUpstream   = "no-upstream"    // nothing to pull from: the branch tracks nothing
-	ReasonLocal        = "local-upstream" // the branch tracks a local branch, no remote
-	ReasonGone         = "gone"           // the upstream is set but no longer there
-	ReasonDiverged     = "diverged"       // both sides have commits: a fast-forward cannot do it
-	ReasonBusy         = "busy"           // an agent works, asks or ends a turn in the checkout
-	ReasonUpToDate     = "up-to-date"     // a pull with nothing to bring
-	ReasonNewBranch    = "new-branch"     // a push that set the branch's upstream
-	ReasonCheckFailed  = "check-failed"   // a push the secret check could not clear
-	ReasonSecretsFound = "secrets"        // a push the secret check found something in
-	ReasonMoved        = "moved"          // a push anyway of a branch that moved since the check the person saw
+	ReasonAway            = "away"             // the machine cannot be reached now
+	ReasonMissing         = "missing"          // the folder is not there
+	ReasonNotRepo         = "not-repository"   // the folder is no git checkout
+	ReasonRunning         = "running"          // another action on the checkout is under way
+	ReasonDetached        = "detached"         // HEAD is on no branch
+	ReasonNoRemote        = "no-remote"        // the repository has no remote to reach
+	ReasonWhichRemote     = "which-remote"     // a branch with no upstream, several remotes and no origin
+	ReasonNoUpstream      = "no-upstream"      // nothing to pull from: the branch tracks nothing
+	ReasonLocal           = "local-upstream"   // the branch tracks a local branch, no remote
+	ReasonGone            = "gone"             // the upstream is set but no longer there
+	ReasonDiverged        = "diverged"         // both sides have commits: a fast-forward cannot do it
+	ReasonBusy            = "busy"             // an agent works, asks or ends a turn in the checkout
+	ReasonUpToDate        = "up-to-date"       // a pull with nothing to bring
+	ReasonNewBranch       = "new-branch"       // a push that set the branch's upstream
+	ReasonCheckFailed     = "check-failed"     // a push the secret check could not clear
+	ReasonSecretsFound    = "secrets"          // a push the secret check found something in
+	ReasonCheckIncomplete = "check-incomplete" // a push whose commits the secret check could not read whole
+	ReasonMoved           = "moved"            // a push anyway of a branch that moved since the check the person saw
 )
 
 // Outcome is what one action came to, in fields the page puts in its own words.

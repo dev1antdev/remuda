@@ -3,6 +3,7 @@ package review
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -18,10 +19,12 @@ type SecretScan struct {
 	Findings []secrets.Finding `json:"findings"`
 	More     int               `json:"more,omitempty"` // findings past the caps
 	Skipped  []Skipped         `json:"skipped,omitempty"`
-	Files    int               `json:"files"`             // files of the work read
-	Commits  int               `json:"commits,omitempty"` // commits read, for a push
-	Push     bool              `json:"push,omitempty"`
-	At       time.Time         `json:"at"`
+	// Incomplete says text was left unread, so finding nothing does not clear it; a binary file has none to read.
+	Incomplete bool      `json:"incomplete,omitempty"`
+	Files      int       `json:"files"`             // files of the work read
+	Commits    int       `json:"commits,omitempty"` // commits read, for a push
+	Push       bool      `json:"push,omitempty"`
+	At         time.Time `json:"at"`
 }
 
 // Skipped is what the check did not read, or not whole, and why.
@@ -29,6 +32,13 @@ type Skipped struct {
 	Path  string `json:"path,omitempty"`
 	Why   string `json:"why"`
 	Count int    `json:"count,omitempty"` // the untracked files past the cap for SkipMany, the commits for SkipOlder
+	// InCommit says it is part of the commits a push would send, not of the work beside them.
+	InCommit bool `json:"in_commit,omitempty"`
+}
+
+// PushUnread says the commits a push would send were not read whole; the work beside them does not go with it.
+func (s SecretScan) PushUnread() bool {
+	return slices.ContainsFunc(s.Skipped, func(skip Skipped) bool { return skip.InCommit })
 }
 
 // Why a file was not read.
@@ -36,7 +46,7 @@ const (
 	SkipBinary = "binary" // no text to read
 	SkipLarge  = "large"  // an untracked file over scanPerFile, not read
 	SkipPartly = "partly" // its changes ran past scanPerFile: the first part read
-	SkipBudget = "budget" // past scanTotal in all, not read
+	SkipBudget = "budget" // past scanTotal, for the work or for the commits, not read
 	SkipMany   = "many"   // untracked files past scanUntracked
 	SkipOlder  = "older"  // commits not pushed yet past scanCommits, for a push
 )
@@ -89,7 +99,8 @@ func readScan(output string, push bool) (SecretScan, error) {
 	header, ended := false, false
 	skipped := map[Skipped]bool{} // a file the work and the index both carry is said once
 	skip := func(path, why string) {
-		if entry := (Skipped{Path: path, Why: why}); path != "" && !skipped[entry] {
+		entry := Skipped{Path: path, Why: why, InCommit: commit != "" && commit != secrets.Staged}
+		if path != "" && !skipped[entry] {
 			skipped[entry] = true
 			scan.Skipped = append(scan.Skipped, entry)
 		}
@@ -120,6 +131,8 @@ func readScan(output string, push bool) (SecretScan, error) {
 				read[file] = true
 			case "binary":
 				binary(value)
+			case "binarydiff": // past the budget, still named: a keystore is a finding
+				binary(binaryPath(value))
 			case SkipPartly:
 				skip(file, SkipPartly)
 				file = ""
@@ -131,7 +144,7 @@ func readScan(output string, push bool) (SecretScan, error) {
 				skip(value, SkipLarge)
 			case SkipMany, SkipOlder:
 				count, _ := strconv.Atoi(value)
-				scan.Skipped = append(scan.Skipped, Skipped{Why: word, Count: count})
+				scan.Skipped = append(scan.Skipped, Skipped{Why: word, Count: count, InCommit: word == SkipOlder})
 			case "failed":
 				if why, known := failures[value]; known {
 					return SecretScan{}, errors.New(why)
@@ -165,6 +178,7 @@ func readScan(output string, push bool) (SecretScan, error) {
 		return SecretScan{}, errUnfinished
 	}
 	scan.Findings, scan.More, scan.Files = collector.Findings(), collector.More(), len(read)
+	scan.Incomplete = slices.ContainsFunc(scan.Skipped, func(skip Skipped) bool { return skip.Why != SkipBinary })
 	return scan, nil
 }
 

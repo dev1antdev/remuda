@@ -70,7 +70,7 @@ type PushAsk struct {
 
 // Push sends the branch to its upstream, or to origin under its own name with the upstream set when it has none; never
 // a force or a tag. The secret check over the commits it would carry (and the work beside them) stands first, its
-// findings or its failure holding the push back until the person says anyway; what goes is the commit the check read
+// findings, its failure or commits it could not read whole holding the push back until the person says anyway; what goes is the commit the check read
 // (Outcome.Head), and anyway names the one its hold showed, refused when the branch moved since (ReasonMoved).
 func (s *Service) Push(machineID, dir string, ask PushAsk) Outcome {
 	return s.act(ActPush, machineID, dir, func(host shell.Host, style rpath.Style, p probe) Outcome {
@@ -102,6 +102,10 @@ func (s *Service) Push(machineID, dir string, ask PushAsk) Outcome {
 			}
 			if len(scan.Findings) > 0 || scan.More > 0 {
 				outcome.State, outcome.Reason, outcome.Scan = Held, ReasonSecretsFound, &scan
+				return outcome
+			}
+			if scan.PushUnread() {
+				outcome.State, outcome.Reason, outcome.Scan = Held, ReasonCheckIncomplete, &scan
 				return outcome
 			}
 		}

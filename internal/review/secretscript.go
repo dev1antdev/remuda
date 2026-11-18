@@ -12,9 +12,9 @@ const plainPatch = script.PatchForm + ` --no-renames -U0`
 // gitDiff is git's diff as the check reads it, writing nothing; each call says itself whether it is relative to the folder.
 const gitDiff = readGit + ` -c diff.relative=false diff ` + plainPatch
 
-// capScript cuts the stream on its way out: each file's lines at scanPerFile (a line "\036partly" says where), and
-// every file once scanTotal is spent (each named on a line "\036budget <path>", "\036unread <path>" for an untracked
-// one); remuda's own lines pass. Past a line "\036untracked" come git grep's lines of the untracked files, path, line
+// capScript cuts the stream on its way out: a diff's removed lines go, nothing to find in them, and each file's lines at scanPerFile (a line "\036partly" says where), and
+// every file once scanTotal is spent, the commits having a scanTotal of their own so the work beside them cannot use it up (each named on a line "\036budget <path>", "\036unread <path>" for an untracked
+// one, and a binary one passes as "\036binarydiff <git's line>"); remuda's own lines pass. Past a line "\036untracked" come git grep's lines of the untracked files, path, line
 // number and text joined by \037, or its "Binary file <path> matches": each file's lines go out after a line
 // "\036file <path>" as a diff's added lines would, a binary one as "\036binary <path>".
 var capScript = `LC_ALL=C awk -v per=` + strconv.Itoa(scanPerFile) + ` -v total=` + strconv.Itoa(scanTotal) + ` '
@@ -29,18 +29,20 @@ function untracked(   at, path, text, size, mark) {
 	print "+" text
 }
 /^\036untracked$/ { grep = 1; next }
+/^\036commit / { if (!commits) { commits = 1; sum = 0 } }
 /^\036/ { grep = 0; print; next }
 grep { untracked(); next }
 /^diff --git / { header = 1; n = 0; cut = 0; over = (sum > total); if (!over) print; next }
 /^@@/ { header = 0 }
-over { if (header && /^\+\+\+ /) print "\036budget " substr($0, 5); next }
+!header && /^-/ { next }
+over { if (header && /^\+\+\+ /) print "\036budget " substr($0, 5); else if (header && /^Binary files /) print "\036binarydiff " $0; next }
 cut { next }
 { size = length($0) + 1; n += size; sum += size; if (n > per) { cut = 1; print "\036partly"; next }; print }'`
 
 // untrackedScript prints the untracked files git does not ignore, the first scanUntracked of them, in one git grep —
 // one process for them all, never one per file: two thousand of them took twenty seconds on a Mac — after a line
-// "\036untracked"; those past the count are counted ("\036many N"), a file over scanPerFile is named ("\036large
-// <path>") and not read, and a link or a folder (a repository inside) is passed over. The names travel NUL-separated
+// "\036untracked"; those past the count are counted ("\036many N"), a file over scanPerFile is named and not read
+// ("\036large <path>", or "\036binary <path>" when its first bytes hold a NUL, as git tells), and a link or a folder (a repository inside) is passed over. The names travel NUL-separated
 // to find and git, so a blank, a quote or a leading dash in one is no trouble; one holding a line break is lost.
 var untrackedScript = `list=$(git ls-files -z --others --exclude-standard 2>/dev/null | tr '\0' '\n'); ` +
 	`if [ -n "$list" ]; then ` +
@@ -48,7 +50,7 @@ var untrackedScript = `list=$(git ls-files -z --others --exclude-standard 2>/dev
 	`if [ "${u:-0}" -gt ` + strconv.Itoa(scanUntracked) + ` ]; then printf '\036many %s\n' "$((u - ` + strconv.Itoa(scanUntracked) + `))"; fi; ` +
 	`names=$(printf '%s\n' "$list" | head -n ` + strconv.Itoa(scanUntracked) + ` | sed 's|^|./|'); ` +
 	`printf '%s\n' "$names" | tr '\n' '\0' | xargs -0 -r sh -c '[ $# -gt 0 ] && find "$@" -prune -type f -size +` + strconv.Itoa(scanPerFile) + `c' sh 2>/dev/null | ` +
-	`while IFS= read -r f; do printf '\036large %s\n' "${f#./}"; done; ` +
+	`while IFS= read -r f; do if [ "$(head -c 8000 "$f" 2>/dev/null | LC_ALL=C tr -dc '\000' | wc -c | tr -d ' ')" -gt 0 ]; then printf '\036binary %s\n' "${f#./}"; else printf '\036large %s\n' "${f#./}"; fi; done; ` +
 	`printf '\036untracked\n'; ` +
 	`printf '%s\n' "$names" | tr '\n' '\0' | xargs -0 -r sh -c '[ $# -gt 0 ] && find "$@" -prune -type f ! -size +` + strconv.Itoa(scanPerFile) + `c -print0' sh 2>/dev/null | ` +
 	`LC_ALL=C xargs -0 -r git --literal-pathspecs -c grep.fullName=false -c grep.column=false -c color.ui=never ` +

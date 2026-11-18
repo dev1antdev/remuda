@@ -1120,7 +1120,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   stands first, hooks skipped or not** (`Service.Check` = `review.ScanWork(host, top, true)`: the
   commits on no remote-tracking branch and the work beside them, any finding
   holding it): findings are `Held` with the scan (`ReasonSecretsFound`), a
-  check that failed `Held` with why (`ReasonCheckFailed`), each naming the commit
+  check that failed `Held` with why (`ReasonCheckFailed`), commits it could not
+  read whole `Held` too (`ReasonCheckIncomplete`, `PushUnread`: what is unread
+  of the work beside them does not hold a push), each naming the commit
   its check read as `head`, and `anyway`, sent only after the person's confirm
   with that `head`, skips it — refused as `ReasonMoved` when the branch moved
   since, so the commits the person never saw checked are not sent. Routes (`internal/server/repos.go`,
@@ -1152,7 +1154,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   `FETCH_AT_ONCE` 8 at a time (`pool.ts`), "Fetching 3/12…" in a button that
   keeps its width, then one toast naming each failure by its repository and
   git's line; a held push opens `PushHeldDialog.tsx` — the findings as the
-  review's check words them, Push anyway… behind `actions.ask`); the screen
+  review's check words them, or the commits' unread parts, Push anyway…
+  behind `actions.ask`); the screen
   sharing mode's names on the machines, folders and paths; `useRepoSync.ts`
   the actions as they run; `repos.ts` and `outcome.ts` the pure parts, tested
   (`syncOf`, `syncLabel`, `syncTip`, `dirtyWords`, `syncOffers`, `fetchable`,
@@ -2228,7 +2231,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   what is staged outside the folder — then, while Skip hooks is on, that
   the pre-commit and commit-msg hooks will not run); its own `useSecretCheck` stands before it as
   before Approve & commit — asked once the button would be on, renewed
-  after every look (`ask(…, renew)`), its findings holding the button
+  after every look (`ask(…, renew)`), its findings or unread text holding the button
   with Commit anyway… behind `commitAnywayAsk`'s confirm, `SecretsCheck`
   under the box, a finding opening its row; a failure keeps the message
   and shows git's words. `SinceCommits.tsx` heads the commits since the
@@ -2305,10 +2308,11 @@ components and icons as rules for whoever changes it: @docs/design.md
   `file:line`, its rule in words and the masked excerpt, a click closing
   the dialog onto its row (`keys.reveal`: the file opened, folded files
   unfolded, the row in the middle and focused); what it did not read is
-  said under them. With findings or a failed check the primary button is
+  said under them, with the files' names when that leaves it incomplete.
+  With findings, a failed check or an incomplete one the primary button is
   disabled and **Send anyway…** (`btn danger`) asks first through the
-  page's confirm, naming how many findings or that nothing is known
-  (`sendAnywayAsk`); while it looks the button reads "Checking for
+  page's confirm, naming how many findings, that nothing is known or
+  that not all was read (`sendAnywayAsk`); while it looks the button reads "Checking for
   secrets…", the server's 45 s bound ending that; Approve alone, Reject
   and Mark reviewed never wait. The finding's rows wear `.fv-line.secret`
   (amber, `onSecretRow`: the new side's line, never a removed one) and the
@@ -2372,13 +2376,14 @@ components and icons as rules for whoever changes it: @docs/design.md
   the commits on no remote-tracking branch (`git log -p --no-merges -n 200
   HEAD --not --remotes`, each after `\036commit <sha>`, outside the folder
   too, paths the repository's: a push sends whole commits; the ones past
-  200 counted, `\036older N`): what the push would send. The awk cuts each
-  file at 1 MB (`\036partly`) and the stream at `scanTotal` 8 MB
+  200 counted, `\036older N`): what the push would send. The awk drops a diff's removed lines, cuts each
+  file at 1 MB (`\036partly`) and the stream at `scanTotal` 8 MB, the commits' own 8 MB after the work's
   (`\036budget <path>` / `\036unread <path>` for the rest), so a remote
   sends megabytes at most; `readScan` feeds the added lines, with their
   numbers in the new file, to `secrets.Collector` (a path git ends with a
   tab for its blank read without it, `pathOf`; a binary pair's new side by
-  halves, `binaryPath`); a binary file is skipped (`binary`), or is a
+  halves, `binaryPath`); a binary file (an untracked one over 1 MB told by a NUL in its first
+  8000 bytes) is skipped (`binary`), or is a
   finding of its own when its name says keystore (`key-file`, line 0).
   **A check that did not finish is no clean one**: the stream ends with
   `\036end`, and `\036failed folder|repository|work|commits` says git
@@ -2386,8 +2391,11 @@ components and icons as rules for whoever changes it: @docs/design.md
   and Send anyway), never "nothing found" (a folder outside git, a git
   that failed and a cut-off script once all read as clean); 45 s at most
   (`scanTimeout`, said as "it took longer than 45s", never ssh's quoting
-  of the script). `SecretScan{findings, more, skipped [{path, why,
-  count}], files, commits, push, at}`. Route: `GET
+  of the script). **A check that left text unread is no clean one either**: any skip
+  but `binary` sets `incomplete`, and a commit, a pull request's approval
+  and a push (`check-incomplete`) wait for a confirm that says so, the
+  skips listed. `SecretScan{findings, more, skipped [{path, why,
+  count}], incomplete, files, commits, push, at}`. Route: `GET
   /api/review/secrets?machine&dir&push=1` (`internal/server/review.go`;
   a 502 carries the reason alone), the person's only — in neither
   `viewerRoutes` nor `readRoutes`, so a viewer link and an agent key get a
@@ -7387,8 +7395,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   answers the person alone: a viewer link and an agent key are refused. A
   check that failed or did not reach its end is a failure, never a clean
   one. An approval asking for a commit or a pull request goes past its
-  findings, or past a check that failed, only through Send anyway and its
-  confirm.
+  findings, or past a check that failed or left text unread, only through
+  Send anyway and its confirm.
   Branch/base names for a worktree go through `sessions.RefOK`. ssh control sockets
   live under `<state>/ssh` (`sshx.SocketDir`) while the path keeps
   within 86 bytes, a unix sockaddr's 104 less the 17-byte suffix

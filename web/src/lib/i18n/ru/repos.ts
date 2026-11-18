@@ -102,6 +102,8 @@ export const repos: Dictionary = {
   "Take the secret out and commit again, or push it if it is no secret after all.": "Уберите секрет и закоммитьте снова — или сделайте push, если это всё-таки не секрет.",
   "Push anyway…": "Всё равно push…",
   "Push anyway": "Всё равно push",
+  "The secret check found nothing, but could not read all of what {name} would push.": "Проверка на секреты ничего не нашла, но смогла прочитать не всё, что отправит {name}.",
+  "Push {name} with part of it unread by the secret check?": "Отправить {name}, хотя проверка на секреты прочитала не всё?",
   "Push {name} with no secret check? Nothing is known about what it carries.": "Сделать push {name} без проверки на секреты? О том, что он унесёт, ничего не известно.",
   "Push {name} with {n} findings? Once on the remote a secret has to be revoked, not just deleted.": [
     "Сделать push {name} с {n} находкой? Попавший на remote секрет придётся отзывать, а не просто удалять.",
