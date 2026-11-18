@@ -153,3 +153,42 @@ func TestTheStampFollowsUncommittedWorkInASubmodule(t *testing.T) {
 		}
 	}
 }
+
+// TestTheStampFollowsWorkInANewRepositoryAndFailsOnWhatItCannotRead: git lists such a repository as one folder.
+func TestTheStampFollowsWorkInANewRepositoryAndFailsOnWhatItCannotRead(t *testing.T) {
+	host, _, trees := madeRepo(t, "work")
+	tree := trees["work"]
+	stamp := func() string {
+		t.Helper()
+		look, err := LookAt(host, tree)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return look.Stamp()
+	}
+	nested := filepath.Join(tree, "experiment")
+	if err := os.MkdirAll(nested, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	gitIn(t, nested, "init", "-q", "-b", "main")
+	write(t, filepath.Join(nested, "draft.txt"), "first\n")
+	gitIn(t, nested, "add", "draft.txt")
+	gitIn(t, nested, "commit", "-qm", "first")
+	seen := stamp()
+	if again := stamp(); again != seen {
+		t.Fatalf("nothing changed and the stamp did: %q, %q", seen, again)
+	}
+	write(t, filepath.Join(nested, "draft.txt"), "second\n")
+	if stamp() == seen {
+		t.Error("more work in the new repository reads as what was shown")
+	}
+	if os.Geteuid() == 0 {
+		return // root reads everything
+	}
+	if err := os.WriteFile(filepath.Join(tree, "sealed.txt"), []byte("x\n"), 0); err != nil {
+		t.Fatal(err)
+	}
+	if stamp() == stamp() {
+		t.Error("a file that cannot be read reads as unchanged")
+	}
+}
