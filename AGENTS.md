@@ -162,8 +162,10 @@ not style.
 - **One design system**: `docs/design.md` is the design book — the words,
   colour, type, sizes, layout, components and icons as rules, naming the
   tokens and classes of `web/src/styles.css` and the pieces of
-  `web/src/ui/`. Read it before changing anything a person sees. The
-  rules no change breaks: every `<button>` carries one family class,
+  `web/src/ui/`. Read it before changing anything a person sees, and
+  update it in the same commit whenever a change alters the design (a
+  token, a component, a rule of words, layout or icons). The rules no
+  change breaks: every `<button>` carries one family class,
   colours, radii and type sizes come from the tokens, icons are
   `icons.tsx` (never an emoji), an icon-only button says what it does
   through `Tip` with an `aria-label`, never a `title` alone, a set of

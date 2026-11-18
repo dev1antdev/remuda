@@ -5,6 +5,10 @@ How the page looks and speaks, as rules for whoever changes it — an agent or a
 before changing anything a person sees. `web/src/lib/designDoc.test.ts` checks that every custom property and class
 named here exists in the stylesheet, so a rename that forgets this file fails the tests.
 
+**When the design changes, this book changes in the same commit.** A new, renamed or removed token, a new component
+or family or variant, a new rule of words, layout, icons or access — update the matching section here, so the book
+always says what the code does. Where the code and the book disagree, the code is right and the book is fixed.
+
 remuda is a working tool open all day on a desk and a phone: quiet, dense, driven from the keyboard. Colour comes from
 the theme and one accent; what needs the person — an agent asking, something blocked, work done — is the only thing
 that stands out.
