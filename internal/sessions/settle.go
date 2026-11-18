@@ -3,6 +3,7 @@ package sessions
 import (
 	"errors"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -40,10 +41,22 @@ var ErrAskedMeanwhile = errors.New("the agent asked something while your message
 // ErrLeftMeanwhile: the agent left the terminal just after herdr gave it the text, and no Enter follows.
 var ErrLeftMeanwhile = errors.New("the agent left just as your message reached it: it may not have been sent")
 
+// ErrNotEntered: the text reached the agent, and whether it went could not be made sure of or has to wait for its turn.
+var ErrNotEntered = errors.New("your message reached the agent but may still be unsent in its prompt box: look there, and press Enter if it is")
+
+// NotDelivered says the text did not surely reach the agent as a message, so the person keeps it and is told why.
+func NotDelivered(err error) bool {
+	for _, known := range []error{ErrAgentBusy, ErrNoAgent, ErrAskedMeanwhile, ErrLeftMeanwhile, ErrNotEntered} {
+		if errors.Is(err, known) {
+			return true
+		}
+	}
+	return false
+}
+
 const (
 	claudeAgent   = "claude"
 	pastingWords  = "Pasting"
-	unsentWords   = "[Pasted text"
 	footerRows    = 6
 	statusBlocked = "blocked"
 )
@@ -51,28 +64,29 @@ const (
 // pictureRe is a file name Claude Code may take for a picture in a paste.
 var pictureRe = regexp.MustCompile(`(?i)\.(png|jpe?g|gif|webp|bmp|tiff?|heic|heif|avif)\b`)
 
+// unsentRe is the prompt box holding a paste: its marker right after the prompt sign, a border before it at most.
+var unsentRe = regexp.MustCompile(`^[\s│|]*[>❯]\s*\[Pasted text`)
+
 // NamesPicture says the text names a picture file, the paste Claude Code takes in at its own pace.
 func NamesPicture(text string) bool {
 	return pictureRe.MatchString(text)
 }
 
 // stillPasting reads Claude Code's footer off a screen: true while it says the paste is being taken in.
-func stillPasting(screen string) bool { return inFooter(screen, pastingWords) }
+func stillPasting(screen string) bool {
+	return slices.ContainsFunc(footer(screen), func(row string) bool { return strings.Contains(row, pastingWords) })
+}
 
 // stillUnsent reads the prompt box off a screen: true while the paste sits in it, waiting for its Enter.
-func stillUnsent(screen string) bool { return inFooter(screen, unsentWords) }
+func stillUnsent(screen string) bool { return slices.ContainsFunc(footer(screen), unsentRe.MatchString) }
 
-func inFooter(screen, words string) bool {
+// footer is the last rows of a screen, where Claude Code keeps its prompt box and what it says under it.
+func footer(screen string) []string {
 	rows := strings.Split(strings.TrimRight(screen, "\n \t"), "\n")
 	if len(rows) > footerRows {
 		rows = rows[len(rows)-footerRows:]
 	}
-	for _, row := range rows {
-		if strings.Contains(row, words) {
-			return true
-		}
-	}
-	return false
+	return rows
 }
 
 // enterAfterPaste presses the Enter Claude Code lost of a message herdr's submit just gave it. Any other agent took the
@@ -107,9 +121,15 @@ func enterAfterPaste(client interface {
 	if atPrompt, err := client.PaneAtPrompt(pane); err != nil || atPrompt {
 		return ErrLeftMeanwhile
 	}
-	// sent already, or anything else on the screen: an Enter now could only answer what came up
-	if screen, err := client.PaneRead(pane); err != nil || !stillUnsent(screen) {
+	screen, err := client.PaneRead(pane)
+	if err != nil {
+		return ErrNotEntered
+	}
+	if !stillUnsent(screen) { // sent already, or something else is up: an Enter could only answer that
 		return nil
+	}
+	if agent.Status == herdr.StatusWorking { // a turn can put a question up at any moment, and the Enter would answer it
+		return ErrNotEntered
 	}
 	return client.PaneSendKeys(pane, []string{"enter"})
 }
