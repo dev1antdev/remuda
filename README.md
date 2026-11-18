@@ -858,7 +858,8 @@ fast-forwards it into `main` — so `main` is always what is out — and
 (`.github/workflows/release.yml`) builds the six binaries (two of them `remuda.exe` for a Windows PC) and
 `checksums.txt` and publishes them under it. CI
 (`.github/workflows/ci.yml`) runs the build, the tests, the TypeScript
-check, `govulncheck`, `npm audit` and a secret scan of the whole history
+check, `govulncheck`, `npm audit` (the page's own dependencies must be
+clean; the build and test tools' advisories are reported, not fatal) and a secret scan of the whole history
 on every push to `main` or `release` and every pull request, and on
 `release` the end-to-end smoke as well: a throwaway herdr, a remuda of
 its own and headless Chrome, a scratch workspace typed into and read
