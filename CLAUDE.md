@@ -4441,7 +4441,7 @@ components and icons as rules for whoever changes it: @docs/design.md
 - `internal/prstatus/` — **the state of the pull request** an agent
   named: `Tracker` hears `events.PullRequestNamed` and, for a GitHub one
   (`/pull/`), runs `gh pr view <url> --json state,isDraft,mergeable,
-  reviewDecision,statusCheckRollup,title,mergeStateStatus,closingIssuesReferences`
+  reviewDecision,statusCheckRollup,title,headRefName,headRefOid,mergeStateStatus,closingIssuesReferences`
   on the pane's machine — asked again without the last two when a gh from
   before them answers "Unknown JSON field" (`Script`, tested on a gh
   stand-in) — (`shell.Text`
@@ -4577,8 +4577,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   a pane in it (`usedElsewhere`, read off the snapshot before the
   close), `Tidy` runs after the close — the folder removed when `git
   status` is clean, new files counted whatever its config (never `--force`: an uncommitted change keeps it, said
-  in the answer's `worktree.kept`), its branch by git's `-d`, or `-D` when
-  its request was read as merged, else kept (`branch_kept`) — and the
+  in the answer's `worktree.kept`), its branch by git's `-d`, or removed at
+  its commit when that is where its merged request ended (`RemoveScript`,
+  `deleteBranchAt`: compared and removed in one step, never a branch
+  checked out elsewhere), else kept (`branch_kept`) — and the
   page's confirm says so (`closeAsk`, `madeWorktree` in
   `features/roster/tidy.ts`, tested) and its toast what became of it
   (`tidyWords`) — the API's way and the e2e's; the page's own close of
@@ -4591,7 +4593,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   off): its branch and main checkout, every `git status --porcelain`
   entry (`dirty`, `first`), the branch's commits on no remote
   (`unpushed`) and of those the ones the main checkout's HEAD lacks too
-  (`unmerged`: lost with the branch), whether that HEAD holds the branch
+  (`unmerged`: lost with the branch), the commit it ends on (`Tip`, in the
+  stamp and what a confirmed delete goes by), whether that HEAD holds the branch
   (`merged`), a `.gitmodules`, and every submodule (`git submodule
   foreach --recursive`) with a commit on no remote — plus, from the
   server (`internal/server/worktree_remove.go`), the other workspaces on

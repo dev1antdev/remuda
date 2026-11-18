@@ -104,14 +104,14 @@ func LookAt(host shell.Shell, path string) (Look, error) {
 
 // Stamp is what the person was shown of the risk; a removal finding another refuses until it is seen.
 func (l Look) Stamp() string {
-	return strings.Join([]string{strconv.Itoa(l.Dirty), l.First, strconv.Itoa(l.Unmerged), l.Branch, strings.Join(l.Submodules, ",")}, "|")
+	return strings.Join([]string{strconv.Itoa(l.Dirty), l.First, strconv.Itoa(l.Unmerged), l.Branch, l.Tip, strings.Join(l.Submodules, ",")}, "|")
 }
 
 // Loses says whether removing the folder loses work: uncommitted changes, or a submodule's commits pushed nowhere.
 func (l Look) Loses() bool { return l.Dirty > 0 || len(l.Submodules) > 0 }
 
-// ForceScript removes the worktree, --force when it holds what the look showed, and deletes its branch when asked:
-// git's -D, since the person was told what of it is on no remote.
+// ForceScript removes the worktree, --force when it holds what the look showed, and deletes its branch when asked, as it
+// stood when looked at, since the person was told what of it is on no remote.
 func ForceScript(look Look, deleteBranch bool) string {
 	force := ""
 	if look.Dirty > 0 || look.HasSubmodules {
@@ -119,7 +119,11 @@ func ForceScript(look Look, deleteBranch bool) string {
 	}
 	s := script.PATH + "\ncd " + script.Quote(look.Repo) + " 2>/dev/null || { echo 'the repository is not there'; exit 3; }\n" +
 		"git worktree remove " + force + script.Quote(look.Path) + " 2>&1 || exit 4\n"
-	if deleteBranch && look.Branch != "" {
+	switch {
+	case !deleteBranch || look.Branch == "":
+	case look.Tip != "":
+		s += deleteBranchAt(look.Branch, script.Quote(look.Tip))
+	default:
 		s += "git branch -D " + script.Quote(look.Branch) + " 2>&1 || exit 5\n"
 	}
 	return s

@@ -40,7 +40,7 @@ func TestRemoveNeverForcesAndDeletesTheBranchOnlyAsAsked(t *testing.T) {
 		t.Fatalf("script = %q", plain)
 	}
 	merged := RemoveScript(info, []Landed{{Branch: "task-20-x", Commit: "abc123"}})
-	if !strings.Contains(merged, "flag=-D") || !strings.Contains(merged, `git branch "$flag" 'task-20-x'`) || !strings.Contains(merged, "' abc123 '") || strings.Contains(merged, "--force") {
+	if !strings.Contains(merged, `git update-ref --no-deref -d 'refs/heads/task-20-x' "$tip"`) || !strings.Contains(merged, "' abc123 '") || strings.Contains(merged, "--force") {
 		t.Fatalf("merged script = %q", merged)
 	}
 	if detached := RemoveScript(Info{Path: "/w", Repo: "/repo"}, []Landed{{Branch: "x", Commit: "abc"}}); strings.Contains(detached, "git branch") {
@@ -57,7 +57,7 @@ func TestRemoveNeverForcesAndDeletesTheBranchOnlyAsAsked(t *testing.T) {
 		return "error: the branch 'task-20-x' is not fully merged\nhint: If you are sure you want to delete it, run 'git branch -D task-20-x'\n", &shell.ExitError{Code: 5}
 	}}
 	err := Remove(unmerged, info, nil)
-	if err == nil || !strings.HasPrefix(err.Error(), "the worktree is removed; the branch stays: ") {
+	if err == nil || err.Error() != "the worktree is removed; the branch stays: error: the branch 'task-20-x' is not fully merged" {
 		t.Fatalf("err = %v", err)
 	}
 	ok := &shell.Fake{Name: "box", Answer: func(string) (string, error) { return "Deleted branch task-20-x (was abc1234).\n", nil }}

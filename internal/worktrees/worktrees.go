@@ -88,22 +88,31 @@ func LandedAt(landed []Landed, branch, tip string) bool {
 	return branch != "" && tip != "" && slices.Contains(landedCommits(landed, branch), tip)
 }
 
+// deleteBranchAt deletes the branch if it still ends on the commit, a shell word: the ref is compared and removed in one
+// step, so a commit that arrives meanwhile keeps it. As with git branch -D, a branch checked out elsewhere stays.
+func deleteBranchAt(branch, commit string) string {
+	ref := script.Quote("refs/heads/" + branch)
+	return "if git worktree list --porcelain | grep -Fqx \"branch \"" + ref + "; then echo 'the branch is checked out in another worktree'; exit 5; fi\n" +
+		"git update-ref --no-deref -d " + ref + " " + commit + " 2>&1 || exit 5\n" +
+		"git config --remove-section " + script.Quote("branch."+branch) + " 2>/dev/null || true\n"
+}
+
 // RemoveScript removes the worktree from its repository and deletes its branch: git's own -d, which refuses a branch
-// it does not see as merged, or -D when the branch ends, there and then, on a commit a merged request of it ended on.
+// it does not see as merged, or by its commit when it ends, there and then, where a merged request of it ended.
 func RemoveScript(info Info, landed []Landed) string {
 	s := script.PATH + "\ncd " + script.Quote(info.Repo) + " 2>/dev/null || { echo 'the repository is not there'; exit 3; }\n" +
 		"git worktree remove " + script.Quote(info.Path) + " 2>&1 || exit 4\n"
 	if info.Branch == "" {
 		return s
 	}
-	branch := script.Quote(info.Branch)
-	flag := "-d"
-	if commits := landedCommits(landed, info.Branch); len(commits) > 0 {
-		s += "tip=$(git rev-parse --verify -q " + script.Quote("refs/heads/"+info.Branch) + ")\n" +
-			"flag=-d; case " + script.Quote(" "+strings.Join(commits, " ")+" ") + " in *\" ${tip:-none} \"*) flag=-D ;; esac\n"
-		flag = `"$flag"`
+	plain := "git branch -d " + script.Quote(info.Branch) + " 2>&1 || exit 5\n"
+	commits := landedCommits(landed, info.Branch)
+	if len(commits) == 0 {
+		return s + plain
 	}
-	return s + "git branch " + flag + " " + branch + " 2>&1 || exit 5\n"
+	return s + "tip=$(git rev-parse --verify -q " + script.Quote("refs/heads/"+info.Branch) + ")\n" +
+		"case " + script.Quote(" "+strings.Join(commits, " ")+" ") + " in\n*\" ${tip:-none} \"*)\n" +
+		deleteBranchAt(info.Branch, `"$tip"`) + ";;\n*)\n" + plain + ";;\nesac\n"
 }
 
 // Remove takes the worktree down on the machine; the error is git's own line.
@@ -142,15 +151,18 @@ func Discard(host shell.Shell, info Info) error {
 	return errors.New(lastLine(out, err.Error()))
 }
 
-// lastLine is git's complaint: the last line it printed, else the fallback.
+// lastLine is git's complaint: the last line it printed that is no hint, else the fallback.
 func lastLine(text, fallback string) string {
-	text = strings.TrimSpace(text)
-	if text == "" {
+	lines := script.Lines(strings.TrimSpace(text))
+	if len(lines) == 0 {
 		return fallback
 	}
-	last := text
-	if i := strings.LastIndex(text, "\n"); i >= 0 {
-		last = text[i+1:]
+	last := lines[len(lines)-1]
+	for i := len(lines) - 1; i >= 0; i-- {
+		if !strings.HasPrefix(strings.TrimSpace(lines[i]), "hint:") { // git's advice after the refusal it explains
+			last = lines[i]
+			break
+		}
 	}
 	return strings.TrimSpace(last)
 }

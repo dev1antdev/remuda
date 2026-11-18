@@ -123,7 +123,7 @@ func TestTidyKeepsTheBranchOfWorkNotMerged(t *testing.T) {
 		write(t, filepath.Join(trees["squashed"], "c.txt"), "c\n")
 		gitIn(t, trees["squashed"], "add", "c.txt")
 		gitIn(t, trees["squashed"], "commit", "-qm", "squashed")
-		landed := []Landed{{Branch: "squashed", Commit: headOf(t, trees["squashed"])}}
+		landed := []Landed{{Branch: "squashed", Commit: gitOut(t, trees["squashed"], "rev-parse", "HEAD")}}
 		if got := Tidy(host, trees["squashed"], landed); !got.Removed || !got.BranchDeleted {
 			t.Fatalf("a branch whose request was merged stayed: %+v", got)
 		}
@@ -131,15 +131,6 @@ func TestTidyKeepsTheBranchOfWorkNotMerged(t *testing.T) {
 			t.Fatal("the branch of a merged request stayed")
 		}
 	}
-}
-
-func headOf(t *testing.T, dir string) string {
-	t.Helper()
-	out, err := exec.Command("git", "-C", dir, "rev-parse", "HEAD").Output()
-	if err != nil {
-		t.Fatal(err)
-	}
-	return strings.TrimSpace(string(out))
 }
 
 // TestAMergedRequestVouchesOnlyForItsOwnBranchAtItsOwnCommit: another request's merge, or a commit made after it, leaves
@@ -150,7 +141,7 @@ func TestAMergedRequestVouchesOnlyForItsOwnBranchAtItsOwnCommit(t *testing.T) {
 		write(t, filepath.Join(tree, name), "x\n")
 		gitIn(t, tree, "add", name)
 		gitIn(t, tree, "commit", "-qm", name)
-		return headOf(t, tree)
+		return gitOut(t, tree, "rev-parse", "HEAD")
 	}
 	for name, landedOf := range map[string]func(tree, merged string) []Landed{
 		"another branch's request": func(_, merged string) []Landed { return []Landed{{Branch: "other", Commit: merged}} },
@@ -175,6 +166,54 @@ func TestAMergedRequestVouchesOnlyForItsOwnBranchAtItsOwnCommit(t *testing.T) {
 	}
 }
 
+// TestABranchThatMovedStays: what the person was shown, or what the merged request ended on, is what may go.
+func TestABranchThatMovedStays(t *testing.T) {
+	host, main, trees := madeRepo(t, "work")
+	look, err := LookAt(host, trees["work"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(trees["work"], "later.txt"), "x\n")
+	gitIn(t, trees["work"], "add", "later.txt")
+	gitIn(t, trees["work"], "commit", "-qm", "later")
+	got := RemoveAsShown(host, look, true)
+	if !got.Removed || got.BranchDeleted || got.BranchKept == "" || !strings.Contains(branches(t, main), "work") {
+		t.Fatalf("outcome %+v", got)
+	}
+}
+
+func TestDeletingABranchByItsCommitLeavesNothingBehind(t *testing.T) {
+	host, main, trees := madeRepo(t, "work")
+	write(t, filepath.Join(trees["work"], "b.txt"), "b\n")
+	gitIn(t, trees["work"], "add", "b.txt")
+	gitIn(t, trees["work"], "commit", "-qm", "b")
+	gitIn(t, main, "config", "branch.work.remote", "origin")
+	got := Tidy(host, trees["work"], []Landed{{Branch: "work", Commit: gitOut(t, trees["work"], "rev-parse", "HEAD")}})
+	if !got.BranchDeleted || strings.Contains(branches(t, main), "work") {
+		t.Fatalf("outcome %+v", got)
+	}
+	if out, err := exec.Command("git", "-C", main, "config", "branch.work.remote").Output(); err == nil {
+		t.Fatalf("the branch's settings stayed: %s", out)
+	}
+}
+
+func TestABranchCheckedOutElsewhereStays(t *testing.T) {
+	host, main, trees := madeRepo(t, "work")
+	tip := gitOut(t, trees["work"], "rev-parse", "HEAD")
+	gitIn(t, trees["work"], "switch", "-q", "--detach")
+	gitIn(t, main, "switch", "-q", "work")
+	err := Remove(host, Info{Path: trees["work"], Repo: main, Branch: "work"}, []Landed{{Branch: "work", Commit: tip}})
+	if err == nil || !strings.Contains(err.Error(), "checked out in another worktree") || !strings.Contains(branches(t, main), "work") {
+		t.Fatalf("%v", err)
+	}
+}
+
+func TestTheStampChangesWithTheBranchsLastCommit(t *testing.T) {
+	if (Look{Branch: "work", Tip: "abc"}).Stamp() == (Look{Branch: "work", Tip: "def"}).Stamp() {
+		t.Error("a branch that moved reads as what the person was shown")
+	}
+}
+
 func TestLandedAtNeedsTheBranchAndItsLastCommit(t *testing.T) {
 	landed := []Landed{{Branch: "work", Commit: "abc"}, {Branch: "other", Commit: "def"}}
 	for _, c := range []struct {
@@ -191,7 +230,7 @@ func TestLandedAtNeedsTheBranchAndItsLastCommit(t *testing.T) {
 func TestALookNamesTheCommitTheBranchEndsOn(t *testing.T) {
 	host, _, trees := madeRepo(t, "work")
 	look, err := LookAt(host, trees["work"])
-	if err != nil || look.Tip != headOf(t, trees["work"]) {
+	if err != nil || look.Tip != gitOut(t, trees["work"], "rev-parse", "HEAD") {
 		t.Fatalf("%+v, %v", look, err)
 	}
 }

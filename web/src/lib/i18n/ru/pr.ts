@@ -3,8 +3,8 @@
 import type { Dictionary } from "../../i18n";
 
 export const pr: Dictionary = {
-  "Closes “{name}” — its agent stops — then removes the worktree and deletes its branch from the repository, on the machine. A worktree with uncommitted changes is refused before anything closes.":
-    "Закрывает «{name}» — его агент остановится — затем удаляет worktree и его ветку из репозитория, на самой машине. Worktree с незакоммиченными изменениями отклоняется до того, как что-либо закроется.",
+  "Closes “{name}” — its agent stops — then removes the worktree on the machine, and its branch if that still ends where the merged request ended or git sees it merged. A worktree with uncommitted changes is refused before anything closes.":
+    "Закрывает «{name}» — его агент остановится — затем удаляет worktree на самой машине, а его ветку, если она всё ещё заканчивается там же, где смерженный запрос, или git считает её слитой. Worktree с незакоммиченными изменениями отклоняется до того, как что-либо закроется.",
   "Hand the failed checks of {pr} to the agent": "Отдать агенту упавшие проверки {pr}",
   "Open {pr}": "Открыть {pr}",
   "Reading the failed checks of {pr}…": "Читаю упавшие проверки {pr}…",

@@ -160,8 +160,8 @@ func TestTrackerKeepsNoStatusWhenGhCannot(t *testing.T) {
 
 // TestARequestNamesItsBranchAndLastCommit: what a merged one vouches for, on GitHub and on GitLab.
 func TestARequestNamesItsBranchAndLastCommit(t *testing.T) {
-	if !strings.Contains(Script("https://x/pull/1"), "headRefName,headRefOid") {
-		t.Error("gh is not asked for them")
+	if strings.Count(Script("https://x/pull/1"), "headRefName,headRefOid") != 2 {
+		t.Error("gh is not asked for them, by the call for an older gh too")
 	}
 	status, err := Parse(`{"state":"MERGED","headRefName":"work","headRefOid":"abc"}`, time.Now())
 	if err != nil || status.HeadBranch != "work" || status.HeadCommit != "abc" {

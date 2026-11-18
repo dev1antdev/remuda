@@ -341,8 +341,8 @@ func fetchPull(host shell.Shell, url string, now time.Time) (*Status, string) {
 
 // viewFields are what every gh names; viewMore adds the ones a gh from before closingIssuesReferences refuses whole.
 const (
-	viewFields = "state,isDraft,mergeable,reviewDecision,statusCheckRollup,title"
-	viewMore   = viewFields + ",mergeStateStatus,closingIssuesReferences,headRefName,headRefOid"
+	viewFields = "state,isDraft,mergeable,reviewDecision,statusCheckRollup,title,headRefName,headRefOid"
+	viewMore   = viewFields + ",mergeStateStatus,closingIssuesReferences"
 )
 
 // Script is the gh call for a request, run on the pane's machine: every field, or the ones any gh knows when it
