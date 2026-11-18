@@ -1,8 +1,16 @@
 package code
 
 import (
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/dev1antdev/remuda/internal/auth"
+	"github.com/dev1antdev/remuda/internal/machines"
 )
 
 func TestSettingOfReadsTheWorkbenchPage(t *testing.T) {
@@ -108,5 +116,79 @@ func TestThemeReadScriptInstallsOnlyAnExtension(t *testing.T) {
 	}
 	if got := ThemeReadScript(""); strings.Contains(got, "--install-extension") || !strings.Contains(got, `cat "$f"`) {
 		t.Fatalf("a built-in theme installs nothing: %s", got)
+	}
+}
+
+// proxied is a code-server stand-in behind Service.Proxy on this machine, and the paths it was asked for.
+func proxied(t *testing.T, answer http.HandlerFunc) (http.Handler, *[]string) {
+	t.Helper()
+	var asked []string
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		asked = append(asked, r.URL.Path)
+		answer(w, r)
+	}))
+	t.Cleanup(backend.Close)
+	port := backend.Listener.Addr().(*net.TCPAddr).Port
+	dir := t.TempDir()
+	mc, err := machines.NewManager(dir, filepath.Join(dir, "no-herdr.sock"), "herdr", nil).Get(machines.LocalID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := &Service{Port: port}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { s.Proxy(w, r, mc, "/code/local") }), &asked
+}
+
+// TestThePortRoutesOfCodeServerStayShut: a page of any port served through them would run on remuda's origin.
+func TestThePortRoutesOfCodeServerStayShut(t *testing.T) {
+	h, asked := proxied(t, func(w http.ResponseWriter, r *http.Request) {})
+	for _, p := range []string{
+		"/proxy/3000/", "/proxy", "/absproxy/3000/x.js", "/absproxy", "/PROXY/3000/", "/AbsProxy/3000/",
+		"//proxy/3000/", "/./proxy/3000/", "/x/../proxy/3000/", "/proxy//3000",
+		"/proxy/3000/../../x", "/absproxy/3000/../../x", "/../proxy/3000/",
+	} {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, &http.Request{Method: "GET", URL: &url.URL{Path: "/code/local" + p}, Header: http.Header{}})
+		if rec.Code != http.StatusNotFound {
+			t.Errorf("%s answered %d", p, rec.Code)
+		}
+	}
+	for _, target := range []string{"/code/local/proxy/3000/..%2f..%2fx", "/code/local/x%2f..%2f..%2fproxy/3000/", "/code/local/%2e%2e/proxy/3000/"} {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest("GET", target, nil))
+		if rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), "Previews") {
+			t.Errorf("%s answered %d %q", target, rec.Code, rec.Body)
+		}
+	}
+	if len(*asked) != 0 {
+		t.Errorf("code-server was asked for %v", *asked)
+	}
+	for _, p := range []string{"/", "/proxyish/x", "/stable/proxy/x", "/_static/absproxy.js"} {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest("GET", "/code/local"+p, nil))
+		if rec.Code != http.StatusOK {
+			t.Errorf("%s answered %d", p, rec.Code)
+		}
+	}
+}
+
+// TestAnEditorsAnswerLeavesTheSessionAlone: no cookie of remuda's, no clearing of the site, and a worker kept to the mount.
+func TestAnEditorsAnswerLeavesTheSessionAlone(t *testing.T) {
+	h, _ := proxied(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Add("Set-Cookie", auth.CookieName+"=x; Path=/")
+		w.Header().Add("Set-Cookie", "code-server-session=y; Path=/")
+		w.Header().Set("Clear-Site-Data", `"cookies"`)
+		w.Header().Set("Service-Worker-Allowed", "/")
+	})
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest("GET", "/code/local/", nil))
+	got := rec.Header()
+	if cookies := got.Values("Set-Cookie"); len(cookies) != 1 || !strings.HasPrefix(cookies[0], "code-server-session=") {
+		t.Errorf("cookies %v", cookies)
+	}
+	if got.Get("Clear-Site-Data") != "" {
+		t.Error("the site's data would be cleared")
+	}
+	if allowed := got.Get("Service-Worker-Allowed"); allowed != "/code/local/" {
+		t.Errorf("a worker is allowed at %q", allowed)
 	}
 }

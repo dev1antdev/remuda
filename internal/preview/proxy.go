@@ -70,14 +70,7 @@ func Proxy(dial func() (string, error), port int, base string, seen func(), hold
 			}
 		},
 		ModifyResponse: func(res *http.Response) error {
-			res.Header.Del("Clear-Site-Data")
-			keep := res.Header.Values("Set-Cookie")
-			res.Header.Del("Set-Cookie")
-			for _, line := range keep {
-				if name, _, _ := strings.Cut(line, "="); strings.TrimSpace(name) != auth.CookieName {
-					res.Header.Add("Set-Cookie", line)
-				}
-			}
+			auth.DropSessionHeaders(res.Header)
 			if loc := res.Header.Get("Location"); loc != "" {
 				res.Header.Set("Location", ownLocation(loc, own, base))
 			}

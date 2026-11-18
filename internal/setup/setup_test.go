@@ -511,6 +511,9 @@ func TestCodeVersionMatchesTheScript(t *testing.T) {
 	if !strings.Contains(codeScript, `CODE_VERSION:-`+CodeVersion+`}`) {
 		t.Fatalf("install-code.sh does not default to code-server %s", CodeVersion)
 	}
+	if !strings.Contains(codeScript, "disable-proxy: true") {
+		t.Error("code-server keeps its routes to every port of the machine")
+	}
 }
 
 // --- the services on Linux ---

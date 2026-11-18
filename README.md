@@ -1148,7 +1148,9 @@ repository's own workspace settings — can reach remuda's API as you, on
 every machine here. remuda keeps its own token from the editor (the
 cookie is stripped on the way to code-server), but the editor itself is
 as trusted as this page. Open the Code mode only on machines you trust
-with everything remuda can do; see SECURITY.md.
+with everything remuda can do; see SECURITY.md. A port served on the
+machine opens from Previews, below, and not from the editor's Ports panel
+or a localhost link in it: those would run on this page's origin.
 
 ## Previews — what the agents serve
 
