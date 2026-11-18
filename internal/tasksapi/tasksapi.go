@@ -121,6 +121,7 @@ type Query struct {
 
 type Client struct {
 	door Door
+	find func() (Door, error) // when set, where each request looks for the door first
 	http *http.Client
 }
 
@@ -128,8 +129,22 @@ func New(door Door) *Client {
 	return &Client{door: door.clean(), http: &http.Client{Timeout: 30 * time.Second}}
 }
 
-// URL is the list's address.
-func (c *Client) URL() string { return c.door.URL }
+// Following is New for a program that outlives the cockpit's connection to this machine: a new connection may leave
+// the door on another port or with another key, so every request reads it again, door serving when it cannot be read.
+func Following(door Door) *Client {
+	client := New(door)
+	client.find = FindDoor
+	return client
+}
+
+func (c *Client) currentDoor() Door {
+	if c.find != nil {
+		if door, err := c.find(); err == nil {
+			return door
+		}
+	}
+	return c.door
+}
 
 func (c *Client) Projects() ([]tasks.Project, error) {
 	var out []tasks.Project
@@ -214,17 +229,18 @@ func (c *Client) do(method, path string, body, out any) error {
 		}
 		reader = bytes.NewReader(b)
 	}
-	req, err := http.NewRequest(method, c.door.URL+path, reader)
+	door := c.currentDoor()
+	req, err := http.NewRequest(method, door.URL+path, reader)
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Authorization", "Bearer "+c.door.Key)
+	req.Header.Set("Authorization", "Bearer "+door.Key)
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
 	res, err := c.http.Do(req)
 	if err != nil {
-		return fmt.Errorf("remuda at %s: %w", c.door.URL, err)
+		return fmt.Errorf("remuda at %s: %w", door.URL, err)
 	}
 	defer res.Body.Close()
 	data, err := io.ReadAll(io.LimitReader(res.Body, 8<<20))

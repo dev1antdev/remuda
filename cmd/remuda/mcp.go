@@ -44,7 +44,7 @@ func serveMCP() {
 	if door, err := tasksapi.FindDoor(); err != nil {
 		tools.Trouble = err
 	} else {
-		tools.Client = tasksapi.New(door)
+		tools.Client = tasksapi.Following(door)
 	}
 	if err := mcp.New(&tools, version).Serve(os.Stdin, os.Stdout); err != nil {
 		fmt.Fprintln(os.Stderr, "mcp:", err)

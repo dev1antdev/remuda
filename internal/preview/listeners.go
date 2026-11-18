@@ -141,7 +141,7 @@ func Recall(out string, seen map[int]Seen) string {
 }
 
 // infrastructure is the processes whose ports are never anyone's app: remuda, herdr, ssh and Tailscale's own
-var infrastructure = map[string]bool{"remuda": true, "herdr": true, "sshd": true, "sshd-sess": true, "ssh": true, "tailscaled": true, "tailscale": true, "Tailscale": true, "IPNExtension": true}
+var infrastructure = map[string]bool{"remuda": true, "herdr": true, "sshd": true, "sshd-sess": true, "sshd-session": true, "ssh": true, "tailscaled": true, "tailscale": true, "Tailscale": true, "IPNExtension": true}
 
 // agents are the coding agents' own programs: herdr runs them in its panes, and a port one of them holds (Claude Code
 // keeps one on the loopback, in its workspace's folder) is no server of the person's to preview, count or stop

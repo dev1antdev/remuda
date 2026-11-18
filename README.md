@@ -1368,7 +1368,10 @@ and an `agent-url` in remuda's state dir on every machine its agents run on;
 the key opens the tasks routes and a read of the roster, a recap and the
 standup, nothing else, on the cockpit itself or
 through its door forwarded over ssh (`REMUDA_AGENT_URL` and
-`REMUDA_AGENT_KEY` override them, for a script of your own). An agent whose
+`REMUDA_AGENT_KEY` override them, for a script of your own). When the
+connection to a machine drops, the door opens again with the reconnect, on
+another port while the old one is still held, and a running agent follows
+it. An agent whose
 CLI cannot register a server gets the lines by hand — Claude Code's
 `.mcp.json`:
 

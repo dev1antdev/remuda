@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -280,6 +281,24 @@ func (c *Conn) ForwardBack(remotePort, localPort int) error {
 		return fmt.Errorf("ssh reverse forward: %s", strings.TrimSpace(errb.String()))
 	}
 	return nil
+}
+
+// ForwardBackAny opens a port the host picks on its loopback leading to 127.0.0.1:localPort here, for as long as the
+// master lives, and names it: the master prints the port it got. One left on a reused master is cancelled first.
+func (c *Conn) ForwardBackAny(localPort int) (int, error) {
+	c.cmd("-O", "cancel", "-R", forwardBackSpec(0, localPort), c.Host).Run()
+	cmd := c.forwardBackCmd(0, localPort)
+	var errb bytes.Buffer
+	cmd.Stderr = &errb
+	out, err := cmd.Output()
+	if err != nil {
+		return 0, fmt.Errorf("ssh reverse forward: %s", strings.TrimSpace(errb.String()))
+	}
+	port, err := strconv.Atoi(strings.TrimSpace(string(out)))
+	if err != nil || port < 1 || port > 65535 {
+		return 0, fmt.Errorf("ssh reverse forward: no port in the answer %q", out)
+	}
+	return port, nil
 }
 
 func (c *Conn) forwardBackCmd(remotePort, localPort int) *exec.Cmd {
