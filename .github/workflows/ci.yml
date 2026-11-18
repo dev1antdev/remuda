@@ -51,8 +51,14 @@ jobs:
         run: go test ./...
       - name: govulncheck
         run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
-      - name: npm audit
+      - name: npm audit (what ships)
+        # the page's own dependencies, which the binary embeds: any moderate advisory fails the build
         working-directory: web
+        run: npm audit --omit=dev --audit-level=moderate
+      - name: npm audit (build and test tools)
+        # vite, vitest and what they pull in never reach the page: their advisories are reported here, never a failure
+        working-directory: web
+        continue-on-error: true
         run: npm audit --audit-level=high
 
   windows:

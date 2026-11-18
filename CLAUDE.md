@@ -965,7 +965,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   clean tree, the checks green) pushes the tag, and
   `.github/workflows/release.yml` builds the binaries and makes the
   GitHub release from it; `.github/workflows/ci.yml` is /verify's list
-  plus govulncheck, npm audit and gitleaks on every push to main or
+  plus govulncheck, npm audit (`--omit=dev --audit-level=moderate` fails
+  the build: what the binary embeds; the dev tools' `--audit-level=high`
+  runs `continue-on-error`, a report — a ReDoS in picomatch with no fixed
+  release, 2026-11-18, came only through vite and vitest) and gitleaks on every push to main or
   release and every pull request, and on `release` (and by hand,
   `workflow_dispatch`) the end-to-end smoke too: `make e2e` is
   `scripts/e2e.sh` — a throwaway herdr server on a socket and HOME of its
