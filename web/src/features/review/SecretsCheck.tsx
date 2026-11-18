@@ -22,7 +22,7 @@ export function SecretsCheck({ state, check, ask, listed, onJump }: {
   const findings = state === "found" ? (check.scan?.findings ?? []) : [];
   const more = state === "found" ? (check.scan?.more ?? 0) : 0;
   const skipped = answered ? skippedWords(check.scan?.skipped) : "";
-  const unread = state === "incomplete" ? unreadPaths(check.scan?.skipped) : "";
+  const unread = answered ? unreadPaths(check.scan?.skipped) : "";
   return (
     <div className={`secret-check is-${state}`} role="status" aria-live="polite">
       <div className="secret-check-head">

@@ -617,3 +617,32 @@ func TestAKeystorePastTheBudgetIsStillFound(t *testing.T) {
 		t.Errorf("text past the budget reads as read: %+v", scan.Skipped)
 	}
 }
+
+// TestWorkBesideTheCommitsLeavesThemTheirBudget: what a push does not send cannot leave what it sends unread.
+func TestWorkBesideTheCommitsLeavesThemTheirBudget(t *testing.T) {
+	ownGitConfig(t)
+	dir, git, write := scratchCheckout(t)
+	write("a.txt", "a\n")
+	git("add", "-A")
+	git("commit", "-qm", "init")
+	write("sent.txt", "export NPM_TOKEN="+"npm_"+fakeKey(22, 36)+"\n")
+	git("add", "-A")
+	git("commit", "-qm", "the commit a push sends")
+	for i := range scanTotal/scanPerFile + 2 {
+		write("scratch"+strconv.Itoa(i+10)+".txt", strings.Repeat("a line\n", scanPerFile/7-1))
+	}
+	scan, err := ScanWork(shell.Local{Name: "local"}, dir, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !scan.Incomplete || scan.PushUnread() {
+		t.Errorf("skipped: %+v", scan.Skipped)
+	}
+	found := false
+	for _, finding := range scan.Findings {
+		found = found || finding.File == "sent.txt"
+	}
+	if !found {
+		t.Errorf("the commit went unread: %+v", scan.Findings)
+	}
+}

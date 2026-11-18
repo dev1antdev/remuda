@@ -11,10 +11,9 @@ import type { HeldPush } from "./useRepoSync";
 export function PushHeldDialog({ held, name, onClose, onPush }: { held: Pick<HeldPush, "outcome">; name: string; onClose: () => void; onPush: () => void }) {
   const { outcome } = held;
   const findings = outcome.scan?.findings ?? [];
-  const partial = outcome.reason === "check-incomplete";
-  const skipped = partial ? outcome.scan?.skipped?.filter((skip) => skip.in_commit) : outcome.scan?.skipped; // what the push itself would send
-  const notRead = skippedWords(skipped);
-  const unread = partial ? unreadPaths(skipped) : "";
+  const outgoing = outcome.scan?.skipped?.filter((skip) => skip.in_commit); // what the push itself would send
+  const notRead = skippedWords(outcome.reason === "check-incomplete" ? outgoing : outcome.scan?.skipped);
+  const unread = unreadPaths(outgoing);
   const anyway = () =>
     actions.ask(pushAnywayAsk(outcome, name), t("Push anyway"), () => {
       onClose();

@@ -13,7 +13,7 @@ const plainPatch = script.PatchForm + ` --no-renames -U0`
 const gitDiff = readGit + ` -c diff.relative=false diff ` + plainPatch
 
 // capScript cuts the stream on its way out: a diff's removed lines go, nothing to find in them, and each file's lines at scanPerFile (a line "\036partly" says where), and
-// every file once scanTotal is spent (each named on a line "\036budget <path>", "\036unread <path>" for an untracked
+// every file once scanTotal is spent, the commits having a scanTotal of their own so the work beside them cannot use it up (each named on a line "\036budget <path>", "\036unread <path>" for an untracked
 // one, and a binary one passes as "\036binarydiff <git's line>"); remuda's own lines pass. Past a line "\036untracked" come git grep's lines of the untracked files, path, line
 // number and text joined by \037, or its "Binary file <path> matches": each file's lines go out after a line
 // "\036file <path>" as a diff's added lines would, a binary one as "\036binary <path>".
@@ -29,6 +29,7 @@ function untracked(   at, path, text, size, mark) {
 	print "+" text
 }
 /^\036untracked$/ { grep = 1; next }
+/^\036commit / { if (!commits) { commits = 1; sum = 0 } }
 /^\036/ { grep = 0; print; next }
 grep { untracked(); next }
 /^diff --git / { header = 1; n = 0; cut = 0; over = (sum > total); if (!over) print; next }

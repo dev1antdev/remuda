@@ -46,7 +46,7 @@ const (
 	SkipBinary = "binary" // no text to read
 	SkipLarge  = "large"  // an untracked file over scanPerFile, not read
 	SkipPartly = "partly" // its changes ran past scanPerFile: the first part read
-	SkipBudget = "budget" // past scanTotal in all, not read
+	SkipBudget = "budget" // past scanTotal, for the work or for the commits, not read
 	SkipMany   = "many"   // untracked files past scanUntracked
 	SkipOlder  = "older"  // commits not pushed yet past scanCommits, for a push
 )
