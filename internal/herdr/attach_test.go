@@ -166,3 +166,32 @@ func TestAnAttachThatEndsAtOnceGivesItsPlaceBack(t *testing.T) {
 		t.Errorf("taken %d, given back %d", taken.Load(), released.Load())
 	}
 }
+
+// TestAViewerOutOfPlacesJoinsTheAttachAnotherStarted: the terminal is up, so no place is needed.
+func TestAViewerOutOfPlacesJoinsTheAttachAnotherStarted(t *testing.T) {
+	var free atomic.Bool
+	var other func()
+	m := NewAttachManager(fakeAttach("screen", false))
+	m.Hold = func(wait time.Duration) (func(), error) {
+		if free.Load() {
+			free.Store(false)
+			return func() {}, nil
+		}
+		if wait > 0 && other == nil { // the last place goes to the other viewer while this one waits
+			free.Store(true)
+			_, cancel, err := m.Subscribe("t1", 0, 0)
+			if err != nil {
+				return nil, err
+			}
+			other = cancel
+		}
+		return nil, errors.New("too many ssh sessions")
+	}
+	_, cancel, err := m.Subscribe("t1", 0, 0)
+	if err != nil {
+		t.Fatalf("the terminal was already up: %v", err)
+	}
+	cancel()
+	other()
+	m.kill(m.standing("t1"))
+}

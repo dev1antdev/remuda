@@ -137,15 +137,21 @@ func (c *Conn) enter(kind sessionKind, timeout time.Duration) (leave func(), lef
 	began := time.Now()
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
+	busy := fmt.Errorf("ssh %s: no session free within %s: the connection is busy", c.Host, timeout)
 	for {
 		in, freed := c.sessions.admit(kind)
 		if in {
-			return func() { c.sessions.leave(kind) }, timeout - time.Since(began), nil
+			left = timeout - time.Since(began)
+			if left <= 0 && timeout > 0 { // its time went in the queue: it must not start now
+				c.sessions.leave(kind)
+				return nil, 0, busy
+			}
+			return func() { c.sessions.leave(kind) }, left, nil
 		}
 		select {
 		case <-freed:
 		case <-timer.C:
-			return nil, 0, fmt.Errorf("ssh %s: no session free within %s: the connection is busy", c.Host, timeout)
+			return nil, 0, busy
 		}
 	}
 }

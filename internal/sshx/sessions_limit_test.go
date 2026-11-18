@@ -212,6 +212,22 @@ func TestEachKindLeavesTheLastPlacesToTheNext(t *testing.T) {
 	}
 }
 
+// TestNothingStartsOnceItsTimeIsGone: a place that comes too late is given back; asking with no wait still works.
+func TestNothingStartsOnceItsTimeIsGone(t *testing.T) {
+	c := limited()
+	if _, _, err := c.enter(kindShort, time.Nanosecond); err == nil || !strings.Contains(err.Error(), "no session free") {
+		t.Fatalf("a script out of time: %v", err)
+	}
+	if c.sessions.total != 0 {
+		t.Fatalf("%d places kept by what did not start", c.sessions.total)
+	}
+	release, err := c.HoldTerminal(0)
+	if err != nil {
+		t.Fatalf("a place asked for with no wait: %v", err)
+	}
+	release()
+}
+
 // TestRequestsSitInTheirOwnPlacesFirst: the event stream of a bridged machine takes nothing from a short script.
 func TestRequestsSitInTheirOwnPlacesFirst(t *testing.T) {
 	c := limited()

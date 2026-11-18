@@ -165,7 +165,10 @@ func (m *AttachManager) Subscribe(termID string, cols, rows int) (ch chan []byte
 	if a == nil {
 		release, err := m.takePlace() // outside the lock: it can wait, and it stops attaches nobody watches
 		if err != nil {
-			return nil, nil, err
+			if a = m.standing(termID); a == nil { // another viewer may have started it meanwhile
+				return nil, nil, err
+			}
+			release = func() {}
 		}
 		m.mu.Lock()
 		if a = m.standingLocked(termID); a != nil {
