@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 	"time"
 
@@ -37,9 +38,9 @@ func doorURL(port int) string { return fmt.Sprintf("http://127.0.0.1:%d", port) 
 // DoorScript places the door at url in the machine's state dir, private to the user: the dir remuda keeps there
 // (`state.Dir()` computed in sh), the key read on stdin, never on a command line, each file replaced whole since a
 // running `remuda mcp` reads them for every call. Cockpits sharing the machine go one at a time under the locks of this
-// half minute and the next: none is taken while one of now or later stands, so a clock set back waits for it, those of a
-// script that died lapse by themselves, and one whose clock left them meanwhile places nothing (sh has no lock that dies
-// with its process on both macOS and Linux).
+// half minute and the next: none is taken while one of now or of the next doorLockAhead half minutes stands, so a clock
+// set back waits for it, those of a script that died lapse by themselves or, dated further ahead, count for nothing, and
+// one whose clock left them meanwhile places nothing (sh has no lock that dies with its process on both macOS and Linux).
 // A door that answers stays — asked straight, past any proxy, and when nobody
 // can ask too: one on a port of its own (agent-door-moved names it, so a cockpit on the machine itself is none) against
 // any newcomer, any other against a door that would move. The port of a connection the network lost says nothing.
@@ -51,7 +52,8 @@ mkdir -p "$d" && chmod 700 "$d" || exit 1
 now=$(($(date +%s) / 30))
 for held in "$d"/agent-door.lock.*; do
   [ -d "$held" ] || continue
-  if [ "${held##*.}" -ge "$now" ] 2>/dev/null; then echo ` + doorBusy + `; exit 0; fi
+  slot=${held##*.}
+  if [ "$slot" -ge "$now" ] 2>/dev/null && [ "$slot" -le $((now + ` + strconv.Itoa(doorLockAhead) + `)) ]; then echo ` + doorBusy + `; exit 0; fi
   rmdir "$held" 2>/dev/null
 done
 mkdir "$d/agent-door.lock.$now" 2>/dev/null || { echo ` + doorBusy + `; exit 0; }
@@ -75,14 +77,19 @@ echo ` + doorPlaced
 }
 
 // doorTries and doorPause: a step of opening the door that failed is asked again, a minute in all, while this
-// connection is the machine's. doorPortAsks is how many asks DoorPort gets before anything else is tried: after this
-// remuda's own restart the machine's sshd holds it a moment for the connection that just ended.
-var doorTries, doorPause, doorPortAsks = 13, 5 * time.Second, 3
+// connection is the machine's. doorPlaceTries is placing it, which outwaits the locks a dead script left: they stand
+// for doorLockAhead half minutes at most, and this runs once per connection. doorPortAsks is how many asks DoorPort gets
+// before anything else is tried: after this remuda's own restart the machine's sshd holds it a moment for the
+// connection that just ended.
+var doorTries, doorPlaceTries, doorPause, doorPortAsks = 13, 33, 5 * time.Second, 3
+
+// doorLockAhead is how many half minutes ahead of the machine's clock a lock still counts, two minutes.
+const doorLockAhead = 4
 
 // trySoon runs the step until it holds, the tries run out or the connection is no longer current.
-func trySoon(step func() error, current func() bool) error {
+func trySoon(tries int, step func() error, current func() bool) error {
 	var err error
-	for try := 0; try < doorTries; try++ {
+	for try := 0; try < tries; try++ {
 		if try > 0 {
 			time.Sleep(doorPause)
 			if !current() {
@@ -131,7 +138,7 @@ func (mc *Machine) openDoor(conn *sshx.Conn) {
 		port, err = doorForward(conn, door.LocalPort, asked)
 		return err
 	}
-	if err := trySoon(forward, current); err != nil {
+	if err := trySoon(doorTries, forward, current); err != nil {
 		log.Printf("%s: no door for its agents to the tasks here: %v", mc.Cfg.Host, err)
 		return
 	}
@@ -172,7 +179,7 @@ func (mc *Machine) openDoor(conn *sshx.Conn) {
 		}
 		return nil
 	}
-	err = trySoon(place, current)
+	err = trySoon(doorPlaceTries, place, current)
 	if placed = err == nil && answer == doorPlaced; placed {
 		return
 	}

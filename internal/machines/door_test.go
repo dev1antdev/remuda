@@ -66,18 +66,18 @@ func TestAFailedStepOfTheDoorIsAskedAgain(t *testing.T) {
 		}
 		return nil
 	}
-	if err := trySoon(refusedTwice, func() bool { return true }); err != nil || asked != 3 {
+	if err := trySoon(doorTries, refusedTwice, func() bool { return true }); err != nil || asked != 3 {
 		t.Fatalf("asked %d times, %v: want the third ask to hold", asked, err)
 	}
 
 	asked = 0
 	refused := func() error { asked++; return errors.New("remote port forwarding failed for listen port 0") }
-	if err := trySoon(refused, func() bool { return true }); err == nil || asked != 4 {
+	if err := trySoon(doorTries, refused, func() bool { return true }); err == nil || asked != 4 {
 		t.Fatalf("asked %d times, %v: want every try spent and the refusal kept", asked, err)
 	}
 
 	asked = 0
-	if err := trySoon(refused, func() bool { return false }); err == nil || asked != 1 {
+	if err := trySoon(doorTries, refused, func() bool { return false }); err == nil || asked != 1 {
 		t.Fatalf("asked %d times for a connection gone: want one", asked)
 	}
 }
@@ -86,6 +86,7 @@ func TestAFailedStepOfTheDoorIsAskedAgain(t *testing.T) {
 type sshdAtTheDoor struct {
 	heldFor   int    // how many asks for 7318 its sshd refuses
 	script    string // what DoorScript answers there, placed by default
+	busyFor   int    // how many runs of it answer busy first
 	forbidden bool   // its sshd refuses a port of its own choice too
 	noKey     bool   // this remuda cannot make a key
 }
@@ -100,10 +101,11 @@ type doorRun struct {
 // with its stdin when it is to answer placed.
 func doorOverSSH(t *testing.T, sshd sshdAtTheDoor) doorRun {
 	t.Helper()
-	tries, pause := doorTries, doorPause
-	doorTries, doorPause = 6, time.Millisecond
-	t.Cleanup(func() { doorTries, doorPause = tries, pause })
+	tries, placeTries, pause := doorTries, doorPlaceTries, doorPause
+	doorTries, doorPlaceTries, doorPause = 6, 12, time.Millisecond
+	t.Cleanup(func() { doorTries, doorPlaceTries, doorPause = tries, placeTries, pause })
 	dir := t.TempDir()
+	runs := filepath.Join(dir, "runs")
 	kept, asks, cancels := filepath.Join(dir, "scripts"), filepath.Join(dir, "asks"), filepath.Join(dir, "cancels")
 	stub := `#!/bin/sh
 case " $* " in
@@ -119,8 +121,11 @@ case " $* " in
 *" -O "*) exit 0 ;;
 esac
 for line; do :; done
-if [ "${DOOR_SCRIPT:-placed}" = placed ]; then { printf '%s\n' "$line"; cat; } >> ` + script.Quote(kept) + `; fi
-echo "${DOOR_SCRIPT:-placed}"
+answer=${DOOR_SCRIPT:-placed}
+echo ran >> ` + script.Quote(runs) + `
+[ $(($(wc -l < ` + script.Quote(runs) + `))) -gt "$DOOR_BUSY_FOR" ] || answer=busy
+if [ "$answer" = placed ]; then { printf '%s\n' "$line"; cat; } >> ` + script.Quote(kept) + `; fi
+echo "$answer"
 `
 	if err := os.WriteFile(filepath.Join(dir, "ssh"), []byte(stub), 0o755); err != nil {
 		t.Fatal(err)
@@ -128,6 +133,7 @@ echo "${DOOR_SCRIPT:-placed}"
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	t.Setenv("DOOR_HELD_FOR", strconv.Itoa(sshd.heldFor))
 	t.Setenv("DOOR_SCRIPT", sshd.script)
+	t.Setenv("DOOR_BUSY_FOR", strconv.Itoa(sshd.busyFor))
 	t.Setenv("DOOR_FORBIDDEN", map[bool]string{true: "1"}[sshd.forbidden])
 	conn, err := sshx.Dial("door-test-" + filepath.Base(dir))
 	if err != nil {
@@ -176,6 +182,18 @@ func TestADoorWhosePortIsHeldOpensOnAnother(t *testing.T) {
 	}
 	if strings.Count(run.cancels, "127.0.0.1:0:") != 1 {
 		t.Fatalf("the door it stands on was let go: %s", run.cancels)
+	}
+}
+
+// TestPlacingTheDoorOutwaitsTheLocksLeftBehind: the machine stays busy past the tries of any other step, and placing
+// goes on for longer than the last lock a dead script left can stand.
+func TestPlacingTheDoorOutwaitsTheLocksLeftBehind(t *testing.T) {
+	if waited, stands := time.Duration(doorPlaceTries-1)*doorPause, time.Duration(doorLockAhead+1)*30*time.Second; waited <= stands {
+		t.Fatalf("placing is asked for %v, a lock stands for %v", waited, stands)
+	}
+	run := doorOverSSH(t, sshdAtTheDoor{busyFor: 8}) // doorOverSSH gives other steps 6 tries, placing 12
+	if !strings.Contains(run.placed, "rk_door") {
+		t.Fatalf("placed: %q, cancelled: %s", run.placed, run.cancels)
 	}
 }
 
@@ -395,12 +413,13 @@ func doorClock(t *testing.T, seconds, afterLook int) (set func(int)) {
 	return set
 }
 
-// TestDoorScriptWaitsForTheLocksStanding: at second 3000 the half minute is 100. A lock of now, of the next one or of
-// later — a clock set back — says busy; one of the past was left by a dead script and lapsed.
+// TestDoorScriptWaitsForTheLocksStanding: at second 3000 the half minute is 100. A lock of now or up to two minutes
+// ahead — a clock set back — says busy; one of the past lapsed, and one further ahead was left by a dead script under a
+// clock since put right.
 func TestDoorScriptWaitsForTheLocksStanding(t *testing.T) {
 	home := newDoorHome(t)
 	doorClock(t, 3000, 3000)
-	for halfMinute, want := range map[int]string{100: doorBusy, 101: doorBusy, 140: doorBusy, 99: doorPlaced, 40: doorPlaced} {
+	for halfMinute, want := range map[int]string{100: doorBusy, 101: doorBusy, 100 + doorLockAhead: doorBusy, 101 + doorLockAhead: doorPlaced, 140: doorPlaced, 99: doorPlaced, 40: doorPlaced} {
 		lock := filepath.Join(home.dir, "agent-door.lock."+strconv.Itoa(halfMinute))
 		if err := os.Mkdir(lock, 0o700); err != nil {
 			t.Fatal(err)

@@ -403,9 +403,11 @@ components and icons as rules for whoever changes it: @docs/design.md
   state dir, 0600 — the files `remuda mcp` and `remuda tasks` read there.
   **Cockpits sharing a machine**: the script looks and places under one
   lock (`agent-door.lock.<half minute>`, this one and the next, none taken
-  while one of now or later stands; a dead script's lapse, and a script
-  whose clock left them meanwhile places nothing) and answers `placed`,
-  `taken` or `busy`. A door that answers `/api/health` — asked straight, past any
+  while one of now or of the next `doorLockAhead` half minutes stands; a
+  dead script's lapse or, dated further ahead, count for nothing, placing
+  is asked again long enough to outwait them, `doorPlaceTries`, and a
+  script whose clock left its locks meanwhile places nothing) and answers
+  `placed`, `taken` or `busy`. A door that answers `/api/health` — asked straight, past any
   proxy; one nobody could ask counts — stays against a door that would
   move, and one on a port of its own (`agent-door-moved` names it, so a
   cockpit on the machine itself, whose `agent-url` is its own `-addr`, is
