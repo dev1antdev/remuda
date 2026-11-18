@@ -17,7 +17,7 @@ require (
 	github.com/creachadair/msync v0.10.1 // indirect
 	github.com/dblohm7/wingoes v0.0.0-20260526185140-fb298caac7ca // indirect
 	github.com/dustin/go-humanize v1.1.0 // indirect
-	github.com/fxamacker/cbor/v2 v2.10.0 // indirect
+	github.com/fxamacker/cbor/v2 v2.9.3 // indirect
 	github.com/gaissmai/bart v0.29.0 // indirect
 	github.com/go-json-experiment/json v0.0.0-20260820222146-c27c302e5fc3 // indirect
 	github.com/godbus/dbus/v5 v5.2.4 // indirect
