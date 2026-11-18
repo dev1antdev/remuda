@@ -103,7 +103,7 @@ func Snapshot(dir, host, version string, now time.Time) ([]byte, Manifest, error
 			return nil
 		}
 		if entry.IsDir() {
-			if !strings.Contains(rel, "/") && skippedDirs[rel] {
+			if !strings.Contains(rel, "/") && (skippedDirs[rel] || strings.HasPrefix(rel, "agent-door.lock.")) {
 				return filepath.SkipDir
 			}
 			info, err := entry.Info()
