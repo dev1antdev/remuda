@@ -248,6 +248,56 @@ func TestTheSecretCheckOnARealCheckoutChangesNothing(t *testing.T) {
 	}
 }
 
+// TestTheCheckReadsThroughGitSettings: settings that change how a patch looks left the parser with nothing it knew, and
+// a check that found nothing.
+func TestTheCheckReadsThroughGitSettings(t *testing.T) {
+	ownGitConfig(t)
+	for name, settings := range map[string][][2]string{
+		"colour":       {{"color.diff", "always"}, {"color.ui", "always"}},
+		"no prefix":    {{"diff.noprefix", "true"}},
+		"mnemonic":     {{"diff.mnemonicPrefix", "true"}},
+		"own prefixes": {{"diff.srcPrefix", "x"}, {"diff.dstPrefix", "y"}},
+		"relative":     {{"diff.relative", "true"}},
+		"no root":      {{"log.showRoot", "false"}},
+		"signature":    {{"log.showSignature", "true"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir, git, write := scratchCheckout(t)
+			_ = os.Mkdir(filepath.Join(dir, "sub"), 0o755)
+			write("sub/first.sh", "export NPM_TOKEN="+"npm_"+fakeKey(21, 36)+"\n")
+			git("add", "-A")
+			git("commit", "-qm", "the first commit holds a token")
+			write("sub/work.env", "DB_PASSWORD="+fakeKey(22, 24)+"\n")
+			write("top.env", "API_SECRET="+fakeKey(24, 24)+"\n")
+			git("add", "sub/work.env", "top.env")
+			write("sub/first.sh", "export NPM_TOKEN="+"npm_"+fakeKey(21, 36)+"\nDB_PASSWORD="+fakeKey(23, 24)+"\n")
+			for _, setting := range settings {
+				git("config", setting[0], setting[1])
+			}
+			scan, err := ScanWork(shell.Local{Name: "local"}, filepath.Join(dir, "sub"), true)
+			if err != nil {
+				t.Fatal(err)
+			}
+			found := map[string]bool{}
+			for _, finding := range scan.Findings {
+				where := "work"
+				if finding.Commit != "" && finding.Commit != secrets.Staged {
+					where = "commit"
+				}
+				found[where+" "+finding.File+" "+finding.Rule] = true
+			}
+			for _, want := range []string{"commit sub/first.sh " + secrets.RuleNPM, "work first.sh " + secrets.RuleAssigned, "work top.env " + secrets.RuleAssigned} {
+				if !found[want] {
+					t.Errorf("no %q in %+v", want, scan.Findings)
+				}
+			}
+			if len(scan.Findings) < 3 || scan.Commits != 1 {
+				t.Errorf("%d commits, findings %+v", scan.Commits, scan.Findings)
+			}
+		})
+	}
+}
+
 // TestAStreamThatFailedOrStoppedIsNoCleanCheck: a folder git cannot read, a git that failed half way and a script cut
 // off all answered "nothing found" once, and the approval went out with its commit unchecked.
 func TestAStreamThatFailedOrStoppedIsNoCleanCheck(t *testing.T) {
@@ -255,9 +305,10 @@ func TestAStreamThatFailedOrStoppedIsNoCleanCheck(t *testing.T) {
 		"":                                "it stopped before it had read everything",
 		script.RS + "failed repository\n": "the folder is not a git checkout",
 		script.RS + "failed folder\n":     "the folder is not there",
-		"diff --git a/x b/x\n+++ b/x\n@@ -0,0 +1 @@\n+one\n": "it stopped before it had read everything",
-		script.RS + "failed work\n" + script.RS + "end\n":    "git could not read the changes",
-		script.RS + "failed commits\n" + script.RS + "end\n": "git could not read the commits not pushed yet",
+		"diff --git a/x b/x\n+++ b/x\n@@ -0,0 +1 @@\n+one\n":                          "it stopped before it had read everything",
+		script.RS + "failed work\n" + script.RS + "end\n":                             "git could not read the changes",
+		script.RS + "failed commits\n" + script.RS + "end\n":                          "git could not read the commits not pushed yet",
+		"\x1b[1mdiff --git a/x b/x\x1b[m\n\x1b[32m+one\x1b[m\n" + script.RS + "end\n": "git's answer could not be read",
 	} {
 		host := &shell.Fake{Name: "box", Answer: func(string) (string, error) { return answer, nil }}
 		if _, err := ScanWork(host, "/repo", true); err == nil || err.Error() != want {
