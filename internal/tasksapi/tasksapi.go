@@ -120,9 +120,9 @@ type Query struct {
 }
 
 type Client struct {
-	door Door
-	find func() (Door, error) // when set, where each request looks for the door first
-	http *http.Client
+	door    Door
+	follows bool // reads the door again for every request
+	http    *http.Client
 }
 
 func New(door Door) *Client {
@@ -133,13 +133,13 @@ func New(door Door) *Client {
 // the door on another port or with another key, so every request reads it again, door serving when it cannot be read.
 func Following(door Door) *Client {
 	client := New(door)
-	client.find = FindDoor
+	client.follows = true
 	return client
 }
 
 func (c *Client) currentDoor() Door {
-	if c.find != nil {
-		if door, err := c.find(); err == nil {
+	if c.follows {
+		if door, err := FindDoor(); err == nil {
 			return door
 		}
 	}

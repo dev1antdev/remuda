@@ -33,8 +33,22 @@ mkdir -p "$d" && chmod 700 "$d" && cat > "$d/agent-key.new" && mv -f "$d/agent-k
 }
 
 // doorTries and doorPause: a step of opening the door that failed is asked again, a minute in all, while this
-// connection is the machine's.
-var doorTries, doorPause = 7, 10 * time.Second
+// connection is the machine's. doorPortAsks is how many asks DoorPort gets before anything else is tried: after this
+// remuda's own restart the machine's sshd holds it a moment for the connection that just ended.
+var doorTries, doorPause, doorPortAsks = 13, 5 * time.Second, 3
+
+// errDoorTaken leaves the machine's door to the remuda whose door it is.
+var errDoorTaken = errors.New("the door its agent-url names answers, so it stays as it is")
+
+// doorAnswersScript succeeds when the door the machine's agent-url names answers: a live remuda's, where the port of
+// a connection the network lost takes the request and says nothing.
+func doorAnswersScript() string {
+	return script.StateDir("d") + `
+url=$(head -n 1 "$d/agent-url" 2>/dev/null)
+[ -n "$url" ] || exit 1
+case "$(curl -s -m 2 "$url/api/health" 2>/dev/null)" in *'"ok":true'*) exit 0 ;; esac
+exit 1`
+}
 
 // trySoon runs the step until it holds, the tries run out or the connection is no longer current.
 func trySoon(step func() error, current func() bool) error {
@@ -53,18 +67,23 @@ func trySoon(step func() error, current func() bool) error {
 	return err
 }
 
-// doorForward opens the door on DoorPort or, when the machine's sshd refuses that, on a port the sshd picks: a
-// connection the network lost holds DoorPort there for hours, sshd not noticing, and the door cannot wait that out.
-func doorForward(onDoorPort func() error, onFreePort func() (int, error)) (int, error) {
-	refused := onDoorPort()
+// doorForward opens the door on DoorPort or, once that was refused doorPortAsks times and no live door stands on the
+// machine, on a port the sshd picks: a connection the network lost holds DoorPort for hours, sshd not noticing.
+func doorForward(conn *sshx.Conn, localPort, asked int) (int, error) {
+	port, refused := conn.ForwardBack(DoorPort, localPort)
 	if refused == nil {
-		return DoorPort, nil
+		return port, nil
 	}
-	port, err := onFreePort()
-	if err != nil {
+	if asked < doorPortAsks {
 		return 0, refused
 	}
-	return port, nil
+	if _, err := conn.Run(doorAnswersScript(), 10*time.Second); err == nil {
+		return 0, errDoorTaken
+	}
+	if port, err := conn.ForwardBack(0, localPort); err == nil {
+		return port, nil
+	}
+	return 0, refused
 }
 
 // openDoor lets the machine's agents reach this remuda's task list, once per connection; a sshd that forbids the
@@ -79,12 +98,10 @@ func (mc *Machine) openDoor(conn *sshx.Conn) {
 		defer mc.mu.Unlock()
 		return mc.conn == conn
 	}
-	var port int
+	var port, asked int
 	forward := func() (err error) {
-		port, err = doorForward(
-			func() error { return conn.ForwardBack(DoorPort, door.LocalPort) },
-			func() (int, error) { return conn.ForwardBackAny(door.LocalPort) },
-		)
+		asked++
+		port, err = doorForward(conn, door.LocalPort, asked)
 		return err
 	}
 	if err := trySoon(forward, current); err != nil {

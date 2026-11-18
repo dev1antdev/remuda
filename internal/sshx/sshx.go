@@ -270,29 +270,20 @@ func (c *Conn) RunWithInput(command string, stdin []byte, timeout time.Duration)
 	return c.run(command, timeout, bytes.NewReader(stdin))
 }
 
-// ForwardBack opens 127.0.0.1:remotePort on the host leading to 127.0.0.1:localPort here, for as long as the master
-// lives; a forward of that port left on a reused master is cancelled first, so the new one is not refused as taken.
-func (c *Conn) ForwardBack(remotePort, localPort int) error {
+// ForwardBack opens 127.0.0.1:remotePort on the host, or with 0 a port the host picks, leading to 127.0.0.1:localPort
+// here, for as long as the master lives, and says which port it is; a forward of that port left on a reused master is
+// cancelled first, so the new one is not refused as taken.
+func (c *Conn) ForwardBack(remotePort, localPort int) (int, error) {
 	c.cmd("-O", "cancel", "-R", forwardBackSpec(remotePort, localPort), c.Host).Run()
 	cmd := c.forwardBackCmd(remotePort, localPort)
-	var errb bytes.Buffer
-	cmd.Stderr = &errb
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("ssh reverse forward: %s", strings.TrimSpace(errb.String()))
-	}
-	return nil
-}
-
-// ForwardBackAny opens a port the host picks on its loopback leading to 127.0.0.1:localPort here, for as long as the
-// master lives, and names it: the master prints the port it got. One left on a reused master is cancelled first.
-func (c *Conn) ForwardBackAny(localPort int) (int, error) {
-	c.cmd("-O", "cancel", "-R", forwardBackSpec(0, localPort), c.Host).Run()
-	cmd := c.forwardBackCmd(0, localPort)
 	var errb bytes.Buffer
 	cmd.Stderr = &errb
 	out, err := cmd.Output()
 	if err != nil {
 		return 0, fmt.Errorf("ssh reverse forward: %s", strings.TrimSpace(errb.String()))
+	}
+	if remotePort != 0 {
+		return remotePort, nil
 	}
 	port, err := strconv.Atoi(strings.TrimSpace(string(out)))
 	if err != nil || port < 1 || port > 65535 {

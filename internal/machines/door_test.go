@@ -2,8 +2,12 @@ package machines
 
 import (
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -76,40 +80,45 @@ func TestAFailedStepOfTheDoorIsAskedAgain(t *testing.T) {
 	}
 }
 
-func TestADoorForbiddenOnEveryPortKeepsTheRefusal(t *testing.T) {
-	refused := errors.New("remote port forwarding failed for listen port 7318")
-	port, err := doorForward(func() error { return refused }, func() (int, error) { return 0, errors.New("no port") })
-	if port != 0 || !errors.Is(err, refused) {
-		t.Fatalf("port %d, %v", port, err)
-	}
+// sshdAtTheDoor is what the machine's sshd does in doorOverSSH.
+type sshdAtTheDoor struct {
+	heldFor   int  // how many asks for 7318 it refuses
+	answers   bool // the door agent-url names answers
+	forbidden bool // it refuses a port of its own choice too
 }
 
-// doorOverSSH opens the door over an `ssh` stand-in first on PATH: a master that stays, 7318 refused while held says
-// so, a port asked for as 0 answered 50236, and a script not run but kept with its stdin, which it answers with.
-func doorOverSSH(t *testing.T, held bool) string {
+// doorOverSSH opens the door over an `ssh` stand-in first on PATH, a master that stays, and answers with the connection
+// and the scripts placed: not run but kept with their stdin, the look at the door excepted.
+func doorOverSSH(t *testing.T, sshd sshdAtTheDoor) (*sshx.Conn, string) {
 	t.Helper()
+	tries, pause := doorTries, doorPause
+	doorTries, doorPause = 6, time.Millisecond
+	t.Cleanup(func() { doorTries, doorPause = tries, pause })
 	dir := t.TempDir()
-	kept := filepath.Join(dir, "scripts")
+	kept, asks := filepath.Join(dir, "scripts"), filepath.Join(dir, "asks")
 	stub := `#!/bin/sh
 case " $* " in
 *" -M "*) while [ "$1" != -S ]; do shift; done; : > "$2"; exec sleep 30 ;;
-*" -O forward -R 127.0.0.1:0:"*) echo 50236; exit 0 ;;
+*" -O forward -R 127.0.0.1:0:"*)
+  [ -z "$DOOR_FORBIDDEN" ] || { echo "remote port forwarding failed for listen port 0" >&2; exit 255; }
+  echo 50236; exit 0 ;;
 *" -O forward -R 127.0.0.1:7318:"*)
-  [ -z "$DOOR_HELD" ] && exit 0
+  echo asked >> ` + script.Quote(asks) + `
+  [ $(($(wc -l < ` + script.Quote(asks) + `))) -gt "$DOOR_HELD_FOR" ] && exit 0
   echo "remote port forwarding failed for listen port 7318" >&2; exit 255 ;;
 *" -O "*) exit 0 ;;
 esac
 for line; do :; done
+case "$line" in *api/health*) [ -n "$DOOR_ANSWERS" ]; exit ;; esac
 { printf '%s\n' "$line"; cat; } >> ` + script.Quote(kept) + `
 `
 	if err := os.WriteFile(filepath.Join(dir, "ssh"), []byte(stub), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
-	t.Setenv("DOOR_HELD", "")
-	if held {
-		t.Setenv("DOOR_HELD", "1")
-	}
+	t.Setenv("DOOR_HELD_FOR", strconv.Itoa(sshd.heldFor))
+	t.Setenv("DOOR_ANSWERS", map[bool]string{true: "1"}[sshd.answers])
+	t.Setenv("DOOR_FORBIDDEN", map[bool]string{true: "1"}[sshd.forbidden])
 	conn, err := sshx.Dial("door-test-" + filepath.Base(dir))
 	if err != nil {
 		t.Fatal(err)
@@ -117,25 +126,90 @@ for line; do :; done
 	t.Cleanup(conn.Close)
 	mc := &Machine{conn: conn, door: &Door{LocalPort: 7317, Key: func(string, string) (string, error) { return "rk_door", nil }}}
 	mc.openDoor(conn)
-	placed, err := os.ReadFile(kept)
-	if err != nil {
-		t.Fatalf("the door files were not placed: %v", err)
-	}
-	return string(placed)
+	placed, _ := os.ReadFile(kept)
+	return conn, string(placed)
 }
 
+const heldForGood = 1000
+
 func TestTheDoorStaysOnItsPortWhileThatIsFree(t *testing.T) {
-	placed := doorOverSSH(t, false)
+	_, placed := doorOverSSH(t, sshdAtTheDoor{})
 	if !strings.Contains(placed, "http://127.0.0.1:7318") || !strings.Contains(placed, "rk_door") {
 		t.Fatalf("placed: %s", placed)
 	}
 }
 
-// TestADoorWhosePortIsHeldOpensOnAnother: the connection the network lost holds 7318, and the door opens at once on
-// the port the sshd picked, the address in the files saying so.
+// TestADoorKeepsItsPortThroughARestart: sshd lets go of 7318 a moment after the connection that just ended.
+func TestADoorKeepsItsPortThroughARestart(t *testing.T) {
+	_, placed := doorOverSSH(t, sshdAtTheDoor{heldFor: doorPortAsks - 1})
+	if !strings.Contains(placed, "http://127.0.0.1:7318") || strings.Contains(placed, "50236") {
+		t.Fatalf("placed: %s", placed)
+	}
+}
+
+// TestADoorWhosePortIsHeldOpensOnAnother: a connection the network lost holds 7318 and answers nothing, and the door
+// opens on the port the sshd picked, the address in the files saying so.
 func TestADoorWhosePortIsHeldOpensOnAnother(t *testing.T) {
-	placed := doorOverSSH(t, true)
+	_, placed := doorOverSSH(t, sshdAtTheDoor{heldFor: heldForGood})
 	if !strings.Contains(placed, "http://127.0.0.1:50236") || strings.Contains(placed, "127.0.0.1:7318") || !strings.Contains(placed, "rk_door") {
 		t.Fatalf("placed: %s", placed)
+	}
+}
+
+// TestALiveDoorIsLeftToItsCockpit: another cockpit's door answers on the machine, and its agents stay with it.
+func TestALiveDoorIsLeftToItsCockpit(t *testing.T) {
+	conn, placed := doorOverSSH(t, sshdAtTheDoor{heldFor: heldForGood, answers: true})
+	if placed != "" {
+		t.Fatalf("the files were replaced: %s", placed)
+	}
+	if _, err := doorForward(conn, 7317, doorPortAsks); !errors.Is(err, errDoorTaken) {
+		t.Fatalf("%v", err)
+	}
+}
+
+func TestADoorForbiddenOnEveryPortKeepsTheRefusal(t *testing.T) {
+	conn, placed := doorOverSSH(t, sshdAtTheDoor{heldFor: heldForGood, forbidden: true})
+	if placed != "" {
+		t.Fatalf("placed: %s", placed)
+	}
+	if _, err := doorForward(conn, 7317, doorPortAsks); err == nil || !strings.Contains(err.Error(), "listen port 7318") {
+		t.Fatalf("%v", err)
+	}
+}
+
+// TestTheLookAtTheDoorTellsALiveOneFromAHeldPort runs the script on this machine, in a home of its own.
+func TestTheLookAtTheDoorTellsALiveOneFromAHeldPort(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	place := func(url string) {
+		t.Helper()
+		out, err := exec.Command("sh", "-c", script.StateDir("d")+`
+mkdir -p "$d" && printf '%s\n' `+script.Quote(url)+` > "$d/agent-url"`).CombinedOutput()
+		if err != nil {
+			t.Fatalf("%v: %s", err, out)
+		}
+	}
+	answers := func() bool { return exec.Command("sh", "-c", doorAnswersScript()).Run() == nil }
+	if answers() {
+		t.Error("no agent-url answered")
+	}
+	live := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/health" {
+			w.Write([]byte(`{"ok":true,"server":true}`))
+		}
+	}))
+	defer live.Close()
+	place(live.URL)
+	if !answers() {
+		t.Error("a live door did not answer")
+	}
+	release := make(chan struct{})
+	silent := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { <-release }))
+	defer silent.Close()
+	defer close(release)
+	place(silent.URL)
+	if answers() {
+		t.Error("a port that says nothing answered")
 	}
 }

@@ -285,8 +285,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   nothing, so the file unlinked before the ask would be gone for good),
   the reverse forward of this remuda's port (`ForwardBack`: `-O forward
   -R 127.0.0.1:<remote>:127.0.0.1:<ours>`, a forward of that port left
-  on a reused master cancelled first; `ForwardBackAny` the same on a port
-  the host picks, asked as 0 and printed by the master), remote exec (`RunWithInput` for a
+  on a reused master cancelled first; asked as 0, a port the host picks,
+  which the master prints), remote exec (`RunWithInput` for a
   secret that must not travel on a command line), and the `ssh -tt … sh
   -c 'HERDR_SOCKET_PATH=<the machine's socket> exec herdr terminal
   attach …'` command builder (`AttachCmd`: the socket as the local attach
@@ -392,9 +392,13 @@ components and icons as rules for whoever changes it: @docs/design.md
   bin (incl. `~/.local/bin`) → RPC transport → `Ping` → **the door**
   (`door.go`, in a goroutine, once per connection): this remuda's port
   forwarded back to `DoorPort` 7318 on the machine's loopback or, when
-  the machine's sshd refuses that, to a port it picks (`doorForward`: a
-  connection the network lost holds 7318 there for hours, sshd not
-  noticing, and a request to it hangs) and
+  the machine's sshd refused that `doorPortAsks` times (after this
+  remuda's own restart it holds 7318 a moment for the connection that
+  just ended) and the door `agent-url` names does not answer
+  (`doorAnswersScript`: a live one is another cockpit's and stays, the
+  files untouched), to a port it picks (`doorForward`: a connection the
+  network lost holds 7318 for hours, sshd not noticing, and a request to
+  it hangs) and
   `DoorScript` placing `agent-key` (the machine's tasks-only key, on
   stdin, never on a command line, kept on the `Machine` so a reconnect
   places the same one while it still passes) and `agent-url`
@@ -2981,7 +2985,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   every listening TCP port above 1023 with its pid, process, working
   folder (its parent's when it has none) and arguments; `Parse` keeps one
   per port (the IPv4 loopback's socket first), leaves out the ports given
-  (the cockpit's own `-addr`, 7317, the door 7318, code-server's), the
+  (the cockpit's own `-addr`, 7317, the door 7318 — on a port its sshd
+  picked, the door goes by that process's name — code-server's), the
   processes remuda, herdr, ssh and Tailscale run, an agent's own
   (`agentProgram`: claude, codex, gemini or kimi as the program or the
   script node or python runs — Claude Code holds a loopback port in its

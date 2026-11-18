@@ -64,7 +64,8 @@ func TestParseKeepsTheAppsServersOnly(t *testing.T) {
 // The agents' door may stand on any port the machine's sshd picked, in a session that sits in a folder: never a server.
 func TestTheDoorOnAPortOfItsOwnIsNoServer(t *testing.T) {
 	answer := line("50236", "127.0.0.1", "951", "sshd-session", "/home/me/app", "/home/me/app", "sshd-session: me@notty") +
-		line("50237", "127.0.0.1", "952", "sshd-sess", "/Users/me/app", "/Users/me/app", "sshd-session: me@notty")
+		line("50237", "127.0.0.1", "952", "sshd-sess", "/Users/me/app", "/Users/me/app", "sshd-session: me@notty") +
+		line("50238", "127.0.0.1", "953", "dropbear", "/home/me/app", "/home/me/app", "dropbear -R")
 	if got := ports(Parse(answer, nil)); got != "" {
 		t.Fatalf("offered %s", got)
 	}
