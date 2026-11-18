@@ -152,6 +152,10 @@ func (s *Server) handleWorktreeRemoveAsShown(w http.ResponseWriter, r *http.Requ
 		rpcErr(w, err)
 		return
 	}
-	s.Watch.Refresh(mc)
+	// herdr's word from after the close: a workspace that came to the checkout meanwhile keeps it, as does not knowing
+	if snap, _ := s.Watch.Refresh(mc); snap == nil || len(sharers(snap, id, rm.Path)) > 0 {
+		writeJSON(w, map[string]any{"closed": true, "kept": true})
+		return
+	}
 	writeJSON(w, map[string]any{"closed": true, "worktree": worktrees.RemoveAsShown(mc, rm.Look, req.DeleteBranch)})
 }

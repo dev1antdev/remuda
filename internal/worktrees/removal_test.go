@@ -248,3 +248,58 @@ func TestAScanThatStopsShortNeverAgrees(t *testing.T) {
 		t.Error("a scan that stopped short reads as complete")
 	}
 }
+
+// submoduleIn gives the worktree a submodule "lib" and answers the folder it is checked out in.
+func submoduleIn(t *testing.T, host homeAt, tree string) string {
+	t.Helper()
+	lib := filepath.Join(host.home, "lib")
+	if err := os.MkdirAll(lib, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	gitIn(t, lib, "init", "-q", "-b", "main")
+	write(t, filepath.Join(lib, "l.txt"), "l\n")
+	gitIn(t, lib, "add", "l.txt")
+	gitIn(t, lib, "commit", "-qm", "lib")
+	gitIn(t, tree, "-c", "protocol.file.allow=always", "submodule", "add", "-q", lib, "lib")
+	gitIn(t, tree, "commit", "-qm", "the lib")
+	return filepath.Join(tree, "lib")
+}
+
+func TestAnEditInASubmoduleSetToBeIgnoredIsShown(t *testing.T) {
+	host, _, trees := madeRepo(t, "subs")
+	inside := submoduleIn(t, host, trees["subs"])
+	gitIn(t, trees["subs"], "config", "-f", ".gitmodules", "submodule.lib.ignore", "dirty")
+	gitIn(t, trees["subs"], "commit", "-qam", "ignore it")
+	write(t, filepath.Join(inside, "l.txt"), "edited\n")
+	look, err := LookAt(host, trees["subs"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if look.Dirty == 0 {
+		t.Errorf("the edit is not shown: %+v", look)
+	}
+}
+
+func TestASubmodulesOtherBranchAndStashAreShown(t *testing.T) {
+	for _, keep := range []string{"branch", "stash"} {
+		t.Run(keep, func(t *testing.T) {
+			host, _, trees := madeRepo(t, "subs")
+			inside := submoduleIn(t, host, trees["subs"])
+			gitIn(t, inside, "switch", "-q", "-c", "keep")
+			write(t, filepath.Join(inside, "l.txt"), "work\n")
+			if keep == "branch" {
+				gitIn(t, inside, "commit", "-qam", "experiment")
+				gitIn(t, inside, "checkout", "-q", "--detach", "origin/HEAD")
+			} else {
+				gitIn(t, inside, "stash", "-q")
+			}
+			look, err := LookAt(host, trees["subs"])
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(look.Submodules) != 1 || look.Submodules[0] != "lib" {
+				t.Errorf("the submodule looks safe: %+v", look)
+			}
+		})
+	}
+}

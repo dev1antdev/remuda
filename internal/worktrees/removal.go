@@ -43,7 +43,7 @@ func LookScript(path string) string {
 		"branch=$(" + git + " symbolic-ref --short -q HEAD 2>/dev/null)\n" +
 		"main=$(" + git + " worktree list --porcelain | sed -n '1s/^worktree //p')\n" +
 		"printf '%s\\n%s\\n\\036\\n' \"$branch\" \"$main\"\n" +
-		git + " status --porcelain --untracked-files=normal 2>/dev/null\nprintf '\\036\\n'\n" +
+		git + " status --porcelain --untracked-files=normal --ignore-submodules=none 2>/dev/null\nprintf '\\036\\n'\n" +
 		"if [ -n \"$branch\" ]; then\n" +
 		"  " + git + " rev-list --count \"refs/heads/$branch\" --not --remotes 2>/dev/null || echo 0\n" +
 		"  " + git + " -C \"$main\" rev-list --count \"refs/heads/$branch\" --not --remotes HEAD 2>/dev/null || echo 0\n" +
@@ -51,20 +51,20 @@ func LookScript(path string) string {
 		"  " + git + " rev-parse --verify -q \"refs/heads/$branch\" 2>/dev/null\n" +
 		"else printf '0\\n0\\nopen\\n'; fi\nprintf '\\036\\n'\n" +
 		"[ -f .gitmodules ] && echo submodules\n" +
-		git + " submodule foreach --quiet --recursive 'if [ -n \"$(git rev-list -n1 HEAD --not --remotes 2>/dev/null)\" ]; then printf \"lost %s\\n\" \"$displaypath\"; fi' 2>/dev/null\n" +
+		git + " submodule foreach --quiet --recursive 'if [ -n \"$(git rev-list -n1 HEAD --branches $(git rev-parse -q --verify refs/stash) --not --remotes 2>/dev/null)\" ]; then printf \"lost %s\\n\" \"$displaypath\"; fi' 2>/dev/null\n" +
 		"printf '\\036\\n'\n" + changesScript() + "\n"
 }
 
 // changesScript prints a checksum of the uncommitted work in the folder it runs in and in its submodules: staged,
-// unstaged, the contents of new files and where new links point, all of a repository git lists as one new folder. What
-// it cannot read adds the shell's process id, so no two looks agree and nothing goes past --force unseen.
+// unstaged, the contents of new files and where new links point, all of a repository git lists as one new folder, and
+// what a submodule's own branches and stash hold, which go with its folder. What it cannot read adds the shell's process id, so no two looks agree and nothing goes past --force unseen.
 func changesScript() string {
 	work := func(git string) string {
 		return git + " diff " + script.PatchForm + " --binary || echo $$; " + git + " diff --cached " + script.PatchForm + " --binary || echo $$; " +
 			git + " ls-files -o --exclude-standard >/dev/null || echo $$; " +
 			git + ` ls-files -z -o --exclude-standard | xargs -0 sh -c "for p; do find \"./\$p\" -type f -exec cksum {} + && find \"./\$p\" -type l -exec ls -ld {} + || echo \$\$; done" sh`
 	}
-	return "{ " + work(repos.Git) + "; " + repos.Git + " submodule foreach --quiet --recursive '" + work("git") + "; true' || echo $$; } 2>/dev/null | cksum"
+	return "{ " + work(repos.Git) + "; " + repos.Git + " submodule foreach --quiet --recursive '" + work("git") + "; git rev-parse HEAD; git for-each-ref refs/heads refs/stash; true' || echo $$; } 2>/dev/null | cksum"
 }
 
 // ParseLook reads the script's answer.

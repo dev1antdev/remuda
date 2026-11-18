@@ -4592,7 +4592,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   work's contents, submodules included (`Changes`, in the stamp, and read
   again by the script that removes with `--force`, after the close), whether that HEAD holds the branch
   (`merged`), a `.gitmodules`, and every submodule (`git submodule
-  foreach --recursive`) with a commit on no remote — plus, from the
+  foreach --recursive`) whose HEAD, branches or stash hold a commit on no remote — plus, from the
   server (`internal/server/worktree_remove.go`), the other workspaces on
   the checkout or with a pane in it (`sharers`), an agent working or
   asking there or a turn still ending (`busyIn`: `undo.Service.Working`
@@ -4605,8 +4605,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   agent at work is a 409, another workspace on the checkout closes this
   workspace alone, a stamp that is not the fresh look's (`removalStamp`: sharing and
   `merged_pr` are in it)
-  is a 409 ("it changed since this opened"), else herdr closes the workspace and
-  `RemoveAsShown` runs `git worktree remove`, with `--force` only for the
+  is a 409 ("it changed since this opened"), else herdr closes the workspace, a
+  workspace found on the checkout right after (or no answer) keeps the
+  folder, and `RemoveAsShown` runs `git worktree remove`, with `--force` only for the
   uncommitted work or the submodules the dialog named (the person's
   decision of 2026-11-13: git's writes at their press, a loss behind a
   danger button that says it), and `deleteBranchAt` at the commit the look

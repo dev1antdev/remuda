@@ -189,3 +189,39 @@ func TestClosingAWorkspaceLeavesTheWorktreeAnAgentWorksIn(t *testing.T) {
 		t.Errorf("%s goes while an agent works there", tree)
 	}
 }
+
+// TestAWorkspaceArrivingDuringTheRemovalKeepsTheFolder: the roster read before the close does not know of it.
+func TestAWorkspaceArrivingDuringTheRemovalKeepsTheFolder(t *testing.T) {
+	s, api, client, mc, _, mainWS := worktreeServer(t)
+	home, err := filepath.EvalSymlinks(os.Getenv("HOME"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	made, err := client.WorktreeCreateAt(mainWS, "feat-z", "", "z", filepath.Join(home, ".herdr", "worktrees", "app", "feat-z"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Watch.Refresh(mc); err != nil {
+		t.Fatal(err)
+	}
+	id := made.Workspace.WorkspaceID
+	var shown Removal
+	if rec := ask(api, "GET", "/api/worktrees/"+id+"/removal?machine=local", ""); json.Unmarshal(rec.Body.Bytes(), &shown) != nil {
+		t.Fatalf("the look is %d %s", rec.Code, rec.Body)
+	}
+	if _, err := client.WorkspaceCreate(made.Worktree.Path, "arrived"); err != nil {
+		t.Fatal(err)
+	}
+	body, _ := json.Marshal(map[string]any{"machine": "local", "stamp": shown.Stamp})
+	rec := ask(api, "POST", "/api/worktrees/"+id+"/remove", string(body))
+	var answer struct {
+		Closed bool `json:"closed"`
+		Kept   bool `json:"kept"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &answer); err != nil || !answer.Closed || !answer.Kept {
+		t.Errorf("answered %d %s", rec.Code, rec.Body)
+	}
+	if _, err := os.Stat(made.Worktree.Path); err != nil {
+		t.Errorf("the checkout is gone: %v", err)
+	}
+}
