@@ -16,13 +16,12 @@ import (
 )
 
 // The pull request an agent named, followed to its end: a red CI's log or the reviewers' comments handed to the agent
-// as a message, and a merged worktree taken down with its branch.
+// as a message.
 
 func (s *Server) prRoutes(api *http.ServeMux) {
 	api.HandleFunc("POST /api/pr/failure", s.prHandoff(prstatus.Failure))
 	api.HandleFunc("POST /api/pr/review", s.prHandoff(prstatus.ReviewComments))
 	api.HandleFunc("POST /api/pr/refresh", s.handlePRRefresh)
-	api.HandleFunc("DELETE /api/worktrees/{id}", s.handleWorktreeRemove)
 }
 
 // handlePRRefresh is POST {machine, panes}: a hover card opened on a workspace's requests, each read again on the
@@ -119,51 +118,6 @@ func (s *Server) prHandoff(compose func(host shell.Shell, label, url string) (st
 		}
 		writeJSON(w, map[string]any{"ok": true, "label": link.Label, "chars": len(text)})
 	}
-}
-
-// handleWorktreeRemove is DELETE /api/worktrees/{id}?machine=: a linked worktree's workspace closed, then the worktree
-// removed from its repository and its branch deleted, on the machine as the person. A worktree with uncommitted changes
-// is refused before anything closes; the branch goes past git's own merge check only when it ends where a merged request of it ended.
-func (s *Server) handleWorktreeRemove(w http.ResponseWriter, r *http.Request) {
-	mc, client, _, ok := s.ready(w, r, "")
-	if !ok {
-		return
-	}
-	snap, err := s.Watch.Snapshot(mc.ID())
-	if snap == nil {
-		httpErr(w, 502, err)
-		return
-	}
-	id := r.PathValue("id")
-	ws := snap.Workspace(id)
-	if ws == nil {
-		httpErr(w, 404, fmt.Errorf("no workspace %s", id))
-		return
-	}
-	if ws.Worktree == nil || !ws.Worktree.IsLinkedWorktree || ws.Worktree.CheckoutPath == "" {
-		httpErr(w, 400, fmt.Errorf("%q is not a linked worktree", ws.Label))
-		return
-	}
-	info, err := worktrees.Inspect(mc, ws.Worktree.CheckoutPath)
-	if err != nil {
-		httpErr(w, http.StatusBadGateway, err)
-		return
-	}
-	if info.Dirty != "" {
-		httpErr(w, http.StatusConflict, fmt.Errorf("the worktree has uncommitted changes (%s); commit or discard them first", info.Dirty))
-		return
-	}
-	landed := s.landedIn(mc, id)
-	if err := client.WorkspaceClose(id); err != nil {
-		rpcErr(w, err)
-		return
-	}
-	s.Watch.Refresh(mc)
-	if err := worktrees.Remove(mc, info, landed); err != nil {
-		httpErr(w, http.StatusBadGateway, fmt.Errorf("the workspace is closed; %s", err))
-		return
-	}
-	writeJSON(w, map[string]any{"ok": true, "branch": info.Branch, "repo": info.Repo})
 }
 
 // landedIn is the pull or merge requests an agent of the workspace named that gh or glab read as merged.

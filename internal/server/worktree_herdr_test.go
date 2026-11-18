@@ -88,6 +88,7 @@ func TestOpeningACheckoutHerdrHasOpenAlreadyStartsNothingThere(t *testing.T) {
 // such a workspace goes through that dialog alone.
 func TestAWorkspaceWhoseWorktreeFolderIsGoneStillCloses(t *testing.T) {
 	s, api, client, mc, _, mainWS := worktreeServer(t)
+	s.prRoutes(api)
 	made, err := client.WorktreeCreateAt(mainWS, "feat-x", "", "x", "")
 	if err != nil {
 		t.Fatal(err)
@@ -101,6 +102,9 @@ func TestAWorkspaceWhoseWorktreeFolderIsGoneStillCloses(t *testing.T) {
 	id := made.Workspace.WorkspaceID
 	if rec := ask(api, "GET", "/api/worktrees/"+id+"/removal?machine=local", ""); rec.Code == 200 {
 		t.Fatalf("a worktree whose folder is gone was looked at: %s", rec.Body)
+	}
+	if rec := ask(api, "DELETE", "/api/worktrees/"+id+"?machine=local", ""); rec.Code == 200 {
+		t.Fatalf("a worktree went past the dialog's checks: %s", rec.Body)
 	}
 	rec := ask(api, "POST", "/api/worktrees/"+id+"/remove", `{"machine":"local","keep_folder":true}`)
 	if rec.Code != 200 {

@@ -130,19 +130,6 @@ func RemoveScript(info Info, landed []Landed) string {
 		deleteBranchAt(info.Branch, `"$tip"`) + ";;\n*)\n" + plain + ";;\nesac\n"
 }
 
-// Remove takes the worktree down on the machine; the error is git's own line.
-func Remove(host shell.Shell, info Info, landed []Landed) error {
-	out, err := shell.Text(host, RemoveScript(info, landed), Timeout)
-	if err == nil {
-		return nil
-	}
-	var exit *shell.ExitError
-	if errors.As(err, &exit) && exit.Code == 5 {
-		return errors.New("the worktree is removed; the branch stays: " + lastLine(out, err.Error()))
-	}
-	return errors.New(lastLine(out, err.Error()))
-}
-
 // DiscardScript removes a worktree whose work the caller has saved, uncommitted changes and all, and deletes its branch.
 func DiscardScript(info Info) string {
 	s := script.PATH + "\ncd " + script.Quote(info.Repo) + " 2>/dev/null || { echo 'the repository is not there'; exit 3; }\n" +

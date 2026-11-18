@@ -332,6 +332,3 @@ export const handFailure = (machine: string, pane: string): Promise<Handed> => s
 // the reviews and line comments of the pane's pull request, sent to the pane's agent
 export const sendReview = (machine: string, pane: string): Promise<Handed> => sendJSON("POST", "/api/pr/review", { machine, pane });
 
-// a linked worktree's workspace closed, the worktree removed and its branch deleted on the machine
-export const removeWorktree = (machineId: string, id: string): Promise<{ ok: boolean; branch: string; repo: string }> =>
-  sendJSON("DELETE", withMachine(`/api/worktrees/${encodeURIComponent(id)}`, machineId));

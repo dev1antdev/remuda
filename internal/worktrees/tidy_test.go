@@ -1,6 +1,7 @@
 package worktrees
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -166,6 +167,16 @@ func TestAMergedRequestVouchesOnlyForItsOwnBranchAtItsOwnCommit(t *testing.T) {
 	}
 }
 
+// removeLanded runs the removal of a worktree whose branch a merged request ended on at tip; the error is what stopped it.
+func removeLanded(host shell.Shell, tree, main, tip string) error {
+	info := Info{Path: tree, Repo: main, Branch: "work"}
+	out, err := shell.Text(host, RemoveScript(info, []Landed{{Branch: "work", Commit: tip}}), Timeout)
+	if err != nil {
+		return errors.New(lastLine(out, err.Error()))
+	}
+	return nil
+}
+
 // TestABranchThatMovedStays: what the person was shown, or what the merged request ended on, is what may go.
 func TestABranchThatMovedStays(t *testing.T) {
 	host, main, trees := madeRepo(t, "work")
@@ -202,7 +213,7 @@ func TestABranchCheckedOutElsewhereStays(t *testing.T) {
 	tip := gitOut(t, trees["work"], "rev-parse", "HEAD")
 	gitIn(t, trees["work"], "switch", "-q", "--detach")
 	gitIn(t, main, "switch", "-q", "work")
-	err := Remove(host, Info{Path: trees["work"], Repo: main, Branch: "work"}, []Landed{{Branch: "work", Commit: tip}})
+	err := removeLanded(host, trees["work"], main, tip)
 	if err == nil || !strings.Contains(err.Error(), "in use in another worktree") || !strings.Contains(branches(t, main), "work") {
 		t.Fatalf("%v", err)
 	}
@@ -222,7 +233,7 @@ func TestABranchBeingRebasedElsewhereStays(t *testing.T) {
 	if out, err := rebase.CombinedOutput(); err == nil {
 		t.Fatalf("the rebase was to stop on its conflict: %s", out)
 	}
-	err := Remove(host, Info{Path: trees["work"], Repo: main, Branch: "work"}, []Landed{{Branch: "work", Commit: tip}})
+	err := removeLanded(host, trees["work"], main, tip)
 	if err == nil || !strings.Contains(err.Error(), "in use in another worktree") || gitOut(t, main, "rev-parse", "refs/heads/work") != tip {
 		t.Fatalf("%v", err)
 	}
@@ -246,7 +257,7 @@ func TestABranchAStackedRebaseWillMoveStays(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(record, "update-refs"), []byte("refs/heads/work\n"+tip+"\n"+tip+"\n"), mode); err != nil {
 				t.Fatal(err)
 			}
-			err := Remove(host, Info{Path: trees["work"], Repo: main, Branch: "work"}, []Landed{{Branch: "work", Commit: tip}})
+			err := removeLanded(host, trees["work"], main, tip)
 			if err == nil || !strings.Contains(err.Error(), "in use in another worktree") {
 				t.Fatalf("%v", err)
 			}
@@ -261,7 +272,7 @@ func TestABranchBeingBisectedElsewhereStays(t *testing.T) {
 	gitIn(t, trees["other"], "switch", "-q", "work")
 	gitIn(t, trees["other"], "bisect", "start")
 	gitIn(t, trees["other"], "switch", "-q", "--detach")
-	err := Remove(host, Info{Path: trees["work"], Repo: main, Branch: "work"}, []Landed{{Branch: "work", Commit: tip}})
+	err := removeLanded(host, trees["work"], main, tip)
 	if err == nil || !strings.Contains(err.Error(), "in use in another worktree") {
 		t.Fatalf("%v", err)
 	}

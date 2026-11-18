@@ -2,15 +2,14 @@
 // allows — the failed checks' log, the reviewers' comments — each a message the server composes with gh (glab for a
 // GitLab merge request) on the machine
 // and sends to the pane's agent, a toast when it went, the server's word when it could not; and, for a merged worktree,
-// its removal behind a confirm.
+// its removal through the remove dialog.
 
-import { act } from "@/app/act";
 import { actions } from "@/app/store";
 import { openUrl } from "@/lib/host";
 import { errMsg } from "@/lib/text";
 import type { MenuItem } from "@/ui";
-import { handFailure, removeWorktree, sendReview, type Machine, type PullRequest, type Session } from "./api";
-import { actionLabel, actionsFor, handedWords, removeAsk, removedWords, type PRAction } from "./prActions";
+import { handFailure, sendReview, type Machine, type PullRequest, type Session } from "./api";
+import { actionLabel, actionsFor, handedWords, type PRAction } from "./prActions";
 import { prWords } from "./prStatus";
 import { isPullURL } from "@/features/pr/links";
 import { t } from "@/lib/i18n";
@@ -27,9 +26,9 @@ export async function handPR(action: PRAction, machineId: string, paneId: string
   }
 }
 
-// askRemoveWorktree is the confirm before a merged worktree and its branch go; a yes closes the workspace and removes them.
+// askRemoveWorktree opens the remove dialog: what goes, what would be lost, and the server's checks when it is confirmed.
 export function askRemoveWorktree(machine: Machine, session: Session): void {
-  actions.ask(removeAsk(session.name), t("Remove the worktree"), () => void act(removeWorktree(machine.id, session.id).then((r) => actions.notify(removedWords(r.branch)))));
+  actions.openDialog({ kind: "remove-worktree", machineId: machine.id, session });
 }
 
 // prPanelRow opens the pull request panel on a GitHub pull request, in the checkout it came from; none for a merge request

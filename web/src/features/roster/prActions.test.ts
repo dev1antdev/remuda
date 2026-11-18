@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PRStatus, PullRequest } from "./api";
-import { actionLabel, actionsFor, canHandFailure, canRemoveWorktree, canSendReview, handedWords, removeAsk, removedWords } from "./prActions";
+import { actionLabel, actionsFor, canHandFailure, canRemoveWorktree, canSendReview, handedWords } from "./prActions";
 
 const status = (over: Omit<Partial<PRStatus>, "checks"> & { checks?: Partial<PRStatus["checks"]> } = {}): PRStatus => ({
   state: "OPEN",
@@ -53,9 +53,5 @@ describe("what the request's state allows", () => {
     expect(actionLabel("review", "PR #15")).toBe("Send the review comments of PR #15 to the agent");
     expect(handedWords("failure", "PR #15")).toBe("The failed checks of PR #15 are with the agent");
     expect(handedWords("review", "PR #15")).toBe("The review comments of PR #15 are with the agent");
-    expect(removeAsk("task-20-x")).toContain("Closes “task-20-x”");
-    expect(removeAsk("task-20-x")).toContain("uncommitted changes");
-    expect(removedWords("task-20-x")).toBe("Worktree removed, branch task-20-x deleted");
-    expect(removedWords("")).toBe("Worktree removed");
   });
 });

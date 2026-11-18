@@ -46,23 +46,15 @@ func TestRemoveNeverForcesAndDeletesTheBranchOnlyAsAsked(t *testing.T) {
 	if detached := RemoveScript(Info{Path: "/w", Repo: "/repo"}, []Landed{{Branch: "x", Commit: "abc"}}); strings.Contains(detached, "git branch") {
 		t.Fatalf("a detached worktree has no branch to delete: %q", detached)
 	}
+}
 
-	refused := &shell.Fake{Name: "box", Answer: func(string) (string, error) {
-		return "fatal: '/repo/.worktrees/task-20' contains modified or untracked files, use --force to delete it\n", &shell.ExitError{Code: 4}
-	}}
-	if err := Remove(refused, info, nil); err == nil || !strings.Contains(err.Error(), "contains modified or untracked files") {
-		t.Fatalf("err = %v", err)
+func TestGitsComplaintIsTheRefusalNotItsHint(t *testing.T) {
+	got := lastLine("error: the branch 'x' is not fully merged\nhint: If you are sure, run 'git branch -D x'\nhint: Disable this message\n", "none")
+	if got != "error: the branch 'x' is not fully merged" {
+		t.Errorf("got %q", got)
 	}
-	unmerged := &shell.Fake{Name: "box", Answer: func(string) (string, error) {
-		return "error: the branch 'task-20-x' is not fully merged\nhint: If you are sure you want to delete it, run 'git branch -D task-20-x'\n", &shell.ExitError{Code: 5}
-	}}
-	err := Remove(unmerged, info, nil)
-	if err == nil || err.Error() != "the worktree is removed; the branch stays: error: the branch 'task-20-x' is not fully merged" {
-		t.Fatalf("err = %v", err)
-	}
-	ok := &shell.Fake{Name: "box", Answer: func(string) (string, error) { return "Deleted branch task-20-x (was abc1234).\n", nil }}
-	if err := Remove(ok, info, nil); err != nil {
-		t.Fatal(err)
+	if got := lastLine(" \n", "none"); got != "none" {
+		t.Errorf("nothing said reads %q", got)
 	}
 }
 

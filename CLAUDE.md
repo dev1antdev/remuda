@@ -4558,16 +4558,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   text through `sessions.Input.SubmitToAgent` — 409 for a pane whose
   agent left, an agent waiting on a question or nothing to send, 502 with gh's (or
   glab's) line, 400 for a link that is neither.
-  **A merged worktree goes** (`internal/worktrees`, tested on
-  `shell.Fake`): `DELETE /api/worktrees/{id}` for a workspace herdr
-  marks a linked worktree — `Inspect` (the branch, the repository's main
-  worktree, the first line of `git status`; uncommitted changes are a
-  409 before anything closes), herdr `workspace.close`, then `Remove`:
-  `git worktree remove` (never `--force`) and `git branch -d`, or `-D`
-  only when an agent pane of the workspace named a request gh or glab read
-  as merged with the branch ending on the commit it ended on (`landedIn`,
-  `worktrees.Landed`, checked in the script), since a squash leaves git unsure; a branch it
-  refuses is reported with the worktree already gone. **A workspace's
+  **A merged worktree goes** through the remove dialog below: the
+  request's menu, on the tile and in the ⋯ (`askRemoveWorktree`), opens it.
+  **A workspace's
   close takes its worktree with it** (`tidy.go`, tested on real
   repositories in a temp home; `DELETE /api/sessions/{id}` →
   `handleWorkspaceClose`): when herdr marks the workspace a linked
@@ -4612,11 +4605,11 @@ components and icons as rules for whoever changes it: @docs/design.md
   `RemoveAsShown` runs `git worktree remove`, with `--force` only for the
   uncommitted work or the submodules the dialog named (the person's
   decision of 2026-11-13: git's writes at their press, a loss behind a
-  danger button that says it), and `git branch -D` when they flipped the
-  branch to Deleted (`RemoveTimeout` 10 min: a node_modules). The page:
+  danger button that says it), and `deleteBranchAt` at the commit the look
+  read when they flipped the branch to Deleted (`RemoveTimeout` 10 min: a node_modules). The page:
   `features/roster/worktree/RemoveWorktreeDialog.tsx` (dialog kind
   `remove-worktree`: "Close & remove worktree…" in a linked worktree's ⋯
-  and the palette, and the close of a made one): a red trash tile, the
+  and the palette, the merged request's menu, and the close of a made one): a red trash tile, the
   table — Folder *Deleted*, Branch *Kept* or *Deleted* (deleted by default
   once merged, a click flips it) — the losses in red, *Remove* / *Remove
   anyway* (`btn danger`), *Close, keep the folder* beside a loss and when
