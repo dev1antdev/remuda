@@ -209,7 +209,7 @@ func (s *Server) closeOtherConcierges(machineID string) {
 }
 
 // ownWorkspace says whether a workspace is one remuda keeps for itself — the floating terminal's shell, the concierge —
-// which the editor's folders, the previews and the sidebar leave out.
+// which the editor's folders, the previews, a viewer's files and the sidebar leave out.
 func (s *Server) ownWorkspace(machineID, workspaceID string) bool {
 	return (s.Scratch != nil && s.Scratch.Is(machineID, workspaceID)) || (s.Concierge != nil && s.Concierge.Is(machineID, workspaceID))
 }

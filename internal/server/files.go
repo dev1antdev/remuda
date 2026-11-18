@@ -9,14 +9,13 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/auth"
 	"github.com/dev1antdev/remuda/internal/filetree"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/rpath"
-	"github.com/dev1antdev/remuda/internal/state"
+	"github.com/dev1antdev/remuda/internal/viewer"
 )
 
 // Files the agent wrote: resolved, served, diffed, uploaded.
@@ -24,104 +23,19 @@ import (
 // errViewerOutside refuses a viewer a file beyond what its link reaches.
 var errViewerOutside = errors.New("this link is for viewing only: the file is outside the workspaces")
 
-// viewerReach is what a viewer may read on a machine.
-type viewerReach struct {
-	folders, closed []string
-	style           rpath.Style
-	local           bool
-}
-
-// reachOf is the workspace folders that do not hold the machine's home — one at it or above it would open everything
-// there — less the places a key lives in, on any system the machine may be. An unknown home reaches nothing.
-func reachOf(dirs []string, home, stateDir string, style rpath.Style, local bool) viewerReach {
-	reach := viewerReach{style: style, local: local}
-	if home == "" {
-		return reach
-	}
-	for _, dir := range dirs {
-		if !style.Within(realPath(dir, local), realPath(home, local)) {
-			reach.folders = append(reach.folders, dir)
-		}
-	}
-	reach.closed = []string{
-		style.Join(home, ".ssh"),
-		style.Join(home, ".config", "remuda"),
-		style.Join(home, "Library", "Application Support", "remuda"),
-		style.Join(home, "AppData", "Roaming", "remuda"),
-	}
-	if stateDir != "" {
-		reach.closed = append(reach.closed, stateDir)
-	}
-	return reach
-}
-
-// allows says the viewer may read the path. The closed places are matched whatever the case, as a Mac's disk finds them.
-func (r viewerReach) allows(path string) bool {
-	if !withinFolders(path, r.folders, r.local) {
-		return false
-	}
-	path = strings.ToLower(realPath(path, r.local))
-	for _, closed := range r.closed {
-		if r.style.Within(strings.ToLower(realPath(closed, r.local)), path) {
-			return false
-		}
-	}
-	return true
-}
-
-// viewerFolders is what a viewer may read on a machine — by the watcher's last snapshot, remuda's own workspaces left
-// out — and whether the request is a viewer's at all.
-func (s *Server) viewerFolders(ctx context.Context, mc *machines.Machine) (viewerReach, bool) {
+// viewerReachOn is what a viewer may read on a machine, by the watcher's last snapshot, and whether the request is a
+// viewer's at all.
+func (s *Server) viewerReachOn(ctx context.Context, mc *machines.Machine) (viewer.Reach, bool) {
 	if !auth.IsViewer(ctx) {
-		return viewerReach{}, false
+		return viewer.Reach{}, false
 	}
 	var dirs []string
 	if s.Watch != nil {
-		for _, dir := range s.previewFolders(mc.ID()) {
-			dirs = append(dirs, dir)
+		if snap, _ := s.Watch.Snapshot(mc.ID()); snap != nil {
+			dirs = s.editorFolders(mc.ID(), snap)
 		}
 	}
-	stateDir := ""
-	if mc.Local() {
-		stateDir, _ = state.Dir()
-	}
-	return reachOf(dirs, mc.Home(), stateDir, mc.Paths(), mc.Local()), true
-}
-
-// withinFolders says whether a path lies in one of the folders; on this machine symlinks are followed on both sides,
-// so a link out of a workspace reaches nothing and /tmp and /private/tmp are one folder.
-func withinFolders(path string, folders []string, local bool) bool {
-	if style := rpath.For(path); !local && style.Windows { // a Windows machine's: case and separators its own
-		for _, folder := range folders {
-			if folder != "" && style.Within(folder, path) {
-				return true
-			}
-		}
-		return false
-	}
-	path = realPath(path, local)
-	for _, folder := range folders {
-		folder = strings.TrimSuffix(realPath(folder, local), "/")
-		if path == folder || strings.HasPrefix(path, folder+"/") {
-			return true
-		}
-	}
-	return false
-}
-
-// realPath is the path with its symlinks resolved on this machine, the name kept when the file is not there yet.
-func realPath(path string, local bool) string {
-	path = filepath.Clean(path)
-	if !local {
-		return path
-	}
-	if real, err := filepath.EvalSymlinks(path); err == nil {
-		return real
-	}
-	if dir, err := filepath.EvalSymlinks(filepath.Dir(path)); err == nil {
-		return filepath.Join(dir, filepath.Base(path))
-	}
-	return path
+	return viewer.Of(dirs, mc.Home(), mc.StateDir(), mc.Paths(), mc.Local()), true
 }
 
 func (s *Server) fileRoutes(api *http.ServeMux) {
@@ -149,8 +63,8 @@ func (s *Server) handleFsStat(w http.ResponseWriter, r *http.Request) {
 	if cwd == "" {
 		cwd = r.URL.Query().Get("dir")
 	}
-	reach, viewer := s.viewerFolders(r.Context(), mc)
-	if viewer && cwd != "" && !reach.allows(cwd) {
+	reach, viewer := s.viewerReachOn(r.Context(), mc)
+	if viewer && cwd != "" && !reach.Allows(cwd) {
 		httpErr(w, http.StatusForbidden, errViewerOutside)
 		return
 	}
@@ -160,24 +74,13 @@ func (s *Server) handleFsStat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if viewer {
-		if !reach.allows(info.Path) {
+		if !reach.Allows(info.Path) {
 			httpErr(w, http.StatusForbidden, errViewerOutside)
 			return
 		}
-		info.Candidates = reach.allowed(info.Candidates)
+		info.Candidates = reach.Allowed(info.Candidates)
 	}
 	writeJSON(w, info)
-}
-
-// allowed keeps the paths the viewer may read.
-func (r viewerReach) allowed(paths []string) []string {
-	var kept []string
-	for _, p := range paths {
-		if r.allows(p) {
-			kept = append(kept, p)
-		}
-	}
-	return kept
 }
 
 // handleFsDirs is GET /api/fs/dirs?machine&path&hidden: a folder's subfolders on the machine, for the folder picker.
@@ -211,7 +114,7 @@ func (s *Server) handleFsTree(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 400, err)
 		return
 	}
-	if reach, viewer := s.viewerFolders(r.Context(), mc); viewer && !reach.allows(folder) {
+	if reach, viewer := s.viewerReachOn(r.Context(), mc); viewer && !reach.Allows(folder) {
 		httpErr(w, http.StatusForbidden, errViewerOutside)
 		return
 	}
@@ -236,7 +139,7 @@ func (s *Server) handleFsFile(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 400, fmt.Errorf("absolute path required (resolve it with /api/fs/stat first)"))
 		return
 	}
-	if reach, viewer := s.viewerFolders(r.Context(), mc); viewer && !reach.allows(path) {
+	if reach, viewer := s.viewerReachOn(r.Context(), mc); viewer && !reach.Allows(path) {
 		httpErr(w, http.StatusForbidden, errViewerOutside)
 		return
 	}

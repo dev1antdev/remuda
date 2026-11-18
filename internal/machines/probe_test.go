@@ -41,6 +41,19 @@ func TestAMacOrLinuxProbeIsReadAsBefore(t *testing.T) {
 	}
 }
 
+func TestTheProbeNamesTheFolderRemudaKeepsThere(t *testing.T) {
+	if script := probeScript(false); !strings.Contains(script, `XDG_CONFIG_HOME`) || !strings.Contains(script, `state=`) {
+		t.Error("the probe does not reckon the state dir as the machine's remuda does")
+	}
+	if found := parseProbe("home=/home/me\nos=Linux\nstate=/home/me/dotfiles/remuda\n"); found.state != "/home/me/dotfiles/remuda" {
+		t.Errorf("read %+v", found)
+	}
+	windows := parseProbe("state=/c/Users/me/AppData/Roaming/remuda\nhome=/c/Users/me\nos=MINGW64_NT-10.0\nwinhome=C:\\\\Users\\\\me\n")
+	if windows.state != `C:\Users\me\AppData\Roaming\remuda` {
+		t.Errorf("on Windows: %q", windows.state)
+	}
+}
+
 func TestAWindowsShellThatIsNotGitBashIsNamed(t *testing.T) {
 	for _, answer := range []string{
 		"'sh' is not recognized as an internal or external command,\r\noperable program or batch file.",

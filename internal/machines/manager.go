@@ -182,6 +182,7 @@ func NewManager(dir, localSocket, localHerdrBin string, door *Door) *Manager {
 	local := &Machine{
 		Cfg:      Config{ID: LocalID, Label: localLabel(runtime.GOOS, host)},
 		local:    true,
+		stateDir: dir,
 		state:    StateConnected,
 		herdrBin: localHerdrBin,
 		socket:   localSocket,

@@ -140,6 +140,27 @@ func (s Style) Within(root, p string) bool {
 	return ok
 }
 
+// HoldsAHome says folder is the root, a home of the usual places (/root, /home/<name>, /Users/<name>, C:\Users\<name>),
+// or this machine's home, or any folder above one of them.
+func (s Style) HoldsAHome(home, folder string) bool {
+	if home != "" && s.Within(folder, home) {
+		return true
+	}
+	parts := strings.FieldsFunc(s.Slash(folder), func(r rune) bool { return r == '/' })
+	if s.Windows && len(parts) > 0 {
+		parts = parts[1:] // the drive
+	}
+	switch len(parts) {
+	case 0:
+		return true
+	case 1:
+		return parts[0] == "root" || parts[0] == "home" || strings.EqualFold(parts[0], "Users")
+	case 2:
+		return parts[0] == "home" || strings.EqualFold(parts[0], "Users")
+	}
+	return false
+}
+
 // Rel is p relative to root, with forward slashes, "." for root itself; false when p is not under root.
 func (s Style) Rel(root, p string) (string, bool) {
 	root, p = s.Clean(root), s.Clean(p)

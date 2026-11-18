@@ -668,10 +668,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   `Gone`, a folder gone with its files likewise, unless the listing was cut).
   Nothing is written. Route `GET /api/fs/tree?machine&dir&path`
   (`internal/server/files.go`, the `trees` field of the server, ready at its
-  zero value): a viewer's within its reach alone (`viewerReach`, `reachOf` in
-  that file: the workspace folders, remuda's own and any at the machine's
-  home or above it left out, `~/.ssh` and the state dir closed inside them;
-  `viewerRoutes`), an agent key never. The page: the files rail's **Project**
+  zero value): a viewer's within its reach alone (`viewer.Reach`, see the
+  viewer links; `viewerRoutes`), an agent key never. The page: the files rail's **Project**
   tab — `app/FilesRail.tsx` (the rail: its two tabs, `fv-tabs`, pref
   `footprint.tab` per device, Agent `features/chat/AgentFiles.tsx` — the files
   the agent touched as before, their icons now, its count "…" while read — or
@@ -2786,8 +2784,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   conflicts, not_merged}`. Routes (`internal/server/gitgraph.go`, tested):
   `GET /api/git/log?machine&dir&all&remotes&skip&limit`, `GET
   /api/git/state`, `GET /api/git/commit?sha`, `GET /api/git/diff?sha&path&from`
-  — a viewer's within the workspaces' folders (`gitTarget` over
-  `viewerFolders`, `viewerRoutes`), an agent key's never — and `POST
+  — a viewer's on a checkout its reach holds whole (`gitTarget` over
+  `viewerReachOn`, `Reach.AllowsAll`; `viewerRoutes`), an agent key's never — and `POST
   /api/git/op {machine, dir, …Request}`, the person's alone (400 refused,
   409 busy or stale, 404 no repository, 200 with git's refusal as
   `{ok: false, output}`; then the folder's badge read again and the roster
@@ -3340,7 +3338,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   concierge.ts`, tested) into `concierges`, so the sidebar, the Wall
   and its zoo, the palette, the folder pickers, the badge, Alt+N and the
   Mac app's menu never see it; the server leaves it out of the Code
-  mode's workspace file and the previews (`ownWorkspace`), of the
+  mode's workspace file, the previews and a viewer's files (`ownWorkspace`), of the
   standup (`recap.Service.Skip`), of `agents_list` (`tasksapi`'s
   `Workspace.Concierge`, `AgentPanes`), of the chats a reboot stopped
   and the closed list (`restart.Memory.Skip`), of every restart —
@@ -6727,10 +6725,12 @@ components and icons as rules for whoever changes it: @docs/design.md
   the office or a colleague watching a run. `ViewerAllows(method, path)`
   is a GET of `viewerRoutes` — the roster, the chat, the screen, the
   scrollback, a recap, the standup, the feed, a file, its stat and a folder of the project tree (kept
-  by `files.go` to the machine's workspace folders, the watcher's
-  `WorkspaceDirs`, symlinks followed on this machine — `withinFolders`,
-  tested: the token file, a key or an ssh key read through the file
-  viewer would open what the link must not; 403 "the file is outside the
+  by `internal/viewer`, tested: `Reach` is the machine's workspace folders
+  by the watcher's snapshot, remuda's own and any at a home or above one
+  left out (`rpath.HoldsAHome`), `~/.ssh` and the state dir the machine's
+  probe names closed inside them whatever the case, symlinks followed on
+  this machine: the token file or an ssh key read through the file viewer
+  would open what the link must not; 403 "the file is outside the
   workspaces", and a stat's `dir` and candidates are kept the same way),
   the health, the push public key, the question, the usage, the models'
   scorecard (`/api/scorecard`, its rows naming no task), the folders'

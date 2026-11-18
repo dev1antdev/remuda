@@ -29,7 +29,7 @@ func (s *Server) gitTarget(w http.ResponseWriter, r *http.Request, bodyMachine, 
 	if !ok {
 		return nil, false
 	}
-	if reach, viewer := s.viewerFolders(r.Context(), mc); viewer && !reach.allows(dir) {
+	if reach, viewer := s.viewerReachOn(r.Context(), mc); viewer && !reach.AllowsAll(dir) {
 		httpErr(w, http.StatusForbidden, errViewerOutsideCheckout)
 		return nil, false
 	}
@@ -95,7 +95,7 @@ func (s *Server) handleGitDiff(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	_, viewer := s.viewerFolders(r.Context(), mc) // a viewer reads the files under the workspace's folder alone
+	_, viewer := s.viewerReachOn(r.Context(), mc) // a viewer reads the files under the workspace's folder alone
 	patch, err := gitgraph.ReadPatch(mc, dir, q.Get("sha"), q.Get("path"), q.Get("from"), viewer)
 	if err != nil {
 		gitReadErr(w, err)
