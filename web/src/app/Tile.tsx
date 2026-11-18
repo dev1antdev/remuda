@@ -165,7 +165,7 @@ export function TileView({ tile, view = "chat", radar, step, now, brief = false,
           <TileState words={words} said={said} />
           {pane.agent && <ScreenRibbon machineId={machine.id} paneId={pane.id} status={pane.status} dir={dir} tailTurns={TAIL_TURNS} />}
           <Screen machineId={machine.id} paneId={pane.id} cols={pane.cols} busy={pane.status === "run" || pane.status === "input"} active onOpen={open} />
-          <TailAnswer machineId={machine.id} paneId={pane.id} status={pane.status} dir={dir} agent={pane.agent} active />
+          {pane.agent && <TailAnswer machineId={machine.id} paneId={pane.id} status={pane.status} dir={dir} agent={pane.agent} active />}
         </>
       ) : (
         <WindowsPaths.Provider value={onWindows(machine)}>

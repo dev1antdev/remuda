@@ -109,7 +109,7 @@ func (s *Server) prHandoff(compose func(host shell.Shell, label, url string) (st
 			return
 		}
 		if err := s.Input.SubmitToAgent(client, events.PaneRef{Machine: mc.ID(), Pane: req.Pane}, text); err != nil {
-			if sessions.Undelivered(err) {
+			if errors.Is(err, sessions.ErrAgentBusy) || errors.Is(err, sessions.ErrNoAgent) {
 				httpErr(w, http.StatusConflict, err)
 				return
 			}

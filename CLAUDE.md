@@ -828,8 +828,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   so — its lens switch keeps its room unseen (`.lens-switch.is-vacant`,
   inert) so the header moves nothing between the two, the palette offers
   it no Show the chat, Show the changes, Show the Git history or split, the View menu no files
-  rail or split rows, and a shell popped out shows its screen, never a
-  chat tail or a creature. An agent started at a shell's prompt (`claude`
+  rail or split rows, and a shell popped out shows its screen alone, never a
+  chat tail, a composer or a creature. An agent started at a shell's prompt (`claude`
   typed there) keeps the terminal in view rather than turning to the lens
   kept for agents (`keepsTerminal`: only for a pane that came on screen
   as a shell, so an agent's pane a restart passes through a shell goes
@@ -6877,11 +6877,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   `ctrl`, `alt` and `shift`, each once, before a named key — enter, esc,
   tab, space, backspace, the arrows — or `ctrl` / `alt` before a letter or
   digit; a printable key alone is text), `RefOK` (a branch name git gets as an
-  argument), and `Input`: one lock per pane, `Submit` (`agent.prompt` only: what
-  is written for an agent is never typed, since the pane may hold its
-  shell, which would run every line; `ErrNoAgent` without one,
-  `ErrAgentNotReady` while it comes up, `ErrAgentBusy` while a menu is
-  open, each a 409 that leaves the person's draft; **a message
+  argument), and `Input`: one lock per pane, `Submit` (`agent.prompt`: what is
+  written for an agent is never typed into a pane without one, whose shell
+  would run every line; `ErrNoAgent` when none is ready, `ErrAgentBusy`
+  while a menu is open, each a 409 that leaves the person's draft; **a message
   that names a picture goes to Claude Code in two steps** — `settle.go`,
   tested on a paper client: herdr 0.9.5 writes the paste and its Enter as
   one, Claude Code swallows an Enter that arrives while it takes a paste
@@ -7253,10 +7252,11 @@ components and icons as rules for whoever changes it: @docs/design.md
   it must keep working after a restart while agents run.
 - **The transcript is read-only**; input goes through herdr: `agent.prompt`
   preferred (refuses with `agent_blocked` while a menu is open — surface
-  that as 409, never type into the menu), `pane.send_text` + 150ms +
-  `pane.send_keys ["Enter"]` as the shell fallback, and for a message that
-  names a picture, to Claude Code, the paste and then — once it is in and
-  no question came up — the Enter (`sessions/settle.go`). Everything per-pane is
+  that as 409, never type into the menu), and for a message that
+  names a picture, to Claude Code, the paste and then — once it is in, no
+  question came up and the agent still holds the terminal — the Enter
+  (`sessions/settle.go`). A pane with no agent ready gets nothing: a 409,
+  never the text typed into its shell. Everything per-pane is
   serialized by `sessions.Input`, one lock per pane. Never queue or auto-send user input.
   The first prompts remuda composes itself — a handover's, a second
   opinion's review request (`opinion.Prompt`) — go only

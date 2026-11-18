@@ -18,6 +18,11 @@ type paper struct {
 	screens []string // what pane.read answers, call after call; the last one stands
 	getErr  error
 	calls   []string
+
+	launching  bool
+	atPrompt   []bool // what the shell's hold on the terminal reads, check after check; the last one stands
+	atErr      error
+	leaveAfter error // what agent.get answers once the paste went in
 }
 
 func (p *paper) next(list *[]string) string {
@@ -36,11 +41,23 @@ func (p *paper) AgentGet(string) (herdr.AgentInfo, error) {
 	if p.getErr != nil {
 		return herdr.AgentInfo{}, p.getErr
 	}
-	return herdr.AgentInfo{Agent: p.agent, Status: p.next(&p.status)}, nil
+	return herdr.AgentInfo{Agent: p.agent, Status: p.next(&p.status), LaunchPending: p.launching}, nil
+}
+
+func (p *paper) PaneAtPrompt(string) (bool, error) {
+	if p.atErr != nil || len(p.atPrompt) == 0 {
+		return false, p.atErr
+	}
+	head := p.atPrompt[0]
+	if len(p.atPrompt) > 1 {
+		p.atPrompt = p.atPrompt[1:]
+	}
+	return head, nil
 }
 
 func (p *paper) PaneSendInput(_, text string, keys []string) error {
 	p.calls = append(p.calls, "paste:"+text+strings.Join(keys, "+"))
+	p.getErr = p.leaveAfter
 	return nil
 }
 
@@ -169,5 +186,33 @@ func TestStillPastingReadsTheFooterAlone(t *testing.T) {
 	talk := "why does it say Pasting… forever?\n" + strings.Repeat("line\n", 12) + idleBox
 	if stillPasting(talk) {
 		t.Error("the word in the conversation above the footer counts")
+	}
+}
+
+// What the paste cannot vouch for goes to herdr's own submit, which refuses a pane with no agent up.
+func TestAPastesAgentMustHoldTheTerminal(t *testing.T) {
+	quick(t)
+	for name, p := range map[string]*paper{
+		"a shell in the foreground": {agent: "claude", status: []string{"idle"}, atPrompt: []bool{true}},
+		"still starting":            {agent: "claude", status: []string{"idle"}, launching: true},
+		"not known":                 {agent: "claude", status: []string{"idle"}, atErr: errors.New("no answer")},
+	} {
+		if err := submit(p, shot); err != nil || strings.Join(p.calls, "|") != "get|prompt:"+shot {
+			t.Errorf("%s: %v, %v", name, err, p.calls)
+		}
+	}
+}
+
+// An agent gone between the paste and the Enter gets no Enter: the shell would run the text.
+func TestAnAgentGoneNeverGetsTheEnter(t *testing.T) {
+	quick(t)
+	for name, p := range map[string]*paper{
+		"herdr no longer names it":  {agent: "claude", status: []string{"idle"}, screens: []string{idleBox}, leaveAfter: &herdr.Error{Code: "agent_not_found"}},
+		"a shell took the terminal": {agent: "claude", status: []string{"idle"}, screens: []string{idleBox}, atPrompt: []bool{false, true}},
+	} {
+		err := submit(p, shot)
+		if got := strings.Join(p.calls, "|"); !errors.Is(err, ErrLeftMeanwhile) || strings.Contains(got, "keys:") || !strings.Contains(got, "paste:") {
+			t.Errorf("%s: %v, %v", name, err, p.calls)
+		}
 	}
 }
