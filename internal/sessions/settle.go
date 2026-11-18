@@ -16,8 +16,8 @@ import (
 // (a composer's attachment, "@.remuda/uploads/shot.png"): then it reads the file first, and the Enter is gone for
 // good. The message sits in the prompt box as "[Pasted text]", unsent (read off Claude Code 2.1.325's paste hook).
 // So the text still goes by herdr's submit, the one way that makes sure an agent holds the terminal; the paste is
-// waited out — the footer says "Pasting…" while it lasts — and Enter is pressed again after it, alone: in the worst
-// case it lands on an empty line.
+// waited out — the footer says "Pasting…" while it lasts — and Enter is pressed again after it, alone, only while the
+// prompt box still shows the paste unsent.
 
 // Settler is what the Enter after the paste needs of herdr's client beyond a Prompter's part.
 type Settler interface {
@@ -43,6 +43,7 @@ var ErrLeftMeanwhile = errors.New("the agent left just as your message reached i
 const (
 	claudeAgent   = "claude"
 	pastingWords  = "Pasting"
+	unsentWords   = "[Pasted text"
 	footerRows    = 6
 	statusBlocked = "blocked"
 )
@@ -56,13 +57,18 @@ func NamesPicture(text string) bool {
 }
 
 // stillPasting reads Claude Code's footer off a screen: true while it says the paste is being taken in.
-func stillPasting(screen string) bool {
+func stillPasting(screen string) bool { return inFooter(screen, pastingWords) }
+
+// stillUnsent reads the prompt box off a screen: true while the paste sits in it, waiting for its Enter.
+func stillUnsent(screen string) bool { return inFooter(screen, unsentWords) }
+
+func inFooter(screen, words string) bool {
 	rows := strings.Split(strings.TrimRight(screen, "\n \t"), "\n")
 	if len(rows) > footerRows {
 		rows = rows[len(rows)-footerRows:]
 	}
 	for _, row := range rows {
-		if strings.Contains(row, pastingWords) {
+		if strings.Contains(row, words) {
 			return true
 		}
 	}
@@ -100,6 +106,10 @@ func enterAfterPaste(client interface {
 	}
 	if atPrompt, err := client.PaneAtPrompt(pane); err != nil || atPrompt {
 		return ErrLeftMeanwhile
+	}
+	// sent already, or anything else on the screen: an Enter now could only answer what came up
+	if screen, err := client.PaneRead(pane); err != nil || !stillUnsent(screen) {
+		return nil
 	}
 	return client.PaneSendKeys(pane, []string{"enter"})
 }

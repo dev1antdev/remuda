@@ -94,7 +94,7 @@ func TestAMessageWithAPictureIsEnteredAfterThePaste(t *testing.T) {
 	if err := submit(p, shot); err != nil {
 		t.Fatal(err)
 	}
-	want := "prompt:" + shot + "|get|read|read|read|get|keys:enter"
+	want := "prompt:" + shot + "|get|read|read|read|get|read|keys:enter"
 	if got := strings.Join(p.calls, "|"); got != want {
 		t.Fatalf("calls\n got %s\nwant %s", got, want)
 	}
@@ -136,6 +136,20 @@ func TestAQuestionNeverGetsTheEnter(t *testing.T) {
 	}
 }
 
+// A message that went with herdr's Enter leaves the box empty: what is on the screen then gets no second one.
+func TestASentMessageGetsNoSecondEnter(t *testing.T) {
+	quick(t)
+	for name, screen := range map[string]string{
+		"an empty box": "╭────╮\n│ >  │\n╰────╯\n  ⏵⏵ accept edits on",
+		"a dialog":     "Do you want to proceed?\n❯ 1. Yes\n  2. No",
+	} {
+		p := &paper{agent: "claude", status: []string{"working"}, screens: []string{screen}}
+		if err := submit(p, shot); err != nil || strings.Contains(strings.Join(p.calls, "|"), "keys:") {
+			t.Errorf("%s: %v, %v", name, err, p.calls)
+		}
+	}
+}
+
 // An agent gone after the submit gets no Enter.
 func TestAnAgentGoneNeverGetsTheEnter(t *testing.T) {
 	quick(t)
@@ -154,7 +168,7 @@ func TestAnAgentGoneNeverGetsTheEnter(t *testing.T) {
 // A footer that never stops saying Pasting is waited out, then Enter goes all the same.
 func TestThePasteIsWaitedForOnlySoLong(t *testing.T) {
 	quick(t)
-	p := &paper{agent: "claude", status: []string{"idle"}, screens: []string{busyFoot}}
+	p := &paper{agent: "claude", status: []string{"idle"}, screens: []string{idleBox + "\n  Pasting…"}}
 	began := time.Now()
 	if err := submit(p, shot); err != nil {
 		t.Fatal(err)
