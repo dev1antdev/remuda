@@ -1325,6 +1325,7 @@ func (st *Store) Update(id int64, p Patch) (Task, error) {
 	if err != nil {
 		return cur, err
 	}
+	wasDone := cur.Done
 	if p.Title != nil {
 		if cur.Title = strings.TrimSpace(*p.Title); cur.Title == "" {
 			return cur, invalid("a task needs a title")
@@ -1426,24 +1427,40 @@ func (st *Store) Update(id int64, p Patch) (Task, error) {
 			return cur, ErrCardHeld
 		}
 	}
+	// only what this patch changes is written: the rest was read before the transaction and may be older than the row
+	var project, status, title, description, done, doneAt, dueDate, priority, position any
 	switch {
 	case p.After != nil:
 		if cur.Position, err = placeAfter(tx, cur.ProjectID, cur.StatusID, id, *p.After); err != nil {
 			return cur, err
 		}
+		position = cur.Position
 	case moved:
 		cur.Position = bottom(tx, cur.ProjectID, cur.StatusID)
+		position = cur.Position
 	}
-	// the words only when this patch names them: read before the transaction, they may be older than the row
-	var title, description any
+	if moved {
+		project, status = cur.ProjectID, cur.StatusID
+	}
+	if moved || cur.Done != wasDone {
+		done, doneAt = cur.Done, cur.DoneAt
+	}
 	if p.Title != nil {
 		title = cur.Title
 	}
 	if p.Description != nil {
 		description = cur.Description
 	}
-	if _, err := tx.Exec(`UPDATE tasks SET project_id=?, status_id=?, title=COALESCE(?, title), description=COALESCE(?, description), done=?, done_at=?, due_date=?, priority=?, position=?, updated=? WHERE id=?`,
-		cur.ProjectID, cur.StatusID, title, description, cur.Done, cur.DoneAt, cur.DueDate, cur.Priority, cur.Position, now, id); err != nil {
+	if p.DueDate != nil {
+		dueDate = cur.DueDate
+	}
+	if p.Priority != nil {
+		priority = cur.Priority
+	}
+	if _, err := tx.Exec(`UPDATE tasks SET project_id=COALESCE(?, project_id), status_id=COALESCE(?, status_id), title=COALESCE(?, title),
+  description=COALESCE(?, description), done=COALESCE(?, done), done_at=COALESCE(?, done_at), due_date=COALESCE(?, due_date),
+  priority=COALESCE(?, priority), position=COALESCE(?, position), updated=? WHERE id=?`,
+		project, status, title, description, done, doneAt, dueDate, priority, position, now, id); err != nil {
 		return cur, err
 	}
 	if moved && cur.Refused != "" {

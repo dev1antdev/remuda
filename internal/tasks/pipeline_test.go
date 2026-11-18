@@ -349,24 +349,41 @@ func TestAnAgentsKeyKeepsARunningPipelinesCardAsItIs(t *testing.T) {
 	}
 }
 
-func TestAPatchThatNamesNoWordsLeavesTheNewestWordsStanding(t *testing.T) {
+func TestAPatchWritesOnlyWhatItChanges(t *testing.T) {
 	st, err := Open(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer st.Close()
+	queueOf := func(project Project) int64 {
+		t.Helper()
+		if _, err := st.SetStatuses(project.ID, append(project.Statuses, Status{Title: "Queued", Kind: KindOpen, OnQueue: true}), nil); err != nil {
+			t.Fatal(err)
+		}
+		p, err := st.Project(project.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return flagged(p.Statuses, func(s Status) bool { return s.OnQueue }).ID
+	}
 	projects, _ := st.Projects()
+	here := projects[0]
+	there, err := st.CreateProject("Elsewhere", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	queueHere, queueThere := queueOf(here), queueOf(there)
 	title, old := "The card", "<p>old</p>"
-	card, err := st.CreateFrom(projects[0].ID, Patch{Title: &title, Description: &old}, "")
+	card, err := st.CreateFrom(here.ID, Patch{Title: &title, Description: &old, StatusID: &queueHere}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	corrected, newTitle, edited := "<p>corrected</p>", "The card, corrected", false
 	clock := st.now
-	st.now = func() time.Time { // between the patch's read of the card and its write, the person saves
+	st.now = func() time.Time { // between the patch's read of the card and its write, the person edits and moves it
 		if !edited {
 			edited = true
-			if _, err := st.Update(card.ID, Patch{Title: &newTitle, Description: &corrected}); err != nil {
+			if _, err := st.Update(card.ID, Patch{Title: &newTitle, Description: &corrected, ProjectID: &there.ID, StatusID: &queueThere}); err != nil {
 				t.Error(err)
 			}
 		}
@@ -377,7 +394,7 @@ func TestAPatchThatNamesNoWordsLeavesTheNewestWordsStanding(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !edited || got.Title != newTitle || got.Description != corrected || got.Priority != 3 {
-		t.Errorf("the person's edit was undone: %+v", got)
+	if !edited || got.Title != newTitle || got.Description != corrected || got.ProjectID != there.ID || got.StatusID != queueThere || got.Priority != 3 {
+		t.Errorf("the person's edit and move were undone: %+v", got)
 	}
 }
