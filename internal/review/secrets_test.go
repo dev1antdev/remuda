@@ -699,8 +699,8 @@ func TestAMergeThatOnlyMergedHoldsNoPush(t *testing.T) {
 	git("add", "-A")
 	git("commit", "-qm", "main")
 	git("merge", "-q", "--no-edit", "side")
-	for name, withOldGit := range map[string]bool{"this git": false, "a git before 2.35": true} {
-		if withOldGit {
+	for _, name := range []string{"this git", "a git before 2.35"} { // the stand-in stays on PATH once set, so this order
+		if name != "this git" {
 			gitWithoutRemergeDiff(t)
 		}
 		scan, err := ScanWork(shell.Local{Name: "local"}, dir, true)

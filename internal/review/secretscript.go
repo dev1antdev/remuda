@@ -57,10 +57,15 @@ var untrackedScript = `list=$(git ls-files -z --others --exclude-standard 2>/dev
 	`grep --untracked --no-color -G -n -z -e '' -- 2>/dev/null | tr '\0' '\037'; ` +
 	`fi; `
 
-// unpushedLog is the commits a push would send with their patches, merges read as mergeForm says.
-func unpushedLog(mergeForm string) string {
-	return readGit + ` -c diff.relative=false -c log.showRoot=true -c log.showSignature=false log ` + mergeForm + ` -n ` + strconv.Itoa(scanCommits) +
-		` -p ` + plainPatch + ` --format='%x1ecommit %h' HEAD --not --remotes 2>/dev/null`
+// unpushedLog is git's log of the commits a push would send, in the form given.
+func unpushedLog(form string) string {
+	return readGit + ` -c diff.relative=false -c log.showRoot=true -c log.showSignature=false log -n ` + strconv.Itoa(scanCommits) + ` ` + form +
+		` HEAD --not --remotes 2>/dev/null`
+}
+
+// commitPatches is the commits with their patches, merges read as mergeForm says.
+func commitPatches(mergeForm string) string {
+	return unpushedLog(mergeForm + ` -p ` + plainPatch + ` --format='%x1ecommit %h'`)
 }
 
 // unpushedScript prints the commits a push would send. --remerge-diff (git 2.35) shows what a merge itself brought, its
@@ -69,9 +74,9 @@ func unpushedLog(mergeForm string) string {
 // combined diff tells such a merge from a plain one, not what it added in a form the check can read.
 var unpushedScript = `c=$(git rev-list --max-count=` + strconv.Itoa(countCommits) + ` HEAD --not --remotes 2>/dev/null | wc -l | tr -d ' '); ` +
 	`if [ "${c:-0}" -gt ` + strconv.Itoa(scanCommits) + ` ]; then printf '\036older %s\n' "$((c - ` + strconv.Itoa(scanCommits) + `))"; fi; ` +
-	unpushedLog(`--remerge-diff`) + ` || { ` +
-	unpushedLog(`--no-merges`) + ` || printf '\036failed commits\n'; ` +
-	`m=$(` + readGit + ` log --merges -n ` + strconv.Itoa(scanCommits) + ` --cc --name-only --no-color --format='%x1emerge %h' HEAD --not --remotes 2>/dev/null) || printf '\036failed commits\n'; ` +
+	commitPatches(`--remerge-diff`) + ` || { ` +
+	commitPatches(`--no-merges`) + ` || printf '\036failed commits\n'; ` +
+	`m=$(` + unpushedLog(`--merges --cc --name-only --no-color --format='%x1emerge %h'`) + `) || printf '\036failed commits\n'; ` +
 	`printf '%s\n' "$m" | LC_ALL=C awk '/^\036merge /{ m = $0; next } NF && m != "" { print m; m = "" }'; }; `
 
 // secretScript prints, in one stream through capScript, the diff of the work against HEAD (the empty tree before the
