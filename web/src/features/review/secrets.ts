@@ -13,7 +13,7 @@ export const STAGED = "staged";
 export type SkipReason = "binary" | "large" | "partly" | "budget" | "many" | "older";
 export type SkippedFile = { path?: string; why: SkipReason; count?: number }; // count: the untracked files past the cap, or the commits
 // SecretScan is the server's answer: the findings, what it did not read, how many files and commits it read
-export type SecretScan = { findings: SecretFinding[]; more?: number; skipped?: SkippedFile[]; files: number; commits?: number; push?: boolean; at: string };
+export type SecretScan = { findings: SecretFinding[]; more?: number; skipped?: SkippedFile[]; incomplete?: boolean; files: number; commits?: number; push?: boolean; at: string };
 // SettingsAudit is one of Claude Code's settings files in the folder or its repository's root
 export type SettingsAudit = { path: string; local?: boolean; tracked?: boolean; ignored?: boolean; findings?: SecretFinding[] };
 
@@ -54,20 +54,23 @@ const RULES: Record<string, string> = {
 
 export const ruleWords = (rule: string): string => RULES[rule] ?? t("Secret value");
 
-// CheckState is where the check stands for the dialog: not asked (no commit or pull request), running, its answer, or failed
-export type CheckState = "off" | "checking" | "clean" | "found" | "failed";
+// CheckState is where the check stands for the dialog: not asked (no commit or pull request), running, its answer (nothing
+// found in what it could not read all of is "incomplete", no clean one), or failed
+export type CheckState = "off" | "checking" | "clean" | "found" | "incomplete" | "failed";
 
 export function checkState(asked: boolean, scan: SecretScan | null, error: string, fetching: boolean): CheckState {
   if (!asked) return "off";
   if (error && !fetching) return "failed";
   if (!scan) return "checking";
-  return foundCount(scan) > 0 ? "found" : "clean";
+  if (foundCount(scan) > 0) return "found";
+  return scan.incomplete ? "incomplete" : "clean";
 }
 
 export const foundCount = (scan: SecretScan | null): number => (scan ? scan.findings.length + (scan.more ?? 0) : 0);
 
-// heldBack: the approval that asks for a commit or a pull request waits for a confirm, after findings or a failed check
-export const heldBack = (state: CheckState): boolean => state === "found" || state === "failed";
+// heldBack: the approval that asks for a commit or a pull request waits for a confirm, after findings or a check that
+// failed or could not read everything
+export const heldBack = (state: CheckState): boolean => state === "found" || state === "incomplete" || state === "failed";
 
 // asksPush: the pull request's check reads the commits a push would send, the commit's only the work
 export const asksPush = (ask: VerdictAsk): boolean => ask === "pr";
@@ -75,6 +78,7 @@ export const asksPush = (ask: VerdictAsk): boolean => ask === "pr";
 export function stateWords(state: CheckState, scan: SecretScan | null, ask: VerdictAsk): string {
   if (state === "checking") return asksPush(ask) ? t("Looking for secrets in what the commit and the push would carry…") : t("Looking for secrets in what the commit would carry…");
   if (state === "found") return tn(foundCount(scan), "{n} thing here looks like a secret. Take it out, or send anyway once you have looked.", "{n} things here look like secrets. Take them out, or send anyway once you have looked.");
+  if (state === "incomplete") return asksPush(ask) ? t("The secret check found nothing, but could not read all of what the commit and the push would carry.") : t("The secret check found nothing, but could not read all of what the commit would carry.");
   if (state !== "clean" || !scan) return "";
   const files = scan.files > 0 ? tn(scan.files, "No secrets in the {n} file the commit would carry.", "No secrets in the {n} files the commit would carry.") : t("Nothing for the commit to carry.");
   return scan.push && scan.commits ? `${files} ${tn(scan.commits, "The {n} commit not pushed yet holds none either.", "The {n} commits not pushed yet hold none either.")}` : files;
@@ -87,6 +91,11 @@ export function sendAnywayAsk(state: CheckState, scan: SecretScan | null, ask: V
     return push
       ? t("The secret check did not finish, so nothing is known about secrets in what the agent would commit and push. Approve and ask for the pull request anyway?")
       : t("The secret check did not finish, so nothing is known about secrets in what the agent would commit. Approve and ask for the commit anyway?");
+  }
+  if (state === "incomplete") {
+    return push
+      ? t("The secret check could not read all of what the agent would commit and push. Approve and ask for the pull request anyway?")
+      : t("The secret check could not read all of what the agent would commit. Approve and ask for the commit anyway?");
   }
   const n = foundCount(scan);
   return push

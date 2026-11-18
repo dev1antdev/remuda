@@ -46,6 +46,11 @@ export const secretguard: Dictionary = {
   ],
   "No secrets in the {n} files the commit would carry.": ["Секретов нет в {n} файле, который унесёт коммит.", "Секретов нет в {n} файлах, которые унесёт коммит.", "Секретов нет в {n} файлах, которые унесёт коммит."],
   "Nothing for the commit to carry.": "Коммиту нечего уносить.",
+  "The secret check found nothing, but could not read all of what the commit and the push would carry.": "Проверка на секреты ничего не нашла, но смогла прочитать не всё, что унесут коммит и push.",
+  "The secret check found nothing, but could not read all of what the commit would carry.": "Проверка на секреты ничего не нашла, но смогла прочитать не всё, что унесёт коммит.",
+  "The secret check could not read all of what the agent would commit and push. Approve and ask for the pull request anyway?": "Проверка на секреты смогла прочитать не всё, что агент закоммитит и отправит. Всё равно одобрить и попросить pull request?",
+  "The secret check could not read all of what the agent would commit. Approve and ask for the commit anyway?": "Проверка на секреты смогла прочитать не всё, что агент закоммитит. Всё равно одобрить и попросить коммит?",
+  "The secret check could not read all of this work. Commit it anyway?": "Проверка на секреты смогла прочитать эту работу не целиком. Всё равно закоммитить?",
   "The {n} commits not pushed yet hold none either.": ["В {n} ещё не отправленном коммите их тоже нет.", "В {n} ещё не отправленных коммитах их тоже нет.", "В {n} ещё не отправленных коммитах их тоже нет."],
   "The secret check did not finish, so nothing is known about secrets in what the agent would commit and push. Approve and ask for the pull request anyway?":
     "Проверка на секреты не завершилась, и о секретах в том, что агент закоммитит и отправит, ничего не известно. Всё равно одобрить и попросить pull request?",

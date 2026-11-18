@@ -18043,6 +18043,7 @@ textarea.screen-term-field {
 }
 
 .modal .secret-check.is-found,
+.modal .secret-check.is-incomplete,
 .modal .secret-check.is-failed {
   border-color: var(--amber-ring);
   background: var(--amber-soft);
@@ -18062,6 +18063,7 @@ textarea.screen-term-field {
 }
 
 .secret-check.is-found .secret-check-head > svg,
+.secret-check.is-incomplete .secret-check-head > svg,
 .secret-check.is-failed .secret-check-head > svg {
   color: var(--amber);
 }

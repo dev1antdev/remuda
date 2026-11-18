@@ -3,6 +3,7 @@ package review
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -18,10 +19,12 @@ type SecretScan struct {
 	Findings []secrets.Finding `json:"findings"`
 	More     int               `json:"more,omitempty"` // findings past the caps
 	Skipped  []Skipped         `json:"skipped,omitempty"`
-	Files    int               `json:"files"`             // files of the work read
-	Commits  int               `json:"commits,omitempty"` // commits read, for a push
-	Push     bool              `json:"push,omitempty"`
-	At       time.Time         `json:"at"`
+	// Incomplete says text was left unread, so finding nothing does not clear it; a binary file has none to read.
+	Incomplete bool      `json:"incomplete,omitempty"`
+	Files      int       `json:"files"`             // files of the work read
+	Commits    int       `json:"commits,omitempty"` // commits read, for a push
+	Push       bool      `json:"push,omitempty"`
+	At         time.Time `json:"at"`
 }
 
 // Skipped is what the check did not read, or not whole, and why.
@@ -165,6 +168,7 @@ func readScan(output string, push bool) (SecretScan, error) {
 		return SecretScan{}, errUnfinished
 	}
 	scan.Findings, scan.More, scan.Files = collector.Findings(), collector.More(), len(read)
+	scan.Incomplete = slices.ContainsFunc(scan.Skipped, func(skip Skipped) bool { return skip.Why != SkipBinary })
 	return scan, nil
 }
 

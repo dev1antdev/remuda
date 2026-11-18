@@ -207,6 +207,14 @@ func TestTheSecretCheckHoldsAPushUntilTheyPushAnyway(t *testing.T) {
 	if outcome := failing.Push("local", mine, PushAsk{}); outcome.State != Held || outcome.Reason != ReasonCheckFailed || outcome.Output == "" {
 		t.Fatalf("a push whose check failed: %+v", outcome)
 	}
+	partial := review.SecretScan{Incomplete: true, Skipped: []review.Skipped{{Why: review.SkipOlder, Count: 150}}}
+	unread := service(t, idle, func(shell.Host, string) (review.SecretScan, error) { return partial, nil })
+	if outcome := unread.Push("local", mine, PushAsk{}); outcome.State != Held || outcome.Reason != ReasonCheckPartial || outcome.Scan == nil || len(outcome.Scan.Skipped) != 1 {
+		t.Fatalf("a push the check could not read all of: %+v", outcome)
+	}
+	if gitIn(t, bare, "rev-parse", "main") != before {
+		t.Fatal("a push read only in part reached the remote")
+	}
 	if outcome := place.Push("local", mine, PushAsk{Anyway: true}); outcome.State != Done {
 		t.Fatalf("push anyway: %+v", outcome)
 	}

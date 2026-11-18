@@ -169,6 +169,9 @@ func TestTheSecretCheckReadsTheScriptsAnswer(t *testing.T) {
 	if scan.Files != 6 || scan.Commits != 1 || !scan.Push {
 		t.Errorf("read %d files, %d commits, push %v", scan.Files, scan.Commits, scan.Push)
 	}
+	if !scan.Incomplete {
+		t.Error("a check that left files unread reads as complete")
+	}
 	scripts := host.Scripts()
 	if len(scripts) != 1 || !strings.Contains(scripts[0], "cd '/repo'") || !strings.Contains(scripts[0], "--not --remotes") || !strings.Contains(scripts[0], "--no-textconv") {
 		t.Fatalf("script: %q", scripts)
@@ -530,5 +533,33 @@ func TestTheSettingsSectionIsRead(t *testing.T) {
 	if len(audits) != 2 || !audits[0].Local || audits[0].Tracked || audits[0].Ignored || len(audits[0].Findings) != 1 ||
 		audits[1].Local || !audits[1].Tracked || audits[1].Path != "/repo/.claude/settings.json" {
 		t.Errorf("%+v", audits)
+	}
+}
+
+// TestRemovedLinesCostTheCheckNothing: a big deletion leaves the lines added beside it read.
+func TestRemovedLinesCostTheCheckNothing(t *testing.T) {
+	ownGitConfig(t)
+	_, git, write := scratchCheckout(t)
+	write("data.txt", strings.Repeat("an old line of data\n", scanPerFile/10))
+	git("add", "-A")
+	git("commit", "-qm", "init")
+	write("data.txt", "export NPM_TOKEN="+"npm_"+fakeKey(21, 36)+"\n")
+	dir := strings.TrimSpace(git("rev-parse", "--show-toplevel"))
+	scan, err := ScanWork(shell.Local{Name: "local"}, dir, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(scan.Findings) != 1 || scan.Incomplete || len(scan.Skipped) != 0 {
+		t.Errorf("scan: %+v", scan)
+	}
+}
+
+func TestABinaryFileAloneLeavesTheCheckComplete(t *testing.T) {
+	scan, err := readScan("diff --git a/logo.png b/logo.png\nBinary files /dev/null and b/logo.png differ\n"+script.RS+"end\n", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if scan.Incomplete || len(scan.Skipped) != 1 {
+		t.Errorf("scan: %+v", scan)
 	}
 }

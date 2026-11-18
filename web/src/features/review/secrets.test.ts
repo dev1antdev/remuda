@@ -28,6 +28,8 @@ describe("the check's state", () => {
     expect(checkState(true, scan(), "", false)).toBe("clean");
     expect(checkState(true, scan({ findings: [finding()] }), "", false)).toBe("found");
     expect(checkState(true, scan({ more: 2 }), "", false)).toBe("found");
+    expect(checkState(true, scan({ incomplete: true }), "", false)).toBe("incomplete");
+    expect(checkState(true, scan({ incomplete: true, more: 1 }), "", false)).toBe("found");
   });
   it("fails on an error, and checks again while a retry runs", () => {
     expect(checkState(true, null, "the secret check could not run: timed out", false)).toBe("failed");
@@ -36,6 +38,7 @@ describe("the check's state", () => {
   it("holds the approval back after findings or a failure, never while clean or off", () => {
     expect(heldBack("found")).toBe(true);
     expect(heldBack("failed")).toBe(true);
+    expect(heldBack("incomplete")).toBe(true);
     expect(heldBack("clean")).toBe(false);
     expect(heldBack("checking")).toBe(false);
     expect(heldBack("off")).toBe(false);
@@ -58,6 +61,9 @@ describe("the check's words", () => {
     expect(sendAnywayAsk("found", scan({ findings: [finding(), finding({ line: 3 })] }), "commit")).toBe("2 possible secrets are in what the agent would commit. Approve and ask for the commit anyway?");
     expect(sendAnywayAsk("found", scan({ findings: [finding()] }), "pr")).toBe("1 possible secret is in what the agent would commit and push. Approve and ask for the pull request anyway?");
     expect(sendAnywayAsk("failed", null, "commit")).toMatch(/^The secret check did not finish/);
+    expect(sendAnywayAsk("incomplete", scan({ incomplete: true }), "pr")).toMatch(/could not read all of what the agent would commit and push/);
+    expect(sendAnywayAsk("incomplete", scan({ incomplete: true }), "commit")).toMatch(/would commit\. Approve/);
+    expect(stateWords("incomplete", scan({ incomplete: true }), "commit")).toMatch(/could not read all/);
   });
   it("name every rule, and a rule the page does not know as a secret value", () => {
     const rules = ["private-key", "aws-access-key", "github-token", "github-fine-grained-token", "gitlab-token", "slack-token", "slack-webhook", "stripe-live-key", "anthropic-key", "openai-key",

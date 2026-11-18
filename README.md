@@ -1703,8 +1703,9 @@ the latest commit moved since. **Skip hooks (--no-verify)** in the same
 menu makes the next commit without the repository's pre-commit and
 commit-msg hooks — for that commit alone, said under the box until it
 lands. The secret check stands before a commit as
-before Approve & commit: findings hold the button back and **Commit
-anyway…** asks first. A failure keeps your message and shows git's own
+before Approve & commit: findings, or text it could not read (over its
+size limits, or past 200 unpushed commits for a push), hold the button
+back and **Commit anyway…** asks first. A failure keeps your message and shows git's own
 words. Nothing is written while an agent works, asks or ends a turn in that
 checkout — the lens names the agent — and every write is yours alone: a
 viewer link or an agent's key reaches none of them. Under the box,

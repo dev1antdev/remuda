@@ -76,5 +76,6 @@ export function committedWords(short: string, subject: string, amended: boolean,
 // commitAnywayAsk is the confirm before committing past what the secret check found, or past a check that failed
 export function commitAnywayAsk(state: CheckState, scan: SecretScan | null): string {
   if (state === "failed") return t("The secret check could not run, so nothing is known about secrets in this work. Commit it anyway?");
+  if (state === "incomplete") return t("The secret check could not read all of this work. Commit it anyway?");
   return tn(foundCount(scan), "{n} thing in this work looks like a secret. Commit it anyway?", "{n} things in this work look like secrets. Commit them anyway?");
 }

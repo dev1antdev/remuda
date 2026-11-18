@@ -104,6 +104,10 @@ func (s *Service) Push(machineID, dir string, ask PushAsk) Outcome {
 				outcome.State, outcome.Reason, outcome.Scan = Held, ReasonSecretsFound, &scan
 				return outcome
 			}
+			if scan.Incomplete {
+				outcome.State, outcome.Reason, outcome.Scan = Held, ReasonCheckPartial, &scan
+				return outcome
+			}
 		}
 		result := s.network(host, style, p, outcome, pushScript(remote, p.branch, p.head, target, setUpstream, ask.NoVerify))
 		if result.State == Done {

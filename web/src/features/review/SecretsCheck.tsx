@@ -8,7 +8,7 @@ import type { VerdictAsk } from "./draft";
 import { jumpable, ruleWords, skippedWords, stateWords, whereWords, type CheckState, type SecretFinding } from "./secrets";
 import type { SecretCheck } from "./useSecretCheck";
 
-const ICONS: Record<CheckState, IconName> = { off: "info", checking: "clock", clean: "circle-check", found: "alert-triangle", failed: "alert-triangle" };
+const ICONS: Record<CheckState, IconName> = { off: "info", checking: "clock", clean: "circle-check", incomplete: "alert-triangle", found: "alert-triangle", failed: "alert-triangle" };
 
 export function SecretsCheck({ state, check, ask, listed, onJump }: {
   state: CheckState; // for the dialog's choice right now (stateFor)
@@ -18,7 +18,7 @@ export function SecretsCheck({ state, check, ask, listed, onJump }: {
   onJump: (finding: SecretFinding) => void;
 }) {
   if (state === "off") return null;
-  const answered = state === "found" || state === "clean";
+  const answered = state === "found" || state === "incomplete" || state === "clean";
   const findings = state === "found" ? (check.scan?.findings ?? []) : [];
   const more = state === "found" ? (check.scan?.more ?? 0) : 0;
   const skipped = answered ? skippedWords(check.scan?.skipped) : "";

@@ -2372,7 +2372,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   the commits on no remote-tracking branch (`git log -p --no-merges -n 200
   HEAD --not --remotes`, each after `\036commit <sha>`, outside the folder
   too, paths the repository's: a push sends whole commits; the ones past
-  200 counted, `\036older N`): what the push would send. The awk cuts each
+  200 counted, `\036older N`): what the push would send. The awk drops a diff's removed lines, cuts each
   file at 1 MB (`\036partly`) and the stream at `scanTotal` 8 MB
   (`\036budget <path>` / `\036unread <path>` for the rest), so a remote
   sends megabytes at most; `readScan` feeds the added lines, with their
@@ -2386,8 +2386,11 @@ components and icons as rules for whoever changes it: @docs/design.md
   and Send anyway), never "nothing found" (a folder outside git, a git
   that failed and a cut-off script once all read as clean); 45 s at most
   (`scanTimeout`, said as "it took longer than 45s", never ssh's quoting
-  of the script). `SecretScan{findings, more, skipped [{path, why,
-  count}], files, commits, push, at}`. Route: `GET
+  of the script). **A check that left text unread is no clean one either**: any skip
+  but `binary` sets `incomplete`, and a commit, a pull request's approval
+  and a push (`check-incomplete`) wait for a confirm that says so, the
+  skips listed. `SecretScan{findings, more, skipped [{path, why,
+  count}], incomplete, files, commits, push, at}`. Route: `GET
   /api/review/secrets?machine&dir&push=1` (`internal/server/review.go`;
   a 502 carries the reason alone), the person's only — in neither
   `viewerRoutes` nor `readRoutes`, so a viewer link and an agent key get a

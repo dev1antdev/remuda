@@ -47,6 +47,7 @@ describe("the commit box", () => {
   it("asks before committing past the secret check", () => {
     expect(commitAnywayAsk("found", { findings: [{ file: "a", line: 1, rule: "jwt", excerpt: "" }], more: 1, files: 1, at: "" })).toBe("2 things in this work look like secrets. Commit them anyway?");
     expect(commitAnywayAsk("failed", null)).toMatch(/could not run/);
+    expect(commitAnywayAsk("incomplete", null)).toMatch(/could not read all/);
     expect(committedWords("1a2b3c4", "Say hello", false)).toBe("Committed 1a2b3c4: Say hello");
     expect(commitHint(state({ mode: "amend" }), true, false)).toMatch(/force push/);
   });
