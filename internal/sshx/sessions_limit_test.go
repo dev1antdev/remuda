@@ -232,17 +232,24 @@ func TestNothingStartsOnceItsTimeIsGone(t *testing.T) {
 func TestNothingIsWrittenPastTheDeadline(t *testing.T) {
 	limitedSSH(t)
 	c := limited()
-	conn, err := c.DialExec("hold", time.Minute)
+	late, err := c.DialExec("hold", time.Minute)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.Close()
-	conn.SetDeadline(time.Now().Add(-time.Second))
-	if _, err := conn.Write([]byte("agent.prompt\n")); !errors.Is(err, os.ErrDeadlineExceeded) {
-		t.Errorf("a write past the deadline: %v", err)
+	defer late.Close()
+	late.SetDeadline(time.Now().Add(-time.Second))
+	if n, err := late.Write([]byte("agent.prompt\n")); n != 0 || !errors.Is(err, os.ErrDeadlineExceeded) {
+		t.Errorf("a write past the deadline: %d, %v", n, err)
 	}
-	conn.SetDeadline(time.Time{}) // the event stream clears it once herdr has answered
-	if _, err := conn.Write([]byte("x\n")); errors.Is(err, os.ErrDeadlineExceeded) {
+	cleared, err := c.DialExec("hold", time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleared.Close()
+	cleared.SetDeadline(time.Now().Add(30 * time.Millisecond))
+	cleared.SetDeadline(time.Time{}) // the event stream clears it once herdr has answered
+	time.Sleep(60 * time.Millisecond)
+	if _, err := cleared.Write([]byte("x\n")); err != nil {
 		t.Errorf("a write with the deadline cleared: %v", err)
 	}
 }
