@@ -157,6 +157,13 @@ func TestAnAgentsKeyLeavesAQueuedCardAlone(t *testing.T) {
 		t.Errorf("the queued card changed: %+v", got)
 	}
 
+	elsewhere, err := store.CreateProject("Elsewhere", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code, out := taskCall(h, "PATCH", path, "GOG", `{"project_id": `+strconv.FormatInt(elsewhere.ID, 10)+`}`); code != http.StatusForbidden {
+		t.Errorf("an agent's key took a queued card to another project: %d %v", code, out)
+	}
 	if code, out := taskCall(h, "DELETE", path, "GOG", ``); code != http.StatusForbidden {
 		t.Errorf("an agent's key deleted a card: %d %v", code, out)
 	}

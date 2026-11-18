@@ -31,7 +31,7 @@ var (
 	ErrNotFound = errors.New("not found")
 	ErrInvalid  = errors.New("invalid")
 	// ErrCardHeld refuses an agent's key the words of a card the queue or a running pipeline hands to the next agent.
-	ErrCardHeld = errors.New("an agent's key cannot change the title, description or fields of a card in the Queued column or a running pipeline")
+	ErrCardHeld = errors.New("an agent's key cannot change the title, description or fields of a card in the Queued column or a running pipeline, nor move it to another project")
 )
 
 func invalid(msg string) error { return fmt.Errorf("%w: %s", ErrInvalid, msg) }
@@ -1349,9 +1349,10 @@ func (st *Store) Update(id int64, p Patch) (Task, error) {
 	if err != nil {
 		return cur, err
 	}
-	moved := false
+	moved, crossed := false, false
 	var carryTo []Field
 	if p.ProjectID != nil && *p.ProjectID != cur.ProjectID {
+		crossed = true // the fields the other project lacks are lost on the way
 		target, err := st.Project(*p.ProjectID)
 		if err != nil {
 			return cur, fmt.Errorf("project: %w", err)
@@ -1414,7 +1415,7 @@ func (st *Store) Update(id int64, p Patch) (Task, error) {
 		return cur, err
 	}
 	defer tx.Rollback()
-	if p.ByAgent && (p.Title != nil || p.Description != nil || len(p.Fields) > 0) {
+	if p.ByAgent && (crossed || p.Title != nil || p.Description != nil || len(p.Fields) > 0) {
 		// inside the transaction, on the one connection: a card queued or started a moment ago counts
 		var held bool
 		if err := tx.QueryRow(`SELECT EXISTS (SELECT 1 FROM tasks t JOIN statuses s ON s.id = t.status_id WHERE t.id = ? AND s.on_queue = 1)
@@ -1433,8 +1434,16 @@ func (st *Store) Update(id int64, p Patch) (Task, error) {
 	case moved:
 		cur.Position = bottom(tx, cur.ProjectID, cur.StatusID)
 	}
-	if _, err := tx.Exec(`UPDATE tasks SET project_id=?, status_id=?, title=?, description=?, done=?, done_at=?, due_date=?, priority=?, position=?, updated=? WHERE id=?`,
-		cur.ProjectID, cur.StatusID, cur.Title, cur.Description, cur.Done, cur.DoneAt, cur.DueDate, cur.Priority, cur.Position, now, id); err != nil {
+	// the words only when this patch names them: read before the transaction, they may be older than the row
+	var title, description any
+	if p.Title != nil {
+		title = cur.Title
+	}
+	if p.Description != nil {
+		description = cur.Description
+	}
+	if _, err := tx.Exec(`UPDATE tasks SET project_id=?, status_id=?, title=COALESCE(?, title), description=COALESCE(?, description), done=?, done_at=?, due_date=?, priority=?, position=?, updated=? WHERE id=?`,
+		cur.ProjectID, cur.StatusID, title, description, cur.Done, cur.DoneAt, cur.DueDate, cur.Priority, cur.Position, now, id); err != nil {
 		return cur, err
 	}
 	if moved && cur.Refused != "" {

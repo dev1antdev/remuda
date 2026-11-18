@@ -7294,7 +7294,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   person wrote, like an agent schedule's — and only for cards the person
   put in the Queued column: an agent's key cannot queue a card, rewrite
   the title, description or fields of a card in the Queued column or with
-  a pipeline run `on` (`ErrCardHeld`, judged inside `Store.Update`'s
+  a pipeline run `on`, or take it to another project, which drops the
+  fields that one lacks (`ErrCardHeld`, judged inside `Store.Update`'s
   transaction: the next stage's `{task}` reads them too), delete a card,
   nor reach any route of a single project — its settings, columns, fields and
   agents, deleting it (`Key.Allows` refuses `/api/tasks/projects/…`); the

@@ -334,10 +334,50 @@ func TestAnAgentsKeyKeepsARunningPipelinesCardAsItIs(t *testing.T) {
 	if _, err := st.Update(card.ID, Patch{Description: &words}); err != nil {
 		t.Errorf("the person's edit: %v", err)
 	}
+	other, err := st.CreateProject("Elsewhere", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.Update(card.ID, Patch{ProjectID: &other.ID, ByAgent: true}); !errors.Is(err, ErrCardHeld) {
+		t.Fatalf("an agent's key took the card to another project, losing what its fields hold: %v", err)
+	}
 	if err := st.StopPipeline(run.ID, "the person moved it"); err != nil {
 		t.Fatal(err)
 	}
 	if got, err := st.Update(card.ID, Patch{Title: &words, ByAgent: true}); err != nil || got.Title != words {
 		t.Errorf("after the pipeline: %+v, %v", got, err)
+	}
+}
+
+func TestAPatchThatNamesNoWordsLeavesTheNewestWordsStanding(t *testing.T) {
+	st, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	projects, _ := st.Projects()
+	title, old := "The card", "<p>old</p>"
+	card, err := st.CreateFrom(projects[0].ID, Patch{Title: &title, Description: &old}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	corrected, newTitle, edited := "<p>corrected</p>", "The card, corrected", false
+	clock := st.now
+	st.now = func() time.Time { // between the patch's read of the card and its write, the person saves
+		if !edited {
+			edited = true
+			if _, err := st.Update(card.ID, Patch{Title: &newTitle, Description: &corrected}); err != nil {
+				t.Error(err)
+			}
+		}
+		return clock()
+	}
+	priority := 3
+	got, err := st.Update(card.ID, Patch{Priority: &priority, ByAgent: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !edited || got.Title != newTitle || got.Description != corrected || got.Priority != 3 {
+		t.Errorf("the person's edit was undone: %+v", got)
 	}
 }
