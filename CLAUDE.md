@@ -394,11 +394,13 @@ components and icons as rules for whoever changes it: @docs/design.md
   forwarded back to `DoorPort` 7318 on the machine's loopback or, when
   the machine's sshd refused that `doorPortAsks` times (after this
   remuda's own restart it holds 7318 a moment for the connection that
-  just ended) and the door `agent-url` names does not answer
-  (`doorAnswersScript`: a live one is another cockpit's and stays, the
-  files untouched), to a port it picks (`doorForward`: a connection the
-  network lost holds 7318 for hours, sshd not noticing, and a request to
-  it hangs) and
+  just ended) and nothing live stands at the address `agent-url` names
+  (`doorLookScript`, straight to the loopback, past any proxy: a live door
+  is another cockpit's and stays, the files untouched, as does one that
+  could not be looked at), to a port it picks (`doorForward`: a connection
+  the network lost holds 7318 for hours, sshd not noticing, and a request
+  to it hangs); a door live on such a port is left alone with 7318 free
+  too, and
   `DoorScript` placing `agent-key` (the machine's tasks-only key, on
   stdin, never on a command line, kept on the `Machine` so a reconnect
   places the same one while it still passes) and `agent-url`
@@ -6661,8 +6663,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   run on (`http://127.0.0.1:7317` on the cockpit, its door forwarded
   over ssh on a remote), read again for every call by a running `remuda
   mcp` (`tasksapi.Following`: a reconnect may leave the door on another
-  port or with another key); without a door the server still answers, every
-  tool saying why (`Tools.Trouble`), so the agent can tell the person.
+  port or with another key, or place the first one); without a door the
+  server still answers, every tool saying why, so the agent can tell the
+  person.
   `remuda tasks list|show|add|move|comment` is the same from a shell
   (`cmd/remuda/tasks.go`; `-json` is the list's own answer). `remuda mcp
   install|status|uninstall [-host H]` (`setup.MCP`, `install-mcp.sh`,

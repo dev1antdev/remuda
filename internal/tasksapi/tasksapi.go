@@ -130,20 +130,23 @@ func New(door Door) *Client {
 }
 
 // Following is New for a program that outlives the cockpit's connection to this machine: a new connection may leave
-// the door on another port or with another key, so every request reads it again, door serving when it cannot be read.
+// the door on another port or with another key, or place the first one, so every request reads it again, the door
+// given serving when it cannot be read.
 func Following(door Door) *Client {
 	client := New(door)
 	client.follows = true
 	return client
 }
 
-func (c *Client) currentDoor() Door {
-	if c.follows {
-		if door, err := FindDoor(); err == nil {
-			return door
-		}
+func (c *Client) currentDoor() (Door, error) {
+	if !c.follows {
+		return c.door, nil
 	}
-	return c.door
+	door, err := FindDoor()
+	if err != nil && c.door.Key != "" {
+		return c.door, nil
+	}
+	return door, err
 }
 
 func (c *Client) Projects() ([]tasks.Project, error) {
@@ -229,7 +232,10 @@ func (c *Client) do(method, path string, body, out any) error {
 		}
 		reader = bytes.NewReader(b)
 	}
-	door := c.currentDoor()
+	door, err := c.currentDoor()
+	if err != nil {
+		return err
+	}
 	req, err := http.NewRequest(method, door.URL+path, reader)
 	if err != nil {
 		return err

@@ -139,3 +139,23 @@ func TestAFollowingClientGoesWhereTheDoorMoved(t *testing.T) {
 		t.Fatalf("heard %s, want %s", got, want)
 	}
 }
+
+// TestAFollowingClientWaitsForTheFirstDoor: started before any door was placed, it says why and then uses the first.
+func TestAFollowingClientWaitsForTheFirstDoor(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("REMUDA_STATE_DIR", dir)
+	t.Setenv(EnvKey, "")
+	t.Setenv(EnvURL, "")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("[]")) }))
+	defer srv.Close()
+	door, _ := FindDoor()
+	client := Following(door)
+	if _, err := client.Labels(); err == nil || !strings.Contains(err.Error(), KeyFile) {
+		t.Fatalf("no door yet: %v", err)
+	}
+	os.WriteFile(filepath.Join(dir, URLFile), []byte(srv.URL+"\n"), 0o600)
+	os.WriteFile(filepath.Join(dir, KeyFile), []byte("rk_first\n"), 0o600)
+	if _, err := client.Labels(); err != nil {
+		t.Fatal(err)
+	}
+}

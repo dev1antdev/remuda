@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/script"
@@ -38,16 +40,29 @@ mkdir -p "$d" && chmod 700 "$d" && cat > "$d/agent-key.new" && mv -f "$d/agent-k
 var doorTries, doorPause, doorPortAsks = 13, 5 * time.Second, 3
 
 // errDoorTaken leaves the machine's door to the remuda whose door it is.
-var errDoorTaken = errors.New("the door its agent-url names answers, so it stays as it is")
+var errDoorTaken = errors.New("a live door stands there, or it could not be looked at, so it stays as it is")
 
-// doorAnswersScript succeeds when the door the machine's agent-url names answers: a live remuda's, where the port of
-// a connection the network lost takes the request and says nothing.
-func doorAnswersScript() string {
+// doorLookScript says what stands at the address the machine's agent-url names: live, free (nothing answers as a
+// remuda: the port of a connection the network lost takes the request and says nothing) or unknown. Asked for moved
+// doors alone, the usual ports count as free: this remuda's own 7318 is settled by asking for it, and a cockpit on the
+// machine itself is no forward.
+func doorLookScript(movedOnly bool) string {
+	usual := ""
+	if movedOnly {
+		usual = `
+case "$url" in *:7317|*:` + strconv.Itoa(DoorPort) + `) echo free; exit 0 ;; esac`
+	}
 	return script.StateDir("d") + `
 url=$(head -n 1 "$d/agent-url" 2>/dev/null)
-[ -n "$url" ] || exit 1
-case "$(curl -s -m 2 "$url/api/health" 2>/dev/null)" in *'"ok":true'*) exit 0 ;; esac
-exit 1`
+[ -n "$url" ] || { echo free; exit 0; }` + usual + `
+command -v curl >/dev/null 2>&1 || { echo unknown; exit 0; }
+case "$(curl -q -s -m 2 --noproxy '*' "$url/api/health" 2>/dev/null)" in *'"ok":true'*) echo live ;; *) echo free ;; esac`
+}
+
+// doorFree says the door may be placed: only a look that came back free, never one that failed.
+func doorFree(conn *sshx.Conn, movedOnly bool) bool {
+	out, err := conn.Run(doorLookScript(movedOnly), 10*time.Second)
+	return err == nil && strings.HasSuffix(strings.TrimSpace(string(out)), "free")
 }
 
 // trySoon runs the step until it holds, the tries run out or the connection is no longer current.
@@ -68,8 +83,12 @@ func trySoon(step func() error, current func() bool) error {
 }
 
 // doorForward opens the door on DoorPort or, once that was refused doorPortAsks times and no live door stands on the
-// machine, on a port the sshd picks: a connection the network lost holds DoorPort for hours, sshd not noticing.
+// machine, on a port the sshd picks: a connection the network lost holds DoorPort for hours, sshd not noticing. A door
+// live on such a port is another cockpit's while DoorPort is free too, and stays.
 func doorForward(conn *sshx.Conn, localPort, asked int) (int, error) {
+	if !doorFree(conn, true) {
+		return 0, errDoorTaken
+	}
 	port, refused := conn.ForwardBack(DoorPort, localPort)
 	if refused == nil {
 		return port, nil
@@ -77,7 +96,7 @@ func doorForward(conn *sshx.Conn, localPort, asked int) (int, error) {
 	if asked < doorPortAsks {
 		return 0, refused
 	}
-	if _, err := conn.Run(doorAnswersScript(), 10*time.Second); err == nil {
+	if !doorFree(conn, false) {
 		return 0, errDoorTaken
 	}
 	if port, err := conn.ForwardBack(0, localPort); err == nil {

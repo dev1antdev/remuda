@@ -82,9 +82,10 @@ func TestAFailedStepOfTheDoorIsAskedAgain(t *testing.T) {
 
 // sshdAtTheDoor is what the machine's sshd does in doorOverSSH.
 type sshdAtTheDoor struct {
-	heldFor   int  // how many asks for 7318 it refuses
-	answers   bool // the door agent-url names answers
-	forbidden bool // it refuses a port of its own choice too
+	heldFor   int    // how many asks for 7318 it refuses
+	door      string // what a look at the door agent-url names finds: live, unknown, else free
+	movedDoor string // the same when the door is on a port of its own
+	forbidden bool   // it refuses a port of its own choice too
 }
 
 // doorOverSSH opens the door over an `ssh` stand-in first on PATH, a master that stays, and answers with the connection
@@ -109,7 +110,10 @@ case " $* " in
 *" -O "*) exit 0 ;;
 esac
 for line; do :; done
-case "$line" in *api/health*) [ -n "$DOOR_ANSWERS" ]; exit ;; esac
+case "$line" in *api/health*)
+  case "$line" in *7317*) echo "${DOOR_MOVED:-free}" ;; *) echo "${DOOR_LOOK:-free}" ;; esac
+  exit 0 ;;
+esac
 { printf '%s\n' "$line"; cat; } >> ` + script.Quote(kept) + `
 `
 	if err := os.WriteFile(filepath.Join(dir, "ssh"), []byte(stub), 0o755); err != nil {
@@ -117,7 +121,8 @@ case "$line" in *api/health*) [ -n "$DOOR_ANSWERS" ]; exit ;; esac
 	}
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	t.Setenv("DOOR_HELD_FOR", strconv.Itoa(sshd.heldFor))
-	t.Setenv("DOOR_ANSWERS", map[bool]string{true: "1"}[sshd.answers])
+	t.Setenv("DOOR_LOOK", sshd.door)
+	t.Setenv("DOOR_MOVED", sshd.movedDoor)
 	t.Setenv("DOOR_FORBIDDEN", map[bool]string{true: "1"}[sshd.forbidden])
 	conn, err := sshx.Dial("door-test-" + filepath.Base(dir))
 	if err != nil {
@@ -156,14 +161,24 @@ func TestADoorWhosePortIsHeldOpensOnAnother(t *testing.T) {
 	}
 }
 
-// TestALiveDoorIsLeftToItsCockpit: another cockpit's door answers on the machine, and its agents stay with it.
+// TestALiveDoorIsLeftToItsCockpit: another cockpit's door answers on the machine, or nobody could look, and its agents
+// stay where they are: with 7318 held, and with a door on a port of its own while 7318 is free.
 func TestALiveDoorIsLeftToItsCockpit(t *testing.T) {
-	conn, placed := doorOverSSH(t, sshdAtTheDoor{heldFor: heldForGood, answers: true})
-	if placed != "" {
-		t.Fatalf("the files were replaced: %s", placed)
-	}
-	if _, err := doorForward(conn, 7317, doorPortAsks); !errors.Is(err, errDoorTaken) {
-		t.Fatalf("%v", err)
+	for name, sshd := range map[string]sshdAtTheDoor{
+		"on 7318":              {heldFor: heldForGood, door: "live"},
+		"not looked at":        {heldFor: heldForGood, door: "unknown"},
+		"moved, 7318 free":     {movedDoor: "live"},
+		"moved, not looked at": {movedDoor: "unknown"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			conn, placed := doorOverSSH(t, sshd)
+			if placed != "" {
+				t.Fatalf("the files were replaced: %s", placed)
+			}
+			if _, err := doorForward(conn, 7317, doorPortAsks); !errors.Is(err, errDoorTaken) {
+				t.Fatalf("%v", err)
+			}
+		})
 	}
 }
 
@@ -182,6 +197,10 @@ func TestTheLookAtTheDoorTellsALiveOneFromAHeldPort(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	t.Setenv("http_proxy", "http://127.0.0.1:9")
+	t.Setenv("HTTP_PROXY", "http://127.0.0.1:9")
+	t.Setenv("all_proxy", "http://127.0.0.1:9")
+	t.Setenv("no_proxy", "")
 	place := func(url string) {
 		t.Helper()
 		out, err := exec.Command("sh", "-c", script.StateDir("d")+`
@@ -190,9 +209,16 @@ mkdir -p "$d" && printf '%s\n' `+script.Quote(url)+` > "$d/agent-url"`).Combined
 			t.Fatalf("%v: %s", err, out)
 		}
 	}
-	answers := func() bool { return exec.Command("sh", "-c", doorAnswersScript()).Run() == nil }
-	if answers() {
-		t.Error("no agent-url answered")
+	look := func(movedOnly bool) string {
+		t.Helper()
+		out, err := exec.Command("sh", "-c", doorLookScript(movedOnly)).CombinedOutput()
+		if err != nil {
+			t.Fatalf("%v: %s", err, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	if got := look(false); got != "free" {
+		t.Errorf("no agent-url: %s", got)
 	}
 	live := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/health" {
@@ -201,15 +227,44 @@ mkdir -p "$d" && printf '%s\n' `+script.Quote(url)+` > "$d/agent-url"`).Combined
 	}))
 	defer live.Close()
 	place(live.URL)
-	if !answers() {
-		t.Error("a live door did not answer")
+	if got := look(false); got != "live" {
+		t.Errorf("a live door, past the proxy: %s", got)
+	}
+	if got := look(true); got != "live" {
+		t.Errorf("a live door on a port of its own: %s", got)
+	}
+	for _, usual := range []string{"http://127.0.0.1:7318", "http://127.0.0.1:7317"} {
+		place(usual)
+		if got := look(true); got != "free" {
+			t.Errorf("%s is no moved door: %s", usual, got)
+		}
 	}
 	release := make(chan struct{})
 	silent := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { <-release }))
 	defer silent.Close()
 	defer close(release)
 	place(silent.URL)
-	if answers() {
-		t.Error("a port that says nothing answered")
+	if got := look(false); got != "free" {
+		t.Errorf("a port that says nothing: %s", got)
+	}
+
+	tools := t.TempDir()
+	for _, tool := range []string{"head", "uname"} {
+		path, err := exec.LookPath(tool)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(path, filepath.Join(tools, tool)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	shell, err := exec.LookPath("sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", tools)
+	out, err := exec.Command(shell, "-c", doorLookScript(false)).CombinedOutput()
+	if err != nil || strings.TrimSpace(string(out)) != "unknown" {
+		t.Errorf("without curl: %q, %v", out, err)
 	}
 }

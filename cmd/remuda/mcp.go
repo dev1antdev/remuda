@@ -38,14 +38,11 @@ func mcpCmd(args []string) {
 	}
 }
 
-// serveMCP answers one agent until its input ends; without a door every tool says why, so the agent can tell the person.
+// serveMCP answers one agent until its input ends; while there is no door every tool says why, so the agent can tell
+// the person, and the first one placed serves.
 func serveMCP() {
-	tools := mcp.Tools{Source: os.Getenv("HERDR_PANE_ID")}
-	if door, err := tasksapi.FindDoor(); err != nil {
-		tools.Trouble = err
-	} else {
-		tools.Client = tasksapi.Following(door)
-	}
+	door, _ := tasksapi.FindDoor()
+	tools := mcp.Tools{Client: tasksapi.Following(door), Source: os.Getenv("HERDR_PANE_ID")}
 	if err := mcp.New(&tools, version).Serve(os.Stdin, os.Stdout); err != nil {
 		fmt.Fprintln(os.Stderr, "mcp:", err)
 		os.Exit(1)
