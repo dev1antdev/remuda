@@ -25,6 +25,10 @@ type AttachManager struct {
 	NewCommand func(terminalID string) *exec.Cmd
 	// Unavailable, when set, is why this machine has no attach at all (herdr on Windows): every Subscribe is refused with it.
 	Unavailable string
+	// Hold, when set, takes the attach's place among the machine's sessions, waiting at most wait; what it answers lets go.
+	Hold func(wait time.Duration) (release func(), err error)
+	// ReadRefusal, when set, finds a refusal by what carries the attach (ssh) in its first output.
+	ReadRefusal func(first string) (string, bool)
 
 	mu       sync.Mutex
 	attaches map[string]*attach
@@ -37,6 +41,9 @@ type attach struct {
 	early  chan []byte // the attach's first chunks, while watched: herdr prints its refusal into the PTY
 	watch  atomic.Bool
 	exited chan struct{}
+
+	readRefusal func(first string) (string, bool)
+	release     func()
 
 	mu     sync.Mutex
 	subs   map[chan []byte]bool
@@ -80,6 +87,14 @@ const firstWait = 1500 * time.Millisecond
 // printing one, while a pane whose screen merely shows the words stays up.
 var refusalExitWait = 2 * time.Second
 
+// refused is herdr's verdict in the first output, or that of what carries the attach.
+func (a *attach) refused(first []byte) (string, bool) {
+	if msg, ok := refusal(first); ok || a.readRefusal == nil {
+		return msg, ok
+	}
+	return a.readRefusal(string(first))
+}
+
 // watchStart reads the attach's first output for herdr's verdict: a refusal comes in a chunk
 // or two and the process exits right after; a real attach paints the screen and stays.
 func (a *attach) watchStart() error {
@@ -91,7 +106,7 @@ func (a *attach) watchStart() error {
 		select {
 		case chunk := <-a.early:
 			acc = append(acc, chunk...)
-			if msg, refused := refusal(acc); refused {
+			if msg, refused := a.refused(acc); refused {
 				select {
 				case <-a.exited:
 					return &RefusedError{Msg: msg}
@@ -108,7 +123,15 @@ func (a *attach) watchStart() error {
 		case <-settle:
 			return nil
 		case <-a.exited:
-			if msg, refused := refusal(acc); refused {
+			for drained := false; !drained; { // what it said before it went may still be waiting
+				select {
+				case chunk := <-a.early:
+					acc = append(acc, chunk...)
+				default:
+					drained = true
+				}
+			}
+			if msg, refused := a.refused(acc); refused {
 				return &RefusedError{Msg: msg}
 			}
 			return fmt.Errorf("attach ended before it began")
@@ -145,26 +168,13 @@ func (m *AttachManager) Subscribe(termID string, cols, rows int) (ch chan []byte
 	if m.Unavailable != "" {
 		return nil, nil, &RefusedError{Msg: m.Unavailable}
 	}
-	m.mu.Lock()
-	a := m.attaches[termID]
-	if a != nil {
-		a.mu.Lock()
-		dead := a.dead
-		a.mu.Unlock()
-		if dead {
-			a = nil
-		}
-	}
+	a := m.standing(termID)
 	joined := a != nil
 	if a == nil {
-		a, err = m.start(termID, cols, rows)
-		if err != nil {
-			m.mu.Unlock()
+		if a, joined, err = m.startOrJoin(termID, cols, rows); err != nil {
 			return nil, nil, err
 		}
-		m.attaches[termID] = a
 	}
-	m.mu.Unlock()
 
 	ch = make(chan []byte, subscriberBuf)
 	a.mu.Lock()
@@ -216,7 +226,79 @@ func (a *attach) repaint(cols, rows int) {
 }
 
 // start must be called with m.mu held.
-func (m *AttachManager) start(termID string, cols, rows int) (*attach, error) {
+// startOrJoin starts the terminal's attach in a place of its own, or joins the one another viewer started meanwhile;
+// without a place it can only join. An attach is never started without one.
+func (m *AttachManager) startOrJoin(termID string, cols, rows int) (a *attach, joined bool, err error) {
+	release, err := m.takePlace() // outside the lock: it can wait, and it stops attaches nobody watches
+	if err != nil {
+		if a = m.standing(termID); a != nil {
+			return a, true, nil
+		}
+		return nil, false, err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if a = m.standingLocked(termID); a != nil {
+		release()
+		return a, true, nil
+	}
+	if a, err = m.start(termID, cols, rows, release); err != nil {
+		release()
+		return nil, false, err
+	}
+	m.attaches[termID] = a
+	return a, false, nil
+}
+
+// standing is the live attach of the terminal, if any.
+func (m *AttachManager) standing(termID string) *attach {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.standingLocked(termID)
+}
+
+func (m *AttachManager) standingLocked(termID string) *attach {
+	a := m.attaches[termID]
+	if a == nil {
+		return nil
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.dead {
+		return nil
+	}
+	return a
+}
+
+// placeWait is how long a new attach waits for its place, once the ones nobody watches are gone.
+var placeWait = 3 * time.Second
+
+// takePlace is the new attach's place: one free now, or the place of an attach nobody watches any more, or one that
+// comes free soon.
+func (m *AttachManager) takePlace() (func(), error) {
+	if m.Hold == nil {
+		return func() {}, nil
+	}
+	if release, err := m.Hold(0); err == nil {
+		return release, nil
+	}
+	m.mu.Lock()
+	lingering := make([]*attach, 0, len(m.attaches))
+	for _, a := range m.attaches {
+		lingering = append(lingering, a)
+	}
+	m.mu.Unlock()
+	for _, a := range lingering {
+		m.killLingering(a)
+	}
+	release, err := m.Hold(placeWait)
+	if err != nil {
+		return nil, &RefusedError{Msg: err.Error()}
+	}
+	return release, nil
+}
+
+func (m *AttachManager) start(termID string, cols, rows int, release func()) (*attach, error) {
 	cmd := m.NewCommand(termID)
 	if !validSize(cols, rows) {
 		cols, rows = 80, 24
@@ -225,7 +307,8 @@ func (m *AttachManager) start(termID string, cols, rows int) (*attach, error) {
 	if err != nil {
 		return nil, err
 	}
-	a := &attach{termID: termID, cmd: cmd, pty: f, subs: map[chan []byte]bool{}, early: make(chan []byte, 64), exited: make(chan struct{})}
+	a := &attach{termID: termID, cmd: cmd, pty: f, subs: map[chan []byte]bool{}, early: make(chan []byte, 64), exited: make(chan struct{}), release: release}
+	a.readRefusal = m.ReadRefusal
 	a.watch.Store(true)
 	go a.readLoop(m)
 	return a, nil
@@ -268,6 +351,17 @@ func (a *attach) readLoop(m *AttachManager) {
 }
 
 // killIfIdle ends an attach nobody watches, the test and the kill under one lock so a joiner is not cut off.
+// killLingering ends an attach whose last viewer has left; one just started has none yet, and stays.
+func (m *AttachManager) killLingering(a *attach) {
+	a.mu.Lock()
+	if a.linger == nil || len(a.subs) > 0 || a.dead {
+		a.mu.Unlock()
+		return
+	}
+	a.linger.Stop()
+	m.killLocked(a)
+}
+
 func (m *AttachManager) killIfIdle(a *attach) {
 	a.mu.Lock()
 	if len(a.subs) > 0 || a.dead {
@@ -301,6 +395,7 @@ func (m *AttachManager) killLocked(a *attach) {
 		a.cmd.Process.Kill()
 	}
 	a.cmd.Wait()
+	a.release()
 
 	m.mu.Lock()
 	if m.attaches[a.termID] == a {

@@ -211,6 +211,8 @@ func (mc *Machine) connect() {
 	mc.attach = herdr.NewAttachManager(func(termID string) *exec.Cmd {
 		return conn.AttachCmd(bin, sock, termID)
 	})
+	mc.attach.Hold = conn.HoldTerminal
+	mc.attach.ReadRefusal = func(first string) (string, bool) { return sshx.SessionRefused(conn.Host, first) }
 	if windows {
 		mc.attach.Unavailable = NoAttachOnWindows
 	}

@@ -81,11 +81,12 @@ func (c *Client) subscribe(subs []Subscription) (*Stream, error) {
 	if subs == nil {
 		subs = []Subscription{}
 	}
+	deadline := time.Now().Add(c.Timeout) // waiting for a connection comes out of it
 	conn, err := c.dial(c.Timeout)
 	if err != nil {
 		return nil, err
 	}
-	conn.SetDeadline(time.Now().Add(c.Timeout))
+	conn.SetDeadline(deadline)
 	req, err := json.Marshal(map[string]any{
 		"id":     fmt.Sprintf("remuda-%d", c.reqSeq.Add(1)),
 		"method": "events.subscribe",

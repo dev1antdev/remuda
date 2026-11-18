@@ -279,7 +279,12 @@ components and icons as rules for whoever changes it: @docs/design.md
   source's, the newest per name) and `Snapshot.FocusedTabID`. Never
   `title` or `display_agent`: remuda reads both back as the pane's own.
 - `internal/sshx/` — one OpenSSH `ControlMaster` per host (BatchMode: fail,
-  never prompt), with socket and port forwarding (`-O forward -L`; a
+  never prompt; sshd's MaxSessions is 10 by default, so every session takes
+  one of 9 places first (`Conn.enter`, `sessionCount`), waiting within its
+  own timeout: at most 5 scripts, 3 of them over a minute long, and 5
+  terminals (`HoldTerminal`; a new one ends attaches nobody watches, then
+  waits 3 s and says why), the last places left to short scripts and the last
+  two to herdr's RPC), with socket and port forwarding (`-O forward -L`; a
   socket forward the master already holds is cancelled first, since
   asked for the same one again the master keeps its listener and binds
   nothing, so the file unlinked before the ask would be gone for good),
@@ -427,7 +432,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   `sh -c 'exec remuda.exe bridge <socket>'` exec (`BridgeCommand`). The watcher's event
   stream rides the same one as a connection that stays: through the
   forwarded socket like any request, or as one long-lived `nc -U` exec, a
-  session of the master for as long as it stands, its dial deadline cleared
+  session of the master for as long as it stands (one of its places for RPC),
+  its dial deadline cleared
   once herdr answered (`sshx/exec_stream_test.go`), swapped for the next
   one only after it closed. Remote
   transcripts are fetched by `stat` + `tail -c` delta into a per-machine
@@ -1086,7 +1092,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   `branch.<b>.remote` / `.merge`, `@{u}` and the counts, the remotes), then one
   action per checkout at a time (`running`, else `ReasonRunning`) and at most
   `PerMachine` 4 actions on a machine at once (the probe, a push's check and
-  the git part are each a session of its ssh master, whose sshd allows ten),
+  the git part are each a session of its ssh master, under what `sshx` lets
+  scripts take there),
   under `quietNetwork` —
   `GCM_INTERACTIVE=0 GIT_TERMINAL_PROMPT=0 GIT_ASKPASS= SSH_ASKPASS=` and
   `GIT_SSH_COMMAND` the repository's or the person's ssh command with `-o
@@ -1292,7 +1299,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   stream is opened there (`sid = <machine>~<peer sid>`, every later
   request forwarded), over `Machine.ForwardAddr(port)` — the same port
   forward as code-server. herdr prints its refusal *into the PTY* and
-  exits, so `attach.go` watches a fresh attach's first chunks
+  exits, as ssh does when the machine will have no more sessions
+  (`ReadRefusal`), so `attach.go` watches a fresh attach's first chunks
   (`watchStart`: a refusal followed by the exit within `refusalExitWait`
   — the words alone on a screen, an agent reading this very file, are
   the pane's own and the attach stands — or 300 ms / 512 bytes of real
