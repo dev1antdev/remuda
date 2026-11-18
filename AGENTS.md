@@ -159,13 +159,19 @@ not style.
   do not push, post or resolve threads unless asked. Tests run gh only on
   a `shell.Fake` with answers written from GitHub's documented shapes —
   never against GitHub for a write.
-- **One design system** (`web/src/styles.css`): every `<button>` carries a
-  family class, radii and type sizes come from the scales, icons are
+- **One design system**: `docs/design.md` is the design book — the words,
+  colour, type, sizes, layout, components and icons as rules, naming the
+  tokens and classes of `web/src/styles.css` and the pieces of
+  `web/src/ui/`. Read it before changing anything a person sees, and
+  update it in the same commit whenever a change alters the design (a
+  token, a component, a rule of words, layout or icons). The rules no
+  change breaks: every `<button>` carries one family class,
+  colours, radii and type sizes come from the tokens, icons are
   `icons.tsx` (never an emoji), an icon-only button says what it does
-  through `Tip` (`ui/Tip.tsx`) with an `aria-label`, never a `title`
-  alone, a set of actions is a `Menu` with words rather than a row of
-  icons, transient status is a toast, nothing in a bar moves when state
-  changes. Reuse a rule before writing one.
+  through `Tip` with an `aria-label`, never a `title` alone, a set of
+  actions is a `Menu` with words rather than a row of icons, transient
+  status is a toast, nothing in a bar moves when state changes. Reuse a
+  rule before writing one.
 
 ## Conventions
 
@@ -224,7 +230,10 @@ not style.
   too"*.
 - **Docs move with the code.** A behaviour change edits the matching
   bullet in `CLAUDE.md` in the same commit; a user-facing one touches
-  `README.md` too.
+  `README.md` too; one that changes how the page looks or speaks — a
+  token, a component family, a rule of words or layout — edits
+  `docs/design.md` (`web/src/lib/designDoc.test.ts` fails on a token or
+  class it names that the stylesheet lost).
 
 ## Where to look
 
@@ -249,7 +258,7 @@ not style.
 | Tasks mode | `internal/tasks/` (`start.go` starts an agent on a task), `web/src/features/tasks/` |
 | Updates and the restarts after them | `internal/updates/`, `internal/health/`, `internal/jobs/`, `internal/restart/`, `web/src/features/updates/Updates.tsx` |
 | Installing and uninstalling: the installer, setup, the service, code-server | `internal/setup/` (the scripts in `scripts/`, embedded), `cmd/remuda/main.go` for the commands |
-| The look | `web/src/styles.css`, `web/src/ui/` |
+| The look | `docs/design.md` (the rules), `web/src/styles.css`, `web/src/ui/` |
 
 ## Agent tooling in this repository
 
