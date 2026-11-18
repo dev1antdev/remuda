@@ -189,8 +189,8 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   are looking at, so a link, a reload or a notification lands on the same
   pane in the same lens.
 - **Submit** — herdr's `agent.prompt` (bracketed paste + Enter), refused
-  while the agent waits on a menu; falls back to `pane.send_text` for plain
-  shells. Named keys (`Enter`, `Escape`, arrows, `Ctrl+C`) via
+  while the agent waits on a menu or when the pane has no agent ready, so
+  what you wrote for an agent never runs in a shell. Named keys (`Enter`, `Escape`, arrows, `Ctrl+C`) via
   `pane.send_keys`.
 - **Answer** — while the agent waits on a dialog, the chat shows the
   question as it stands on the screen (Claude Code's permission prompts,

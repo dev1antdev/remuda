@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/herdr"
@@ -223,5 +224,30 @@ func TestAWorkspaceArrivingDuringTheRemovalKeepsTheFolder(t *testing.T) {
 	}
 	if _, err := os.Stat(made.Worktree.Path); err != nil {
 		t.Errorf("the checkout is gone: %v", err)
+	}
+}
+
+// TestAMessageForAnAgentNeverRunsInAShell: the pane holds a shell at its prompt, and the words would be a command.
+func TestAMessageForAnAgentNeverRunsInAShell(t *testing.T) {
+	s, api, client, mc, repo, _ := worktreeServer(t)
+	snap, err := s.Watch.Refresh(mc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snap.Panes) == 0 {
+		t.Fatal("no pane")
+	}
+	pane := snap.Panes[0].PaneID
+	marker := filepath.Join(repo, "ran")
+	body, _ := json.Marshal(map[string]string{"machine": "local", "pane": pane, "text": "touch " + marker})
+	if rec := ask(api, "POST", "/api/submit", string(body)); rec.Code != http.StatusConflict {
+		t.Errorf("answered %d %s", rec.Code, rec.Body)
+	}
+	if err := client.PaneSendKeys(pane, []string{"enter"}); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(500 * time.Millisecond)
+	if _, err := os.Stat(marker); err == nil {
+		t.Error("the shell ran the message")
 	}
 }

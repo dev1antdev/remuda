@@ -53,7 +53,8 @@ fields that matter are in `herdr.PaneInfo` (`agent_status`:
 blocked | done | idle | unknown | working; `agent_session` for the
 transcript). Error codes remuda handles by name: `agent_blocked` (a menu
 is open → 409), `agent_pane_busy` / `agent_not_ready` (retried while a
-new pane's shell comes up).
+new pane's shell comes up), and `agent_not_found` / `agent_not_ready` on a
+message for an agent (409, nothing sent: it is never typed into the pane).
 
 Mutating methods (`agent.prompt`, `pane.send_*`, `workspace.close`, …)
 act on the person's agents. By hand, only on a pane you created

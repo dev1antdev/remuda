@@ -320,7 +320,7 @@ func (s *Server) handleSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.Input.Submit(client, events.PaneRef{Machine: mc.ID(), Pane: req.Pane}, req.Text); err != nil {
-		if errors.Is(err, sessions.ErrAgentBusy) || errors.Is(err, sessions.ErrAskedMeanwhile) {
+		if sessions.NotDelivered(err) {
 			httpErr(w, http.StatusConflict, err)
 			return
 		}

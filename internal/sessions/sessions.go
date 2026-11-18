@@ -306,56 +306,47 @@ func (in *Input) lock(ref events.PaneRef) *sync.Mutex {
 	return in.locks[ref]
 }
 
-// Submit delivers text to a pane the way the chat does: herdr's own submit for an agent, typing like a keyboard for a
-// shell; a message that names a picture goes to Claude Code as a paste and an Enter once the paste is in (settle.go).
+// Submit delivers what a person wrote for the pane's agent, the way the chat does: herdr's own submit, and for a message
+// that names a picture the Enter Claude Code loses of it (settle.go). Without an agent nothing goes.
 func (in *Input) Submit(client Prompter, ref events.PaneRef, text string) error {
 	lock := in.lock(ref)
 	lock.Lock()
 	defer lock.Unlock()
-	// a message naming a picture goes to Claude Code as a paste and, once that is in, an Enter (settle.go)
+	if err := agentPrompt(client, ref.Pane, text); err != nil {
+		return err
+	}
 	if two, ok := client.(interface {
 		Settler
 		Prompter
 	}); ok && NamesPicture(text) {
-		if handled, err := pasteThenEnter(two, ref.Pane, text); handled {
-			return err
-		}
+		return enterAfterPaste(two, ref.Pane)
 	}
-	err := client.AgentPrompt(ref.Pane, text)
-	switch {
-	case err == nil:
-		return nil
-	case herdr.IsCode(err, "agent_blocked"):
-		return ErrAgentBusy
-	case herdr.IsCode(err, "agent_not_found") || herdr.IsCode(err, "agent_not_ready"):
-		// the settle gap before Enter: a TUI still redrawing would take it as a newline
-		if err := client.PaneSendText(ref.Pane, text); err != nil {
-			return err
-		}
-		time.Sleep(150 * time.Millisecond)
-		return client.PaneSendKeys(ref.Pane, []string{"enter"})
-	default:
-		return err
-	}
+	return nil
 }
 
-// ErrNoAgent: the pane runs no agent now, and what was written for one must not reach its shell, which would run every line.
-var ErrNoAgent = errors.New("no agent runs in that pane now; nothing was sent")
+// ErrNoAgent: the pane has no agent up to take the text, and what was written for one must not reach its shell, which
+// would run every line.
+var ErrNoAgent = errors.New("no agent is ready in that pane; nothing was sent")
+
+// agentPrompt is herdr's own submit, which makes sure an agent holds the terminal: the text is never typed into the pane.
+func agentPrompt(client Prompter, pane, text string) error {
+	err := client.AgentPrompt(pane, text)
+	switch {
+	case herdr.IsCode(err, "agent_blocked"):
+		return ErrAgentBusy
+	case herdr.IsCode(err, "agent_not_found"), herdr.IsCode(err, "agent_not_ready"):
+		return ErrNoAgent
+	}
+	return err
+}
 
 // SubmitToAgent delivers text meant for an agent — a schedule's prompt, a pull request's failures, a booked "continue" —
-// through herdr's own submit only: a pane whose agent left since it was picked gets nothing, never the text typed.
+// under the pane's lock.
 func (in *Input) SubmitToAgent(client Prompter, ref events.PaneRef, text string) error {
 	lock := in.lock(ref)
 	lock.Lock()
 	defer lock.Unlock()
-	err := client.AgentPrompt(ref.Pane, text)
-	switch {
-	case herdr.IsCode(err, "agent_blocked"):
-		return ErrAgentBusy
-	case herdr.IsCode(err, "agent_not_found"):
-		return ErrNoAgent
-	}
-	return err
+	return agentPrompt(client, ref.Pane, text)
 }
 
 // FirstPromptRetry and FirstPromptTimeout pace the delivery of a first prompt: a try every so often until the agent takes it.
