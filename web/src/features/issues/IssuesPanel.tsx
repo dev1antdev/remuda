@@ -42,7 +42,11 @@ export default function IssuesPanel({ onClose }: { onClose: () => void }) {
   const followDir = follow && follow.machineId === machineId ? follow.dir : ""; // the pane's folder, asked about on its own machine only
   const folderPlace = placeOf(machineId, followDir);
   const repos = useQuery<PlacedRepos>(
-    async (): Promise<PlacedRepos> => ({ machine: machineId, ...(await readAt(folderPlace, repos.data, () => fetchRepos(machineId, followDir || undefined))) }),
+    async (): Promise<PlacedRepos> => {
+      // the machine's checkouts stay when one folder cannot be read: a repository picked by hand still has them
+      const last = repos.data?.machine === machineId ? { ...repos.data, place: folderPlace } : null;
+      return { machine: machineId, ...(await readAt(folderPlace, last, () => fetchRepos(machineId, followDir || undefined))) };
+    },
     [machineId, followDir],
     { keep: true },
   );
