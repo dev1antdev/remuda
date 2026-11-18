@@ -378,23 +378,42 @@ func TestAPatchWritesOnlyWhatItChanges(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	corrected, newTitle, edited := "<p>corrected</p>", "The card, corrected", false
+	corrected, newTitle := "<p>corrected</p>", "The card, corrected"
 	clock := st.now
-	st.now = func() time.Time { // between the patch's read of the card and its write, the person edits and moves it
-		if !edited {
-			edited = true
-			if _, err := st.Update(card.ID, Patch{Title: &newTitle, Description: &corrected, ProjectID: &there.ID, StatusID: &queueThere}); err != nil {
-				t.Error(err)
+	personActs := func(id int64, patch Patch) *bool { // between the next patch's read of the card and its write
+		acted := false
+		st.now = func() time.Time {
+			if !acted {
+				acted = true
+				if _, err := st.Update(id, patch); err != nil {
+					t.Error(err)
+				}
 			}
+			return clock()
 		}
-		return clock()
+		return &acted
 	}
+	acted := personActs(card.ID, Patch{Title: &newTitle, Description: &corrected, ProjectID: &there.ID, StatusID: &queueThere})
 	priority := 3
 	got, err := st.Update(card.ID, Patch{Priority: &priority, ByAgent: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !edited || got.Title != newTitle || got.Description != corrected || got.ProjectID != there.ID || got.StatusID != queueThere || got.Priority != 3 {
+	if !*acted || got.Title != newTitle || got.Description != corrected || got.ProjectID != there.ID || got.StatusID != queueThere || got.Priority != 3 {
 		t.Errorf("the person's edit and move were undone: %+v", got)
+	}
+
+	second, err := st.CreateFrom(here.ID, Patch{Title: &title, StatusID: &queueHere}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	current, _ := st.Project(here.ID)
+	open := landing(current.Statuses).ID
+	acted = personActs(second.ID, Patch{ProjectID: &there.ID, StatusID: &queueThere})
+	if _, err := st.Update(second.ID, Patch{StatusID: &open, ByAgent: true}); !errors.Is(err, ErrInvalid) {
+		t.Errorf("a column move reckoned from the old place: %v", err)
+	}
+	if got, _ := st.Get(second.ID); !*acted || got.ProjectID != there.ID || got.StatusID != queueThere {
+		t.Errorf("the card was pulled back: %+v", got)
 	}
 }

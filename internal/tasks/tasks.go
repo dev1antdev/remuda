@@ -1325,7 +1325,7 @@ func (st *Store) Update(id int64, p Patch) (Task, error) {
 	if err != nil {
 		return cur, err
 	}
-	wasDone := cur.Done
+	wasDone, readProject, readStatus := cur.Done, cur.ProjectID, cur.StatusID
 	if p.Title != nil {
 		if cur.Title = strings.TrimSpace(*p.Title); cur.Title == "" {
 			return cur, invalid("a task needs a title")
@@ -1425,6 +1425,19 @@ func (st *Store) Update(id int64, p Patch) (Task, error) {
 		}
 		if held {
 			return cur, ErrCardHeld
+		}
+	}
+	if moved || p.After != nil { // a place reckoned from where the card was: it may have been moved since
+		var project, status int64
+		err := tx.QueryRow(`SELECT project_id, status_id FROM tasks WHERE id = ?`, id).Scan(&project, &status)
+		if errors.Is(err, sql.ErrNoRows) {
+			return cur, ErrNotFound
+		}
+		if err != nil {
+			return cur, err
+		}
+		if project != readProject || status != readStatus {
+			return cur, invalid("the card was moved meanwhile: read it again")
 		}
 	}
 	// only what this patch changes is written: the rest was read before the transaction and may be older than the row
