@@ -227,6 +227,36 @@ describe("typing over the HTTP transport", () => {
     transport.close();
   });
 
+  it("says no loss when only a report failed after the typing went", async () => {
+    let answer: (r: Response) => void = () => {};
+    const { transport, posted, lost, wait } = typing([() => new Promise<Response>((resolve) => (answer = resolve)), () => Promise.resolve(new Response(null, { status: 204 })), refused]);
+    await wait(3000);
+    transport.input("a");
+    await wait(10);
+    transport.input("\x1b]"); // Alt+], and Ctrl+G: together they read like a report
+    transport.input("\x07");
+    answer(new Response(null, { status: 204 }));
+    await wait(100);
+    transport.input("\x1b[I");
+    await wait(100);
+    expect(posted).toEqual(["a", "\x1b]\x07", "\x1b[I"]);
+    expect(lost()).toBe(0);
+    transport.close();
+  });
+
+  it("counts what a failure dropped as settled", async () => {
+    const { transport, lost, wait } = typing([refused, () => Promise.resolve(new Response(null, { status: 204 })), refused]);
+    await wait(3000);
+    transport.input("x");
+    await wait(10);
+    transport.input("y");
+    await wait(10);
+    transport.input("\x1b[I");
+    await wait(10);
+    expect(lost()).toBe(1);
+    transport.close();
+  });
+
   it("says nothing of the terminal's own reports", async () => {
     const wheel = "\x1b[<65;10;5M";
     const { transport, posted, lost, wait } = typing([offline], { opens: [() => new Promise<Response>(() => {})] });

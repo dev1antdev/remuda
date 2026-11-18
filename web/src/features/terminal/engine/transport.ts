@@ -135,7 +135,10 @@ export function connect(stream: Stream): Transport {
     };
     // typingTo is the typing of one stream: what it holds never reaches another
     const typingTo = (id: string) => {
-      let owed = 0; // characters typed and not through yet
+      // positions in all that was handed to the sender: its end, where the last typing ended, and how far went through
+      let pushed = 0;
+      let typedTo = 0;
+      let through = 0;
       const sender = createSender(
         async ({ text }) => {
           if (sid !== id) throw new Error("the stream is gone"); // what waited for it is not sent once it ended
@@ -144,7 +147,7 @@ export function connect(stream: Stream): Transport {
           try {
             const res = await fetch(`/api/term/input?sid=${id}`, { method: "POST", body: text, signal: abort.signal });
             if (!res.ok) throw new Error(`input refused (${res.status})`);
-            owed -= typedIn(text);
+            through += text.length;
           } finally {
             clearTimeout(timeout);
           }
@@ -154,13 +157,14 @@ export function connect(stream: Stream): Transport {
             lossSaid = false;
           },
           failed: () => {
-            if (owed > 0) lost();
-            owed = 0;
+            if (typedTo > through) lost();
+            through = pushed; // the sender dropped the rest
           },
         },
       );
       return (data: string) => {
-        owed += typedIn(data);
+        pushed += data.length;
+        if (typedIn(data) > 0) typedTo = pushed;
         sender.push({ text: data });
       };
     };
