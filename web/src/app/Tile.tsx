@@ -2,6 +2,7 @@
 // label, workspace · machine, the pull request it named, context % · cost — its state line (how long, and what it runs this second), then the
 // tail of its chat, or its terminal as it is, with a line to answer.
 
+import { useRef } from "react";
 import Tail, { TAIL_TURNS, TailAnswer, TileState } from "@/features/chat/Tail";
 import { ScreenRibbon } from "@/features/chat/ActivityRibbon";
 import { displayOf, markOf, rowLabel, stateWords, type RadarPrefs } from "@/features/roster/radar";
@@ -55,6 +56,8 @@ export function TileView({ tile, view = "chat", radar, step, now, brief = false,
   const fill = usage && usage.window > 0 ? usage.context / usage.window : 0;
   const where = `${hidden ? folderName : session.name}${machine.id !== "local" ? ` · ${share.machineLabel(machine)}` : ""}`;
   const screen = view === "screen" || !pane.agent; // a shell, popped out, has its screen alone: no conversation to tail
+  const hadAgent = useRef(false); // the line to answer stays once an agent left, with what was being written in it
+  if (pane.agent) hadAgent.current = true;
   const open = () => {
     actions.selectPane(machine.id, pane.id);
     actions.setLens(screen ? "terminal" : "chat");
@@ -165,7 +168,7 @@ export function TileView({ tile, view = "chat", radar, step, now, brief = false,
           <TileState words={words} said={said} />
           {pane.agent && <ScreenRibbon machineId={machine.id} paneId={pane.id} status={pane.status} dir={dir} tailTurns={TAIL_TURNS} />}
           <Screen machineId={machine.id} paneId={pane.id} cols={pane.cols} busy={pane.status === "run" || pane.status === "input"} active onOpen={open} />
-          {pane.agent && <TailAnswer machineId={machine.id} paneId={pane.id} status={pane.status} dir={dir} agent={pane.agent} active />}
+          {hadAgent.current && <TailAnswer machineId={machine.id} paneId={pane.id} status={pane.status} dir={dir} agent={pane.agent} active />}
         </>
       ) : (
         <WindowsPaths.Provider value={onWindows(machine)}>

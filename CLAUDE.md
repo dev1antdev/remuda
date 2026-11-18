@@ -829,7 +829,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   inert) so the header moves nothing between the two, the palette offers
   it no Show the chat, Show the changes, Show the Git history or split, the View menu no files
   rail or split rows, and a shell popped out shows its screen alone, never a
-  chat tail, a composer or a creature. An agent started at a shell's prompt (`claude`
+  chat tail, a composer (one stays once an agent left, with its draft) or a
+  creature. An agent started at a shell's prompt (`claude`
   typed there) keeps the terminal in view rather than turning to the lens
   kept for agents (`keepsTerminal`: only for a pane that came on screen
   as a shell, so an agent's pane a restart passes through a shell goes
@@ -6881,21 +6882,21 @@ components and icons as rules for whoever changes it: @docs/design.md
   written for an agent is never typed into a pane without one, whose shell
   would run every line; `ErrNoAgent` when none is ready, `ErrAgentBusy`
   while a menu is open, each a 409 that leaves the person's draft; **a message
-  that names a picture goes to Claude Code in two steps** — `settle.go`,
+  that names a picture gets a second Enter** — `settle.go`,
   tested on a paper client: herdr 0.9.5 writes the paste and its Enter as
   one, Claude Code swallows an Enter that arrives while it takes a paste
   in and presses it again itself afterwards, except when the paste names
   a picture (`NamesPicture`: a composer's `@.remuda/uploads/shot.png`),
   which it reads first, the Enter gone for good and the message left in
   the prompt box as "[Pasted text]" (read off 2.1.325's paste hook); so
-  `pasteThenEnter` asks `agent.get` (`herdr.Client.AgentGet`: only for an
-  agent `claude`, any other and a shell keep herdr's own submit; blocked
-  is `ErrAgentBusy` with nothing sent), pastes through `pane.send_input`,
-  waits `SettleFirst` 250 ms and then while the footer's last rows say
-  "Pasting" (`stillPasting`, a look every `SettlePoll` 150 ms, `SettleFor`
-  10 s at most), asks `agent.get` once more — a question put up meanwhile
-  gets no Enter, `ErrAskedMeanwhile`, a 409 saying the message is in the
-  prompt box unsent — and presses Enter through `pane.send_keys`),
+  after `agent.prompt` took the text, `enterAfterPaste` asks `agent.get`
+  (`herdr.Client.AgentGet`: only for an agent `claude`), waits `SettleFirst`
+  250 ms and then while the footer's last rows say "Pasting"
+  (`stillPasting`, a look every `SettlePoll` 150 ms, `SettleFor` 10 s at
+  most), looks again — a question put up meanwhile gets no Enter,
+  `ErrAskedMeanwhile`; an agent gone or a shell back at its prompt none
+  either, `ErrLeftMeanwhile`; both a 409 — and presses Enter alone through
+  `pane.send_keys`),
   `SendKeys`
   (herdr 0.9.5 refuses `home`, `end`, `pageup`, `pagedown` and `delete` as
   `invalid_key`, so those go as a terminal's bytes through `send_text`:
@@ -7253,8 +7254,8 @@ components and icons as rules for whoever changes it: @docs/design.md
 - **The transcript is read-only**; input goes through herdr: `agent.prompt`
   preferred (refuses with `agent_blocked` while a menu is open — surface
   that as 409, never type into the menu), and for a message that
-  names a picture, to Claude Code, the paste and then — once it is in, no
-  question came up and the agent still holds the terminal — the Enter
+  names a picture, to Claude Code, a second Enter once the paste is in, no
+  question came up and the agent still holds the terminal
   (`sessions/settle.go`). A pane with no agent ready gets nothing: a 409,
   never the text typed into its shell. Everything per-pane is
   serialized by `sessions.Input`, one lock per pane. Never queue or auto-send user input.

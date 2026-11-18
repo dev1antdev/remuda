@@ -9,19 +9,19 @@ import (
 	"github.com/dev1antdev/remuda/internal/herdr"
 )
 
-// A message that names a picture, sent to Claude Code in two steps.
+// A message that names a picture, and the Enter Claude Code loses of it.
 //
 // herdr's own submit writes the text as a paste and Enter right after it. Claude Code swallows an Enter that arrives
 // while it takes a paste in, and presses it again itself once the paste is in — unless the paste names a picture
 // (a composer's attachment, "@.remuda/uploads/shot.png"): then it reads the file first, and the Enter is gone for
 // good. The message sits in the prompt box as "[Pasted text]", unsent (read off Claude Code 2.1.325's paste hook).
-// So such a message is pasted alone, the paste is waited out — the footer says "Pasting…" while it lasts — and Enter
-// is pressed after it.
+// So the text still goes by herdr's submit, the one way that makes sure an agent holds the terminal; the paste is
+// waited out — the footer says "Pasting…" while it lasts — and Enter is pressed again after it, alone: in the worst
+// case it lands on an empty line.
 
-// Settler is what the two steps need of herdr's client beyond a Prompter's part.
+// Settler is what the Enter after the paste needs of herdr's client beyond a Prompter's part.
 type Settler interface {
 	AgentGet(target string) (herdr.AgentInfo, error)
-	PaneSendInput(paneID, text string, keys []string) error
 	PaneRead(paneID string) (string, error)
 	PaneAtPrompt(paneID string) (bool, error)
 }
@@ -37,8 +37,8 @@ var (
 // ErrAskedMeanwhile: the agent put a question up between the paste and the Enter; the Enter would have answered it.
 var ErrAskedMeanwhile = errors.New("the agent asked something while your message was on its way: it is in the agent's prompt box, not sent — answer the prompt, then press Enter in its terminal")
 
-// ErrLeftMeanwhile: the agent left the terminal between the paste and the Enter; the Enter would have run the text.
-var ErrLeftMeanwhile = errors.New("the agent left while your message was on its way: it was not sent, and may still be on the pane's command line")
+// ErrLeftMeanwhile: the agent left the terminal just after herdr gave it the text, and no Enter follows.
+var ErrLeftMeanwhile = errors.New("the agent left just as your message reached it: it may not have been sent")
 
 const (
 	claudeAgent   = "claude"
@@ -69,25 +69,18 @@ func stillPasting(screen string) bool {
 	return false
 }
 
-// pasteThenEnter delivers a message to a Claude Code pane in two steps. handled is false when the pane is not one —
-// another agent, a shell, an agent herdr cannot name, one not up yet or gone from the foreground — and nothing was sent:
-// herdr's own submit, which refuses what has no agent to take it, answers then.
-func pasteThenEnter(client interface {
+// enterAfterPaste presses the Enter Claude Code lost of a message herdr's submit just gave it. Any other agent took the
+// submit whole.
+func enterAfterPaste(client interface {
 	Settler
 	Prompter
-}, pane, text string) (handled bool, err error) {
+}, pane string) error {
 	agent, err := client.AgentGet(pane)
-	if err != nil || agent.Agent != claudeAgent {
-		return false, nil
+	if err != nil {
+		return ErrLeftMeanwhile
 	}
-	if agent.Status == statusBlocked {
-		return true, ErrAgentBusy
-	}
-	if atPrompt, err := client.PaneAtPrompt(pane); err != nil || atPrompt || agent.LaunchPending {
-		return false, nil
-	}
-	if err := client.PaneSendInput(pane, text, nil); err != nil {
-		return true, err
+	if agent.Agent != claudeAgent {
+		return nil
 	}
 	time.Sleep(SettleFirst)
 	for waited := SettleFirst; waited < SettleFor; waited += SettlePoll {
@@ -97,16 +90,16 @@ func pasteThenEnter(client interface {
 		}
 		time.Sleep(SettlePoll)
 	}
-	// the Enter goes to the agent or nowhere: a question put up meanwhile would take it as its answer, a shell as a command
+	// the Enter goes to the agent or nowhere: a question put up meanwhile would take it as its answer
 	agent, err = client.AgentGet(pane)
 	if err != nil || agent.Agent != claudeAgent {
-		return true, ErrLeftMeanwhile
+		return ErrLeftMeanwhile
 	}
 	if agent.Status == statusBlocked {
-		return true, ErrAskedMeanwhile
+		return ErrAskedMeanwhile
 	}
 	if atPrompt, err := client.PaneAtPrompt(pane); err != nil || atPrompt {
-		return true, ErrLeftMeanwhile
+		return ErrLeftMeanwhile
 	}
-	return true, client.PaneSendKeys(pane, []string{"enter"})
+	return client.PaneSendKeys(pane, []string{"enter"})
 }

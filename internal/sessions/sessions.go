@@ -306,35 +306,31 @@ func (in *Input) lock(ref events.PaneRef) *sync.Mutex {
 	return in.locks[ref]
 }
 
-// Submit delivers what a person wrote for the pane's agent, the way the chat does: herdr's own submit, or for a message
-// that names a picture a paste to Claude Code and an Enter once the paste is in (settle.go). Without an agent nothing goes.
+// Submit delivers what a person wrote for the pane's agent, the way the chat does: herdr's own submit, and for a message
+// that names a picture the Enter Claude Code loses of it (settle.go). Without an agent nothing goes.
 func (in *Input) Submit(client Prompter, ref events.PaneRef, text string) error {
+	lock := in.lock(ref)
+	lock.Lock()
+	defer lock.Unlock()
+	if err := agentPrompt(client, ref.Pane, text); err != nil {
+		return err
+	}
 	if two, ok := client.(interface {
 		Settler
 		Prompter
 	}); ok && NamesPicture(text) {
-		lock := in.lock(ref)
-		lock.Lock()
-		handled, err := pasteThenEnter(two, ref.Pane, text)
-		lock.Unlock()
-		if handled {
-			return err
-		}
+		return enterAfterPaste(two, ref.Pane)
 	}
-	return in.SubmitToAgent(client, ref, text)
+	return nil
 }
 
 // ErrNoAgent: the pane has no agent up to take the text, and what was written for one must not reach its shell, which
 // would run every line.
 var ErrNoAgent = errors.New("no agent is ready in that pane; nothing was sent")
 
-// SubmitToAgent delivers text meant for an agent — a schedule's prompt, a pull request's failures, a booked "continue" —
-// through herdr's own submit only: a pane without an agent ready gets nothing, never the text typed.
-func (in *Input) SubmitToAgent(client Prompter, ref events.PaneRef, text string) error {
-	lock := in.lock(ref)
-	lock.Lock()
-	defer lock.Unlock()
-	err := client.AgentPrompt(ref.Pane, text)
+// agentPrompt is herdr's own submit, which makes sure an agent holds the terminal: the text is never typed into the pane.
+func agentPrompt(client Prompter, pane, text string) error {
+	err := client.AgentPrompt(pane, text)
 	switch {
 	case herdr.IsCode(err, "agent_blocked"):
 		return ErrAgentBusy
@@ -342,6 +338,15 @@ func (in *Input) SubmitToAgent(client Prompter, ref events.PaneRef, text string)
 		return ErrNoAgent
 	}
 	return err
+}
+
+// SubmitToAgent delivers text meant for an agent — a schedule's prompt, a pull request's failures, a booked "continue" —
+// under the pane's lock.
+func (in *Input) SubmitToAgent(client Prompter, ref events.PaneRef, text string) error {
+	lock := in.lock(ref)
+	lock.Lock()
+	defer lock.Unlock()
+	return agentPrompt(client, ref.Pane, text)
 }
 
 // FirstPromptRetry and FirstPromptTimeout pace the delivery of a first prompt: a try every so often until the agent takes it.

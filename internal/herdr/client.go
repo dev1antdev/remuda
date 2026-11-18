@@ -434,9 +434,8 @@ func (c *Client) PaneSendInput(paneID, text string, keys []string) error {
 
 // AgentInfo is what herdr says of the agent in a pane: its kind and how it stands.
 type AgentInfo struct {
-	Agent         string `json:"agent"`
-	Status        string `json:"agent_status"`
-	LaunchPending bool   `json:"launch_pending"` // started, and not up yet
+	Agent  string `json:"agent"`
+	Status string `json:"agent_status"`
 }
 
 // AgentGet is agent.get: the agent of a pane as herdr sees it now, without the wait for the watcher's next snapshot.

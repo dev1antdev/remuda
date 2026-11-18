@@ -69,9 +69,9 @@ not style.
   the status line in `settings.json` only when the person runs it or
   presses Run on its Updates row (a backup kept in remuda's state dir,
   `internal/limits`), and a test of it runs in a temp HOME only.
-  Input reaches an agent only through herdr — `agent.prompt`, or for a
-  message naming a picture the guarded paste and Enter of
-  `sessions/settle.go` — serialized per pane by `sessions.Input`. What is
+  Input reaches an agent only through herdr — `agent.prompt`, for a message
+  naming a picture with the Enter `sessions/settle.go` adds after it —
+  serialized per pane by `sessions.Input`. What is
   written for an agent is never typed into a pane without one. Never queue, retry or auto-send what a person typed. The
   exceptions are the restart after an update the person ran (CLAUDE.md,
   `internal/restart`), the "continue" a person booked for after a plan
