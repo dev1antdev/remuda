@@ -25,8 +25,8 @@ type AttachManager struct {
 	NewCommand func(terminalID string) *exec.Cmd
 	// Unavailable, when set, is why this machine has no attach at all (herdr on Windows): every Subscribe is refused with it.
 	Unavailable string
-	// Hold, when set, counts an attach among the machine's sessions while it stands; what it answers lets go.
-	Hold func() (release func())
+	// Hold, when set, takes the attach's place among the machine's sessions, waiting at most wait; what it answers lets go.
+	Hold func(wait time.Duration) (release func(), err error)
 	// ReadRefusal, when set, finds a refusal by what carries the attach (ssh) in its first output.
 	ReadRefusal func(first string) (string, bool)
 
@@ -160,26 +160,30 @@ func (m *AttachManager) Subscribe(termID string, cols, rows int) (ch chan []byte
 	if m.Unavailable != "" {
 		return nil, nil, &RefusedError{Msg: m.Unavailable}
 	}
-	m.mu.Lock()
-	a := m.attaches[termID]
-	if a != nil {
-		a.mu.Lock()
-		dead := a.dead
-		a.mu.Unlock()
-		if dead {
-			a = nil
-		}
-	}
+	a := m.standing(termID)
 	joined := a != nil
 	if a == nil {
-		a, err = m.start(termID, cols, rows)
+		release, err := m.takePlace() // outside the lock: it can wait, and it stops attaches nobody watches
 		if err != nil {
-			m.mu.Unlock()
 			return nil, nil, err
 		}
-		m.attaches[termID] = a
+		m.mu.Lock()
+		if a = m.standingLocked(termID); a != nil {
+			joined = true
+			m.mu.Unlock()
+			release() // another viewer started it meanwhile
+		} else {
+			a, err = m.start(termID, cols, rows)
+			if err != nil {
+				m.mu.Unlock()
+				release()
+				return nil, nil, err
+			}
+			a.release = release
+			m.attaches[termID] = a
+			m.mu.Unlock()
+		}
 	}
-	m.mu.Unlock()
 
 	ch = make(chan []byte, subscriberBuf)
 	a.mu.Lock()
@@ -231,6 +235,54 @@ func (a *attach) repaint(cols, rows int) {
 }
 
 // start must be called with m.mu held.
+// standing is the live attach of the terminal, if any.
+func (m *AttachManager) standing(termID string) *attach {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.standingLocked(termID)
+}
+
+func (m *AttachManager) standingLocked(termID string) *attach {
+	a := m.attaches[termID]
+	if a == nil {
+		return nil
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.dead {
+		return nil
+	}
+	return a
+}
+
+// placeWait is how long a new attach waits for its place, once the ones nobody watches are gone.
+var placeWait = 3 * time.Second
+
+// takePlace is the new attach's place: one free now, or the place of an attach nobody watches any more, or one that
+// comes free soon.
+func (m *AttachManager) takePlace() (func(), error) {
+	if m.Hold == nil {
+		return func() {}, nil
+	}
+	if release, err := m.Hold(0); err == nil {
+		return release, nil
+	}
+	m.mu.Lock()
+	lingering := make([]*attach, 0, len(m.attaches))
+	for _, a := range m.attaches {
+		lingering = append(lingering, a)
+	}
+	m.mu.Unlock()
+	for _, a := range lingering {
+		m.killIfIdle(a)
+	}
+	release, err := m.Hold(placeWait)
+	if err != nil {
+		return nil, &RefusedError{Msg: err.Error()}
+	}
+	return release, nil
+}
+
 func (m *AttachManager) start(termID string, cols, rows int) (*attach, error) {
 	cmd := m.NewCommand(termID)
 	if !validSize(cols, rows) {
@@ -242,9 +294,6 @@ func (m *AttachManager) start(termID string, cols, rows int) (*attach, error) {
 	}
 	a := &attach{termID: termID, cmd: cmd, pty: f, subs: map[chan []byte]bool{}, early: make(chan []byte, 64), exited: make(chan struct{})}
 	a.readRefusal = m.ReadRefusal
-	if m.Hold != nil {
-		a.release = m.Hold()
-	}
 	a.watch.Store(true)
 	go a.readLoop(m)
 	return a, nil

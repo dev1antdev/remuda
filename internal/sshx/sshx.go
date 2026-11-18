@@ -31,26 +31,93 @@ type Conn struct {
 	master    *exec.Cmd
 	masterErr *lockedBuffer // what the master said: why it could not connect, then nothing more is kept
 
-	placesOnce sync.Once
-	long       chan struct{} // scripts given over a minute: the rest of the scripts' places stay for short ones
-	scripts    chan struct{} // scripts, each also in shared
-	shared     chan struct{} // scripts and terminals, and RPC when its own are taken
-	rpc        chan struct{} // herdr's requests alone: no script or terminal can leave them waiting
-	terminals  chan struct{} // the terminals that count in shared; there is always room for scripts beside them
+	sessions sessionCount
 }
 
 // A connection carries a limited number of sessions: OpenSSH's MaxSessions is 10 by default, and past it the next one
-// is refused. Scripts and RPC wait for a place instead; a terminal, which a person is waiting for and which stays
-// open, never waits, and takes a place while there is one. Together the places are nine: a script killed at its timeout
-// is still counted by sshd until it exits on the machine.
+// is refused. So what opens one takes a place first, and each kind stops short of the last places: herdr's requests can
+// always get one, a short script can get one past the long ones and the terminals. Nine in all, as a script killed at its
+// timeout is still counted by sshd until it exits on the machine.
 const (
+	maxSessions    = 9
+	rpcReserve     = 2 // places only herdr's requests reach
+	shortReserve   = 1 // and one more that long scripts and terminals leave to short scripts
 	maxScripts     = 5
 	maxLongScripts = 3
-	longRun        = time.Minute
-	sharedPlaces   = 6
-	rpcPlaces      = 3
-	maxTerminals   = 4
+	maxTerminals   = 5
+	longRun        = time.Minute // a script given more than this is a long one
 )
+
+type sessionKind int
+
+const (
+	kindRPC sessionKind = iota
+	kindShort
+	kindLong
+	kindTerminal
+)
+
+func scriptKind(timeout time.Duration) sessionKind {
+	if timeout > longRun {
+		return kindLong
+	}
+	return kindShort
+}
+
+// sessionCount is what is open on a connection, by kind.
+type sessionCount struct {
+	mu                              sync.Mutex
+	total, scripts, long, terminals int
+	freed                           chan struct{} // closed when a place comes free
+}
+
+func (s *sessionCount) add(kind sessionKind, by int) {
+	s.total += by
+	switch kind {
+	case kindShort:
+		s.scripts += by
+	case kindLong:
+		s.scripts += by
+		s.long += by
+	case kindTerminal:
+		s.terminals += by
+	}
+}
+
+// admit takes a place if the kind may have one now; else it answers what to wait on before asking again.
+func (s *sessionCount) admit(kind sessionKind) (bool, <-chan struct{}) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	room := false
+	switch kind {
+	case kindRPC:
+		room = s.total < maxSessions
+	case kindShort:
+		room = s.scripts < maxScripts && s.total < maxSessions-rpcReserve
+	case kindLong:
+		room = s.long < maxLongScripts && s.scripts < maxScripts && s.total < maxSessions-rpcReserve-shortReserve
+	case kindTerminal:
+		room = s.terminals < maxTerminals && s.total < maxSessions-rpcReserve-shortReserve
+	}
+	if room {
+		s.add(kind, 1)
+		return true, nil
+	}
+	if s.freed == nil {
+		s.freed = make(chan struct{})
+	}
+	return false, s.freed
+}
+
+func (s *sessionCount) leave(kind sessionKind) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.add(kind, -1)
+	if s.freed != nil {
+		close(s.freed)
+		s.freed = nil
+	}
+}
 
 const sessionRefused = "Session open refused"
 
@@ -62,79 +129,31 @@ func SessionRefused(host, said string) (string, bool) {
 	return fmt.Sprintf("%s refused one more ssh session: too many are open on the connection (sshd's MaxSessions)", host), true
 }
 
-func (c *Conn) places() {
-	c.placesOnce.Do(func() {
-		c.long, c.scripts = make(chan struct{}, maxLongScripts), make(chan struct{}, maxScripts)
-		c.shared, c.rpc = make(chan struct{}, sharedPlaces), make(chan struct{}, rpcPlaces)
-		c.terminals = make(chan struct{}, maxTerminals)
-	})
-}
-
-// enter waits for a place within timeout; it answers how to leave and how much of the timeout is left. A script takes
-// its places always in the same order, so no two wait on each other.
-func (c *Conn) enter(scripted bool, timeout time.Duration) (leave func(), left time.Duration, err error) {
-	c.places()
+// enter waits for a place within timeout; it answers how to leave and how much of the timeout is left.
+func (c *Conn) enter(kind sessionKind, timeout time.Duration) (leave func(), left time.Duration, err error) {
 	began := time.Now()
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
-	var held []chan struct{}
-	wait := func(gate chan struct{}) bool {
+	for {
+		in, freed := c.sessions.admit(kind)
+		if in {
+			return func() { c.sessions.leave(kind) }, timeout - time.Since(began), nil
+		}
 		select {
-		case gate <- struct{}{}:
-			held = append(held, gate)
-			return true
+		case <-freed:
 		case <-timer.C:
-			return false
+			return nil, 0, fmt.Errorf("ssh %s: no session free within %s: the connection is busy", c.Host, timeout)
 		}
 	}
-	entered := false
-	if scripted {
-		entered = (timeout <= longRun || wait(c.long)) && wait(c.scripts) && wait(c.shared)
-	} else {
-		select {
-		case c.rpc <- struct{}{}:
-			held, entered = append(held, c.rpc), true
-		default:
-			select {
-			case c.rpc <- struct{}{}:
-				held, entered = append(held, c.rpc), true
-			case c.shared <- struct{}{}:
-				held, entered = append(held, c.shared), true
-			case <-timer.C:
-			}
-		}
-	}
-	leave = func() {
-		for _, gate := range held {
-			<-gate
-		}
-	}
-	if !entered {
-		leave()
-		return nil, 0, fmt.Errorf("ssh %s: no session free within %s: the connection is busy", c.Host, timeout)
-	}
-	return leave, timeout - time.Since(began), nil
 }
 
-// HoldTerminal counts a terminal among the sessions for as long as it stands, when there is room: it never waits, and
-// what it answers gives the place back.
-func (c *Conn) HoldTerminal() (release func()) {
-	c.places()
-	select {
-	case c.terminals <- struct{}{}:
-	default:
-		return func() {}
+// HoldTerminal takes a terminal's place for as long as it stands, waiting at most wait; what it answers gives it back.
+func (c *Conn) HoldTerminal(wait time.Duration) (release func(), err error) {
+	release, _, err = c.enter(kindTerminal, wait)
+	if err != nil {
+		return nil, fmt.Errorf("%s has too many ssh sessions open for one more terminal: close one and try again", c.Host)
 	}
-	select {
-	case c.shared <- struct{}{}:
-		return func() {
-			<-c.shared
-			<-c.terminals
-		}
-	default:
-		<-c.terminals
-		return func() {}
-	}
+	return release, nil
 }
 
 // masterErrMax is how much of the master's stderr is kept: its first lines say why it could not connect, and over a
@@ -272,7 +291,7 @@ func CommandConn(cmd *exec.Cmd, timeout time.Duration) (net.Conn, error) {
 // run executes a remote command over the master with a deadline, stdin streamed to it when given; without stdin a
 // long script travels on it (Remote), one with stdin on the command line, its scripts being short.
 func (c *Conn) run(command string, timeout time.Duration, stdin io.Reader) ([]byte, error) {
-	leave, timeout, err := c.enter(true, timeout)
+	leave, timeout, err := c.enter(scriptKind(timeout), timeout)
 	if err != nil {
 		return nil, err
 	}
@@ -313,7 +332,7 @@ func (c *Conn) run(command string, timeout time.Duration, stdin io.Reader) ([]by
 
 // Stream runs a remote command, handing sink its output (stdout and stderr) as it comes; the exit status is the error.
 func (c *Conn) Stream(command string, timeout time.Duration, sink func([]byte)) error {
-	leave, timeout, err := c.enter(true, timeout)
+	leave, timeout, err := c.enter(scriptKind(timeout), timeout)
 	if err != nil {
 		return err
 	}
@@ -477,7 +496,7 @@ func (c *Conn) ForwardTCPTo(host string, remotePort int) (string, error) {
 // DialExec runs a remote command over the master and exposes its stdin/stdout as a net.Conn:
 // the RPC transport for an sshd that refuses unix-socket forwarding (`nc -U <socket>` bridges to herdr).
 func (c *Conn) DialExec(command string, timeout time.Duration) (net.Conn, error) {
-	leave, left, err := c.enter(false, timeout)
+	leave, left, err := c.enter(kindRPC, timeout)
 	if err != nil {
 		return nil, err
 	}
@@ -569,19 +588,20 @@ func (c *cmdConn) wrap(n int, err error) (int, error) {
 	return n, err
 }
 
-// saidBy is what ssh wrote, given a moment on a session that failed at once: its words can trail the end of its output.
+// saidBy is what ssh wrote, given a moment on a session that failed: its reason can trail the end of its output and
+// what else it says.
 func (c *cmdConn) saidBy() string {
 	for range 10 {
 		msg := strings.TrimSpace(c.stderr.String())
 		c.mu.Lock()
 		closed := c.closed
 		c.mu.Unlock()
-		if msg != "" || closed || c.host == "" {
+		if _, refused := SessionRefused(c.host, msg); refused || closed || c.host == "" {
 			return msg
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	return ""
+	return strings.TrimSpace(c.stderr.String())
 }
 
 func (c *cmdConn) Read(b []byte) (int, error)  { return c.wrap(c.stdout.Read(b)) }

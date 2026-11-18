@@ -26,7 +26,7 @@ func limitedSSH(t *testing.T) (peak func() int) {
 		"ls " + script.Quote(running) + " | wc -l >> " + script.Quote(log) + "\n" +
 		"trap 'rm -f \"$me\"' EXIT\n" +
 		"case \"$*\" in\n" +
-		"*refuse*) exec 1>&-; sleep 0.05; echo 'mux_client_request_session: session request failed: Session open refused by peer' >&2; exit 255 ;;\n" +
+		"*refuse*) echo 'debug1: asking the master' >&2; exec 1>&-; sleep 0.05; echo 'mux_client_request_session: session request failed: Session open refused by peer' >&2; exit 255 ;;\n" +
 		"*quick*) echo done ;;\n" +
 		"*hold*) rm -f \"$me\"; exec sleep 30 ;;\n" +
 		"*) sleep 0.6 ;;\nesac\n"
@@ -102,7 +102,7 @@ func TestAPlaceIsHeldUntilTheConnectionCloses(t *testing.T) {
 	limitedSSH(t)
 	c := limited()
 	var held []io.Closer
-	for range sharedPlaces + rpcPlaces {
+	for range maxSessions {
 		conn, err := c.DialExec("hold", time.Minute)
 		if err != nil {
 			t.Fatal(err)
@@ -120,17 +120,16 @@ func TestAPlaceIsHeldUntilTheConnectionCloses(t *testing.T) {
 	if _, err := c.Run("quick", 100*time.Millisecond); err == nil || !strings.Contains(err.Error(), "no session free") {
 		t.Fatalf("a script past the limit: %v", err)
 	}
-	last := held[len(held)-1] // the requests' own places went first: this one holds a shared place, as scripts need
-	last.Close()
-	last.Close() // closing twice gives one place back
-	if _, err := c.Run("quick", 2*time.Second); err != nil {
+	held[0].Close()
+	held[0].Close() // closing twice gives one place back
+	again, err := c.DialExec("quick", time.Second)
+	if err != nil {
 		t.Fatalf("a place given back: %v", err)
 	}
-	again, err := c.DialExec("quick", 100*time.Millisecond)
-	if err != nil {
-		t.Fatalf("the place was not free again: %v", err)
-	}
 	held = append(held, again)
+	if _, err := c.DialExec("quick", 100*time.Millisecond); err == nil {
+		t.Fatal("one Close gave two places back")
+	}
 }
 
 // TestTheWaitComesOutOfTheTimeout: a caller's bound holds, queue included.
@@ -139,7 +138,7 @@ func TestTheWaitComesOutOfTheTimeout(t *testing.T) {
 	c := limited()
 	leave := make([]func(), 0, maxScripts)
 	for range maxScripts {
-		out, _, err := c.enter(true, time.Second)
+		out, _, err := c.enter(kindShort, time.Second)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -181,41 +180,35 @@ func TestARefusedSessionIsSaidInWords(t *testing.T) {
 	}
 }
 
-// TestTerminalsCountAndRPCKeepsItsPlaces: a terminal never waits, takes its place, and cannot leave herdr's requests none.
-func TestTerminalsCountAndRPCKeepsItsPlaces(t *testing.T) {
-	limitedSSH(t)
+// TestEachKindLeavesTheLastPlacesToTheNext: terminals and long scripts stop first, then short scripts, then requests.
+func TestEachKindLeavesTheLastPlacesToTheNext(t *testing.T) {
 	c := limited()
-	var release []func()
-	for range maxTerminals + 2 {
-		release = append(release, c.HoldTerminal())
-	}
-	if len(c.shared) != maxTerminals {
-		t.Fatalf("%d terminals hold a place, want %d", len(c.shared), maxTerminals)
-	}
-	var scripts []func()
-	for range sharedPlaces - maxTerminals {
-		leave, _, err := c.enter(true, time.Second)
-		if err != nil {
-			t.Fatal(err)
+	var leave []func()
+	take := func(what string, kind sessionKind, n int) {
+		t.Helper()
+		for range n {
+			out, _, err := c.enter(kind, 10*time.Millisecond)
+			if err != nil {
+				t.Fatalf("%s: %v", what, err)
+			}
+			leave = append(leave, out)
 		}
-		scripts = append(scripts, leave)
-	}
-	if _, _, err := c.enter(true, 50*time.Millisecond); err == nil {
-		t.Fatal("a script went past the sessions the terminals hold")
-	}
-	var requests []func()
-	for range rpcPlaces {
-		leave, _, err := c.enter(false, 50*time.Millisecond)
-		if err != nil {
-			t.Fatalf("a request found no place of its own: %v", err)
+		if _, _, err := c.enter(kind, 10*time.Millisecond); err == nil {
+			t.Fatalf("one %s too many went in", what)
 		}
-		requests = append(requests, leave)
 	}
-	for _, out := range append(append(release, scripts...), requests...) {
+	take("terminal", kindTerminal, maxTerminals)
+	take("long script", kindLong, maxSessions-rpcReserve-shortReserve-maxTerminals)
+	take("short script", kindShort, shortReserve)
+	take("request", kindRPC, rpcReserve)
+	if _, err := c.HoldTerminal(10 * time.Millisecond); err == nil || !strings.Contains(err.Error(), "one more terminal") {
+		t.Errorf("a terminal past the limit: %v", err)
+	}
+	for _, out := range leave {
 		out()
 	}
-	if len(c.shared) != 0 || len(c.terminals) != 0 || len(c.rpc) != 0 {
-		t.Errorf("places left taken: %d %d %d", len(c.shared), len(c.terminals), len(c.rpc))
+	if s := &c.sessions; s.total != 0 || s.scripts != 0 || s.long != 0 || s.terminals != 0 {
+		t.Errorf("places left taken: %+v", s)
 	}
 }
 
@@ -224,7 +217,7 @@ func TestLongScriptsLeaveRoomForShortOnes(t *testing.T) {
 	c := limited()
 	var leave []func()
 	for range maxLongScripts {
-		out, _, err := c.enter(true, 2*longRun)
+		out, _, err := c.enter(kindLong, time.Second)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -232,7 +225,7 @@ func TestLongScriptsLeaveRoomForShortOnes(t *testing.T) {
 	}
 	waited := make(chan func(), 1)
 	go func() {
-		out, _, _ := c.enter(true, 2*longRun)
+		out, _, _ := c.enter(kindLong, time.Minute)
 		waited <- out
 	}()
 	select {
@@ -240,7 +233,7 @@ func TestLongScriptsLeaveRoomForShortOnes(t *testing.T) {
 		t.Fatal("one more long script went in")
 	case <-time.After(50 * time.Millisecond):
 	}
-	short, _, err := c.enter(true, 50*time.Millisecond)
+	short, _, err := c.enter(kindShort, 50*time.Millisecond)
 	if err != nil {
 		t.Fatalf("a short script: %v", err)
 	}
@@ -249,5 +242,8 @@ func TestLongScriptsLeaveRoomForShortOnes(t *testing.T) {
 	(<-waited)()
 	for _, out := range leave[1:] {
 		out()
+	}
+	if scriptKind(longRun) != kindShort || scriptKind(longRun+1) != kindLong {
+		t.Error("what counts as long")
 	}
 }

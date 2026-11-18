@@ -1,6 +1,7 @@
 package herdr
 
 import (
+	"errors"
 	"os/exec"
 	"strings"
 	"sync/atomic"
@@ -59,22 +60,21 @@ func TestAScreenSayingAttachFailedIsNoRefusal(t *testing.T) {
 func TestAnAttachHoldsItsPlaceAndItsCarrierCanRefuse(t *testing.T) {
 	var held, released atomic.Int32
 	m := NewAttachManager(fakeAttach("screen", false))
-	m.Hold = func() func() {
+	m.Hold = func(time.Duration) (func(), error) {
 		held.Add(1)
-		return func() { released.Add(1) }
+		return func() { released.Add(1) }, nil
 	}
 	_, cancel, err := m.Subscribe("t1", 80, 24)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if held.Load() != 1 || released.Load() != 0 {
-		t.Fatalf("held %d, released %d", held.Load(), released.Load())
+	if _, again, err := m.Subscribe("t1", 80, 24); err != nil || held.Load() != 1 {
+		t.Fatalf("a second viewer took a place: %d, %v", held.Load(), err)
+	} else {
+		again()
 	}
 	cancel()
-	m.mu.Lock()
-	a := m.attaches["t1"]
-	m.mu.Unlock()
-	m.kill(a)
+	m.kill(m.standing("t1"))
 	if released.Load() != 1 {
 		t.Errorf("released %d", released.Load())
 	}
@@ -83,4 +83,64 @@ func TestAnAttachHoldsItsPlaceAndItsCarrierCanRefuse(t *testing.T) {
 	if _, _, err := refused.Subscribe("t2", 80, 24); err == nil || err.Error() != "the machine is full" {
 		t.Errorf("a refusal by what carries the attach: %v", err)
 	}
+}
+
+// TestANewAttachTakesThePlaceOfOneNobodyWatches, and without one it starts nothing and says why.
+func TestANewAttachTakesThePlaceOfOneNobodyWatches(t *testing.T) {
+	defer func(d time.Duration) { placeWait = d }(placeWait)
+	placeWait = 10 * time.Millisecond
+	free := atomic.Int32{}
+	free.Store(1)
+	m := NewAttachManager(fakeAttach("screen", false))
+	m.Hold = func(time.Duration) (func(), error) {
+		if free.Add(-1) < 0 {
+			free.Add(1)
+			return nil, errors.New("too many ssh sessions")
+		}
+		return func() { free.Add(1) }, nil
+	}
+	_, cancel, err := m.Subscribe("watched", 80, 24)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := m.Subscribe("next", 80, 24); err == nil || err.Error() != "too many ssh sessions" {
+		t.Fatalf("with every attach watched: %v", err)
+	}
+	cancel() // now it only lingers
+	_, done, err := m.Subscribe("next", 80, 24)
+	if err != nil {
+		t.Fatalf("over one nobody watches: %v", err)
+	}
+	done()
+	if m.standing("watched") != nil {
+		t.Error("the lingering attach stayed")
+	}
+	m.kill(m.standing("next"))
+}
+
+// TestTwoViewersStartingTogetherHoldOnePlace: the one that finds the attach already up gives its place back.
+func TestTwoViewersStartingTogetherHoldOnePlace(t *testing.T) {
+	var taken, released atomic.Int32
+	m := NewAttachManager(fakeAttach("screen", false))
+	var other func()
+	m.Hold = func(time.Duration) (func(), error) {
+		if taken.Add(1) == 1 { // the other viewer gets there while this one has its place in hand
+			_, cancel, err := m.Subscribe("t1", 80, 24)
+			if err != nil {
+				return nil, err
+			}
+			other = cancel
+		}
+		return func() { released.Add(1) }, nil
+	}
+	_, cancel, err := m.Subscribe("t1", 80, 24)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if taken.Load() != 2 || released.Load() != 1 {
+		t.Errorf("taken %d, given back %d", taken.Load(), released.Load())
+	}
+	cancel()
+	other()
+	m.kill(m.standing("t1"))
 }
