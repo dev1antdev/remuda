@@ -11,6 +11,7 @@ package worktrees
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"time"
 
@@ -66,24 +67,72 @@ func Inspect(host shell.Shell, path string) (Info, error) {
 	return ParseInspect(path, out)
 }
 
+// Landed is a merged request's branch and the commit it ended on: what vouches for a branch a squash leaves git unsure of.
+type Landed struct {
+	Branch, Commit string
+}
+
+// landedCommits are the commits merged requests of the branch ended on.
+func landedCommits(landed []Landed, branch string) []string {
+	var commits []string
+	for _, l := range landed {
+		if l.Branch == branch && l.Commit != "" {
+			commits = append(commits, l.Commit)
+		}
+	}
+	return commits
+}
+
+// LandedAt says a merged request of the branch ended on the commit, so nothing on the branch is lost with it.
+func LandedAt(landed []Landed, branch, tip string) bool {
+	return branch != "" && tip != "" && slices.Contains(landedCommits(landed, branch), tip)
+}
+
+// branchInUseScript stops with git's own reasons for keeping a branch: checked out in a worktree, or being rebased or
+// bisected in one, where git's list shows that worktree detached, or waiting to be moved by a rebase --update-refs. A
+// record that cannot be read counts as naming it.
+func branchInUseScript(branch string) string {
+	ref, name := script.Quote("refs/heads/"+branch), script.Quote(branch)
+	return "inuse() { echo 'the branch is in use in another worktree'; exit 5; }\n" +
+		"names() { [ -e \"$2\" ] || return 0; grep -Fqx -e \"$1\" \"$2\" 2>/dev/null; [ $? -eq 1 ] || inuse; }\n" +
+		"list=$(git worktree list --porcelain) || inuse\n" +
+		"printf '%s\\n' \"$list\" | grep -Fqx \"branch \"" + ref + " && inuse\n" +
+		"common=$(git rev-parse --git-common-dir) || inuse\n" +
+		"for d in \"$common\" \"$common\"/worktrees/*; do\n" +
+		"  for f in rebase-merge/head-name rebase-apply/head-name rebase-merge/update-refs; do names " + ref + " \"$d/$f\"; done\n" +
+		"  names " + name + " \"$d/BISECT_START\"\n" +
+		"done\n"
+}
+
+// deleteBranchAt deletes the branch if it still ends on the commit, a shell word: the ref is compared and removed in one
+// step, so a commit that arrives meanwhile keeps it. What git branch -D would refuse stays too.
+func deleteBranchAt(branch, commit string) string {
+	return branchInUseScript(branch) +
+		"git update-ref --no-deref -d " + script.Quote("refs/heads/"+branch) + " " + commit + " 2>&1 || exit 5\n" +
+		"git config --remove-section " + script.Quote("branch."+branch) + " 2>/dev/null || true\n"
+}
+
 // RemoveScript removes the worktree from its repository and deletes its branch: git's own -d, which refuses a branch
-// it does not see as merged, or -D when the caller knows the branch's request was merged (a squash leaves git unsure).
-func RemoveScript(info Info, merged bool) string {
+// it does not see as merged, or by its commit when it ends, there and then, where a merged request of it ended.
+func RemoveScript(info Info, landed []Landed) string {
 	s := script.PATH + "\ncd " + script.Quote(info.Repo) + " 2>/dev/null || { echo 'the repository is not there'; exit 3; }\n" +
 		"git worktree remove " + script.Quote(info.Path) + " 2>&1 || exit 4\n"
-	if info.Branch != "" {
-		flag := "-d"
-		if merged {
-			flag = "-D"
-		}
-		s += "git branch " + flag + " " + script.Quote(info.Branch) + " 2>&1 || exit 5\n"
+	if info.Branch == "" {
+		return s
 	}
-	return s
+	plain := "git branch -d " + script.Quote(info.Branch) + " 2>&1 || exit 5\n"
+	commits := landedCommits(landed, info.Branch)
+	if len(commits) == 0 {
+		return s + plain
+	}
+	return s + "tip=$(git rev-parse --verify -q " + script.Quote("refs/heads/"+info.Branch) + ")\n" +
+		"case " + script.Quote(" "+strings.Join(commits, " ")+" ") + " in\n*\" ${tip:-none} \"*)\n" +
+		deleteBranchAt(info.Branch, `"$tip"`) + ";;\n*)\n" + plain + ";;\nesac\n"
 }
 
 // Remove takes the worktree down on the machine; the error is git's own line.
-func Remove(host shell.Shell, info Info, merged bool) error {
-	out, err := shell.Text(host, RemoveScript(info, merged), Timeout)
+func Remove(host shell.Shell, info Info, landed []Landed) error {
+	out, err := shell.Text(host, RemoveScript(info, landed), Timeout)
 	if err == nil {
 		return nil
 	}
@@ -117,15 +166,18 @@ func Discard(host shell.Shell, info Info) error {
 	return errors.New(lastLine(out, err.Error()))
 }
 
-// lastLine is git's complaint: the last line it printed, else the fallback.
+// lastLine is git's complaint: the last line it printed that is no hint, else the fallback.
 func lastLine(text, fallback string) string {
-	text = strings.TrimSpace(text)
-	if text == "" {
+	lines := script.Lines(strings.TrimSpace(text))
+	if len(lines) == 0 {
 		return fallback
 	}
-	last := text
-	if i := strings.LastIndex(text, "\n"); i >= 0 {
-		last = text[i+1:]
+	last := lines[len(lines)-1]
+	for i := len(lines) - 1; i >= 0; i-- {
+		if !strings.HasPrefix(strings.TrimSpace(lines[i]), "hint:") { // git's advice after the refusal it explains
+			last = lines[i]
+			break
+		}
 	}
 	return strings.TrimSpace(last)
 }

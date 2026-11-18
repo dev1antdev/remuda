@@ -33,7 +33,7 @@ export const handedWords = (action: PRAction, label: string): string =>
 
 // removeAsk is the confirm before a worktree goes
 export const removeAsk = (name: string): string =>
-  t("Closes “{name}” — its agent stops — then removes the worktree and deletes its branch from the repository, on the machine. A worktree with uncommitted changes is refused before anything closes.", { name });
+  t("Closes “{name}” — its agent stops — then removes the worktree on the machine, and its branch if that still ends where the merged request ended or git sees it merged. A worktree with uncommitted changes is refused before anything closes.", { name });
 
 // removedWords is the toast once it is gone
 export const removedWords = (branch: string): string => (branch ? t("Worktree removed, branch {branch} deleted", { branch }) : t("Worktree removed"));

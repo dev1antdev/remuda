@@ -123,7 +123,7 @@ func (s *Server) prHandoff(compose func(host shell.Shell, label, url string) (st
 
 // handleWorktreeRemove is DELETE /api/worktrees/{id}?machine=: a linked worktree's workspace closed, then the worktree
 // removed from its repository and its branch deleted, on the machine as the person. A worktree with uncommitted changes
-// is refused before anything closes; the branch goes past git's own merge check only when the request it carried is merged.
+// is refused before anything closes; the branch goes past git's own merge check only when it ends where a merged request of it ended.
 func (s *Server) handleWorktreeRemove(w http.ResponseWriter, r *http.Request) {
 	mc, client, _, ok := s.ready(w, r, "")
 	if !ok {
@@ -153,25 +153,26 @@ func (s *Server) handleWorktreeRemove(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, http.StatusConflict, fmt.Errorf("the worktree has uncommitted changes (%s); commit or discard them first", info.Dirty))
 		return
 	}
-	merged := s.mergedIn(mc, id)
+	landed := s.landedIn(mc, id)
 	if err := client.WorkspaceClose(id); err != nil {
 		rpcErr(w, err)
 		return
 	}
 	s.Watch.Refresh(mc)
-	if err := worktrees.Remove(mc, info, merged); err != nil {
+	if err := worktrees.Remove(mc, info, landed); err != nil {
 		httpErr(w, http.StatusBadGateway, fmt.Errorf("the workspace is closed; %s", err))
 		return
 	}
 	writeJSON(w, map[string]any{"ok": true, "branch": info.Branch, "repo": info.Repo})
 }
 
-// mergedIn says whether an agent of the workspace named a pull or merge request gh or glab read as merged.
-func (s *Server) mergedIn(mc *machines.Machine, workspaceID string) bool {
+// landedIn is the pull or merge requests an agent of the workspace named that gh or glab read as merged.
+func (s *Server) landedIn(mc *machines.Machine, workspaceID string) []worktrees.Landed {
 	snap, _ := s.Watch.Snapshot(mc.ID())
 	if snap == nil {
-		return false
+		return nil
 	}
+	var landed []worktrees.Landed
 	for i := range snap.Panes {
 		pane := &snap.Panes[i]
 		if pane.WorkspaceID != workspaceID || pane.Agent == "" {
@@ -181,8 +182,8 @@ func (s *Server) mergedIn(mc *machines.Machine, workspaceID string) bool {
 			continue
 		}
 		if status, ok := s.PRs.Status(mc.ID(), pane.PaneID); ok && status.State == "MERGED" {
-			return true
+			landed = append(landed, worktrees.Landed{Branch: status.HeadBranch, Commit: status.HeadCommit})
 		}
 	}
-	return false
+	return landed
 }

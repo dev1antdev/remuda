@@ -35,33 +35,33 @@ func TestInspectReadsTheWorktreeAndRefusesNothingItself(t *testing.T) {
 
 func TestRemoveNeverForcesAndDeletesTheBranchOnlyAsAsked(t *testing.T) {
 	info := Info{Path: "/repo/.worktrees/task-20", Branch: "task-20-x", Repo: "/repo"}
-	plain := RemoveScript(info, false)
+	plain := RemoveScript(info, nil)
 	if !strings.Contains(plain, "cd '/repo'") || !strings.Contains(plain, "git worktree remove '/repo/.worktrees/task-20'") || !strings.Contains(plain, "git branch -d 'task-20-x'") || strings.Contains(plain, "--force") || strings.Contains(plain, "-D") {
 		t.Fatalf("script = %q", plain)
 	}
-	merged := RemoveScript(info, true)
-	if !strings.Contains(merged, "git branch -D 'task-20-x'") || strings.Contains(merged, "--force") {
+	merged := RemoveScript(info, []Landed{{Branch: "task-20-x", Commit: "abc123"}})
+	if !strings.Contains(merged, `git update-ref --no-deref -d 'refs/heads/task-20-x' "$tip"`) || !strings.Contains(merged, "' abc123 '") || strings.Contains(merged, "--force") {
 		t.Fatalf("merged script = %q", merged)
 	}
-	if detached := RemoveScript(Info{Path: "/w", Repo: "/repo"}, true); strings.Contains(detached, "git branch") {
+	if detached := RemoveScript(Info{Path: "/w", Repo: "/repo"}, []Landed{{Branch: "x", Commit: "abc"}}); strings.Contains(detached, "git branch") {
 		t.Fatalf("a detached worktree has no branch to delete: %q", detached)
 	}
 
 	refused := &shell.Fake{Name: "box", Answer: func(string) (string, error) {
 		return "fatal: '/repo/.worktrees/task-20' contains modified or untracked files, use --force to delete it\n", &shell.ExitError{Code: 4}
 	}}
-	if err := Remove(refused, info, false); err == nil || !strings.Contains(err.Error(), "contains modified or untracked files") {
+	if err := Remove(refused, info, nil); err == nil || !strings.Contains(err.Error(), "contains modified or untracked files") {
 		t.Fatalf("err = %v", err)
 	}
 	unmerged := &shell.Fake{Name: "box", Answer: func(string) (string, error) {
 		return "error: the branch 'task-20-x' is not fully merged\nhint: If you are sure you want to delete it, run 'git branch -D task-20-x'\n", &shell.ExitError{Code: 5}
 	}}
-	err := Remove(unmerged, info, false)
-	if err == nil || !strings.HasPrefix(err.Error(), "the worktree is removed; the branch stays: ") {
+	err := Remove(unmerged, info, nil)
+	if err == nil || err.Error() != "the worktree is removed; the branch stays: error: the branch 'task-20-x' is not fully merged" {
 		t.Fatalf("err = %v", err)
 	}
 	ok := &shell.Fake{Name: "box", Answer: func(string) (string, error) { return "Deleted branch task-20-x (was abc1234).\n", nil }}
-	if err := Remove(ok, info, true); err != nil {
+	if err := Remove(ok, info, nil); err != nil {
 		t.Fatal(err)
 	}
 }

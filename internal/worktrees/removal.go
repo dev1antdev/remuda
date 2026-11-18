@@ -29,6 +29,7 @@ type Look struct {
 	Unpushed      int      `json:"unpushed"`         // the branch's commits on no remote
 	Unmerged      int      `json:"unmerged"`         // of those, the ones the main checkout's HEAD lacks too: lost with the branch
 	Merged        bool     `json:"merged"`           // the main checkout's HEAD holds the branch
+	Tip           string   `json:"-"`                // the commit the branch ends on
 	HasSubmodules bool     `json:"has_submodules,omitempty"`
 	Submodules    []string `json:"submodules,omitempty"` // the ones with commits pushed nowhere
 }
@@ -46,6 +47,7 @@ func LookScript(path string) string {
 		"  " + git + " rev-list --count \"refs/heads/$branch\" --not --remotes 2>/dev/null || echo 0\n" +
 		"  " + git + " -C \"$main\" rev-list --count \"refs/heads/$branch\" --not --remotes HEAD 2>/dev/null || echo 0\n" +
 		"  if " + git + " -C \"$main\" merge-base --is-ancestor \"refs/heads/$branch\" HEAD 2>/dev/null; then echo merged; else echo open; fi\n" +
+		"  " + git + " rev-parse --verify -q \"refs/heads/$branch\" 2>/dev/null\n" +
 		"else printf '0\\n0\\nopen\\n'; fi\nprintf '\\036\\n'\n" +
 		"[ -f .gitmodules ] && echo submodules\n" +
 		git + " submodule foreach --quiet --recursive 'if [ -n \"$(git rev-list -n1 HEAD --not --remotes 2>/dev/null)\" ]; then printf \"lost %s\\n\" \"$displaypath\"; fi' 2>/dev/null\ntrue\n"
@@ -77,6 +79,9 @@ func ParseLook(path, out string) (Look, error) {
 		look.Unmerged, _ = strconv.Atoi(strings.TrimSpace(reach[1]))
 		look.Merged = strings.TrimSpace(reach[2]) == "merged"
 	}
+	if len(reach) >= 4 {
+		look.Tip = strings.TrimSpace(reach[3])
+	}
 	for _, line := range script.Lines(parts[3]) {
 		switch {
 		case strings.TrimSpace(line) == "submodules":
@@ -99,14 +104,14 @@ func LookAt(host shell.Shell, path string) (Look, error) {
 
 // Stamp is what the person was shown of the risk; a removal finding another refuses until it is seen.
 func (l Look) Stamp() string {
-	return strings.Join([]string{strconv.Itoa(l.Dirty), l.First, strconv.Itoa(l.Unmerged), l.Branch, strings.Join(l.Submodules, ",")}, "|")
+	return strings.Join([]string{strconv.Itoa(l.Dirty), l.First, strconv.Itoa(l.Unmerged), l.Branch, l.Tip, strings.Join(l.Submodules, ",")}, "|")
 }
 
 // Loses says whether removing the folder loses work: uncommitted changes, or a submodule's commits pushed nowhere.
 func (l Look) Loses() bool { return l.Dirty > 0 || len(l.Submodules) > 0 }
 
-// ForceScript removes the worktree, --force when it holds what the look showed, and deletes its branch when asked:
-// git's -D, since the person was told what of it is on no remote.
+// ForceScript removes the worktree, --force when it holds what the look showed, and deletes its branch when asked, as it
+// stood when looked at, since the person was told what of it is on no remote.
 func ForceScript(look Look, deleteBranch bool) string {
 	force := ""
 	if look.Dirty > 0 || look.HasSubmodules {
@@ -114,8 +119,12 @@ func ForceScript(look Look, deleteBranch bool) string {
 	}
 	s := script.PATH + "\ncd " + script.Quote(look.Repo) + " 2>/dev/null || { echo 'the repository is not there'; exit 3; }\n" +
 		"git worktree remove " + force + script.Quote(look.Path) + " 2>&1 || exit 4\n"
-	if deleteBranch && look.Branch != "" {
-		s += "git branch -D " + script.Quote(look.Branch) + " 2>&1 || exit 5\n"
+	switch {
+	case !deleteBranch || look.Branch == "":
+	case look.Tip != "":
+		s += deleteBranchAt(look.Branch, script.Quote(look.Tip))
+	default:
+		s += "echo 'the branch had no commit when it was looked at'; exit 5\n"
 	}
 	return s
 }

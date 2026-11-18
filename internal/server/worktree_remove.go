@@ -21,7 +21,7 @@ type Removal struct {
 	Made      bool     `json:"made"`             // under the machine's ~/.herdr/worktrees, where herdr and remuda make them
 	Shared    []string `json:"shared,omitempty"` // the other workspaces standing on it or with a pane in it: then only this one closes
 	Working   string   `json:"working,omitempty"`
-	MergedPR  bool     `json:"merged_pr,omitempty"` // a pull request its agents named was read as merged
+	MergedPR  bool     `json:"merged_pr,omitempty"` // a merged request its agents named ended where the branch ends
 	Stamp     string   `json:"stamp"`
 	Home      string   `json:"home"` // the machine's, for the paths the dialog says with ~
 }
@@ -46,7 +46,7 @@ func (s *Server) removal(mc *machines.Machine, id string) (*Removal, int, error)
 	}
 	rm := &Removal{Look: look, Workspace: id, Name: ws.Label, RepoName: ws.Worktree.RepoName, Made: worktrees.Made(mc.Home(), tree), Shared: sharers(snap, id, tree), Home: mc.Home()}
 	rm.Working = s.busyIn(mc.ID(), tree)
-	rm.MergedPR = s.mergedIn(mc, id)
+	rm.MergedPR = worktrees.LandedAt(s.landedIn(mc, id), look.Branch, look.Tip)
 	rm.Stamp = look.Stamp()
 	return rm, 0, nil
 }

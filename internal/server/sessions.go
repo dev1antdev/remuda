@@ -200,14 +200,14 @@ func plainWorktree(mc *machines.Machine, c *herdr.Client, req *createReq) (strin
 
 // handleWorkspaceClose is DELETE /api/sessions/{id}: the workspace closed and, when it stood on a worktree herdr or
 // remuda made that no other workspace uses, the worktree taken down after it as far as nothing is lost
-// (worktrees.Tidy: the folder once clean, the branch once merged); the answer's worktree says what became of it.
+// (worktrees.Tidy: the folder once clean, the branch once merged as it stands); the answer's worktree says what became of it.
 func (s *Server) handleWorkspaceClose(w http.ResponseWriter, r *http.Request) {
 	mc, client, _, ok := s.ready(w, r, "")
 	if !ok {
 		return
 	}
 	id := r.PathValue("id")
-	tree, merged := s.madeWorktree(mc, id)
+	tree, landed := s.madeWorktree(mc, id)
 	if err := client.WorkspaceClose(id); err != nil {
 		rpcErr(w, err)
 		return
@@ -215,27 +215,27 @@ func (s *Server) handleWorkspaceClose(w http.ResponseWriter, r *http.Request) {
 	s.Watch.Refresh(mc)
 	answer := map[string]any{"ok": true}
 	if tree != "" {
-		answer["worktree"] = worktrees.Tidy(mc, tree, merged)
+		answer["worktree"] = worktrees.Tidy(mc, tree, landed)
 	}
 	writeJSON(w, answer)
 }
 
 // madeWorktree is the worktree herdr or remuda made that the workspace alone stands on, "" for any other folder, and
-// whether a request its agents named was read as merged — from the snapshot before the close
-func (s *Server) madeWorktree(mc *machines.Machine, id string) (string, bool) {
+// the requests its agents named that were read as merged — from the snapshot before the close
+func (s *Server) madeWorktree(mc *machines.Machine, id string) (string, []worktrees.Landed) {
 	snap, _ := s.Watch.Snapshot(mc.ID())
 	if snap == nil {
-		return "", false
+		return "", nil
 	}
 	ws := snap.Workspace(id)
 	if ws == nil || ws.Worktree == nil || !ws.Worktree.IsLinkedWorktree || !worktrees.Made(mc.Home(), ws.Worktree.CheckoutPath) {
-		return "", false
+		return "", nil
 	}
 	tree := ws.Worktree.CheckoutPath
 	if usedElsewhere(snap, id, tree) {
-		return "", false
+		return "", nil
 	}
-	return tree, s.mergedIn(mc, id)
+	return tree, s.landedIn(mc, id)
 }
 
 // usedElsewhere says whether another workspace stands on the worktree or has a pane inside it.

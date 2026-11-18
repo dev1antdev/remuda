@@ -49,6 +49,8 @@ type Status struct {
 	Checks     Checks    `json:"checks"`
 	Closes     []Issue   `json:"closes,omitempty"` // the issues the request closes once it merges
 	At         time.Time `json:"at"`
+	HeadBranch string    `json:"-"` // the request's branch and its last commit, what a merged one vouches for
+	HeadCommit string    `json:"-"`
 }
 
 // Issue is an issue a pull request closes, as gh names it: its number, its address and its repository, owner/name.
@@ -339,7 +341,7 @@ func fetchPull(host shell.Shell, url string, now time.Time) (*Status, string) {
 
 // viewFields are what every gh names; viewMore adds the ones a gh from before closingIssuesReferences refuses whole.
 const (
-	viewFields = "state,isDraft,mergeable,reviewDecision,statusCheckRollup,title"
+	viewFields = "state,isDraft,mergeable,reviewDecision,statusCheckRollup,title,headRefName,headRefOid"
 	viewMore   = viewFields + ",mergeStateStatus,closingIssuesReferences"
 )
 
@@ -377,6 +379,8 @@ type ghView struct {
 	ReviewDecision string       `json:"reviewDecision"`
 	Rollup         []rollupItem `json:"statusCheckRollup"`
 	Closes         []ghIssue    `json:"closingIssuesReferences"`
+	HeadBranch     string       `json:"headRefName"`
+	HeadCommit     string       `json:"headRefOid"`
 }
 
 // Parse reads gh's JSON; anything else — gh missing, not signed in, a refused request — is the error's text.
@@ -391,6 +395,7 @@ func Parse(out string, now time.Time) (Status, error) {
 		return Status{}, errors.New(firstLine(trimmed, err.Error()))
 	}
 	status := Status{Title: view.Title, State: view.State, Draft: view.IsDraft, Mergeable: view.Mergeable, MergeState: view.MergeState, Review: view.ReviewDecision, At: now}
+	status.HeadBranch, status.HeadCommit = view.HeadBranch, view.HeadCommit
 	for _, issue := range view.Closes {
 		repo := ""
 		if issue.Repository.Owner.Login != "" && issue.Repository.Name != "" {
