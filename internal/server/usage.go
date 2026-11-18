@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/auth"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/shell"
 	"github.com/dev1antdev/remuda/internal/usage"
@@ -58,6 +59,9 @@ func (s *Server) handleUsage(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().In(loc)
 	since := time.Date(now.Year(), now.Month(), now.Day()-(days-1), 0, 0, 0, 0, loc)
 	reports := usage.Collect(s.connectedHosts(r.URL.Query().Get("machine")), since, loc, tz)
+	if auth.IsViewer(r.Context()) {
+		reports = s.viewerUsage(r.Context(), reports)
+	}
 	writeJSON(w, map[string]any{"since": since.UTC().Format(time.RFC3339), "days": days, "machines": reports})
 }
 

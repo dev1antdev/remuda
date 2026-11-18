@@ -20,11 +20,17 @@ import (
 	"github.com/dev1antdev/remuda/internal/review"
 	"github.com/dev1antdev/remuda/internal/scratch"
 	"github.com/dev1antdev/remuda/internal/sent"
+	"github.com/dev1antdev/remuda/internal/transcript"
 	"github.com/dev1antdev/remuda/internal/watch"
 )
 
 func TestAViewerNeverReachesRemudasOwnWorkspaces(t *testing.T) {
+	t.Setenv("HOME", t.TempDir()) // the transcripts below are this test's own
 	sock := herdrtest.Server(t)
+	home, err := os.UserHomeDir() // the throwaway herdr may have set one of its own
+	if err != nil {
+		t.Fatal(err)
+	}
 	client := herdr.NewClient(sock)
 	appDir := t.TempDir()
 	shellDir, err := filepath.EvalSymlinks(t.TempDir()) // herdr names the folder as the system resolves it
@@ -100,6 +106,33 @@ func TestAViewerNeverReachesRemudasOwnWorkspaces(t *testing.T) {
 	}
 	if personTag == viewerTag {
 		t.Error("the two rosters share an ETag: one would be answered 304 with the other's")
+	}
+
+	passes := s.viewerOwnGuard(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	if code, _ := fileCall(passes, "/?machine=local&pane=w99:p9", true); code != 200 {
+		t.Errorf("the page's own address, naming a pane gone since: %d", code)
+	}
+	const conciergeSession, appSession = "11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222"
+	projects := filepath.Join(home, ".claude", "projects")
+	for session, folder := range map[string]string{conciergeSession: filepath.Join(mc.StateDir(), "concierge"), appSession: appDir} {
+		dir := filepath.Join(projects, transcript.EncodePath(folder))
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, session+".jsonl"), []byte("{}\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, route := range []string{"/api/chat", "/api/recap"} {
+		if code, _ := fileCall(passes, route+"?machine=local&dir="+url.QueryEscape(appDir)+"&session="+conciergeSession, true); code != http.StatusNotFound {
+			t.Errorf("%s: the concierge's session asked for through another folder: %d", route, code)
+		}
+		if code, _ := fileCall(passes, route+"?machine=local&dir="+url.QueryEscape(filepath.Join(mc.StateDir(), "concierge"))+"&session="+appSession, true); code != http.StatusNotFound {
+			t.Errorf("%s: the concierge's folder: %d", route, code)
+		}
+		if code, _ := fileCall(passes, route+"?machine=local&dir="+url.QueryEscape(appDir)+"&session="+appSession, true); code != 200 {
+			t.Errorf("%s: a session of the person's folder: %d", route, code)
+		}
 	}
 
 	s.Feed.Add(sent.Entry("Phone", "the-secret", false, machines.LocalID, ownPane, scratch.Label))

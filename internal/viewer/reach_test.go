@@ -3,6 +3,7 @@ package viewer
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/dev1antdev/remuda/internal/rpath"
@@ -209,5 +210,20 @@ func TestAPatchShowingASecretIsRefused(t *testing.T) {
 		if got := PatchAllowed(patch); got != want {
 			t.Errorf("%q: %v, want %v", patch, got, want)
 		}
+	}
+}
+
+func TestClosedPlacesAreKnownByPathAndByTheirTranscriptFolder(t *testing.T) {
+	reach := Of([]string{"/home/me/app"}, "/home/me", "/home/me/.config/remuda", rpath.POSIX, false)
+	encode := func(path string) string { return strings.NewReplacer("/", "-", ".", "-").Replace(path) }
+	if !reach.Closes("/home/me/.config/remuda/concierge") || reach.Closes("/home/me/app") {
+		t.Error("the state dir's folders are closed, a workspace is not")
+	}
+	if !reach.ClosesProject(encode("/home/me/.config/remuda/concierge"), encode) || reach.ClosesProject(encode("/home/me/app"), encode) {
+		t.Error("a transcript folder goes by the place it was kept for")
+	}
+	var unread Reach
+	if !unread.Closes("/home/me/app") || !unread.ClosesProject("-home-me-app", encode) {
+		t.Error("a machine not read yet closes everything")
 	}
 }

@@ -65,6 +65,25 @@ func (r Reach) Allows(path string) bool {
 	return false
 }
 
+// Closes says the path is a place no viewer reads, whichever folder it is asked through; on a machine not read yet, any.
+func (r Reach) Closes(path string) bool {
+	return r.home == "" || r.inClosed(path)
+}
+
+// ClosesProject says a transcript folder belongs to a closed place: name is the folder as the agent keeps it, encode
+// turns a path into such a name. A name that only begins the same way counts: refusing one more is the safe side.
+func (r Reach) ClosesProject(name string, encode func(string) string) bool {
+	if r.home == "" {
+		return true
+	}
+	for _, closed := range r.closed {
+		if strings.HasPrefix(name, encode(closed)) {
+			return true
+		}
+	}
+	return false
+}
+
 // AllowsCheckout says the viewer may see the history of the checkout at top, "" for a folder outside git: a commit names
 // files of every folder of it, so it may hold neither a home nor a closed place.
 func (r Reach) AllowsCheckout(top string) bool {
