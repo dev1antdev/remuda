@@ -643,7 +643,8 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   menu, opens a table of what goes, after Orca's: the folder *Deleted*,
   the branch *Kept* or *Deleted* (deleted once merged; a click flips
   it), and in red what would be lost — uncommitted changes, the branch's
-  commits that are on no remote, a submodule's commits pushed nowhere.
+  commits that are on no remote, a submodule's commits pushed nowhere,
+  and that a worktree has submodules at all.
   *Remove anyway* then runs `git worktree remove --force`; *Close, keep
   the folder* closes the workspace alone, and is there too when the
   worktree cannot be looked at (its folder deleted by hand). It waits while an agent works

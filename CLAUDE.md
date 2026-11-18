@@ -4616,7 +4616,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   `remove-worktree`: "Close & remove worktree…" in a linked worktree's ⋯
   and the palette, the merged request's menu, and the close of a made one): a red trash tile, the
   table — Folder *Deleted*, Branch *Kept* or *Deleted* (deleted by default
-  once merged, a click flips it) — the losses in red, *Remove* / *Remove
+  once merged, a click flips it) — the losses in red (any submodule among them, since a nested or
+  deinitialized one cannot be looked into), *Remove* / *Remove
   anyway* (`btn danger`), *Close, keep the folder* beside a loss and when
   the look failed (`keepFolderOffered`: the one way left to close a
   workspace whose folder is gone), *Close

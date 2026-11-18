@@ -31,6 +31,8 @@ export function warnings(rm: Removal, deleteBranch: boolean): string[] {
   if (deleteBranch && rm.branch && rm.unmerged > 0 && !rm.merged_pr)
     out.push(tn(rm.unmerged, "{n} commit on {branch} is on no remote and in no other branch: deleting the branch loses it.", "{n} commits on {branch} are on no remote and in no other branch: deleting the branch loses them.", { branch: rm.branch }));
   for (const sub of rm.submodules ?? []) out.push(t("Submodule {name} has commits that aren't pushed anywhere: they will be lost.", { name: sub }));
+  // not every submodule can be looked into (one nested, one deinitialized), so having any is said aloud
+  if (rm.has_submodules) out.push(t("This worktree has submodules: whatever only they hold goes with it."));
   return out;
 }
 

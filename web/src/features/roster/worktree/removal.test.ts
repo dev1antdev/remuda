@@ -37,6 +37,8 @@ describe("the remove dialog", () => {
     expect(warnings(risky, true)[1]).toBe("2 commits on fix are on no remote and in no other branch: deleting the branch loses them.");
     expect(buttonWords(risky, false, false)).toBe("Remove anyway");
     expect(buttonWords(clean, true, false)).toBe("Remove");
+    expect(warnings({ ...clean, has_submodules: true }, false)).toEqual(["This worktree has submodules: whatever only they hold goes with it."]);
+    expect(buttonWords({ ...clean, has_submodules: true }, false, false)).toBe("Remove anyway");
     expect(buttonWords(clean, true, true)).toBe("Removing…");
   });
   it("closes the workspace alone when another one uses the checkout", () => {
