@@ -66,14 +66,16 @@ func scriptKind(timeout time.Duration) sessionKind {
 
 // sessionCount is what is open on a connection, by kind.
 type sessionCount struct {
-	mu                              sync.Mutex
-	total, scripts, long, terminals int
-	freed                           chan struct{} // closed when a place comes free
+	mu                                   sync.Mutex
+	total, rpc, scripts, long, terminals int
+	freed                                chan struct{} // closed when a place comes free
 }
 
 func (s *sessionCount) add(kind sessionKind, by int) {
 	s.total += by
 	switch kind {
+	case kindRPC:
+		s.rpc += by
 	case kindShort:
 		s.scripts += by
 	case kindLong:
@@ -88,16 +90,17 @@ func (s *sessionCount) add(kind sessionKind, by int) {
 func (s *sessionCount) admit(kind sessionKind) (bool, <-chan struct{}) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	others := s.total - min(s.rpc, rpcReserve) // requests sit in their own places first
 	room := false
 	switch kind {
 	case kindRPC:
 		room = s.total < maxSessions
 	case kindShort:
-		room = s.scripts < maxScripts && s.total < maxSessions-rpcReserve
+		room = s.scripts < maxScripts && others < maxSessions-rpcReserve
 	case kindLong:
-		room = s.long < maxLongScripts && s.scripts < maxScripts && s.total < maxSessions-rpcReserve-shortReserve
+		room = s.long < maxLongScripts && s.scripts < maxScripts && others < maxSessions-rpcReserve-shortReserve
 	case kindTerminal:
-		room = s.terminals < maxTerminals && s.total < maxSessions-rpcReserve-shortReserve
+		room = s.terminals < maxTerminals && others < maxSessions-rpcReserve-shortReserve
 	}
 	if room {
 		s.add(kind, 1)

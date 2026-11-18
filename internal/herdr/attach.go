@@ -173,13 +173,12 @@ func (m *AttachManager) Subscribe(termID string, cols, rows int) (ch chan []byte
 			m.mu.Unlock()
 			release() // another viewer started it meanwhile
 		} else {
-			a, err = m.start(termID, cols, rows)
+			a, err = m.start(termID, cols, rows, release)
 			if err != nil {
 				m.mu.Unlock()
 				release()
 				return nil, nil, err
 			}
-			a.release = release
 			m.attaches[termID] = a
 			m.mu.Unlock()
 		}
@@ -283,7 +282,7 @@ func (m *AttachManager) takePlace() (func(), error) {
 	return release, nil
 }
 
-func (m *AttachManager) start(termID string, cols, rows int) (*attach, error) {
+func (m *AttachManager) start(termID string, cols, rows int, release func()) (*attach, error) {
 	cmd := m.NewCommand(termID)
 	if !validSize(cols, rows) {
 		cols, rows = 80, 24
@@ -292,7 +291,7 @@ func (m *AttachManager) start(termID string, cols, rows int) (*attach, error) {
 	if err != nil {
 		return nil, err
 	}
-	a := &attach{termID: termID, cmd: cmd, pty: f, subs: map[chan []byte]bool{}, early: make(chan []byte, 64), exited: make(chan struct{})}
+	a := &attach{termID: termID, cmd: cmd, pty: f, subs: map[chan []byte]bool{}, early: make(chan []byte, 64), exited: make(chan struct{}), release: release}
 	a.readRefusal = m.ReadRefusal
 	a.watch.Store(true)
 	go a.readLoop(m)
@@ -369,9 +368,7 @@ func (m *AttachManager) killLocked(a *attach) {
 		a.cmd.Process.Kill()
 	}
 	a.cmd.Wait()
-	if a.release != nil {
-		a.release()
-	}
+	a.release()
 
 	m.mu.Lock()
 	if m.attaches[a.termID] == a {

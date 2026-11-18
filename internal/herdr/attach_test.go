@@ -68,7 +68,7 @@ func TestAnAttachHoldsItsPlaceAndItsCarrierCanRefuse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, again, err := m.Subscribe("t1", 80, 24); err != nil || held.Load() != 1 {
+	if _, again, err := m.Subscribe("t1", 0, 0); err != nil || held.Load() != 1 { // no size: no repaint to outlive the test
 		t.Fatalf("a second viewer took a place: %d, %v", held.Load(), err)
 	} else {
 		again()
@@ -133,7 +133,7 @@ func TestTwoViewersStartingTogetherHoldOnePlace(t *testing.T) {
 		}
 		return func() { released.Add(1) }, nil
 	}
-	_, cancel, err := m.Subscribe("t1", 80, 24)
+	_, cancel, err := m.Subscribe("t1", 0, 0) // no size: no repaint to outlive the test
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -143,4 +143,26 @@ func TestTwoViewersStartingTogetherHoldOnePlace(t *testing.T) {
 	cancel()
 	other()
 	m.kill(m.standing("t1"))
+}
+
+// TestAnAttachThatEndsAtOnceGivesItsPlaceBack, each once.
+func TestAnAttachThatEndsAtOnceGivesItsPlaceBack(t *testing.T) {
+	var taken, released atomic.Int32
+	m := NewAttachManager(fakeAttach("", true))
+	m.Hold = func(time.Duration) (func(), error) {
+		taken.Add(1)
+		return func() { released.Add(1) }, nil
+	}
+	for range 5 {
+		if _, _, err := m.Subscribe("gone", 80, 24); err == nil {
+			t.Fatal("an attach that ended came back as standing")
+		}
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for released.Load() != taken.Load() && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if taken.Load() != 5 || released.Load() != 5 {
+		t.Errorf("taken %d, given back %d", taken.Load(), released.Load())
+	}
 }

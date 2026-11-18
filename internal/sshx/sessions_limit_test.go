@@ -212,6 +212,30 @@ func TestEachKindLeavesTheLastPlacesToTheNext(t *testing.T) {
 	}
 }
 
+// TestRequestsSitInTheirOwnPlacesFirst: the event stream of a bridged machine takes nothing from a short script.
+func TestRequestsSitInTheirOwnPlacesFirst(t *testing.T) {
+	c := limited()
+	for _, step := range []struct {
+		what string
+		kind sessionKind
+		n    int
+	}{{"request", kindRPC, rpcReserve}, {"terminal", kindTerminal, maxTerminals}, {"long script", kindLong, 1}, {"short script", kindShort, shortReserve}} {
+		for range step.n {
+			if _, _, err := c.enter(step.kind, 10*time.Millisecond); err != nil {
+				t.Fatalf("%s: %v", step.what, err)
+			}
+		}
+	}
+	if c.sessions.total != maxSessions {
+		t.Fatalf("%d open", c.sessions.total)
+	}
+	for _, kind := range []sessionKind{kindRPC, kindShort, kindLong, kindTerminal} {
+		if _, _, err := c.enter(kind, 10*time.Millisecond); err == nil {
+			t.Errorf("kind %d went past the limit of the connection", kind)
+		}
+	}
+}
+
 // TestLongScriptsLeaveRoomForShortOnes: an update or a fetch does not stop the transcripts being read.
 func TestLongScriptsLeaveRoomForShortOnes(t *testing.T) {
 	c := limited()
