@@ -89,16 +89,18 @@ func LandedAt(landed []Landed, branch, tip string) bool {
 }
 
 // branchInUseScript stops with git's own reasons for keeping a branch: checked out in a worktree, or being rebased or
-// bisected in one, where git's list shows that worktree detached.
+// bisected in one, where git's list shows that worktree detached, or waiting to be moved by a rebase --update-refs. A
+// record that cannot be read counts as naming it.
 func branchInUseScript(branch string) string {
 	ref, name := script.Quote("refs/heads/"+branch), script.Quote(branch)
 	return "inuse() { echo 'the branch is in use in another worktree'; exit 5; }\n" +
+		"names() { [ -e \"$2\" ] || return 0; grep -Fqx -e \"$1\" \"$2\" 2>/dev/null; [ $? -eq 1 ] || inuse; }\n" +
 		"list=$(git worktree list --porcelain) || inuse\n" +
 		"printf '%s\\n' \"$list\" | grep -Fqx \"branch \"" + ref + " && inuse\n" +
 		"common=$(git rev-parse --git-common-dir) || inuse\n" +
 		"for d in \"$common\" \"$common\"/worktrees/*; do\n" +
-		"  for f in rebase-merge/head-name rebase-apply/head-name; do [ -f \"$d/$f\" ] && grep -Fqx " + ref + " \"$d/$f\" && inuse; done\n" +
-		"  [ -f \"$d/BISECT_START\" ] && grep -Fqx " + name + " \"$d/BISECT_START\" && inuse\n" +
+		"  for f in rebase-merge/head-name rebase-apply/head-name rebase-merge/update-refs; do names " + ref + " \"$d/$f\"; done\n" +
+		"  names " + name + " \"$d/BISECT_START\"\n" +
 		"done\n"
 }
 

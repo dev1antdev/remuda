@@ -228,6 +228,32 @@ func TestABranchBeingRebasedElsewhereStays(t *testing.T) {
 	}
 }
 
+// TestABranchAStackedRebaseWillMoveStays: git rebase --update-refs lists it, and git branch -D refuses it for that.
+func TestABranchAStackedRebaseWillMoveStays(t *testing.T) {
+	for name, unreadable := range map[string]bool{"named": false, "unreadable": true} {
+		t.Run(name, func(t *testing.T) {
+			host, main, trees := madeRepo(t, "work", "other")
+			tip := gitOut(t, trees["work"], "rev-parse", "HEAD")
+			gitIn(t, trees["work"], "switch", "-q", "--detach")
+			record := filepath.Join(gitOut(t, trees["other"], "rev-parse", "--absolute-git-dir"), "rebase-merge")
+			if err := os.MkdirAll(record, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			mode := os.FileMode(0o644)
+			if unreadable {
+				mode = 0
+			}
+			if err := os.WriteFile(filepath.Join(record, "update-refs"), []byte("refs/heads/work\n"+tip+"\n"+tip+"\n"), mode); err != nil {
+				t.Fatal(err)
+			}
+			err := Remove(host, Info{Path: trees["work"], Repo: main, Branch: "work"}, []Landed{{Branch: "work", Commit: tip}})
+			if err == nil || !strings.Contains(err.Error(), "in use in another worktree") {
+				t.Fatalf("%v", err)
+			}
+		})
+	}
+}
+
 func TestABranchBeingBisectedElsewhereStays(t *testing.T) {
 	host, main, trees := madeRepo(t, "work", "other")
 	tip := gitOut(t, trees["work"], "rev-parse", "HEAD")
