@@ -1,16 +1,16 @@
 package code
 
 import (
-	"github.com/dev1antdev/remuda/internal/auth"
-	"github.com/dev1antdev/remuda/internal/machines"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/dev1antdev/remuda/internal/auth"
+	"github.com/dev1antdev/remuda/internal/machines"
 )
 
 func TestSettingOfReadsTheWorkbenchPage(t *testing.T) {
@@ -128,11 +128,7 @@ func proxied(t *testing.T, answer http.HandlerFunc) (http.Handler, *[]string) {
 		answer(w, r)
 	}))
 	t.Cleanup(backend.Close)
-	_, portText, err := net.SplitHostPort(strings.TrimPrefix(backend.URL, "http://"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	port, _ := strconv.Atoi(portText)
+	port := backend.Listener.Addr().(*net.TCPAddr).Port
 	dir := t.TempDir()
 	mc, err := machines.NewManager(dir, filepath.Join(dir, "no-herdr.sock"), "herdr", nil).Get(machines.LocalID)
 	if err != nil {
@@ -148,11 +144,19 @@ func TestThePortRoutesOfCodeServerStayShut(t *testing.T) {
 	for _, p := range []string{
 		"/proxy/3000/", "/proxy", "/absproxy/3000/x.js", "/absproxy", "/PROXY/3000/", "/AbsProxy/3000/",
 		"//proxy/3000/", "/./proxy/3000/", "/x/../proxy/3000/", "/proxy//3000",
+		"/proxy/3000/../../x", "/absproxy/3000/../../x", "/../proxy/3000/",
 	} {
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, &http.Request{Method: "GET", URL: &url.URL{Path: "/code/local" + p}, Header: http.Header{}})
 		if rec.Code != http.StatusNotFound {
 			t.Errorf("%s answered %d", p, rec.Code)
+		}
+	}
+	for _, target := range []string{"/code/local/proxy/3000/..%2f..%2fx", "/code/local/x%2f..%2f..%2fproxy/3000/", "/code/local/%2e%2e/proxy/3000/"} {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest("GET", target, nil))
+		if rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), "Previews") {
+			t.Errorf("%s answered %d %q", target, rec.Code, rec.Body)
 		}
 	}
 	if len(*asked) != 0 {

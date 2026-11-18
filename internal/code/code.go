@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"path"
 	"regexp"
 	"sort"
 	"strings"
@@ -270,23 +269,27 @@ func (s *Service) Forget(machineID string) {
 	s.mu.Unlock()
 }
 
-// portProxy says the path is one of code-server's routes to any port of the machine, spelled in any way its router
-// reads alike: a page served through them would run on remuda's own origin, the one thing the previews' port avoids.
-func portProxy(p string) bool {
-	p = strings.ToLower(path.Clean("/" + p))
-	for _, route := range []string{"/proxy", "/absproxy"} {
-		if p == route || strings.HasPrefix(p, route+"/") {
+// portProxy says the path, exactly as it goes to code-server, may reach its routes to any port of the machine: first
+// among its parts in any case, or behind a part that climbs, which only an escaped slash brings this far. A page served
+// through them would run on remuda's own origin, the one thing the previews' port avoids.
+func portProxy(path string) bool {
+	first := ""
+	for _, part := range strings.Split(strings.ToLower(path), "/") {
+		if part == ".." {
 			return true
 		}
+		if first == "" && part != "." {
+			first = part
+		}
 	}
-	return false
+	return first == "proxy" || first == "absproxy"
 }
 
 // Proxy serves one request to the machine's code-server, with the mount prefix (/code/<machine>) stripped on the way in and put back on absolute redirects.
 // WebSocket upgrades pass through: the editor's own connection is one.
 func (s *Service) Proxy(w http.ResponseWriter, r *http.Request, mc *machines.Machine, prefix string) {
 	if portProxy(strings.TrimPrefix(r.URL.Path, prefix)) {
-		http.NotFound(w, r)
+		http.Error(w, "code-server's routes to other ports are closed here: open the port from Previews", http.StatusNotFound)
 		return
 	}
 	addr, err := mc.CodeAddr(s.Port)
@@ -308,11 +311,11 @@ func (s *Service) Proxy(w http.ResponseWriter, r *http.Request, mc *machines.Mac
 					pr.Out.AddCookie(c)
 				}
 			}
-			out := strings.TrimPrefix(pr.In.URL.Path, prefix)
-			if out == "" {
-				out = "/"
+			path := strings.TrimPrefix(pr.In.URL.Path, prefix)
+			if path == "" {
+				path = "/"
 			}
-			pr.Out.URL.Path = out
+			pr.Out.URL.Path = path
 			pr.Out.URL.RawPath = ""
 		},
 		ModifyResponse: func(res *http.Response) error {

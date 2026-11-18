@@ -1,12 +1,13 @@
 package machines
 
 import (
-	"github.com/dev1antdev/remuda/internal/state"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/dev1antdev/remuda/internal/state"
 )
 
 // TestAWindowsProbeIsReadInWindowsSpelling reads the probe's answer as GitHub's Windows Server 2025 runner gave it

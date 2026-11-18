@@ -2971,9 +2971,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   install-code.sh`, also `make code [HOST=]`: a pinned release, its
   checksum known for all four platforms, launchd / systemd user service). remuda is
   the only door: code-server's routes to any port of the machine stay shut
-  (`disable-proxy` in its config, and `portProxy` refusing `/proxy` and
-  `/absproxy` in any spelling, for a machine installed before that: a page
-  served through them would run on remuda's origin), an answer sets no
+  (`disable-proxy` in its config, and `portProxy` refusing `/proxy`,
+  `/absproxy` and any path that climbs, as it goes upstream, for a machine
+  installed before that: a page served through them would run on remuda's
+  origin, and a port is opened from Previews), an answer sets no
   cookie of remuda's and clears no site data (`auth.DropSessionHeaders`)
   and a service worker stays under the mount; `/code/<machine>/…` is a `httputil.ReverseProxy` behind the
   token guard — prefix stripped, Host kept, `X-Frame-Options` dropped,
@@ -7340,7 +7341,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   response but the code-server proxy's (its own headers; `X-Frame-Options`
   forced to SAMEORIGIN there) and the file viewer's bytes (a stricter
   sandbox CSP). The code proxy strips `Cookie`/`Authorization` before
-  forwarding — remuda's token never reaches a machine's code-server.
+  forwarding — remuda's token never reaches a machine's code-server — refuses
+  code-server's `/proxy` and `/absproxy`, and keeps its answers from touching
+  the session (`auth.DropSessionHeaders`, a worker held to the mount).
   A preview (`internal/preview`) is served on a port of its own, never
   under remuda's origin, so the app's scripts cannot drive remuda's API
   (`csrfGuard` refuses the same-site port's Origin); it lets in only
