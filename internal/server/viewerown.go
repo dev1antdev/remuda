@@ -39,8 +39,12 @@ func (s *Server) viewerBarred(r *http.Request) bool {
 	if err != nil {
 		return false // the route answers for a machine it does not know
 	}
-	if dir != "" && s.ownFolder(mc.ID(), dir) {
-		return true
+	if dir != "" {
+		// the state dir is asked of the machine, a script on a remote: only for the routes that read a conversation by folder
+		conversation := r.URL.Path == "/api/chat" || r.URL.Path == "/api/recap"
+		if s.ownFolder(mc.ID(), dir) || (conversation && mc.InStateDir(dir)) {
+			return true
+		}
 	}
 	if pane == "" {
 		return false
@@ -59,23 +63,24 @@ func (s *Server) snapshotOf(machineID string) *herdr.Snapshot {
 	return snap
 }
 
-// viewerSeesPane says the pane is on the roster a viewer gets.
-func (s *Server) viewerSeesPane(machineID, paneID string) bool {
+// paneOf is the pane as the watcher's last snapshot has it, nil when it does not.
+func (s *Server) paneOf(machineID, paneID string) (*herdr.Snapshot, *herdr.PaneInfo) {
 	snap := s.snapshotOf(machineID)
 	if snap == nil {
-		return false
+		return nil, nil
 	}
-	pane := snap.Pane(paneID)
+	return snap, snap.Pane(paneID)
+}
+
+// viewerSeesPane says the pane is on the roster a viewer gets.
+func (s *Server) viewerSeesPane(machineID, paneID string) bool {
+	_, pane := s.paneOf(machineID, paneID)
 	return pane != nil && !s.ownWorkspace(machineID, pane.WorkspaceID)
 }
 
 // ownPane says the pane stands in one of remuda's own workspaces now.
 func (s *Server) ownPane(machineID, paneID string) bool {
-	snap := s.snapshotOf(machineID)
-	if snap == nil {
-		return false
-	}
-	pane := snap.Pane(paneID)
+	_, pane := s.paneOf(machineID, paneID)
 	return pane != nil && s.ownWorkspace(machineID, pane.WorkspaceID)
 }
 
@@ -87,18 +92,8 @@ func (s *Server) ownFolder(machineID, dir string) bool {
 	if snap == nil || err != nil {
 		return false
 	}
-	own := false
-	for i := range snap.Workspaces {
-		ws := &snap.Workspaces[i]
-		if !mc.Paths().Equal(snap.WorkspaceDir(ws), dir) {
-			continue
-		}
-		if !s.ownWorkspace(machineID, ws.WorkspaceID) {
-			return false
-		}
-		own = true
-	}
-	return own
+	same := func(folder string) bool { return mc.Paths().Equal(folder, dir) }
+	return slices.ContainsFunc(snap.WorkspaceDirs(), same) && !slices.ContainsFunc(s.editorFolders(machineID, snap), same)
 }
 
 // ownRecording says a timelapse is of remuda's own workspaces: by the name they are made under, which outlasts them

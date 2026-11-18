@@ -3,14 +3,12 @@ package server
 import (
 	"encoding/json"
 	"net/http"
-	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/dev1antdev/remuda/internal/auth"
 	"github.com/dev1antdev/remuda/internal/concierge"
 	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/feed"
@@ -24,14 +22,6 @@ import (
 	"github.com/dev1antdev/remuda/internal/sent"
 	"github.com/dev1antdev/remuda/internal/watch"
 )
-
-func viewerGet(h http.Handler, path string) *httptest.ResponseRecorder {
-	req := httptest.NewRequest("GET", path, nil)
-	req = req.WithContext(auth.WithViewer(req.Context()))
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
-	return rec
-}
 
 func TestAViewerNeverReachesRemudasOwnWorkspaces(t *testing.T) {
 	sock := herdrtest.Server(t)
@@ -78,24 +68,22 @@ func TestAViewerNeverReachesRemudasOwnWorkspaces(t *testing.T) {
 
 	for _, route := range []string{"/api/screen", "/api/scrollback", "/api/question"} {
 		path := route + "?machine=local&pane="
-		if rec := viewerGet(h, path+url.QueryEscape(ownPane)); rec.Code != http.StatusNotFound {
-			t.Errorf("%s of the floating terminal: %d %s", route, rec.Code, rec.Body)
+		if code, body := fileCall(h, path+url.QueryEscape(ownPane), true); code != http.StatusNotFound {
+			t.Errorf("%s of the floating terminal: %d %s", route, code, body)
 		}
-		if rec := viewerGet(h, path+"w99:p9"); rec.Code != http.StatusNotFound {
-			t.Errorf("%s of a pane the roster never showed: %d %s", route, rec.Code, rec.Body)
+		if code, body := fileCall(h, path+"w99:p9", true); code != http.StatusNotFound {
+			t.Errorf("%s of a pane the roster never showed: %d %s", route, code, body)
 		}
-		if rec := viewerGet(h, path+url.QueryEscape(appPane)); rec.Code != 200 {
-			t.Errorf("%s of a workspace of the person's: %d %s", route, rec.Code, rec.Body)
+		if code, body := fileCall(h, path+url.QueryEscape(appPane), true); code != 200 {
+			t.Errorf("%s of a workspace of the person's: %d %s", route, code, body)
 		}
-		rec := httptest.NewRecorder()
-		h.ServeHTTP(rec, httptest.NewRequest("GET", path+url.QueryEscape(ownPane), nil))
-		if rec.Code != 200 {
-			t.Errorf("%s for the person: %d %s", route, rec.Code, rec.Body)
+		if code, body := fileCall(h, path+url.QueryEscape(ownPane), false); code != 200 {
+			t.Errorf("%s for the person: %d %s", route, code, body)
 		}
 	}
 	for _, dir := range []string{shellDir, shellDir + "/"} {
-		if rec := viewerGet(h, "/api/screen?machine=local&dir="+url.QueryEscape(dir)+"&pane="+url.QueryEscape(appPane)); rec.Code != http.StatusNotFound {
-			t.Errorf("the floating terminal's folder %s: %d", dir, rec.Code)
+		if code, _ := fileCall(h, "/api/screen?machine=local&dir="+url.QueryEscape(dir)+"&pane="+url.QueryEscape(appPane), true); code != http.StatusNotFound {
+			t.Errorf("the floating terminal's folder %s: %d", dir, code)
 		}
 	}
 
@@ -117,7 +105,7 @@ func TestAViewerNeverReachesRemudasOwnWorkspaces(t *testing.T) {
 	s.Feed.Add(sent.Entry("Phone", "the-secret", false, machines.LocalID, ownPane, scratch.Label))
 	s.Feed.Add(sent.Entry("Phone", "gone-pane-secret", false, machines.LocalID, "w99:p9", ""))
 	s.Feed.Add(sent.Entry("Phone", "hello", false, machines.LocalID, appPane, "app"))
-	body := viewerGet(h, "/api/feed").Body.String()
+	_, body := fileCall(h, "/api/feed", true)
 	if strings.Contains(body, "secret") || !strings.Contains(body, "hello") {
 		t.Errorf("a viewer's activity: %s", body)
 	}
@@ -133,16 +121,16 @@ func TestAViewerGetsNoRecordingOfRemudasOwnWorkspaces(t *testing.T) {
 			if rec := ask(api, "GET", path, ""); !strings.Contains(rec.Body.String(), meta.ID) {
 				t.Fatalf("%s for the person: %s", path, rec.Body)
 			}
-			if rec := viewerGet(api, path); rec.Code != 200 || strings.Contains(rec.Body.String(), meta.ID) {
-				t.Errorf("%s of %s for a viewer: %d %s", path, label, rec.Code, rec.Body)
+			if code, body := fileCall(api, path, true); code != 200 || strings.Contains(body, meta.ID) {
+				t.Errorf("%s of %s for a viewer: %d %s", path, label, code, body)
 			}
 		}
-		if rec := viewerGet(api, "/api/timelapse/recordings/"+meta.ID); rec.Code != http.StatusNotFound {
-			t.Errorf("%s's recording by its id: %d", label, rec.Code)
+		if code, _ := fileCall(api, "/api/timelapse/recordings/"+meta.ID, true); code != http.StatusNotFound {
+			t.Errorf("%s's recording by its id: %d", label, code)
 		}
 	}
 	_, api, meta := recordedServer(t)
-	if rec := viewerGet(api, "/api/timelapse/recordings/"+meta.ID); rec.Code != 200 {
-		t.Errorf("a recording of the person's workspace: %d", rec.Code)
+	if code, _ := fileCall(api, "/api/timelapse/recordings/"+meta.ID, true); code != 200 {
+		t.Errorf("a recording of the person's workspace: %d", code)
 	}
 }

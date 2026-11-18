@@ -39,10 +39,6 @@ func (s *Server) handleRecap(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if dir != "" && auth.IsViewer(r.Context()) && mc.InStateDir(dir) { // the concierge's folder
-		httpErr(w, 404, errors.New("not found"))
-		return
-	}
 	summary, err := s.Recap.Conversation(mc, paneID, sessionID, dir, since)
 	var notFound *chat.NotFoundError
 	switch {

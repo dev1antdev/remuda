@@ -35,10 +35,8 @@ func (s *Server) viewerReachOn(ctx context.Context, mc *machines.Machine) (viewe
 		return viewer.Reach{}, false
 	}
 	var dirs []string
-	if s.Watch != nil {
-		if snap, _ := s.Watch.Snapshot(mc.ID()); snap != nil {
-			dirs = s.editorFolders(mc.ID(), snap)
-		}
+	if snap := s.snapshotOf(mc.ID()); snap != nil {
+		dirs = s.editorFolders(mc.ID(), snap)
 	}
 	return viewer.Of(dirs, mc.Home(), mc.StateDir(), mc.Paths(), mc.Local()), true
 }
