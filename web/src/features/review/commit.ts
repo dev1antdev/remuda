@@ -73,7 +73,7 @@ export function committedWords(short: string, subject: string, amended: boolean,
   return noVerify ? `${made} · ${t("hooks skipped")}` : made;
 }
 
-// commitAnywayAsk is the confirm before committing past what the secret check found, or past a check that failed
+// commitAnywayAsk is the confirm before committing past what the secret check found or could not read, or past a check that failed
 export function commitAnywayAsk(state: CheckState, scan: SecretScan | null): string {
   if (state === "failed") return t("The secret check could not run, so nothing is known about secrets in this work. Commit it anyway?");
   if (state === "incomplete") return t("The secret check could not read all of this work. Commit it anyway?");

@@ -101,7 +101,7 @@ export function ranWords(run: FetchRun): Said {
   return { text: `${t("Fetched {done} of {repositories}.", { done: run.total - run.failed.length, repositories: repositories(run.total) })} ${named}${rest}`, error: true };
 }
 
-// heldWords is the held push's head: how many findings, or that the check could not clear it
+// heldWords is the held push's head: how many findings, or that the check could not clear it or read all of it
 export function heldWords(o: Outcome, name: string): string {
   if (o.reason === "check-failed") return t("The secret check could not read what {name} would push: {why}. Nothing is known about it.", { name, why: o.output || t("no reason given") });
   if (o.reason === "check-incomplete") return t("The secret check found nothing, but could not read all of what {name} would push.", { name });

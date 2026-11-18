@@ -5,7 +5,7 @@ import { t, tn } from "@/lib/i18n";
 import { Icon } from "@/ui";
 import type { IconName } from "@/ui/icons";
 import type { VerdictAsk } from "./draft";
-import { jumpable, ruleWords, skippedWords, stateWords, whereWords, type CheckState, type SecretFinding } from "./secrets";
+import { jumpable, ruleWords, skippedWords, stateWords, unreadPaths, whereWords, type CheckState, type SecretFinding } from "./secrets";
 import type { SecretCheck } from "./useSecretCheck";
 
 const ICONS: Record<CheckState, IconName> = { off: "info", checking: "clock", clean: "circle-check", incomplete: "alert-triangle", found: "alert-triangle", failed: "alert-triangle" };
@@ -22,6 +22,7 @@ export function SecretsCheck({ state, check, ask, listed, onJump }: {
   const findings = state === "found" ? (check.scan?.findings ?? []) : [];
   const more = state === "found" ? (check.scan?.more ?? 0) : 0;
   const skipped = answered ? skippedWords(check.scan?.skipped) : "";
+  const unread = state === "incomplete" ? unreadPaths(check.scan?.skipped) : "";
   return (
     <div className={`secret-check is-${state}`} role="status" aria-live="polite">
       <div className="secret-check-head">
@@ -52,6 +53,7 @@ export function SecretsCheck({ state, check, ask, listed, onJump }: {
       {more > 0 && <p className="secret-check-note">{tn(more, "…and {n} more the list leaves out.", "…and {n} more the list leaves out.")}</p>}
       {state === "failed" && <p className="secret-check-note">{t("Nothing is known about secrets in this work: Send anyway asks you first.")}</p>}
       {skipped && <p className="secret-check-note">{skipped}</p>}
+      {unread && <p className="secret-check-note">{unread}</p>}
     </div>
   );
 }

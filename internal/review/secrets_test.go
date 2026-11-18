@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -561,5 +562,58 @@ func TestABinaryFileAloneLeavesTheCheckComplete(t *testing.T) {
 	}
 	if scan.Incomplete || len(scan.Skipped) != 1 {
 		t.Errorf("scan: %+v", scan)
+	}
+}
+
+func TestABigUntrackedFileIsCalledBinaryOnlyWhenItIs(t *testing.T) {
+	ownGitConfig(t)
+	dir, git, write := scratchCheckout(t)
+	write("a.txt", "a\n")
+	git("add", "-A")
+	git("commit", "-qm", "init")
+	write("shot.png", "\x00"+strings.Repeat("x", scanPerFile+1))
+	scan, err := ScanWork(shell.Local{Name: "local"}, dir, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if scan.Incomplete || len(scan.Skipped) != 1 || scan.Skipped[0] != (Skipped{Path: "shot.png", Why: SkipBinary}) {
+		t.Errorf("a big binary: %+v", scan)
+	}
+	write("dump.sql", strings.Repeat("insert\n", scanPerFile/7+1))
+	if scan, err = ScanWork(shell.Local{Name: "local"}, dir, false); err != nil {
+		t.Fatal(err)
+	}
+	if !scan.Incomplete {
+		t.Errorf("big text left unread reads as complete: %+v", scan)
+	}
+}
+
+// TestAKeystorePastTheBudgetIsStillFound, and what a push would send past it counts against the push.
+func TestAKeystorePastTheBudgetIsStillFound(t *testing.T) {
+	ownGitConfig(t)
+	dir, git, write := scratchCheckout(t)
+	write("a.txt", "a\n")
+	git("add", "-A")
+	git("commit", "-qm", "init")
+	for i := range scanTotal/scanPerFile + 2 {
+		write("part"+strconv.Itoa(i+10)+".txt", strings.Repeat("a line\n", scanPerFile/7-1))
+	}
+	write("z.txt", "after the budget\n")
+	write("z.p12", "\x00\x01 a keystore")
+	git("add", "-A")
+	git("commit", "-qm", "a lot")
+	scan, err := ScanWork(shell.Local{Name: "local"}, dir, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, finding := range scan.Findings {
+		found = found || finding.File == "z.p12"
+	}
+	if !found {
+		t.Errorf("the keystore went unnoticed: %+v", scan.Findings)
+	}
+	if !scan.Incomplete || !scan.PushUnread() {
+		t.Errorf("text past the budget reads as read: %+v", scan.Skipped)
 	}
 }

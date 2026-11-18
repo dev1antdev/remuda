@@ -11,6 +11,7 @@ import {
   sendAnywayAsk,
   settingsNotes,
   skippedWords,
+  unreadPaths,
   stateWords,
   whereWords,
   type SecretFinding,
@@ -83,6 +84,9 @@ describe("the check's words", () => {
   });
   it("say what was not read, by reason", () => {
     expect(skippedWords(undefined)).toBe("");
+    expect(unreadPaths(undefined)).toBe("");
+    expect(unreadPaths([{ path: "a.png", why: "binary" }, { why: "older", count: 3 }, { path: "b.sql", why: "large" }, { path: "b.sql", why: "budget" }])).toBe("b.sql");
+    expect(unreadPaths(["1", "2", "3", "4", "5", "6", "7"].map((path) => ({ path, why: "budget" as const })))).toBe("1, 2, 3, 4, 5 and 2 more");
     expect(skippedWords([{ path: "a.png", why: "binary" }, { path: "b.png", why: "binary" }, { path: "dump.sql", why: "large" }, { why: "many", count: 12 }])).toBe(
       "Not read: 2 binary files, 1 file over 1 MB, 12 more untracked files.",
     );

@@ -11,7 +11,7 @@ import type { VerdictAsk } from "./draft";
 export type SecretFinding = { file: string; line: number; rule: string; excerpt: string; commit?: string };
 export const STAGED = "staged";
 export type SkipReason = "binary" | "large" | "partly" | "budget" | "many" | "older";
-export type SkippedFile = { path?: string; why: SkipReason; count?: number }; // count: the untracked files past the cap, or the commits
+export type SkippedFile = { path?: string; why: SkipReason; count?: number; in_commit?: boolean }; // count: the untracked files past the cap, or the commits
 // SecretScan is the server's answer: the findings, what it did not read, how many files and commits it read
 export type SecretScan = { findings: SecretFinding[]; more?: number; skipped?: SkippedFile[]; incomplete?: boolean; files: number; commits?: number; push?: boolean; at: string };
 // SettingsAudit is one of Claude Code's settings files in the folder or its repository's root
@@ -78,13 +78,14 @@ export const asksPush = (ask: VerdictAsk): boolean => ask === "pr";
 export function stateWords(state: CheckState, scan: SecretScan | null, ask: VerdictAsk): string {
   if (state === "checking") return asksPush(ask) ? t("Looking for secrets in what the commit and the push would carry…") : t("Looking for secrets in what the commit would carry…");
   if (state === "found") return tn(foundCount(scan), "{n} thing here looks like a secret. Take it out, or send anyway once you have looked.", "{n} things here look like secrets. Take them out, or send anyway once you have looked.");
-  if (state === "incomplete") return asksPush(ask) ? t("The secret check found nothing, but could not read all of what the commit and the push would carry.") : t("The secret check found nothing, but could not read all of what the commit would carry.");
+  if (state === "incomplete") return asksPush(ask) ? t("The secret check found nothing, but could not read all of this work and the commits a push would send.") : t("The secret check found nothing, but could not read all of this work.");
   if (state !== "clean" || !scan) return "";
   const files = scan.files > 0 ? tn(scan.files, "No secrets in the {n} file the commit would carry.", "No secrets in the {n} files the commit would carry.") : t("Nothing for the commit to carry.");
   return scan.push && scan.commits ? `${files} ${tn(scan.commits, "The {n} commit not pushed yet holds none either.", "The {n} commits not pushed yet hold none either.")}` : files;
 }
 
-// sendAnywayAsk is the confirm before an approval goes out past the check: it names how many findings, or that the check failed
+// sendAnywayAsk is the confirm before an approval goes out past the check: it names how many findings, or that the check
+// failed or could not read everything
 export function sendAnywayAsk(state: CheckState, scan: SecretScan | null, ask: VerdictAsk): string {
   const push = asksPush(ask);
   if (state === "failed") {
@@ -131,6 +132,15 @@ export function skippedWords(skipped: SkippedFile[] | undefined): string {
     return n > 0 ? words(n) : "";
   }).filter(Boolean);
   return parts.length ? t("Not read: {what}.", { what: parts.join(", ") }) : "";
+}
+
+const PATHS_SHOWN = 5;
+
+// unreadPaths names the files left unread, a few of them, binary ones apart: what to look at before going past the check
+export function unreadPaths(skipped: SkippedFile[] | undefined): string {
+  const paths = [...new Set((skipped ?? []).flatMap((skip) => (skip.path && skip.why !== "binary" ? [skip.path] : [])))];
+  const shown = paths.slice(0, PATHS_SHOWN).join(", ");
+  return paths.length > PATHS_SHOWN ? t("{paths} and {n} more", { paths: shown, n: paths.length - PATHS_SHOWN }) : shown;
 }
 
 // onSecretRow says whether a finding sits on a diff row: the work's, on the new file's line, never a removed one

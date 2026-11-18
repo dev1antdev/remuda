@@ -2,7 +2,7 @@
 // that it could not read the push, at all or in part; Push anyway asks once more before it goes, as Approve & open PR does.
 
 import { actions } from "@/app/store";
-import { ruleWords, skippedWords, whereWords } from "@/features/review/secrets";
+import { ruleWords, skippedWords, unreadPaths, whereWords } from "@/features/review/secrets";
 import { Dialog, Notice } from "@/ui";
 import { t } from "@/lib/i18n";
 import { heldWords, pushAnywayAsk } from "./outcome";
@@ -11,7 +11,10 @@ import type { HeldPush } from "./useRepoSync";
 export function PushHeldDialog({ held, name, onClose, onPush }: { held: Pick<HeldPush, "outcome">; name: string; onClose: () => void; onPush: () => void }) {
   const { outcome } = held;
   const findings = outcome.scan?.findings ?? [];
-  const notRead = skippedWords(outcome.scan?.skipped);
+  const partial = outcome.reason === "check-incomplete";
+  const skipped = partial ? outcome.scan?.skipped?.filter((skip) => skip.in_commit) : outcome.scan?.skipped; // what the push itself would send
+  const notRead = skippedWords(skipped);
+  const unread = partial ? unreadPaths(skipped) : "";
   const anyway = () =>
     actions.ask(pushAnywayAsk(outcome, name), t("Push anyway"), () => {
       onClose();
@@ -32,6 +35,7 @@ export function PushHeldDialog({ held, name, onClose, onPush }: { held: Pick<Hel
         </ul>
       )}
       {notRead && <p className="modal-hint">{notRead}</p>}
+      {unread && <p className="modal-hint">{unread}</p>}
       {outcome.reason === "secrets" && <p className="modal-hint">{t("Take the secret out and commit again, or push it if it is no secret after all.")}</p>}
       <div className="modal-actions">
         <button type="button" className="btn" onClick={onClose}>

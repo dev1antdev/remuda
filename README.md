@@ -436,7 +436,8 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   (a branch that diverged is said so and left alone) and waits while an
   agent works or asks in that checkout; a push is never forced and never
   carries tags, and the secret check stands before it as before Approve &
-  open PR — Push anyway… asks first. **Push without hooks**, right under
+  open PR, holding it for findings and for commits it could not read whole
+  (past its size limits, or past the latest 200) — Push anyway… asks first. **Push without hooks**, right under
   Push here and in the Git lens's menu, is the same push with
   `--no-verify`: the repository's pre-push hook does not run, the secret
   check still does. What goes is what the check read: a
@@ -1704,8 +1705,7 @@ menu makes the next commit without the repository's pre-commit and
 commit-msg hooks — for that commit alone, said under the box until it
 lands. The secret check stands before a commit as
 before Approve & commit: findings, or text it could not read (over its
-size limits, or past 200 unpushed commits for a push), hold the button
-back and **Commit anyway…** asks first. A failure keeps your message and shows git's own
+size limits), hold the button back and **Commit anyway…** asks first. A failure keeps your message and shows git's own
 words. Nothing is written while an agent works, asks or ends a turn in that
 checkout — the lens names the agent — and every write is yours alone: a
 viewer link or an agent's key reaches none of them. Under the box,
@@ -1747,7 +1747,8 @@ like `API_KEY` or `password`, leaving placeholders such as `<your-key>`,
 it finds holds the button back: the dialog lists each one by file and
 line with the secret masked, a click shows its row in the diff, marked,
 and **Send anyway…** goes only after a confirm that says how many. A check
-that cannot run says so, and Send anyway is the way past it too; a plain
+that cannot run, or could not read all of the work, says so and names the
+files, and Send anyway is the way past it too; a plain
 Approve, Reject and Mark reviewed never wait. A line ending in
 `gitleaks:allow` (or `remuda:allow-secret`) is let through, so a test
 fixture can say it is one. The lens head also warns when Claude Code's
