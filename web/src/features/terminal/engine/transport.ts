@@ -1,6 +1,8 @@
 // The pane's byte stream: a WebSocket, or HTTP long-polling once WebSockets prove unusable on this page
 // (a proxy that drops them). Bytes come in, keystrokes and resizes go back; a dropped connection retries.
 
+import { createSender } from "../screen/sender";
+
 export type Transport = {
   input(data: string): void;
   resize(cols: number, rows: number): void;
@@ -12,7 +14,8 @@ export type Stream = {
   size: () => { cols: number; rows: number };
   onOpen: (sentSize: string) => void; // a fresh stream, opened with this grid: the screen starts over
   onBytes: (buf: Uint8Array) => void;
-  note: (text: string) => void; // a line on the screen from remuda itself
+  note: (text: string) => void; // a line on the screen from remuda itself, while the stream is down
+  inputLost: () => void; // typing did not surely go through, and will not be sent again
 };
 
 // refusal is why the server would not open a stream, in its own words — another client holds the terminal — else the status
@@ -26,8 +29,13 @@ async function refusal(res: Response): Promise<string> {
   return `open failed (${res.status})`;
 }
 
-// How long one batch of typing may take to go out: past it the person has moved on, and it must not land later.
+// How long one batch of typing may take to go out, its upload counted: past it the person has moved on.
 const INPUT_WAIT_MS = 5000;
+const INPUT_CHARS_PER_MS = 50;
+
+// What the terminal says by itself — mouse and focus reports, answers to the app's questions — is nobody's typing: when
+// it cannot go, nothing need be said.
+const REPORTS = /^(?:\x1b\[<[\d;]+[Mm]|\x1b\[M[\s\S]{3}|\x1b\[[IO]|\x1b\[[?>\d;]*[cnRt]|\x1b\[\?[\d;]*\$y|\x1bP[\s\S]*?\x1b\\|\x1b\][\s\S]*?(?:\x07|\x1b\\))+$/;
 
 // Once WebSockets prove unusable, every terminal on this page uses HTTP without trying again.
 let preferHTTP = false;
@@ -107,73 +115,76 @@ export function connect(stream: Stream): Transport {
     };
   };
 
-  // connectHTTP opens a server-side stream, long-polls it for output and POSTs input in batches, one at a time so they
-  // stay in order; 410 means it expired. Typing goes now or not at all: what cannot go is dropped and said, never kept
-  // for later, when the screen may be something else and a command would run unseen.
+  // connectHTTP opens a server-side stream, long-polls it for output and POSTs input through a sender of its own, one
+  // request at a time so it stays in order; 410 means it expired. Typing goes now or not at all: what cannot go is dropped
+  // and said, never kept for later, when the screen may be something else and a command would run unseen.
   const connectHTTP = (): Transport => {
     let sid: string | null = null;
+    let type: ((data: string) => void) | null = null; // the open stream's typing; none between streams
     let stopped = false;
-    let pending = "";
-    let sending = false;
-    let dropNoted = false;
-    let flushTimer: ReturnType<typeof setTimeout> | null = null;
+    let lossSaid = false;
     let reopenTimer: ReturnType<typeof setTimeout> | null = null;
 
-    const drop = () => {
-      pending = "";
-      if (flushTimer) clearTimeout(flushTimer);
-      flushTimer = null;
-      if (dropNoted || stopped) return;
-      dropNoted = true;
-      stream.note("what you typed did not go through, and will not be sent again");
+    const lost = () => {
+      if (lossSaid || stopped) return;
+      lossSaid = true;
+      stream.inputLost();
     };
+    // typingTo is the typing of one stream: what it holds never reaches another
+    const typingTo = (id: string) => {
+      let typed = false; // something the person typed waits to go
+      let carrying = false; // and the request out holds some of it
+      const sender = createSender(
+        async ({ text }) => {
+          carrying = typed;
+          typed = false;
+          const abort = new AbortController();
+          const timeout = setTimeout(() => abort.abort(), INPUT_WAIT_MS + text.length / INPUT_CHARS_PER_MS);
+          try {
+            const res = await fetch(`/api/term/input?sid=${id}`, { method: "POST", body: text, signal: abort.signal });
+            if (!res.ok) throw new Error(`input refused (${res.status})`);
+          } finally {
+            clearTimeout(timeout);
+          }
+        },
+        {
+          sent: () => {
+            lossSaid = false;
+          },
+          failed: () => {
+            if (carrying || typed) lost();
+            typed = false;
+          },
+        },
+      );
+      return (data: string) => {
+        if (!REPORTS.test(data)) typed = true;
+        sender.push({ text: data });
+      };
+    };
+    const streamGone = () => {
+      sid = null;
+      type = null;
+    };
+
     const closeStream = () => {
       if (!sid) return;
       void fetch(`/api/term/close?sid=${sid}`, { method: "DELETE", keepalive: true });
-      sid = null;
+      streamGone();
     };
     const open = async () => {
       const sentSize = sizeText();
       const { cols, rows } = stream.size();
       const res = await fetch(`/api/term/open?${stream.query}&cols=${cols}&rows=${rows}`, { method: "POST" });
       if (!res.ok) throw new Error(await refusal(res));
-      if (pending) drop(); // typed for the stream before this one
       sid = ((await res.json()) as { sid: string }).sid;
-      dropNoted = false;
       if (stopped) {
         closeStream(); // closed while opening: nothing may pin the attach
         return;
       }
+      type = typingTo(sid);
+      lossSaid = false;
       stream.onOpen(sentSize);
-    };
-    // flush POSTs the pending input, once: a batch that failed may have landed, so it is never sent again.
-    const flush = async () => {
-      flushTimer = null;
-      if (stopped || !pending) return;
-      if (!sid) {
-        drop();
-        return;
-      }
-      const body = pending;
-      pending = "";
-      sending = true;
-      const abort = new AbortController();
-      const timeout = setTimeout(() => abort.abort(), INPUT_WAIT_MS);
-      let went = false;
-      try {
-        went = (await fetch(`/api/term/input?sid=${sid}`, { method: "POST", body, signal: abort.signal })).ok;
-      } catch {
-        // said below
-      }
-      clearTimeout(timeout);
-      sending = false;
-      if (stopped) return;
-      if (!went) {
-        drop();
-        return;
-      }
-      dropNoted = false;
-      if (pending) void flush();
     };
     const later = (ms: number) => {
       if (!stopped) reopenTimer = setTimeout(() => void loop(), ms);
@@ -195,7 +206,7 @@ export function connect(stream: Stream): Transport {
           const res = await fetch(`/api/term/read?sid=${sid}&wait=20`);
           if (stopped) return;
           if (res.status === 410) {
-            sid = null;
+            streamGone();
             later(500);
             return;
           }
@@ -205,7 +216,7 @@ export function connect(stream: Stream): Transport {
           if (buf.length) stream.onBytes(buf);
           if (res.headers.get("X-Remuda-End") === "1") {
             // the server dropped it already; the attach ended (herdr restarted, say) and a fresh one is asked for, as the socket does
-            sid = null;
+            streamGone();
             stream.note("terminal detached — reconnecting");
             later(500);
             return;
@@ -219,8 +230,8 @@ export function connect(stream: Stream): Transport {
     void loop();
     return {
       input: (data) => {
-        pending += data;
-        if (!flushTimer && !sending) flushTimer = setTimeout(() => void flush(), 20);
+        if (type) type(data);
+        else if (!REPORTS.test(data)) lost();
       },
       resize: (cols, rows) => {
         if (sid) void fetch(`/api/term/resize?sid=${sid}&cols=${cols}&rows=${rows}`, { method: "POST" });
@@ -228,7 +239,6 @@ export function connect(stream: Stream): Transport {
       close: () => {
         stopped = true;
         if (reopenTimer) clearTimeout(reopenTimer);
-        if (flushTimer) clearTimeout(flushTimer);
         closeStream();
       },
     };

@@ -45,7 +45,7 @@ describe("the HTTP transport", () => {
     vi.stubGlobal("fetch", fetch);
     const notes: string[] = [];
     const opened: string[] = [];
-    const transport = connect({ query: "machine=local&id=w1:p1", size: () => ({ cols: 80, rows: 24 }), onOpen: (size) => opened.push(size), onBytes: () => {}, note: (text) => notes.push(text) });
+    const transport = connect({ query: "machine=local&id=w1:p1", size: () => ({ cols: 80, rows: 24 }), onOpen: (size) => opened.push(size), onBytes: () => {}, note: (text) => notes.push(text), inputLost: () => {} });
     try {
       await vi.waitFor(() => expect(opened.length).toBe(2), { timeout: 6000, interval: 20 });
     } finally {
@@ -57,21 +57,26 @@ describe("the HTTP transport", () => {
   }, 10000);
 });
 
-// A stream on a fake clock: its opens answer as told, reads never do, and each POST of input takes the next answer.
-function typing(answers: (() => Promise<Response>)[], opens: (() => Promise<Response>)[] = []) {
+// A stream on a fake clock: opens and reads answer as told (a read not told never answers), each POST of input takes the
+// next answer, and every stream opened has its own id.
+function typing(answers: (() => Promise<Response>)[], { opens = [], reads = [] }: { opens?: (() => Promise<Response>)[]; reads?: (() => Promise<Response>)[] } = {}) {
   const posted: string[] = [];
-  const notes: string[] = [];
-  const opened = () => Promise.resolve(new Response(JSON.stringify({ sid: "s1" }), { status: 200 }));
+  const to: string[] = [];
+  let lost = 0;
+  let streams = 0;
+  const opened = () => Promise.resolve(new Response(JSON.stringify({ sid: `s${++streams}` }), { status: 200 }));
   vi.stubGlobal("WebSocket", DeadSocket);
   vi.stubGlobal("location", { protocol: "http:", host: "remuda" });
   vi.stubGlobal(
     "fetch",
     vi.fn((url: string, init?: RequestInit) => {
-      const path = url.split("?")[0]!;
+      const [path, query] = url.split("?") as [string, string];
       if (path === "/ws/pane") return Promise.resolve(new Response("", { status: 426 }));
       if (path === "/api/term/open") return (opens.shift() ?? opened)();
-      if (path !== "/api/term/input") return new Promise<Response>(() => {});
+      if (path === "/api/term/read") return reads.shift()?.() ?? new Promise<Response>(() => {});
+      if (path !== "/api/term/input") return Promise.resolve(new Response(null, { status: 204 }));
       posted.push(String(init?.body));
+      to.push(new URLSearchParams(query).get("sid") ?? "");
       const answer = answers.shift() ?? (() => Promise.resolve(new Response(null, { status: 204 })));
       return new Promise<Response>((resolve, reject) => {
         init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
@@ -79,11 +84,13 @@ function typing(answers: (() => Promise<Response>)[], opens: (() => Promise<Resp
       });
     }),
   );
-  const transport: Transport = connect({ query: "machine=local&id=w1:p1", size: () => ({ cols: 80, rows: 24 }), onOpen: () => {}, onBytes: () => {}, note: (text) => notes.push(text) });
-  return { transport, posted, notes, wait: (ms: number) => vi.advanceTimersByTimeAsync(ms) };
+  const transport: Transport = connect({ query: "machine=local&id=w1:p1", size: () => ({ cols: 80, rows: 24 }), onOpen: () => {}, onBytes: () => {}, note: () => {}, inputLost: () => lost++ });
+  return { transport, posted, to, lost: () => lost, wait: (ms: number) => vi.advanceTimersByTimeAsync(ms) };
 }
 
-const LOST = "what you typed did not go through, and will not be sent again";
+const refused = () => Promise.resolve(new Response("", { status: 502 }));
+const offline = () => Promise.reject(new TypeError("offline"));
+const never = () => new Promise<Response>(() => {});
 
 describe("typing over the HTTP transport", () => {
   beforeEach(() => vi.useFakeTimers());
@@ -93,8 +100,8 @@ describe("typing over the HTTP transport", () => {
   });
 
   it("never sends again what failed, and says so once", async () => {
-    for (const failure of [() => Promise.reject(new TypeError("offline")), () => Promise.resolve(new Response("", { status: 502 }))]) {
-      const { transport, posted, notes, wait } = typing([failure, failure]);
+    for (const failure of [offline, refused]) {
+      const { transport, posted, lost, wait } = typing([failure, failure]);
       await wait(3000);
       transport.input("rm -rf build\r");
       await wait(60_000);
@@ -102,61 +109,109 @@ describe("typing over the HTTP transport", () => {
       transport.input("x");
       await wait(100);
       expect(posted).toEqual(["rm -rf build\r", "x"]);
-      expect(notes.filter((note) => note === LOST)).toHaveLength(1);
+      expect(lost()).toBe(1);
       transport.close();
     }
   });
 
-  it("drops what is typed with no stream, and sends it neither then nor later", async () => {
-    let open: (r: Response) => void = () => {};
-    const { transport, posted, notes, wait } = typing([], [() => new Promise<Response>((resolve) => (open = resolve))]);
+  it("drops what is typed while the stream opens, the answer still on its way included", async () => {
+    let head: (r: Response) => void = () => {};
+    let body: (v: unknown) => void = () => {};
+    const { transport, posted, lost, wait } = typing([], { opens: [() => new Promise<Response>((resolve) => (head = resolve))] });
     await wait(3000);
-    transport.input("rm -rf build\r");
-    await wait(100);
-    open(new Response(JSON.stringify({ sid: "s1" }), { status: 200 }));
+    transport.input("rm -rf");
+    expect(lost()).toBe(1);
+    head({ ok: true, status: 200, json: () => new Promise((resolve) => (body = resolve)) } as unknown as Response);
+    await wait(10);
+    transport.input(" build\r");
+    body({ sid: "s1" });
     await wait(1000);
     expect(posted).toEqual([]);
-    expect(notes).toContain(LOST);
-    transport.close();
-  });
-
-  it("gives a new stream nothing typed before it opened", async () => {
-    let open: (r: Response) => void = () => {};
-    const { transport, posted, notes, wait } = typing([], [() => new Promise<Response>((resolve) => (open = resolve))]);
-    await wait(3000);
-    transport.input("rm -rf build\\r");
-    open(new Response(JSON.stringify({ sid: "s1" }), { status: 200 }));
-    await wait(1000);
-    expect(posted).toEqual([]);
-    expect(notes).toContain(LOST);
+    transport.input("ls\r");
+    await wait(10);
+    expect(posted).toEqual(["ls\r"]);
     transport.close();
   });
 
   it("gives up on a request that hangs, and what was typed behind it goes with it", async () => {
-    const { transport, posted, notes, wait } = typing([() => new Promise<Response>(() => {})]);
+    const { transport, posted, lost, wait } = typing([never]);
     await wait(3000);
     transport.input("first");
     await wait(100);
     transport.input("second\r");
     await wait(60_000);
     expect(posted).toEqual(["first"]);
-    expect(notes).toContain(LOST);
+    expect(lost()).toBe(1);
     transport.close();
   });
 
-  it("keeps one request out at a time, in order", async () => {
+  it("waits longer for a big paste", async () => {
+    const { transport, lost, wait } = typing([never]);
+    await wait(3000);
+    transport.input("x".repeat(500_000));
+    await wait(10_000);
+    expect(lost()).toBe(0);
+    await wait(10_000);
+    expect(lost()).toBe(1);
+    transport.close();
+  });
+
+  it("keeps a stream's typing to that stream, and an old failure off the new one", async () => {
+    let fail: (e: unknown) => void = () => {};
+    let end: (r: Response) => void = () => {};
+    const { transport, posted, to, lost, wait } = typing([() => new Promise<Response>((_, reject) => (fail = reject))], { reads: [() => new Promise<Response>((resolve) => (end = resolve))] });
+    await wait(3000);
+    transport.input("old");
+    await wait(10);
+    transport.input(" behind");
+    end(new Response("", { status: 410 }));
+    await wait(10);
+    transport.input("between");
+    expect(lost()).toBe(1);
+    await wait(1000);
+    fail(new TypeError("offline"));
+    await wait(10);
+    expect(lost()).toBe(2); // said again on the new stream: this was another loss
+    transport.input("new");
+    await wait(100);
+    expect(posted).toEqual(["old", "new"]);
+    expect(to).toEqual(["s1", "s2"]);
+    transport.close();
+  });
+
+  it("sends what waited behind a request to the stream it was typed for", async () => {
     let answer: (r: Response) => void = () => {};
-    const { transport, posted, wait } = typing([() => new Promise<Response>((resolve) => (answer = resolve))]);
+    let end: (r: Response) => void = () => {};
+    const { transport, posted, to, wait } = typing([() => new Promise<Response>((resolve) => (answer = resolve))], { reads: [() => new Promise<Response>((resolve) => (end = resolve))] });
     await wait(3000);
     transport.input("a");
-    await wait(100);
+    await wait(10);
     transport.input("b");
-    transport.input("c");
-    await wait(100);
-    expect(posted).toEqual(["a"]);
+    end(new Response("", { status: 410 }));
+    await wait(1000);
     answer(new Response(null, { status: 204 }));
     await wait(100);
-    expect(posted).toEqual(["a", "bc"]);
+    expect(posted).toEqual(["a", "b"]);
+    expect(to).toEqual(["s1", "s1"]);
     transport.close();
+  });
+
+  it("says nothing of the terminal's own reports", async () => {
+    const wheel = "\x1b[<65;10;5M";
+    const { transport, posted, lost, wait } = typing([offline], { opens: [() => new Promise<Response>(() => {})] });
+    await wait(3000);
+    transport.input(wheel);
+    transport.input("\x1b[I");
+    transport.input("\x1b[12;40R");
+    expect(lost()).toBe(0);
+    transport.close();
+    const open = typing([offline]);
+    await open.wait(3000);
+    open.transport.input(wheel);
+    await open.wait(100);
+    expect(open.posted).toEqual([wheel]);
+    expect(open.lost()).toBe(0);
+    open.transport.close();
+    expect(posted).toEqual([]);
   });
 });
