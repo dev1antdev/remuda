@@ -248,6 +248,35 @@ func TestTheSecretCheckOnARealCheckoutChangesNothing(t *testing.T) {
 	}
 }
 
+// TestAConflictInTheIndexIsNoFailedCheck: git names the unmerged file there, and its copy in the work is read.
+func TestAConflictInTheIndexIsNoFailedCheck(t *testing.T) {
+	answer := script.RS + "staged\n* Unmerged path app.go\n" + script.RS + "end\n"
+	host := &shell.Fake{Name: "box", Answer: func(string) (string, error) { return answer, nil }}
+	if _, err := ScanWork(host, "/repo", false); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestTheCheckLeavesTheIndexAlone: a touched file's stat is not refreshed by a look at it.
+func TestTheCheckLeavesTheIndexAlone(t *testing.T) {
+	ownGitConfig(t)
+	dir, git, write := scratchCheckout(t)
+	write("app.go", "package app\n")
+	git("add", "-A")
+	git("commit", "-qm", "init")
+	later := time.Now().Add(time.Hour)
+	if err := os.Chtimes(filepath.Join(dir, "app.go"), later, later); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := os.ReadFile(filepath.Join(dir, ".git", "index"))
+	if _, err := ScanWork(shell.Local{Name: "local"}, dir, true); err != nil {
+		t.Fatal(err)
+	}
+	if after, _ := os.ReadFile(filepath.Join(dir, ".git", "index")); string(after) != string(before) {
+		t.Error("the check rewrote the index")
+	}
+}
+
 // TestTheCheckReadsThroughGitSettings: settings that change how a patch looks left the parser with nothing it knew, and
 // a check that found nothing.
 func TestTheCheckReadsThroughGitSettings(t *testing.T) {
@@ -260,6 +289,7 @@ func TestTheCheckReadsThroughGitSettings(t *testing.T) {
 		"relative":     {{"diff.relative", "true"}},
 		"no root":      {{"log.showRoot", "false"}},
 		"signature":    {{"log.showSignature", "true"}},
+		"submodules":   {{"diff.submodule", "log"}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			dir, git, write := scratchCheckout(t)
@@ -270,6 +300,7 @@ func TestTheCheckReadsThroughGitSettings(t *testing.T) {
 			write("sub/work.env", "DB_PASSWORD="+fakeKey(22, 24)+"\n")
 			write("top.env", "API_SECRET="+fakeKey(24, 24)+"\n")
 			git("add", "sub/work.env", "top.env")
+			git("update-index", "--add", "--cacheinfo", "160000,"+git("rev-parse", "HEAD")+",vendored")
 			write("sub/first.sh", "export NPM_TOKEN="+"npm_"+fakeKey(21, 36)+"\nDB_PASSWORD="+fakeKey(23, 24)+"\n")
 			for _, setting := range settings {
 				git("config", setting[0], setting[1])
@@ -309,6 +340,7 @@ func TestAStreamThatFailedOrStoppedIsNoCleanCheck(t *testing.T) {
 		script.RS + "failed work\n" + script.RS + "end\n":                             "git could not read the changes",
 		script.RS + "failed commits\n" + script.RS + "end\n":                          "git could not read the commits not pushed yet",
 		"\x1b[1mdiff --git a/x b/x\x1b[m\n\x1b[32m+one\x1b[m\n" + script.RS + "end\n": "git's answer could not be read",
+		"Submodule vendored abc..def:\n" + script.RS + "end\n":                        "git's answer could not be read",
 	} {
 		host := &shell.Fake{Name: "box", Answer: func(string) (string, error) { return answer, nil }}
 		if _, err := ScanWork(host, "/repo", true); err == nil || err.Error() != want {

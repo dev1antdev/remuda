@@ -34,7 +34,7 @@ func packScript(dir string, full bool) string {
 		`printf '%s\n%s\n' "$branch" "$(git rev-parse HEAD)" > "$t/meta"; ` +
 		`if [ -z "$(git for-each-ref --count=1 refs/remotes)" ]; then git bundle create -q "$t/commits.bundle" refs/heads/"$branch" 2> "$t/err" || { cat "$t/err" >&2; exit 1; }; ` +
 		`else git bundle create -q "$t/commits.bundle" ` + scope + ` 2> "$t/err" || { grep -qi 'empty bundle' "$t/err" && rm -f "$t/commits.bundle" || { cat "$t/err" >&2; exit 1; }; }; fi; ` +
-		`rm -f "$t/err"; d='--binary --no-ext-diff --no-textconv --no-color --src-prefix=a/ --dst-prefix=b/'; ` + // a patch git apply takes, whatever the person's diff settings
+		`rm -f "$t/err"; d='--binary ` + script.PatchForm + `'; ` + // a patch git apply takes, whatever the person's diff settings
 		`git diff $d --cached > "$t/staged.patch" && git diff $d > "$t/unstaged.patch" || exit 1; ` +
 		`git ls-files -z --others --exclude-standard > "$t/untracked.list"; ` +
 		`if [ -s "$t/untracked.list" ]; then tar -cf "$t/untracked.tar" --null -T "$t/untracked.list" || { echo "the new files could not be packed" >&2; exit 1; }; fi; rm -f "$t/untracked.list"; ` +

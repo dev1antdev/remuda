@@ -156,6 +156,7 @@ func readScan(output string, push bool) (SecretScan, error) {
 			number++
 		case !header && strings.HasPrefix(line, " "):
 			number++
+		case strings.HasPrefix(line, "* Unmerged path "): // the index's word on a conflict: the work's copy was read above
 		case !header && line != "" && !strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "-") && !strings.HasPrefix(line, `\`):
 			return SecretScan{}, errUnreadable
 		}

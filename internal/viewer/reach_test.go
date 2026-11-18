@@ -203,6 +203,8 @@ func TestAPatchShowingASecretIsRefused(t *testing.T) {
 		file("a/.config/remuda/tasks.db", "b/.config/remuda/tasks.db"):                  false,
 		"diff --git a/old/agent-key b/new/notes\nsimilarity index 90%\nrename from old/agent-key\nrename to new/notes\n--- a/old/agent-key\n+++ b/new/notes\n": false,
 		"diff --git a/o b/n\nsimilarity index 100%\nrename from run/serve.lock\nrename to n\n":                                                                 false,
+		"\x1b[1mdiff --git a/run/token b/run/token\x1b[m\n\x1b[1m+++ b/run/token\x1b[m\n\x1b[32m+s\x1b[m\n":                                                    false,
+		"+a line with no header\n": false,
 	} {
 		if got := PatchAllowed(patch); got != want {
 			t.Errorf("%q: %v, want %v", patch, got, want)

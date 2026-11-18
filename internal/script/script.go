@@ -36,6 +36,10 @@ func Stat(file, gnuFormat, bsdFormat string) string {
 	return "stat -c " + Quote(gnuFormat) + " " + file + " 2>/dev/null || stat -f " + Quote(bsdFormat) + " " + file
 }
 
+// PatchForm is git's patch in one shape whatever the person's or the repository's settings make of it, for whatever
+// reads its lines: no colour, no external driver or textconv, a moved submodule as a plain hunk, paths under a/ and b/.
+const PatchForm = `--no-color --no-ext-diff --no-textconv --submodule=short --src-prefix=a/ --dst-prefix=b/`
+
 // Health asks the remuda at url how it is, past ~/.curlrc and any proxy, every door and peer being on the loopback; a
 // live one's answer holds "ok":true. url is a shell word already, without its path.
 func Health(url string) string {

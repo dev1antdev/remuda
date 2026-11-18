@@ -2346,7 +2346,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   no secret leaves the machine through an Approve & commit or an Approve
   & open PR. `ScanWork(host, dir, push)` is one script on the folder's
   machine (`secretscript.go`: `secretScript`, through `capScript`'s awk; every
-  patch in one form whatever git's settings say, `plainPatch`, and a line no
+  patch in one form whatever git's settings say, `script.PatchForm`, which
+  the Git lens's patches, the collisions and a teleport share, and a line no
   diff holds fails the check):
   `git diff -U0 --no-ext-diff --no-textconv --no-renames --relative`
   against HEAD (the empty tree before the first commit), staged or not,
