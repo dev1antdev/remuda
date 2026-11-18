@@ -4,8 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/auth"
 	"github.com/dev1antdev/remuda/internal/chat"
 	"github.com/dev1antdev/remuda/internal/recap"
 )
@@ -35,6 +37,10 @@ func (s *Server) handleRecap(w http.ResponseWriter, r *http.Request) {
 	}
 	since, ok := sinceParam(w, r)
 	if !ok {
+		return
+	}
+	if dir != "" && auth.IsViewer(r.Context()) && mc.InStateDir(dir) { // the concierge's folder
+		httpErr(w, 404, errors.New("not found"))
 		return
 	}
 	summary, err := s.Recap.Conversation(mc, paneID, sessionID, dir, since)
@@ -68,6 +74,9 @@ func (s *Server) handleStandup(w http.ResponseWriter, r *http.Request) {
 		since = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
 	}
 	items := s.Recap.Standup(since)
+	if auth.IsViewer(r.Context()) {
+		items = slices.DeleteFunc(items, func(i recap.Item) bool { return s.ownPane(i.Machine, i.Pane) })
+	}
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, map[string]any{"since": sinceText(since), "items": items, "markdown": recap.Markdown(items, since.In(loc), now)})
 }

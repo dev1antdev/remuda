@@ -7,10 +7,12 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/auth"
 	"github.com/dev1antdev/remuda/internal/timelapse"
 )
 
@@ -52,6 +54,9 @@ func (s *Server) handleScreenSearch(w http.ResponseWriter, r *http.Request) {
 	}
 	if days, _ := strconv.Atoi(q.Get("days")); days > 0 {
 		query.Since = time.Now().AddDate(0, 0, -days)
+	}
+	if auth.IsViewer(r.Context()) {
+		query.Skip = s.ownRecording
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, s.Timelapse.Search(r.Context(), query))
@@ -104,14 +109,21 @@ func (s *Server) handleRecordings(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 404, err)
 		return
 	}
+	list := s.Timelapse.List(mc.ID(), q.Get("pane"), q.Get("dir"))
+	if auth.IsViewer(r.Context()) {
+		list = slices.DeleteFunc(list, s.ownRecording)
+	}
 	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, map[string]any{"recordings": s.Timelapse.List(mc.ID(), q.Get("pane"), q.Get("dir")), "on": s.Timelapse.On()})
+	writeJSON(w, map[string]any{"recordings": list, "on": s.Timelapse.On()})
 }
 
 // handleRecording is GET /api/timelapse/recordings/{id}: the recording whole, as the file holds it — gzipped, which the
 // browser unpacks itself, so a Raspberry Pi spends nothing on it; unpacked here only for a client that takes no gzip.
 func (s *Server) handleRecording(w http.ResponseWriter, r *http.Request) {
-	_, path, err := s.Timelapse.File(r.PathValue("id"))
+	meta, path, err := s.Timelapse.File(r.PathValue("id"))
+	if err == nil && auth.IsViewer(r.Context()) && s.ownRecording(meta) {
+		err = timelapse.ErrNotFound
+	}
 	if err != nil {
 		httpErr(w, 404, err)
 		return

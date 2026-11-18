@@ -21,6 +21,12 @@ import (
 // recordedServer is a server whose recorder holds one finished turn of the local pane w1:p1
 func recordedServer(t *testing.T) (*Server, *http.ServeMux, timelapse.Meta) {
 	t.Helper()
+	return recordedIn(t, "app")
+}
+
+// recordedIn is the same with the turn recorded in a workspace of that name
+func recordedIn(t *testing.T, workspace string) (*Server, *http.ServeMux, timelapse.Meta) {
+	t.Helper()
 	dir := t.TempDir()
 	var reads atomic.Int32
 	recorder := timelapse.Open(dir, timelapse.Inputs{Screen: func(machineID, paneID string) (string, error) {
@@ -30,7 +36,7 @@ func recordedServer(t *testing.T) (*Server, *http.ServeMux, timelapse.Meta) {
 	s := &Server{Machines: machines.NewManager(dir, filepath.Join(dir, "no-herdr.sock"), "herdr", nil), Timelapse: recorder}
 	pane := func(status string) *herdr.Snapshot {
 		return &herdr.Snapshot{
-			Workspaces: []herdr.WorkspaceInfo{{WorkspaceID: "w1", Label: "app"}},
+			Workspaces: []herdr.WorkspaceInfo{{WorkspaceID: "w1", Label: workspace}},
 			Panes:      []herdr.PaneInfo{{PaneID: "w1:p1", WorkspaceID: "w1", Agent: "claude", AgentStatus: status, CWD: "/repo/app"}},
 		}
 	}

@@ -52,6 +52,10 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 400, fmt.Errorf("pane, or dir and session, required"))
 		return
 	}
+	if dir != "" && auth.IsViewer(r.Context()) && mc.InStateDir(dir) { // the concierge's folder
+		httpErr(w, 404, errors.New("not found"))
+		return
+	}
 	last := 0
 	if v := r.URL.Query().Get("last"); v != "" {
 		n, err := strconv.Atoi(v)
