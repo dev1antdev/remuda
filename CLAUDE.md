@@ -6191,7 +6191,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   updated&direction=desc&per_page=1`), for one issue the issue itself —
   whose 304 ends the script, then `gh issue list -R R --state all
   --search Q --limit 200 --json …` (`Limit`; the most recently updated
-  first unless the search says `sort:`), or the REST timeline (`gh api
+  first unless the search says `sort:`; a search naming `repo:`, `org:`,
+  `user:` or `owner:` keeps only this repository's issues by their
+  address, `ownItems`, and the page shows rows only for the machine and
+  repository they were asked about, `answerAt`), or the REST timeline (`gh api
   --paginate`, pages decoded as a stream) and GraphQL's
   `closedByPullRequestsReferences` (the pull requests that close it; the
   ones the timeline says mentioned it when GitHub would not say). **The

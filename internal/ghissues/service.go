@@ -161,7 +161,7 @@ func (s *Service) List(machineID, repo, query string, fresh bool) (List, error) 
 	if err != nil {
 		return List{}, troubleOf(host.Label(), repo, cutWords(err, runErr))
 	}
-	list := List{Items: items, More: len(items) >= Limit, Me: me, At: now, Source: FromGitHub}
+	list := List{Items: ownItems(items, repo, query), More: len(items) >= Limit, Me: me, At: now, Source: FromGitHub}
 	s.mu.Lock()
 	s.lists[key] = &listEntry{list: list, etag: probed.etag}
 	evictLists(s.lists)

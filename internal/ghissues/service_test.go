@@ -257,3 +257,37 @@ func TestGitHubRepoReadsEverySpellingOfAnOrigin(t *testing.T) {
 		t.Error("no origin read as GitHub")
 	}
 }
+
+// TestASearchNamingAnotherRepositoryShowsOnlyThisOnes: the panel would act on this repository's issue of the same number.
+func TestASearchNamingAnotherRepositoryShowsOnlyThisOnes(t *testing.T) {
+	const mixed = `[
+  {"number": 12, "title": "Elsewhere", "author": {"login": "bob"}, "state": "OPEN", "labels": [], "assignees": [], "updatedAt": "2026-11-13T09:00:00Z", "url": "https://github.com/other/place/issues/12"},
+  {"number": 13, "title": "Here", "author": {"login": "bob"}, "state": "OPEN", "labels": [], "assignees": [], "updatedAt": "2026-11-13T08:00:00Z", "url": "https://github.com/ACME/Widgets/issues/13"}
+]`
+	host := newFake(func(string) (string, error) { return "alice\n" + rs + headers200 + rs + mixed, nil })
+	s, _ := serviceOn(host)
+	for _, query := range []string{"is:open repo:other/place", "org:other", "USER:other", "-repo:acme/widgets", "owner:other"} {
+		list, err := s.List("gog", "acme/widgets", query, true)
+		if err != nil || len(list.Items) != 1 || list.Items[0].Number != 13 {
+			t.Errorf("%s: %+v %v", query, list.Items, err)
+		}
+	}
+	plain, err := s.List("gog", "acme/widgets", "is:open", true)
+	if err != nil || len(plain.Items) != 2 {
+		t.Errorf("a plain search, as a renamed repository answers it: %+v %v", plain.Items, err)
+	}
+}
+
+func TestRepoOfIssue(t *testing.T) {
+	for address, want := range map[string]string{
+		"https://github.com/acme/widgets/issues/41": "acme/widgets",
+		"https://github.com/acme/widgets/pull/41":   "",
+		"https://github.com/acme/widgets":           "",
+		"":                                          "",
+		"://nonsense":                               "",
+	} {
+		if got := repoOfIssue(address); got != want {
+			t.Errorf("%q = %q", address, got)
+		}
+	}
+}

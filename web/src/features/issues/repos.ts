@@ -11,6 +11,12 @@ export const MAX_RECENT = 6;
 
 export type Recent = { machine: string; repo: string };
 
+// Placed is an answer with where it was asked: kept on screen while the next one loads, it counts only for that place,
+// since the rows' actions go to the place on screen by number.
+export type Placed<T> = { place: string; answer: T };
+export const placeOf = (machine: string, repo = "") => `${machine}\n${repo.toLowerCase()}`;
+export const answerAt = <T,>(placed: Placed<T> | null, place: string): T | undefined => (placed?.place === place ? placed.answer : undefined);
+
 // remember puts a repository first among the recent ones, once
 export function remember(recent: Recent[], entry: Recent): Recent[] {
   const same = (r: Recent) => r.machine === entry.machine && r.repo.toLowerCase() === entry.repo.toLowerCase();

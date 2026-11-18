@@ -12,7 +12,7 @@ import { useQuery } from "@/lib/query";
 import { errMsg } from "@/lib/text";
 import { Dialog, Icon, Tip } from "@/ui";
 import { t } from "@/lib/i18n";
-import { assignIssue, closeIssue, fetchIssues, fetchRepos, reopenIssue, troubleOf, type Item, type List, type Repo } from "./api";
+import { assignIssue, closeIssue, fetchIssues, fetchRepos, reopenIssue, troubleOf, type Answer, type Item, type List, type Repo, type Repos } from "./api";
 import IssueTable from "./IssueTable";
 import IssueViewer, { type Viewed } from "./IssueViewer";
 import type { RowActions } from "./IssueRow";
@@ -20,7 +20,7 @@ import { openWorkspace, paneOf, startFrom } from "./links";
 import { issuePrompt, issueURL } from "./prompt";
 import { OPEN_QUERY } from "./query";
 import RepoPicker from "./RepoPicker";
-import { PICKED_KEY, RECENT_KEY, remember, type Picked, type Recent } from "./repos";
+import { PICKED_KEY, RECENT_KEY, answerAt, placeOf, remember, type Picked, type Placed, type Recent } from "./repos";
 import { TroubleNote } from "./pieces";
 import { whyNoRepo } from "./words";
 
@@ -37,26 +37,30 @@ export default function IssuesPanel({ onClose }: { onClose: () => void }) {
   const machine = machines.find((m) => m.id === machineId);
   const machineLabel = (id: string) => machines.find((m) => m.id === id)?.label ?? id;
   const followDir = follow && follow.machineId === machineId ? follow.dir : ""; // the pane's folder, asked about on its own machine only
-  const repos = useQuery(() => fetchRepos(machineId, followDir || undefined), [machineId, followDir], { keep: true });
-  const following = repos.data?.here?.repo ?? "";
+  const machinePlace = placeOf(machineId);
+  const repos = useQuery<Placed<Repos>>(async () => ({ place: machinePlace, answer: await fetchRepos(machineId, followDir || undefined) }), [machineId, followDir], { keep: true });
+  const known = answerAt(repos.data, machinePlace); // another machine's repositories are not this one's
+  const following = known?.here?.repo ?? "";
   const repo = choice?.repo ?? following;
-  const entry: Repo | undefined = repos.data?.repos.find((r) => r.repo.toLowerCase() === repo.toLowerCase());
+  const entry: Repo | undefined = known?.repos.find((r) => r.repo.toLowerCase() === repo.toLowerCase());
   const [query, setQuery] = useState(OPEN_QUERY);
   const [viewing, setViewing] = useState<Viewed[]>([]);
   const [busy, setBusy] = useState<number | null>(null);
   const fresh = useRef(false);
-  const list = useQuery(
-    () => {
+  const place = placeOf(machineId, repo);
+  const list = useQuery<Placed<Answer<List>>>(
+    async () => {
       const ask = fresh.current;
       fresh.current = false;
-      return repo ? fetchIssues(machineId, repo, query, ask) : Promise.resolve(undefined);
+      return repo ? { place, answer: await fetchIssues(machineId, repo, query, ask) } : undefined;
     },
     [machineId, repo, query],
     { every: 60_000, enabled: !!repo && viewing.length === 0, keep: true },
   );
   useEffect(() => setViewing([]), [machineId, repo]);
-  const trouble = troubleOf(list.data ?? undefined);
-  const shown = list.data && !trouble ? (list.data as List) : null;
+  const answer = answerAt(list.data, place); // the rows of the place their actions go to, and no other's
+  const trouble = troubleOf(answer);
+  const shown = answer && !trouble ? (answer as List) : null;
   const again = () => {
     fresh.current = true;
     list.reload();
@@ -112,12 +116,12 @@ export default function IssuesPanel({ onClose }: { onClose: () => void }) {
     [machineId, repo, entry, machine],
   );
   const at = viewing[viewing.length - 1];
-  const picker = <RepoPicker repo={repo} picked={choice} machine={machineId} following={following} recent={recent} repos={repos.data?.repos ?? []} machineLabel={machineLabel} onPick={pick} />;
+  const picker = <RepoPicker repo={repo} picked={choice} machine={machineId} following={following} recent={recent} repos={known?.repos ?? []} machineLabel={machineLabel} onPick={pick} />;
   const go = (r: string, n: number) => {
     if (at && r.toLowerCase() === at.repo.toLowerCase() && n === at.number) return;
     setViewing([...viewing, { repo: r, number: n }]);
   };
-  const why = !repo && repos.data ? whyNoRepo(repos.data.here, machineLabel(machineId)) : null;
+  const why = !repo && known ? whyNoRepo(known.here, machineLabel(machineId)) : null;
   const crumbs = ["GitHub", machineLabel(machineId), repo || t("no repository")];
 
   return (

@@ -1,9 +1,19 @@
 import { describe, expect, it } from "vitest";
 import type { Repo } from "./api";
-import { MAX_RECENT, pickerRows, remember } from "./repos";
+import { MAX_RECENT, answerAt, pickerRows, placeOf, remember } from "./repos";
 
 const repo = (name: string): Repo => ({ repo: name, folder: `/${name}`, dirs: [`/${name}`], links: [] });
 const label = (id: string) => ({ local: "This Mac", gog: "GOG" })[id] ?? id;
+
+describe("an answer kept on screen", () => {
+  it("counts only for the machine and repository it was asked about", () => {
+    const placed = { place: placeOf("local", "acme/a"), answer: "rows of a" };
+    expect(answerAt(placed, placeOf("local", "ACME/A"))).toBe("rows of a");
+    expect(answerAt(placed, placeOf("local", "acme/b"))).toBeUndefined();
+    expect(answerAt(placed, placeOf("gog", "acme/a"))).toBeUndefined();
+    expect(answerAt(null, placeOf("local", "acme/a"))).toBeUndefined();
+  });
+});
 
 describe("the recent repositories", () => {
   it("put the one picked first, once, at most six", () => {
