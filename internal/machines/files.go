@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -25,7 +24,6 @@ const (
 	MaxTextBytes = 512 * 1024
 	MaxRawBytes  = 24 * 1024 * 1024 // images / media / pdf
 	maxFind      = 8
-	maxFindAsked = 200 // what a search looks through for the files its caller may read
 )
 
 type FileInfo struct {
@@ -67,12 +65,6 @@ func classify(p string, sniffBinary func() bool) (kind, mime string) {
 // the machine's way (C:\Users\me\app\x.go on Windows). A relative miss is searched under the pane folder by suffix:
 // agents say "demo.mp4" for "docs/demo.mp4".
 func (mc *Machine) ResolvePath(cwd, raw string) (FileInfo, error) {
-	return mc.ResolvePathAllowed(cwd, raw, nil)
-}
-
-// ResolvePathAllowed is ResolvePath for someone who may read only some files: allow, when given, is asked before a file
-// the search found is looked at or named.
-func (mc *Machine) ResolvePathAllowed(cwd, raw string, allow func(string) bool) (FileInfo, error) {
 	style := mc.Paths()
 	p := mc.EffectivePath(cwd, raw)
 	if p == "" {
@@ -83,15 +75,7 @@ func (mc *Machine) ResolvePathAllowed(cwd, raw string, allow func(string) bool) 
 		return info, nil
 	}
 	if !style.IsAbs(raw) && !strings.HasPrefix(raw, "~") && cwd != "" {
-		limit := maxFind
-		if allow != nil {
-			limit = maxFindAsked
-		}
-		found := mc.findBySuffix(cwd, strings.TrimPrefix(strings.TrimPrefix(style.Slash(raw), "./"), "/"), limit)
-		if allow != nil {
-			found = slices.DeleteFunc(found, func(p string) bool { return !allow(p) })
-			found = found[:min(len(found), maxFind)]
-		}
+		found := mc.findBySuffix(cwd, strings.TrimPrefix(strings.TrimPrefix(style.Slash(raw), "./"), "/"))
 		if len(found) == 1 {
 			if info, err := mc.stat(found[0]); err == nil {
 				return info, nil
@@ -144,10 +128,9 @@ func (mc *Machine) InStateDir(path string) bool {
 	return err != nil || strings.TrimSpace(out) != "no"
 }
 
-// HoldsStateDir says a folder a remuda serves from lies under the folder, or that the machine could not tell.
+// HoldsStateDir says a folder a remuda serves from lies under the folder, or that it could not all be looked through.
 func (mc *Machine) HoldsStateDir(folder string) bool {
-	out, err := mc.Run(`find `+script.Quote(mc.Paths().Slash(folder))+` -name .git -prune -o -name node_modules -prune -o -name `+
-		state.LockFile+` -print 2>/dev/null | head -n 1`, 15*time.Second)
+	out, err := mc.Run(`find `+script.Quote(mc.Paths().Slash(folder))+` -name .git -prune -o -name `+state.LockFile+` -print 2>/dev/null`, 15*time.Second)
 	return err != nil || strings.TrimSpace(string(out)) != ""
 }
 
@@ -231,7 +214,7 @@ func sniffLocal(p string) bool {
 
 var skipDirs = map[string]bool{"node_modules": true, ".git": true, "dist": true, "target": true, ".next": true, "vendor": true}
 
-func (mc *Machine) findBySuffix(root, rel string, limit int) []string {
+func (mc *Machine) findBySuffix(root, rel string) []string {
 	if rel == "" {
 		return nil
 	}
@@ -242,7 +225,7 @@ func (mc *Machine) findBySuffix(root, rel string, limit int) []string {
 			if err != nil {
 				return nil
 			}
-			if budget--; budget <= 0 || len(found) >= limit {
+			if budget--; budget <= 0 || len(found) >= maxFind {
 				return filepath.SkipAll
 			}
 			if d.IsDir() {
@@ -259,7 +242,7 @@ func (mc *Machine) findBySuffix(root, rel string, limit int) []string {
 		return found
 	}
 	style := mc.Paths()
-	out, err := mc.text(findScript(style, root, rel, limit), 20*time.Second)
+	out, err := mc.text(findScript(style, root, rel), 20*time.Second)
 	if err != nil {
 		return nil
 	}
@@ -268,14 +251,14 @@ func (mc *Machine) findBySuffix(root, rel string, limit int) []string {
 
 // findScript prints the files under root whose path ends in rel, past the folders nobody means; root in forward
 // slashes, so Git Bash on Windows prints every path one way.
-func findScript(style rpath.Style, root, rel string, limit int) string {
+func findScript(style rpath.Style, root, rel string) string {
 	var prune []string
 	for d := range skipDirs {
 		prune = append(prune, "-name "+script.Quote(d)+" -prune -o")
 	}
 	sort.Strings(prune)
 	return `find ` + script.Quote(style.Slash(root)) + ` ` + strings.Join(prune, " ") +
-		` -type f -path ` + script.Quote("*/"+rel) + ` -print 2>/dev/null | head -` + strconv.Itoa(limit)
+		` -type f -path ` + script.Quote("*/"+rel) + ` -print 2>/dev/null | head -` + strconv.Itoa(maxFind)
 }
 
 // readFound reads findScript's answer, each path in the machine's spelling.

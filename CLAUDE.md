@@ -6735,8 +6735,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   `serve.lock` (`Machine.InStateDir`, a state dir wherever it was put);
   symlinks followed on this machine, a file opened inside its folder and
   answered only if it is the one authorised (`OpenLocal`), the path checked
-  as `Machine.EffectivePath` spells it before anything touches it, a
-  search's finds filtered before they are looked at (`ResolvePathAllowed`):
+  as `Machine.EffectivePath` spells it before anything touches it, and
+  that file alone, with no search for a name that misses:
   the token file or an ssh key read through the file viewer
   would open what the link must not; 403 "the file is outside the
   workspaces", and a stat's `dir` and candidates are kept the same way),

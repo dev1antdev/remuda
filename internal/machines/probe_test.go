@@ -149,52 +149,16 @@ func TestACheckoutHoldingAStateDirIsKnown(t *testing.T) {
 	if !mc.HoldsStateDir(root) {
 		t.Error("the state dir under the checkout")
 	}
-}
-
-// TestClosedFindsDoNotCrowdOutOpenOnes: the search's cap counts what the caller may read.
-func TestClosedFindsDoNotCrowdOutOpenOnes(t *testing.T) {
-	root, err := filepath.EvalSymlinks(t.TempDir())
-	if err != nil {
+	if !mc.HoldsStateDir(filepath.Join(root, "gone")) {
+		t.Error("a folder that could not be looked through")
+	}
+	if err := os.MkdirAll(filepath.Join(root, "web", "node_modules", ".cache"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	for _, dir := range []string{"a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8", "a9", "z-open"} {
-		if err := os.MkdirAll(filepath.Join(root, dir), 0o700); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(root, dir, "same.txt"), []byte("x"), 0o600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	info, err := (&Machine{local: true}).ResolvePathAllowed(root, "same.txt", func(p string) bool { return strings.Contains(p, "/z-open/") })
-	if err != nil || info.Path != filepath.Join(root, "z-open", "same.txt") {
-		t.Fatalf("%+v, %v", info, err)
-	}
-}
-
-// TestASearchLooksOnlyAtWhatMayBeRead: a file the caller may not read is neither looked at nor named.
-func TestASearchLooksOnlyAtWhatMayBeRead(t *testing.T) {
-	root, err := filepath.EvalSymlinks(t.TempDir())
-	if err != nil {
+	if err := os.Rename(filepath.Join(stateDir, state.LockFile), filepath.Join(root, "web", "node_modules", ".cache", state.LockFile)); err != nil {
 		t.Fatal(err)
 	}
-	for _, file := range []string{"closed/prefs.json", "open/notes.txt", "closed/two.txt", "open/two.txt"} {
-		full := filepath.Join(root, file)
-		if err := os.MkdirAll(filepath.Dir(full), 0o700); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(full, []byte("x"), 0o600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	mc := &Machine{local: true}
-	allow := func(p string) bool { return !strings.Contains(p, "/closed/") }
-	if info, err := mc.ResolvePathAllowed(root, "prefs.json", allow); err != nil || info.Kind != "missing" || len(info.Candidates) != 0 {
-		t.Errorf("a closed file: %+v, %v", info, err)
-	}
-	if info, err := mc.ResolvePathAllowed(root, "two.txt", allow); err != nil || info.Path != filepath.Join(root, "open", "two.txt") {
-		t.Errorf("one of two left: %+v, %v", info, err)
-	}
-	if info, err := mc.ResolvePath(root, "two.txt"); err != nil || len(info.Candidates) != 2 {
-		t.Errorf("the owner's search: %+v, %v", info, err)
+	if !mc.HoldsStateDir(root) {
+		t.Error("a state dir under node_modules")
 	}
 }

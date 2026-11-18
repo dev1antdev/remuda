@@ -68,26 +68,19 @@ func (s *Server) handleFsStat(w http.ResponseWriter, r *http.Request) {
 	if cwd == "" {
 		cwd = r.URL.Query().Get("dir")
 	}
-	reach, isViewer := s.viewerReachOn(r.Context(), mc)
-	var allow func(string) bool
-	if isViewer {
-		allow = func(path string) bool { return viewerMay(mc, reach, path) }
-		if cwd != "" && !allow(cwd) {
+	raw := r.URL.Query().Get("path")
+	if reach, isViewer := s.viewerReachOn(r.Context(), mc); isViewer {
+		// the file named and no other: the search for a name that misses would look through what a viewer may not read
+		raw = mc.EffectivePath(cwd, raw)
+		if cwd != "" && !viewerMay(mc, reach, cwd) || raw != "" && !viewerMay(mc, reach, raw) {
 			httpErr(w, http.StatusForbidden, errViewerOutside)
 			return
 		}
-		if p := mc.EffectivePath(cwd, r.URL.Query().Get("path")); p != "" && !allow(p) {
-			httpErr(w, http.StatusForbidden, errViewerOutside)
-			return
-		}
+		cwd = ""
 	}
-	info, err := mc.ResolvePathAllowed(cwd, r.URL.Query().Get("path"), allow)
+	info, err := mc.ResolvePath(cwd, raw)
 	if err != nil {
 		httpErr(w, 400, err)
-		return
-	}
-	if isViewer && !allow(info.Path) {
-		httpErr(w, http.StatusForbidden, errViewerOutside)
 		return
 	}
 	writeJSON(w, info)

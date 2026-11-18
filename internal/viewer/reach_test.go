@@ -122,6 +122,13 @@ func TestOpeningLocallyStaysInTheWorkspace(t *testing.T) {
 		f.Close()
 		t.Error("a file the caller refuses opened")
 	}
+	if err := os.WriteFile(filepath.Join(app, "token"), []byte("s"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if f, err := reach.OpenLocal(filepath.Join(app, "token"), nothing); err == nil {
+		f.Close()
+		t.Error("a closed file inside the workspace opened")
+	}
 	if _, err := reach.OpenLocal(filepath.Join(home, "notes"), nothing); err == nil {
 		t.Error("a file out of reach opened")
 	}
