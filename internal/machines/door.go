@@ -44,23 +44,26 @@ url=` + script.Quote(url) + `
 usual=` + script.Quote(doorURL(DoorPort)) + `
 mkdir -p "$d" && chmod 700 "$d" || exit 1
 now=$(($(date +%s) / 30))
-for held in "$d"/agent-door.lock.*; do
+lock="$d/agent-door.lock"
+me="owner.$$.$now"
+for held in "$lock".*; do
   [ -d "$held" ] || continue
   slot=${held##*.}
   if [ "$slot" -ge "$now" ] 2>/dev/null && [ "$slot" -le $((now + ` + strconv.Itoa(doorLockAhead) + `)) ]; then echo ` + doorBusy + `; exit 0; fi
-  rmdir "$held" 2>/dev/null
+  rm -rf "$held"
 done
-mkdir "$d/agent-door.lock.$now" 2>/dev/null || { echo ` + doorBusy + `; exit 0; }
-mkdir "$d/agent-door.lock.$((now + 1))" 2>/dev/null || { rmdir "$d/agent-door.lock.$now"; echo ` + doorBusy + `; exit 0; }
-trap 'rmdir "$d/agent-door.lock.$now" "$d/agent-door.lock.$((now + 1))" 2>/dev/null' EXIT
+mine() { [ -e "$lock.$now/$me" ] && [ -e "$lock.$((now + 1))/$me" ]; }
+drop() { for slot in "$now" "$((now + 1))"; do [ ! -e "$lock.$slot/$me" ] || rm -rf "$lock.$slot"; done; }
+trap drop EXIT
+mkdir "$lock.$now" 2>/dev/null && : > "$lock.$now/$me" || { echo ` + doorBusy + `; exit 0; }
+mkdir "$lock.$((now + 1))" 2>/dev/null && : > "$lock.$((now + 1))/$me" || { echo ` + doorBusy + `; exit 0; }
 was=$(head -n 1 "$d/agent-url" 2>/dev/null)
 moved=$(head -n 1 "$d/agent-door-moved" 2>/dev/null)
 if [ -n "$was" ] && [ "$was" != "$url" ] && { [ "$url" != "$usual" ] || [ "$was" = "$moved" ]; }; then
   command -v curl >/dev/null 2>&1 || { echo ` + doorTaken + `; exit 0; }
   case "$(` + script.Health(`"$was"`) + `)" in *'"ok":true'*) echo ` + doorTaken + `; exit 0 ;; esac
 fi
-still=$(($(date +%s) / 30))
-[ "$still" -ge "$now" ] && [ "$still" -le $((now + 1)) ] || { echo ` + doorBusy + `; exit 0; }
+mine || { echo ` + doorBusy + `; exit 0; }
 if [ "$url" = "$usual" ]; then
   rm -f "$d/agent-door-moved"
 else
@@ -86,9 +89,9 @@ func trySoon(tries int, step func() error, current func() bool) error {
 	for try := 0; try < tries; try++ {
 		if try > 0 {
 			time.Sleep(doorPause)
-			if !current() {
-				return errors.New("the connection went away")
-			}
+		}
+		if !current() {
+			return errors.New("the connection went away")
 		}
 		if err = step(); err == nil {
 			return nil
@@ -126,7 +129,16 @@ func (mc *Machine) openDoor(conn *sshx.Conn) {
 		defer mc.mu.Unlock()
 		return mc.conn == conn
 	}
-	conn.CancelForwardBack(0, door.LocalPort) // one this cockpit left on a reused master is no other cockpit's live door
+	// A Conn reaches whichever master the host has now, so a forward is let go only under doorMu, while conn is the
+	// machine's: the next connection starts here, behind this lock, and asks for nothing before it has it.
+	letGo := func(remotePort int) {
+		mc.doorMu.Lock()
+		defer mc.doorMu.Unlock()
+		if current() {
+			conn.CancelForwardBack(remotePort, door.LocalPort)
+		}
+	}
+	letGo(0) // one this cockpit left on a reused master is no other cockpit's live door
 	var port, asked int
 	forward := func() (err error) {
 		asked++
@@ -139,13 +151,13 @@ func (mc *Machine) openDoor(conn *sshx.Conn) {
 	}
 	placed := false
 	defer func() {
-		if placed || !current() { // a Conn reaches whichever master the host has now: never the next connection's door
+		if placed {
 			return
 		}
 		if port != DoorPort {
 			port = 0
 		}
-		conn.CancelForwardBack(port, door.LocalPort)
+		letGo(port)
 	}()
 	mc.mu.Lock()
 	have := mc.doorKey

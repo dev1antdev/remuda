@@ -77,8 +77,8 @@ func TestAFailedStepOfTheDoorIsAskedAgain(t *testing.T) {
 	}
 
 	asked = 0
-	if err := trySoon(doorTries, refused, func() bool { return false }); err == nil || asked != 1 {
-		t.Fatalf("asked %d times for a connection gone: want one", asked)
+	if err := trySoon(doorTries, refused, func() bool { return false }); err == nil || asked != 0 {
+		t.Fatalf("asked %d times for a connection gone: want none", asked)
 	}
 }
 
@@ -90,6 +90,7 @@ type sshdAtTheDoor struct {
 	forbidden bool   // its sshd refuses a port of its own choice too
 	noKey     bool   // this remuda cannot make a key
 	goneAtKey bool   // the connection is replaced while the key is made, which then fails
+	letGoing  bool   // the connection before this one is still letting go of its forward
 }
 
 // doorRun is what came of opening the door: the scripts that placed it, and the forwards cancelled.
@@ -154,7 +155,19 @@ echo "$answer"
 		return "rk_door", nil
 	}
 	mc.door = &Door{LocalPort: 7317, Key: key}
-	mc.openDoor(conn)
+	if sshd.letGoing {
+		mc.doorMu.Lock()
+		opened := make(chan struct{})
+		go func() { mc.openDoor(conn); close(opened) }()
+		time.Sleep(50 * time.Millisecond)
+		if _, err := os.Stat(cancels); err == nil {
+			t.Error("the door began while the connection before it was letting go")
+		}
+		mc.doorMu.Unlock()
+		<-opened
+	} else {
+		mc.openDoor(conn)
+	}
 	placed, _ := os.ReadFile(kept)
 	cancelled, _ := os.ReadFile(cancels)
 	return doorRun{conn, string(placed), string(cancelled)}
@@ -177,6 +190,14 @@ func TestAConnectionGoneLeavesTheForwardsAlone(t *testing.T) {
 	run := doorOverSSH(t, sshdAtTheDoor{goneAtKey: true})
 	if strings.Count(run.cancels, "127.0.0.1:7318:") != 1 { // the one before asking
 		t.Fatalf("cancelled: %s", run.cancels)
+	}
+}
+
+// TestTheNextDoorWaitsForTheForwardBeingLetGo: a cancel under way reaches the new master, so nothing of the new door
+// may stand there yet.
+func TestTheNextDoorWaitsForTheForwardBeingLetGo(t *testing.T) {
+	if run := doorOverSSH(t, sshdAtTheDoor{letGoing: true}); !strings.Contains(run.placed, "rk_door") {
+		t.Fatalf("placed: %q", run.placed)
 	}
 }
 
@@ -406,29 +427,20 @@ func TestDoorScriptGoesOneAtATime(t *testing.T) {
 	}
 }
 
-// doorClock puts a `date` first on PATH that reads the clock it answers with, and a `curl` that sets it to afterLook:
-// what the clock did while the script looked at the door.
-func doorClock(t *testing.T, seconds, afterLook int) (set func(int)) {
+// doorClock puts a `date` first on PATH answering seconds, and a `curl` that runs duringLook: what happened on the
+// machine while the script looked at the door.
+func doorClock(t *testing.T, seconds int, duringLook string) {
 	t.Helper()
 	tools := t.TempDir()
-	clock := filepath.Join(tools, "clock")
-	set = func(to int) {
-		t.Helper()
-		if err := os.WriteFile(clock, []byte(strconv.Itoa(to)+"\n"), 0o600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	set(seconds)
 	for name, stub := range map[string]string{
-		"date": "#!/bin/sh\ncat " + script.Quote(clock) + "\n",
-		"curl": "#!/bin/sh\necho " + strconv.Itoa(afterLook) + " > " + script.Quote(clock) + "\n",
+		"date": "#!/bin/sh\necho " + strconv.Itoa(seconds) + "\n",
+		"curl": "#!/bin/sh\n" + duringLook + "\n",
 	} {
 		if err := os.WriteFile(filepath.Join(tools, name), []byte(stub), 0o755); err != nil {
 			t.Fatal(err)
 		}
 	}
 	t.Setenv("PATH", tools+string(os.PathListSeparator)+os.Getenv("PATH"))
-	return set
 }
 
 // TestDoorScriptWaitsForTheLocksStanding: at second 3000 the half minute is 100. A lock of now or up to two minutes
@@ -436,7 +448,7 @@ func doorClock(t *testing.T, seconds, afterLook int) (set func(int)) {
 // clock since put right.
 func TestDoorScriptWaitsForTheLocksStanding(t *testing.T) {
 	home := newDoorHome(t)
-	doorClock(t, 3000, 3000)
+	doorClock(t, 3000, ":")
 	for halfMinute, want := range map[int]string{100: doorBusy, 101: doorBusy, 100 + doorLockAhead: doorBusy, 101 + doorLockAhead: doorPlaced, 140: doorPlaced, 99: doorPlaced, 40: doorPlaced} {
 		lock := filepath.Join(home.dir, "agent-door.lock."+strconv.Itoa(halfMinute))
 		if err := os.Mkdir(lock, 0o700); err != nil {
@@ -454,20 +466,34 @@ func TestDoorScriptWaitsForTheLocksStanding(t *testing.T) {
 	}
 }
 
-// TestDoorScriptPlacesNothingOnceItsLocksAreLeftBehind: the clock went past them or back before them during the look,
-// so another cockpit may hold the door by now.
-func TestDoorScriptPlacesNothingOnceItsLocksAreLeftBehind(t *testing.T) {
-	for afterLook, want := range map[int]string{3120: doorBusy, 2940: doorBusy, 3030: doorPlaced} {
-		home := newDoorHome(t)
-		doorClock(t, 3000, afterLook)
-		home.write("agent-url", "http://127.0.0.1:9")
-		home.write("agent-key", "rk_old")
-		if got := home.place(doorURL(50236)); got != want {
-			t.Errorf("the clock at %d after the look: answered %s, want %s", afterLook, got, want)
-		}
-		if want == doorBusy && (home.read("agent-url") != "http://127.0.0.1:9" || home.read("agent-key") != "rk_old") {
-			t.Errorf("the clock at %d after the look: the files changed", afterLook)
-		}
+// TestDoorScriptPlacesNothingOnceItsLocksAreNotItsOwn: another run took them from it during the look — its clock set
+// back past them, and put right again — and the locks that stand then are that run's, which this one leaves.
+func TestDoorScriptPlacesNothingOnceItsLocksAreNotItsOwn(t *testing.T) {
+	for name, c := range map[string]struct {
+		duringLook, want string
+		locksLeft        int
+	}{
+		"nothing happened":  {":", doorPlaced, 0},
+		"locks taken away":  {`rm -rf "$DOOR_LOCKS"/agent-door.lock.*`, doorBusy, 0},
+		"one taken away":    {`rm -rf "$DOOR_LOCKS"/agent-door.lock.101`, doorBusy, 0},
+		"another run's now": {`rm -rf "$DOOR_LOCKS"/agent-door.lock.*; mkdir "$DOOR_LOCKS"/agent-door.lock.100 "$DOOR_LOCKS"/agent-door.lock.101`, doorBusy, 2},
+	} {
+		t.Run(name, func(t *testing.T) {
+			home := newDoorHome(t)
+			t.Setenv("DOOR_LOCKS", home.dir)
+			doorClock(t, 3000, c.duringLook)
+			home.write("agent-url", "http://127.0.0.1:9")
+			home.write("agent-key", "rk_old")
+			if got := home.place(doorURL(50236)); got != c.want {
+				t.Fatalf("answered %s, want %s", got, c.want)
+			}
+			if c.want == doorBusy && (home.read("agent-url") != "http://127.0.0.1:9" || home.read("agent-key") != "rk_old") {
+				t.Error("the files changed")
+			}
+			if left, _ := filepath.Glob(filepath.Join(home.dir, "agent-door.lock.*")); len(left) != c.locksLeft {
+				t.Errorf("locks left: %v", left)
+			}
+		})
 	}
 }
 

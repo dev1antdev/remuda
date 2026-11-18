@@ -45,8 +45,9 @@ type Machine struct {
 
 	onState func(id, label, state, reason string) // the manager's ear for connected / error, nil for the local one
 
-	door    *Door  // the way its agents reach the tasks here, opened after every connect
-	doorKey string // the key placed there, kept so a reconnect places the same one
+	door    *Door      // the way its agents reach the tasks here, opened after every connect
+	doorKey string     // the key placed there, kept so a reconnect places the same one
+	doorMu  sync.Mutex // held to let go of a forward: the next connection's door waits for it
 
 	// Transcripts reads the session files on this machine.
 	Transcripts *transcript.Reader
