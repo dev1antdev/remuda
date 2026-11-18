@@ -163,27 +163,8 @@ func (m *AttachManager) Subscribe(termID string, cols, rows int) (ch chan []byte
 	a := m.standing(termID)
 	joined := a != nil
 	if a == nil {
-		release, err := m.takePlace() // outside the lock: it can wait, and it stops attaches nobody watches
-		if err != nil {
-			if a = m.standing(termID); a == nil { // another viewer may have started it meanwhile
-				return nil, nil, err
-			}
-			release = func() {}
-		}
-		m.mu.Lock()
-		if a = m.standingLocked(termID); a != nil {
-			joined = true
-			m.mu.Unlock()
-			release() // another viewer started it meanwhile
-		} else {
-			a, err = m.start(termID, cols, rows, release)
-			if err != nil {
-				m.mu.Unlock()
-				release()
-				return nil, nil, err
-			}
-			m.attaches[termID] = a
-			m.mu.Unlock()
+		if a, joined, err = m.startOrJoin(termID, cols, rows); err != nil {
+			return nil, nil, err
 		}
 	}
 
@@ -237,6 +218,30 @@ func (a *attach) repaint(cols, rows int) {
 }
 
 // start must be called with m.mu held.
+// startOrJoin starts the terminal's attach in a place of its own, or joins the one another viewer started meanwhile;
+// without a place it can only join. An attach is never started without one.
+func (m *AttachManager) startOrJoin(termID string, cols, rows int) (a *attach, joined bool, err error) {
+	release, err := m.takePlace() // outside the lock: it can wait, and it stops attaches nobody watches
+	if err != nil {
+		if a = m.standing(termID); a != nil {
+			return a, true, nil
+		}
+		return nil, false, err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if a = m.standingLocked(termID); a != nil {
+		release()
+		return a, true, nil
+	}
+	if a, err = m.start(termID, cols, rows, release); err != nil {
+		release()
+		return nil, false, err
+	}
+	m.attaches[termID] = a
+	return a, false, nil
+}
+
 // standing is the live attach of the terminal, if any.
 func (m *AttachManager) standing(termID string) *attach {
 	m.mu.Lock()
