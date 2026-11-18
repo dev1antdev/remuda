@@ -518,6 +518,28 @@ func TestDoorScriptWaitsForTheLocksStanding(t *testing.T) {
 	}
 }
 
+// TestDoorScriptLosingALockAsItTakesItIsBusy: a run of the next half minute clears the lock it finds of the last one, and
+// that may be one this run has just made. dash ends a script on a failed redirection of `:`, with no answer at all.
+func TestDoorScriptLosingALockAsItTakesItIsBusy(t *testing.T) {
+	home := newDoorHome(t)
+	doorClock(t, 3000, ":")
+	realMkdir, err := exec.LookPath("mkdir")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tools := t.TempDir()
+	stub := "#!/bin/sh\n" + script.Quote(realMkdir) + ` "$@" || exit
+case "$1" in *agent-door.lock.100) rm -rf "$1" ;; esac
+`
+	if err := os.WriteFile(filepath.Join(tools, "mkdir"), []byte(stub), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", tools+string(os.PathListSeparator)+os.Getenv("PATH"))
+	if got := home.place(doorURL(DoorPort)); got != doorBusy {
+		t.Fatalf("answered %q", got)
+	}
+}
+
 // TestDoorScriptPlacesNothingOnceItsLocksAreNotItsOwn: another run took them from it during the look — its clock set
 // back past them, and put right again — and the locks that stand then are that run's, which this one leaves.
 func TestDoorScriptPlacesNothingOnceItsLocksAreNotItsOwn(t *testing.T) {
