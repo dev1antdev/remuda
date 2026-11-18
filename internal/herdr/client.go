@@ -118,12 +118,13 @@ func (c *Client) CallTimeout(method string, params any, out any, timeout time.Du
 }
 
 func (c *Client) call(method string, params any, out any, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout) // waiting for a connection comes out of it
 	conn, err := c.dial(timeout)
 	if err != nil {
 		return err
 	}
 	defer conn.Close()
-	conn.SetDeadline(time.Now().Add(timeout))
+	conn.SetDeadline(deadline)
 
 	if params == nil {
 		params = map[string]any{}

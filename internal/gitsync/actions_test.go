@@ -2,6 +2,7 @@ package gitsync
 
 import (
 	"errors"
+	"github.com/dev1antdev/remuda/internal/rpath"
 	"os"
 	"path/filepath"
 	"strings"
@@ -368,5 +369,20 @@ func TestFetchRunsWithoutAPrompt(t *testing.T) {
 	outcome := service(t, idle, nil).Fetch("local", mine)
 	if outcome.State != Failed || outcome.Output == "" {
 		t.Fatalf("a fetch that cannot reach its remote: %+v", outcome)
+	}
+}
+
+// TestAnActionSaysWhatSSHSaid: a machine refusing the session is no "exit 255".
+func TestAnActionSaysWhatSSHSaid(t *testing.T) {
+	host := &shell.Fake{Name: "box", Answer: func(string) (string, error) {
+		return "", &shell.ExitError{Code: 255, Stderr: "box refused one more ssh session"}
+	}}
+	_, _, err := run(host, rpath.POSIX, "/w", "git fetch")
+	if err == nil || err.Error() != "box refused one more ssh session" {
+		t.Errorf("err = %v", err)
+	}
+	silent := &shell.Fake{Name: "box", Answer: func(string) (string, error) { return "", &shell.ExitError{Code: 1} }}
+	if _, _, err := run(silent, rpath.POSIX, "/w", "git fetch"); err == nil || err.Error() != "exit 1" {
+		t.Errorf("a command that said nothing: %v", err)
 	}
 }

@@ -122,6 +122,9 @@ func run(host shell.Host, style rpath.Style, top, action string) (output string,
 	if runErr != nil && !errors.As(runErr, &exit) {
 		return output, after, runErr // a timeout, or the machine went away mid-way
 	}
+	if exit != nil && exit.Stderr != "" {
+		return output, after, exit // what ssh said, a machine refusing the session
+	}
 	if exit != nil {
 		return output, after, errors.New("exit " + strconv.Itoa(exit.Code))
 	}

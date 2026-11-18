@@ -1,6 +1,7 @@
 package sshx
 
 import (
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -25,7 +26,7 @@ func limitedSSH(t *testing.T) (peak func() int) {
 		"ls " + script.Quote(running) + " | wc -l >> " + script.Quote(log) + "\n" +
 		"trap 'rm -f \"$me\"' EXIT\n" +
 		"case \"$*\" in\n" +
-		"*refuse*) echo 'mux_client_request_session: session request failed: Session open refused by peer' >&2; exit 255 ;;\n" +
+		"*refuse*) exec 1>&-; sleep 0.05; echo 'mux_client_request_session: session request failed: Session open refused by peer' >&2; exit 255 ;;\n" +
 		"*quick*) echo done ;;\n" +
 		"*hold*) rm -f \"$me\"; exec sleep 30 ;;\n" +
 		"*) sleep 0.6 ;;\nesac\n"
@@ -101,7 +102,7 @@ func TestAPlaceIsHeldUntilTheConnectionCloses(t *testing.T) {
 	limitedSSH(t)
 	c := limited()
 	var held []io.Closer
-	for range maxSessions {
+	for range sharedPlaces + rpcPlaces {
 		conn, err := c.DialExec("hold", time.Minute)
 		if err != nil {
 			t.Fatal(err)
@@ -119,8 +120,9 @@ func TestAPlaceIsHeldUntilTheConnectionCloses(t *testing.T) {
 	if _, err := c.Run("quick", 100*time.Millisecond); err == nil || !strings.Contains(err.Error(), "no session free") {
 		t.Fatalf("a script past the limit: %v", err)
 	}
-	held[0].Close()
-	held[0].Close() // closing twice gives one place back
+	last := held[len(held)-1] // the requests' own places went first: this one holds a shared place, as scripts need
+	last.Close()
+	last.Close() // closing twice gives one place back
 	if _, err := c.Run("quick", 2*time.Second); err != nil {
 		t.Fatalf("a place given back: %v", err)
 	}
@@ -173,11 +175,79 @@ func TestARefusedSessionIsSaidInWords(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer conn.Close()
-	if _, err := conn.Read(make([]byte, 8)); err == nil {
-		t.Fatal("no error")
+	_, err = conn.Read(make([]byte, 8))
+	if err == nil || !strings.Contains(err.Error(), "MaxSessions") || errors.Is(err, io.EOF) {
+		t.Errorf("a request, at its first failure: %v", err)
 	}
-	time.Sleep(100 * time.Millisecond)
-	if _, err := conn.Read(make([]byte, 8)); err == nil || !strings.Contains(err.Error(), "MaxSessions") {
-		t.Errorf("a request: %v", err)
+}
+
+// TestTerminalsCountAndRPCKeepsItsPlaces: a terminal never waits, takes its place, and cannot leave herdr's requests none.
+func TestTerminalsCountAndRPCKeepsItsPlaces(t *testing.T) {
+	limitedSSH(t)
+	c := limited()
+	var release []func()
+	for range maxTerminals + 2 {
+		release = append(release, c.HoldTerminal())
+	}
+	if len(c.shared) != maxTerminals {
+		t.Fatalf("%d terminals hold a place, want %d", len(c.shared), maxTerminals)
+	}
+	var scripts []func()
+	for range sharedPlaces - maxTerminals {
+		leave, _, err := c.enter(true, time.Second)
+		if err != nil {
+			t.Fatal(err)
+		}
+		scripts = append(scripts, leave)
+	}
+	if _, _, err := c.enter(true, 50*time.Millisecond); err == nil {
+		t.Fatal("a script went past the sessions the terminals hold")
+	}
+	var requests []func()
+	for range rpcPlaces {
+		leave, _, err := c.enter(false, 50*time.Millisecond)
+		if err != nil {
+			t.Fatalf("a request found no place of its own: %v", err)
+		}
+		requests = append(requests, leave)
+	}
+	for _, out := range append(append(release, scripts...), requests...) {
+		out()
+	}
+	if len(c.shared) != 0 || len(c.terminals) != 0 || len(c.rpc) != 0 {
+		t.Errorf("places left taken: %d %d %d", len(c.shared), len(c.terminals), len(c.rpc))
+	}
+}
+
+// TestLongScriptsLeaveRoomForShortOnes: an update or a fetch does not stop the transcripts being read.
+func TestLongScriptsLeaveRoomForShortOnes(t *testing.T) {
+	c := limited()
+	var leave []func()
+	for range maxLongScripts {
+		out, _, err := c.enter(true, 2*longRun)
+		if err != nil {
+			t.Fatal(err)
+		}
+		leave = append(leave, out)
+	}
+	waited := make(chan func(), 1)
+	go func() {
+		out, _, _ := c.enter(true, 2*longRun)
+		waited <- out
+	}()
+	select {
+	case <-waited:
+		t.Fatal("one more long script went in")
+	case <-time.After(50 * time.Millisecond):
+	}
+	short, _, err := c.enter(true, 50*time.Millisecond)
+	if err != nil {
+		t.Fatalf("a short script: %v", err)
+	}
+	short()
+	leave[0]()
+	(<-waited)()
+	for _, out := range leave[1:] {
+		out()
 	}
 }

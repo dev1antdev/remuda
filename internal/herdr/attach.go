@@ -25,6 +25,10 @@ type AttachManager struct {
 	NewCommand func(terminalID string) *exec.Cmd
 	// Unavailable, when set, is why this machine has no attach at all (herdr on Windows): every Subscribe is refused with it.
 	Unavailable string
+	// Hold, when set, counts an attach among the machine's sessions while it stands; what it answers lets go.
+	Hold func() (release func())
+	// ReadRefusal, when set, finds a refusal by what carries the attach (ssh) in its first output.
+	ReadRefusal func(first string) (string, bool)
 
 	mu       sync.Mutex
 	attaches map[string]*attach
@@ -37,6 +41,9 @@ type attach struct {
 	early  chan []byte // the attach's first chunks, while watched: herdr prints its refusal into the PTY
 	watch  atomic.Bool
 	exited chan struct{}
+
+	readRefusal func(first string) (string, bool)
+	release     func()
 
 	mu     sync.Mutex
 	subs   map[chan []byte]bool
@@ -58,14 +65,11 @@ func Refused(err error) bool {
 var ansiRe = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07]*\x07|\x1b[()][A-Z0-9]`)
 
 // refusal finds herdr's verdict in the attach's first output, returned without escape sequences:
-// a line "herdr: server shut down: terminal attach failed: …", or any "attach failed", or ssh refused the session.
+// a line "herdr: server shut down: terminal attach failed: …", or any "attach failed".
 func refusal(first []byte) (string, bool) {
 	text := ansiRe.ReplaceAllString(string(first), "")
 	for _, line := range strings.Split(text, "\n") {
 		line = strings.TrimSpace(strings.TrimRight(line, "\r"))
-		if strings.Contains(line, "Session open refused") { // ssh's, the machine at its MaxSessions
-			return "the machine refused one more ssh session: too many are open on the connection (sshd's MaxSessions)", true
-		}
 		if strings.Contains(line, "attach failed") {
 			if i := strings.Index(line, "terminal attach failed: "); i >= 0 {
 				line = line[i+len("terminal attach failed: "):]
@@ -83,6 +87,14 @@ const firstWait = 1500 * time.Millisecond
 // printing one, while a pane whose screen merely shows the words stays up.
 var refusalExitWait = 2 * time.Second
 
+// refused is herdr's verdict in the first output, or that of what carries the attach.
+func (a *attach) refused(first []byte) (string, bool) {
+	if msg, ok := refusal(first); ok || a.readRefusal == nil {
+		return msg, ok
+	}
+	return a.readRefusal(string(first))
+}
+
 // watchStart reads the attach's first output for herdr's verdict: a refusal comes in a chunk
 // or two and the process exits right after; a real attach paints the screen and stays.
 func (a *attach) watchStart() error {
@@ -94,7 +106,7 @@ func (a *attach) watchStart() error {
 		select {
 		case chunk := <-a.early:
 			acc = append(acc, chunk...)
-			if msg, refused := refusal(acc); refused {
+			if msg, refused := a.refused(acc); refused {
 				select {
 				case <-a.exited:
 					return &RefusedError{Msg: msg}
@@ -111,7 +123,7 @@ func (a *attach) watchStart() error {
 		case <-settle:
 			return nil
 		case <-a.exited:
-			if msg, refused := refusal(acc); refused {
+			if msg, refused := a.refused(acc); refused {
 				return &RefusedError{Msg: msg}
 			}
 			return fmt.Errorf("attach ended before it began")
@@ -229,6 +241,10 @@ func (m *AttachManager) start(termID string, cols, rows int) (*attach, error) {
 		return nil, err
 	}
 	a := &attach{termID: termID, cmd: cmd, pty: f, subs: map[chan []byte]bool{}, early: make(chan []byte, 64), exited: make(chan struct{})}
+	a.readRefusal = m.ReadRefusal
+	if m.Hold != nil {
+		a.release = m.Hold()
+	}
 	a.watch.Store(true)
 	go a.readLoop(m)
 	return a, nil
@@ -304,6 +320,9 @@ func (m *AttachManager) killLocked(a *attach) {
 		a.cmd.Process.Kill()
 	}
 	a.cmd.Wait()
+	if a.release != nil {
+		a.release()
+	}
 
 	m.mu.Lock()
 	if m.attaches[a.termID] == a {
