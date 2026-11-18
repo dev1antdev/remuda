@@ -5,57 +5,17 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dev1antdev/remuda/internal/auth"
 	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/watch"
 )
-
-func TestWithinFoldersFollowsSymlinksOnThisMachine(t *testing.T) {
-	root := t.TempDir()
-	workspace, outside := filepath.Join(root, "ws"), filepath.Join(root, "outside")
-	for _, dir := range []string{workspace, outside} {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := os.WriteFile(filepath.Join(workspace, "a.png"), []byte("png"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(outside, "secret"), []byte("s"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Symlink(filepath.Join(outside, "secret"), filepath.Join(workspace, "link")); err != nil {
-		t.Fatal(err)
-	}
-	folders := []string{workspace}
-	for path, want := range map[string]bool{
-		filepath.Join(workspace, "a.png"):                   true,
-		workspace:                                           true,
-		filepath.Join(workspace, "not-yet.png"):             true, // a file not there yet keeps its name under the folder
-		filepath.Join(workspace, "link"):                    false,
-		filepath.Join(outside, "secret"):                    false,
-		filepath.Join(workspace, "..", "outside", "secret"): false,
-		root: false,
-	} {
-		if got := withinFolders(path, folders, true); got != want {
-			t.Errorf("withinFolders(%s) = %v, want %v", path, got, want)
-		}
-	}
-	// a remote machine: the paths as given, since nothing there resolves them
-	for path, want := range map[string]bool{"/w/api/x.png": true, "/w/api": true, "/w/api2/x.png": false, "/w": false, "/w/api/../../etc/passwd": false} {
-		if got := withinFolders(path, []string{"/w/api/"}, false); got != want {
-			t.Errorf("remote withinFolders(%s) = %v, want %v", path, got, want)
-		}
-	}
-	if withinFolders("/w/api/x", nil, false) {
-		t.Error("no folders should reach nothing")
-	}
-}
 
 // fileServer is the file routes over this machine, with a watcher that has no snapshot yet: a viewer reaches nothing.
 func fileServer(t *testing.T) http.Handler {
@@ -98,6 +58,30 @@ func TestAViewerReadsFilesInTheWorkspacesOnly(t *testing.T) {
 		if code, body := fileCall(h, path, true); code != http.StatusForbidden || strings.Contains(body, token) {
 			t.Fatalf("a viewer at %s: %d %q", path, code, body)
 		}
+	}
+}
+
+// TestAViewerIsRefusedBeforeAnyFileIsTouched: a pipe would hold a look at it until someone wrote to it.
+func TestAViewerIsRefusedBeforeAnyFileIsTouched(t *testing.T) {
+	h := fileServer(t)
+	pipe := filepath.Join(t.TempDir(), "pipe")
+	if err := exec.Command("mkfifo", pipe).Run(); err != nil {
+		t.Skip(err)
+	}
+	for _, viewer := range []bool{true, false} {
+		answered := make(chan int, 1)
+		go func() {
+			code, _ := fileCall(h, "/api/fs/stat?path="+url.QueryEscape(pipe), viewer)
+			answered <- code
+		}()
+		select {
+		case <-answered:
+		case <-time.After(3 * time.Second):
+			t.Fatalf("a look at a pipe hung (viewer %v)", viewer)
+		}
+	}
+	if code, _ := fileCall(h, "/api/fs/file?path="+url.QueryEscape(pipe+" "), true); code != http.StatusForbidden {
+		t.Errorf("a viewer with a space after the name: %d", code)
 	}
 }
 

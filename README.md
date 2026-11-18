@@ -928,7 +928,8 @@ the screens and their timelapses, the standup, the usage and Activity, and nothi
 changes — no composer, no keys, no question buttons, no Changes lens, no
 tasks; the Git lens draws its graph and opens no menu; the terminal lens shows the pane's screen as the Wall does, without
 attaching, and the file viewer opens only files inside the machines'
-workspace folders. Every call past that is refused with "this link is for
+workspace folders — none at the home folder or above it, none of remuda's
+own, and never `~/.ssh` or remuda's state folder. Every call past that is refused with "this link is for
 viewing only", a viewer's look marks nothing as seen, and the header says
 *Viewing only*. The link is shown once; revoking it signs every screen it
 opened out at once, and the pairing link opened on such a screen makes it

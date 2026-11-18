@@ -17,6 +17,7 @@ type probe struct {
 	herdr   string // herdr's binary, "" when none was found
 	remuda  string // remuda's own binary on a Windows machine, the bridge to herdr there
 	appData string // %APPDATA% on Windows, where herdr keeps its socket
+	state   string // the folder remuda keeps there
 }
 
 // probeScript prints the machine's home, its system and, when asked to find it, herdr's binary, a key=value a line; on
@@ -24,7 +25,9 @@ type probe struct {
 // herdr's stable alias comes first there: an update moves the release on PATH, the alias follows it. Every lookup is
 // quiet and the script ends true, so a missing binary is an empty value, not a failed exec.
 func probeScript(findHerdr bool) string {
-	s := `printf 'home=%s\n' "$HOME"; o=$(uname -s 2>/dev/null); printf 'os=%s\n' "$o"
+	s := script.StateDir("d") + `
+printf 'state=%s\n' "${REMUDA_STATE_DIR:-$d}"
+printf 'home=%s\n' "$HOME"; o=$(uname -s 2>/dev/null); printf 'os=%s\n' "$o"
 case "$o" in MINGW*|MSYS*|CYGWIN*)
   printf 'winhome=%s\n' "$(cygpath -w "$HOME" 2>/dev/null)"; printf 'appdata=%s\n' "$APPDATA"
   r="$HOME/.local/bin/remuda.exe"; [ -x "$r" ] && printf 'remuda=%s\n' "$r"
@@ -58,6 +61,8 @@ func parseProbe(out string) probe {
 			winHome = strings.TrimSpace(value)
 		case "appdata":
 			p.appData = strings.TrimSpace(value)
+		case "state":
+			p.state = strings.TrimSpace(value)
 		case "remuda":
 			p.remuda = strings.TrimSpace(value)
 		case "herdr":
@@ -68,6 +73,7 @@ func parseProbe(out string) probe {
 	}
 	if p.os == "windows" && winHome != "" {
 		p.home = rpath.For(winHome).Clean(winHome)
+		p.state = rpath.For(winHome).Clean(p.state)
 	}
 	return p
 }

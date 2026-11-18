@@ -48,34 +48,13 @@ func CheckScan(home string, scan Scan) (Scan, error) {
 		return Scan{}, errors.New("the folder must be a full path, or one under ~/")
 	}
 	folder = style.Clean(folder)
-	if unsearched(style, home, folder) {
+	if style.HoldsAHome(home, folder) {
 		return Scan{}, errors.New("a home folder, or a folder above one, is too big to scan: pick the folder that holds your repositories")
 	}
 	if scan.Depth < MinDepth || scan.Depth > MaxDepth {
 		return Scan{}, errors.New("the depth goes from 1 to 5")
 	}
 	return Scan{Folder: folder, Depth: scan.Depth}, nil
-}
-
-// unsearched is the root, a home of the usual places (/root, /home/<name>, /Users/<name>, C:\Users\<name>), or this
-// machine's home, or any folder above one of them.
-func unsearched(style rpath.Style, home, folder string) bool {
-	if home != "" && style.Within(folder, home) {
-		return true
-	}
-	parts := strings.FieldsFunc(style.Slash(folder), func(r rune) bool { return r == '/' })
-	if style.Windows && len(parts) > 0 {
-		parts = parts[1:] // the drive
-	}
-	switch len(parts) {
-	case 0:
-		return true
-	case 1:
-		return parts[0] == "root" || parts[0] == "home" || strings.EqualFold(parts[0], "Users")
-	case 2:
-		return parts[0] == "home" || strings.EqualFold(parts[0], "Users")
-	}
-	return false
 }
 
 // Scans is each machine's folder to scan, kept in the state dir.

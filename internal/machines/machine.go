@@ -45,9 +45,10 @@ type Machine struct {
 
 	onState func(id, label, state, reason string) // the manager's ear for connected / error, nil for the local one
 
-	door    *Door      // the way its agents reach the tasks here, opened after every connect
-	doorKey string     // the key placed there, kept so a reconnect places the same one
-	doorMu  sync.Mutex // held for each step of opening the door: the next connection's waits for it
+	door     *Door      // the way its agents reach the tasks here, opened after every connect
+	doorKey  string     // the key placed there, kept so a reconnect places the same one
+	stateDir string     // the folder remuda keeps there
+	doorMu   sync.Mutex // held for each step of opening the door: the next connection's waits for it
 
 	// Transcripts reads the session files on this machine.
 	Transcripts *transcript.Reader
@@ -204,6 +205,7 @@ func (mc *Machine) connect() {
 	mc.conn = conn
 	mc.client = client
 	mc.home = home
+	mc.stateDir = found.state
 	mc.herdrBin, mc.socket = bin, sock
 	mc.os = found.os
 	mc.attach = herdr.NewAttachManager(func(termID string) *exec.Cmd {

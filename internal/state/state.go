@@ -15,7 +15,13 @@ import (
 // Dir is <user config dir>/remuda, created on first use, or REMUDA_STATE_DIR for a second instance beside the real one.
 func Dir() (string, error) {
 	dir := os.Getenv("REMUDA_STATE_DIR")
-	if dir == "" {
+	if dir != "" {
+		abs, err := filepath.Abs(dir)
+		if err != nil {
+			return "", err
+		}
+		dir = abs
+	} else {
 		base, err := os.UserConfigDir()
 		if err != nil {
 			return "", err

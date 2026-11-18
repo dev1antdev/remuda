@@ -9,70 +9,38 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/auth"
 	"github.com/dev1antdev/remuda/internal/filetree"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/rpath"
+	"github.com/dev1antdev/remuda/internal/viewer"
 )
 
 // Files the agent wrote: resolved, served, diffed, uploaded.
 
-// errViewerOutside refuses a viewer a file beyond the machine's workspace folders: the token file, a key or an ssh
-// key read through the file viewer would open what the link must not.
+// errViewerOutside refuses a viewer a file beyond what its link reaches.
 var errViewerOutside = errors.New("this link is for viewing only: the file is outside the workspaces")
 
-// viewerFolders is where a viewer may read files on a machine — the folders herdr has a workspace in there, by the
-// watcher's last snapshot — and whether the request is a viewer's at all.
-func (s *Server) viewerFolders(ctx context.Context, mc *machines.Machine) ([]string, bool) {
+// viewerMay says a viewer may read the path: within its reach, and in no folder a remuda serves from.
+func viewerMay(mc *machines.Machine, reach viewer.Reach, path string) bool {
+	return reach.Allows(path) && !mc.InStateDir(path)
+}
+
+// viewerReachOn is what a viewer may read on a machine, by the watcher's last snapshot, and whether the request is a
+// viewer's at all.
+func (s *Server) viewerReachOn(ctx context.Context, mc *machines.Machine) (viewer.Reach, bool) {
 	if !auth.IsViewer(ctx) {
-		return nil, false
+		return viewer.Reach{}, false
 	}
-	var folders []string
+	var dirs []string
 	if s.Watch != nil {
 		if snap, _ := s.Watch.Snapshot(mc.ID()); snap != nil {
-			folders = snap.WorkspaceDirs()
+			dirs = s.editorFolders(mc.ID(), snap)
 		}
 	}
-	return folders, true
-}
-
-// withinFolders says whether a path lies in one of the folders; on this machine symlinks are followed on both sides,
-// so a link out of a workspace reaches nothing and /tmp and /private/tmp are one folder.
-func withinFolders(path string, folders []string, local bool) bool {
-	if style := rpath.For(path); !local && style.Windows { // a Windows machine's: case and separators its own
-		for _, folder := range folders {
-			if folder != "" && style.Within(folder, path) {
-				return true
-			}
-		}
-		return false
-	}
-	path = realPath(path, local)
-	for _, folder := range folders {
-		folder = strings.TrimSuffix(realPath(folder, local), "/")
-		if path == folder || strings.HasPrefix(path, folder+"/") {
-			return true
-		}
-	}
-	return false
-}
-
-// realPath is the path with its symlinks resolved on this machine, the name kept when the file is not there yet.
-func realPath(path string, local bool) string {
-	path = filepath.Clean(path)
-	if !local {
-		return path
-	}
-	if real, err := filepath.EvalSymlinks(path); err == nil {
-		return real
-	}
-	if dir, err := filepath.EvalSymlinks(filepath.Dir(path)); err == nil {
-		return filepath.Join(dir, filepath.Base(path))
-	}
-	return path
+	return viewer.Of(dirs, mc.Home(), mc.StateDir(), mc.Paths(), mc.Local()), true
 }
 
 func (s *Server) fileRoutes(api *http.ServeMux) {
@@ -100,35 +68,27 @@ func (s *Server) handleFsStat(w http.ResponseWriter, r *http.Request) {
 	if cwd == "" {
 		cwd = r.URL.Query().Get("dir")
 	}
-	folders, viewer := s.viewerFolders(r.Context(), mc)
-	if viewer && cwd != "" && !withinFolders(cwd, folders, mc.Local()) {
-		httpErr(w, http.StatusForbidden, errViewerOutside)
+	raw := r.URL.Query().Get("path")
+	if reach, isViewer := s.viewerReachOn(r.Context(), mc); isViewer {
+		// the file named and no other: the search for a name that misses would look through what a viewer may not read
+		path := mc.EffectivePath(cwd, raw)
+		if path == "" {
+			httpErr(w, 400, fmt.Errorf("path required"))
+			return
+		}
+		if cwd != "" && !viewerMay(mc, reach, cwd) || !viewerMay(mc, reach, path) {
+			httpErr(w, http.StatusForbidden, errViewerOutside)
+			return
+		}
+		writeJSON(w, mc.LookAt(path))
 		return
 	}
-	info, err := mc.ResolvePath(cwd, r.URL.Query().Get("path"))
+	info, err := mc.ResolvePath(cwd, raw)
 	if err != nil {
 		httpErr(w, 400, err)
 		return
 	}
-	if viewer {
-		if !withinFolders(info.Path, folders, mc.Local()) {
-			httpErr(w, http.StatusForbidden, errViewerOutside)
-			return
-		}
-		info.Candidates = withinAll(info.Candidates, folders, mc.Local())
-	}
 	writeJSON(w, info)
-}
-
-// withinAll keeps the paths that lie in the folders.
-func withinAll(paths, folders []string, local bool) []string {
-	var kept []string
-	for _, p := range paths {
-		if withinFolders(p, folders, local) {
-			kept = append(kept, p)
-		}
-	}
-	return kept
 }
 
 // handleFsDirs is GET /api/fs/dirs?machine&path&hidden: a folder's subfolders on the machine, for the folder picker.
@@ -162,7 +122,7 @@ func (s *Server) handleFsTree(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 400, err)
 		return
 	}
-	if folders, viewer := s.viewerFolders(r.Context(), mc); viewer && !withinFolders(folder, folders, mc.Local()) {
+	if reach, isViewer := s.viewerReachOn(r.Context(), mc); isViewer && !viewerMay(mc, reach, folder) {
 		httpErr(w, http.StatusForbidden, errViewerOutside)
 		return
 	}
@@ -187,11 +147,18 @@ func (s *Server) handleFsFile(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 400, fmt.Errorf("absolute path required (resolve it with /api/fs/stat first)"))
 		return
 	}
-	if folders, viewer := s.viewerFolders(r.Context(), mc); viewer && !withinFolders(path, folders, mc.Local()) {
-		httpErr(w, http.StatusForbidden, errViewerOutside)
-		return
+	reach, isViewer := s.viewerReachOn(r.Context(), mc)
+	var info machines.FileInfo
+	if isViewer {
+		path = mc.EffectivePath("", path)
+		if !viewerMay(mc, reach, path) {
+			httpErr(w, http.StatusForbidden, errViewerOutside)
+			return
+		}
+		info = mc.LookAt(path)
+	} else {
+		info, err = mc.ResolvePath("", path)
 	}
-	info, err := mc.ResolvePath("", path)
 	if err != nil || info.Kind == "missing" || info.Kind == "dir" {
 		httpErr(w, 404, fmt.Errorf("not a readable file: %s", path))
 		return
@@ -208,7 +175,11 @@ func (s *Server) handleFsFile(w http.ResponseWriter, r *http.Request) {
 	}
 	max := info.MaxBytes()
 	if mc.Local() {
-		f, err := mc.Open(info.Path)
+		open := mc.Open
+		if isViewer {
+			open = func(path string) (*os.File, error) { return reach.OpenLocal(path, mc.InStateDir) }
+		}
+		f, err := open(info.Path)
 		if err != nil {
 			httpErr(w, 500, err)
 			return

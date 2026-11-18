@@ -17,6 +17,7 @@ import (
 
 	"github.com/dev1antdev/remuda/internal/rpath"
 	"github.com/dev1antdev/remuda/internal/script"
+	"github.com/dev1antdev/remuda/internal/state"
 )
 
 const (
@@ -65,17 +66,10 @@ func classify(p string, sniffBinary func() bool) (kind, mime string) {
 // agents say "demo.mp4" for "docs/demo.mp4".
 func (mc *Machine) ResolvePath(cwd, raw string) (FileInfo, error) {
 	style := mc.Paths()
-	p := strings.TrimSpace(raw)
+	p := mc.EffectivePath(cwd, raw)
 	if p == "" {
 		return FileInfo{}, fmt.Errorf("path required")
 	}
-	if p == "~" || strings.HasPrefix(p, "~/") || style.Windows && strings.HasPrefix(p, `~\`) {
-		p = style.Join(mc.Home(), p[1:])
-	}
-	if !style.IsAbs(p) && cwd != "" {
-		p = style.Join(cwd, p)
-	}
-	p = cleanPath(style, p)
 	info, err := mc.stat(p)
 	if err == nil {
 		return info, nil
@@ -92,6 +86,67 @@ func (mc *Machine) ResolvePath(cwd, raw string) (FileInfo, error) {
 		}
 	}
 	return FileInfo{Path: p, Kind: "missing"}, nil
+}
+
+// LookAt is what the path, taken exactly as given, is: nothing cleaned, nothing searched.
+func (mc *Machine) LookAt(p string) FileInfo {
+	if info, err := mc.stat(p); err == nil {
+		return info
+	}
+	return FileInfo{Path: p, Kind: "missing"}
+}
+
+// EffectivePath is the file ResolvePath looks at first, nothing touched yet: what a check of the path must be made on.
+// "" for an empty path.
+func (mc *Machine) EffectivePath(cwd, raw string) string {
+	style := mc.Paths()
+	p := strings.TrimSpace(raw)
+	if p == "" {
+		return ""
+	}
+	if p == "~" || strings.HasPrefix(p, "~/") || style.Windows && strings.HasPrefix(p, `~\`) {
+		p = style.Join(mc.Home(), p[1:])
+	}
+	if !style.IsAbs(p) && cwd != "" {
+		p = style.Join(cwd, p)
+	}
+	return cleanPath(style, p)
+}
+
+// InStateDir says the path lies in a folder a remuda serves from, wherever that was put: its lock file stands there. A
+// machine that cannot be asked counts as yes.
+func (mc *Machine) InStateDir(path string) bool {
+	if mc.local {
+		p := path
+		if real, err := filepath.EvalSymlinks(p); err == nil {
+			p = real
+		}
+		for {
+			if _, err := os.Lstat(filepath.Join(p, state.LockFile)); err == nil {
+				return true
+			}
+			up := filepath.Dir(p)
+			if up == p {
+				return false
+			}
+			p = up
+		}
+	}
+	out, err := mc.text(stateDirScript(mc.Paths().Slash(path)), 15*time.Second)
+	return err != nil || strings.TrimSpace(out) != "no"
+}
+
+// HoldsStateDir says a folder a remuda serves from lies under the folder, or that it could not all be looked through.
+func (mc *Machine) HoldsStateDir(folder string) bool {
+	out, err := mc.Run(`find `+script.Quote(mc.Paths().Slash(folder))+` -name .git -prune -o -name `+state.LockFile+` -print 2>/dev/null`, 15*time.Second)
+	return err != nil || strings.TrimSpace(string(out)) != ""
+}
+
+// stateDirScript prints yes when the path or a folder above it holds a serving remuda's lock file, else no.
+func stateDirScript(path string) string {
+	return `p=` + script.Quote(path) + `; while :; do [ -e "$p/` + state.LockFile + `" ] && { echo yes; exit 0; }; ` +
+		`up=${p%/*}; { [ -z "$up" ] || [ "$up" = "$p" ]; } && break; p=$up; done; ` +
+		`[ -e "/` + state.LockFile + `" ] && echo yes || echo no`
 }
 
 // cleanPath is an absolute path in the machine's spelling: from / on a Mac or Linux, from its drive on Windows.
@@ -114,6 +169,9 @@ func (mc *Machine) stat(p string) (FileInfo, error) {
 		}
 		if fi.IsDir() {
 			return FileInfo{Path: p, Kind: "dir"}, nil
+		}
+		if !fi.Mode().IsRegular() { // a pipe would hold the read until someone writes to it
+			return FileInfo{}, os.ErrNotExist
 		}
 		kind, mime := classify(p, func() bool { return sniffLocal(p) })
 		return FileInfo{Path: p, Kind: kind, MIME: mime, Size: fi.Size()}, nil

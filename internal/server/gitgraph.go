@@ -8,6 +8,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/gitgraph"
 	"github.com/dev1antdev/remuda/internal/gitops"
 	"github.com/dev1antdev/remuda/internal/machines"
+	viewerpkg "github.com/dev1antdev/remuda/internal/viewer"
 )
 
 // The Git lens: a checkout's history as a graph, where it stands, one commit's files and one file's patch — a viewer's
@@ -29,9 +30,16 @@ func (s *Server) gitTarget(w http.ResponseWriter, r *http.Request, bodyMachine, 
 	if !ok {
 		return nil, false
 	}
-	if folders, viewer := s.viewerFolders(r.Context(), mc); viewer && !withinFolders(dir, folders, mc.Local()) {
-		httpErr(w, http.StatusForbidden, errViewerOutsideCheckout)
-		return nil, false
+	if reach, viewer := s.viewerReachOn(r.Context(), mc); viewer {
+		if !viewerMay(mc, reach, dir) {
+			httpErr(w, http.StatusForbidden, errViewerOutsideCheckout)
+			return nil, false
+		}
+		top, err := gitgraph.Toplevel(mc, dir)
+		if err != nil || !reach.AllowsCheckout(top) || top != "" && mc.HoldsStateDir(top) {
+			httpErr(w, http.StatusForbidden, errViewerOutsideCheckout)
+			return nil, false
+		}
 	}
 	return mc, true
 }
@@ -95,8 +103,11 @@ func (s *Server) handleGitDiff(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	_, viewer := s.viewerFolders(r.Context(), mc) // a viewer reads the files under the workspace's folder alone
-	patch, err := gitgraph.ReadPatch(mc, dir, q.Get("sha"), q.Get("path"), q.Get("from"), viewer)
+	_, isViewer := s.viewerReachOn(r.Context(), mc) // a viewer reads the files under the workspace's folder alone
+	patch, err := gitgraph.ReadPatch(mc, dir, q.Get("sha"), q.Get("path"), q.Get("from"), isViewer)
+	if err == nil && isViewer && !viewerpkg.PatchAllowed(patch) {
+		err = gitgraph.ErrOutside
+	}
 	if err != nil {
 		gitReadErr(w, err)
 		return

@@ -80,6 +80,61 @@ func history(t *testing.T) string {
 
 var host = shell.Local{Name: "local"}
 
+// TestAPatchLabelsItsPathsTheSameWhateverTheRepositorySays: what reads a patch's headers relies on a/ and b/.
+func TestAPatchLabelsItsPathsTheSameWhateverTheRepositorySays(t *testing.T) {
+	needGit(t)
+	root := t.TempDir()
+	run(t, root, "init", "-q")
+	run(t, root, "config", "diff.srcPrefix", "x")
+	run(t, root, "config", "diff.dstPrefix", "y")
+	run(t, root, "config", "diff.noprefix", "true")
+	write(t, root, "token", "one\n")
+	run(t, root, "add", ".")
+	run(t, root, "commit", "-q", "-m", "first")
+	first := run(t, root, "rev-parse", "HEAD")
+	write(t, root, "token", "two\n")
+	run(t, root, "commit", "-q", "-am", "second")
+	second := run(t, root, "rev-parse", "HEAD")
+	for sha, want := range map[string]string{first: "+++ b/token", second: "--- a/token\n+++ b/token"} {
+		patch, err := ReadPatch(host, root, sha, "token", "", false)
+		if err != nil || !strings.Contains(patch, want) {
+			t.Errorf("%s: %v\n%s", sha, err, patch)
+		}
+	}
+}
+
+// TestToplevelIsTheCheckoutAFolderLiesIn: a read of a folder answers for the whole checkout above it.
+func TestToplevelIsTheCheckoutAFolderLiesIn(t *testing.T) {
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	run(t, root, "init", "-q")
+	write(t, root, "web/app.js", "x")
+	for _, dir := range []string{root, filepath.Join(root, "web")} {
+		if top, err := Toplevel(host, dir); err != nil || top != root {
+			t.Errorf("%s: %q, %v", dir, top, err)
+		}
+	}
+	spaced := filepath.Join(root, "ends in a space ")
+	if err := os.MkdirAll(spaced, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	run(t, spaced, "init", "-q")
+	if top, err := Toplevel(host, spaced); err != nil || top != spaced {
+		t.Errorf("a checkout whose name ends in a space: %q, %v", top, err)
+	}
+	plain, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, dir := range []string{plain, filepath.Join(plain, "gone")} {
+		if top, err := Toplevel(host, dir); err != nil || top != "" {
+			t.Errorf("outside git, %s: %q, %v", dir, top, err)
+		}
+	}
+}
+
 func TestTheLogReadsEveryBranchTagAndRemoteWithTheirLabels(t *testing.T) {
 	dir := history(t)
 	log, err := ReadLog(host, dir, Query{All: true, Remotes: true, Limit: Page})

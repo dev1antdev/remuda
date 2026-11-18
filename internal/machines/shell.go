@@ -47,6 +47,13 @@ func (mc *Machine) Home() string {
 	return mc.home
 }
 
+// StateDir is the folder remuda keeps on this machine, "" for a remote before its first connect.
+func (mc *Machine) StateDir() string {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+	return mc.stateDir
+}
+
 // shell is where scripts run: here, or the ssh master while it is up.
 func (mc *Machine) shell() (shell.Shell, error) {
 	if mc.local {
