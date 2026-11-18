@@ -26,6 +26,9 @@ async function refusal(res: Response): Promise<string> {
   return `open failed (${res.status})`;
 }
 
+// How long one batch of typing may take to go out: past it the person has moved on, and it must not land later.
+const INPUT_WAIT_MS = 5000;
+
 // Once WebSockets prove unusable, every terminal on this page uses HTTP without trying again.
 let preferHTTP = false;
 let wsFailures = 0;
@@ -104,14 +107,26 @@ export function connect(stream: Stream): Transport {
     };
   };
 
-  // connectHTTP opens a server-side stream, long-polls it for output and POSTs input in batches; 410 means it expired.
+  // connectHTTP opens a server-side stream, long-polls it for output and POSTs input in batches, one at a time so they
+  // stay in order; 410 means it expired. Typing goes now or not at all: what cannot go is dropped and said, never kept
+  // for later, when the screen may be something else and a command would run unseen.
   const connectHTTP = (): Transport => {
     let sid: string | null = null;
     let stopped = false;
     let pending = "";
+    let sending = false;
+    let dropNoted = false;
     let flushTimer: ReturnType<typeof setTimeout> | null = null;
     let reopenTimer: ReturnType<typeof setTimeout> | null = null;
 
+    const drop = () => {
+      pending = "";
+      if (flushTimer) clearTimeout(flushTimer);
+      flushTimer = null;
+      if (dropNoted || stopped) return;
+      dropNoted = true;
+      stream.note("what you typed did not go through, and will not be sent again");
+    };
     const closeStream = () => {
       if (!sid) return;
       void fetch(`/api/term/close?sid=${sid}`, { method: "DELETE", keepalive: true });
@@ -122,25 +137,43 @@ export function connect(stream: Stream): Transport {
       const { cols, rows } = stream.size();
       const res = await fetch(`/api/term/open?${stream.query}&cols=${cols}&rows=${rows}`, { method: "POST" });
       if (!res.ok) throw new Error(await refusal(res));
+      if (pending) drop(); // typed for the stream before this one
       sid = ((await res.json()) as { sid: string }).sid;
+      dropNoted = false;
       if (stopped) {
         closeStream(); // closed while opening: nothing may pin the attach
         return;
       }
       stream.onOpen(sentSize);
     };
-    // flush POSTs the pending input; a batch that failed is queued again and retried.
+    // flush POSTs the pending input, once: a batch that failed may have landed, so it is never sent again.
     const flush = async () => {
       flushTimer = null;
-      if (stopped || !sid || !pending) return;
+      if (stopped || !pending) return;
+      if (!sid) {
+        drop();
+        return;
+      }
       const body = pending;
       pending = "";
+      sending = true;
+      const abort = new AbortController();
+      const timeout = setTimeout(() => abort.abort(), INPUT_WAIT_MS);
+      let went = false;
       try {
-        await fetch(`/api/term/input?sid=${sid}`, { method: "POST", body });
+        went = (await fetch(`/api/term/input?sid=${sid}`, { method: "POST", body, signal: abort.signal })).ok;
       } catch {
-        pending = body + pending;
-        if (!stopped && !flushTimer) flushTimer = setTimeout(() => void flush(), 500);
+        // said below
       }
+      clearTimeout(timeout);
+      sending = false;
+      if (stopped) return;
+      if (!went) {
+        drop();
+        return;
+      }
+      dropNoted = false;
+      if (pending) void flush();
     };
     const later = (ms: number) => {
       if (!stopped) reopenTimer = setTimeout(() => void loop(), ms);
@@ -187,7 +220,7 @@ export function connect(stream: Stream): Transport {
     return {
       input: (data) => {
         pending += data;
-        if (!flushTimer) flushTimer = setTimeout(() => void flush(), 20);
+        if (!flushTimer && !sending) flushTimer = setTimeout(() => void flush(), 20);
       },
       resize: (cols, rows) => {
         if (sid) void fetch(`/api/term/resize?sid=${sid}&cols=${cols}&rows=${rows}`, { method: "POST" });

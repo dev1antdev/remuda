@@ -1290,7 +1290,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   With a peer, `/ws/pane` is relayed to the peer's `/ws/pane` (frames
   piped both ways, its close reason passed on) and the HTTP transport's
   stream is opened there (`sid = <machine>~<peer sid>`, every later
-  request forwarded), over `Machine.ForwardAddr(port)` — the same port
+  request forwarded; on the page its typing goes one batch at a time and
+  once: what fails, hangs past 5 s or finds no stream is dropped and said,
+  `engine/transport.ts`, never sent later), over `Machine.ForwardAddr(port)` — the same port
   forward as code-server. herdr prints its refusal *into the PTY* and
   exits, so `attach.go` watches a fresh attach's first chunks
   (`watchStart`: a refusal followed by the exit within `refusalExitWait`
