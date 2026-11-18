@@ -6730,8 +6730,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   by `internal/viewer`, tested: `Reach` is the machine's workspace folders
   by the watcher's snapshot, remuda's own and any at a home or above one
   left out (`rpath.HoldsAHome`), `~/.ssh`, the state dir the machine's probe
-  names and the usual ones closed inside them whatever the case, remuda's
-  `token` and `agent-key*` by name anywhere, and any folder holding a
+  names and the usual ones closed inside them whatever the case, the state
+  dir's credential files (`token`, `agent-key*`, `webhooks.json`, …) by
+  name anywhere, and any folder holding a
   `serve.lock` (`Machine.InStateDir`, a state dir wherever it was put);
   symlinks followed on this machine, a file opened inside its folder and
   answered only if it is the one authorised (`OpenLocal`), the path checked

@@ -11,10 +11,16 @@ import (
 	"github.com/dev1antdev/remuda/internal/rpath"
 )
 
-// closedName says the file is one of remuda's own secrets by its name, wherever a state dir was put: the token, and an
+// secretFiles are the files of a state dir that hold a credential.
+var secretFiles = map[string]bool{
+	"token": true, "webhooks.json": true, "vapid.json": true, "jira.json": true,
+	"push-subscriptions.json": true, "devices.json": true,
+}
+
+// closedName says the file is one of remuda's own secrets by its name, wherever a state dir was put: those above, and an
 // agent key with the files it is written through.
 func closedName(name string) bool {
-	return name == "token" || strings.HasPrefix(name, "agent-key")
+	return secretFiles[name] || strings.HasPrefix(name, "agent-key")
 }
 
 // Reach is what a viewer may read on one machine.
@@ -120,18 +126,35 @@ func (r Reach) inClosed(path string) bool {
 
 // PatchAllowed says a viewer may read a commit's patch: none of the files it shows, on either side of a rename, under
 // any folder asked for, is one of remuda's secrets or lies in a .ssh or a remuda folder, as any commit may have kept one.
+// The names are read from each file's header, where a line holds one path whole; the changed lines are left alone.
 func PatchAllowed(patch string) bool {
+	inHeader := false
 	for _, line := range strings.Split(patch, "\n") {
-		if !strings.HasPrefix(line, "diff --git ") {
-			continue
-		}
-		for _, part := range strings.FieldsFunc(strings.ToLower(line), func(c rune) bool { return c == '/' || c == ' ' || c == '"' }) {
-			if closedName(part) || part == ".ssh" || part == "remuda" || part == "serve.lock" {
-				return false
+		switch {
+		case strings.HasPrefix(line, "diff --git "):
+			inHeader = true
+		case strings.HasPrefix(line, "@@ "):
+			inHeader = false
+		case inHeader:
+			for _, label := range []string{"--- ", "+++ ", "rename from ", "rename to ", "copy from ", "copy to "} {
+				if name, ok := strings.CutPrefix(line, label); ok && closedPatchPath(name) {
+					return false
+				}
 			}
 		}
 	}
 	return true
+}
+
+// closedPatchPath reads a path as a patch header spells it, quoted when git had to, with a tab after a name with spaces.
+func closedPatchPath(path string) bool {
+	path = strings.ToLower(strings.Trim(strings.TrimRight(path, "\t\r"), `"`))
+	for _, part := range strings.Split(path, "/") {
+		if closedName(part) || part == ".ssh" || part == "remuda" || part == "serve.lock" {
+			return true
+		}
+	}
+	return false
 }
 
 // folded is the path as compared where a Mac's disk would find it in any case.

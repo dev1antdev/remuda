@@ -184,16 +184,25 @@ func TestReachFollowsLinksOnThisMachine(t *testing.T) {
 
 // TestAPatchShowingASecretIsRefused: a token committed once stays in history, whatever became of the folder since.
 func TestAPatchShowingASecretIsRefused(t *testing.T) {
+	file := func(old, new string) string {
+		return "diff --git a/x b/x\n--- " + old + "\n+++ " + new + "\n@@ -1 +1 @@\n-a\n+b\n"
+	}
 	for patch, want := range map[string]bool{
-		"diff --git a/web/app.js b/web/app.js\n+token = 1\n": true,
-		"": true,
-		"diff --git a/run/token b/run/token\n+rt_secret\n":                                   false,
-		"diff --git a/web/app.js b/web/app.js\n+x\ndiff --git a/run/TOKEN b/run/TOKEN\n+s\n": false,
-		"diff --git a/old/agent-key b/new/notes\nrename from old/agent-key\n":                false,
-		"diff --git \"a/caf\\303\\251/token\" \"b/caf\\303\\251/token\"\n+s\n":               false,
-		"diff --git a/home/.ssh/id_ed25519 b/home/.ssh/id_ed25519\n+k\n":                     false,
-		"diff --git a/.config/remuda/tasks.db b/.config/remuda/tasks.db\n":                   false,
-		"diff --git a/run/serve.lock b/run/serve.lock\n":                                     false,
+		"":                                   true,
+		file("a/web/app.js", "b/web/app.js"): true,
+		file("a/docs/token handling.md\t", "b/docs/token handling.md\t"):                true,
+		"diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1 +1 @@\n--- a/token\n+++ b/token\n": true,
+		file("/dev/null", "b/run/token"):                                                false,
+		file("a/run/token", "/dev/null"):                                                false,
+		file("a/web/app.js", "b/web/app.js") + file("a/run/TOKEN", "b/run/TOKEN"):       false,
+		file(`"a/caf\303\251/token"`, `"b/caf\303\251/token"`):                          false,
+		file("a/run/webhooks.json", "b/run/webhooks.json"):                              false,
+		file("a/run/vapid.json", "b/run/vapid.json"):                                    false,
+		file("a/run/jira.json", "b/run/jira.json"):                                      false,
+		file("a/home/.ssh/id_ed25519", "b/home/.ssh/id_ed25519"):                        false,
+		file("a/.config/remuda/tasks.db", "b/.config/remuda/tasks.db"):                  false,
+		"diff --git a/old/agent-key b/new/notes\nsimilarity index 90%\nrename from old/agent-key\nrename to new/notes\n--- a/old/agent-key\n+++ b/new/notes\n": false,
+		"diff --git a/o b/n\nsimilarity index 100%\nrename from run/serve.lock\nrename to n\n":                                                                 false,
 	} {
 		if got := PatchAllowed(patch); got != want {
 			t.Errorf("%q: %v, want %v", patch, got, want)
