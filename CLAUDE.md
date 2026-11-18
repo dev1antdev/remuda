@@ -668,7 +668,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   `Gone`, a folder gone with its files likewise, unless the listing was cut).
   Nothing is written. Route `GET /api/fs/tree?machine&dir&path`
   (`internal/server/files.go`, the `trees` field of the server, ready at its
-  zero value): a viewer's within the workspace folders alone (`withinFolders`,
+  zero value): a viewer's within its reach alone (`viewerReach`, `reachOf` in
+  that file: the workspace folders, remuda's own and any at the machine's
+  home or above it left out, `~/.ssh` and the state dir closed inside them;
   `viewerRoutes`), an agent key never. The page: the files rail's **Project**
   tab — `app/FilesRail.tsx` (the rail: its two tabs, `fv-tabs`, pref
   `footprint.tab` per device, Agent `features/chat/AgentFiles.tsx` — the files

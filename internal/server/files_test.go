@@ -12,6 +12,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/auth"
 	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/rpath"
 	"github.com/dev1antdev/remuda/internal/watch"
 )
 
@@ -54,6 +55,70 @@ func TestWithinFoldersFollowsSymlinksOnThisMachine(t *testing.T) {
 	}
 	if withinFolders("/w/api/x", nil, false) {
 		t.Error("no folders should reach nothing")
+	}
+}
+
+// TestAViewerReachesTheWorkspacesAndNoSecret: a workspace at the home or above it opens nothing, and the places keys
+// live in stay closed inside any workspace, whatever the case they are asked in.
+func TestAViewerReachesTheWorkspacesAndNoSecret(t *testing.T) {
+	reach := reachOf([]string{"/", "/home", "/home/me", "/home/me/", "/home/me/app", "/home/me/.config", "/home/me/.ssh"}, "/home/me", "/srv/remuda", rpath.POSIX, false)
+	for path, want := range map[string]bool{
+		"/home/me/app/main.go":            true,
+		"/home/me/app":                    true,
+		"/home/me/.config/gh/hosts":       true,
+		"/home/me/notes.txt":              false,
+		"/etc/passwd":                     false,
+		"/home/other/x":                   false,
+		"/home/me/.ssh/id_ed25519":        false,
+		"/home/me/.SSH/id_ed25519":        false,
+		"/home/me/.config/remuda/token":   false,
+		"/home/me/.config/REMUDA/token":   false,
+		"/home/me/app/../.ssh/id_ed25519": false,
+	} {
+		if got := reach.allows(path); got != want {
+			t.Errorf("%s: %v, want %v", path, got, want)
+		}
+	}
+	mac := reachOf([]string{"/Users/me/Library", "/Users/me"}, "/Users/me", "", rpath.POSIX, false)
+	if mac.allows("/Users/me/Library/Application Support/remuda/token") || !mac.allows("/Users/me/Library/Notes/a") {
+		t.Error("a Mac's state dir")
+	}
+	windows := reachOf([]string{`C:\Users\me`, `C:\Users\me\AppData`, `C:\Users\me\app`}, `C:\Users\me`, "", rpath.Style{Windows: true}, false)
+	for path, want := range map[string]bool{
+		`C:\Users\me\app\main.go`:                  true,
+		`C:\Users\me\AppData\Local\x`:              true,
+		`c:\users\me\appdata\roaming\remuda\token`: false,
+		`C:\Users\me\.ssh\id_ed25519`:              false,
+		`C:\Users\me\notes.txt`:                    false,
+	} {
+		if got := windows.allows(path); got != want {
+			t.Errorf("%s: %v, want %v", path, got, want)
+		}
+	}
+	if reachOf([]string{"/w"}, "", "", rpath.POSIX, false).allows("/w/x") {
+		t.Error("a machine whose home is not known yet reached a file")
+	}
+}
+
+// TestAViewerReachFollowsLinksOnThisMachine: a link out of a workspace into a closed place reaches nothing.
+func TestAViewerReachFollowsLinksOnThisMachine(t *testing.T) {
+	home := t.TempDir()
+	home, _ = filepath.EvalSymlinks(home)
+	app, keys := filepath.Join(home, "app"), filepath.Join(home, ".ssh")
+	for _, dir := range []string{app, keys} {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Symlink(home, filepath.Join(home, "up")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(keys, filepath.Join(app, "keys")); err != nil {
+		t.Fatal(err)
+	}
+	reach := reachOf([]string{app, filepath.Join(home, "up")}, home, "", rpath.POSIX, true)
+	if len(reach.folders) != 1 || reach.allows(filepath.Join(app, "keys", "id")) || !reach.allows(filepath.Join(app, "main.go")) {
+		t.Fatalf("folders %v", reach.folders)
 	}
 }
 

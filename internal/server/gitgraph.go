@@ -29,7 +29,7 @@ func (s *Server) gitTarget(w http.ResponseWriter, r *http.Request, bodyMachine, 
 	if !ok {
 		return nil, false
 	}
-	if folders, viewer := s.viewerFolders(r.Context(), mc); viewer && !withinFolders(dir, folders, mc.Local()) {
+	if reach, viewer := s.viewerFolders(r.Context(), mc); viewer && !reach.allows(dir) {
 		httpErr(w, http.StatusForbidden, errViewerOutsideCheckout)
 		return nil, false
 	}
