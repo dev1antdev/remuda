@@ -124,7 +124,7 @@ func ForceScript(look Look, deleteBranch bool) string {
 	case look.Tip != "":
 		s += deleteBranchAt(look.Branch, script.Quote(look.Tip))
 	default:
-		s += "git branch -D " + script.Quote(look.Branch) + " 2>&1 || exit 5\n"
+		s += "echo 'the branch had no commit when it was looked at'; exit 5\n"
 	}
 	return s
 }

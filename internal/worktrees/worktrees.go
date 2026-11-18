@@ -88,12 +88,25 @@ func LandedAt(landed []Landed, branch, tip string) bool {
 	return branch != "" && tip != "" && slices.Contains(landedCommits(landed, branch), tip)
 }
 
+// branchInUseScript stops with git's own reasons for keeping a branch: checked out in a worktree, or being rebased or
+// bisected in one, where git's list shows that worktree detached.
+func branchInUseScript(branch string) string {
+	ref, name := script.Quote("refs/heads/"+branch), script.Quote(branch)
+	return "inuse() { echo 'the branch is in use in another worktree'; exit 5; }\n" +
+		"list=$(git worktree list --porcelain) || inuse\n" +
+		"printf '%s\\n' \"$list\" | grep -Fqx \"branch \"" + ref + " && inuse\n" +
+		"common=$(git rev-parse --git-common-dir) || inuse\n" +
+		"for d in \"$common\" \"$common\"/worktrees/*; do\n" +
+		"  for f in rebase-merge/head-name rebase-apply/head-name; do [ -f \"$d/$f\" ] && grep -Fqx " + ref + " \"$d/$f\" && inuse; done\n" +
+		"  [ -f \"$d/BISECT_START\" ] && grep -Fqx " + name + " \"$d/BISECT_START\" && inuse\n" +
+		"done\n"
+}
+
 // deleteBranchAt deletes the branch if it still ends on the commit, a shell word: the ref is compared and removed in one
-// step, so a commit that arrives meanwhile keeps it. As with git branch -D, a branch checked out elsewhere stays.
+// step, so a commit that arrives meanwhile keeps it. What git branch -D would refuse stays too.
 func deleteBranchAt(branch, commit string) string {
-	ref := script.Quote("refs/heads/" + branch)
-	return "if git worktree list --porcelain | grep -Fqx \"branch \"" + ref + "; then echo 'the branch is checked out in another worktree'; exit 5; fi\n" +
-		"git update-ref --no-deref -d " + ref + " " + commit + " 2>&1 || exit 5\n" +
+	return branchInUseScript(branch) +
+		"git update-ref --no-deref -d " + script.Quote("refs/heads/"+branch) + " " + commit + " 2>&1 || exit 5\n" +
 		"git config --remove-section " + script.Quote("branch."+branch) + " 2>/dev/null || true\n"
 }
 

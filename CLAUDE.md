@@ -4580,7 +4580,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   in the answer's `worktree.kept`), its branch by git's `-d`, or removed at
   its commit when that is where its merged request ended (`RemoveScript`,
   `deleteBranchAt`: compared and removed in one step, never a branch
-  checked out elsewhere), else kept (`branch_kept`) — and the
+  checked out, rebased or bisected in another worktree), else kept (`branch_kept`) — and the
   page's confirm says so (`closeAsk`, `madeWorktree` in
   `features/roster/tidy.ts`, tested) and its toast what became of it
   (`tidyWords`) — the API's way and the e2e's; the page's own close of

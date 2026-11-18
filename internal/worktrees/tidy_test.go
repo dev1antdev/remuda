@@ -203,8 +203,49 @@ func TestABranchCheckedOutElsewhereStays(t *testing.T) {
 	gitIn(t, trees["work"], "switch", "-q", "--detach")
 	gitIn(t, main, "switch", "-q", "work")
 	err := Remove(host, Info{Path: trees["work"], Repo: main, Branch: "work"}, []Landed{{Branch: "work", Commit: tip}})
-	if err == nil || !strings.Contains(err.Error(), "checked out in another worktree") || !strings.Contains(branches(t, main), "work") {
+	if err == nil || !strings.Contains(err.Error(), "in use in another worktree") || !strings.Contains(branches(t, main), "work") {
 		t.Fatalf("%v", err)
+	}
+}
+
+// TestABranchBeingRebasedElsewhereStays: git shows that worktree as detached, and still counts on the branch.
+func TestABranchBeingRebasedElsewhereStays(t *testing.T) {
+	host, main, trees := madeRepo(t, "work", "other")
+	write(t, filepath.Join(trees["work"], "a.txt"), "work\n")
+	gitIn(t, trees["work"], "commit", "-qam", "work")
+	tip := gitOut(t, trees["work"], "rev-parse", "HEAD")
+	write(t, filepath.Join(main, "a.txt"), "main\n")
+	gitIn(t, main, "commit", "-qam", "main")
+	gitIn(t, trees["work"], "switch", "-q", "--detach")
+	rebase := exec.Command("git", "-c", "user.email=t@t", "-c", "user.name=t", "rebase", "main", "work")
+	rebase.Dir = trees["other"]
+	if out, err := rebase.CombinedOutput(); err == nil {
+		t.Fatalf("the rebase was to stop on its conflict: %s", out)
+	}
+	err := Remove(host, Info{Path: trees["work"], Repo: main, Branch: "work"}, []Landed{{Branch: "work", Commit: tip}})
+	if err == nil || !strings.Contains(err.Error(), "in use in another worktree") || gitOut(t, main, "rev-parse", "refs/heads/work") != tip {
+		t.Fatalf("%v", err)
+	}
+}
+
+func TestABranchBeingBisectedElsewhereStays(t *testing.T) {
+	host, main, trees := madeRepo(t, "work", "other")
+	tip := gitOut(t, trees["work"], "rev-parse", "HEAD")
+	gitIn(t, trees["work"], "switch", "-q", "--detach")
+	gitIn(t, trees["other"], "switch", "-q", "work")
+	gitIn(t, trees["other"], "bisect", "start")
+	gitIn(t, trees["other"], "switch", "-q", "--detach")
+	err := Remove(host, Info{Path: trees["work"], Repo: main, Branch: "work"}, []Landed{{Branch: "work", Commit: tip}})
+	if err == nil || !strings.Contains(err.Error(), "in use in another worktree") {
+		t.Fatalf("%v", err)
+	}
+}
+
+// TestABranchWithNoCommitStaysWhenAskedToGo: nothing was shown of it, so nothing that arrives since may go with it.
+func TestABranchWithNoCommitStaysWhenAskedToGo(t *testing.T) {
+	script := ForceScript(Look{Path: "/w", Repo: "/repo", Branch: "fresh"}, true)
+	if strings.Contains(script, "branch -D") || !strings.Contains(script, "no commit when it was looked at") {
+		t.Fatalf("%s", script)
 	}
 }
 
