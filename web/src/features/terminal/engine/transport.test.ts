@@ -179,20 +179,51 @@ describe("typing over the HTTP transport", () => {
     transport.close();
   });
 
-  it("sends what waited behind a request to the stream it was typed for", async () => {
+  it("sends nothing that waited once its stream ended, and says so", async () => {
     let answer: (r: Response) => void = () => {};
     let end: (r: Response) => void = () => {};
-    const { transport, posted, to, wait } = typing([() => new Promise<Response>((resolve) => (answer = resolve))], { reads: [() => new Promise<Response>((resolve) => (end = resolve))] });
+    const { transport, posted, to, lost, wait } = typing([() => new Promise<Response>((resolve) => (answer = resolve))], { reads: [() => new Promise<Response>((resolve) => (end = resolve))] });
     await wait(3000);
     transport.input("a");
     await wait(10);
-    transport.input("b");
+    transport.input("b\r");
     end(new Response("", { status: 410 }));
     await wait(1000);
     answer(new Response(null, { status: 204 }));
     await wait(100);
-    expect(posted).toEqual(["a", "b"]);
-    expect(to).toEqual(["s1", "s1"]);
+    expect(posted).toEqual(["a"]);
+    expect(to).toEqual(["s1"]);
+    expect(lost()).toBe(1);
+    transport.close();
+  });
+
+  it("sends nothing that waited once the terminal closed", async () => {
+    let answer: (r: Response) => void = () => {};
+    const { transport, posted, lost, wait } = typing([() => new Promise<Response>((resolve) => (answer = resolve))]);
+    await wait(3000);
+    transport.input("a");
+    await wait(10);
+    transport.input("rm -rf build\r");
+    transport.close();
+    answer(new Response(null, { status: 204 }));
+    await wait(100);
+    expect(posted).toEqual(["a"]);
+    expect(lost()).toBe(0);
+  });
+
+  it("says a loss when typing fails behind reports that went", async () => {
+    let answer: (r: Response) => void = () => {};
+    const wheel = "\x1b[<65;10;5M".repeat(400);
+    const { transport, posted, lost, wait } = typing([() => new Promise<Response>((resolve) => (answer = resolve)), () => Promise.resolve(new Response(null, { status: 204 })), refused]);
+    await wait(3000);
+    transport.input("\x1b[I");
+    await wait(10);
+    transport.input(wheel);
+    transport.input("rm\r");
+    answer(new Response(null, { status: 204 }));
+    await wait(100);
+    expect(posted.length).toBe(3);
+    expect(lost()).toBe(1);
     transport.close();
   });
 

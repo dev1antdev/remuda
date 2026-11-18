@@ -35,7 +35,10 @@ const INPUT_CHARS_PER_MS = 50;
 
 // What the terminal says by itself — mouse and focus reports, answers to the app's questions — is nobody's typing: when
 // it cannot go, nothing need be said.
-const REPORTS = /^(?:\x1b\[<[\d;]+[Mm]|\x1b\[M[\s\S]{3}|\x1b\[[IO]|\x1b\[[?>\d;]*[cnRt]|\x1b\[\?[\d;]*\$y|\x1bP[\s\S]*?\x1b\\|\x1b\][\s\S]*?(?:\x07|\x1b\\))+$/;
+const REPORTS = /\x1b\[<[\d;]+[Mm]|\x1b\[M[\s\S]{3}|\x1b\[[IO]|\x1b\[[?>\d;]*[cnRt]|\x1b\[\?[\d;]*\$y|\x1bP[\s\S]*?\x1b\\|\x1b\][\s\S]*?(?:\x07|\x1b\\)/g;
+
+// typedIn is how much of the text the person typed.
+const typedIn = (text: string) => text.replace(REPORTS, "").length;
 
 // Once WebSockets prove unusable, every terminal on this page uses HTTP without trying again.
 let preferHTTP = false;
@@ -132,17 +135,16 @@ export function connect(stream: Stream): Transport {
     };
     // typingTo is the typing of one stream: what it holds never reaches another
     const typingTo = (id: string) => {
-      let typed = false; // something the person typed waits to go
-      let carrying = false; // and the request out holds some of it
+      let owed = 0; // characters typed and not through yet
       const sender = createSender(
         async ({ text }) => {
-          carrying = typed;
-          typed = false;
+          if (sid !== id) throw new Error("the stream is gone"); // what waited for it is not sent once it ended
           const abort = new AbortController();
           const timeout = setTimeout(() => abort.abort(), INPUT_WAIT_MS + text.length / INPUT_CHARS_PER_MS);
           try {
             const res = await fetch(`/api/term/input?sid=${id}`, { method: "POST", body: text, signal: abort.signal });
             if (!res.ok) throw new Error(`input refused (${res.status})`);
+            owed -= typedIn(text);
           } finally {
             clearTimeout(timeout);
           }
@@ -152,13 +154,13 @@ export function connect(stream: Stream): Transport {
             lossSaid = false;
           },
           failed: () => {
-            if (carrying || typed) lost();
-            typed = false;
+            if (owed > 0) lost();
+            owed = 0;
           },
         },
       );
       return (data: string) => {
-        if (!REPORTS.test(data)) typed = true;
+        owed += typedIn(data);
         sender.push({ text: data });
       };
     };
@@ -231,7 +233,7 @@ export function connect(stream: Stream): Transport {
     return {
       input: (data) => {
         if (type) type(data);
-        else if (!REPORTS.test(data)) lost();
+        else if (typedIn(data) > 0) lost();
       },
       resize: (cols, rows) => {
         if (sid) void fetch(`/api/term/resize?sid=${sid}&cols=${cols}&rows=${rows}`, { method: "POST" });
