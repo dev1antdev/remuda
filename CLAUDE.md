@@ -279,7 +279,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   source's, the newest per name) and `Snapshot.FocusedTabID`. Never
   `title` or `display_agent`: remuda reads both back as the pane's own.
 - `internal/sshx/` — one OpenSSH `ControlMaster` per host (BatchMode: fail,
-  never prompt), with socket and port forwarding (`-O forward -L`; a
+  never prompt; at most 5 scripts and 7 sessions of scripts and RPC at once
+  on it, the rest waiting within their own timeout, since sshd's MaxSessions
+  is 10 and terminals stay open: `Conn.enter`), with socket and port forwarding (`-O forward -L`; a
   socket forward the master already holds is cancelled first, since
   asked for the same one again the master keeps its listener and binds
   nothing, so the file unlinked before the ask would be gone for good),

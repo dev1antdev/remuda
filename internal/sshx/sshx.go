@@ -30,6 +30,59 @@ type Conn struct {
 	ctl       string // control socket path
 	master    *exec.Cmd
 	masterErr *lockedBuffer // what the master said: why it could not connect, then nothing more is kept
+
+	placesOnce sync.Once
+	scripts    chan struct{} // the places of scripts, within those of sessions
+	sessions   chan struct{} // the places of scripts and herdr's RPC together
+}
+
+// A connection carries a limited number of sessions: OpenSSH's MaxSessions is 10 by default, and past it the next one
+// is refused. Scripts and RPC wait for a place instead. Some of the places are out of the scripts' reach, so that long
+// scripts cannot stop herdr's RPC, and what the limit leaves is for the terminals, which stay open and are not queued.
+const (
+	maxScripts  = 5
+	maxSessions = 7
+)
+
+// sessionRefused is how ssh reports a machine that will not open one more session on the connection.
+const sessionRefused = "Session open refused"
+
+// said is what ssh wrote, in words a person can act on when the machine refused the session.
+func (c *Conn) said(stderr string) string {
+	if strings.Contains(stderr, sessionRefused) {
+		return fmt.Sprintf("%s refused one more ssh session: too many are open on the connection (sshd's MaxSessions)", c.Host)
+	}
+	return stderr
+}
+
+// enter waits for a place at each gate, within timeout; it answers how to leave and how much of the timeout is left.
+func (c *Conn) enter(scripted bool, timeout time.Duration) (leave func(), left time.Duration, err error) {
+	c.placesOnce.Do(func() {
+		c.scripts, c.sessions = make(chan struct{}, maxScripts), make(chan struct{}, maxSessions)
+	})
+	gates := []chan struct{}{c.sessions}
+	if scripted {
+		gates = []chan struct{}{c.scripts, c.sessions} // always in this order, so no two wait on each other
+	}
+	began := time.Now()
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	taken := 0
+	free := func() {
+		for _, gate := range gates[:taken] {
+			<-gate
+		}
+	}
+	for _, gate := range gates {
+		select {
+		case gate <- struct{}{}:
+			taken++
+		case <-timer.C:
+			free()
+			return nil, 0, fmt.Errorf("ssh %s: no session free within %s: the connection is busy", c.Host, timeout)
+		}
+	}
+	return free, timeout - time.Since(began), nil
 }
 
 // masterErrMax is how much of the master's stderr is kept: its first lines say why it could not connect, and over a
@@ -167,6 +220,11 @@ func CommandConn(cmd *exec.Cmd, timeout time.Duration) (net.Conn, error) {
 // run executes a remote command over the master with a deadline, stdin streamed to it when given; without stdin a
 // long script travels on it (Remote), one with stdin on the command line, its scripts being short.
 func (c *Conn) run(command string, timeout time.Duration, stdin io.Reader) ([]byte, error) {
+	leave, timeout, err := c.enter(true, timeout)
+	if err != nil {
+		return nil, err
+	}
+	defer leave()
 	line := RemoteCommand(command)
 	if stdin == nil {
 		line, stdin = Remote(command)
@@ -185,7 +243,7 @@ func (c *Conn) run(command string, timeout time.Duration, stdin io.Reader) ([]by
 		if err != nil {
 			var ee *exec.ExitError
 			if errors.As(err, &ee) {
-				return out.Bytes(), &shell.ExitError{Code: ee.ExitCode(), Stderr: strings.TrimSpace(errb.String())}
+				return out.Bytes(), &shell.ExitError{Code: ee.ExitCode(), Stderr: c.said(strings.TrimSpace(errb.String()))}
 			}
 			return out.Bytes(), fmt.Errorf("ssh %s: %w", c.Host, err)
 		}
@@ -199,11 +257,17 @@ func (c *Conn) run(command string, timeout time.Duration, stdin io.Reader) ([]by
 
 // Stream runs a remote command, handing sink its output (stdout and stderr) as it comes; the exit status is the error.
 func (c *Conn) Stream(command string, timeout time.Duration, sink func([]byte)) error {
+	leave, timeout, err := c.enter(true, timeout)
+	if err != nil {
+		return err
+	}
+	defer leave()
 	line, stdin := Remote("exec 2>&1; " + command)
 	cmd := c.session(c.Host, line)
 	cmd.Stdin = stdin
 	pr, pw := io.Pipe()
-	cmd.Stdout, cmd.Stderr = pw, pw
+	stderr := &lockedBuffer{max: masterErrMax}
+	cmd.Stdout, cmd.Stderr = pw, io.MultiWriter(pw, stderr)
 	if err := cmd.Start(); err != nil {
 		pw.Close()
 		return err
@@ -234,7 +298,11 @@ func (c *Conn) Stream(command string, timeout time.Duration, sink func([]byte)) 
 		if err != nil {
 			var ee *exec.ExitError
 			if errors.As(err, &ee) {
-				return &shell.ExitError{Code: ee.ExitCode()}
+				exit := &shell.ExitError{Code: ee.ExitCode()}
+				if said := stderr.String(); strings.Contains(said, sessionRefused) {
+					exit.Stderr = c.said(said)
+				}
+				return exit
 			}
 			return fmt.Errorf("ssh %s: %w", c.Host, err)
 		}
@@ -353,11 +421,29 @@ func (c *Conn) ForwardTCPTo(host string, remotePort int) (string, error) {
 // DialExec runs a remote command over the master and exposes its stdin/stdout as a net.Conn:
 // the RPC transport for an sshd that refuses unix-socket forwarding (`nc -U <socket>` bridges to herdr).
 func (c *Conn) DialExec(command string, timeout time.Duration) (net.Conn, error) {
-	return newCmdConn(c.session(c.Host, command), timeout)
+	leave, left, err := c.enter(false, timeout)
+	if err != nil {
+		return nil, err
+	}
+	conn, err := startCmdConn(c.session(c.Host, command), left)
+	if err != nil {
+		leave()
+		return nil, err
+	}
+	conn.leave, conn.said = leave, c.said
+	return conn, nil
 }
 
 // newCmdConn starts the command and wraps its stdin and stdout as a net.Conn that the deadline ends.
 func newCmdConn(cmd *exec.Cmd, timeout time.Duration) (net.Conn, error) {
+	conn, err := startCmdConn(cmd, timeout)
+	if err != nil {
+		return nil, err
+	}
+	return conn, nil
+}
+
+func startCmdConn(cmd *exec.Cmd, timeout time.Duration) (*cmdConn, error) {
 	stderr := &lockedBuffer{}
 	cmd.Stderr = stderr
 	stdin, err := cmd.StdinPipe()
@@ -385,6 +471,8 @@ type cmdConn struct {
 	timer    *time.Timer
 	closed   bool
 	timedOut bool
+	leave    func()              // gives its place back, when it holds one
+	said     func(string) string // ssh's words as the connection puts them
 }
 
 // lockedBuffer holds the command's stderr: exec copies into it on a goroutine of its own while a failing Read or
@@ -423,6 +511,9 @@ func (c *cmdConn) wrap(n int, err error) (int, error) {
 		return n, os.ErrDeadlineExceeded
 	}
 	if msg := strings.TrimSpace(c.stderr.String()); msg != "" {
+		if c.said != nil {
+			msg = c.said(msg)
+		}
 		return n, fmt.Errorf("%w (%s)", err, msg)
 	}
 	return n, err
@@ -448,6 +539,9 @@ func (c *cmdConn) Close() error {
 		c.cmd.Process.Kill()
 	}
 	c.cmd.Wait()
+	if c.leave != nil {
+		c.leave()
+	}
 	return nil
 }
 

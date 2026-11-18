@@ -2,6 +2,7 @@ package herdr
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -13,6 +14,9 @@ func TestRefusal(t *testing.T) {
 	}
 	if _, ok := refusal([]byte("\x1b[?1000h\x1b[2J\x1b[H$ ")); ok {
 		t.Fatal("a screen is not a refusal")
+	}
+	if msg, ok := refusal([]byte("mux_client_request_session: session request failed: Session open refused by peer\r\n")); !ok || !strings.Contains(msg, "MaxSessions") {
+		t.Fatalf("ssh's refusal: %v %q", ok, msg)
 	}
 	err := &RefusedError{Msg: msg}
 	if !Refused(err) || Refused(errors.New("already has an attached client")) {

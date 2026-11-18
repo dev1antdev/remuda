@@ -58,11 +58,14 @@ func Refused(err error) bool {
 var ansiRe = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07]*\x07|\x1b[()][A-Z0-9]`)
 
 // refusal finds herdr's verdict in the attach's first output, returned without escape sequences:
-// a line "herdr: server shut down: terminal attach failed: …", or any "attach failed".
+// a line "herdr: server shut down: terminal attach failed: …", or any "attach failed", or ssh refused the session.
 func refusal(first []byte) (string, bool) {
 	text := ansiRe.ReplaceAllString(string(first), "")
 	for _, line := range strings.Split(text, "\n") {
 		line = strings.TrimSpace(strings.TrimRight(line, "\r"))
+		if strings.Contains(line, "Session open refused") { // ssh's, the machine at its MaxSessions
+			return "the machine refused one more ssh session: too many are open on the connection (sshd's MaxSessions)", true
+		}
 		if strings.Contains(line, "attach failed") {
 			if i := strings.Index(line, "terminal attach failed: "); i >= 0 {
 				line = line[i+len("terminal attach failed: "):]
