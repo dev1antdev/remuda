@@ -56,12 +56,12 @@ func LookScript(path string) string {
 }
 
 // changesScript prints a checksum of the uncommitted work in the folder it runs in and in its submodules: staged,
-// unstaged and the contents of new files, all of a repository git lists as one new folder. A file it cannot read adds the
-// shell's process id, so no two looks agree and nothing goes past --force unseen.
+// unstaged, the contents of new files and where new links point, all of a repository git lists as one new folder. What
+// it cannot read adds the shell's process id, so no two looks agree and nothing goes past --force unseen.
 func changesScript() string {
 	work := func(git string) string {
-		return git + " diff " + script.PatchForm + " --binary; " + git + " diff --cached " + script.PatchForm + " --binary; " +
-			git + ` ls-files -z -o --exclude-standard | xargs -0 sh -c "for p; do find \"./\$p\" -type f -exec cksum {} + || echo \$\$; done" sh`
+		return git + " diff " + script.PatchForm + " --binary || echo $$; " + git + " diff --cached " + script.PatchForm + " --binary || echo $$; " +
+			git + ` ls-files -z -o --exclude-standard | xargs -0 sh -c "for p; do find \"./\$p\" -type f -exec cksum {} + && find \"./\$p\" -type l -exec ls -ld {} + || echo \$\$; done" sh`
 	}
 	return "{ " + work(repos.Git) + "; " + repos.Git + " submodule foreach --quiet --recursive '" + work("git") + "; true'; } 2>/dev/null | cksum"
 }

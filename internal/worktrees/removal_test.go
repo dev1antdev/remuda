@@ -182,13 +182,38 @@ func TestTheStampFollowsWorkInANewRepositoryAndFailsOnWhatItCannotRead(t *testin
 	if stamp() == seen {
 		t.Error("more work in the new repository reads as what was shown")
 	}
+	link := filepath.Join(tree, "active")
+	if err := os.Symlink("one", link); err != nil {
+		t.Fatal(err)
+	}
+	seen = stamp()
+	if err := os.Remove(link); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("other", link); err != nil {
+		t.Fatal(err)
+	}
+	if stamp() == seen {
+		t.Error("a new link pointed elsewhere reads as what was shown")
+	}
 	if os.Geteuid() == 0 {
 		return // root reads everything
+	}
+	tracked := filepath.Join(tree, "a.txt")
+	write(t, tracked, "changed\n")
+	if err := os.Chmod(tracked, 0); err != nil {
+		t.Fatal(err)
+	}
+	if stamp() == stamp() {
+		t.Error("a changed file that cannot be read reads as unchanged")
+	}
+	if err := os.Chmod(tracked, 0o644); err != nil {
+		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(tree, "sealed.txt"), []byte("x\n"), 0); err != nil {
 		t.Fatal(err)
 	}
 	if stamp() == stamp() {
-		t.Error("a file that cannot be read reads as unchanged")
+		t.Error("a new file that cannot be read reads as unchanged")
 	}
 }
