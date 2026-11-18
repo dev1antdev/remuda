@@ -37,8 +37,9 @@ func doorURL(port int) string { return fmt.Sprintf("http://127.0.0.1:%d", port) 
 // DoorScript places the door at url in the machine's state dir, private to the user: the dir remuda keeps there
 // (`state.Dir()` computed in sh), the key read on stdin, never on a command line, each file replaced whole since a
 // running `remuda mcp` reads them for every call. Cockpits sharing the machine go one at a time under the locks of this
-// half minute and the next, any two runs close in time sharing one, and those of a script that died lapse by themselves;
-// one that was held up past them places nothing (sh has no lock that dies with its process on both macOS and Linux).
+// half minute and the next: none is taken while one of now or later stands, so a clock set back waits for it, those of a
+// script that died lapse by themselves, and one whose clock left them meanwhile places nothing (sh has no lock that dies
+// with its process on both macOS and Linux).
 // A door that answers stays — asked straight, past any proxy, and when nobody
 // can ask too: one on a port of its own (agent-door-moved names it, so a cockpit on the machine itself is none) against
 // any newcomer, any other against a door that would move. The port of a connection the network lost says nothing.
@@ -48,7 +49,11 @@ url=` + script.Quote(url) + `
 usual=` + script.Quote(doorURL(DoorPort)) + `
 mkdir -p "$d" && chmod 700 "$d" || exit 1
 now=$(($(date +%s) / 30))
-for old in "$d"/agent-door.lock.*; do [ "${old##*.}" -ge "$now" ] 2>/dev/null || rmdir "$old" 2>/dev/null; done
+for held in "$d"/agent-door.lock.*; do
+  [ -d "$held" ] || continue
+  if [ "${held##*.}" -ge "$now" ] 2>/dev/null; then echo ` + doorBusy + `; exit 0; fi
+  rmdir "$held" 2>/dev/null
+done
 mkdir "$d/agent-door.lock.$now" 2>/dev/null || { echo ` + doorBusy + `; exit 0; }
 mkdir "$d/agent-door.lock.$((now + 1))" 2>/dev/null || { rmdir "$d/agent-door.lock.$now"; echo ` + doorBusy + `; exit 0; }
 trap 'rmdir "$d/agent-door.lock.$now" "$d/agent-door.lock.$((now + 1))" 2>/dev/null' EXIT
@@ -58,7 +63,8 @@ if [ -n "$was" ] && [ "$was" != "$url" ] && { [ "$url" != "$usual" ] || [ "$was"
   command -v curl >/dev/null 2>&1 || { echo ` + doorTaken + `; exit 0; }
   case "$(curl -q -s -m 2 --noproxy '*' "$was/api/health" 2>/dev/null)" in *'"ok":true'*) echo ` + doorTaken + `; exit 0 ;; esac
 fi
-[ $(($(date +%s) / 30)) -le $((now + 1)) ] || { echo ` + doorBusy + `; exit 0; }
+still=$(($(date +%s) / 30))
+[ "$still" -ge "$now" ] && [ "$still" -le $((now + 1)) ] || { echo ` + doorBusy + `; exit 0; }
 if [ "$url" = "$usual" ]; then
   rm -f "$d/agent-door-moved"
 else

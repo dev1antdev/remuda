@@ -331,35 +331,10 @@ func TestDoorScriptKeepsALiveDoor(t *testing.T) {
 	}
 }
 
-// TestDoorScriptGoesOneAtATime: a lock in use says busy, one a dead script left has lapsed, and of cockpits placing
-// their live doors together exactly one wins, the others finding its door.
+// TestDoorScriptGoesOneAtATime: of cockpits placing their live doors together exactly one wins, the others finding its
+// door.
 func TestDoorScriptGoesOneAtATime(t *testing.T) {
 	home := newDoorHome(t)
-	lock := func(halfMinute int64) string {
-		return filepath.Join(home.dir, "agent-door.lock."+strconv.FormatInt(halfMinute, 10))
-	}
-	now := time.Now().Unix() / 30
-	for _, held := range []int64{now, now + 1} {
-		if err := os.Mkdir(lock(held), 0o700); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if got := home.place(doorURL(DoorPort)); got != doorBusy {
-		t.Fatalf("a lock in use: %s", got)
-	}
-	for _, held := range []int64{now, now + 1} {
-		os.Remove(lock(held))
-	}
-	if err := os.Mkdir(lock(now-2), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if got := home.place(doorURL(DoorPort)); got != doorPlaced {
-		t.Fatalf("a lock left behind: %s", got)
-	}
-	if left, _ := filepath.Glob(filepath.Join(home.dir, "agent-door.lock.*")); len(left) != 0 {
-		t.Fatalf("locks stayed: %v", left)
-	}
-	home.clear()
 	urls := []string{liveDoor(t), liveDoor(t), liveDoor(t), liveDoor(t)}
 	answers := make([]string, len(urls))
 	var cockpits sync.WaitGroup
@@ -395,29 +370,67 @@ func TestDoorScriptGoesOneAtATime(t *testing.T) {
 	}
 }
 
-// TestDoorScriptHeldUpPastItsLocksPlacesNothing: its look took so long that another cockpit may hold the door by now.
-func TestDoorScriptHeldUpPastItsLocksPlacesNothing(t *testing.T) {
-	home := newDoorHome(t)
-	home.write("agent-url", "http://127.0.0.1:9")
-	home.write("agent-key", "rk_old")
-	tools, clock := t.TempDir(), filepath.Join(t.TempDir(), "clock")
-	if err := os.WriteFile(clock, []byte("3000\n"), 0o600); err != nil {
-		t.Fatal(err)
+// doorClock puts a `date` first on PATH that reads the clock it answers with, and a `curl` that sets it to afterLook:
+// what the clock did while the script looked at the door.
+func doorClock(t *testing.T, seconds, afterLook int) (set func(int)) {
+	t.Helper()
+	tools := t.TempDir()
+	clock := filepath.Join(tools, "clock")
+	set = func(to int) {
+		t.Helper()
+		if err := os.WriteFile(clock, []byte(strconv.Itoa(to)+"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
 	}
+	set(seconds)
 	for name, stub := range map[string]string{
 		"date": "#!/bin/sh\ncat " + script.Quote(clock) + "\n",
-		"curl": "#!/bin/sh\necho 3120 > " + script.Quote(clock) + "\n",
+		"curl": "#!/bin/sh\necho " + strconv.Itoa(afterLook) + " > " + script.Quote(clock) + "\n",
 	} {
 		if err := os.WriteFile(filepath.Join(tools, name), []byte(stub), 0o755); err != nil {
 			t.Fatal(err)
 		}
 	}
 	t.Setenv("PATH", tools+string(os.PathListSeparator)+os.Getenv("PATH"))
-	if got := home.place(doorURL(50236)); got != doorBusy {
-		t.Fatalf("answered %s", got)
+	return set
+}
+
+// TestDoorScriptWaitsForTheLocksStanding: at second 3000 the half minute is 100. A lock of now, of the next one or of
+// later — a clock set back — says busy; one of the past was left by a dead script and lapsed.
+func TestDoorScriptWaitsForTheLocksStanding(t *testing.T) {
+	home := newDoorHome(t)
+	doorClock(t, 3000, 3000)
+	for halfMinute, want := range map[int]string{100: doorBusy, 101: doorBusy, 140: doorBusy, 99: doorPlaced, 40: doorPlaced} {
+		lock := filepath.Join(home.dir, "agent-door.lock."+strconv.Itoa(halfMinute))
+		if err := os.Mkdir(lock, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if got := home.place(doorURL(DoorPort)); got != want {
+			t.Errorf("a lock of %d: answered %s, want %s", halfMinute, got, want)
+		}
+		if want == doorBusy {
+			os.Remove(lock)
+		}
+		if left, _ := filepath.Glob(filepath.Join(home.dir, "agent-door.lock.*")); len(left) != 0 {
+			t.Errorf("a lock of %d: left %v", halfMinute, left)
+		}
 	}
-	if url, key := home.read("agent-url"), home.read("agent-key"); url != "http://127.0.0.1:9" || key != "rk_old" {
-		t.Fatalf("url %q key %q", url, key)
+}
+
+// TestDoorScriptPlacesNothingOnceItsLocksAreLeftBehind: the clock went past them or back before them during the look,
+// so another cockpit may hold the door by now.
+func TestDoorScriptPlacesNothingOnceItsLocksAreLeftBehind(t *testing.T) {
+	for afterLook, want := range map[int]string{3120: doorBusy, 2940: doorBusy, 3030: doorPlaced} {
+		home := newDoorHome(t)
+		doorClock(t, 3000, afterLook)
+		home.write("agent-url", "http://127.0.0.1:9")
+		home.write("agent-key", "rk_old")
+		if got := home.place(doorURL(50236)); got != want {
+			t.Errorf("the clock at %d after the look: answered %s, want %s", afterLook, got, want)
+		}
+		if want == doorBusy && (home.read("agent-url") != "http://127.0.0.1:9" || home.read("agent-key") != "rk_old") {
+			t.Errorf("the clock at %d after the look: the files changed", afterLook)
+		}
 	}
 }
 
