@@ -123,7 +123,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   without its `*.txt` logs; never `ssh/` (the masters' sockets),
   `backups/` (the copies this machine keeps), `timelapse/` (the agents'
   recordings, `internal/timelapse`: up to 200 MB of screens), `undo/` (the
-  turns kept to be undone, `internal/undo`: up to 200 MB of patches), `serve.lock`, a `-wal` /
+  turns kept to be undone, `internal/undo`: up to 200 MB of patches), the door's `agent-door.lock.*`, `serve.lock`, a `-wal` /
   `-shm` / `-journal`, a `.log`, a file the atomic writer is still
   writing (`name.123456789`, a number of any length; the tailnet node's
   `name.tmp123456789`; `.partial`, `.new`); a `remuda-backup.json`

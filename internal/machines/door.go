@@ -55,8 +55,9 @@ done
 mine() { [ -e "$lock.$now/$me" ] && [ -e "$lock.$((now + 1))/$me" ]; }
 drop() { for slot in "$now" "$((now + 1))"; do [ ! -e "$lock.$slot/$me" ] || rm -rf "$lock.$slot"; done; }
 trap drop EXIT
-mkdir "$lock.$now" 2>/dev/null && : > "$lock.$now/$me" || { echo ` + doorBusy + `; exit 0; }
-mkdir "$lock.$((now + 1))" 2>/dev/null && : > "$lock.$((now + 1))/$me" || { echo ` + doorBusy + `; exit 0; }
+for slot in "$now" "$((now + 1))"; do
+  mkdir "$lock.$slot" 2>/dev/null && mkdir "$lock.$slot/$me" 2>/dev/null || { echo ` + doorBusy + `; exit 0; }
+done
 was=$(head -n 1 "$d/agent-url" 2>/dev/null)
 moved=$(head -n 1 "$d/agent-door-moved" 2>/dev/null)
 if [ -n "$was" ] && [ "$was" != "$url" ] && { [ "$url" != "$usual" ] || [ "$was" = "$moved" ]; }; then

@@ -65,6 +65,9 @@ func names(entries []Entry) []string {
 
 func TestASnapshotHoldsTheStateAndLeavesTheRestOut(t *testing.T) {
 	dir, _ := stateDir(t)
+	if err := os.MkdirAll(filepath.Join(dir, "agent-door.lock.100", "owner.1.100"), 0o700); err != nil { // here for a moment
+		t.Fatal(err)
+	}
 	at := time.Date(2026, 11, 5, 2, 30, 0, 0, time.UTC)
 	archive, manifest, err := Snapshot(dir, "rp-orange", "v0.12.5", at)
 	if err != nil {
