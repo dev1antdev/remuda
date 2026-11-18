@@ -30,7 +30,7 @@ func (s *Server) gitTarget(w http.ResponseWriter, r *http.Request, bodyMachine, 
 		return nil, false
 	}
 	if reach, viewer := s.viewerReachOn(r.Context(), mc); viewer {
-		if !reach.Allows(dir) {
+		if !viewerMay(mc, reach, dir) {
 			httpErr(w, http.StatusForbidden, errViewerOutsideCheckout)
 			return nil, false
 		}

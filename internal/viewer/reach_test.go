@@ -76,12 +76,23 @@ func TestACheckoutHoldingAHomeOrAClosedPlaceShowsNoHistory(t *testing.T) {
 	}
 }
 
+// TestTheUsualStateDirsStayClosedBesideTheOneReported: the agents' door stands there whatever the service uses.
+func TestTheUsualStateDirsStayClosedBesideTheOneReported(t *testing.T) {
+	check(t, Of([]string{"/home/me/.config", "/home/me/Library", "/home/me/AppData"}, "/home/me", "/srv/remuda", rpath.POSIX, false), map[string]bool{
+		"/home/me/.config/gh/hosts":                            true,
+		"/home/me/.config/remuda/agent-url":                    false,
+		"/home/me/Library/Application Support/remuda/tasks.db": false,
+		"/home/me/AppData/Roaming/remuda/tasks.db":             false,
+	})
+}
+
 func TestRemudasSecretsAreClosedByNameAnywhere(t *testing.T) {
 	check(t, Of([]string{"/home/me/app"}, "/home/me", "/home/me/.config/remuda", rpath.POSIX, false), map[string]bool{
 		"/home/me/app/run/token":           false,
 		"/home/me/app/run/TOKEN":           false,
 		"/home/me/app/run/agent-key":       false,
 		"/home/me/app/run/agent-keys.json": false,
+		"/home/me/app/run/agent-key.new":   false,
 		"/home/me/app/run/tokens.go":       true,
 	})
 }

@@ -6728,11 +6728,14 @@ components and icons as rules for whoever changes it: @docs/design.md
   scrollback, a recap, the standup, the feed, a file, its stat and a folder of the project tree (kept
   by `internal/viewer`, tested: `Reach` is the machine's workspace folders
   by the watcher's snapshot, remuda's own and any at a home or above one
-  left out (`rpath.HoldsAHome`), `~/.ssh` and the state dir the machine's
-  probe names closed inside them whatever the case, remuda's `token` and
-  `agent-key` by name anywhere, symlinks followed on this machine and a
-  file opened inside its folder (`OpenLocal`, `os.OpenInRoot`), the path
-  checked as `Machine.EffectivePath` spells it before anything touches it:
+  left out (`rpath.HoldsAHome`), `~/.ssh`, the state dir the machine's probe
+  names and the usual ones closed inside them whatever the case, remuda's
+  `token` and `agent-key*` by name anywhere, and any folder holding a
+  `serve.lock` (`Machine.InStateDir`, a state dir wherever it was put);
+  symlinks followed on this machine, a file opened inside its folder and
+  answered only if it is the one authorised (`OpenLocal`), the path checked
+  as `Machine.EffectivePath` spells it before anything touches it, a
+  search's finds filtered before they are looked at (`ResolvePathAllowed`):
   the token file or an ssh key read through the file viewer
   would open what the link must not; 403 "the file is outside the
   workspaces", and a stat's `dir` and candidates are kept the same way),

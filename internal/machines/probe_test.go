@@ -1,7 +1,10 @@
 package machines
 
 import (
+	"github.com/dev1antdev/remuda/internal/state"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -94,5 +97,66 @@ func TestTheEffectivePathIsTheOneLookedAt(t *testing.T) {
 		if got := mc.EffectivePath("/w/app", raw); got != want {
 			t.Errorf("%q: %q, want %q", raw, got, want)
 		}
+	}
+}
+
+// TestAStateDirIsKnownByItsLockWhereverItIs: here and through the script a remote machine runs.
+func TestAStateDirIsKnownByItsLockWhereverItIs(t *testing.T) {
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	stateDir := filepath.Join(root, "app", "run state")
+	if err := os.MkdirAll(filepath.Join(stateDir, "tailscale"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(stateDir, state.LockFile), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for path, want := range map[string]bool{
+		stateDir:                            true,
+		filepath.Join(stateDir, "tasks.db"): true,
+		filepath.Join(stateDir, "tailscale", "node"): true,
+		filepath.Join(root, "app", "main.go"):        false,
+		root:                                         false,
+	} {
+		if got := (&Machine{local: true}).InStateDir(path); got != want {
+			t.Errorf("here, %s: %v, want %v", path, got, want)
+		}
+		out, err := exec.Command("sh", "-c", stateDirScript(path)).Output()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := strings.TrimSpace(string(out)) == "yes"; got != want {
+			t.Errorf("by the script, %s: %v, want %v", path, got, want)
+		}
+	}
+}
+
+// TestASearchLooksOnlyAtWhatMayBeRead: a file the caller may not read is neither looked at nor named.
+func TestASearchLooksOnlyAtWhatMayBeRead(t *testing.T) {
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range []string{"closed/prefs.json", "open/notes.txt", "closed/two.txt", "open/two.txt"} {
+		full := filepath.Join(root, file)
+		if err := os.MkdirAll(filepath.Dir(full), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mc := &Machine{local: true}
+	allow := func(p string) bool { return !strings.Contains(p, "/closed/") }
+	if info, err := mc.ResolvePathAllowed(root, "prefs.json", allow); err != nil || info.Kind != "missing" || len(info.Candidates) != 0 {
+		t.Errorf("a closed file: %+v, %v", info, err)
+	}
+	if info, err := mc.ResolvePathAllowed(root, "two.txt", allow); err != nil || info.Path != filepath.Join(root, "open", "two.txt") {
+		t.Errorf("one of two left: %+v, %v", info, err)
+	}
+	if info, err := mc.ResolvePath(root, "two.txt"); err != nil || len(info.Candidates) != 2 {
+		t.Errorf("the owner's search: %+v, %v", info, err)
 	}
 }

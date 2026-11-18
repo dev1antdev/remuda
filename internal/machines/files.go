@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -17,6 +18,7 @@ import (
 
 	"github.com/dev1antdev/remuda/internal/rpath"
 	"github.com/dev1antdev/remuda/internal/script"
+	"github.com/dev1antdev/remuda/internal/state"
 )
 
 const (
@@ -64,6 +66,12 @@ func classify(p string, sniffBinary func() bool) (kind, mime string) {
 // the machine's way (C:\Users\me\app\x.go on Windows). A relative miss is searched under the pane folder by suffix:
 // agents say "demo.mp4" for "docs/demo.mp4".
 func (mc *Machine) ResolvePath(cwd, raw string) (FileInfo, error) {
+	return mc.ResolvePathAllowed(cwd, raw, nil)
+}
+
+// ResolvePathAllowed is ResolvePath for someone who may read only some files: allow, when given, is asked before a file
+// the search found is looked at or named.
+func (mc *Machine) ResolvePathAllowed(cwd, raw string, allow func(string) bool) (FileInfo, error) {
 	style := mc.Paths()
 	p := mc.EffectivePath(cwd, raw)
 	if p == "" {
@@ -75,6 +83,9 @@ func (mc *Machine) ResolvePath(cwd, raw string) (FileInfo, error) {
 	}
 	if !style.IsAbs(raw) && !strings.HasPrefix(raw, "~") && cwd != "" {
 		found := mc.findBySuffix(cwd, strings.TrimPrefix(strings.TrimPrefix(style.Slash(raw), "./"), "/"))
+		if allow != nil {
+			found = slices.DeleteFunc(found, func(p string) bool { return !allow(p) })
+		}
 		if len(found) == 1 {
 			if info, err := mc.stat(found[0]); err == nil {
 				return info, nil
@@ -102,6 +113,36 @@ func (mc *Machine) EffectivePath(cwd, raw string) string {
 		p = style.Join(cwd, p)
 	}
 	return cleanPath(style, p)
+}
+
+// InStateDir says the path lies in a folder a remuda serves from, wherever that was put: its lock file stands there. A
+// machine that cannot be asked counts as yes.
+func (mc *Machine) InStateDir(path string) bool {
+	if mc.local {
+		p := path
+		if real, err := filepath.EvalSymlinks(p); err == nil {
+			p = real
+		}
+		for {
+			if _, err := os.Lstat(filepath.Join(p, state.LockFile)); err == nil {
+				return true
+			}
+			up := filepath.Dir(p)
+			if up == p {
+				return false
+			}
+			p = up
+		}
+	}
+	out, err := mc.text(stateDirScript(mc.Paths().Slash(path)), 15*time.Second)
+	return err != nil || strings.TrimSpace(out) != "no"
+}
+
+// stateDirScript prints yes when the path or a folder above it holds a serving remuda's lock file, else no.
+func stateDirScript(path string) string {
+	return `p=` + script.Quote(path) + `; while :; do [ -e "$p/` + state.LockFile + `" ] && { echo yes; exit 0; }; ` +
+		`up=${p%/*}; { [ -z "$up" ] || [ "$up" = "$p" ]; } && break; p=$up; done; ` +
+		`[ -e "/` + state.LockFile + `" ] && echo yes || echo no`
 }
 
 // cleanPath is an absolute path in the machine's spelling: from / on a Mac or Linux, from its drive on Windows.

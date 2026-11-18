@@ -60,7 +60,7 @@ func commitPrelude(dir, hash string) string {
 // Toplevel is the top of the checkout the folder lies in, "" outside git: every read here answers for all of it.
 func Toplevel(host shell.Host, dir string) (string, error) {
 	out, err := shell.Text(host, script.PATH+"; "+Read+`cd `+script.Quote(dir)+` 2>/dev/null || exit 0; g rev-parse --show-toplevel 2>/dev/null || true`, readFor)
-	return strings.TrimSpace(out), err
+	return strings.TrimRight(out, "\r\n"), err
 }
 
 // ReadCommit reads a commit's message, committer and files.

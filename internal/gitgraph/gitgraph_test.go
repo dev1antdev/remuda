@@ -93,6 +93,14 @@ func TestToplevelIsTheCheckoutAFolderLiesIn(t *testing.T) {
 			t.Errorf("%s: %q, %v", dir, top, err)
 		}
 	}
+	spaced := filepath.Join(root, "ends in a space ")
+	if err := os.MkdirAll(spaced, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	run(t, spaced, "init", "-q")
+	if top, err := Toplevel(host, spaced); err != nil || top != spaced {
+		t.Errorf("a checkout whose name ends in a space: %q, %v", top, err)
+	}
 	plain, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)

@@ -11,8 +11,11 @@ import (
 	"github.com/dev1antdev/remuda/internal/rpath"
 )
 
-// closedNames are remuda's own secrets by name, for a state dir kept where the machine's probe cannot see it.
-var closedNames = map[string]bool{"token": true, "agent-key": true, "agent-keys.json": true}
+// closedName says the file is one of remuda's own secrets by its name, wherever a state dir was put: the token, and an
+// agent key with the files it is written through.
+func closedName(name string) bool {
+	return name == "token" || strings.HasPrefix(name, "agent-key")
+}
 
 // Reach is what a viewer may read on one machine.
 type Reach struct {
@@ -23,7 +26,8 @@ type Reach struct {
 }
 
 // Of is the reach of the workspace folders given: those that hold no home, since one at a home or above it would open
-// everything there, less the machine's ~/.ssh and remuda's state dir. A machine not read yet reaches nothing.
+// everything there, less the machine's ~/.ssh and remuda's state dir, the one it reports and the usual ones, where the
+// agents' door may stand whatever the service uses. A machine not read yet reaches nothing.
 func Of(dirs []string, home, stateDir string, style rpath.Style, local bool) Reach {
 	reach := Reach{style: style, local: local}
 	if home == "" || stateDir == "" {
@@ -35,7 +39,13 @@ func Of(dirs []string, home, stateDir string, style rpath.Style, local bool) Rea
 		}
 	}
 	reach.home = home
-	reach.closed = []string{style.Join(home, ".ssh"), stateDir}
+	reach.closed = []string{
+		style.Join(home, ".ssh"),
+		stateDir,
+		style.Join(home, ".config", "remuda"),
+		style.Join(home, "Library", "Application Support", "remuda"),
+		style.Join(home, "AppData", "Roaming", "remuda"),
+	}
 	return reach
 }
 
@@ -66,32 +76,34 @@ func (r Reach) AllowsCheckout(top string) bool {
 	return true
 }
 
-// OpenLocal opens a file of this machine the viewer may read, inside its workspace folder by the system's own check: a
-// link swapped in after Allows looked leads nowhere out of that folder.
+// OpenLocal opens a file of this machine the viewer may read, inside its workspace folder by the system's own check, and
+// answers it only if it is the very file that path leads to now: one swapped for a link after Allows looked is refused.
 func (r Reach) OpenLocal(path string) (*os.File, error) {
 	real := realPath(path, true)
 	for _, folder := range r.folders {
 		root := realPath(folder, true)
-		if rel, ok := r.style.Rel(root, real); ok && r.Allows(path) {
-			return os.OpenInRoot(root, filepath.FromSlash(rel))
+		rel, ok := r.style.Rel(root, real)
+		if !ok || !r.Allows(path) {
+			continue
 		}
+		f, err := os.OpenInRoot(root, filepath.FromSlash(rel))
+		if err != nil {
+			return nil, err
+		}
+		opened, err := f.Stat()
+		if err == nil && opened.Mode().IsRegular() && realPath(path, true) == real {
+			if now, err := os.Lstat(real); err == nil && os.SameFile(opened, now) {
+				return f, nil
+			}
+		}
+		f.Close()
+		return nil, fs.ErrPermission
 	}
 	return nil, fs.ErrPermission
 }
 
-// Allowed keeps the paths the viewer may read.
-func (r Reach) Allowed(paths []string) []string {
-	var kept []string
-	for _, path := range paths {
-		if r.Allows(path) {
-			kept = append(kept, path)
-		}
-	}
-	return kept
-}
-
 func (r Reach) inClosed(path string) bool {
-	if closedNames[strings.ToLower(r.style.Base(realPath(path, r.local)))] {
+	if closedName(strings.ToLower(r.style.Base(realPath(path, r.local)))) {
 		return true
 	}
 	for _, closed := range r.closed {

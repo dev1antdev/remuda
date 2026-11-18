@@ -23,6 +23,11 @@ import (
 // errViewerOutside refuses a viewer a file beyond what its link reaches.
 var errViewerOutside = errors.New("this link is for viewing only: the file is outside the workspaces")
 
+// viewerMay says a viewer may read the path: within its reach, and in no folder a remuda serves from.
+func viewerMay(mc *machines.Machine, reach viewer.Reach, path string) bool {
+	return reach.Allows(path) && !mc.InStateDir(path)
+}
+
 // viewerReachOn is what a viewer may read on a machine, by the watcher's last snapshot, and whether the request is a
 // viewer's at all.
 func (s *Server) viewerReachOn(ctx context.Context, mc *machines.Machine) (viewer.Reach, bool) {
@@ -63,26 +68,27 @@ func (s *Server) handleFsStat(w http.ResponseWriter, r *http.Request) {
 	if cwd == "" {
 		cwd = r.URL.Query().Get("dir")
 	}
-	reach, viewer := s.viewerReachOn(r.Context(), mc)
-	if viewer && cwd != "" && !reach.Allows(cwd) {
-		httpErr(w, http.StatusForbidden, errViewerOutside)
-		return
+	reach, isViewer := s.viewerReachOn(r.Context(), mc)
+	var allow func(string) bool
+	if isViewer {
+		allow = func(path string) bool { return viewerMay(mc, reach, path) }
+		if cwd != "" && !allow(cwd) {
+			httpErr(w, http.StatusForbidden, errViewerOutside)
+			return
+		}
+		if p := mc.EffectivePath(cwd, r.URL.Query().Get("path")); p != "" && !allow(p) {
+			httpErr(w, http.StatusForbidden, errViewerOutside)
+			return
+		}
 	}
-	if p := mc.EffectivePath(cwd, r.URL.Query().Get("path")); viewer && p != "" && !reach.Allows(p) {
-		httpErr(w, http.StatusForbidden, errViewerOutside)
-		return
-	}
-	info, err := mc.ResolvePath(cwd, r.URL.Query().Get("path"))
+	info, err := mc.ResolvePathAllowed(cwd, r.URL.Query().Get("path"), allow)
 	if err != nil {
 		httpErr(w, 400, err)
 		return
 	}
-	if viewer {
-		if !reach.Allows(info.Path) {
-			httpErr(w, http.StatusForbidden, errViewerOutside)
-			return
-		}
-		info.Candidates = reach.Allowed(info.Candidates)
+	if isViewer && !allow(info.Path) {
+		httpErr(w, http.StatusForbidden, errViewerOutside)
+		return
 	}
 	writeJSON(w, info)
 }
@@ -118,7 +124,7 @@ func (s *Server) handleFsTree(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 400, err)
 		return
 	}
-	if reach, viewer := s.viewerReachOn(r.Context(), mc); viewer && !reach.Allows(folder) {
+	if reach, isViewer := s.viewerReachOn(r.Context(), mc); isViewer && !viewerMay(mc, reach, folder) {
 		httpErr(w, http.StatusForbidden, errViewerOutside)
 		return
 	}
@@ -143,8 +149,8 @@ func (s *Server) handleFsFile(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 400, fmt.Errorf("absolute path required (resolve it with /api/fs/stat first)"))
 		return
 	}
-	reach, viewer := s.viewerReachOn(r.Context(), mc)
-	if viewer && !reach.Allows(mc.EffectivePath("", path)) {
+	reach, isViewer := s.viewerReachOn(r.Context(), mc)
+	if isViewer && !viewerMay(mc, reach, mc.EffectivePath("", path)) {
 		httpErr(w, http.StatusForbidden, errViewerOutside)
 		return
 	}
@@ -166,7 +172,7 @@ func (s *Server) handleFsFile(w http.ResponseWriter, r *http.Request) {
 	max := info.MaxBytes()
 	if mc.Local() {
 		open := mc.Open
-		if viewer {
+		if isViewer {
 			open = reach.OpenLocal
 		}
 		f, err := open(info.Path)
