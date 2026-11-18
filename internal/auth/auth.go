@@ -291,6 +291,19 @@ func (g *Guard) SignOut(w http.ResponseWriter, r *http.Request) {
 	g.clearCookie(w, r)
 }
 
+// DropSessionHeaders takes off what a proxied answer must not do to the person's session here: a cookie of remuda's name,
+// and Clear-Site-Data, which would sign them out.
+func DropSessionHeaders(h http.Header) {
+	h.Del("Clear-Site-Data")
+	keep := h.Values("Set-Cookie")
+	h.Del("Set-Cookie")
+	for _, line := range keep {
+		if name, _, _ := strings.Cut(line, "="); strings.TrimSpace(name) != CookieName {
+			h.Add("Set-Cookie", line)
+		}
+	}
+}
+
 // staleCookie is a device no longer signed in: its cookie is dropped and the fact logged once, with no wait (a page of the person's own must not be slowed).
 func (g *Guard) staleCookie(w http.ResponseWriter, r *http.Request) {
 	g.clearCookie(w, r)

@@ -83,6 +83,7 @@ auth: none
 cert: false
 disable-telemetry: true
 disable-update-check: true
+disable-proxy: true
 EOF
 }
 

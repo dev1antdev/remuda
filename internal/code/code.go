@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"path"
 	"regexp"
 	"sort"
 	"strings"
@@ -269,9 +270,25 @@ func (s *Service) Forget(machineID string) {
 	s.mu.Unlock()
 }
 
+// portProxy says the path is one of code-server's routes to any port of the machine, spelled in any way its router
+// reads alike: a page served through them would run on remuda's own origin, the one thing the previews' port avoids.
+func portProxy(p string) bool {
+	p = strings.ToLower(path.Clean("/" + p))
+	for _, route := range []string{"/proxy", "/absproxy"} {
+		if p == route || strings.HasPrefix(p, route+"/") {
+			return true
+		}
+	}
+	return false
+}
+
 // Proxy serves one request to the machine's code-server, with the mount prefix (/code/<machine>) stripped on the way in and put back on absolute redirects.
 // WebSocket upgrades pass through: the editor's own connection is one.
 func (s *Service) Proxy(w http.ResponseWriter, r *http.Request, mc *machines.Machine, prefix string) {
+	if portProxy(strings.TrimPrefix(r.URL.Path, prefix)) {
+		http.NotFound(w, r)
+		return
+	}
 	addr, err := mc.CodeAddr(s.Port)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
@@ -291,16 +308,20 @@ func (s *Service) Proxy(w http.ResponseWriter, r *http.Request, mc *machines.Mac
 					pr.Out.AddCookie(c)
 				}
 			}
-			path := strings.TrimPrefix(pr.In.URL.Path, prefix)
-			if path == "" {
-				path = "/"
+			out := strings.TrimPrefix(pr.In.URL.Path, prefix)
+			if out == "" {
+				out = "/"
 			}
-			pr.Out.URL.Path = path
+			pr.Out.URL.Path = out
 			pr.Out.URL.RawPath = ""
 		},
 		ModifyResponse: func(res *http.Response) error {
 			// the editor is framed by remuda, and by nothing else
 			res.Header.Set("X-Frame-Options", "SAMEORIGIN")
+			auth.DropSessionHeaders(res.Header)
+			if res.Header.Get("Service-Worker-Allowed") != "" { // a worker of the editor's stays in the editor
+				res.Header.Set("Service-Worker-Allowed", prefix+"/")
+			}
 			if loc := res.Header.Get("Location"); strings.HasPrefix(loc, "/") && !strings.HasPrefix(loc, prefix) {
 				res.Header.Set("Location", prefix+loc)
 			}

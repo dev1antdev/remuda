@@ -2970,7 +2970,12 @@ components and icons as rules for whoever changes it: @docs/design.md
   installed by `remuda code [-host H]` (`internal/setup/scripts/
   install-code.sh`, also `make code [HOST=]`: a pinned release, its
   checksum known for all four platforms, launchd / systemd user service). remuda is
-  the only door: `/code/<machine>/…` is a `httputil.ReverseProxy` behind the
+  the only door: code-server's routes to any port of the machine stay shut
+  (`disable-proxy` in its config, and `portProxy` refusing `/proxy` and
+  `/absproxy` in any spelling, for a machine installed before that: a page
+  served through them would run on remuda's origin), an answer sets no
+  cookie of remuda's and clears no site data (`auth.DropSessionHeaders`)
+  and a service worker stays under the mount; `/code/<machine>/…` is a `httputil.ReverseProxy` behind the
   token guard — prefix stripped, Host kept, `X-Frame-Options` dropped,
   absolute `Location`s re-prefixed, WebSocket upgrades passed; the target
   is `Machine.CodeAddr(port)`: the port itself locally, a loopback port
