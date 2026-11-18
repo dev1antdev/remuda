@@ -14,6 +14,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
 — the same file Codex, Cursor and Copilot read, and Gemini through the
 `GEMINI.md` symlink.
 
+How the page looks and speaks — words, colour, type, sizes, layout,
+components and icons as rules for whoever changes it: @docs/design.md
+
 ## Layout
 
 - `cmd/remuda/` — main; flags `-addr` (default `127.0.0.1:7317`), `-socket`,
@@ -6994,27 +6997,17 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   reads the stylesheet so the numbers cannot drift), a layer
   ladder (`--z-drawer` < `--z-dialog` < `--z-menu` < `--z-select`), three
   shadows, `--ease`/`--fast`/`--base` for motion (and
-  `prefers-reduced-motion`). **Every `<button>` carries one family class**:
-  `btn` (quiet), `btn primary` (the one filled button of a surface), `btn
-  danger`, `btn ghost`, `icon-btn` (+ `sm`/`lg`), or `linkish`; `.on` marks a
-  toggled one — the accent fill and ring on a quiet `btn`, kept under the
-  pointer (the Wall's filters, a picked choice; the Wall's view and its size,
-  each a pick of one, are a segmented well like the lens switch) — and the
-  selected sidebar row, tab and split pane too — never
-  `.sel`, the Select's own class, whose height, border, padding and type
-  would follow it (`features/roster/selected.test.ts`). Fields have one base rule (every input, textarea and `.sel`;
-  `.sm`, `.bare`; the inputs are picked inside `:where()`, so the rule
+  `prefers-reduced-motion`). How to use all of it — the button families,
+  `.on`, fields, rows, cards, badges, dots, the few context rules — is
+  `docs/design.md`, the design book (`lib/designDoc.test.ts` checks every
+  token and class it names against this stylesheet). Why two of its rules
+  are as they are: `.on`, never `.sel`, marks a selected row, tab or split
+  pane, since `.sel` is the Select's own class and its height, border,
+  padding and type would follow (`features/roster/selected.test.ts`); and
+  the fields' one base rule picks the inputs inside `:where()`, so it
   weighs no more than a tag and a place's own rule for its field wins —
   as four `:not()`s it outweighed them all and a field kept a box inside
-  a box that drew one), one placeholder, one focus ring. Rows share a radius,
-  hover and focus ring; cards are `.card`; counts are `.badge` (`.quiet`);
-  state dots are `.dot.dot-<status>` / `.dot.machine-state.is-<state>`. On
-  a coarse pointer every control grows (`--ctl-touch`) and hover-revealed ones stay
-  visible. A button is styled by its family class, not by where it sits;
-  the only context rules left are the components whose children *are* the
-  component — segmented controls (`.mode-switch`, `.lens-switch`,
-  `.fv-tabs`), menus (`.row-menu`), the key bar (`.keybar .key`). Reuse
-  these before writing new rules.
+  a box that drew one.
 - `web/src/ui/` — the shared pieces, `index.ts` the barrel: `Dialog` (one
   scrim over the drawer, a head with icon/title/controls/X, Escape — but
   not the Esc a tooltip or a menu inside it used to close itself, which
