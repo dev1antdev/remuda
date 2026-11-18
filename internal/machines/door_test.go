@@ -92,12 +92,14 @@ type sshdAtTheDoor struct {
 	goneAtKey bool   // the connection is replaced while the key is made, which then fails
 	letGoing  bool   // the connection before this one is still letting go of its forward
 	pauseAt   string // the step that waits, asking for 7318 or placing, for the test to look
+	goneThere bool   // the connection is replaced while that step waits
 }
 
 // doorRun is what came of opening the door: the scripts that placed it, and the forwards cancelled.
 type doorRun struct {
 	conn            *sshx.Conn
 	placed, cancels string
+	keys            int // how many keys were asked for
 }
 
 // doorOverSSH opens the door over an `ssh` stand-in first on PATH, a master that stays. A script is not run: it is kept
@@ -147,7 +149,13 @@ echo "$answer"
 	}
 	t.Cleanup(conn.Close)
 	mc := &Machine{conn: conn}
+	keys := 0
 	key := func(string, string) (string, error) {
+		keys++
+		if mc.doorMu.TryLock() {
+			mc.doorMu.Unlock()
+			t.Error("a key was made without the door's lock")
+		}
 		if sshd.goneAtKey {
 			mc.mu.Lock()
 			mc.conn = nil
@@ -172,6 +180,11 @@ echo "$answer"
 			mc.doorMu.Unlock()
 			t.Errorf("%s runs without the door's lock", sshd.pauseAt)
 		}
+		if sshd.goneThere {
+			mc.mu.Lock()
+			mc.conn = nil
+			mc.mu.Unlock()
+		}
 		if err := os.WriteFile(resume, nil, 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -191,7 +204,7 @@ echo "$answer"
 	}
 	placed, _ := os.ReadFile(kept)
 	cancelled, _ := os.ReadFile(cancels)
-	return doorRun{conn, string(placed), string(cancelled)}
+	return doorRun{conn, string(placed), string(cancelled), keys}
 }
 
 const heldForGood = 1000
@@ -230,6 +243,13 @@ func TestEveryStepOfTheDoorHoldsItsLock(t *testing.T) {
 				t.Fatalf("placed: %q", run.placed)
 			}
 		})
+	}
+}
+
+// TestAConnectionGoneMakesNoKey: a new key would replace the one the next connection placed.
+func TestAConnectionGoneMakesNoKey(t *testing.T) {
+	if run := doorOverSSH(t, sshdAtTheDoor{pauseAt: "forward", goneThere: true}); run.keys != 0 || run.placed != "" {
+		t.Fatalf("%d keys, placed: %q", run.keys, run.placed)
 	}
 }
 

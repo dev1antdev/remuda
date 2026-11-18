@@ -168,17 +168,23 @@ func (mc *Machine) openDoor(conn *sshx.Conn) {
 		}
 		letGo(port)
 	}()
-	mc.mu.Lock()
-	have := mc.doorKey
-	mc.mu.Unlock()
-	key, err := door.Key(mc.Label(), have)
-	if err != nil {
+	var key string
+	issueKey := func() (err error) { // a new key replaces the machine's last one, which the next connection may have placed
+		mc.mu.Lock()
+		have := mc.doorKey
+		mc.mu.Unlock()
+		if key, err = door.Key(mc.Label(), have); err != nil {
+			return err
+		}
+		mc.mu.Lock()
+		mc.doorKey = key
+		mc.mu.Unlock()
+		return nil
+	}
+	if err := whileCurrent(issueKey); err != nil {
 		log.Printf("%s: no key for its agents: %v", mc.Cfg.Host, err)
 		return
 	}
-	mc.mu.Lock()
-	mc.doorKey = key
-	mc.mu.Unlock()
 	var answer string
 	place := func() error {
 		out, err := conn.RunWithInput(DoorScript(doorURL(port)), []byte(key+"\n"), 15*time.Second)
@@ -194,7 +200,7 @@ func (mc *Machine) openDoor(conn *sshx.Conn) {
 		}
 		return nil
 	}
-	err = trySoon(doorPlaceTries, func() error { return whileCurrent(place) }, current)
+	err := trySoon(doorPlaceTries, func() error { return whileCurrent(place) }, current)
 	if placed = err == nil && answer == doorPlaced; placed {
 		return
 	}
