@@ -303,3 +303,28 @@ func TestASubmodulesOtherBranchAndStashAreShown(t *testing.T) {
 		})
 	}
 }
+
+// TestASubmoduleLeftInTheGitFolderIsStillSaid: a branch without .gitmodules does not take its repository away.
+func TestASubmoduleLeftInTheGitFolderIsStillSaid(t *testing.T) {
+	host, _, trees := madeRepo(t, "subs")
+	tree := trees["subs"]
+	submoduleIn(t, host, tree)
+	before := gitOut(t, tree, "rev-parse", "HEAD~1")
+	gitIn(t, tree, "submodule", "deinit", "-qf", "lib")
+	gitIn(t, tree, "switch", "-q", "--detach", before)
+	if _, err := os.Stat(filepath.Join(tree, ".gitmodules")); err == nil {
+		t.Fatal("the commit before still names the submodule")
+	}
+	look, err := LookAt(host, tree)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !look.HasSubmodules {
+		t.Errorf("the worktree looks free of submodules: %+v", look)
+	}
+	without := look
+	without.HasSubmodules = false
+	if without.Stamp() == look.Stamp() {
+		t.Error("a confirmation does not answer for the submodules")
+	}
+}
