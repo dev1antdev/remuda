@@ -80,6 +80,30 @@ func history(t *testing.T) string {
 
 var host = shell.Local{Name: "local"}
 
+// TestToplevelIsTheCheckoutAFolderLiesIn: a read of a folder answers for the whole checkout above it.
+func TestToplevelIsTheCheckoutAFolderLiesIn(t *testing.T) {
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	run(t, root, "init", "-q")
+	write(t, root, "web/app.js", "x")
+	for _, dir := range []string{root, filepath.Join(root, "web")} {
+		if top, err := Toplevel(host, dir); err != nil || top != root {
+			t.Errorf("%s: %q, %v", dir, top, err)
+		}
+	}
+	plain, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, dir := range []string{plain, filepath.Join(plain, "gone")} {
+		if top, err := Toplevel(host, dir); err != nil || top != "" {
+			t.Errorf("outside git, %s: %q, %v", dir, top, err)
+		}
+	}
+}
+
 func TestTheLogReadsEveryBranchTagAndRemoteWithTheirLabels(t *testing.T) {
 	dir := history(t)
 	log, err := ReadLog(host, dir, Query{All: true, Remotes: true, Limit: Page})

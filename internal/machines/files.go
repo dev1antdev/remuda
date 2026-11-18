@@ -65,17 +65,10 @@ func classify(p string, sniffBinary func() bool) (kind, mime string) {
 // agents say "demo.mp4" for "docs/demo.mp4".
 func (mc *Machine) ResolvePath(cwd, raw string) (FileInfo, error) {
 	style := mc.Paths()
-	p := strings.TrimSpace(raw)
+	p := mc.EffectivePath(cwd, raw)
 	if p == "" {
 		return FileInfo{}, fmt.Errorf("path required")
 	}
-	if p == "~" || strings.HasPrefix(p, "~/") || style.Windows && strings.HasPrefix(p, `~\`) {
-		p = style.Join(mc.Home(), p[1:])
-	}
-	if !style.IsAbs(p) && cwd != "" {
-		p = style.Join(cwd, p)
-	}
-	p = cleanPath(style, p)
 	info, err := mc.stat(p)
 	if err == nil {
 		return info, nil
@@ -92,6 +85,23 @@ func (mc *Machine) ResolvePath(cwd, raw string) (FileInfo, error) {
 		}
 	}
 	return FileInfo{Path: p, Kind: "missing"}, nil
+}
+
+// EffectivePath is the file ResolvePath looks at first, nothing touched yet: what a check of the path must be made on.
+// "" for an empty path.
+func (mc *Machine) EffectivePath(cwd, raw string) string {
+	style := mc.Paths()
+	p := strings.TrimSpace(raw)
+	if p == "" {
+		return ""
+	}
+	if p == "~" || strings.HasPrefix(p, "~/") || style.Windows && strings.HasPrefix(p, `~\`) {
+		p = style.Join(mc.Home(), p[1:])
+	}
+	if !style.IsAbs(p) && cwd != "" {
+		p = style.Join(cwd, p)
+	}
+	return cleanPath(style, p)
 }
 
 // cleanPath is an absolute path in the machine's spelling: from / on a Mac or Linux, from its drive on Windows.
@@ -114,6 +124,9 @@ func (mc *Machine) stat(p string) (FileInfo, error) {
 		}
 		if fi.IsDir() {
 			return FileInfo{Path: p, Kind: "dir"}, nil
+		}
+		if !fi.Mode().IsRegular() { // a pipe would hold the read until someone writes to it
+			return FileInfo{}, os.ErrNotExist
 		}
 		kind, mime := classify(p, func() bool { return sniffLocal(p) })
 		return FileInfo{Path: p, Kind: kind, MIME: mime, Size: fi.Size()}, nil

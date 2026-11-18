@@ -5,9 +5,11 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dev1antdev/remuda/internal/auth"
 	"github.com/dev1antdev/remuda/internal/events"
@@ -56,6 +58,30 @@ func TestAViewerReadsFilesInTheWorkspacesOnly(t *testing.T) {
 		if code, body := fileCall(h, path, true); code != http.StatusForbidden || strings.Contains(body, token) {
 			t.Fatalf("a viewer at %s: %d %q", path, code, body)
 		}
+	}
+}
+
+// TestAViewerIsRefusedBeforeAnyFileIsTouched: a pipe would hold a look at it until someone wrote to it.
+func TestAViewerIsRefusedBeforeAnyFileIsTouched(t *testing.T) {
+	h := fileServer(t)
+	pipe := filepath.Join(t.TempDir(), "pipe")
+	if err := exec.Command("mkfifo", pipe).Run(); err != nil {
+		t.Skip(err)
+	}
+	for _, viewer := range []bool{true, false} {
+		answered := make(chan int, 1)
+		go func() {
+			code, _ := fileCall(h, "/api/fs/stat?path="+url.QueryEscape(pipe), viewer)
+			answered <- code
+		}()
+		select {
+		case <-answered:
+		case <-time.After(3 * time.Second):
+			t.Fatalf("a look at a pipe hung (viewer %v)", viewer)
+		}
+	}
+	if code, _ := fileCall(h, "/api/fs/file?path="+url.QueryEscape(pipe+" "), true); code != http.StatusForbidden {
+		t.Errorf("a viewer with a space after the name: %d", code)
 	}
 }
 

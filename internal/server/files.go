@@ -68,6 +68,10 @@ func (s *Server) handleFsStat(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, http.StatusForbidden, errViewerOutside)
 		return
 	}
+	if p := mc.EffectivePath(cwd, r.URL.Query().Get("path")); viewer && p != "" && !reach.Allows(p) {
+		httpErr(w, http.StatusForbidden, errViewerOutside)
+		return
+	}
 	info, err := mc.ResolvePath(cwd, r.URL.Query().Get("path"))
 	if err != nil {
 		httpErr(w, 400, err)
@@ -139,7 +143,8 @@ func (s *Server) handleFsFile(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 400, fmt.Errorf("absolute path required (resolve it with /api/fs/stat first)"))
 		return
 	}
-	if reach, viewer := s.viewerReachOn(r.Context(), mc); viewer && !reach.Allows(path) {
+	reach, viewer := s.viewerReachOn(r.Context(), mc)
+	if viewer && !reach.Allows(mc.EffectivePath("", path)) {
 		httpErr(w, http.StatusForbidden, errViewerOutside)
 		return
 	}
@@ -160,7 +165,11 @@ func (s *Server) handleFsFile(w http.ResponseWriter, r *http.Request) {
 	}
 	max := info.MaxBytes()
 	if mc.Local() {
-		f, err := mc.Open(info.Path)
+		open := mc.Open
+		if viewer {
+			open = reach.OpenLocal
+		}
+		f, err := open(info.Path)
 		if err != nil {
 			httpErr(w, 500, err)
 			return

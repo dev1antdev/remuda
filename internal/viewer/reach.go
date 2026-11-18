@@ -3,15 +3,21 @@
 package viewer
 
 import (
+	"io/fs"
+	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/dev1antdev/remuda/internal/rpath"
 )
 
+// closedNames are remuda's own secrets by name, for a state dir kept where the machine's probe cannot see it.
+var closedNames = map[string]bool{"token": true, "agent-key": true, "agent-keys.json": true}
+
 // Reach is what a viewer may read on one machine.
 type Reach struct {
 	folders, closed []string
+	home            string
 	style           rpath.Style
 	local           bool
 }
@@ -28,6 +34,7 @@ func Of(dirs []string, home, stateDir string, style rpath.Style, local bool) Rea
 			reach.folders = append(reach.folders, dir)
 		}
 	}
+	reach.home = home
 	reach.closed = []string{style.Join(home, ".ssh"), stateDir}
 	return reach
 }
@@ -42,18 +49,34 @@ func (r Reach) Allows(path string) bool {
 	return false
 }
 
-// AllowsAll says the viewer may read the folder and whatever lies under it: what a checkout's history needs, which
-// names files of every folder of it.
-func (r Reach) AllowsAll(folder string) bool {
-	if !r.Allows(folder) {
+// AllowsCheckout says the viewer may see the history of the checkout at top, "" for a folder outside git: a commit names
+// files of every folder of it, so it may hold neither a home nor a closed place.
+func (r Reach) AllowsCheckout(top string) bool {
+	if top == "" {
+		return true
+	}
+	if r.home == "" || r.style.HoldsAHome(folded(r.home, r.local), folded(top, r.local)) {
 		return false
 	}
 	for _, closed := range r.closed {
-		if r.style.Within(folded(folder, r.local), folded(closed, r.local)) {
+		if r.style.Within(folded(top, r.local), folded(closed, r.local)) {
 			return false
 		}
 	}
 	return true
+}
+
+// OpenLocal opens a file of this machine the viewer may read, inside its workspace folder by the system's own check: a
+// link swapped in after Allows looked leads nowhere out of that folder.
+func (r Reach) OpenLocal(path string) (*os.File, error) {
+	real := realPath(path, true)
+	for _, folder := range r.folders {
+		root := realPath(folder, true)
+		if rel, ok := r.style.Rel(root, real); ok && r.Allows(path) {
+			return os.OpenInRoot(root, filepath.FromSlash(rel))
+		}
+	}
+	return nil, fs.ErrPermission
 }
 
 // Allowed keeps the paths the viewer may read.
@@ -68,6 +91,9 @@ func (r Reach) Allowed(paths []string) []string {
 }
 
 func (r Reach) inClosed(path string) bool {
+	if closedNames[strings.ToLower(r.style.Base(realPath(path, r.local)))] {
+		return true
+	}
 	for _, closed := range r.closed {
 		if r.style.Within(folded(closed, r.local), folded(path, r.local)) {
 			return true

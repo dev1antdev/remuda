@@ -29,9 +29,15 @@ func (s *Server) gitTarget(w http.ResponseWriter, r *http.Request, bodyMachine, 
 	if !ok {
 		return nil, false
 	}
-	if reach, viewer := s.viewerReachOn(r.Context(), mc); viewer && !reach.AllowsAll(dir) {
-		httpErr(w, http.StatusForbidden, errViewerOutsideCheckout)
-		return nil, false
+	if reach, viewer := s.viewerReachOn(r.Context(), mc); viewer {
+		if !reach.Allows(dir) {
+			httpErr(w, http.StatusForbidden, errViewerOutsideCheckout)
+			return nil, false
+		}
+		if top, err := gitgraph.Toplevel(mc, dir); err != nil || !reach.AllowsCheckout(top) {
+			httpErr(w, http.StatusForbidden, errViewerOutsideCheckout)
+			return nil, false
+		}
 	}
 	return mc, true
 }

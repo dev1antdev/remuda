@@ -63,17 +63,62 @@ func TestAMachineNotReadYetReachesNothing(t *testing.T) {
 	}
 }
 
-// TestACheckoutHoldingAClosedPlaceShowsNoHistory: its commits name files of every folder of it, the closed one's too.
-func TestACheckoutHoldingAClosedPlaceShowsNoHistory(t *testing.T) {
-	reach := Of([]string{"/home/me/dotfiles", "/home/me/app"}, "/home/me", "/home/me/dotfiles/remuda", rpath.POSIX, false)
-	if !reach.Allows("/home/me/dotfiles") || reach.AllowsAll("/home/me/dotfiles") {
-		t.Error("the checkout that holds the state dir")
+// TestACheckoutHoldingAHomeOrAClosedPlaceShowsNoHistory: its commits name files of every folder of it.
+func TestACheckoutHoldingAHomeOrAClosedPlaceShowsNoHistory(t *testing.T) {
+	reach := Of([]string{"/home/me/dotfiles/nvim", "/home/me/app"}, "/home/me", "/home/me/dotfiles/remuda", rpath.POSIX, false)
+	for top, want := range map[string]bool{"/home/me/app": true, "/home/me/mono": true, "": true, "/home/me/dotfiles": false, "/home/me": false, "/": false} {
+		if got := reach.AllowsCheckout(top); got != want {
+			t.Errorf("%q: %v, want %v", top, got, want)
+		}
 	}
-	if !reach.AllowsAll("/home/me/app") || !reach.AllowsAll("/home/me/app/web") {
-		t.Error("an ordinary checkout")
+	if (Reach{}).AllowsCheckout("/home/me/app") {
+		t.Error("a machine not read yet")
 	}
-	if reach.AllowsAll("/home/me/other") {
-		t.Error("a folder out of reach")
+}
+
+func TestRemudasSecretsAreClosedByNameAnywhere(t *testing.T) {
+	check(t, Of([]string{"/home/me/app"}, "/home/me", "/home/me/.config/remuda", rpath.POSIX, false), map[string]bool{
+		"/home/me/app/run/token":           false,
+		"/home/me/app/run/TOKEN":           false,
+		"/home/me/app/run/agent-key":       false,
+		"/home/me/app/run/agent-keys.json": false,
+		"/home/me/app/run/tokens.go":       true,
+	})
+}
+
+// TestOpeningLocallyStaysInTheWorkspace: a link leading out is refused by the open itself, whatever was checked before.
+func TestOpeningLocallyStaysInTheWorkspace(t *testing.T) {
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	home := filepath.Join(root, "people", "somebody", "me")
+	app := filepath.Join(home, "app")
+	if err := os.MkdirAll(app, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(app, "main.go"), []byte("package main"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	reach := Of([]string{app}, home, filepath.Join(root, "state"), rpath.POSIX, true)
+	f, err := reach.OpenLocal(filepath.Join(app, "main.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+	if _, err := reach.OpenLocal(filepath.Join(home, "notes")); err == nil {
+		t.Error("a file out of reach opened")
+	}
+	secret := filepath.Join(root, "secret")
+	if err := os.WriteFile(secret, []byte("s"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(secret, filepath.Join(app, "swapped")); err != nil {
+		t.Fatal(err)
+	}
+	if f, err := reach.OpenLocal(filepath.Join(app, "swapped")); err == nil {
+		f.Close()
+		t.Error("a link out of the folder opened")
 	}
 }
 

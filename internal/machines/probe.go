@@ -26,7 +26,7 @@ type probe struct {
 // quiet and the script ends true, so a missing binary is an empty value, not a failed exec.
 func probeScript(findHerdr bool) string {
 	s := script.StateDir("d") + `
-printf 'state=%s\n' "$d"
+printf 'state=%s\n' "${REMUDA_STATE_DIR:-$d}"
 printf 'home=%s\n' "$HOME"; o=$(uname -s 2>/dev/null); printf 'os=%s\n' "$o"
 case "$o" in MINGW*|MSYS*|CYGWIN*)
   printf 'winhome=%s\n' "$(cygpath -w "$HOME" 2>/dev/null)"; printf 'appdata=%s\n' "$APPDATA"

@@ -2784,8 +2784,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   conflicts, not_merged}`. Routes (`internal/server/gitgraph.go`, tested):
   `GET /api/git/log?machine&dir&all&remotes&skip&limit`, `GET
   /api/git/state`, `GET /api/git/commit?sha`, `GET /api/git/diff?sha&path&from`
-  — a viewer's on a checkout its reach holds whole (`gitTarget` over
-  `viewerReachOn`, `Reach.AllowsAll`; `viewerRoutes`), an agent key's never — and `POST
+  — a viewer's in a folder of its reach, on a checkout whose top holds no
+  home and no closed place (`gitTarget` over `viewerReachOn`,
+  `gitgraph.Toplevel`, `Reach.AllowsCheckout`; `viewerRoutes`), an agent key's never — and `POST
   /api/git/op {machine, dir, …Request}`, the person's alone (400 refused,
   409 busy or stale, 404 no repository, 200 with git's refusal as
   `{ok: false, output}`; then the folder's badge read again and the roster
@@ -6728,8 +6729,11 @@ components and icons as rules for whoever changes it: @docs/design.md
   by `internal/viewer`, tested: `Reach` is the machine's workspace folders
   by the watcher's snapshot, remuda's own and any at a home or above one
   left out (`rpath.HoldsAHome`), `~/.ssh` and the state dir the machine's
-  probe names closed inside them whatever the case, symlinks followed on
-  this machine: the token file or an ssh key read through the file viewer
+  probe names closed inside them whatever the case, remuda's `token` and
+  `agent-key` by name anywhere, symlinks followed on this machine and a
+  file opened inside its folder (`OpenLocal`, `os.OpenInRoot`), the path
+  checked as `Machine.EffectivePath` spells it before anything touches it:
+  the token file or an ssh key read through the file viewer
   would open what the link must not; 403 "the file is outside the
   workspaces", and a stat's `dir` and candidates are kept the same way),
   the health, the push public key, the question, the usage, the models'

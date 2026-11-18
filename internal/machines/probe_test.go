@@ -45,6 +45,9 @@ func TestTheProbeNamesTheFolderRemudaKeepsThere(t *testing.T) {
 	if script := probeScript(false); !strings.Contains(script, `XDG_CONFIG_HOME`) || !strings.Contains(script, `state=`) {
 		t.Error("the probe does not reckon the state dir as the machine's remuda does")
 	}
+	if !strings.Contains(probeScript(false), `${REMUDA_STATE_DIR:-$d}`) {
+		t.Error("a state dir set for the machine's remuda is not looked at")
+	}
 	if found := parseProbe("home=/home/me\nos=Linux\nstate=/home/me/dotfiles/remuda\n"); found.state != "/home/me/dotfiles/remuda" {
 		t.Errorf("read %+v", found)
 	}
@@ -74,5 +77,22 @@ func TestAWindowsShellThatIsNotGitBashIsNamed(t *testing.T) {
 func TestTheProbeLooksForHerdrOnlyWhenNotConfigured(t *testing.T) {
 	if strings.Contains(probeScript(false), "command -v herdr") || !strings.Contains(probeScript(true), "command -v herdr") {
 		t.Fatal("a configured herdr_bin is not looked for")
+	}
+}
+
+// TestTheEffectivePathIsTheOneLookedAt: what a check is made on is the file a look then opens, a space at its end gone.
+func TestTheEffectivePathIsTheOneLookedAt(t *testing.T) {
+	mc := &Machine{home: "/home/me", os: "linux"}
+	for raw, want := range map[string]string{
+		"/w/app/x ":       "/w/app/x",
+		" /w/app/../y":    "/w/y",
+		"~/notes":         "/home/me/notes",
+		"src/main.go":     "/w/app/src/main.go",
+		"../../etc/hosts": "/etc/hosts",
+		"   ":             "",
+	} {
+		if got := mc.EffectivePath("/w/app", raw); got != want {
+			t.Errorf("%q: %q, want %q", raw, got, want)
+		}
 	}
 }

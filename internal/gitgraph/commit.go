@@ -57,6 +57,12 @@ func commitPrelude(dir, hash string) string {
 		`tree() { if [ -n "$parent" ]; then g diff-tree -r -M -z --no-commit-id "$@" "$parent" "$sha"; else g diff-tree --root -r -M -z --no-commit-id "$@" "$sha"; fi; }; `
 }
 
+// Toplevel is the top of the checkout the folder lies in, "" outside git: every read here answers for all of it.
+func Toplevel(host shell.Host, dir string) (string, error) {
+	out, err := shell.Text(host, script.PATH+"; "+Read+`cd `+script.Quote(dir)+` 2>/dev/null || exit 0; g rev-parse --show-toplevel 2>/dev/null || true`, readFor)
+	return strings.TrimSpace(out), err
+}
+
 // ReadCommit reads a commit's message, committer and files.
 func ReadCommit(host shell.Host, dir, hash string) (Detail, error) {
 	if !HashOK(hash) {
