@@ -3,7 +3,6 @@ package ghissues
 import (
 	"encoding/json"
 	"errors"
-	"net/url"
 	"regexp"
 	"sort"
 	"strings"
@@ -142,26 +141,14 @@ func ownItems(items []Item, repo, query string) []Item {
 	if !scopeRe.MatchString(query) {
 		return items
 	}
+	prefix := "https://github.com/" + strings.ToLower(repo) + "/issues/"
 	own := []Item{}
 	for _, item := range items {
-		if strings.EqualFold(repoOfIssue(item.URL), repo) {
+		if strings.HasPrefix(strings.ToLower(item.URL), prefix) {
 			own = append(own, item)
 		}
 	}
 	return own
-}
-
-// repoOfIssue is the owner/name an issue's address names, "" for anything else.
-func repoOfIssue(address string) string {
-	parsed, err := url.Parse(address)
-	if err != nil {
-		return ""
-	}
-	parts := strings.Split(strings.Trim(parsed.Path, "/"), "/")
-	if len(parts) != 4 || parts[2] != "issues" {
-		return ""
-	}
-	return parts[0] + "/" + parts[1]
 }
 
 // Reaction is how many reacted with one of GitHub's eight reactions: +1, -1, laugh, hooray, confused, heart, rocket, eyes.

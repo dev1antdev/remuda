@@ -37,10 +37,19 @@ export default function IssuesPanel({ onClose }: { onClose: () => void }) {
   const machine = machines.find((m) => m.id === machineId);
   const machineLabel = (id: string) => machines.find((m) => m.id === id)?.label ?? id;
   const followDir = follow && follow.machineId === machineId ? follow.dir : ""; // the pane's folder, asked about on its own machine only
+  // where each read last failed: a failure speaks only for the place it happened at
+  const failedAt = useRef({ repos: "", list: "" });
+  const noting = <T,>(read: "repos" | "list", at: string, answer: Promise<T>) =>
+    answer.catch((e: unknown) => {
+      failedAt.current[read] = at;
+      throw e;
+    });
   const machinePlace = placeOf(machineId);
-  const repos = useQuery<Placed<Repos>>(async () => ({ place: machinePlace, answer: await fetchRepos(machineId, followDir || undefined) }), [machineId, followDir], { keep: true });
+  const folderPlace = placeOf(machineId, followDir);
+  const repos = useQuery<Placed<Repos>>(async () => ({ place: machinePlace, answer: await noting("repos", folderPlace, fetchRepos(machineId, followDir || undefined)) }), [machineId, followDir], { keep: true });
   const known = answerAt(repos.data, machinePlace); // another machine's repositories are not this one's
-  const following = known?.here?.repo ?? "";
+  const reposError = failedAt.current.repos === folderPlace ? repos.error : "";
+  const following = reposError ? "" : (known?.here?.repo ?? ""); // a folder that could not be read follows nothing
   const repo = choice?.repo ?? following;
   const entry: Repo | undefined = known?.repos.find((r) => r.repo.toLowerCase() === repo.toLowerCase());
   const [query, setQuery] = useState(OPEN_QUERY);
@@ -52,12 +61,16 @@ export default function IssuesPanel({ onClose }: { onClose: () => void }) {
     async () => {
       const ask = fresh.current;
       fresh.current = false;
-      return repo ? { place, answer: await fetchIssues(machineId, repo, query, ask) } : undefined;
+      return repo ? { place, answer: await noting("list", place, fetchIssues(machineId, repo, query, ask)) } : undefined;
     },
     [machineId, repo, query],
     { every: 60_000, enabled: !!repo && viewing.length === 0, keep: true },
   );
-  useEffect(() => setViewing([]), [machineId, repo]);
+  useEffect(() => {
+    setViewing([]);
+    setBusy(null); // a number means another issue here
+  }, [machineId, repo]);
+  const listError = failedAt.current.list === place ? list.error : "";
   const answer = answerAt(list.data, place); // the rows of the place their actions go to, and no other's
   const trouble = troubleOf(answer);
   const shown = answer && !trouble ? (answer as List) : null;
@@ -171,12 +184,12 @@ export default function IssuesPanel({ onClose }: { onClose: () => void }) {
       ) : repo ? (
         <>
           {trouble && <TroubleNote trouble={trouble} onRetry={again} />}
-          {list.error && <TroubleNote trouble={{ kind: "failed", text: list.error }} onRetry={again} />}
+          {listError && <TroubleNote trouble={{ kind: "failed", text: listError }} onRetry={again} />}
           <IssueTable
             query={query}
             onQuery={(q) => setQuery(q.trim() || OPEN_QUERY)}
             list={shown}
-            loading={!shown && !trouble && !list.error}
+            loading={!shown && !trouble && !listError}
             repo={repo}
             isLinked={(n) => !!openSession(n)}
             busy={busy}
@@ -187,8 +200,8 @@ export default function IssuesPanel({ onClose }: { onClose: () => void }) {
       ) : (
         <div className="issue-list">
           <div className="issue-bar">{picker}</div>
-          {repos.error ? (
-            <TroubleNote trouble={{ kind: "failed", text: repos.error }} onRetry={repos.reload} />
+          {reposError ? (
+            <TroubleNote trouble={{ kind: "failed", text: reposError }} onRetry={repos.reload} />
           ) : why ? (
             <TroubleNote trouble={{ kind: "failed", text: why.text, run: why.run }} onRetry={repos.reload} />
           ) : (

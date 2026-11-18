@@ -82,8 +82,8 @@ export default function IssueTable({ query, onQuery, list, loading, repo, isLink
       <div className="issue-table" role="table" aria-label={t("Issues")} aria-busy={loading}>
         <HeadRow />
         <div className="issue-rows" role="rowgroup">
-          {loading && !list ? (
-            <SkeletonRows />
+          {!list ? (
+            loading && <SkeletonRows /> // no list and no read under way: the panel says above what went wrong
           ) : shown.length === 0 ? (
             <p className="issue-empty">{t("No issue matches {query}.", { query })}</p>
           ) : (

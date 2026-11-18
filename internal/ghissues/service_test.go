@@ -277,17 +277,3 @@ func TestASearchNamingAnotherRepositoryShowsOnlyThisOnes(t *testing.T) {
 		t.Errorf("a plain search, as a renamed repository answers it: %+v %v", plain.Items, err)
 	}
 }
-
-func TestRepoOfIssue(t *testing.T) {
-	for address, want := range map[string]string{
-		"https://github.com/acme/widgets/issues/41": "acme/widgets",
-		"https://github.com/acme/widgets/pull/41":   "",
-		"https://github.com/acme/widgets":           "",
-		"":                                          "",
-		"://nonsense":                               "",
-	} {
-		if got := repoOfIssue(address); got != want {
-			t.Errorf("%q = %q", address, got)
-		}
-	}
-}

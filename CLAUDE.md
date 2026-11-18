@@ -6193,8 +6193,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   --search Q --limit 200 --json …` (`Limit`; the most recently updated
   first unless the search says `sort:`; a search naming `repo:`, `org:`,
   `user:` or `owner:` keeps only this repository's issues by their
-  address, `ownItems`, and the page shows rows only for the machine and
-  repository they were asked about, `answerAt`), or the REST timeline (`gh api
+  address, `ownItems`), or the REST timeline (`gh api
   --paginate`, pages decoded as a stream) and GraphQL's
   `closedByPullRequestsReferences` (the pull requests that close it; the
   ones the timeline says mentioned it when GitHub would not say). **The
@@ -6252,8 +6251,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   of state, people, the labels the list wears, the order and Reset — and
   the search field, all of them the visible query; a sticky head row; 25 a
   page, `PER_PAGE`; a foot with the count, "read 2 minutes ago" and the
-  pager; skeleton rows while the first list is read; read every minute
-  while on screen); `IssueRow.tsx` (72 px after Orca: the number pill, the
+  pager; skeleton rows while a repository's first list is read; read every
+  minute while on screen; rows and failures show only for the machine and
+  repository they were asked about, `answerAt`, since a row's actions go
+  by number to the one on screen); `IssueRow.tsx` (72 px after Orca: the number pill, the
   title over its author and labels, the assignees' faces with a Menu to
   assign or unassign yourself, the state pill with its Menu — Close as
   completed / not planned, or Reopen — `agoWords`, **Start** or, when a
@@ -6292,7 +6293,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   `labelToken`, `chipOf`, `filterRows`, `labelsIn`, `pageOf`,
   `pagerPages`), `words.ts` (`stateLook`, `roleBadges`, `REACTIONS`,
   `refWords`, `issueClosedWords`, `whyNoRepo`), `links.ts`, `repos.ts`
-  (`remember`, `pickerRows`), `prompt.ts` (`issueAddress`, `linkify`,
+  (`remember`, `pickerRows`, `placeOf`, `answerAt`), `prompt.ts` (`issueAddress`, `linkify`,
   `issuePrompt`, `issueBranch`); `lib/time.ts` `agoWords` ("41 minutes
   ago", "yesterday"). The e2e display suite fakes `/api/issues*` in the
   browser (`fakeIssues`: forty issues of acme/widgets, the worktree's

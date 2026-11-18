@@ -37,11 +37,11 @@ export function pickerRows(o: { picked: Picked; machine: string; following: stri
   const isPicked = (machine: string, repo: string) => !!o.picked && o.picked.machine === machine && o.picked.repo.toLowerCase() === repo.toLowerCase();
   if (!q) rows.push({ kind: "follow", hint: o.following || t("No GitHub repository in the pane's folder"), checked: !o.picked });
   const section = (title: string, entries: Recent[]) => {
-    const fresh = entries.filter((e) => hit(e.repo) && !seen.has(`${e.machine}|${e.repo.toLowerCase()}`));
+    const fresh = entries.filter((e) => hit(e.repo) && !seen.has(placeOf(e.machine, e.repo)));
     if (fresh.length === 0) return;
     rows.push({ kind: "heading", text: title });
     for (const e of fresh) {
-      seen.add(`${e.machine}|${e.repo.toLowerCase()}`);
+      seen.add(placeOf(e.machine, e.repo));
       rows.push({ kind: "repo", machine: e.machine, repo: e.repo, hint: e.machine === o.machine ? "" : o.machineLabel(e.machine), checked: isPicked(e.machine, e.repo) });
     }
   };
