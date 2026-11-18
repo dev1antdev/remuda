@@ -17,7 +17,7 @@ export default function IssueTable({ query, onQuery, list, loading, repo, isLink
   loading: boolean;
   repo: string;
   isLinked: (number: number) => boolean;
-  busy: number | null; // the issue a write is under way on
+  busy: number[]; // the issues a write is under way on
   act: RowActions;
   picker: ReactNode;
 }) {
@@ -87,7 +87,7 @@ export default function IssueTable({ query, onQuery, list, loading, repo, isLink
           ) : shown.length === 0 ? (
             <p className="issue-empty">{t("No issue matches {query}.", { query })}</p>
           ) : (
-            shown.map((item) => <IssueRow key={item.number} item={item} repo={repo} me={list?.me ?? ""} linked={isLinked(item.number)} busy={busy === item.number} act={act} now={now} />)
+            shown.map((item) => <IssueRow key={item.number} item={item} repo={repo} me={list?.me ?? ""} linked={isLinked(item.number)} busy={busy.includes(item.number)} act={act} now={now} />)
           )}
         </div>
       </div>

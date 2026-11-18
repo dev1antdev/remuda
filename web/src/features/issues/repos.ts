@@ -2,6 +2,7 @@
 // panel's machine; a filter narrows them all. Which repository the panel is on is a pref of this device.
 
 import { t } from "@/lib/i18n";
+import { errMsg } from "@/lib/text";
 import type { Repo } from "./api";
 
 export type Picked = { machine: string; repo: string } | null; // null follows the pane
@@ -11,11 +12,22 @@ export const MAX_RECENT = 6;
 
 export type Recent = { machine: string; repo: string };
 
-// Placed is an answer with where it was asked: kept on screen while the next one loads, it counts only for that place,
-// since the rows' actions go to the place on screen by number.
-export type Placed<T> = { place: string; answer: T };
+// Placed is a read's outcome with where it was asked: kept on screen while the next one loads, it counts only for that
+// place, since the rows' actions go to the place on screen by number. A failure is one too, so that a read overtaken by
+// a later one is dropped with its failure; what the place showed before stays beside it.
+export type Placed<T> = { place: string; answer?: T; failed?: string };
 export const placeOf = (machine: string, repo = "") => `${machine}\n${repo.toLowerCase()}`;
 export const answerAt = <T,>(placed: Placed<T> | null, place: string): T | undefined => (placed?.place === place ? placed.answer : undefined);
+export const failureAt = (placed: Placed<unknown> | null, place: string): string => (placed?.place === place ? (placed.failed ?? "") : "");
+
+// readAt runs a read for a place and answers with its outcome, a failure included; the place's last answer stays
+export async function readAt<T>(place: string, last: Placed<T> | null, read: () => Promise<T>): Promise<Placed<T>> {
+  try {
+    return { place, answer: await read() };
+  } catch (e) {
+    return { place, answer: answerAt(last, place), failed: errMsg(e) };
+  }
+}
 
 // remember puts a repository first among the recent ones, once
 export function remember(recent: Recent[], entry: Recent): Recent[] {
