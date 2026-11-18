@@ -2785,8 +2785,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   `GET /api/git/log?machine&dir&all&remotes&skip&limit`, `GET
   /api/git/state`, `GET /api/git/commit?sha`, `GET /api/git/diff?sha&path&from`
   — a viewer's in a folder of its reach, on a checkout whose top holds no
-  home and no closed place (`gitTarget` over `viewerReachOn`,
-  `gitgraph.Toplevel`, `Reach.AllowsCheckout`; `viewerRoutes`), an agent key's never — and `POST
+  home, no closed place and no `serve.lock` (`gitTarget` over
+  `viewerReachOn`, `gitgraph.Toplevel`, `Reach.AllowsCheckout`,
+  `Machine.HoldsStateDir`; `viewerRoutes`), an agent key's never — and `POST
   /api/git/op {machine, dir, …Request}`, the person's alone (400 refused,
   409 busy or stale, 404 no repository, 200 with git's refusal as
   `{ok: false, output}`; then the folder's badge read again and the roster

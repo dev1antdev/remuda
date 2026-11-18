@@ -173,7 +173,7 @@ func (s *Server) handleFsFile(w http.ResponseWriter, r *http.Request) {
 	if mc.Local() {
 		open := mc.Open
 		if isViewer {
-			open = reach.OpenLocal
+			open = func(path string) (*os.File, error) { return reach.OpenLocal(path, mc.InStateDir) }
 		}
 		f, err := open(info.Path)
 		if err != nil {

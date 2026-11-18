@@ -76,14 +76,18 @@ func (r Reach) AllowsCheckout(top string) bool {
 	return true
 }
 
-// OpenLocal opens a file of this machine the viewer may read, inside its workspace folder by the system's own check, and
-// answers it only if it is the very file that path leads to now: one swapped for a link after Allows looked is refused.
-func (r Reach) OpenLocal(path string) (*os.File, error) {
+// OpenLocal opens a file of this machine the viewer may read. The path is resolved once, and that target is what is
+// judged, by Allows and by refused, what is opened, inside its workspace folder, and what the open file must still be:
+// a link swapped in at any moment gives another file, or another target, and is refused.
+func (r Reach) OpenLocal(path string, refused func(string) bool) (*os.File, error) {
 	real := realPath(path, true)
+	if !r.Allows(real) || refused(real) {
+		return nil, fs.ErrPermission
+	}
 	for _, folder := range r.folders {
 		root := realPath(folder, true)
 		rel, ok := r.style.Rel(root, real)
-		if !ok || !r.Allows(path) {
+		if !ok {
 			continue
 		}
 		f, err := os.OpenInRoot(root, filepath.FromSlash(rel))

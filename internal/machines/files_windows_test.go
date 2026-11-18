@@ -35,7 +35,7 @@ func TestOnWindowsTheFileViewersScriptsReadAWindowsFolder(t *testing.T) {
 	if info, _ := readStat(dir, wintest.Text(t, remote, statScript(dir))); info.Kind != "dir" {
 		t.Fatalf("a folder: %+v", info)
 	}
-	found := readFound(windows, wintest.Text(t, remote, findScript(windows, dir, "demo.mp4")))
+	found := readFound(windows, wintest.Text(t, remote, findScript(windows, dir, "demo.mp4", maxFind)))
 	if len(found) != 1 || !windows.Equal(found[0], filepath.Join(dir, "docs", "demo.mp4")) {
 		t.Fatalf("found by suffix: %q", found)
 	}

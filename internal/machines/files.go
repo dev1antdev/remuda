@@ -25,6 +25,7 @@ const (
 	MaxTextBytes = 512 * 1024
 	MaxRawBytes  = 24 * 1024 * 1024 // images / media / pdf
 	maxFind      = 8
+	maxFindAsked = 200 // what a search looks through for the files its caller may read
 )
 
 type FileInfo struct {
@@ -82,9 +83,14 @@ func (mc *Machine) ResolvePathAllowed(cwd, raw string, allow func(string) bool) 
 		return info, nil
 	}
 	if !style.IsAbs(raw) && !strings.HasPrefix(raw, "~") && cwd != "" {
-		found := mc.findBySuffix(cwd, strings.TrimPrefix(strings.TrimPrefix(style.Slash(raw), "./"), "/"))
+		limit := maxFind
+		if allow != nil {
+			limit = maxFindAsked
+		}
+		found := mc.findBySuffix(cwd, strings.TrimPrefix(strings.TrimPrefix(style.Slash(raw), "./"), "/"), limit)
 		if allow != nil {
 			found = slices.DeleteFunc(found, func(p string) bool { return !allow(p) })
+			found = found[:min(len(found), maxFind)]
 		}
 		if len(found) == 1 {
 			if info, err := mc.stat(found[0]); err == nil {
@@ -136,6 +142,13 @@ func (mc *Machine) InStateDir(path string) bool {
 	}
 	out, err := mc.text(stateDirScript(mc.Paths().Slash(path)), 15*time.Second)
 	return err != nil || strings.TrimSpace(out) != "no"
+}
+
+// HoldsStateDir says a folder a remuda serves from lies under the folder, or that the machine could not tell.
+func (mc *Machine) HoldsStateDir(folder string) bool {
+	out, err := mc.Run(`find `+script.Quote(mc.Paths().Slash(folder))+` -name .git -prune -o -name node_modules -prune -o -name `+
+		state.LockFile+` -print 2>/dev/null | head -n 1`, 15*time.Second)
+	return err != nil || strings.TrimSpace(string(out)) != ""
 }
 
 // stateDirScript prints yes when the path or a folder above it holds a serving remuda's lock file, else no.
@@ -218,7 +231,7 @@ func sniffLocal(p string) bool {
 
 var skipDirs = map[string]bool{"node_modules": true, ".git": true, "dist": true, "target": true, ".next": true, "vendor": true}
 
-func (mc *Machine) findBySuffix(root, rel string) []string {
+func (mc *Machine) findBySuffix(root, rel string, limit int) []string {
 	if rel == "" {
 		return nil
 	}
@@ -229,7 +242,7 @@ func (mc *Machine) findBySuffix(root, rel string) []string {
 			if err != nil {
 				return nil
 			}
-			if budget--; budget <= 0 || len(found) >= maxFind {
+			if budget--; budget <= 0 || len(found) >= limit {
 				return filepath.SkipAll
 			}
 			if d.IsDir() {
@@ -246,7 +259,7 @@ func (mc *Machine) findBySuffix(root, rel string) []string {
 		return found
 	}
 	style := mc.Paths()
-	out, err := mc.text(findScript(style, root, rel), 20*time.Second)
+	out, err := mc.text(findScript(style, root, rel, limit), 20*time.Second)
 	if err != nil {
 		return nil
 	}
@@ -255,14 +268,14 @@ func (mc *Machine) findBySuffix(root, rel string) []string {
 
 // findScript prints the files under root whose path ends in rel, past the folders nobody means; root in forward
 // slashes, so Git Bash on Windows prints every path one way.
-func findScript(style rpath.Style, root, rel string) string {
+func findScript(style rpath.Style, root, rel string, limit int) string {
 	var prune []string
 	for d := range skipDirs {
 		prune = append(prune, "-name "+script.Quote(d)+" -prune -o")
 	}
 	sort.Strings(prune)
 	return `find ` + script.Quote(style.Slash(root)) + ` ` + strings.Join(prune, " ") +
-		` -type f -path ` + script.Quote("*/"+rel) + ` -print 2>/dev/null | head -` + strconv.Itoa(maxFind)
+		` -type f -path ` + script.Quote("*/"+rel) + ` -print 2>/dev/null | head -` + strconv.Itoa(limit)
 }
 
 // readFound reads findScript's answer, each path in the machine's spelling.

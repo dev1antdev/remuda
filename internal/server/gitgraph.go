@@ -34,7 +34,8 @@ func (s *Server) gitTarget(w http.ResponseWriter, r *http.Request, bodyMachine, 
 			httpErr(w, http.StatusForbidden, errViewerOutsideCheckout)
 			return nil, false
 		}
-		if top, err := gitgraph.Toplevel(mc, dir); err != nil || !reach.AllowsCheckout(top) {
+		top, err := gitgraph.Toplevel(mc, dir)
+		if err != nil || !reach.AllowsCheckout(top) || top != "" && mc.HoldsStateDir(top) {
 			httpErr(w, http.StatusForbidden, errViewerOutsideCheckout)
 			return nil, false
 		}

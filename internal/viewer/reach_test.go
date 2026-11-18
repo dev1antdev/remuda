@@ -112,12 +112,17 @@ func TestOpeningLocallyStaysInTheWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 	reach := Of([]string{app}, home, filepath.Join(root, "state"), rpath.POSIX, true)
-	f, err := reach.OpenLocal(filepath.Join(app, "main.go"))
+	nothing := func(string) bool { return false }
+	f, err := reach.OpenLocal(filepath.Join(app, "main.go"), nothing)
 	if err != nil {
 		t.Fatal(err)
 	}
 	f.Close()
-	if _, err := reach.OpenLocal(filepath.Join(home, "notes")); err == nil {
+	if f, err := reach.OpenLocal(filepath.Join(app, "main.go"), func(p string) bool { return p == filepath.Join(app, "main.go") }); err == nil {
+		f.Close()
+		t.Error("a file the caller refuses opened")
+	}
+	if _, err := reach.OpenLocal(filepath.Join(home, "notes"), nothing); err == nil {
 		t.Error("a file out of reach opened")
 	}
 	secret := filepath.Join(root, "secret")
@@ -127,7 +132,7 @@ func TestOpeningLocallyStaysInTheWorkspace(t *testing.T) {
 	if err := os.Symlink(secret, filepath.Join(app, "swapped")); err != nil {
 		t.Fatal(err)
 	}
-	if f, err := reach.OpenLocal(filepath.Join(app, "swapped")); err == nil {
+	if f, err := reach.OpenLocal(filepath.Join(app, "swapped"), nothing); err == nil {
 		f.Close()
 		t.Error("a link out of the folder opened")
 	}

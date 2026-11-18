@@ -133,6 +133,44 @@ func TestAStateDirIsKnownByItsLockWhereverItIs(t *testing.T) {
 	}
 }
 
+func TestACheckoutHoldingAStateDirIsKnown(t *testing.T) {
+	root := t.TempDir()
+	stateDir := filepath.Join(root, "dotfiles", "run")
+	if err := os.MkdirAll(stateDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	mc := &Machine{local: true}
+	if mc.HoldsStateDir(root) {
+		t.Error("no state dir here yet")
+	}
+	if err := os.WriteFile(filepath.Join(stateDir, state.LockFile), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if !mc.HoldsStateDir(root) {
+		t.Error("the state dir under the checkout")
+	}
+}
+
+// TestClosedFindsDoNotCrowdOutOpenOnes: the search's cap counts what the caller may read.
+func TestClosedFindsDoNotCrowdOutOpenOnes(t *testing.T) {
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, dir := range []string{"a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8", "a9", "z-open"} {
+		if err := os.MkdirAll(filepath.Join(root, dir), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, dir, "same.txt"), []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	info, err := (&Machine{local: true}).ResolvePathAllowed(root, "same.txt", func(p string) bool { return strings.Contains(p, "/z-open/") })
+	if err != nil || info.Path != filepath.Join(root, "z-open", "same.txt") {
+		t.Fatalf("%+v, %v", info, err)
+	}
+}
+
 // TestASearchLooksOnlyAtWhatMayBeRead: a file the caller may not read is neither looked at nor named.
 func TestASearchLooksOnlyAtWhatMayBeRead(t *testing.T) {
 	root, err := filepath.EvalSymlinks(t.TempDir())
