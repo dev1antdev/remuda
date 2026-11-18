@@ -217,3 +217,34 @@ func TestTheStampFollowsWorkInANewRepositoryAndFailsOnWhatItCannotRead(t *testin
 		t.Error("a new file that cannot be read reads as unchanged")
 	}
 }
+
+// TestAScanThatStopsShortNeverAgrees: a submodule git cannot walk hides the ones after it.
+func TestAScanThatStopsShortNeverAgrees(t *testing.T) {
+	host, _, trees := madeRepo(t, "subs")
+	tree := trees["subs"]
+	lib := filepath.Join(host.home, "lib")
+	if err := os.MkdirAll(lib, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	gitIn(t, lib, "init", "-q", "-b", "main")
+	write(t, filepath.Join(lib, "l.txt"), "l\n")
+	gitIn(t, lib, "add", "l.txt")
+	gitIn(t, lib, "commit", "-qm", "lib")
+	for _, name := range []string{"a", "z"} {
+		gitIn(t, tree, "-c", "protocol.file.allow=always", "submodule", "add", "-q", lib, name)
+	}
+	gitIn(t, tree, "commit", "-qm", "the libs")
+	gitIn(t, tree, "config", "-f", ".gitmodules", "--remove-section", "submodule.a")
+	write(t, filepath.Join(tree, "z", "l.txt"), "draft\n")
+	first, err := LookAt(host, tree)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := LookAt(host, tree)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Stamp() == second.Stamp() {
+		t.Error("a scan that stopped short reads as complete")
+	}
+}

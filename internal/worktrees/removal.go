@@ -61,9 +61,10 @@ func LookScript(path string) string {
 func changesScript() string {
 	work := func(git string) string {
 		return git + " diff " + script.PatchForm + " --binary || echo $$; " + git + " diff --cached " + script.PatchForm + " --binary || echo $$; " +
+			git + " ls-files -o --exclude-standard >/dev/null || echo $$; " +
 			git + ` ls-files -z -o --exclude-standard | xargs -0 sh -c "for p; do find \"./\$p\" -type f -exec cksum {} + && find \"./\$p\" -type l -exec ls -ld {} + || echo \$\$; done" sh`
 	}
-	return "{ " + work(repos.Git) + "; " + repos.Git + " submodule foreach --quiet --recursive '" + work("git") + "; true'; } 2>/dev/null | cksum"
+	return "{ " + work(repos.Git) + "; " + repos.Git + " submodule foreach --quiet --recursive '" + work("git") + "; true' || echo $$; } 2>/dev/null | cksum"
 }
 
 // ParseLook reads the script's answer.
