@@ -195,3 +195,34 @@ func TestAViewerOutOfPlacesJoinsTheAttachAnotherStarted(t *testing.T) {
 	other()
 	m.kill(m.standing("t1"))
 }
+
+// TestANewAttachIsNotTakenForALingeringOne: it has no viewer yet, and only just got its place.
+func TestANewAttachIsNotTakenForALingeringOne(t *testing.T) {
+	m := NewAttachManager(fakeAttach("screen", false))
+	a, err := m.start("new", 80, 24, func() {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.kill(a)
+	m.killLingering(a)
+	a.mu.Lock()
+	dead := a.dead
+	a.mu.Unlock()
+	if dead {
+		t.Error("an attach starting up was ended")
+	}
+}
+
+// TestARefusalAlreadyWaitingIsReadWhenTheAttachHasEnded: the exit can be seen before the words.
+func TestARefusalAlreadyWaitingIsReadWhenTheAttachHasEnded(t *testing.T) {
+	a := &attach{early: make(chan []byte, 4), exited: make(chan struct{}), readRefusal: func(first string) (string, bool) {
+		return "the machine is full", strings.Contains(first, "refused")
+	}}
+	close(a.exited)
+	for range 50 { // select takes either ready case: each time the words must count
+		a.early <- []byte("session refused\r\n")
+		if err := a.watchStart(); err == nil || err.Error() != "the machine is full" {
+			t.Fatalf("watchStart: %v", err)
+		}
+	}
+}

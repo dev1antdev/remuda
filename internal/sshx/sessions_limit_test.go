@@ -228,6 +228,25 @@ func TestNothingStartsOnceItsTimeIsGone(t *testing.T) {
 	release()
 }
 
+// TestNothingIsWrittenPastTheDeadline: a request late to its session does not reach herdr.
+func TestNothingIsWrittenPastTheDeadline(t *testing.T) {
+	limitedSSH(t)
+	c := limited()
+	conn, err := c.DialExec("hold", time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	conn.SetDeadline(time.Now().Add(-time.Second))
+	if _, err := conn.Write([]byte("agent.prompt\n")); !errors.Is(err, os.ErrDeadlineExceeded) {
+		t.Errorf("a write past the deadline: %v", err)
+	}
+	conn.SetDeadline(time.Time{}) // the event stream clears it once herdr has answered
+	if _, err := conn.Write([]byte("x\n")); errors.Is(err, os.ErrDeadlineExceeded) {
+		t.Errorf("a write with the deadline cleared: %v", err)
+	}
+}
+
 // TestRequestsSitInTheirOwnPlacesFirst: the event stream of a bridged machine takes nothing from a short script.
 func TestRequestsSitInTheirOwnPlacesFirst(t *testing.T) {
 	c := limited()

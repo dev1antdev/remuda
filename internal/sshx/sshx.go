@@ -548,8 +548,9 @@ type cmdConn struct {
 	timer    *time.Timer
 	closed   bool
 	timedOut bool
-	leave    func() // gives its place back, when it holds one
-	host     string // the machine, on a connection that rides a master
+	deadline time.Time // nothing is written past it, even before the timer has ended the command
+	leave    func()    // gives its place back, when it holds one
+	host     string    // the machine, on a connection that rides a master
 }
 
 // lockedBuffer holds the command's stderr: exec copies into it on a goroutine of its own while a failing Read or
@@ -613,8 +614,16 @@ func (c *cmdConn) saidBy() string {
 	return strings.TrimSpace(c.stderr.String())
 }
 
-func (c *cmdConn) Read(b []byte) (int, error)  { return c.wrap(c.stdout.Read(b)) }
-func (c *cmdConn) Write(b []byte) (int, error) { return c.wrap(c.stdin.Write(b)) }
+func (c *cmdConn) Read(b []byte) (int, error) { return c.wrap(c.stdout.Read(b)) }
+func (c *cmdConn) Write(b []byte) (int, error) {
+	c.mu.Lock()
+	late := !c.deadline.IsZero() && !time.Now().Before(c.deadline)
+	c.mu.Unlock()
+	if late {
+		return 0, os.ErrDeadlineExceeded
+	}
+	return c.wrap(c.stdin.Write(b))
+}
 
 func (c *cmdConn) Close() error {
 	c.mu.Lock()
@@ -647,6 +656,7 @@ func (c *cmdConn) SetDeadline(t time.Time) error {
 		c.timer.Stop()
 		c.timer = nil
 	}
+	c.deadline = t
 	if !t.IsZero() && !c.closed {
 		c.timer = time.AfterFunc(time.Until(t), func() {
 			c.mu.Lock()

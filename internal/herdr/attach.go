@@ -123,6 +123,14 @@ func (a *attach) watchStart() error {
 		case <-settle:
 			return nil
 		case <-a.exited:
+			for drained := false; !drained; { // what it said before it went may still be waiting
+				select {
+				case chunk := <-a.early:
+					acc = append(acc, chunk...)
+				default:
+					drained = true
+				}
+			}
 			if msg, refused := a.refused(acc); refused {
 				return &RefusedError{Msg: msg}
 			}
@@ -281,7 +289,7 @@ func (m *AttachManager) takePlace() (func(), error) {
 	}
 	m.mu.Unlock()
 	for _, a := range lingering {
-		m.killIfIdle(a)
+		m.killLingering(a)
 	}
 	release, err := m.Hold(placeWait)
 	if err != nil {
@@ -343,6 +351,17 @@ func (a *attach) readLoop(m *AttachManager) {
 }
 
 // killIfIdle ends an attach nobody watches, the test and the kill under one lock so a joiner is not cut off.
+// killLingering ends an attach whose last viewer has left; one just started has none yet, and stays.
+func (m *AttachManager) killLingering(a *attach) {
+	a.mu.Lock()
+	if a.linger == nil || len(a.subs) > 0 || a.dead {
+		a.mu.Unlock()
+		return
+	}
+	a.linger.Stop()
+	m.killLocked(a)
+}
+
 func (m *AttachManager) killIfIdle(a *attach) {
 	a.mu.Lock()
 	if len(a.subs) > 0 || a.dead {
