@@ -1427,7 +1427,7 @@ func (st *Store) Update(id int64, p Patch) (Task, error) {
 			return cur, ErrCardHeld
 		}
 	}
-	if moved || p.After != nil { // a place reckoned from where the card was: it may have been moved since
+	if moved || p.After != nil || len(p.Fields) > 0 { // a place, or fields, reckoned from where the card was: it may have been moved since
 		var project, status int64
 		err := tx.QueryRow(`SELECT project_id, status_id FROM tasks WHERE id = ?`, id).Scan(&project, &status)
 		if errors.Is(err, sql.ErrNoRows) {

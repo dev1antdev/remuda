@@ -1,7 +1,9 @@
 package tasks
 
 import (
+	"encoding/json"
 	"errors"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -415,5 +417,23 @@ func TestAPatchWritesOnlyWhatItChanges(t *testing.T) {
 	}
 	if got, _ := st.Get(second.ID); !*acted || got.ProjectID != there.ID || got.StatusID != queueThere {
 		t.Errorf("the card was pulled back: %+v", got)
+	}
+
+	fields, err := st.SetFields(here.ID, []Field{{Title: "Criteria", Kind: "text"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	third, err := st.CreateFrom(here.ID, Patch{Title: &title}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	st.now = clock
+	acted = personActs(third.ID, Patch{ProjectID: &there.ID})
+	key := strconv.FormatInt(fields[0].ID, 10)
+	if _, err := st.Update(third.ID, Patch{Fields: map[string]json.RawMessage{key: json.RawMessage(`"done means done"`)}, ByAgent: true}); !errors.Is(err, ErrInvalid) {
+		t.Errorf("a field of the project the card has left: %v", err)
+	}
+	if got, _ := st.Get(third.ID); !*acted || got.ProjectID != there.ID || len(got.Fields) != 0 {
+		t.Errorf("the card holds a field its project lacks: %+v", got)
 	}
 }
