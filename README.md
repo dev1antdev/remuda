@@ -636,9 +636,8 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   instance) is followed the same way through `glab` on that machine: its
   pipeline's jobs as the checks, its approvals, its threads still open,
   the failed job's log and the open threads handed to the agent from the
-  same menu, and the merge moving the task to *Done*. Once merged, the
-  workspace's ⋯ menu offers *Remove the worktree and its branch…*,
-  which opens the table below.
+  same menu, and the merge moving the task to *Done*. Once merged, its menu
+  on the tile offers *Close & remove worktree…*, the table below.
   Closing a workspace that stands on a worktree herdr or remuda made
   (under `~/.herdr/worktrees`), or *Close & remove worktree…* in its ⋯
   menu, opens a table of what goes, after Orca's: the folder *Deleted*,

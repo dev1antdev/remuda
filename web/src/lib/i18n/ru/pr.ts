@@ -7,7 +7,6 @@ export const pr: Dictionary = {
   "Open {pr}": "Открыть {pr}",
   "Reading the failed checks of {pr}…": "Читаю упавшие проверки {pr}…",
   "Reading the reviews of {pr}…": "Читаю ревью {pr}…",
-  "Remove the worktree and its branch…": "Удалить worktree и его ветку…",
   "Send the review comments of {pr} to the agent": "Отправить агенту комментарии ревью {pr}",
   "The failed checks of {pr} are with the agent": "Упавшие проверки {pr} переданы агенту",
   "The review comments of {pr} are with the agent": "Комментарии ревью {pr} переданы агенту",

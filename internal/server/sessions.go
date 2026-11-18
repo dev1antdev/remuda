@@ -220,7 +220,8 @@ func (s *Server) handleWorkspaceClose(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, answer)
 }
 
-// madeWorktree is the worktree herdr or remuda made that the workspace alone stands on, "" for any other folder, and
+// madeWorktree is the worktree herdr or remuda made that the workspace alone stands on and no agent works in, "" for any
+// other folder, which stays for Leftover worktrees, and
 // the requests its agents named that were read as merged — from the snapshot before the close
 func (s *Server) madeWorktree(mc *machines.Machine, id string) (string, []worktrees.Landed) {
 	snap, _ := s.Watch.Snapshot(mc.ID())
@@ -232,7 +233,7 @@ func (s *Server) madeWorktree(mc *machines.Machine, id string) (string, []worktr
 		return "", nil
 	}
 	tree := ws.Worktree.CheckoutPath
-	if usedElsewhere(snap, id, tree) {
+	if usedElsewhere(snap, id, tree) || s.busyIn(mc.ID(), tree) != "" {
 		return "", nil
 	}
 	return tree, s.landedIn(mc, id)

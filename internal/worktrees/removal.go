@@ -30,6 +30,7 @@ type Look struct {
 	Unmerged      int      `json:"unmerged"`         // of those, the ones the main checkout's HEAD lacks too: lost with the branch
 	Merged        bool     `json:"merged"`           // the main checkout's HEAD holds the branch
 	Tip           string   `json:"-"`                // the commit the branch ends on
+	Changes       string   `json:"-"`                // a checksum of the uncommitted work's contents
 	HasSubmodules bool     `json:"has_submodules,omitempty"`
 	Submodules    []string `json:"submodules,omitempty"` // the ones with commits pushed nowhere
 }
@@ -50,7 +51,10 @@ func LookScript(path string) string {
 		"  " + git + " rev-parse --verify -q \"refs/heads/$branch\" 2>/dev/null\n" +
 		"else printf '0\\n0\\nopen\\n'; fi\nprintf '\\036\\n'\n" +
 		"[ -f .gitmodules ] && echo submodules\n" +
-		git + " submodule foreach --quiet --recursive 'if [ -n \"$(git rev-list -n1 HEAD --not --remotes 2>/dev/null)\" ]; then printf \"lost %s\\n\" \"$displaypath\"; fi' 2>/dev/null\ntrue\n"
+		git + " submodule foreach --quiet --recursive 'if [ -n \"$(git rev-list -n1 HEAD --not --remotes 2>/dev/null)\" ]; then printf \"lost %s\\n\" \"$displaypath\"; fi' 2>/dev/null\n" +
+		"printf '\\036\\n'\n" +
+		"{ " + git + " diff " + script.PatchForm + " --binary; " + git + " diff --cached " + script.PatchForm + " --binary; " +
+		git + " ls-files -z -o --exclude-standard | xargs -0 cksum --; } 2>/dev/null | cksum\n"
 }
 
 // ParseLook reads the script's answer.
@@ -90,6 +94,9 @@ func ParseLook(path, out string) (Look, error) {
 			look.Submodules = append(look.Submodules, strings.TrimSpace(strings.TrimPrefix(line, "lost ")))
 		}
 	}
+	if len(parts) > 4 {
+		look.Changes = strings.TrimSpace(parts[4])
+	}
 	return look, nil
 }
 
@@ -104,7 +111,7 @@ func LookAt(host shell.Shell, path string) (Look, error) {
 
 // Stamp is what the person was shown of the risk; a removal finding another refuses until it is seen.
 func (l Look) Stamp() string {
-	return strings.Join([]string{strconv.Itoa(l.Dirty), l.First, strconv.Itoa(l.Unmerged), l.Branch, l.Tip, strings.Join(l.Submodules, ",")}, "|")
+	return strings.Join([]string{strconv.Itoa(l.Dirty), l.First, strconv.Itoa(l.Unmerged), l.Branch, l.Tip, l.Changes, strings.Join(l.Submodules, ",")}, "|")
 }
 
 // Loses says whether removing the folder loses work: uncommitted changes, or a submodule's commits pushed nowhere.

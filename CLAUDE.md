@@ -4559,7 +4559,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   agent left, an agent waiting on a question or nothing to send, 502 with gh's (or
   glab's) line, 400 for a link that is neither.
   **A merged worktree goes** through the remove dialog below: the
-  request's menu, on the tile and in the ⋯ (`askRemoveWorktree`), opens it.
+  request's menu on the tile (`askRemoveWorktree`) opens it.
   **A workspace's
   close takes its worktree with it** (`tidy.go`, tested on real
   repositories in a temp home; `DELETE /api/sessions/{id}` →
@@ -4573,7 +4573,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   in the answer's `worktree.kept`), its branch by git's `-d`, or removed at
   its commit when that is where its merged request ended (`RemoveScript`,
   `deleteBranchAt`: compared and removed in one step, never a branch
-  checked out, rebased, bisected or awaited by a stacked rebase elsewhere), else kept (`branch_kept`) — and the
+  checked out, rebased, bisected or awaited by a stacked rebase elsewhere), else kept (`branch_kept`); an agent at work there
+  (`busyIn`) keeps the folder for *Leftover worktrees* — and the
   page's confirm says so (`closeAsk`, `madeWorktree` in
   `features/roster/tidy.ts`, tested) and its toast what became of it
   (`tidyWords`) — the API's way and the e2e's; the page's own close of
@@ -4587,7 +4588,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   entry (`dirty`, `first`), the branch's commits on no remote
   (`unpushed`) and of those the ones the main checkout's HEAD lacks too
   (`unmerged`: lost with the branch), the commit it ends on (`Tip`, in the
-  stamp and what a confirmed delete goes by), whether that HEAD holds the branch
+  stamp and what a confirmed delete goes by), a checksum of the uncommitted
+  work's contents (`Changes`, in the stamp), whether that HEAD holds the branch
   (`merged`), a `.gitmodules`, and every submodule (`git submodule
   foreach --recursive`) with a commit on no remote — plus, from the
   server (`internal/server/worktree_remove.go`), the other workspaces on
@@ -4600,8 +4602,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   folder was deleted behind herdr's back, which herdr still marks a linked
   worktree and no look can read, still closes); else it looks again: an
   agent at work is a 409, another workspace on the checkout closes this
-  workspace alone, a stamp that is not the fresh look's is a 409 ("it
-  changed since this opened"), else herdr closes the workspace and
+  workspace alone, a stamp that is not the fresh look's (sharing is in it)
+  is a 409 ("it changed since this opened"), else herdr closes the workspace and
   `RemoveAsShown` runs `git worktree remove`, with `--force` only for the
   uncommitted work or the submodules the dialog named (the person's
   decision of 2026-11-13: git's writes at their press, a loss behind a
@@ -4628,7 +4630,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   `Tidy`, the rest left alone and said so; the clean ones come ticked,
   the button says how much goes (`removedWords`, `leftoverWords`,
   `sizeWords`). The deletions remuda makes in a repository are these,
-  each at the person's word — a close, the menu row, the dialog's button,
+  each at the person's word — a close, the dialog's button,
   the remove dialog's *Remove anyway* past what it named;
   `Discard`
   (`git worktree remove --force` and `git branch -D`) is kept for an
@@ -4766,10 +4768,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   `features/roster/prActions.ts` (tested: `canHandFailure` an open
   request with a failed check, `canSendReview` an open request,
   `canRemoveWorktree` a linked worktree whose request is merged,
-  `actionsFor`, the rows' and toasts' words, `removeAsk`,
-  `removedWords`), `prMenu.tsx` (`prMenuItems`, `handPR` with its two
-  toasts, `askRemoveWorktree` behind the confirm, then `act` so the
-  roster drops the workspace): in a wall tile the two chips are one
+  `actionsFor`, the rows' and toasts' words), `prMenu.tsx`
+  (`prMenuItems`, `handPR` with its two toasts, `askRemoveWorktree`
+  opening the remove dialog): in a wall tile the two chips are one
   `.pr-chips` button that opens a `Menu` — Open with the state as its
   hint, then (after the separator, so a viewer's menu ends before them,
   `viewerMenu`) "Pull request panel" for a GitHub one (`prPanelRow`) and

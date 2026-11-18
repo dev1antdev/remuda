@@ -6,6 +6,7 @@ const left = (more: Partial<Leftover> = {}): Leftover => ({ path: "/h/.herdr/wor
 describe("madeWorktree", () => {
   it("is a linked worktree under ~/.herdr/worktrees/<repository>/<name>, nothing else", () => {
     expect(madeWorktree({ linked: true, checkout_path: "/Users/me/.herdr/worktrees/app/task-1" })).toBe(true);
+    expect(madeWorktree({ linked: true, checkout_path: "C:\\Users\\me\\.herdr\\worktrees\\app\\task-1" })).toBe(true);
     expect(madeWorktree({ linked: false, checkout_path: "/Users/me/.herdr/worktrees/app/task-1" })).toBe(false);
     expect(madeWorktree({ linked: true, checkout_path: "/Users/me/code/app-wt" })).toBe(false);
     expect(madeWorktree({ linked: true, checkout_path: "/Users/me/.herdr/worktrees/app" })).toBe(false);

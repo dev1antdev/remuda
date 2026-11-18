@@ -14,8 +14,8 @@ import { openUrl } from "@/lib/host";
 import type { MenuItem } from "@/ui";
 import { killSession, muteWorkspace, unmuteWorkspace, type Machine, type Session } from "./api";
 import { leftWords, muteChoices, mutedUntil } from "./mute";
-import { actionLabel, actionsFor, canRemoveWorktree } from "./prActions";
-import { askRemoveWorktree, handPR } from "./prMenu";
+import { actionLabel, actionsFor } from "./prActions";
+import { handPR } from "./prMenu";
 import { cardDetailsRows, cardNoteRows, folderNoteRows } from "./cardMenu";
 import { prWords } from "./prStatus";
 import { isPullURL } from "@/features/pr/links";
@@ -95,7 +95,6 @@ export function workspaceMenuItems(m: Machine, session: Session, shown: Shown): 
   if (pr) {
     rows.push({ sep: true }, { label: t("Open {pr}", { pr: pr.label }), icon: "external-link", hint: pr.status ? prWords(pr.status) : undefined, onSelect: () => openUrl(pr.url) });
     if (chat) for (const action of actionsFor(pr)) rows.push({ label: actionLabel(action, pr.label), icon: "send", onSelect: () => void handPR(action, m.id, chat.id, pr.label) });
-    if (canRemoveWorktree(session, pr)) rows.push({ label: t("Remove the worktree and its branch…"), icon: "trash", danger: true, onSelect: () => askRemoveWorktree(m, session) });
   }
   const checkout = session.dir ?? folder;
   if (session.branch && checkout && connected) {

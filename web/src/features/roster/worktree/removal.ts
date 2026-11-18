@@ -23,12 +23,12 @@ export function rows(rm: Removal, deleteBranch: boolean, home: string): Row[] {
   return out;
 }
 
-// warnings are what would be lost, each a sentence in red
+// warnings are what would be lost, each a sentence in red; a branch ending where its merged request ended loses nothing
 export function warnings(rm: Removal, deleteBranch: boolean): string[] {
   if (sharedHere(rm)) return [];
   const out: string[] = [];
   if (rm.dirty > 0) out.push(t("Uncommitted changes in this worktree will be lost."));
-  if (deleteBranch && rm.branch && rm.unmerged > 0)
+  if (deleteBranch && rm.branch && rm.unmerged > 0 && !rm.merged_pr)
     out.push(tn(rm.unmerged, "{n} commit on {branch} is on no remote and in no other branch: deleting the branch loses it.", "{n} commits on {branch} are on no remote and in no other branch: deleting the branch loses them.", { branch: rm.branch }));
   for (const sub of rm.submodules ?? []) out.push(t("Submodule {name} has commits that aren't pushed anywhere: they will be lost.", { name: sub }));
   return out;

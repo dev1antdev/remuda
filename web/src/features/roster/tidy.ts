@@ -11,7 +11,7 @@ export type Outcome = { path: string; branch?: string; removed: boolean; branch_
 // Leftover is a worktree under the machine's root that no workspace has open
 export type Leftover = { path: string; repo: string; name: string; branch?: string; dirty?: string; broken?: string; kb: number };
 
-const MADE = /\/\.herdr\/worktrees\/[^/]+\/[^/]/;
+const MADE = /[\\/]\.herdr[\\/]worktrees[\\/][^\\/]+[\\/][^\\/]/; // a Windows machine's herdr names it with backslashes
 
 // madeWorktree says whether a workspace stands on a worktree herdr or remuda made, the only kind a close takes down
 export const madeWorktree = (worktree: { linked: boolean; checkout_path: string } | undefined): boolean => !!worktree?.linked && MADE.test(worktree.checkout_path);

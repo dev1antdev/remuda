@@ -48,6 +48,9 @@ func (s *Server) removal(mc *machines.Machine, id string) (*Removal, int, error)
 	rm.Working = s.busyIn(mc.ID(), tree)
 	rm.MergedPR = worktrees.LandedAt(s.landedIn(mc, id), look.Branch, look.Tip)
 	rm.Stamp = look.Stamp()
+	if len(rm.Shared) > 0 { // what was agreed to then is a close alone: with the others gone it does not carry over to a removal
+		rm.Stamp += "\x1fshared"
+	}
 	return rm, 0, nil
 }
 

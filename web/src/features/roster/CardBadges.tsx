@@ -66,7 +66,7 @@ function PRBadge({ machine, session, first, more, editable, onDetails }: { machi
   const items = (): MenuItem[] => {
     const rows = prMenuItems(machine.id, paneId, pr);
     if (!editable) return rows.slice(0, 1); // a viewer opens the request and hands nothing to the agent
-    if (canRemoveWorktree(session, pr)) rows.push({ sep: true }, { label: t("Remove the worktree and its branch…"), icon: "trash", danger: true, onSelect: () => askRemoveWorktree(machine, session) });
+    if (canRemoveWorktree(session, pr)) rows.push({ sep: true }, { label: t("Close & remove worktree…"), icon: "trash", danger: true, disabled: machine.state !== "connected", onSelect: () => askRemoveWorktree(machine, session) });
     return rows;
   };
   // a ⌘-click is the site's, a tap is the card's details: neither opens the menu, which Radix opens on the press
