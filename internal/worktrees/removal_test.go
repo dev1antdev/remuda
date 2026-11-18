@@ -310,7 +310,7 @@ func TestASubmoduleLeftInTheGitFolderIsStillSaid(t *testing.T) {
 	tree := trees["subs"]
 	submoduleIn(t, host, tree)
 	before := gitOut(t, tree, "rev-parse", "HEAD~1")
-	gitIn(t, tree, "submodule", "deinit", "-qf", "lib")
+	gitIn(t, tree, "submodule", "--quiet", "deinit", "-f", "lib")
 	gitIn(t, tree, "switch", "-q", "--detach", before)
 	if _, err := os.Stat(filepath.Join(tree, ".gitmodules")); err == nil {
 		t.Fatal("the commit before still names the submodule")
