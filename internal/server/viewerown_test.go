@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/url"
@@ -9,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dev1antdev/remuda/internal/auth"
 	"github.com/dev1antdev/remuda/internal/concierge"
 	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/feed"
@@ -135,16 +137,17 @@ func TestAViewerNeverReachesRemudasOwnWorkspaces(t *testing.T) {
 		}
 	}
 
-	s.Feed.Add(sent.Entry("Phone", "the-secret", false, machines.LocalID, ownPane, scratch.Label))
-	s.Feed.Add(sent.Entry("Phone", "gone-pane-secret", false, machines.LocalID, "w99:p9", ""))
-	s.Feed.Add(sent.Entry("Phone", "hello", false, machines.LocalID, appPane, "app"))
-	s.Feed.Add(feed.Entry{Kind: "done", Machine: machines.LocalID, Pane: "w98:p1", Title: "own-secret, its pane gone", Own: true})
-	s.Feed.Add(feed.Entry{Kind: "done", Machine: machines.LocalID, Pane: "w97:p1", Title: "finished, its pane closed since"})
+	s.noteSent(context.Background(), machines.LocalID, ownPane, "the-secret", false)
+	s.noteSent(context.Background(), machines.LocalID, appPane, "hello", false)
+	s.Feed.Add(sent.Entry("Phone", "unmarked-secret, its pane gone", false, machines.LocalID, "w99:p9", ""))
+	s.Feed.Add(feed.Entry{Kind: "asked", Machine: machines.LocalID, Pane: "w96:p1", Title: "unmarked-secret alert, its pane gone"})
+	s.Feed.Add(feed.Entry{Kind: "done", Machine: machines.LocalID, Pane: "w98:p1", Title: "own-secret, its pane gone", Own: new(true)})
+	s.Feed.Add(feed.Entry{Kind: "done", Machine: machines.LocalID, Pane: "w97:p1", Title: "finished, its pane closed since", Own: new(false)})
 	_, body := fileCall(h, "/api/feed", true)
 	if strings.Contains(body, "secret") || !strings.Contains(body, "hello") || !strings.Contains(body, "finished") {
 		t.Errorf("a viewer's activity: %s", body)
 	}
-	if all := s.Feed.List(0); len(all) != 5 {
+	if all := s.Feed.List(0); len(all) != 6 {
 		t.Errorf("the person's activity lost rows: %+v", all)
 	}
 
@@ -158,11 +161,18 @@ func TestAViewerNeverReachesRemudasOwnWorkspaces(t *testing.T) {
 	if ended, _ := s.rosterFor(true); strings.Contains(string(ended), ownPane) {
 		t.Errorf("a viewer's roster shows the floating terminal just ended: %s", ended)
 	}
+	if s.ownFolder(machines.LocalID, shellDir) != true {
+		t.Error("the folder of a floating terminal just ended counts as the person's")
+	}
+	reach, _ := s.viewerReachOn(auth.WithViewer(context.Background()), mc)
+	if reach.Allows(filepath.Join(shellDir, "notes.txt")) {
+		t.Error("a viewer reaches into the folder of a floating terminal just ended")
+	}
 }
 
 func TestAViewerGetsNoRecordingOfRemudasOwnWorkspaces(t *testing.T) {
-	for label, own := range map[string]bool{scratch.Label: false, concierge.Label: false, "renamed by hand": true} {
-		_, api, meta := recordedIn(t, label, own)
+	for _, label := range []string{scratch.Label, concierge.Label, "renamed by hand"} {
+		_, api, meta := recordedIn(t, label, true)
 		for _, path := range []string{"/api/timelapse/recordings?machine=local&pane=w1:p1", "/api/timelapse/search?q=step"} {
 			if rec := ask(api, "GET", path, ""); !strings.Contains(rec.Body.String(), meta.ID) {
 				t.Fatalf("%s for the person: %s", path, rec.Body)
@@ -175,8 +185,10 @@ func TestAViewerGetsNoRecordingOfRemudasOwnWorkspaces(t *testing.T) {
 			t.Errorf("%s's recording by its id: %d", label, code)
 		}
 	}
-	_, api, meta := recordedServer(t)
-	if code, _ := fileCall(api, "/api/timelapse/recordings/"+meta.ID, true); code != 200 {
-		t.Errorf("a recording of the person's workspace: %d", code)
+	for _, label := range []string{"app", scratch.Label} { // marked as the person's, whatever the workspace is called
+		_, api, meta := recordedIn(t, label, false)
+		if code, _ := fileCall(api, "/api/timelapse/recordings/"+meta.ID, true); code != 200 {
+			t.Errorf("a recording of the person's workspace %s: %d", label, code)
+		}
 	}
 }

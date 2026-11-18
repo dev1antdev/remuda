@@ -167,13 +167,16 @@ func Run(ctx context.Context, o Options) error {
 	ownWorkspace := func(machineID, workspaceID string) bool {
 		return shells.Is(machineID, workspaceID) || conciergeAgent.Is(machineID, workspaceID)
 	}
-	ownPane := func(machineID, paneID string) bool {
+	ownMark := func(machineID, paneID string) *bool { // nil for a pane the last snapshot does not know
 		snap, _ := watcher.Snapshot(machineID)
 		if snap == nil {
-			return false
+			return nil
 		}
 		pane := snap.Pane(paneID)
-		return pane != nil && ownWorkspace(machineID, pane.WorkspaceID)
+		if pane == nil {
+			return nil
+		}
+		return new(ownWorkspace(machineID, pane.WorkspaceID))
 	}
 	chats := &chat.Service{Machines: fleet, Watch: watcher}
 	var srv *server.Server // named here: the live hub fingerprints the roster as the server serves it
@@ -186,7 +189,7 @@ func Run(ctx context.Context, o Options) error {
 	defer pushSvc.Sockets.Close() // the Mac app's alert stream ends with "remuda is stopping", as the page's events do
 	var mirrored *mirror.Service  // named here: an alert the feed records may pop up inside herdr too
 	pushSvc.OnAlert = func(p push.Payload) {
-		activity.Add(feed.Entry{Kind: p.Kind, Machine: p.Machine, Pane: p.Pane, Title: p.Title, Body: p.Body, Worked: p.Worked, Own: ownPane(p.Machine, p.Pane)})
+		activity.Add(feed.Entry{Kind: p.Kind, Machine: p.Machine, Pane: p.Pane, Title: p.Title, Body: p.Body, Worked: p.Worked, Own: ownMark(p.Machine, p.Pane)})
 		hub.RosterChanged() // the bell's dot rides on the roster
 		if mirrored != nil {
 			mirrored.Alert(p)

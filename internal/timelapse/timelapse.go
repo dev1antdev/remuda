@@ -63,7 +63,7 @@ type Meta struct {
 	Count     int       `json:"count"`         // frames
 	Ended     string    `json:"ended"`         // the status it rested in (done, idle, blocked), or EndedGone, EndedStopped, EndedCut
 	Size      int64     `json:"size"`          // the file's bytes, read off the disk
-	Own       bool      `json:"own,omitempty"` // of a workspace remuda keeps for itself: never a viewer's
+	Own       *bool     `json:"own,omitempty"` // of a workspace remuda keeps for itself (nil: recorded before this was noted): true is never a viewer's
 }
 
 // Recording is a recording whole: its frames, each the rows that changed since the one before.

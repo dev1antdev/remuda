@@ -6767,8 +6767,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   the list, the search and the id (`ownRecording`: `Meta.Own`, set when the
   take begins; an older one by the name the workspace is made under), the
   usage report drops their folders and sessions (its totals still count
-  them), the standup their rows, the feed the rows marked `Own` when written
-  (and an older row of what was typed, for a pane gone), and its event
+  them), the standup keeps the panes on the viewer's roster, the feed goes
+  by the `Own` a row was written with and hides a row without one whose pane
+  is gone, and its event
   stream watches none of them; a floating terminal just ended stays hidden
   (`scratch.Store.Ended`) while the last snapshot shows it. A conversation
   run from the floating terminal inside a folder a visible workspace also

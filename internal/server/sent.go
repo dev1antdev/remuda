@@ -16,7 +16,7 @@ func (s *Server) noteSent(ctx context.Context, machineID, paneID, text string, k
 		return
 	}
 	entry := sent.Entry(s.senderName(ctx), text, keys, machineID, paneID, s.workspaceOf(machineID, paneID))
-	entry.Own = s.ownPane(machineID, paneID)
+	entry.Own = s.ownMark(machineID, paneID)
 	s.Feed.Add(entry)
 }
 

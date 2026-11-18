@@ -71,7 +71,7 @@ func (s *Server) handleStandup(w http.ResponseWriter, r *http.Request) {
 	}
 	items := s.Recap.Standup(since)
 	if auth.IsViewer(r.Context()) {
-		items = slices.DeleteFunc(items, func(i recap.Item) bool { return s.ownPane(i.Machine, i.Pane) })
+		items = slices.DeleteFunc(items, func(i recap.Item) bool { return !s.viewerSeesPane(i.Machine, i.Pane) })
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, map[string]any{"since": sinceText(since), "items": items, "markdown": recap.Markdown(items, since.In(loc), now)})

@@ -13,7 +13,6 @@ import (
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/scratch"
-	"github.com/dev1antdev/remuda/internal/sent"
 	"github.com/dev1antdev/remuda/internal/timelapse"
 	"github.com/dev1antdev/remuda/internal/transcript"
 	"github.com/dev1antdev/remuda/internal/usage"
@@ -132,24 +131,39 @@ func (s *Server) ownFolder(machineID, dir string) bool {
 		return false
 	}
 	same := func(folder string) bool { return mc.Paths().Equal(folder, dir) }
-	return slices.ContainsFunc(snap.WorkspaceDirs(), same) && !slices.ContainsFunc(s.editorFolders(machineID, snap), same)
+	return slices.ContainsFunc(snap.WorkspaceDirs(), same) && !slices.ContainsFunc(s.foldersBut(machineID, snap, s.viewerOwn), same)
 }
 
-// ownRecording says a timelapse is of remuda's own workspaces: marked so when it began; one made before the mark goes by
-// the name they are made under, or by the pane and folder they hold now, and a workspace of the person's under such a
-// name stays out with it.
+// ownMark is whether the pane stands in one of remuda's own workspaces, for what is written about it; nil when the
+// snapshot does not know the pane.
+func (s *Server) ownMark(machineID, paneID string) *bool {
+	_, pane := s.paneOf(machineID, paneID)
+	if pane == nil {
+		return nil
+	}
+	return new(s.viewerOwn(machineID, pane.WorkspaceID))
+}
+
+// ownRecording says a timelapse is of remuda's own workspaces, as marked when it began; one made before the mark goes
+// by the name they are made under, or by the pane and folder they hold now.
 func (s *Server) ownRecording(m timelapse.Meta) bool {
-	return m.Own || m.Workspace == scratch.Label || m.Workspace == concierge.Label || s.ownPane(m.Machine, m.Pane) || s.ownFolder(m.Machine, m.Dir)
+	if m.Own != nil {
+		return *m.Own
+	}
+	return m.Workspace == scratch.Label || m.Workspace == concierge.Label || s.ownPane(m.Machine, m.Pane) || s.ownFolder(m.Machine, m.Dir)
 }
 
-// viewerFeed is the activity without remuda's own workspaces. What was typed, in a row written before rows were marked,
-// is kept from a viewer also for a pane no longer there to be told apart.
+// viewerFeed is the activity without remuda's own workspaces, by the mark a row was written with; a row without one, of
+// a pane that cannot be told apart any more, is kept from a viewer too.
 func (s *Server) viewerFeed(entries []feed.Entry) []feed.Entry {
 	return slices.DeleteFunc(entries, func(e feed.Entry) bool {
-		if e.Pane == "" {
+		switch {
+		case e.Pane == "":
 			return false
+		case e.Own != nil:
+			return *e.Own
 		}
-		return e.Own || s.ownPane(e.Machine, e.Pane) || (e.Kind == sent.Kind && !s.viewerSeesPane(e.Machine, e.Pane))
+		return !s.viewerSeesPane(e.Machine, e.Pane)
 	})
 }
 

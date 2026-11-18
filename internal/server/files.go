@@ -36,7 +36,7 @@ func (s *Server) viewerReachOn(ctx context.Context, mc *machines.Machine) (viewe
 	}
 	var dirs []string
 	if snap := s.snapshotOf(mc.ID()); snap != nil {
-		dirs = s.editorFolders(mc.ID(), snap)
+		dirs = s.foldersBut(mc.ID(), snap, s.viewerOwn)
 	}
 	return viewer.Of(dirs, mc.Home(), mc.StateDir(), mc.Paths(), mc.Local()), true
 }
