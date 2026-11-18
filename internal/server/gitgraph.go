@@ -8,6 +8,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/gitgraph"
 	"github.com/dev1antdev/remuda/internal/gitops"
 	"github.com/dev1antdev/remuda/internal/machines"
+	viewerpkg "github.com/dev1antdev/remuda/internal/viewer"
 )
 
 // The Git lens: a checkout's history as a graph, where it stands, one commit's files and one file's patch — a viewer's
@@ -102,8 +103,11 @@ func (s *Server) handleGitDiff(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	_, viewer := s.viewerReachOn(r.Context(), mc) // a viewer reads the files under the workspace's folder alone
-	patch, err := gitgraph.ReadPatch(mc, dir, q.Get("sha"), q.Get("path"), q.Get("from"), viewer)
+	_, isViewer := s.viewerReachOn(r.Context(), mc) // a viewer reads the files under the workspace's folder alone
+	patch, err := gitgraph.ReadPatch(mc, dir, q.Get("sha"), q.Get("path"), q.Get("from"), isViewer)
+	if err == nil && isViewer && !viewerpkg.PatchAllowed(patch) {
+		err = gitgraph.ErrOutside
+	}
 	if err != nil {
 		gitReadErr(w, err)
 		return

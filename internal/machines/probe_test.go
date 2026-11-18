@@ -162,3 +162,19 @@ func TestACheckoutHoldingAStateDirIsKnown(t *testing.T) {
 		t.Error("a state dir under node_modules")
 	}
 }
+
+// TestLookingAtAPathTakesItAsGiven: a name ending in a space is that name, and never the file without the space.
+func TestLookingAtAPathTakesItAsGiven(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "secret")
+	if err := os.WriteFile(file, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	mc := &Machine{local: true}
+	if info := mc.LookAt(file + " "); info.Kind != "missing" || info.Path != file+" " {
+		t.Errorf("with a space: %+v", info)
+	}
+	if info := mc.LookAt(file); info.Kind == "missing" {
+		t.Errorf("the file: %+v", info)
+	}
+}

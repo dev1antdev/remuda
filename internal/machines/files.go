@@ -88,6 +88,14 @@ func (mc *Machine) ResolvePath(cwd, raw string) (FileInfo, error) {
 	return FileInfo{Path: p, Kind: "missing"}, nil
 }
 
+// LookAt is what the path, taken exactly as given, is: nothing cleaned, nothing searched.
+func (mc *Machine) LookAt(p string) FileInfo {
+	if info, err := mc.stat(p); err == nil {
+		return info
+	}
+	return FileInfo{Path: p, Kind: "missing"}
+}
+
 // EffectivePath is the file ResolvePath looks at first, nothing touched yet: what a check of the path must be made on.
 // "" for an empty path.
 func (mc *Machine) EffectivePath(cwd, raw string) string {

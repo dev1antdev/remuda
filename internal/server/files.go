@@ -71,12 +71,17 @@ func (s *Server) handleFsStat(w http.ResponseWriter, r *http.Request) {
 	raw := r.URL.Query().Get("path")
 	if reach, isViewer := s.viewerReachOn(r.Context(), mc); isViewer {
 		// the file named and no other: the search for a name that misses would look through what a viewer may not read
-		raw = mc.EffectivePath(cwd, raw)
-		if cwd != "" && !viewerMay(mc, reach, cwd) || raw != "" && !viewerMay(mc, reach, raw) {
+		path := mc.EffectivePath(cwd, raw)
+		if path == "" {
+			httpErr(w, 400, fmt.Errorf("path required"))
+			return
+		}
+		if cwd != "" && !viewerMay(mc, reach, cwd) || !viewerMay(mc, reach, path) {
 			httpErr(w, http.StatusForbidden, errViewerOutside)
 			return
 		}
-		cwd = ""
+		writeJSON(w, mc.LookAt(path))
+		return
 	}
 	info, err := mc.ResolvePath(cwd, raw)
 	if err != nil {
@@ -143,11 +148,17 @@ func (s *Server) handleFsFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	reach, isViewer := s.viewerReachOn(r.Context(), mc)
-	if isViewer && !viewerMay(mc, reach, mc.EffectivePath("", path)) {
-		httpErr(w, http.StatusForbidden, errViewerOutside)
-		return
+	var info machines.FileInfo
+	if isViewer {
+		path = mc.EffectivePath("", path)
+		if !viewerMay(mc, reach, path) {
+			httpErr(w, http.StatusForbidden, errViewerOutside)
+			return
+		}
+		info = mc.LookAt(path)
+	} else {
+		info, err = mc.ResolvePath("", path)
 	}
-	info, err := mc.ResolvePath("", path)
 	if err != nil || info.Kind == "missing" || info.Kind == "dir" {
 		httpErr(w, 404, fmt.Errorf("not a readable file: %s", path))
 		return

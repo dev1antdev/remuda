@@ -181,3 +181,22 @@ func TestReachFollowsLinksOnThisMachine(t *testing.T) {
 		root:                                     false,
 	})
 }
+
+// TestAPatchShowingASecretIsRefused: a token committed once stays in history, whatever became of the folder since.
+func TestAPatchShowingASecretIsRefused(t *testing.T) {
+	for patch, want := range map[string]bool{
+		"diff --git a/web/app.js b/web/app.js\n+token = 1\n": true,
+		"": true,
+		"diff --git a/run/token b/run/token\n+rt_secret\n":                                   false,
+		"diff --git a/web/app.js b/web/app.js\n+x\ndiff --git a/run/TOKEN b/run/TOKEN\n+s\n": false,
+		"diff --git a/old/agent-key b/new/notes\nrename from old/agent-key\n":                false,
+		"diff --git \"a/caf\\303\\251/token\" \"b/caf\\303\\251/token\"\n+s\n":               false,
+		"diff --git a/home/.ssh/id_ed25519 b/home/.ssh/id_ed25519\n+k\n":                     false,
+		"diff --git a/.config/remuda/tasks.db b/.config/remuda/tasks.db\n":                   false,
+		"diff --git a/run/serve.lock b/run/serve.lock\n":                                     false,
+	} {
+		if got := PatchAllowed(patch); got != want {
+			t.Errorf("%q: %v, want %v", patch, got, want)
+		}
+	}
+}

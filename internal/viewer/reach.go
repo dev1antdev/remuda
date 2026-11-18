@@ -118,6 +118,22 @@ func (r Reach) inClosed(path string) bool {
 	return false
 }
 
+// PatchAllowed says a viewer may read a commit's patch: none of the files it shows, on either side of a rename, under
+// any folder asked for, is one of remuda's secrets or lies in a .ssh or a remuda folder, as any commit may have kept one.
+func PatchAllowed(patch string) bool {
+	for _, line := range strings.Split(patch, "\n") {
+		if !strings.HasPrefix(line, "diff --git ") {
+			continue
+		}
+		for _, part := range strings.FieldsFunc(strings.ToLower(line), func(c rune) bool { return c == '/' || c == ' ' || c == '"' }) {
+			if closedName(part) || part == ".ssh" || part == "remuda" || part == "serve.lock" {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 // folded is the path as compared where a Mac's disk would find it in any case.
 func folded(path string, local bool) string { return strings.ToLower(realPath(path, local)) }
 

@@ -6736,7 +6736,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   symlinks followed on this machine, a file opened inside its folder and
   answered only if it is the one authorised (`OpenLocal`), the path checked
   as `Machine.EffectivePath` spells it before anything touches it, and
-  that file alone, with no search for a name that misses:
+  that file alone (`LookAt`), with no search for a name that misses; a
+  commit's patch showing a secret's name or a `.ssh` or `remuda` folder is
+  refused (`viewer.PatchAllowed`):
   the token file or an ssh key read through the file viewer
   would open what the link must not; 403 "the file is outside the
   workspaces", and a stat's `dir` and candidates are kept the same way),
