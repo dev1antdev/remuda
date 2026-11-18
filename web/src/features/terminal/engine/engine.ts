@@ -3,6 +3,8 @@
 // the mouse reports, the selection that stays with the text, the selection layer, copy, links, paste — are
 // wired here and torn down together.
 
+import { actions } from "@/app/store";
+import { t } from "@/lib/i18n";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal as XTerm } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
@@ -144,6 +146,7 @@ export function createEngine(mount: HTMLElement, machineId: string, paneId: stri
     onOpen,
     onBytes: paint,
     note,
+    inputLost: () => actions.notify(t("What you typed may not have gone through. It will not be sent again."), { error: true }),
   });
   props().onReady({ input, appCursor: () => term.modes.applicationCursorKeysMode, focus: () => term.focus(), search });
 

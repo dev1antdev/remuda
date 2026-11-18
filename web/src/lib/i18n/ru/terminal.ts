@@ -3,6 +3,7 @@
 import type { Dictionary } from "../../i18n";
 
 export const terminal: Dictionary = {
+  "What you typed may not have gone through. It will not be sent again.": "Набранное могло не дойти. Повторно оно не отправится.",
   "At least {n} columns": "Не меньше {n} колонок",
   Backspace: "Backspace",
   Clear: "Очистить",
