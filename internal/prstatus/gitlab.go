@@ -90,6 +90,8 @@ type glabMerge struct {
 	HasConflicts        bool   `json:"has_conflicts"`
 	DetailedMergeStatus string `json:"detailed_merge_status"`
 	MergeStatus         string `json:"merge_status"`
+	SourceBranch        string `json:"source_branch"`
+	SHA                 string `json:"sha"`
 	HeadPipeline        *struct {
 		ID     int64  `json:"id"`
 		Status string `json:"status"`
@@ -167,7 +169,7 @@ func ParseMerge(out string, now time.Time) (Status, int64, error) {
 	if err := jsonAt(sections[0], "{", &mr); err != nil {
 		return Status{}, 0, err
 	}
-	status := Status{Title: mr.Title, State: mergeState(mr.State), Draft: mr.Draft || mr.WorkInProgress, Mergeable: "UNKNOWN", At: now}
+	status := Status{Title: mr.Title, State: mergeState(mr.State), Draft: mr.Draft || mr.WorkInProgress, Mergeable: "UNKNOWN", At: now, HeadBranch: mr.SourceBranch, HeadCommit: mr.SHA}
 	switch {
 	case mr.HasConflicts:
 		status.Mergeable = "CONFLICTING"

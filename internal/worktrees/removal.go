@@ -29,6 +29,7 @@ type Look struct {
 	Unpushed      int      `json:"unpushed"`         // the branch's commits on no remote
 	Unmerged      int      `json:"unmerged"`         // of those, the ones the main checkout's HEAD lacks too: lost with the branch
 	Merged        bool     `json:"merged"`           // the main checkout's HEAD holds the branch
+	Tip           string   `json:"-"`                // the commit the branch ends on
 	HasSubmodules bool     `json:"has_submodules,omitempty"`
 	Submodules    []string `json:"submodules,omitempty"` // the ones with commits pushed nowhere
 }
@@ -46,6 +47,7 @@ func LookScript(path string) string {
 		"  " + git + " rev-list --count \"refs/heads/$branch\" --not --remotes 2>/dev/null || echo 0\n" +
 		"  " + git + " -C \"$main\" rev-list --count \"refs/heads/$branch\" --not --remotes HEAD 2>/dev/null || echo 0\n" +
 		"  if " + git + " -C \"$main\" merge-base --is-ancestor \"refs/heads/$branch\" HEAD 2>/dev/null; then echo merged; else echo open; fi\n" +
+		"  " + git + " rev-parse --verify -q \"refs/heads/$branch\" 2>/dev/null\n" +
 		"else printf '0\\n0\\nopen\\n'; fi\nprintf '\\036\\n'\n" +
 		"[ -f .gitmodules ] && echo submodules\n" +
 		git + " submodule foreach --quiet --recursive 'if [ -n \"$(git rev-list -n1 HEAD --not --remotes 2>/dev/null)\" ]; then printf \"lost %s\\n\" \"$displaypath\"; fi' 2>/dev/null\ntrue\n"
@@ -76,6 +78,9 @@ func ParseLook(path, out string) (Look, error) {
 		look.Unpushed, _ = strconv.Atoi(strings.TrimSpace(reach[0]))
 		look.Unmerged, _ = strconv.Atoi(strings.TrimSpace(reach[1]))
 		look.Merged = strings.TrimSpace(reach[2]) == "merged"
+	}
+	if len(reach) >= 4 {
+		look.Tip = strings.TrimSpace(reach[3])
 	}
 	for _, line := range script.Lines(parts[3]) {
 		switch {

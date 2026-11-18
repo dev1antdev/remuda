@@ -46,7 +46,7 @@ func (s *Server) removal(mc *machines.Machine, id string) (*Removal, int, error)
 	}
 	rm := &Removal{Look: look, Workspace: id, Name: ws.Label, RepoName: ws.Worktree.RepoName, Made: worktrees.Made(mc.Home(), tree), Shared: sharers(snap, id, tree), Home: mc.Home()}
 	rm.Working = s.busyIn(mc.ID(), tree)
-	rm.MergedPR = s.mergedIn(mc, id)
+	rm.MergedPR = worktrees.LandedAt(s.landedIn(mc, id), look.Branch, look.Tip)
 	rm.Stamp = look.Stamp()
 	return rm, 0, nil
 }

@@ -83,7 +83,7 @@ func (s *Server) handleLeftoversRemove(w http.ResponseWriter, r *http.Request) {
 		case left.Broken != "":
 			outcomes = append(outcomes, worktrees.Outcome{Path: path, Kept: left.Broken})
 		default:
-			outcomes = append(outcomes, worktrees.Tidy(mc, path, false))
+			outcomes = append(outcomes, worktrees.Tidy(mc, path, nil))
 		}
 	}
 	writeJSON(w, map[string]any{"outcomes": outcomes})

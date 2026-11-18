@@ -11,6 +11,7 @@ package worktrees
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"time"
 
@@ -66,24 +67,48 @@ func Inspect(host shell.Shell, path string) (Info, error) {
 	return ParseInspect(path, out)
 }
 
+// Landed is a merged request's branch and the commit it ended on: what vouches for a branch a squash leaves git unsure of.
+type Landed struct {
+	Branch, Commit string
+}
+
+// landedCommits are the commits merged requests of the branch ended on.
+func landedCommits(landed []Landed, branch string) []string {
+	var commits []string
+	for _, l := range landed {
+		if l.Branch == branch && l.Commit != "" {
+			commits = append(commits, l.Commit)
+		}
+	}
+	return commits
+}
+
+// LandedAt says a merged request of the branch ended on the commit, so nothing on the branch is lost with it.
+func LandedAt(landed []Landed, branch, tip string) bool {
+	return branch != "" && tip != "" && slices.Contains(landedCommits(landed, branch), tip)
+}
+
 // RemoveScript removes the worktree from its repository and deletes its branch: git's own -d, which refuses a branch
-// it does not see as merged, or -D when the caller knows the branch's request was merged (a squash leaves git unsure).
-func RemoveScript(info Info, merged bool) string {
+// it does not see as merged, or -D when the branch ends, there and then, on a commit a merged request of it ended on.
+func RemoveScript(info Info, landed []Landed) string {
 	s := script.PATH + "\ncd " + script.Quote(info.Repo) + " 2>/dev/null || { echo 'the repository is not there'; exit 3; }\n" +
 		"git worktree remove " + script.Quote(info.Path) + " 2>&1 || exit 4\n"
-	if info.Branch != "" {
-		flag := "-d"
-		if merged {
-			flag = "-D"
-		}
-		s += "git branch " + flag + " " + script.Quote(info.Branch) + " 2>&1 || exit 5\n"
+	if info.Branch == "" {
+		return s
 	}
-	return s
+	branch := script.Quote(info.Branch)
+	flag := "-d"
+	if commits := landedCommits(landed, info.Branch); len(commits) > 0 {
+		s += "tip=$(git rev-parse --verify -q " + script.Quote("refs/heads/"+info.Branch) + ")\n" +
+			"flag=-d; case " + script.Quote(" "+strings.Join(commits, " ")+" ") + " in *\" ${tip:-none} \"*) flag=-D ;; esac\n"
+		flag = `"$flag"`
+	}
+	return s + "git branch " + flag + " " + branch + " 2>&1 || exit 5\n"
 }
 
 // Remove takes the worktree down on the machine; the error is git's own line.
-func Remove(host shell.Shell, info Info, merged bool) error {
-	out, err := shell.Text(host, RemoveScript(info, merged), Timeout)
+func Remove(host shell.Shell, info Info, landed []Landed) error {
+	out, err := shell.Text(host, RemoveScript(info, landed), Timeout)
 	if err == nil {
 		return nil
 	}

@@ -48,7 +48,7 @@ type Outcome struct {
 }
 
 // Tidy takes a worktree down once nothing in it would be lost; what stays, and why, is in the outcome.
-func Tidy(host shell.Shell, folder string, merged bool) Outcome {
+func Tidy(host shell.Shell, folder string, landed []Landed) Outcome {
 	out := Outcome{Path: folder}
 	info, err := Inspect(host, folder)
 	if err != nil {
@@ -60,7 +60,7 @@ func Tidy(host shell.Shell, folder string, merged bool) Outcome {
 		out.Kept = "uncommitted changes (" + info.Dirty + ")"
 		return out
 	}
-	text, err := shell.Text(host, RemoveScript(info, merged), Timeout)
+	text, err := shell.Text(host, RemoveScript(info, landed), Timeout)
 	var exit *shell.ExitError
 	switch {
 	case err == nil:

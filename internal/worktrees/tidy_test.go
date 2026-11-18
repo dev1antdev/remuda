@@ -95,7 +95,7 @@ func TestOnlyAWorktreeUnderTheRootIsMade(t *testing.T) {
 
 func TestTidyTakesACleanMergedWorktreeDownWithItsBranch(t *testing.T) {
 	host, main, trees := madeRepo(t, "done")
-	got := Tidy(host, trees["done"], false)
+	got := Tidy(host, trees["done"], nil)
 	if !got.Removed || !got.BranchDeleted || got.Kept != "" || got.BranchKept != "" || got.Branch != "done" {
 		t.Fatalf("outcome %+v", got)
 	}
@@ -112,7 +112,7 @@ func TestTidyKeepsTheBranchOfWorkNotMerged(t *testing.T) {
 	write(t, filepath.Join(trees["work"], "b.txt"), "b\n")
 	gitIn(t, trees["work"], "add", "b.txt")
 	gitIn(t, trees["work"], "commit", "-qm", "work")
-	got := Tidy(host, trees["work"], false)
+	got := Tidy(host, trees["work"], nil)
 	if !got.Removed || got.BranchDeleted || got.BranchKept == "" {
 		t.Fatalf("outcome %+v", got)
 	}
@@ -123,7 +123,8 @@ func TestTidyKeepsTheBranchOfWorkNotMerged(t *testing.T) {
 		write(t, filepath.Join(trees["squashed"], "c.txt"), "c\n")
 		gitIn(t, trees["squashed"], "add", "c.txt")
 		gitIn(t, trees["squashed"], "commit", "-qm", "squashed")
-		if got := Tidy(host, trees["squashed"], true); !got.Removed || !got.BranchDeleted {
+		landed := []Landed{{Branch: "squashed", Commit: headOf(t, trees["squashed"])}}
+		if got := Tidy(host, trees["squashed"], landed); !got.Removed || !got.BranchDeleted {
 			t.Fatalf("a branch whose request was merged stayed: %+v", got)
 		}
 		if strings.Contains(branches(t, main), "squashed") {
@@ -132,10 +133,73 @@ func TestTidyKeepsTheBranchOfWorkNotMerged(t *testing.T) {
 	}
 }
 
+func headOf(t *testing.T, dir string) string {
+	t.Helper()
+	out, err := exec.Command("git", "-C", dir, "rev-parse", "HEAD").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// TestAMergedRequestVouchesOnlyForItsOwnBranchAtItsOwnCommit: another request's merge, or a commit made after it, leaves
+// the branch to git's own check, which keeps what is on no other branch.
+func TestAMergedRequestVouchesOnlyForItsOwnBranchAtItsOwnCommit(t *testing.T) {
+	commit := func(t *testing.T, tree, name string) string {
+		t.Helper()
+		write(t, filepath.Join(tree, name), "x\n")
+		gitIn(t, tree, "add", name)
+		gitIn(t, tree, "commit", "-qm", name)
+		return headOf(t, tree)
+	}
+	for name, landedOf := range map[string]func(tree, merged string) []Landed{
+		"another branch's request": func(_, merged string) []Landed { return []Landed{{Branch: "other", Commit: merged}} },
+		"no commit known":          func(string, string) []Landed { return []Landed{{Branch: "work"}} },
+		"nothing known":            func(string, string) []Landed { return []Landed{{}} },
+		"a commit after the merge": func(tree, merged string) []Landed {
+			commit(t, tree, "after.txt")
+			return []Landed{{Branch: "work", Commit: merged}}
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			host, main, trees := madeRepo(t, "work")
+			merged := commit(t, trees["work"], "b.txt")
+			got := Tidy(host, trees["work"], landedOf(trees["work"], merged))
+			if !got.Removed || got.BranchDeleted || got.BranchKept == "" {
+				t.Fatalf("outcome %+v", got)
+			}
+			if !strings.Contains(branches(t, main), "work") {
+				t.Fatal("the branch with its commits went")
+			}
+		})
+	}
+}
+
+func TestLandedAtNeedsTheBranchAndItsLastCommit(t *testing.T) {
+	landed := []Landed{{Branch: "work", Commit: "abc"}, {Branch: "other", Commit: "def"}}
+	for _, c := range []struct {
+		branch, tip string
+		want        bool
+	}{{"work", "abc", true}, {"work", "def", false}, {"other", "abc", false}, {"", "abc", false}, {"work", "", false}} {
+		if got := LandedAt(landed, c.branch, c.tip); got != c.want {
+			t.Errorf("%+v: %v", c, got)
+		}
+	}
+}
+
+// TestALookNamesTheCommitTheBranchEndsOn: what the removal dialog's offer goes by.
+func TestALookNamesTheCommitTheBranchEndsOn(t *testing.T) {
+	host, _, trees := madeRepo(t, "work")
+	look, err := LookAt(host, trees["work"])
+	if err != nil || look.Tip != headOf(t, trees["work"]) {
+		t.Fatalf("%+v, %v", look, err)
+	}
+}
+
 func TestTidyKeepsAWorktreeWithUncommittedChanges(t *testing.T) {
 	host, main, trees := madeRepo(t, "dirty")
 	write(t, filepath.Join(trees["dirty"], "a.txt"), "edited\n")
-	got := Tidy(host, trees["dirty"], true)
+	got := Tidy(host, trees["dirty"], nil)
 	if got.Removed || !strings.Contains(got.Kept, "uncommitted changes") || !strings.Contains(got.Kept, "a.txt") {
 		t.Fatalf("outcome %+v", got)
 	}
@@ -206,7 +270,7 @@ func TestTidyKeepsNewFilesThatGitStatusIsToldToHide(t *testing.T) {
 	if list, _ := Leftovers(host, nil); len(list) != 1 || list[0].Dirty == "" {
 		t.Fatalf("the leftover with a new file reads clean: %+v", list)
 	}
-	got := Tidy(host, trees["t1"], true)
+	got := Tidy(host, trees["t1"], nil)
 	if got.Removed || !strings.Contains(got.Kept, "uncommitted") {
 		t.Fatalf("a worktree with a new file was taken down: %+v", got)
 	}

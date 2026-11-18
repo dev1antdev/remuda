@@ -4565,7 +4565,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   409 before anything closes), herdr `workspace.close`, then `Remove`:
   `git worktree remove` (never `--force`) and `git branch -d`, or `-D`
   only when an agent pane of the workspace named a request gh or glab read
-  as merged (`mergedIn`), since a squash leaves git unsure; a branch it
+  as merged with the branch ending on the commit it ended on (`landedIn`,
+  `worktrees.Landed`, checked in the script), since a squash leaves git unsure; a branch it
   refuses is reported with the worktree already gone. **A workspace's
   close takes its worktree with it** (`tidy.go`, tested on real
   repositories in a temp home; `DELETE /api/sessions/{id}` →
@@ -4596,7 +4597,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   server (`internal/server/worktree_remove.go`), the other workspaces on
   the checkout or with a pane in it (`sharers`), an agent working or
   asking there or a turn still ending (`busyIn`: `undo.Service.Working`
-  and `Tracker.Going`), a request read as merged (`mergedIn`), and the
+  and `Tracker.Going`), a request read as merged at the branch's own last commit (`landedIn`), and the
   `Stamp` of what it showed. `POST /api/worktrees/{id}/remove {machine,
   delete_branch, stamp, keep_folder}` with `keep_folder` closes this
   workspace alone and looks at nothing (so a workspace whose worktree

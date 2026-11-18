@@ -48,7 +48,7 @@ func (m sceneMachine) Leftovers(open []string) ([]worktrees.Leftover, error) {
 }
 
 func (m sceneMachine) Tidy(folder string) worktrees.Outcome {
-	return worktrees.Tidy(m.mc, folder, false)
+	return worktrees.Tidy(m.mc, folder, nil)
 }
 
 func (m sceneMachine) Folder(dir string) bool {
