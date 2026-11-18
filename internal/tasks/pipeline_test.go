@@ -1,6 +1,7 @@
 package tasks
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -304,5 +305,39 @@ func TestOnlyThePipelineMovesTheCardWhileItRuns(t *testing.T) {
 	}
 	if got, _ := st.Run(first.ID); got.Pipeline != PipelinePassed {
 		t.Fatalf("the first run is %q", got.Pipeline)
+	}
+}
+
+func TestAnAgentsKeyKeepsARunningPipelinesCardAsItIs(t *testing.T) {
+	st, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	projects, _ := st.Projects()
+	title, words := "The person's words", "Do this instead"
+	card, err := st.CreateFrom(projects[0].ID, Patch{Title: &title}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	run, err := st.StartStageRun(Run{TaskID: card.ID}, 1, Stage{}, "w1:p2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.Update(card.ID, Patch{Title: &words, ByAgent: true}); !errors.Is(err, ErrCardHeld) {
+		t.Fatalf("an agent's key rewrote the card the next stage reads: %v", err)
+	}
+	priority := 3
+	if _, err := st.Update(card.ID, Patch{Priority: &priority, ByAgent: true}); err != nil {
+		t.Errorf("a priority is not the card's words: %v", err)
+	}
+	if _, err := st.Update(card.ID, Patch{Description: &words}); err != nil {
+		t.Errorf("the person's edit: %v", err)
+	}
+	if err := st.StopPipeline(run.ID, "the person moved it"); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := st.Update(card.ID, Patch{Title: &words, ByAgent: true}); err != nil || got.Title != words {
+		t.Errorf("after the pipeline: %+v, %v", got, err)
 	}
 }

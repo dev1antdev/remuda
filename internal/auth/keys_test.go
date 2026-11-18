@@ -109,6 +109,13 @@ func TestKeyAllowsTasksAndReadsOnly(t *testing.T) {
 			t.Errorf("%s allowed", path)
 		}
 	}
+	for _, path := range []string{"/api/tasks/projects/1", "/api/tasks/projects/1/statuses", "/api/tasks/projects/1/fields", "/api/tasks/projects/1/automation"} {
+		for _, method := range []string{"GET", "PATCH", "PUT", "DELETE"} {
+			if key.Allows(method, path) {
+				t.Errorf("%s %s allowed: a project is the person's", method, path)
+			}
+		}
+	}
 	if (Key{}).Allows("GET", "/api/tasks") {
 		t.Error("a key without a scope opens nothing")
 	}

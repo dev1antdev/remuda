@@ -188,11 +188,15 @@ func (k *Keys) Revoke(id string) bool {
 	return true
 }
 
-// Allows says whether a key of this scope may make a request: a tasks key reaches the task routes with any method
-// and the read routes with GET, a viewer key the viewer routes with GET, nothing else.
+// Allows says whether a key of this scope may make a request: a tasks key reaches the task routes with any method,
+// but no single project's (its settings, columns, fields and agents, and deleting it, are the person's), and the read
+// routes with GET; a viewer key the viewer routes with GET; nothing else.
 func (key Key) Allows(method, path string) bool {
 	switch key.Scope {
 	case ScopeTasks:
+		if strings.HasPrefix(path, "/api/tasks/projects/") {
+			return false
+		}
 		if path == "/api/tasks" || strings.HasPrefix(path, "/api/tasks/") {
 			return true
 		}

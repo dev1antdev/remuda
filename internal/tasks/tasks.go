@@ -30,6 +30,8 @@ const BoardDone = 50
 var (
 	ErrNotFound = errors.New("not found")
 	ErrInvalid  = errors.New("invalid")
+	// ErrCardHeld refuses an agent's key the words of a card the queue or a running pipeline hands to the next agent.
+	ErrCardHeld = errors.New("an agent's key cannot change the title, description or fields of a card in the Queued column or a running pipeline")
 )
 
 func invalid(msg string) error { return fmt.Errorf("%w: %s", ErrInvalid, msg) }
@@ -165,6 +167,7 @@ type Patch struct {
 	StatusID    *int64                     `json:"status_id"`
 	After       *int64                     `json:"after"`
 	Fields      map[string]json.RawMessage `json:"fields"`
+	ByAgent     bool                       `json:"-"` // it came with an agent's key: Update keeps the words of a card about to reach an agent
 }
 
 type ProjectPatch struct {
@@ -1411,6 +1414,17 @@ func (st *Store) Update(id int64, p Patch) (Task, error) {
 		return cur, err
 	}
 	defer tx.Rollback()
+	if p.ByAgent && (p.Title != nil || p.Description != nil || len(p.Fields) > 0) {
+		// inside the transaction, on the one connection: a card queued or started a moment ago counts
+		var held bool
+		if err := tx.QueryRow(`SELECT EXISTS (SELECT 1 FROM tasks t JOIN statuses s ON s.id = t.status_id WHERE t.id = ? AND s.on_queue = 1)
+  OR EXISTS (SELECT 1 FROM task_runs WHERE task_id = ? AND pipeline = ?)`, id, id, PipelineOn).Scan(&held); err != nil {
+			return cur, err
+		}
+		if held {
+			return cur, ErrCardHeld
+		}
+	}
 	switch {
 	case p.After != nil:
 		if cur.Position, err = placeAfter(tx, cur.ProjectID, cur.StatusID, id, *p.After); err != nil {

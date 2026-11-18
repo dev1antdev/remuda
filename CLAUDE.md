@@ -7292,8 +7292,13 @@ components and icons as rules for whoever changes it: @docs/design.md
   A project's queue and pipeline (`internal/tasks`) send prompts only once
   the person switched them on — the task's own prompt and the stages' the
   person wrote, like an agent schedule's — and only for cards the person
-  put in the Queued column: an agent's key cannot queue a card, change a
-  project's columns or its agents (403, `queueKept` in the tasks routes).
+  put in the Queued column: an agent's key cannot queue a card, rewrite
+  the title, description or fields of a card in the Queued column or with
+  a pipeline run `on` (`ErrCardHeld`, judged inside `Store.Update`'s
+  transaction: the next stage's `{task}` reads them too), delete a card,
+  nor reach any route of a single project — its settings, columns, fields and
+  agents, deleting it (`Key.Allows` refuses `/api/tasks/projects/…`); the
+  move into the column is `queueKept` in the tasks routes.
   A plan limit's offer (`internal/limits` offers) starts the held card or
   schedule on the other vendor's agent only when the person presses its
   button — the toast, the Usage panel's row, the push's — never by itself,

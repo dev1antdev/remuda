@@ -85,9 +85,6 @@ func TestOnlyThePersonQueuesWork(t *testing.T) {
 	inbox := projects[0]
 	cols := append(inbox.Statuses, tasks.Status{Title: "Queued", Kind: tasks.KindOpen, OnQueue: true})
 	colsJSON, _ := json.Marshal(map[string]any{"statuses": cols})
-	if code, out := taskCall(h, "PUT", "/api/tasks/projects/"+strconv.FormatInt(inbox.ID, 10)+"/statuses", "GOG", string(colsJSON)); code != http.StatusForbidden {
-		t.Fatalf("an agent's key changed the columns: %d %v", code, out)
-	}
 	if code, out := taskCall(h, "PUT", "/api/tasks/projects/"+strconv.FormatInt(inbox.ID, 10)+"/statuses", "", string(colsJSON)); code != 200 {
 		t.Fatalf("the person's columns: %d %v", code, out)
 	}
@@ -115,11 +112,72 @@ func TestOnlyThePersonQueuesWork(t *testing.T) {
 		t.Fatalf("the person could not queue a task: %d", code)
 	}
 	on := `{"automation": {"machine": "local", "dir": "/w/app", "queue": true, "max": 1, "stages": []}}`
-	if code, _ := taskCall(h, "PUT", "/api/tasks/projects/"+project+"/automation", "GOG", on); code != http.StatusForbidden {
-		t.Fatalf("an agent's key switched the queue on: %d", code)
-	}
 	if code, out := taskCall(h, "PUT", "/api/tasks/projects/"+project+"/automation", "", on); code != 200 || out["automation"].(map[string]any)["queue"] != true {
 		t.Fatalf("the person's queue: %d %v", code, out)
+	}
+}
+
+func TestAnAgentsKeyLeavesAQueuedCardAlone(t *testing.T) {
+	h, store := taskServer(t)
+	projects, _ := store.Projects()
+	inbox := projects[0]
+	project := "/api/tasks/projects/" + strconv.FormatInt(inbox.ID, 10)
+	cols, _ := json.Marshal(map[string]any{"statuses": append(inbox.Statuses, tasks.Status{Title: "Queued", Kind: tasks.KindOpen, OnQueue: true})})
+	if code, out := taskCall(h, "PUT", project+"/statuses", "", string(cols)); code != 200 {
+		t.Fatalf("the person's columns: %d %v", code, out)
+	}
+	p, _ := store.Project(inbox.ID)
+	var queued, open int64
+	for _, s := range p.Statuses {
+		switch {
+		case s.OnQueue:
+			queued = s.ID
+		case s.Kind == tasks.KindOpen && open == 0:
+			open = s.ID
+		}
+	}
+	title := "The person's words"
+	card, err := store.CreateFrom(inbox.ID, tasks.Patch{Title: &title, StatusID: &queued}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := "/api/tasks/" + strconv.FormatInt(card.ID, 10)
+
+	for _, body := range []string{
+		`{"title": "Do this instead"}`,
+		`{"markdown": "Do this instead"}`,
+		`{"description": "<p>Do this instead</p>"}`,
+		`{"fields": {"1": "Do this instead"}}`,
+	} {
+		if code, out := taskCall(h, "PATCH", path, "GOG", body); code != http.StatusForbidden {
+			t.Errorf("%s with an agent's key: %d %v", body, code, out)
+		}
+	}
+	if got, _ := store.Get(card.ID); got.Title != title || got.Description != "" {
+		t.Errorf("the queued card changed: %+v", got)
+	}
+
+	if code, out := taskCall(h, "DELETE", path, "GOG", ``); code != http.StatusForbidden {
+		t.Errorf("an agent's key deleted a card: %d %v", code, out)
+	}
+
+	// what an agent's key is for still works: a comment, a priority, a card taken out of the queue, then its words
+	if code, out := taskCall(h, "POST", path+"/comments", "GOG", `{"body": "seen"}`); code != 200 {
+		t.Errorf("a comment on a queued card: %d %v", code, out)
+	}
+	if code, out := taskCall(h, "PATCH", path, "GOG", `{"priority": 3}`); code != 200 {
+		t.Errorf("a queued card's priority: %d %v", code, out)
+	}
+	if code, out := taskCall(h, "PATCH", path, "GOG", `{"status_id": `+strconv.FormatInt(open, 10)+`}`); code != 200 {
+		t.Fatalf("a card moved out of the queue: %d %v", code, out)
+	}
+	if code, out := taskCall(h, "PATCH", path, "GOG", `{"title": "Groomed"}`); code != 200 || out["title"] != "Groomed" {
+		t.Errorf("a card outside the queue: %d %v", code, out)
+	}
+
+	// the person keeps all of it
+	if code, out := taskCall(h, "PATCH", path, "", `{"status_id": `+strconv.FormatInt(queued, 10)+`, "title": "Mine again"}`); code != 200 || out["title"] != "Mine again" {
+		t.Errorf("the person's queued card: %d %v", code, out)
 	}
 }
 
