@@ -19,8 +19,8 @@ func (s *Server) previewRoutes(api *http.ServeMux) {
 	api.HandleFunc("DELETE /api/previews", s.handlePreviewClose)
 }
 
-// PreviewSkip is the ports never offered: the cockpit's own, the door a remote machine's agents reach it by, a remuda's
-// usual one (a peer), the code-server's
+// PreviewSkip is the ports never offered: the cockpit's own, the door's usual one (on another port the door is its
+// sshd's, which preview.Parse leaves out), a remuda's usual one (a peer), the code-server's
 func (s *Server) PreviewSkip() map[int]bool {
 	skip := map[int]bool{7317: true, machines.DoorPort: true}
 	if s.Code != nil {

@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/script"
@@ -11,10 +13,10 @@ import (
 )
 
 // The door is how a remote machine's agents reach this remuda's task list: this remuda's own port forwarded back
-// over the ssh master to DoorPort on the machine's loopback, and two files placed in the machine's state dir, the
-// tasks-only key and that address, which `remuda mcp` and `remuda tasks` read there.
+// over the ssh master to the machine's loopback, and two files placed in the machine's state dir, the tasks-only key
+// and that address, which `remuda mcp` and `remuda tasks` read there.
 
-// DoorPort is where, on a remote machine, this remuda answers.
+// DoorPort is where, on a remote machine, this remuda answers while the port is free there (doorForward).
 const DoorPort = 7318
 
 // Door is what opening one takes: this remuda's port, and a tasks-only key for a machine (the one it already holds
@@ -24,36 +26,99 @@ type Door struct {
 	Key       func(name, have string) (string, error)
 }
 
-// DoorScript writes the key read on stdin and the address into the machine's state dir, private to the user:
-// the dir remuda keeps there (`state.Dir()` computed in sh), the key never on a command line.
+// What DoorScript answers on its last line: the door is placed, another one stays, or another cockpit is placing its own.
+const (
+	doorPlaced = "placed"
+	doorTaken  = "taken"
+	doorBusy   = "busy"
+)
+
+func doorURL(port int) string { return fmt.Sprintf("http://127.0.0.1:%d", port) }
+
+// DoorScript places the door at url in the machine's state dir under a lock, the key read on stdin, each file replaced
+// whole, and answers how it went: a door that answers, or that cannot be asked, may stay (CLAUDE.md, "Cockpits sharing a
+// machine"). sh has no lock that dies with its process on both macOS and Linux, hence locks named by the time.
 func DoorScript(url string) string {
 	return "umask 077\n" + script.StateDir("d") + `
-mkdir -p "$d" && chmod 700 "$d" && cat > "$d/agent-key.new" && mv -f "$d/agent-key.new" "$d/agent-key" && printf '%s\n' ` + script.Quote(url) + ` > "$d/agent-url" && chmod 600 "$d/agent-key" "$d/agent-url"`
+url=` + script.Quote(url) + `
+usual=` + script.Quote(doorURL(DoorPort)) + `
+mkdir -p "$d" && chmod 700 "$d" || exit 1
+now=$(($(date +%s) / 30))
+lock="$d/agent-door.lock"
+me="owner.$$.$now"
+for held in "$lock".*; do
+  [ -d "$held" ] || continue
+  slot=${held##*.}
+  if [ "$slot" -ge "$now" ] 2>/dev/null && [ "$slot" -le $((now + ` + strconv.Itoa(doorLockAhead) + `)) ]; then echo ` + doorBusy + `; exit 0; fi
+  rm -rf "$held"
+done
+mine() { [ -e "$lock.$now/$me" ] && [ -e "$lock.$((now + 1))/$me" ]; }
+drop() { for slot in "$now" "$((now + 1))"; do [ ! -e "$lock.$slot/$me" ] || rm -rf "$lock.$slot"; done; }
+trap drop EXIT
+mkdir "$lock.$now" 2>/dev/null && : > "$lock.$now/$me" || { echo ` + doorBusy + `; exit 0; }
+mkdir "$lock.$((now + 1))" 2>/dev/null && : > "$lock.$((now + 1))/$me" || { echo ` + doorBusy + `; exit 0; }
+was=$(head -n 1 "$d/agent-url" 2>/dev/null)
+moved=$(head -n 1 "$d/agent-door-moved" 2>/dev/null)
+if [ -n "$was" ] && [ "$was" != "$url" ] && { [ "$url" != "$usual" ] || [ "$was" = "$moved" ]; }; then
+  command -v curl >/dev/null 2>&1 || { echo ` + doorTaken + `; exit 0; }
+  case "$(` + script.Health(`"$was"`) + `)" in *'"ok":true'*) echo ` + doorTaken + `; exit 0 ;; esac
+fi
+mine || { echo ` + doorBusy + `; exit 0; }
+if [ "$url" = "$usual" ]; then
+  rm -f "$d/agent-door-moved"
+else
+  printf '%s\n' "$url" > "$d/agent-door-moved.new" && mv -f "$d/agent-door-moved.new" "$d/agent-door-moved" || exit 1
+fi
+cat > "$d/agent-key.new" && mv -f "$d/agent-key.new" "$d/agent-key" && printf '%s\n' "$url" > "$d/agent-url.new" && mv -f "$d/agent-url.new" "$d/agent-url" && chmod 600 "$d/agent-key" "$d/agent-url" || exit 1
+echo ` + doorPlaced
 }
 
-// doorTries and doorPause: a reverse forward the machine's sshd refuses because the connection of a remuda that just
-// restarted still holds the port there is asked again, a minute in all, while this connection is the machine's.
-var doorTries, doorPause = 7, 10 * time.Second
+// doorTries and doorPause: a step of opening the door that failed is asked again, a minute in all, while this
+// connection is the machine's. doorPlaceTries is placing it, which outwaits the locks a dead script left: they stand
+// for doorLockAhead half minutes at most, and this runs once per connection. doorPortAsks is how many asks DoorPort gets
+// before anything else is tried: after this remuda's own restart the machine's sshd holds it a moment for the
+// connection that just ended.
+var doorTries, doorPlaceTries, doorPause, doorPortAsks = 13, 33, 5 * time.Second, 3
 
-// forwardSoon asks for the forward until it holds, the tries run out or the connection is no longer current.
-func forwardSoon(forward func() error, current func() bool) error {
+// doorLockAhead is how many half minutes ahead of the machine's clock a lock still counts, two minutes.
+const doorLockAhead = 4
+
+// trySoon runs the step until it holds, the tries run out or the connection is no longer current.
+func trySoon(tries int, step func() error, current func() bool) error {
 	var err error
-	for try := 0; try < doorTries; try++ {
+	for try := 0; try < tries; try++ {
 		if try > 0 {
 			time.Sleep(doorPause)
-			if !current() {
-				return errors.New("the connection went away")
-			}
 		}
-		if err = forward(); err == nil {
+		if !current() {
+			return errors.New("the connection went away")
+		}
+		if err = step(); err == nil {
 			return nil
 		}
 	}
 	return err
 }
 
+// doorForward opens the door on DoorPort or, once that was refused doorPortAsks times, on a port the sshd picks: a
+// connection the network lost holds DoorPort for hours, sshd not noticing. DoorScript decides whether it may stand.
+func doorForward(conn *sshx.Conn, localPort, asked int) (int, error) {
+	port, refused := conn.ForwardBack(DoorPort, localPort)
+	if refused == nil {
+		return port, nil
+	}
+	if asked < doorPortAsks {
+		return 0, refused
+	}
+	if port, err := conn.ForwardBack(0, localPort); err == nil {
+		return port, nil
+	}
+	return 0, refused
+}
+
 // openDoor lets the machine's agents reach this remuda's task list, once per connection; a sshd that forbids the
-// reverse forward, or a state dir that cannot be written, is a log line, never a failure of the connection.
+// reverse forward, a state dir that cannot be written or another cockpit's live door is a log line, never a failure of
+// the connection, and a forward no door came of is let go.
 func (mc *Machine) openDoor(conn *sshx.Conn) {
 	door := mc.door
 	if door == nil || door.LocalPort == 0 || door.Key == nil {
@@ -64,22 +129,83 @@ func (mc *Machine) openDoor(conn *sshx.Conn) {
 		defer mc.mu.Unlock()
 		return mc.conn == conn
 	}
-	if err := forwardSoon(func() error { return conn.ForwardBack(DoorPort, door.LocalPort) }, current); err != nil {
+	// A Conn reaches whichever master the host has now, so each step runs under doorMu while conn is the machine's: the
+	// next connection's first step waits for one under way, and once it is the machine's this one runs no more.
+	whileCurrent := func(step func() error) error {
+		mc.doorMu.Lock()
+		defer mc.doorMu.Unlock()
+		if !current() {
+			return errors.New("the connection went away")
+		}
+		return step()
+	}
+	letGo := func(remotePort int) {
+		whileCurrent(func() error {
+			conn.CancelForwardBack(remotePort, door.LocalPort)
+			return nil
+		})
+	}
+	letGo(0) // one this cockpit left on a reused master is no other cockpit's live door
+	var port, asked int
+	forward := func() error {
+		return whileCurrent(func() (err error) {
+			asked++
+			port, err = doorForward(conn, door.LocalPort, asked)
+			return err
+		})
+	}
+	if err := trySoon(doorTries, forward, current); err != nil {
 		log.Printf("%s: no door for its agents to the tasks here: %v", mc.Cfg.Host, err)
 		return
 	}
-	mc.mu.Lock()
-	have := mc.doorKey
-	mc.mu.Unlock()
-	key, err := door.Key(mc.Label(), have)
-	if err != nil {
+	placed := false
+	defer func() {
+		if placed {
+			return
+		}
+		if port != DoorPort {
+			port = 0
+		}
+		letGo(port)
+	}()
+	var key string
+	issueKey := func() (err error) { // a new key replaces the machine's last one, which the next connection may have placed
+		mc.mu.Lock()
+		have := mc.doorKey
+		mc.mu.Unlock()
+		if key, err = door.Key(mc.Label(), have); err != nil {
+			return err
+		}
+		mc.mu.Lock()
+		mc.doorKey = key
+		mc.mu.Unlock()
+		return nil
+	}
+	if err := whileCurrent(issueKey); err != nil {
 		log.Printf("%s: no key for its agents: %v", mc.Cfg.Host, err)
 		return
 	}
-	mc.mu.Lock()
-	mc.doorKey = key
-	mc.mu.Unlock()
-	if _, err := conn.RunWithInput(DoorScript(fmt.Sprintf("http://127.0.0.1:%d", DoorPort)), []byte(key+"\n"), 15*time.Second); err != nil {
-		log.Printf("%s: the door files for its agents could not be placed: %v", mc.Cfg.Host, err)
+	var answer string
+	place := func() error {
+		out, err := conn.RunWithInput(DoorScript(doorURL(port)), []byte(key+"\n"), 15*time.Second)
+		if err != nil {
+			return err
+		}
+		lines := script.Lines(string(out))
+		if len(lines) == 0 {
+			return errors.New("the door script said nothing")
+		}
+		if answer = strings.TrimSpace(lines[len(lines)-1]); answer == doorBusy {
+			return errors.New("another cockpit is placing its door")
+		}
+		return nil
 	}
+	err := trySoon(doorPlaceTries, func() error { return whileCurrent(place) }, current)
+	if placed = err == nil && answer == doorPlaced; placed {
+		return
+	}
+	if err == nil {
+		err = errors.New("a live door stands there, or it could not be looked at, so it stays as it is")
+	}
+	log.Printf("%s: the door files for its agents were not placed: %v", mc.Cfg.Host, err)
 }

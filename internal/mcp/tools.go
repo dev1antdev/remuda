@@ -22,10 +22,9 @@ var priorities = []string{"none", "low", "medium", "high", "urgent", "do now"}
 
 // Tools is the task list as the tools see it.
 type Tools struct {
-	Client  *tasksapi.Client
-	Source  string           // what a task made here is marked with: the agent's pane, from HERDR_PANE_ID
-	Trouble error            // no door on this machine: every call answers the reason, so the agent can say so
-	Now     func() time.Time // the clock, for the spans agents_list says; nil is time.Now
+	Client *tasksapi.Client
+	Source string           // what a task made here is marked with: the agent's pane, from HERDR_PANE_ID
+	Now    func() time.Time // the clock, for the spans agents_list says; nil is time.Now
 }
 
 // Spec is one tool as tools/list describes it.
@@ -117,9 +116,6 @@ func (t *Tools) Call(name string, args json.RawMessage) (string, error) {
 	}
 	if !specNames()[name] {
 		return "", fmt.Errorf("%w: %s", errNoTool, name)
-	}
-	if t.Trouble != nil {
-		return "", t.Trouble
 	}
 	switch name {
 	case "tasks_list":

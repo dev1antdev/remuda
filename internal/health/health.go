@@ -259,7 +259,7 @@ grep -q 'remuda[^"]*statusline' "$HOME/.claude/settings.json" 2>/dev/null && ech
 ` + SettingsScript + `echo "df=$(df -kP "$HOME" 2>/dev/null | tail -1)"
 echo "uptime=$(uptime 2>/dev/null)"
 ` + HostScript + WindowsHostScript + `tf=""; for f in "$HOME/Library/Application Support/remuda/token" "$HOME/.config/remuda/token"; do [ -r "$f" ] && { tf="$f"; break; }; done
-if [ -n "$tf" ] && command -v curl >/dev/null 2>&1; then ph=$(curl -s -m 2 http://127.0.0.1:7317/api/health 2>/dev/null); case "$ph" in *'"ok":true'*) echo "peer=$ph"; echo "peer_token=$(cat "$tf")";; esac; fi
+if [ -n "$tf" ] && command -v curl >/dev/null 2>&1; then ph=$(` + script.Health("http://127.0.0.1:7317") + `); case "$ph" in *'"ok":true'*) echo "peer=$ph"; echo "peer_token=$(cat "$tf")";; esac; fi
 `
 }
 

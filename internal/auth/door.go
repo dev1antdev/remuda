@@ -13,7 +13,8 @@ import (
 
 // The door is how the agents on a machine reach this remuda's task list: two files in that machine's state dir,
 // the tasks-only key and the address, read by `remuda mcp` and `remuda tasks` there.
-// On a remote machine the address is the reverse forward of this remuda's port over the ssh master (machines.DoorPort).
+// On a remote machine the address is the reverse forward of this remuda's port over the ssh master (machines.DoorPort,
+// or the port its sshd picked while that one is held).
 const (
 	DoorKeyFile = "agent-key"
 	DoorURLFile = "agent-url"

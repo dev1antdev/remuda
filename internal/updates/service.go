@@ -12,6 +12,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/jobs"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/restart"
+	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/shell"
 	"github.com/dev1antdev/remuda/internal/watch"
 )
@@ -423,7 +424,7 @@ func (s *Service) deploySelf(mc *machines.Machine, say func(string)) error {
 	say("waiting for remuda there…")
 	for i := 0; i < 30; i++ {
 		time.Sleep(time.Second)
-		if out, err := shell.Text(mc, `curl -s -m 2 http://127.0.0.1:7317/api/health 2>/dev/null`, 10*time.Second); err == nil && strings.Contains(out, `"ok":true`) {
+		if out, err := shell.Text(mc, script.Health("http://127.0.0.1:7317"), 10*time.Second); err == nil && strings.Contains(out, `"ok":true`) {
 			say("remuda there answers: " + strings.TrimSpace(out))
 			return nil
 		}

@@ -285,7 +285,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   nothing, so the file unlinked before the ask would be gone for good),
   the reverse forward of this remuda's port (`ForwardBack`: `-O forward
   -R 127.0.0.1:<remote>:127.0.0.1:<ours>`, a forward of that port left
-  on a reused master cancelled first), remote exec (`RunWithInput` for a
+  on a reused master cancelled first; asked as 0, a port the host picks,
+  which the master prints), remote exec (`RunWithInput` for a
   secret that must not travel on a command line), and the `ssh -tt … sh
   -c 'HERDR_SOCKET_PATH=<the machine's socket> exec herdr terminal
   attach …'` command builder (`AttachCmd`: the socket as the local attach
@@ -390,16 +391,34 @@ components and icons as rules for whoever changes it: @docs/design.md
   background: dial master → one script reads `$HOME` and finds the herdr
   bin (incl. `~/.local/bin`) → RPC transport → `Ping` → **the door**
   (`door.go`, in a goroutine, once per connection): this remuda's port
-  forwarded back to `DoorPort` 7318 on the machine's loopback and
-  `DoorScript` placing `agent-key` (the machine's tasks-only key, on
+  forwarded back to `DoorPort` 7318 on the machine's loopback or, when
+  the machine's sshd refused that `doorPortAsks` times (after this
+  remuda's own restart it holds 7318 a moment for the connection that
+  just ended), to a port it picks (`doorForward`: a connection the network
+  lost holds 7318 for hours, sshd not noticing, and a request to it hangs),
+  and `DoorScript` placing `agent-key` (the machine's tasks-only key, on
   stdin, never on a command line, kept on the `Machine` so a reconnect
   places the same one while it still passes) and `agent-url`
-  (`http://127.0.0.1:7318`) in the machine's state dir, 0600 — the files
-  `remuda mcp` and `remuda tasks` read there; `Door{LocalPort, Key}` is
-  the manager's, given by `internal/app`; a refused `-R` is asked again
-  for a minute while the connection stands (`forwardSoon`: after this
-  remuda's own restart the machine's sshd may still hold 7318 for the
-  connection that just ended), then a sshd that forbids it is a
+  (`http://127.0.0.1:<that port>`), each replaced whole, in the machine's
+  state dir, 0600 — the files `remuda mcp` and `remuda tasks` read there.
+  **Cockpits sharing a machine**: the script looks and places under one
+  lock (`agent-door.lock.<half minute>`, this one and the next, none taken
+  while one of now or of the next `doorLockAhead` half minutes stands; a
+  dead script's lapse or, dated further ahead, count for nothing, placing
+  is asked again long enough to outwait them, `doorPlaceTries`; each run
+  marks its locks and places nothing once they are no longer its own) and
+  answers `placed`, `taken` or `busy`. A door that answers `/api/health` — asked straight, past any
+  proxy; one nobody could ask counts — stays against a door that would
+  move, and one on a port of its own (`agent-door-moved` names it, so a
+  cockpit on the machine itself, whose `agent-url` is its own `-addr`, is
+  none) stays against 7318 too; a forward no door came of, for whatever
+  reason, is cancelled (`CancelForwardBack`), and one a reused master still
+  holds on a picked port goes first. A `Conn` reaches the host's master of
+  the moment, so every step runs under `doorMu` while its connection is
+  the machine's, the next connection's first step waiting for it. `Door{LocalPort, Key}`
+  is the manager's, given by `internal/app`; a step that failed is asked
+  again while the connection stands (`trySoon`, a minute, placing longer),
+  then a sshd that forbids the forward is a
   log line, not a failure of the connection. **Two RPC
   transports**: a forwarded unix socket when the sshd allows streamlocal
   forwarding, else one `ssh host nc -U <sock>` exec per request
@@ -2978,7 +2997,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   every listening TCP port above 1023 with its pid, process, working
   folder (its parent's when it has none) and arguments; `Parse` keeps one
   per port (the IPv4 loopback's socket first), leaves out the ports given
-  (the cockpit's own `-addr`, 7317, the door 7318, code-server's), the
+  (the cockpit's own `-addr`, 7317, the door 7318 — on a port its sshd
+  picked, the door goes by that process's name — code-server's), the
   processes remuda, herdr, ssh and Tailscale run, an agent's own
   (`agentProgram`: claude, codex, gemini or kimi as the program or the
   script node or python runs — Claude Code holds a loopback port in its
@@ -6651,8 +6671,11 @@ components and icons as rules for whoever changes it: @docs/design.md
   `REMUDA_AGENT_KEY`, else the state dir's `agent-url` and `agent-key`
   files the remuda holding the list leaves on every machine its agents
   run on (`http://127.0.0.1:7317` on the cockpit, its door forwarded
-  over ssh on a remote); without a door the server still answers, every
-  tool saying why (`Tools.Trouble`), so the agent can tell the person.
+  over ssh on a remote), read again for every call by a running `remuda
+  mcp` (`tasksapi.Following`: a reconnect may leave the door on another
+  port or with another key, or place the first one); without a door the
+  server still answers, every tool saying why, so the agent can tell the
+  person.
   `remuda tasks list|show|add|move|comment` is the same from a shell
   (`cmd/remuda/tasks.go`; `-json` is the list's own answer). `remuda mcp
   install|status|uninstall [-host H]` (`setup.MCP`, `install-mcp.sh`,

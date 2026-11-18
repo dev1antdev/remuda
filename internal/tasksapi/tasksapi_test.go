@@ -95,3 +95,67 @@ func TestRefusalsBecomeErrors(t *testing.T) {
 		t.Errorf("401: %v", err)
 	}
 }
+
+// TestAFollowingClientGoesWhereTheDoorMoved: the cockpit reconnected and left another address and key, and a client
+// that was already running uses them; with the files gone it keeps the door it had, and New never looks again.
+func TestAFollowingClientGoesWhereTheDoorMoved(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("REMUDA_STATE_DIR", dir)
+	t.Setenv(EnvKey, "")
+	t.Setenv(EnvURL, "")
+	var heard []string
+	listen := func(name string) *httptest.Server {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			heard = append(heard, name+" "+r.Header.Get("Authorization"))
+			w.Write([]byte("[]"))
+		}))
+		t.Cleanup(srv.Close)
+		return srv
+	}
+	first, second := listen("first"), listen("second")
+	place := func(url, key string) {
+		os.WriteFile(filepath.Join(dir, URLFile), []byte(url+"\n"), 0o600)
+		os.WriteFile(filepath.Join(dir, KeyFile), []byte(key+"\n"), 0o600)
+	}
+	place(first.URL, "rk_one")
+	door, err := FindDoor()
+	if err != nil {
+		t.Fatal(err)
+	}
+	following, fixed := Following(door), New(door)
+	place(second.URL, "rk_two")
+	if _, err := following.Labels(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fixed.Labels(); err != nil {
+		t.Fatal(err)
+	}
+	os.Remove(filepath.Join(dir, KeyFile))
+	if _, err := following.Labels(); err != nil {
+		t.Fatal(err)
+	}
+	want := "second Bearer rk_two|first Bearer rk_one|first Bearer rk_one"
+	if got := strings.Join(heard, "|"); got != want {
+		t.Fatalf("heard %s, want %s", got, want)
+	}
+}
+
+// TestAFollowingClientWaitsForTheFirstDoor: started before any door was placed, it says why and then uses the first.
+func TestAFollowingClientWaitsForTheFirstDoor(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("REMUDA_STATE_DIR", dir)
+	t.Setenv(EnvKey, "")
+	t.Setenv(EnvURL, "")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("[]")) }))
+	defer srv.Close()
+	door, _ := FindDoor()
+	client := Following(door)
+	if _, err := client.Labels(); err == nil || !strings.Contains(err.Error(), KeyFile) {
+		t.Fatalf("no door yet: %v", err)
+	}
+	os.WriteFile(filepath.Join(dir, URLFile), []byte(srv.URL+"\n"), 0o600)
+	os.WriteFile(filepath.Join(dir, KeyFile), []byte("rk_first\n"), 0o600)
+	if _, err := client.Labels(); err != nil {
+		t.Fatal(err)
+	}
+}
