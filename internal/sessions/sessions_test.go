@@ -53,16 +53,18 @@ func (f *fakeClient) AgentStart(paneID, kind string) error {
 	return nil
 }
 
-func TestSubmitPrefersThePromptAndTypesForAShell(t *testing.T) {
+func TestSubmitGoesOnlyToAnAgent(t *testing.T) {
 	in := NewInput(nil, nil)
 	ref := events.PaneRef{Machine: "local", Pane: "w1:p1"}
 	agent := &fakeClient{}
 	if err := in.Submit(agent, ref, "hello"); err != nil || len(agent.typed) != 1 || agent.typed[0] != "prompt:hello" {
 		t.Fatalf("agent: %v %v", err, agent.typed)
 	}
-	shell := &fakeClient{promptErr: &herdr.Error{Code: "agent_not_found"}}
-	if err := in.Submit(shell, ref, "ls"); err != nil || len(shell.typed) != 1 || shell.typed[0] != "text:ls" || len(shell.keys) != 1 || shell.keys[0][0] != "enter" {
-		t.Fatalf("shell: %v %v %v", err, shell.typed, shell.keys)
+	for code, want := range map[string]error{"agent_not_found": ErrNoAgent, "agent_not_ready": ErrAgentNotReady} {
+		pane := &fakeClient{promptErr: &herdr.Error{Code: code}}
+		if err := in.Submit(pane, ref, "rm -rf build"); !errors.Is(err, want) || !Undelivered(err) || len(pane.typed) != 0 || len(pane.keys) != 0 {
+			t.Errorf("%s: %v, typed %v, keys %v", code, err, pane.typed, pane.keys)
+		}
 	}
 	blocked := &fakeClient{promptErr: &herdr.Error{Code: "agent_blocked"}}
 	if err := in.Submit(blocked, ref, "x"); !errors.Is(err, ErrAgentBusy) || len(blocked.typed) != 0 {

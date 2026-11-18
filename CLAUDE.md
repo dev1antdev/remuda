@@ -4564,7 +4564,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   request panel names, the pane being the agent picked, and `{check}`,
   one failed check by name — compose on the pane's machine and send the
   text through `sessions.Input.SubmitToAgent` — 409 for a pane whose
-  agent left, an agent waiting on a question or nothing to send, 502 with gh's (or
+  agent left or is not up yet, an agent waiting on a question or nothing to send, 502 with gh's (or
   glab's) line, 400 for a link that is neither.
   **A merged worktree goes** through the remove dialog below: the
   request's menu on the tile (`askRemoveWorktree`) opens it.
@@ -6877,8 +6877,11 @@ components and icons as rules for whoever changes it: @docs/design.md
   `ctrl`, `alt` and `shift`, each once, before a named key — enter, esc,
   tab, space, backspace, the arrows — or `ctrl` / `alt` before a letter or
   digit; a printable key alone is text), `RefOK` (a branch name git gets as an
-  argument), and `Input`: one lock per pane, `Submit` (`agent.prompt`, else
-  `send_text` + Enter; `ErrAgentBusy` while a menu is open; **a message
+  argument), and `Input`: one lock per pane, `Submit` (`agent.prompt` only: what
+  is written for an agent is never typed, since the pane may hold its
+  shell, which would run every line; `ErrNoAgent` without one,
+  `ErrAgentNotReady` while it comes up, `ErrAgentBusy` while a menu is
+  open, each a 409 that leaves the person's draft; **a message
   that names a picture goes to Claude Code in two steps** — `settle.go`,
   tested on a paper client: herdr 0.9.5 writes the paste and its Enter as
   one, Claude Code swallows an Enter that arrives while it takes a paste
