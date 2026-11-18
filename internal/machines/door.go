@@ -35,15 +35,9 @@ const (
 
 func doorURL(port int) string { return fmt.Sprintf("http://127.0.0.1:%d", port) }
 
-// DoorScript places the door at url in the machine's state dir, private to the user: the dir remuda keeps there
-// (`state.Dir()` computed in sh), the key read on stdin, never on a command line, each file replaced whole since a
-// running `remuda mcp` reads them for every call. Cockpits sharing the machine go one at a time under the locks of this
-// half minute and the next: none is taken while one of now or of the next doorLockAhead half minutes stands, so a clock
-// set back waits for it, those of a script that died lapse by themselves or, dated further ahead, count for nothing, and
-// one whose clock left them meanwhile places nothing (sh has no lock that dies with its process on both macOS and Linux).
-// A door that answers stays — asked straight, past any proxy, and when nobody
-// can ask too: one on a port of its own (agent-door-moved names it, so a cockpit on the machine itself is none) against
-// any newcomer, any other against a door that would move. The port of a connection the network lost says nothing.
+// DoorScript places the door at url in the machine's state dir under a lock, the key read on stdin, each file replaced
+// whole, and answers how it went: a door that answers, or that cannot be asked, may stay (CLAUDE.md, "Cockpits sharing a
+// machine"). sh has no lock that dies with its process on both macOS and Linux, hence locks named by the time.
 func DoorScript(url string) string {
 	return "umask 077\n" + script.StateDir("d") + `
 url=` + script.Quote(url) + `
@@ -63,7 +57,7 @@ was=$(head -n 1 "$d/agent-url" 2>/dev/null)
 moved=$(head -n 1 "$d/agent-door-moved" 2>/dev/null)
 if [ -n "$was" ] && [ "$was" != "$url" ] && { [ "$url" != "$usual" ] || [ "$was" = "$moved" ]; }; then
   command -v curl >/dev/null 2>&1 || { echo ` + doorTaken + `; exit 0; }
-  case "$(curl -q -s -m 2 --noproxy '*' "$was/api/health" 2>/dev/null)" in *'"ok":true'*) echo ` + doorTaken + `; exit 0 ;; esac
+  case "$(` + script.Health(`"$was"`) + `)" in *'"ok":true'*) echo ` + doorTaken + `; exit 0 ;; esac
 fi
 still=$(($(date +%s) / 30))
 [ "$still" -ge "$now" ] && [ "$still" -le $((now + 1)) ] || { echo ` + doorBusy + `; exit 0; }
@@ -132,6 +126,7 @@ func (mc *Machine) openDoor(conn *sshx.Conn) {
 		defer mc.mu.Unlock()
 		return mc.conn == conn
 	}
+	conn.CancelForwardBack(0, door.LocalPort) // one this cockpit left on a reused master is no other cockpit's live door
 	var port, asked int
 	forward := func() (err error) {
 		asked++
@@ -144,14 +139,13 @@ func (mc *Machine) openDoor(conn *sshx.Conn) {
 	}
 	placed := false
 	defer func() {
-		if placed {
+		if placed || !current() { // a Conn reaches whichever master the host has now: never the next connection's door
 			return
 		}
-		forwarded := port
 		if port != DoorPort {
-			forwarded = 0
+			port = 0
 		}
-		conn.CancelForwardBack(forwarded, door.LocalPort)
+		conn.CancelForwardBack(port, door.LocalPort)
 	}()
 	mc.mu.Lock()
 	have := mc.doorKey
@@ -170,11 +164,11 @@ func (mc *Machine) openDoor(conn *sshx.Conn) {
 		if err != nil {
 			return err
 		}
-		fields := strings.Fields(string(out))
-		if len(fields) == 0 {
+		lines := script.Lines(string(out))
+		if len(lines) == 0 {
 			return errors.New("the door script said nothing")
 		}
-		if answer = fields[len(fields)-1]; answer == doorBusy {
+		if answer = strings.TrimSpace(lines[len(lines)-1]); answer == doorBusy {
 			return errors.New("another cockpit is placing its door")
 		}
 		return nil

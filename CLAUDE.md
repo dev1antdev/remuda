@@ -412,9 +412,12 @@ components and icons as rules for whoever changes it: @docs/design.md
   move, and one on a port of its own (`agent-door-moved` names it, so a
   cockpit on the machine itself, whose `agent-url` is its own `-addr`, is
   none) stays against 7318 too; a forward no door came of, for whatever
-  reason, is cancelled (`CancelForwardBack`). `Door{LocalPort, Key}` is the manager's, given by
-  `internal/app`; a step that failed is asked again for a minute while the
-  connection stands (`trySoon`), then a sshd that forbids the forward is a
+  reason, is cancelled (`CancelForwardBack`, unless the connection went:
+  a `Conn` reaches the host's master of the moment), and one a reused
+  master still holds on a picked port goes first. `Door{LocalPort, Key}`
+  is the manager's, given by `internal/app`; a step that failed is asked
+  again while the connection stands (`trySoon`, a minute, placing longer),
+  then a sshd that forbids the forward is a
   log line, not a failure of the connection. **Two RPC
   transports**: a forwarded unix socket when the sshd allows streamlocal
   forwarding, else one `ssh host nc -U <sock>` exec per request

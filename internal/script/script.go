@@ -36,6 +36,12 @@ func Stat(file, gnuFormat, bsdFormat string) string {
 	return "stat -c " + Quote(gnuFormat) + " " + file + " 2>/dev/null || stat -f " + Quote(bsdFormat) + " " + file
 }
 
+// Health asks the remuda at url how it is, past ~/.curlrc and any proxy, every door and peer being on the loopback; a
+// live one's answer holds "ok":true. url is a shell word already, without its path.
+func Health(url string) string {
+	return "curl -q -s -m 2 --noproxy 127.0.0.1 " + url + "/api/health 2>/dev/null"
+}
+
 // WindowsDefaultShell is the one line, in an administrator PowerShell on a Windows PC, that makes Git Bash the shell its
 // OpenSSH server runs a command in, so every script here runs there as it does on a Mac or Linux.
 const WindowsDefaultShell = `New-ItemProperty -Path "HKLM:\SOFTWARE\OpenSSH" -Name DefaultShell -Value "C:\Program Files\Git\bin\bash.exe" -PropertyType String -Force`

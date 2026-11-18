@@ -89,6 +89,7 @@ type sshdAtTheDoor struct {
 	busyFor   int    // how many runs of it answer busy first
 	forbidden bool   // its sshd refuses a port of its own choice too
 	noKey     bool   // this remuda cannot make a key
+	goneAtKey bool   // the connection is replaced while the key is made, which then fails
 }
 
 // doorRun is what came of opening the door: the scripts that placed it, and the forwards cancelled.
@@ -140,13 +141,19 @@ echo "$answer"
 		t.Fatal(err)
 	}
 	t.Cleanup(conn.Close)
+	mc := &Machine{conn: conn}
 	key := func(string, string) (string, error) {
-		if sshd.noKey {
+		if sshd.goneAtKey {
+			mc.mu.Lock()
+			mc.conn = nil
+			mc.mu.Unlock()
+		}
+		if sshd.noKey || sshd.goneAtKey {
 			return "", errors.New("the disk is full")
 		}
 		return "rk_door", nil
 	}
-	mc := &Machine{conn: conn, door: &Door{LocalPort: 7317, Key: key}}
+	mc.door = &Door{LocalPort: 7317, Key: key}
 	mc.openDoor(conn)
 	placed, _ := os.ReadFile(kept)
 	cancelled, _ := os.ReadFile(cancels)
@@ -159,6 +166,17 @@ func TestTheDoorStaysOnItsPortWhileThatIsFree(t *testing.T) {
 	run := doorOverSSH(t, sshdAtTheDoor{})
 	if !strings.Contains(run.placed, "http://127.0.0.1:7318") || !strings.Contains(run.placed, "rk_door") {
 		t.Fatalf("placed: %s", run.placed)
+	}
+	if first, _, _ := strings.Cut(run.cancels, "\n"); !strings.Contains(first, "127.0.0.1:0:") {
+		t.Fatalf("what a reused master held on a picked port was not let go first: %s", run.cancels)
+	}
+}
+
+// TestAConnectionGoneLeavesTheForwardsAlone: the next connection may have its door on the same port by now.
+func TestAConnectionGoneLeavesTheForwardsAlone(t *testing.T) {
+	run := doorOverSSH(t, sshdAtTheDoor{goneAtKey: true})
+	if strings.Count(run.cancels, "127.0.0.1:7318:") != 1 { // the one before asking
+		t.Fatalf("cancelled: %s", run.cancels)
 	}
 }
 
@@ -180,7 +198,7 @@ func TestADoorWhosePortIsHeldOpensOnAnother(t *testing.T) {
 	if !strings.Contains(run.placed, "http://127.0.0.1:50236") || !strings.Contains(run.placed, "rk_door") {
 		t.Fatalf("placed: %s", run.placed)
 	}
-	if strings.Count(run.cancels, "127.0.0.1:0:") != 1 {
+	if strings.Count(run.cancels, "127.0.0.1:0:") != 2 { // what a reused master held, and before asking
 		t.Fatalf("the door it stands on was let go: %s", run.cancels)
 	}
 }
@@ -211,11 +229,11 @@ func TestAForwardNoDoorCameOfIsLetGo(t *testing.T) {
 			if run.placed != "" {
 				t.Fatalf("placed: %s", run.placed)
 			}
-			spec := "127.0.0.1:7318:"
+			spec, cancels := "127.0.0.1:7318:", 2 // before asking, and letting it go
 			if sshd.heldFor > 0 {
-				spec = "127.0.0.1:0:"
+				spec, cancels = "127.0.0.1:0:", 3 // and what a reused master held
 			}
-			if strings.Count(run.cancels, spec) != 2 { // the one before asking, and letting it go
+			if strings.Count(run.cancels, spec) != cancels {
 				t.Fatalf("cancelled: %s", run.cancels)
 			}
 		})
