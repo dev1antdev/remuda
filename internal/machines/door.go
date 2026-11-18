@@ -129,21 +129,30 @@ func (mc *Machine) openDoor(conn *sshx.Conn) {
 		defer mc.mu.Unlock()
 		return mc.conn == conn
 	}
-	// A Conn reaches whichever master the host has now, so a forward is let go only under doorMu, while conn is the
-	// machine's: the next connection starts here, behind this lock, and asks for nothing before it has it.
-	letGo := func(remotePort int) {
+	// A Conn reaches whichever master the host has now, so each step runs under doorMu while conn is the machine's: the
+	// next connection's first step waits for one under way, and once it is the machine's this one runs no more.
+	whileCurrent := func(step func() error) error {
 		mc.doorMu.Lock()
 		defer mc.doorMu.Unlock()
-		if current() {
-			conn.CancelForwardBack(remotePort, door.LocalPort)
+		if !current() {
+			return errors.New("the connection went away")
 		}
+		return step()
+	}
+	letGo := func(remotePort int) {
+		whileCurrent(func() error {
+			conn.CancelForwardBack(remotePort, door.LocalPort)
+			return nil
+		})
 	}
 	letGo(0) // one this cockpit left on a reused master is no other cockpit's live door
 	var port, asked int
-	forward := func() (err error) {
-		asked++
-		port, err = doorForward(conn, door.LocalPort, asked)
-		return err
+	forward := func() error {
+		return whileCurrent(func() (err error) {
+			asked++
+			port, err = doorForward(conn, door.LocalPort, asked)
+			return err
+		})
 	}
 	if err := trySoon(doorTries, forward, current); err != nil {
 		log.Printf("%s: no door for its agents to the tasks here: %v", mc.Cfg.Host, err)
@@ -185,7 +194,7 @@ func (mc *Machine) openDoor(conn *sshx.Conn) {
 		}
 		return nil
 	}
-	err = trySoon(doorPlaceTries, place, current)
+	err = trySoon(doorPlaceTries, func() error { return whileCurrent(place) }, current)
 	if placed = err == nil && answer == doorPlaced; placed {
 		return
 	}

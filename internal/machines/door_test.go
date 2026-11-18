@@ -91,6 +91,7 @@ type sshdAtTheDoor struct {
 	noKey     bool   // this remuda cannot make a key
 	goneAtKey bool   // the connection is replaced while the key is made, which then fails
 	letGoing  bool   // the connection before this one is still letting go of its forward
+	pauseAt   string // the step that waits, asking for 7318 or placing, for the test to look
 }
 
 // doorRun is what came of opening the door: the scripts that placed it, and the forwards cancelled.
@@ -107,7 +108,7 @@ func doorOverSSH(t *testing.T, sshd sshdAtTheDoor) doorRun {
 	doorTries, doorPlaceTries, doorPause = 6, 12, time.Millisecond
 	t.Cleanup(func() { doorTries, doorPlaceTries, doorPause = tries, placeTries, pause })
 	dir := t.TempDir()
-	runs := filepath.Join(dir, "runs")
+	runs, resume := filepath.Join(dir, "runs"), filepath.Join(dir, "resume")
 	kept, asks, cancels := filepath.Join(dir, "scripts"), filepath.Join(dir, "asks"), filepath.Join(dir, "cancels")
 	stub := `#!/bin/sh
 case " $* " in
@@ -118,6 +119,7 @@ case " $* " in
   echo 50236; exit 0 ;;
 *" -O forward -R 127.0.0.1:7318:"*)
   echo asked >> ` + script.Quote(asks) + `
+  [ "$DOOR_PAUSE_AT" != forward ] || while [ ! -e ` + script.Quote(resume) + ` ]; do sleep 0.01; done
   [ $(($(wc -l < ` + script.Quote(asks) + `))) -gt "$DOOR_HELD_FOR" ] && exit 0
   echo "remote port forwarding failed for listen port 7318" >&2; exit 255 ;;
 *" -O "*) exit 0 ;;
@@ -125,6 +127,7 @@ esac
 for line; do :; done
 answer=${DOOR_SCRIPT:-placed}
 echo ran >> ` + script.Quote(runs) + `
+[ "$DOOR_PAUSE_AT" != place ] || while [ ! -e ` + script.Quote(resume) + ` ]; do sleep 0.01; done
 [ $(($(wc -l < ` + script.Quote(runs) + `))) -gt "$DOOR_BUSY_FOR" ] || answer=busy
 if [ "$answer" = placed ]; then { printf '%s\n' "$line"; cat; } >> ` + script.Quote(kept) + `; fi
 echo "$answer"
@@ -136,6 +139,7 @@ echo "$answer"
 	t.Setenv("DOOR_HELD_FOR", strconv.Itoa(sshd.heldFor))
 	t.Setenv("DOOR_SCRIPT", sshd.script)
 	t.Setenv("DOOR_BUSY_FOR", strconv.Itoa(sshd.busyFor))
+	t.Setenv("DOOR_PAUSE_AT", sshd.pauseAt)
 	t.Setenv("DOOR_FORBIDDEN", map[bool]string{true: "1"}[sshd.forbidden])
 	conn, err := sshx.Dial("door-test-" + filepath.Base(dir))
 	if err != nil {
@@ -155,7 +159,24 @@ echo "$answer"
 		return "rk_door", nil
 	}
 	mc.door = &Door{LocalPort: 7317, Key: key}
-	if sshd.letGoing {
+	if sshd.pauseAt != "" {
+		reached := map[string]string{"forward": asks, "place": runs}[sshd.pauseAt]
+		opened := make(chan struct{})
+		go func() { mc.openDoor(conn); close(opened) }()
+		for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(5 * time.Millisecond) {
+			if _, err := os.Stat(reached); err == nil {
+				break
+			}
+		}
+		if mc.doorMu.TryLock() {
+			mc.doorMu.Unlock()
+			t.Errorf("%s runs without the door's lock", sshd.pauseAt)
+		}
+		if err := os.WriteFile(resume, nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		<-opened
+	} else if sshd.letGoing {
 		mc.doorMu.Lock()
 		opened := make(chan struct{})
 		go func() { mc.openDoor(conn); close(opened) }()
@@ -198,6 +219,17 @@ func TestAConnectionGoneLeavesTheForwardsAlone(t *testing.T) {
 func TestTheNextDoorWaitsForTheForwardBeingLetGo(t *testing.T) {
 	if run := doorOverSSH(t, sshdAtTheDoor{letGoing: true}); !strings.Contains(run.placed, "rk_door") {
 		t.Fatalf("placed: %q", run.placed)
+	}
+}
+
+// TestEveryStepOfTheDoorHoldsItsLock: the next connection's door cannot begin while one is on its way to the master.
+func TestEveryStepOfTheDoorHoldsItsLock(t *testing.T) {
+	for _, step := range []string{"forward", "place"} {
+		t.Run(step, func(t *testing.T) {
+			if run := doorOverSSH(t, sshdAtTheDoor{pauseAt: step}); !strings.Contains(run.placed, "rk_door") {
+				t.Fatalf("placed: %q", run.placed)
+			}
+		})
 	}
 }
 

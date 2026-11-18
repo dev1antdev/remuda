@@ -412,10 +412,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   move, and one on a port of its own (`agent-door-moved` names it, so a
   cockpit on the machine itself, whose `agent-url` is its own `-addr`, is
   none) stays against 7318 too; a forward no door came of, for whatever
-  reason, is cancelled (`CancelForwardBack`, only under `doorMu` while the
-  connection is the machine's: a `Conn` reaches the host's master of the
-  moment, and the next connection's door begins behind that lock), and one
-  a reused master still holds on a picked port goes first. `Door{LocalPort, Key}`
+  reason, is cancelled (`CancelForwardBack`), and one a reused master still
+  holds on a picked port goes first. A `Conn` reaches the host's master of
+  the moment, so every step runs under `doorMu` while its connection is
+  the machine's, the next connection's first step waiting for it. `Door{LocalPort, Key}`
   is the manager's, given by `internal/app`; a step that failed is asked
   again while the connection stands (`trySoon`, a minute, placing longer),
   then a sshd that forbids the forward is a
