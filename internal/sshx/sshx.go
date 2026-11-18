@@ -274,7 +274,7 @@ func (c *Conn) RunWithInput(command string, stdin []byte, timeout time.Duration)
 // here, for as long as the master lives, and says which port it is; a forward of that port left on a reused master is
 // cancelled first, so the new one is not refused as taken.
 func (c *Conn) ForwardBack(remotePort, localPort int) (int, error) {
-	c.cmd("-O", "cancel", "-R", forwardBackSpec(remotePort, localPort), c.Host).Run()
+	c.CancelForwardBack(remotePort, localPort)
 	cmd := c.forwardBackCmd(remotePort, localPort)
 	var errb bytes.Buffer
 	cmd.Stderr = &errb
@@ -290,6 +290,11 @@ func (c *Conn) ForwardBack(remotePort, localPort int) (int, error) {
 		return 0, fmt.Errorf("ssh reverse forward: no port in the answer %q", out)
 	}
 	return port, nil
+}
+
+// CancelForwardBack lets go of the forward ForwardBack was asked for with these ports, if the master holds one.
+func (c *Conn) CancelForwardBack(remotePort, localPort int) {
+	c.cmd("-O", "cancel", "-R", forwardBackSpec(remotePort, localPort), c.Host).Run()
 }
 
 func (c *Conn) forwardBackCmd(remotePort, localPort int) *exec.Cmd {

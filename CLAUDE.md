@@ -394,21 +394,24 @@ components and icons as rules for whoever changes it: @docs/design.md
   forwarded back to `DoorPort` 7318 on the machine's loopback or, when
   the machine's sshd refused that `doorPortAsks` times (after this
   remuda's own restart it holds 7318 a moment for the connection that
-  just ended) and nothing live stands at the address `agent-url` names
-  (`doorLookScript`, straight to the loopback, past any proxy: a live door
-  is another cockpit's and stays, the files untouched, as does one that
-  could not be looked at), to a port it picks (`doorForward`: a connection
-  the network lost holds 7318 for hours, sshd not noticing, and a request
-  to it hangs); a door live on such a port is left alone with 7318 free
-  too, and
-  `DoorScript` placing `agent-key` (the machine's tasks-only key, on
+  just ended), to a port it picks (`doorForward`: a connection the network
+  lost holds 7318 for hours, sshd not noticing, and a request to it hangs),
+  and `DoorScript` placing `agent-key` (the machine's tasks-only key, on
   stdin, never on a command line, kept on the `Machine` so a reconnect
   places the same one while it still passes) and `agent-url`
   (`http://127.0.0.1:<that port>`), each replaced whole, in the machine's
-  state dir, 0600 — the files `remuda mcp` and `remuda tasks` read there;
-  `Door{LocalPort, Key}` is the manager's, given by `internal/app`; a
-  step that failed is asked again for a minute while the connection
-  stands (`trySoon`), then a sshd that forbids the forward is a
+  state dir, 0600 — the files `remuda mcp` and `remuda tasks` read there.
+  **Cockpits sharing a machine**: the script looks and places under one
+  lock (`agent-door.lock.<half minute>`, this one and the next, so runs
+  close in time share one and a dead script's lapse) and answers `placed`,
+  `taken` or `busy`. A door that answers `/api/health` — asked straight, past any
+  proxy; one nobody could ask counts — stays against a door that would
+  move, and one on a port of its own (`agent-door-moved` names it, so a
+  cockpit on the machine itself, whose `agent-url` is its own `-addr`, is
+  none) stays against 7318 too; the forward no door came of is cancelled
+  (`CancelForwardBack`). `Door{LocalPort, Key}` is the manager's, given by
+  `internal/app`; a step that failed is asked again for a minute while the
+  connection stands (`trySoon`), then a sshd that forbids the forward is a
   log line, not a failure of the connection. **Two RPC
   transports**: a forwarded unix socket when the sshd allows streamlocal
   forwarding, else one `ssh host nc -U <sock>` exec per request
