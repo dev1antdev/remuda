@@ -34,8 +34,12 @@ func TestAViewerNeverReachesRemudasOwnWorkspaces(t *testing.T) {
 		t.Fatal(err)
 	}
 	client := herdr.NewClient(sock)
-	appDir := t.TempDir()
-	shellDir, err := filepath.EvalSymlinks(t.TempDir()) // herdr names the folder as the system resolves it
+	// herdr names a folder as the system resolves it
+	appDir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	shellDir, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,8 +119,10 @@ func TestAViewerNeverReachesRemudasOwnWorkspaces(t *testing.T) {
 		t.Errorf("the page's own address, naming a pane gone since: %d", code)
 	}
 	const conciergeSession, appSession = "11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222"
+	const closedShellSession = "33333333-3333-4333-8333-333333333333"
+	elsewhere := filepath.Join(home, "private-project") // where the floating terminal stood, no workspace there now
 	projects := filepath.Join(home, ".claude", "projects")
-	for session, folder := range map[string]string{conciergeSession: filepath.Join(mc.StateDir(), "concierge"), appSession: appDir} {
+	for session, folder := range map[string]string{conciergeSession: filepath.Join(mc.StateDir(), "concierge"), appSession: appDir, closedShellSession: elsewhere} {
 		dir := filepath.Join(projects, transcript.EncodePath(folder))
 		if err := os.MkdirAll(dir, 0o700); err != nil {
 			t.Fatal(err)
@@ -131,6 +137,12 @@ func TestAViewerNeverReachesRemudasOwnWorkspaces(t *testing.T) {
 		}
 		if code, _ := fileCall(passes, route+"?machine=local&dir="+url.QueryEscape(filepath.Join(mc.StateDir(), "concierge"))+"&session="+appSession, true); code != http.StatusNotFound {
 			t.Errorf("%s: the concierge's folder: %d", route, code)
+		}
+		if code, _ := fileCall(passes, route+"?machine=local&dir="+url.QueryEscape(appDir)+"&session="+closedShellSession, true); code != http.StatusNotFound {
+			t.Errorf("%s: a conversation of a folder no workspace stands in: %d", route, code)
+		}
+		if code, _ := fileCall(passes, route+"?machine=local&dir="+url.QueryEscape(elsewhere)+"&session="+closedShellSession, true); code != http.StatusNotFound {
+			t.Errorf("%s: a folder no workspace stands in: %d", route, code)
 		}
 		if code, _ := fileCall(passes, route+"?machine=local&dir="+url.QueryEscape(appDir)+"&session="+appSession, true); code != 200 {
 			t.Errorf("%s: a session of the person's folder: %d", route, code)
@@ -184,6 +196,11 @@ func TestAViewerGetsNoRecordingOfRemudasOwnWorkspaces(t *testing.T) {
 		if code, _ := fileCall(api, "/api/timelapse/recordings/"+meta.ID, true); code != http.StatusNotFound {
 			t.Errorf("%s's recording by its id: %d", label, code)
 		}
+	}
+	s, _, meta := recordedIn(t, "renamed long ago", false)
+	meta.Own, meta.Dir = nil, filepath.Join(s.Machines.All()[0].StateDir(), "concierge")
+	if !s.ownRecording(meta) {
+		t.Error("an unmarked recording made in a state dir")
 	}
 	for _, label := range []string{"app", scratch.Label} { // marked as the person's, whatever the workspace is called
 		_, api, meta := recordedIn(t, label, false)

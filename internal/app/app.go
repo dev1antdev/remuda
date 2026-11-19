@@ -176,7 +176,7 @@ func Run(ctx context.Context, o Options) error {
 		if pane == nil {
 			return nil
 		}
-		return new(ownWorkspace(machineID, pane.WorkspaceID))
+		return new(ownWorkspace(machineID, pane.WorkspaceID) || shells.Ended(machineID, pane.WorkspaceID))
 	}
 	chats := &chat.Service{Machines: fleet, Watch: watcher}
 	var srv *server.Server // named here: the live hub fingerprints the roster as the server serves it

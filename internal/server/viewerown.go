@@ -1,7 +1,6 @@
 package server
 
 import (
-	"context"
 	"errors"
 	"net/http"
 	"slices"
@@ -48,16 +47,9 @@ func (s *Server) viewerBarred(r *http.Request) bool {
 	if dir != "" && s.ownFolder(mc.ID(), dir) {
 		return true
 	}
-	if r.URL.Path == "/api/chat" || r.URL.Path == "/api/recap" {
-		if dir != "" && s.closedFolder(r.Context(), mc, dir) {
-			return true
-		}
-		if pane == "" && s.closedSession(r.Context(), mc, dir, q.Get("session")) {
-			return true
-		}
-	}
 	if pane == "" {
-		return false
+		conversation := r.URL.Path == "/api/chat" || r.URL.Path == "/api/recap"
+		return conversation && !s.viewerReadsSession(mc, dir, q.Get("session"))
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/timelapse/") {
 		return s.ownPane(mc.ID(), pane) // a recording outlives its pane; the listing itself leaves out the person's
@@ -65,26 +57,22 @@ func (s *Server) viewerBarred(r *http.Request) bool {
 	return !s.viewerSeesPane(mc.ID(), pane) // the routes read the pane by its id: one the roster has not shown stays shut
 }
 
-// closedFolder says the folder is one no viewer reads, the concierge's among them: a state dir, the one reported or one
-// with a remuda serving from it, which is asked of the machine and so only here, for a conversation by folder.
-func (s *Server) closedFolder(ctx context.Context, mc *machines.Machine, dir string) bool {
-	reach, _ := s.viewerReachOn(ctx, mc)
-	return reach.Closes(dir) || mc.InStateDir(dir)
-}
-
-// closedSession says the session asked for lives in a closed place: a session is found by its id in every project
-// folder, whatever folder the request names.
-func (s *Server) closedSession(ctx context.Context, mc *machines.Machine, dir, session string) bool {
-	if dir == "" || !sessionIDRe.MatchString(session) {
-		return false // the route refuses it
-	}
-	found, err := mc.Transcripts.ResolveSession("", dir, "id", session)
-	if err != nil {
+// viewerReadsSession says a viewer may read a conversation by folder and id: the folder is within the workspaces it
+// reaches, and so is the transcript, since a session is looked for in every project folder whatever folder is named.
+func (s *Server) viewerReadsSession(mc *machines.Machine, dir, session string) bool {
+	reach := s.viewerReach(mc)
+	if !viewerMay(mc, reach, dir) {
 		return false
 	}
-	reach, _ := s.viewerReachOn(ctx, mc)
+	if !sessionIDRe.MatchString(session) {
+		return true // the route refuses it
+	}
+	found, err := mc.Transcripts.ResolveSession("", dir, "id", session)
+	if err != nil || transcript.FormatOf(found) != transcript.Claude {
+		return true // none to read, or a format whose files are not kept by folder
+	}
 	style := mc.Paths()
-	return reach.ClosesProject(style.Base(style.Dir(found)), transcript.EncodePath)
+	return reach.HoldsProject(style.Base(style.Dir(found)), transcript.EncodePath)
 }
 
 func (s *Server) snapshotOf(machineID string) *herdr.Snapshot {
@@ -145,12 +133,16 @@ func (s *Server) ownMark(machineID, paneID string) *bool {
 }
 
 // ownRecording says a timelapse is of remuda's own workspaces, as marked when it began; one made before the mark goes
-// by the name they are made under, or by the pane and folder they hold now.
+// by the name they are made under, the pane and folder they hold now, or a folder no viewer reads.
 func (s *Server) ownRecording(m timelapse.Meta) bool {
 	if m.Own != nil {
 		return *m.Own
 	}
-	return m.Workspace == scratch.Label || m.Workspace == concierge.Label || s.ownPane(m.Machine, m.Pane) || s.ownFolder(m.Machine, m.Dir)
+	if m.Workspace == scratch.Label || m.Workspace == concierge.Label || s.ownPane(m.Machine, m.Pane) || s.ownFolder(m.Machine, m.Dir) {
+		return true
+	}
+	mc, err := s.Machines.Get(m.Machine)
+	return err == nil && s.viewerReach(mc).Closes(m.Dir) // the concierge's folder lies in a state dir
 }
 
 // viewerFeed is the activity without remuda's own workspaces, by the mark a row was written with; a row without one, of
@@ -167,15 +159,15 @@ func (s *Server) viewerFeed(entries []feed.Entry) []feed.Entry {
 	})
 }
 
-// viewerUsage leaves out the folders a viewer may not know of, and with them the sessions a chat could be opened by.
-func (s *Server) viewerUsage(ctx context.Context, reports []usage.MachineReport) []usage.MachineReport {
+// viewerUsage keeps the folders within a viewer's reach, and with them the sessions a chat could be opened by.
+func (s *Server) viewerUsage(reports []usage.MachineReport) []usage.MachineReport {
 	for i := range reports {
 		mc, err := s.Machines.Get(reports[i].ID)
 		if err != nil || reports[i].Report == nil {
 			continue
 		}
-		reach, _ := s.viewerReachOn(ctx, mc)
-		reports[i].Report.WithoutFolders(func(dir string) bool { return reach.Closes(dir) || s.ownFolder(mc.ID(), dir) })
+		reach := s.viewerReach(mc)
+		reports[i].Report.WithoutFolders(func(dir string) bool { return !reach.Allows(dir) })
 	}
 	return reports
 }

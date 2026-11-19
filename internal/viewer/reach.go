@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/dev1antdev/remuda/internal/rpath"
@@ -70,18 +71,20 @@ func (r Reach) Closes(path string) bool {
 	return r.home == "" || r.inClosed(path)
 }
 
-// ClosesProject says a transcript folder belongs to a closed place: name is the folder as the agent keeps it, encode
-// turns a path into such a name. A name that only begins the same way counts: refusing one more is the safe side.
-func (r Reach) ClosesProject(name string, encode func(string) string) bool {
-	if r.home == "" {
-		return true
-	}
+// HoldsProject says a transcript folder is of a workspace the viewer reaches, or of a folder inside one, and of no closed
+// place: name is the folder as the agent keeps it, encode turns a path into such a name.
+func (r Reach) HoldsProject(name string, encode func(string) string) bool {
 	for _, closed := range r.closed {
-		if strings.HasPrefix(name, encode(closed)) {
-			return true
+		if within(name, encode(closed)) {
+			return false
 		}
 	}
-	return false
+	return slices.ContainsFunc(r.folders, func(folder string) bool { return within(name, encode(folder)) })
+}
+
+// within says an encoded folder is the one given or, as near as the encoding tells, one under it.
+func within(name, folder string) bool {
+	return name == folder || strings.HasPrefix(name, folder+"-")
 }
 
 // AllowsCheckout says the viewer may see the history of the checkout at top, "" for a folder outside git: a commit names

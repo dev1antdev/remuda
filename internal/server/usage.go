@@ -60,7 +60,7 @@ func (s *Server) handleUsage(w http.ResponseWriter, r *http.Request) {
 	since := time.Date(now.Year(), now.Month(), now.Day()-(days-1), 0, 0, 0, 0, loc)
 	reports := usage.Collect(s.connectedHosts(r.URL.Query().Get("machine")), since, loc, tz)
 	if auth.IsViewer(r.Context()) {
-		reports = s.viewerUsage(r.Context(), reports)
+		reports = s.viewerUsage(reports)
 	}
 	writeJSON(w, map[string]any{"since": since.UTC().Format(time.RFC3339), "days": days, "machines": reports})
 }
