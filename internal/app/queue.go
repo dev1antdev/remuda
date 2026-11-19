@@ -47,7 +47,7 @@ func taskQueue(store *tasks.Store, fleet *machines.Manager, watcher *watch.Watch
 			return ""
 		},
 		PaneState: func(machineID, paneID string) (string, bool) {
-			display, ok := taskPane(fleet, chats, tracker)(machineID, paneID)
+			display, ok := taskPane(fleet, chats, tracker, machineID, paneID)
 			return display.State, ok
 		},
 		Spent: func(machineID, agent string) string {
@@ -100,12 +100,10 @@ func budgetScope(b budget.Budget) string {
 }
 
 // taskPane is the radar's reading of a task's pane, for the queue's slots and the run watch.
-func taskPane(fleet *machines.Manager, chats *chat.Service, tracker *radar.Tracker) func(machineID, paneID string) (radar.Display, bool) {
-	return func(machineID, paneID string) (radar.Display, bool) {
-		pane, snap := chats.Pane(machineID, paneID)
-		_, err := fleet.Get(machineID)
-		return readTaskPane(pane, snap, err == nil, func() radar.Display { return tracker.Display(machineID, pane) })
-	}
+func taskPane(fleet *machines.Manager, chats *chat.Service, tracker *radar.Tracker, machineID, paneID string) (radar.Display, bool) {
+	pane, snap := chats.Pane(machineID, paneID)
+	_, err := fleet.Get(machineID)
+	return readTaskPane(pane, snap, err == nil, func() radar.Display { return tracker.Display(machineID, pane) })
 }
 
 // readTaskPane: a machine gone from the fleet and a pane gone from its herdr are gone (ok false); a machine not seen yet
