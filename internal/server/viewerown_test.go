@@ -131,7 +131,18 @@ func TestAViewerNeverReachesRemudasOwnWorkspaces(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	const codexSession = "44444444-4444-4444-8444-444444444444"
+	rollouts := filepath.Join(home, ".codex", "sessions", "2026", "11", "19")
+	if err := os.MkdirAll(rollouts, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(rollouts, "rollout-2026-11-19T00-00-00-"+codexSession+".jsonl"), []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	for _, route := range []string{"/api/chat", "/api/recap"} {
+		if code, _ := fileCall(passes, route+"?machine=local&dir="+url.QueryEscape(appDir)+"&session="+codexSession, true); code != http.StatusNotFound {
+			t.Errorf("%s: a Codex session nothing ties to the folder: %d", route, code)
+		}
 		if code, _ := fileCall(passes, route+"?machine=local&dir="+url.QueryEscape(appDir)+"&session="+conciergeSession, true); code != http.StatusNotFound {
 			t.Errorf("%s: the concierge's session asked for through another folder: %d", route, code)
 		}
@@ -201,6 +212,10 @@ func TestAViewerGetsNoRecordingOfRemudasOwnWorkspaces(t *testing.T) {
 	meta.Own, meta.Dir = nil, filepath.Join(s.Machines.All()[0].StateDir(), "concierge")
 	if !s.ownRecording(meta) {
 		t.Error("an unmarked recording made in a state dir")
+	}
+	meta.Machine, meta.Dir = "a machine removed since", "/anywhere"
+	if !s.ownRecording(meta) {
+		t.Error("an unmarked recording of a machine that can no longer be asked")
 	}
 	for _, label := range []string{"app", scratch.Label} { // marked as the person's, whatever the workspace is called
 		_, api, meta := recordedIn(t, label, false)

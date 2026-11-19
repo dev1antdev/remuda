@@ -68,8 +68,11 @@ func (s *Server) viewerReadsSession(mc *machines.Machine, dir, session string) b
 		return true // the route refuses it
 	}
 	found, err := mc.Transcripts.ResolveSession("", dir, "id", session)
-	if err != nil || transcript.FormatOf(found) != transcript.Claude {
-		return true // none to read, or a format whose files are not kept by folder
+	if err != nil {
+		return true // the route answers there is none
+	}
+	if transcript.FormatOf(found) != transcript.Claude {
+		return false // kept by date or by a hash, nothing here ties the file to the folder: read through its pane
 	}
 	style := mc.Paths()
 	return reach.HoldsProject(style.Base(style.Dir(found)), transcript.EncodePath)
@@ -142,7 +145,7 @@ func (s *Server) ownRecording(m timelapse.Meta) bool {
 		return true
 	}
 	mc, err := s.Machines.Get(m.Machine)
-	return err == nil && s.viewerReach(mc).Closes(m.Dir) // the concierge's folder lies in a state dir
+	return err != nil || s.viewerReach(mc).Closes(m.Dir) // the concierge's folder lies in a state dir; a machine gone tells nothing
 }
 
 // viewerFeed is the activity without remuda's own workspaces, by the mark a row was written with; a row without one, of
