@@ -39,10 +39,11 @@ func (s *Server) handleRecap(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var summary recap.Recap
-	if !s.viewerPaneSilent(r, mc.ID(), paneID) {
-		summary, err = s.Recap.Conversation(mc, paneID, sessionID, dir, since)
+	read := s.Recap.Conversation
+	if auth.IsViewer(r.Context()) {
+		read = s.Recap.ConversationOwn
 	}
+	summary, err := read(mc, paneID, sessionID, dir, since)
 	var notFound *chat.NotFoundError
 	switch {
 	case errors.As(err, &notFound):
@@ -72,11 +73,11 @@ func (s *Server) handleStandup(w http.ResponseWriter, r *http.Request) {
 	if since.IsZero() {
 		since = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
 	}
-	items := s.Recap.Standup(since)
+	var items []recap.Item
 	if auth.IsViewer(r.Context()) {
-		items = slices.DeleteFunc(items, func(i recap.Item) bool {
-			return !s.viewerSeesPane(i.Machine, i.Pane) || s.viewerPaneSilent(r, i.Machine, i.Pane)
-		})
+		items = slices.DeleteFunc(s.Recap.StandupOwn(since), func(i recap.Item) bool { return !s.viewerSeesPane(i.Machine, i.Pane) })
+	} else {
+		items = s.Recap.Standup(since)
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, map[string]any{"since": sinceText(since), "items": items, "markdown": recap.Markdown(items, since.In(loc), now)})

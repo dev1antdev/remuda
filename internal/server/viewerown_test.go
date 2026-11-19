@@ -7,9 +7,11 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
+	"github.com/dev1antdev/remuda/internal/chat"
 	"github.com/dev1antdev/remuda/internal/concierge"
 	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/feed"
@@ -18,16 +20,23 @@ import (
 	"github.com/dev1antdev/remuda/internal/herdr/herdrtest"
 	"github.com/dev1antdev/remuda/internal/jira"
 	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/recap"
 	"github.com/dev1antdev/remuda/internal/review"
 	"github.com/dev1antdev/remuda/internal/schedule"
 	"github.com/dev1antdev/remuda/internal/scratch"
 	"github.com/dev1antdev/remuda/internal/sent"
+	"github.com/dev1antdev/remuda/internal/transcript"
 	"github.com/dev1antdev/remuda/internal/usage"
 	"github.com/dev1antdev/remuda/internal/watch"
 )
 
 func TestAViewerNeverReachesRemudasOwnWorkspaces(t *testing.T) {
+	t.Setenv("HOME", t.TempDir()) // the transcript below is this test's own
 	sock := herdrtest.Server(t)
+	home, err := os.UserHomeDir() // the throwaway herdr may have set one of its own
+	if err != nil {
+		t.Fatal(err)
+	}
 	client := herdr.NewClient(sock)
 	// herdr names a folder as the system resolves it
 	appDir, err := filepath.EvalSymlinks(t.TempDir())
@@ -128,12 +137,27 @@ func TestAViewerNeverReachesRemudasOwnWorkspaces(t *testing.T) {
 			t.Errorf("%s: a pane's own conversation: %d", route, code)
 		}
 	}
-	silent := http.NewServeMux()
-	s.chatRoutes(silent)
-	s.recapRoutes(silent)
-	for _, route := range []string{"/api/chat", "/api/recap"} { // the shell reports no session: a viewer gets nothing, not the folder's newest
-		code, body := fileCall(silent, route+"?machine=local&pane="+url.QueryEscape(appPane), true)
-		if code != 200 || strings.Contains(body, session) || (route == "/api/recap" && !strings.Contains(body, `"recap":`)) {
+	project := filepath.Join(home, ".claude", "projects", transcript.EncodePath(appDir))
+	if err := os.MkdirAll(project, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	record := `{"type":"user","uuid":"u1","sessionId":"` + session + `","timestamp":"2026-11-19T00:00:00Z","cwd":` + strconv.Quote(appDir) + `,"message":{"role":"user","content":"the-other-conversation"}}` + "\n"
+	if err := os.WriteFile(filepath.Join(project, session+".jsonl"), []byte(record), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s.Chat = &chat.Service{Machines: fleet, Watch: watcher}
+	s.Recap = &recap.Service{Machines: fleet, Watch: watcher, Chat: s.Chat}
+	reads := http.NewServeMux()
+	s.chatRoutes(reads)
+	s.recapRoutes(reads)
+	// the shell reports no session: the person gets the folder's newest, a viewer nothing
+	for route, read := range map[string]string{"/api/chat": "the-other-conversation", "/api/recap": `"prompts":1`} {
+		path := route + "?machine=local&look=0&pane=" + url.QueryEscape(appPane)
+		if code, body := fileCall(reads, path, false); code != 200 || !strings.Contains(body, read) {
+			t.Errorf("%s for the person: %d %s", route, code, body)
+		}
+		code, body := fileCall(reads, path, true)
+		if code != 200 || strings.Contains(body, read) || (route == "/api/recap" && !strings.Contains(body, `"recap":`)) {
 			t.Errorf("%s of a pane with no session: %d %s", route, code, body)
 		}
 	}

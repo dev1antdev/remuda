@@ -64,42 +64,29 @@ func (s *Server) viewerBarred(r *http.Request) bool {
 }
 
 // viewerSeesSession says the session is the one a pane on a viewer's roster is in, as herdr names it or, after a
-// compaction, the file the conversation went on in: of the pane named, else of the panes in the folder.
+// compaction, the file the conversation went on in: of the pane named, else of the panes in the folder or its workspace.
 func (s *Server) viewerSeesSession(mc *machines.Machine, paneID, dir, session string) bool {
 	snap := s.snapshotOf(mc.ID())
 	if snap == nil || session == "" {
 		return false
 	}
+	style := mc.Paths()
 	for i := range snap.Panes {
 		pane := &snap.Panes[i]
-		if pane.AgentSession == nil || s.viewerOwn(mc.ID(), pane.WorkspaceID) {
-			continue
-		}
-		if paneID != pane.PaneID && (paneID != "" || !mc.Paths().Equal(pane.Dir(), dir)) {
+		if pane.AgentSession == nil || s.viewerOwn(mc.ID(), pane.WorkspaceID) || (paneID != "" && paneID != pane.PaneID) {
 			continue
 		}
 		if pane.AgentSession.Kind == "id" && pane.AgentSession.Value == session {
 			return true
 		}
-		if _, live, ok := s.Chat.SessionFile(mc.ID(), pane); ok && strings.TrimSuffix(mc.Paths().Base(live), ".jsonl") == session {
+		if ws := snap.Workspace(pane.WorkspaceID); paneID == "" && !style.Equal(pane.Dir(), dir) && (ws == nil || !style.Equal(snap.WorkspaceDir(ws), dir)) {
+			continue // finding the file below asks the machine: only for the panes the request is about
+		}
+		if _, live, ok := s.Chat.SessionFile(mc.ID(), pane); ok && strings.TrimSuffix(style.Base(live), ".jsonl") == session {
 			return true
 		}
 	}
 	return false
-}
-
-// viewerPaneSilent says a viewer asking for a pane's conversation gets none: the pane's own session cannot be found, and
-// the newest of its folder, which the person gets instead, may be anyone's.
-func (s *Server) viewerPaneSilent(r *http.Request, machineID, paneID string) bool {
-	if paneID == "" || !auth.IsViewer(r.Context()) {
-		return false
-	}
-	_, pane := s.paneOf(machineID, paneID)
-	if pane == nil || pane.AgentSession == nil {
-		return true
-	}
-	_, _, found := s.Chat.SessionFile(machineID, pane)
-	return !found
 }
 
 func (s *Server) snapshotOf(machineID string) *herdr.Snapshot {
