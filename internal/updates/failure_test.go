@@ -57,6 +57,17 @@ func TestAHerdrUpdateThatFailsFailsItsJob(t *testing.T) {
 	}
 }
 
+func TestAFailedHerdrUpdateLeavesTheServerRunning(t *testing.T) {
+	var said []string
+	then := (&Service{}).herdrThen(nil) // no machine: going on to the versions or the restart would panic
+	if err := then(func(line string) { said = append(said, line) }, errors.New("exit status 7")); err != nil {
+		t.Fatal(err)
+	}
+	if len(said) != 1 {
+		t.Errorf("said %q", said)
+	}
+}
+
 func TestAReleaseThatDoesNotRunIsNotInstalled(t *testing.T) {
 	home := standIns(t, map[string]string{
 		"curl":      `while [ $# -gt 0 ]; do [ "$1" = -o ] && out=$2; shift; done; printf '#!/bin/sh\nexit 3\n' > "$out"`,

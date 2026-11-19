@@ -186,8 +186,12 @@ func serverRestartUpdate(mc *machines.Machine, running, installed string, snap *
 }
 
 // herdrThen is the step after an install of herdr: the running server onto the new version, unless the installer's handoff already did that.
-func (s *Service) herdrThen(mc *machines.Machine) func(say func(string)) error {
-	return func(say func(string)) error {
+func (s *Service) herdrThen(mc *machines.Machine) func(say func(string), failed error) error {
+	return func(say func(string), failed error) error {
+		if failed != nil { // a restart ends every pane's process: never for an update that did not go through
+			say("the update failed: the running server stays as it is")
+			return nil
+		}
 		installed, running, err := mc.ServerVersions()
 		if err != nil {
 			return fmt.Errorf("read herdr's versions: %v", err)
@@ -280,7 +284,7 @@ func restartWords(kind string) string {
 }
 
 // restartHooks reads the agents' versions before and after an update's script and restarts the chats of every agent whose version changed.
-func (s *Service) restartHooks(mc *machines.Machine, what string) (first func(say func(string)), then func(say func(string)) error) {
+func (s *Service) restartHooks(mc *machines.Machine, what string) (first func(say func(string)), then func(say func(string), failed error) error) {
 	kinds := restart.Kinds(what)
 	if len(kinds) == 0 {
 		return nil, nil
@@ -308,7 +312,7 @@ func (s *Service) restartHooks(mc *machines.Machine, what string) (first func(sa
 			say("before: " + strings.Join(have, ", "))
 		}
 	}
-	then = func(say func(string)) error {
+	then = func(say func(string), _ error) error { // a run that failed part way may still have moved an agent on
 		after := versions()
 		var changed []string
 		for _, k := range kinds {

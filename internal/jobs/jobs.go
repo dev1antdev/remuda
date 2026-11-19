@@ -55,8 +55,8 @@ func (r *Runner) Start(host shell.Host, title, command string) Job {
 }
 
 // StartThen is Start with Go work around the script in the same log: first
-// before it, then after it whatever its exit status, which stays the verdict.
-func (r *Runner) StartThen(host shell.Host, title, command string, first func(say func(string)), then func(say func(string)) error) Job {
+// before it, then after it whatever its exit status, which then is told and which stays the verdict.
+func (r *Runner) StartThen(host shell.Host, title, command string, first func(say func(string)), then func(say func(string), failed error) error) Job {
 	return r.launch(host, title, command, func(j *job) error {
 		say := func(line string) { j.write([]byte(line + "\n")) }
 		if first != nil {
@@ -64,7 +64,7 @@ func (r *Runner) StartThen(host shell.Host, title, command string, first func(sa
 		}
 		err := host.Stream(command, timeout, j.write)
 		if then != nil {
-			if terr := then(say); terr != nil && err == nil {
+			if terr := then(say, err); terr != nil && err == nil {
 				err = terr
 			}
 		}

@@ -957,7 +957,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   to `~/.local/bin/remuda.new`, check it against the release's
   `checksums.txt` when there is one (a mismatch keeps the old binary;
   none → installed with a "not verified" line), `InstallScript` (chmod,
-  `-version`, mv) and `RestartScript` (launchctl kickstart / systemctl
+  `-version`, mv; a binary that does not run fails the job, nothing restarted)
+  and `RestartScript` (launchctl kickstart / systemctl
   restart, a line saying so where neither exists) — the machine serving
   the page restarts detached two seconds after the job instead, so the
   job ends first and the stale-page pill
@@ -1452,8 +1453,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   `events.JobDone`, on which the vitals are re-read; `updates.Plan(what,
   report)` is the update command for herdr (brew or `herdr update --handoff`;
   every brew path runs `brew update` first, once per job; an install that
-  fails ends the job with its status, before the hooks step, as a release
-  that does not run ends its job before the restart),
+  fails ends the job with its status, with no hooks step and no restart of
+  the server),
   claude / codex / gemini / kimi (brew, npm or the agent's own updater, by
   where the binary lives), or every agent (`restart.Kinds("agents")` is the
   one list of them); `what=hooks` is `herdr integration

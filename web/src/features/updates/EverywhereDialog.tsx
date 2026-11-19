@@ -10,7 +10,7 @@ import { errMsg } from "@/lib/text";
 import { Dialog, Notice } from "@/ui";
 import { t } from "@/lib/i18n";
 import { everywherePlan, fetchEverywhere, startEverywhere, type Batch, type Step } from "./api";
-import { byMachine, hostRestarting, restartsHost, stateWords, summaryWords } from "./everywhere";
+import { byMachine, hostRestarting, stateWords, summaryWords } from "./everywhere";
 
 export default function EverywhereDialog({ onClose }: { onClose: () => void }) {
   const { host } = useRoster();
@@ -41,7 +41,6 @@ export default function EverywhereDialog({ onClose }: { onClose: () => void }) {
     }
   };
   const steps = plan ?? [];
-  const restarts = restartsHost(steps, host?.id);
   return (
     <Dialog title={t("Update everywhere")} icon="refresh-cw" size="md" onClose={onClose} className="updates everywhere">
       {(error || failure) && <Notice tone="error">{redact(failure || error || "")}</Notice>}
@@ -65,7 +64,7 @@ export default function EverywhereDialog({ onClose }: { onClose: () => void }) {
           ) : (
             <Notice tone={batch.done ? (batch.steps.some((s) => s.state === "failed") ? "warn" : "success") : "info"}>
               {!batch.done && <span className="spinner" aria-hidden="true" />} {summaryWords(batch.steps, batch.done)}
-              {batch.done && restarts ? ` · ${t("remuda here restarts now; the page offers a reload once the new version answers.")}` : ""}
+              {batch.done && hostRestarting(batch.steps, host?.id) ? ` · ${t("remuda here restarts now; the page offers a reload once the new version answers.")}` : ""}
             </Notice>
           )}
         </>
