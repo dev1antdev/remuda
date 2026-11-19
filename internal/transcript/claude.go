@@ -776,6 +776,12 @@ func firstParent(path string) string {
 	return string(m[1])
 }
 
+// forkOf says a file holds the record its first parentUuid names: it opens on a copy of a conversation, a fork's or
+// the first file's own, not on a parent elsewhere.
+func forkOf(path, parent string) bool {
+	return hasRecord(path, parent)
+}
+
 // hasRecord says whether the file holds a record with this uuid.
 // The parent of a continuation sits near the old file's end, so the tail is read first.
 func hasRecord(path, uuid string) bool {
@@ -811,7 +817,8 @@ func hasRecord(path, uuid string) bool {
 // Continuation is the newer session file in path's folder that continues it, or ""; one step, callers loop.
 // A compaction moves the conversation to a new file while herdr keeps naming the old id: the old file ends with a
 // continued-in record naming the new session, and the new file's first parentUuid names a record of the old one (the
-// only trace an older Claude Code left, and read when the record is missing).
+// only trace an older Claude Code left, and read when the record is missing). A fork copies the conversation it began
+// from, so its first parentUuid is a record of its own (forkOf): it continues nothing.
 func Continuation(path string) string {
 	st, err := os.Stat(path)
 	if err != nil {
@@ -846,7 +853,7 @@ func Continuation(path string) string {
 	}
 	sort.Slice(cands, func(i, j int) bool { return cands[i].mod.Before(cands[j].mod) })
 	for _, c := range cands {
-		if p := firstParent(c.path); p != "" && hasRecord(path, p) {
+		if p := firstParent(c.path); p != "" && hasRecord(path, p) && !forkOf(c.path, p) {
 			return c.path
 		}
 	}
@@ -876,7 +883,7 @@ func Predecessor(path string) string {
 		}
 	}
 	parent := firstParent(path)
-	if parent == "" {
+	if parent == "" || forkOf(path, parent) {
 		return ""
 	}
 	for _, p := range siblings {
@@ -892,6 +899,7 @@ func PredecessorScript(quotedPath string) string {
 	return `new=` + quotedPath + `; dir=$(dirname "$new"); id=$(basename "$new" .jsonl); ` +
 		`for f in "$dir"/*.jsonl; do [ "$f" = "$new" ] && continue; if tail -c 65536 "$f" 2>/dev/null | grep -qF "\"continuedInSessionId\":\"$id\""; then printf %s "$f"; exit 0; fi; done; ` +
 		`p=$(head -c 65536 "$new" | grep -o '"parentUuid":"[0-9a-f-]*"' | head -1 | cut -d'"' -f4); [ -n "$p" ] || exit 0; ` +
+		`grep -q "\"uuid\":\"$p\"" "$new" && exit 0; ` +
 		`for f in "$dir"/*.jsonl; do [ "$f" = "$new" ] && continue; if grep -q "\"uuid\":\"$p\"" "$f" 2>/dev/null; then printf %s "$f"; exit 0; fi; done`
 }
 
@@ -904,7 +912,7 @@ func ContinuationScript(quotedPath string) string {
 		`ls -t "$dir"/*.jsonl 2>/dev/null | while IFS= read -r f; do ` +
 		`[ "$f" = "$old" ] && break; [ "$f" -nt "$old" ] || continue; ` +
 		`p=$(head -c 65536 "$f" | grep -o '"parentUuid":"[0-9a-f-]*"' | head -1 | cut -d'"' -f4); [ -n "$p" ] || continue; ` +
-		`if grep -q "\"uuid\":\"$p\"" "$old"; then printf %s "$f"; break; fi; done`
+		`if grep -q "\"uuid\":\"$p\"" "$old" && ! grep -q "\"uuid\":\"$p\"" "$f"; then printf %s "$f"; break; fi; done`
 }
 
 // ---- what a turn ended with ----

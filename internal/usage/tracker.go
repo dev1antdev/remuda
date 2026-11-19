@@ -280,7 +280,9 @@ func (t *Tracker) Display(machineID, paneID string) (Display, bool) {
 	sum, last := st.acc.Sum()
 	d := Display{Cost: sum.Cost, Turns: sum.Turns, Tokens: sum.Tokens, Partial: st.partial}
 	var predecessors []string
-	for p, n := t.pred[key(machineID, path)], 0; p != "" && n < 8; p, n = t.pred[key(machineID, p)], n+1 {
+	seen := map[string]bool{path: true}
+	for p := t.pred[key(machineID, path)]; p != "" && !seen[p]; p = t.pred[key(machineID, p)] {
+		seen[p] = true
 		predecessors = append(predecessors, p)
 	}
 	if sum.Turns == 0 { // a file just moved to holds only what it copied: its last response is its predecessor's

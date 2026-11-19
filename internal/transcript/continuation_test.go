@@ -150,3 +150,45 @@ func runScript(t *testing.T, line string) string {
 	}
 	return strings.TrimSpace(string(out))
 }
+
+func TestAForkContinuesNothingAndHasNoPredecessor(t *testing.T) {
+	dir := t.TempDir()
+	now := time.Now().Truncate(time.Second)
+	first := `{"parentUuid":null,"type":"user","uuid":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1","timestamp":"2026-10-06T20:00:00Z","message":{"role":"user","content":"build it"}}`
+	second := `{"parentUuid":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1","type":"assistant","uuid":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2","timestamp":"2026-10-06T20:00:05Z","message":{"role":"assistant","content":[{"type":"text","text":"Built."}]}}`
+	old := writeSession(t, dir, oldID, now.Add(-2*time.Minute), first, second)
+	fork := writeSession(t, dir, newID, now.Add(-time.Minute), first, second,
+		`{"parentUuid":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2","type":"user","uuid":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3","timestamp":"2026-10-06T21:00:00Z","message":{"role":"user","content":"now the other way"}}`)
+	for _, path := range []string{old, fork} {
+		if got := Continuation(path); got != "" {
+			t.Errorf("Continuation(%s) = %q", filepath.Base(path), got)
+		}
+		if got := Predecessor(path); got != "" {
+			t.Errorf("Predecessor(%s) = %q", filepath.Base(path), got)
+		}
+		if got := runScript(t, ContinuationScript(script.Quote(path))); got != "" {
+			t.Errorf("continuation script on %s printed %q", filepath.Base(path), got)
+		}
+		if got := runScript(t, PredecessorScript(script.Quote(path))); got != "" {
+			t.Errorf("predecessor script on %s printed %q", filepath.Base(path), got)
+		}
+	}
+	reader := NewReader(shell.Local{Name: "local"})
+	if got := reader.Lineage(fork); len(got) != 1 || got[0] != fork {
+		t.Errorf("Lineage(fork) = %q", got)
+	}
+}
+
+func TestAChainThatComesBackOnItselfStops(t *testing.T) {
+	old, next := continuedSession(t)
+	reader := NewReader(shell.Local{Name: "local"})
+	reader.continuation[old] = continuation{next: next, at: time.Now()}
+	reader.continuation[next] = continuation{next: old, at: time.Now()}
+	reader.predecessor[old] = next
+	if got := reader.Chain(old); len(got) != 2 || got[0] != old || got[1] != next {
+		t.Errorf("Chain = %q", got)
+	}
+	if got := reader.Lineage(old); len(got) != 2 {
+		t.Errorf("Lineage = %q", got)
+	}
+}
