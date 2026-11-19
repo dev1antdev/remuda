@@ -795,3 +795,32 @@ func TestAMergeReadThatBrokeOffIsNoCleanCheck(t *testing.T) {
 		t.Errorf("a check that lost the merges counted as finished: %+v", scan)
 	}
 }
+
+func TestAKeystoreAMergeDeletedIsNoFinding(t *testing.T) {
+	ownGitConfig(t)
+	dir, git, write := scratchCheckout(t)
+	write("store.p12", "\x00\x01binary\x00")
+	git("add", "-A")
+	git("commit", "-qm", "init")
+	git("branch", "-M", "main")
+	git("checkout", "-qb", "side")
+	write("b.txt", "b\n")
+	git("add", "-A")
+	git("commit", "-qm", "side")
+	git("checkout", "-q", "main")
+	write("c.txt", "c\n")
+	git("add", "-A")
+	git("commit", "-qm", "main")
+	git("update-ref", "refs/remotes/origin/main", "main")
+	git("update-ref", "refs/remotes/origin/side", "side")
+	git("merge", "-q", "--no-commit", "side")
+	git("rm", "-q", "store.p12")
+	git("commit", "-qm", "merged")
+	scan, err := ScanWork(shell.Local{Name: "local"}, dir, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(scan.Findings) != 0 || scan.PushUnread() {
+		t.Errorf("%+v", scan)
+	}
+}

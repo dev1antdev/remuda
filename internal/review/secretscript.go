@@ -66,11 +66,13 @@ func unpushedLog(form string) string {
 // mergeLines turns git's combined diff of the merges into the plain diff the rest of the stream reads. A line marked
 // added against every parent is what the merge brought itself, a conflict's resolution or anything else, and stays
 // added; a line one parent already had is context, since that parent's commit is read or already out; a line the result
-// lacks goes. A file a parent holds as binary has no lines to tell, and is named ("\036binarymerge <path>").
+// lacks goes. A file a parent holds as binary has no lines to tell, and is named ("\036binarymerge <path>") unless the
+// merge deleted it.
 const mergeLines = `LC_ALL=C awk '
 /^\036/ { n = 0; print; next }
-/^diff --cc / { n = 0; path = substr($0, 11); print "diff --git " path " " path; next }
-/^Binary files differ$/ { print "\036binarymerge " path; next }
+/^diff --cc / { n = 0; gone = 0; path = substr($0, 11); print "diff --git " path " " path; next }
+/^deleted file mode / { gone = 1 }
+/^Binary files differ$/ { if (!gone) print "\036binarymerge " path; next }
 /^@@@+ / { match($0, /^@+/); n = RLENGTH - 1; start = $(n + 2); sub(/^\+/, "", start); sub(/,.*/, "", start); print "@@ -0,0 +" start " @@"; next }
 n == 0 || length($0) < n || /^\\/ { if (n == 0) print; next }
 { mark = substr($0, 1, n); if (index(mark, "-")) next
@@ -78,9 +80,9 @@ n == 0 || length($0) < n || /^\\/ { if (n == 0) print; next }
 
 // unpushedScript prints the commits a push would send, those with one parent as patches and the merges by what they
 // brought themselves (mergeLines): a merge that only merged shows nothing. A combined diff merges nothing again, so no
-// driver runs, and a partial clone is not sent for what it lacks: nothing is written, and git's failure says so.
-var unpushedScript = `GIT_NO_LAZY_FETCH=1; export GIT_NO_LAZY_FETCH; o=0; for kind in --no-merges --merges; do ` +
-	`c=$(git rev-list "$kind" --max-count=` + strconv.Itoa(countCommits) + ` HEAD --not --remotes 2>/dev/null | wc -l | tr -d ' '); ` +
+// driver runs.
+var unpushedScript = `o=0; for kind in --no-merges --merges; do ` +
+	`c=$(git rev-list --count "$kind" --max-count=` + strconv.Itoa(countCommits) + ` HEAD --not --remotes 2>/dev/null) || printf '\036failed commits\n'; ` +
 	`if [ "${c:-0}" -gt ` + strconv.Itoa(scanCommits) + ` ]; then o=$((o + c - ` + strconv.Itoa(scanCommits) + `)); fi; done; ` +
 	`if [ "$o" -gt 0 ]; then printf '\036older %s\n' "$o"; fi; ` +
 	unpushedLog(`--no-merges -p `+plainPatch+` --format='%x1ecommit %h'`) + ` || printf '\036failed commits\n'; ` +
@@ -99,7 +101,8 @@ func secretScript(dir string, push bool) string {
 	if push {
 		commits = `if [ "$base" = HEAD ]; then ` + unpushedScript + `fi; `
 	}
-	return `cd ` + script.Quote(dir) + ` 2>/dev/null || { printf '\036failed folder\n'; exit 0; }; ` +
+	// a partial clone is not sent for what it lacks (git 2.45 on): nothing is written, and git's failure says so
+	return `GIT_NO_LAZY_FETCH=1; export GIT_NO_LAZY_FETCH; cd ` + script.Quote(dir) + ` 2>/dev/null || { printf '\036failed folder\n'; exit 0; }; ` +
 		`git rev-parse --show-toplevel >/dev/null 2>&1 || { printf '\036failed repository\n'; exit 0; }; ` +
 		`base=HEAD; git rev-parse -q --verify HEAD >/dev/null 2>&1 || base=$(git hash-object -t tree /dev/null); ` +
 		`{ ` + gitDiff + ` --relative "$base" 2>/dev/null || printf '\036failed work\n'; ` +
