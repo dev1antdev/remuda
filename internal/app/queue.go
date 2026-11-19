@@ -47,7 +47,9 @@ func taskQueue(store *tasks.Store, fleet *machines.Manager, watcher *watch.Watch
 			return ""
 		},
 		PaneState: func(machineID, paneID string) (string, bool) {
-			display, ok := taskPane(fleet, chats, tracker, machineID, paneID)
+			// a machine gone from the fleet, or not back in it yet after a restart, holds its slot until the run watch ends
+			// the run, two minutes on
+			display, ok := taskPane(chats, tracker, machineID, paneID, true)
 			return display.State, ok
 		},
 		Spent: func(machineID, agent string) string {
@@ -100,15 +102,12 @@ func budgetScope(b budget.Budget) string {
 }
 
 // taskPane is the radar's reading of a task's pane, for the queue's slots and the run watch.
-func taskPane(fleet *machines.Manager, chats *chat.Service, tracker *radar.Tracker, machineID, paneID string) (radar.Display, bool) {
+func taskPane(chats *chat.Service, tracker *radar.Tracker, machineID, paneID string, inFleet bool) (radar.Display, bool) {
 	pane, snap := chats.Pane(machineID, paneID)
-	_, err := fleet.Get(machineID)
-	return readTaskPane(pane, snap, err == nil, func() radar.Display { return tracker.Display(machineID, pane) })
+	return readTaskPane(pane, snap, inFleet, func() radar.Display { return tracker.Display(machineID, pane) })
 }
 
-// readTaskPane: a machine gone from the fleet and a pane gone from its herdr are gone (ok false); a machine not seen yet
-// (a restart, a reconnect) is unknown, which holds the run; a pane whose agent left (/exit, a sleep, a reboot) is idle,
-// so it holds no slot for good.
+// readTaskPane reads a task's pane as gone (ok false), not seen yet (unknown), left by its agent (idle) or the radar's.
 func readTaskPane(pane *herdr.PaneInfo, snap *herdr.Snapshot, inFleet bool, display func() radar.Display) (radar.Display, bool) {
 	switch {
 	case !inFleet, snap != nil && pane == nil:
