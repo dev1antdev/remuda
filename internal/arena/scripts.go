@@ -19,7 +19,7 @@ func HeadScript(dir string) string {
 // folder $d, which the caller removes through cleanup. Without a folder nothing else runs.
 func throwaway(base string) string {
 	return `d=$(mktemp -d "${TMPDIR:-/tmp}/remuda-arena.XXXXXX") && t="$d/index" && ` +
-		`GIT_INDEX_FILE="$t" git read-tree ` + script.Quote(base) + ` 2>/dev/null && GIT_INDEX_FILE="$t" git add -A 2>/dev/null`
+		`GIT_INDEX_FILE="$t" git read-tree ` + script.Quote(base) + ` 2>/dev/null && GIT_INDEX_FILE="$t" git -c core.fsmonitor=false add -A 2>/dev/null`
 }
 
 // cleanup removes throwaway's folder, and nothing at all when mktemp made none.

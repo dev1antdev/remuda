@@ -2,7 +2,7 @@ package repos
 
 // The New worktree dialog's read of a repository, in one script on its machine: its local branches and origin's, the
 // checkouts git keeps for it, the branch a new one starts from, origin's address and the team's setup script. Every
-// git call is a read that touches no index (--no-optional-locks, fsmonitor off).
+// git call is a read that touches no index (script.ReadGit).
 
 import (
 	"errors"
@@ -57,8 +57,8 @@ type Source struct {
 // TeamFiles are the files a repository keeps its setup script in: herdr's own, else Orca's, of the same format.
 var TeamFiles = []string{"herdr.yaml", "orca.yaml"}
 
-// Git is git as remuda's reads run it: no lock taken, no fsmonitor started.
-const Git = "git --no-optional-locks -c core.fsmonitor=false"
+// Git is git as remuda's reads run it.
+const Git = script.ReadGit
 
 // SourceScript reads the repository whose main checkout (or any checkout) is the folder.
 func SourceScript(folder string) string {
