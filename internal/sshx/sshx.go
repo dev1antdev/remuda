@@ -222,10 +222,17 @@ func (c *Conn) scriptSession(line string, keep []string) *exec.Cmd {
 	return c.session(append(append([]string{"-T"}, keep...), c.Host, line)...)
 }
 
-// stdinWithin is keepStdin within a script's time: what the probe took is the script's, before it takes a session.
-func (c *Conn) stdinWithin(timeout time.Duration) ([]string, time.Duration, error) {
+// stdinWithin is keepStdin within a script's time, before it takes a session: what the wait took is the script's. A
+// script holding a NUL is refused: the shell drops the byte, so the script that ran would not be the one written.
+func (c *Conn) stdinWithin(command string, timeout time.Duration) ([]string, time.Duration, error) {
+	if strings.IndexByte(command, 0) >= 0 {
+		return nil, 0, fmt.Errorf("ssh %s: a script holds a NUL byte", c.Host)
+	}
 	began := time.Now()
-	keep := keepStdin()
+	keep, answered := keepStdin(timeout)
+	if !answered {
+		return nil, 0, fmt.Errorf("ssh %s: no time left for the script once ssh was asked what it knows", c.Host)
+	}
 	if timeout <= 0 {
 		return keep, timeout, nil
 	}
@@ -253,36 +260,50 @@ type stdinAsk struct {
 
 var stdinProbe = 5 * time.Second
 
-func keepStdin() []string {
+// keepStdin is the options, waiting at most wait (0: as long as the probe takes) for a probe under way; answered is
+// false when the wait ran out first, the probe going on for the callers after.
+func keepStdin(wait time.Duration) (keep []string, answered bool) {
 	path, err := exec.LookPath("ssh")
 	if err != nil {
-		return nil
+		return nil, true
 	}
 	stdinMu.Lock()
-	known, kept := stdinKept[path]
+	if known, kept := stdinKept[path]; kept {
+		stdinMu.Unlock()
+		return stdinOptions(known), true
+	}
 	ask := stdinAsking[path]
-	switch {
-	case kept:
-		stdinMu.Unlock()
-	case ask != nil:
-		stdinMu.Unlock()
-		<-ask.done
-		known = ask.known
-	default:
+	if ask == nil {
 		ask = &stdinAsk{done: make(chan struct{})}
 		stdinAsking[path] = ask
-		stdinMu.Unlock()
-		var settled bool
-		known, settled = askStdin(path)
-		stdinMu.Lock()
-		ask.known = known
-		if settled {
-			stdinKept[path] = known
-		}
-		delete(stdinAsking, path)
-		stdinMu.Unlock()
-		close(ask.done)
+		go func() {
+			known, settled := askStdin(path)
+			stdinMu.Lock()
+			ask.known = known
+			if settled {
+				stdinKept[path] = known
+			}
+			delete(stdinAsking, path)
+			stdinMu.Unlock()
+			close(ask.done)
+		}()
 	}
+	stdinMu.Unlock()
+	if wait <= 0 {
+		<-ask.done
+		return stdinOptions(ask.known), true
+	}
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
+	select {
+	case <-ask.done:
+		return stdinOptions(ask.known), true
+	case <-timer.C:
+		return nil, false
+	}
+}
+
+func stdinOptions(known bool) []string {
 	if !known {
 		return nil
 	}
@@ -398,7 +419,7 @@ func CommandConn(cmd *exec.Cmd, timeout time.Duration) (net.Conn, error) {
 // run executes a remote command over the master with a deadline, the script on the session's stdin (Remote), the stdin
 // given after it (RemoteWithInput).
 func (c *Conn) run(command string, timeout time.Duration, stdin io.Reader) ([]byte, error) {
-	keep, timeout, err := c.stdinWithin(timeout)
+	keep, timeout, err := c.stdinWithin(command, timeout)
 	if err != nil {
 		return nil, err
 	}
@@ -440,7 +461,7 @@ func (c *Conn) run(command string, timeout time.Duration, stdin io.Reader) ([]by
 
 // Stream runs a remote command, handing sink its output (stdout and stderr) as it comes; the exit status is the error.
 func (c *Conn) Stream(command string, timeout time.Duration, sink func([]byte)) error {
-	keep, timeout, err := c.stdinWithin(timeout)
+	keep, timeout, err := c.stdinWithin(command, timeout)
 	if err != nil {
 		return err
 	}

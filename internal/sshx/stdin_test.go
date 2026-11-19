@@ -188,7 +188,7 @@ func TestTheOptionProbeReadsNoConfig(t *testing.T) {
 	}
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	began := time.Now()
-	if got := keepStdin(); len(got) != 4 || time.Since(began) > stdinProbe {
+	if got, _ := keepStdin(0); len(got) != 4 || time.Since(began) > stdinProbe {
 		t.Errorf("%q after %s", got, time.Since(began))
 	}
 }
@@ -205,10 +205,10 @@ func TestAProbeThatTimedOutIsAskedAgain(t *testing.T) {
 	was := stdinProbe
 	stdinProbe = 300 * time.Millisecond
 	t.Cleanup(func() { stdinProbe = was })
-	if got := keepStdin(); got != nil {
+	if got, _ := keepStdin(0); got != nil {
 		t.Fatalf("a probe that timed out said %q", got)
 	}
-	if got := keepStdin(); len(got) != 4 {
+	if got, _ := keepStdin(0); len(got) != 4 {
 		t.Errorf("asked again: %q", got)
 	}
 }
@@ -230,7 +230,7 @@ func TestCallersWaitingOnOneProbeShareItsAnswer(t *testing.T) {
 	var wg sync.WaitGroup
 	for range 3 {
 		wg.Add(1)
-		go func() { defer wg.Done(); keepStdin() }()
+		go func() { defer wg.Done(); keepStdin(0) }()
 	}
 	wg.Wait()
 	if took := time.Since(began); took > 2*stdinProbe {
@@ -239,7 +239,7 @@ func TestCallersWaitingOnOneProbeShareItsAnswer(t *testing.T) {
 	if got := lengths(t, probes); len(got) != 1 {
 		t.Errorf("%d probes for one stall", len(got))
 	}
-	keepStdin()
+	keepStdin(0)
 	if got := lengths(t, probes); len(got) != 2 {
 		t.Errorf("a later caller did not ask again: %d probes", len(got))
 	}
@@ -258,10 +258,26 @@ func TestAScriptWithNoTimeLeftAfterTheProbeNeverStarts(t *testing.T) {
 	stdinProbe = 300 * time.Millisecond
 	t.Cleanup(func() { stdinProbe = was })
 	c := &Conn{Host: "roofr.remote", ctl: filepath.Join(t.TempDir(), "ctl")}
+	began := time.Now()
 	if _, err := c.Run("true", 100*time.Millisecond); err == nil {
 		t.Error("a script ran past its time")
 	}
+	if took := time.Since(began); took >= stdinProbe {
+		t.Errorf("the script waited %s for the probe, past its own time", took)
+	}
 	if _, err := os.Stat(ran); err == nil {
 		t.Error("ssh was started past the script's time")
+	}
+}
+
+// TestAScriptHoldingANulNeverRuns: the shell would drop the byte and run another script than the one written.
+func TestAScriptHoldingANulNeverRuns(t *testing.T) {
+	fakeDropbear(t)
+	c := &Conn{Host: "roofr.remote", ctl: filepath.Join(t.TempDir(), "ctl")}
+	if _, err := c.Run("cat /safe/a\x00/../../etc/passwd", 10*time.Second); err == nil || !strings.Contains(err.Error(), "NUL") {
+		t.Errorf("%v", err)
+	}
+	if out, err := c.RunWithInput("cat", []byte("a\x00b"), 10*time.Second); err != nil || string(out) != "a\x00b" {
+		t.Errorf("data on stdin must stay whole: %q, %v", out, err)
 	}
 }

@@ -315,8 +315,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   empty run, and an ssh that knows the options, OpenSSH 8.7 on (`keepStdin`,
   asked per binary with `ssh -F none -G`, no config read, 5 s at most, one
   probe at a time whose answer its waiters share; an answer is kept, a
-  timeout asked again by a later caller; the probe's time is the script's,
-  taken before its session, `stdinWithin`), is told `StdinNull=no` and
+  timeout asked again by a later caller; each caller waits for it within
+  its own time, taken before its session, `stdinWithin`, which refuses a
+  script holding a NUL byte, since the shell would drop it and run another), is told `StdinNull=no` and
   `ForkAfterAuthentication=no`; the session asks for no terminal, `-T`), since sshd hands the line to
   the account's login shell first — fish reads `\\` and `\'` inside single
   quotes, tcsh refuses a line break inside them — and Dropbear drops the
