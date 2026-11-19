@@ -2385,7 +2385,13 @@ components and icons as rules for whoever changes it: @docs/design.md
   the commits on no remote-tracking branch (`git log -p --no-merges -n 200
   HEAD --not --remotes`, each after `\036commit <sha>`, outside the folder
   too, paths the repository's: a push sends whole commits; the ones past
-  200 counted, `\036older N`): what the push would send. The awk drops a diff's removed lines, cuts each
+  200 of each kind, plain and merge, counted, `\036older N`; the merges by `--cc`, `mergeLines` keeping as
+  added only the lines no parent had — a conflict's resolution among them,
+  nothing for a merge that only merged, a file some parent holds as binary
+  named unread — with no merge run again, no driver, and no partial clone's
+  fetch (`GIT_NO_LAZY_FETCH`; a partial clone on a git before 2.45, which
+  would fetch regardless, leaves its merges unread), so no object written):
+  what the push would send. The awk drops a diff's removed lines, cuts each
   file at 1 MB (`\036partly`) and the stream at `scanTotal` 8 MB, the commits' own 8 MB after the work's
   (`\036budget <path>` / `\036unread <path>` for the rest), so a remote
   sends megabytes at most; `readScan` feeds the added lines, with their
@@ -7313,8 +7319,14 @@ components and icons as rules for whoever changes it: @docs/design.md
   A project's queue and pipeline (`internal/tasks`) send prompts only once
   the person switched them on — the task's own prompt and the stages' the
   person wrote, like an agent schedule's — and only for cards the person
-  put in the Queued column: an agent's key cannot queue a card, change a
-  project's columns or its agents (403, `queueKept` in the tasks routes).
+  put in the Queued column: an agent's key cannot queue a card, rewrite
+  the title, description or fields of a card in the Queued column or with
+  a pipeline run `on`, or take it to another project, which drops the
+  fields that one lacks (`ErrCardHeld`, judged inside `Store.Update`'s
+  transaction: the next stage's `{task}` reads them too), delete a card,
+  nor reach any route of a single project — its settings, columns, fields and
+  agents, deleting it (`Key.Allows` refuses `/api/tasks/projects/…`); the
+  move into the column is `queueKept` in the tasks routes.
   A plan limit's offer (`internal/limits` offers) starts the held card or
   schedule on the other vendor's agent only when the person presses its
   button — the toast, the Usage panel's row, the push's — never by itself,

@@ -1353,8 +1353,10 @@ to use which: look who is already on what before filing or taking a task.
 A task an agent makes remembers the pane that made it and lands in the project's
 **Proposed** column (unless the agent named a column), where the Tasks
 mode's Proposed list lets you accept or decline it — so a scout's dozen
-never mixes with your own New tasks. One command registers the server with
-every agent on a machine, through the agent's own CLI (`claude mcp add`,
+never mixes with your own New tasks. An agent's key changes no project and
+deletes no task, and a card in the Queued column or a running pipeline keeps
+the title, description and fields you gave it, since those are what the next
+agent is told. One command registers the server with every agent on a machine, through the agent's own CLI (`claude mcp add`,
 `codex mcp add`, `gemini mcp add`; Kimi when its CLI can):
 
     remuda mcp install            # on this machine

@@ -30,6 +30,8 @@ const BoardDone = 50
 var (
 	ErrNotFound = errors.New("not found")
 	ErrInvalid  = errors.New("invalid")
+	// ErrCardHeld refuses an agent's key the words of a card the queue or a running pipeline hands to the next agent.
+	ErrCardHeld = errors.New("an agent's key cannot change the title, description or fields of a card in the Queued column or a running pipeline, nor move it to another project")
 )
 
 func invalid(msg string) error { return fmt.Errorf("%w: %s", ErrInvalid, msg) }
@@ -165,6 +167,7 @@ type Patch struct {
 	StatusID    *int64                     `json:"status_id"`
 	After       *int64                     `json:"after"`
 	Fields      map[string]json.RawMessage `json:"fields"`
+	ByAgent     bool                       `json:"-"` // it came with an agent's key: Update keeps the words of a card about to reach an agent
 }
 
 type ProjectPatch struct {
@@ -1322,6 +1325,7 @@ func (st *Store) Update(id int64, p Patch) (Task, error) {
 	if err != nil {
 		return cur, err
 	}
+	wasDone, readProject, readStatus := cur.Done, cur.ProjectID, cur.StatusID
 	if p.Title != nil {
 		if cur.Title = strings.TrimSpace(*p.Title); cur.Title == "" {
 			return cur, invalid("a task needs a title")
@@ -1346,9 +1350,10 @@ func (st *Store) Update(id int64, p Patch) (Task, error) {
 	if err != nil {
 		return cur, err
 	}
-	moved := false
+	moved, crossed := false, false
 	var carryTo []Field
 	if p.ProjectID != nil && *p.ProjectID != cur.ProjectID {
+		crossed = true // the fields the other project lacks are lost on the way
 		target, err := st.Project(*p.ProjectID)
 		if err != nil {
 			return cur, fmt.Errorf("project: %w", err)
@@ -1411,16 +1416,64 @@ func (st *Store) Update(id int64, p Patch) (Task, error) {
 		return cur, err
 	}
 	defer tx.Rollback()
+	if p.ByAgent && (crossed || p.Title != nil || p.Description != nil || len(p.Fields) > 0) {
+		// inside the transaction, on the one connection: a card queued or started a moment ago counts
+		var held bool
+		if err := tx.QueryRow(`SELECT EXISTS (SELECT 1 FROM tasks t JOIN statuses s ON s.id = t.status_id WHERE t.id = ? AND s.on_queue = 1)
+  OR EXISTS (SELECT 1 FROM task_runs WHERE task_id = ? AND pipeline = ?)`, id, id, PipelineOn).Scan(&held); err != nil {
+			return cur, err
+		}
+		if held {
+			return cur, ErrCardHeld
+		}
+	}
+	if moved || p.After != nil || len(p.Fields) > 0 { // a place, or fields, reckoned from where the card was: it may have been moved since
+		var project, status int64
+		err := tx.QueryRow(`SELECT project_id, status_id FROM tasks WHERE id = ?`, id).Scan(&project, &status)
+		if errors.Is(err, sql.ErrNoRows) {
+			return cur, ErrNotFound
+		}
+		if err != nil {
+			return cur, err
+		}
+		if project != readProject || status != readStatus {
+			return cur, invalid("the card was moved meanwhile: read it again")
+		}
+	}
+	// only what this patch changes is written: the rest was read before the transaction and may be older than the row
+	var project, status, title, description, done, doneAt, dueDate, priority, position any
 	switch {
 	case p.After != nil:
 		if cur.Position, err = placeAfter(tx, cur.ProjectID, cur.StatusID, id, *p.After); err != nil {
 			return cur, err
 		}
+		position = cur.Position
 	case moved:
 		cur.Position = bottom(tx, cur.ProjectID, cur.StatusID)
+		position = cur.Position
 	}
-	if _, err := tx.Exec(`UPDATE tasks SET project_id=?, status_id=?, title=?, description=?, done=?, done_at=?, due_date=?, priority=?, position=?, updated=? WHERE id=?`,
-		cur.ProjectID, cur.StatusID, cur.Title, cur.Description, cur.Done, cur.DoneAt, cur.DueDate, cur.Priority, cur.Position, now, id); err != nil {
+	if moved {
+		project, status = cur.ProjectID, cur.StatusID
+	}
+	if moved || cur.Done != wasDone {
+		done, doneAt = cur.Done, cur.DoneAt
+	}
+	if p.Title != nil {
+		title = cur.Title
+	}
+	if p.Description != nil {
+		description = cur.Description
+	}
+	if p.DueDate != nil {
+		dueDate = cur.DueDate
+	}
+	if p.Priority != nil {
+		priority = cur.Priority
+	}
+	if _, err := tx.Exec(`UPDATE tasks SET project_id=COALESCE(?, project_id), status_id=COALESCE(?, status_id), title=COALESCE(?, title),
+  description=COALESCE(?, description), done=COALESCE(?, done), done_at=COALESCE(?, done_at), due_date=COALESCE(?, due_date),
+  priority=COALESCE(?, priority), position=COALESCE(?, position), updated=? WHERE id=?`,
+		project, status, title, description, done, doneAt, dueDate, priority, position, now, id); err != nil {
 		return cur, err
 	}
 	if moved && cur.Refused != "" {

@@ -3,6 +3,7 @@ package review
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -644,5 +645,211 @@ func TestWorkBesideTheCommitsLeavesThemTheirBudget(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("the commit went unread: %+v", scan.Findings)
+	}
+}
+
+// conflictedMerge is a checkout whose unpushed merge resolved a conflict with a line only the merge holds.
+func conflictedMerge(t *testing.T, resolution string) string {
+	t.Helper()
+	dir, git, write := scratchCheckout(t)
+	write("a.txt", "one\ntwo\n")
+	git("add", "-A")
+	git("commit", "-qm", "init")
+	git("branch", "-M", "main")
+	git("checkout", "-qb", "side")
+	write("a.txt", "one\nside\n")
+	git("commit", "-qam", "side")
+	git("checkout", "-q", "main")
+	write("a.txt", "one\nmain\n")
+	git("commit", "-qam", "main")
+	cmd := exec.Command("git", "-c", "user.email=t@t", "-c", "user.name=t", "merge", "-q", "side")
+	cmd.Dir = dir
+	_ = cmd.Run() // it stops at the conflict
+	write("a.txt", "one\n"+resolution+"\n")
+	git("add", "-A")
+	git("commit", "-qm", "merged")
+	return dir
+}
+
+func TestASecretOnlyAMergeCommitHoldsIsFound(t *testing.T) {
+	ownGitConfig(t)
+	secret := "export NPM_TOKEN=" + "npm_" + fakeKey(23, 36)
+	scan, err := ScanWork(shell.Local{Name: "local"}, conflictedMerge(t, secret), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(scan.Findings) != 1 || scan.Findings[0].File != "a.txt" || scan.Findings[0].Line != 2 || scan.Findings[0].Commit == "" {
+		t.Errorf("the conflict's resolution went unread: %+v", scan.Findings)
+	}
+}
+
+func TestAMergeThatOnlyMergedHoldsNoPush(t *testing.T) {
+	ownGitConfig(t)
+	dir, git, write := scratchCheckout(t)
+	write("a.txt", "1\n2\n3\n4\n5\n6\n7\n8\n9\n")
+	git("add", "-A")
+	git("commit", "-qm", "init")
+	git("branch", "-M", "main")
+	git("checkout", "-qb", "side")
+	write("a.txt", "one\n2\n3\n4\n5\n6\n7\n8\n9\n")
+	git("commit", "-qam", "side")
+	git("checkout", "-q", "main")
+	write("a.txt", "1\n2\n3\n4\n5\n6\n7\n8\nnine\n")
+	git("commit", "-qam", "main")
+	git("merge", "-q", "--no-edit", "side")
+	scan, err := ScanWork(shell.Local{Name: "local"}, dir, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if scan.Incomplete || scan.PushUnread() || len(scan.Findings) != 0 {
+		t.Errorf("%+v", scan)
+	}
+}
+
+func TestALineAddedByAMergeOfSeveralBranchesIsRead(t *testing.T) {
+	ownGitConfig(t)
+	dir, git, write := scratchCheckout(t)
+	write("a.txt", "a\n")
+	git("add", "-A")
+	git("commit", "-qm", "init")
+	git("branch", "-M", "main")
+	for _, branch := range []string{"one", "two"} {
+		git("checkout", "-qb", branch, "main")
+		write(branch+".txt", branch+"\n")
+		git("add", "-A")
+		git("commit", "-qm", branch)
+	}
+	git("checkout", "-q", "main")
+	git("merge", "-q", "--no-commit", "one", "two")
+	write("a.txt", "a\nexport NPM_TOKEN="+"npm_"+fakeKey(24, 36)+"\n")
+	git("add", "-A")
+	git("commit", "-qm", "merged")
+	scan, err := ScanWork(shell.Local{Name: "local"}, dir, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(scan.Findings) != 1 || scan.Findings[0].File != "a.txt" || scan.Findings[0].Line != 2 {
+		t.Errorf("%+v", scan.Findings)
+	}
+}
+
+// mergeBringing is a checkout whose unpushed merge, of branches that touch other files, adds one file of its own.
+func mergeBringing(t *testing.T, name, body string) string {
+	t.Helper()
+	dir, git, write := scratchCheckout(t)
+	write("a.txt", "a\n")
+	git("add", "-A")
+	git("commit", "-qm", "init")
+	git("branch", "-M", "main")
+	git("checkout", "-qb", "side")
+	write("b.txt", "b\n")
+	git("add", "-A")
+	git("commit", "-qm", "side")
+	git("checkout", "-q", "main")
+	write("c.txt", "c\n")
+	git("add", "-A")
+	git("commit", "-qm", "main")
+	git("merge", "-q", "--no-commit", "side")
+	write(name, body)
+	git("add", "-A")
+	git("commit", "-qm", "merged")
+	return dir
+}
+
+func TestAKeystoreOnlyAMergeBringsIsFound(t *testing.T) {
+	ownGitConfig(t)
+	scan, err := ScanWork(shell.Local{Name: "local"}, mergeBringing(t, "store.p12", "\x00\x01binary\x00"), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(scan.Findings) != 1 || scan.Findings[0].File != "store.p12" || scan.PushUnread() {
+		t.Errorf("%+v", scan)
+	}
+}
+
+func TestABinaryFileOfAMergeStaysUnread(t *testing.T) {
+	ownGitConfig(t)
+	scan, err := ScanWork(shell.Local{Name: "local"}, mergeBringing(t, "blob.bin", "\x00\x01binary\x00"), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !scan.PushUnread() || !scan.Incomplete || len(scan.Skipped) != 1 || scan.Skipped[0].Path != "blob.bin" || scan.Skipped[0].Why != SkipBinary {
+		t.Errorf("a merge's binary file counted as read: %+v", scan)
+	}
+}
+
+func TestAMergeReadThatBrokeOffIsNoCleanCheck(t *testing.T) {
+	ownGitConfig(t)
+	dir := mergeBringing(t, "d.txt", "d\n")
+	real, err := exec.LookPath("awk")
+	if err != nil {
+		t.Skip("no awk")
+	}
+	bin := t.TempDir()
+	stand := "#!/bin/sh\ncase \"$*\" in *'diff --cc'*) cat >/dev/null; exit 2;; esac\nexec " + script.Quote(real) + " \"$@\"\n"
+	if err := os.WriteFile(filepath.Join(bin, "awk"), []byte(stand), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	if scan, err := ScanWork(shell.Local{Name: "local"}, dir, true); err == nil {
+		t.Errorf("a check that lost the merges counted as finished: %+v", scan)
+	}
+}
+
+func TestAKeystoreAMergeDeletedIsNoFinding(t *testing.T) {
+	ownGitConfig(t)
+	dir, git, write := scratchCheckout(t)
+	write("store.p12", "\x00\x01binary\x00")
+	git("add", "-A")
+	git("commit", "-qm", "init")
+	git("branch", "-M", "main")
+	git("checkout", "-qb", "side")
+	write("b.txt", "b\n")
+	git("add", "-A")
+	git("commit", "-qm", "side")
+	git("checkout", "-q", "main")
+	write("c.txt", "c\n")
+	git("add", "-A")
+	git("commit", "-qm", "main")
+	git("update-ref", "refs/remotes/origin/main", "main")
+	git("update-ref", "refs/remotes/origin/side", "side")
+	git("merge", "-q", "--no-commit", "side")
+	git("rm", "-q", "store.p12")
+	git("commit", "-qm", "merged")
+	scan, err := ScanWork(shell.Local{Name: "local"}, dir, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(scan.Findings) != 0 || scan.PushUnread() {
+		t.Errorf("%+v", scan)
+	}
+}
+
+func TestAPartialCloneOnAnOlderGitLeavesItsMergesUnread(t *testing.T) {
+	ownGitConfig(t)
+	real, err := exec.LookPath("git")
+	if err != nil {
+		t.Skip("no git")
+	}
+	bin := t.TempDir()
+	stand := "#!/bin/sh\n[ \"$1\" = --no-lazy-fetch ] && exit 129\nexec " + script.Quote(real) + " \"$@\"\n"
+	if err := os.WriteFile(filepath.Join(bin, "git"), []byte(stand), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	for key, value := range map[string]string{"remote.origin.promisor": "true", "remote.origin.partialCloneFilter": "blob:none", "extensions.partialClone": "origin"} {
+		dir := conflictedMerge(t, "export NPM_TOKEN="+"npm_"+fakeKey(25, 36))
+		config := exec.Command(real, "config", key, value)
+		config.Dir = dir
+		if err := config.Run(); err != nil {
+			t.Fatal(err)
+		}
+		scan, err := ScanWork(shell.Local{Name: "local"}, dir, true)
+		if err != nil {
+			t.Fatalf("%s: %v", key, err)
+		}
+		if !scan.PushUnread() || !scan.Incomplete || len(scan.Findings) != 0 {
+			t.Errorf("%s: merges left unread must say so: %+v", key, scan)
+		}
 	}
 }

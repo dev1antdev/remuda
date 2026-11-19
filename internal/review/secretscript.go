@@ -57,23 +57,56 @@ var untrackedScript = `list=$(git ls-files -z --others --exclude-standard 2>/dev
 	`grep --untracked --no-color -G -n -z -e '' -- 2>/dev/null | tr '\0' '\037'; ` +
 	`fi; `
 
+// unpushedLog is git's log of the commits a push would send, in the form given.
+func unpushedLog(form string) string {
+	return readGit + ` -c diff.relative=false -c log.showRoot=true -c log.showSignature=false log -n ` + strconv.Itoa(scanCommits) + ` ` + form +
+		` HEAD --not --remotes 2>/dev/null`
+}
+
+// mergeLines turns git's combined diff of the merges into the plain diff the rest of the stream reads. A line marked
+// added against every parent is what the merge brought itself, a conflict's resolution or anything else, and stays
+// added; a line one parent already had is context, since that parent's commit is read or already out; a line the result
+// lacks goes. A file a parent holds as binary has no lines to tell, and is named ("\036binarymerge <path>") unless the
+// merge deleted it.
+const mergeLines = `LC_ALL=C awk '
+/^\036/ { n = 0; print; next }
+/^diff --cc / { n = 0; gone = 0; path = substr($0, 11); print "diff --git " path " " path; next }
+/^deleted file mode / { gone = 1 }
+/^Binary files differ$/ { if (!gone) print "\036binarymerge " path; next }
+/^@@@+ / { match($0, /^@+/); n = RLENGTH - 1; start = $(n + 2); sub(/^\+/, "", start); sub(/,.*/, "", start); print "@@ -0,0 +" start " @@"; next }
+n == 0 || length($0) < n || /^\\/ { if (n == 0) print; next }
+{ mark = substr($0, 1, n); if (index(mark, "-")) next
+  text = substr($0, n + 1); gsub(/\+/, "", mark); print (mark == "" ? "+" : " ") text }'`
+
+// unpushedScript prints the commits a push would send, those with one parent as patches and the merges by what they
+// brought themselves (mergeLines): a merge that only merged shows nothing. A combined diff merges nothing again, so no
+// driver runs. It reads the parents' files, which a partial clone may lack and a git before 2.45 would fetch whatever it
+// is told: there the merges are left unread, counted with the commits past the limit.
+var unpushedScript = `o=0; m=0; for kind in --no-merges --merges; do ` +
+	`c=$(git rev-list --count "$kind" --max-count=` + strconv.Itoa(countCommits) + ` HEAD --not --remotes 2>/dev/null) || printf '\036failed commits\n'; ` +
+	`if [ "$kind" = --merges ]; then m=${c:-0}; fi; ` +
+	`if [ "${c:-0}" -gt ` + strconv.Itoa(scanCommits) + ` ]; then o=$((o + c - ` + strconv.Itoa(scanCommits) + `)); fi; done; ` +
+	`skip=; if [ "$m" -gt 0 ] && [ -n "$(git config --get-regexp '^(remote\..*\.(promisor|partialclonefilter)|extensions\.partialclone)$' 2>/dev/null)" ] && ! git --no-lazy-fetch version >/dev/null 2>&1; then ` +
+	`skip=1; if [ "$m" -gt ` + strconv.Itoa(scanCommits) + ` ]; then m=` + strconv.Itoa(scanCommits) + `; fi; o=$((o + m)); fi; ` +
+	`if [ "$o" -gt 0 ]; then printf '\036older %s\n' "$o"; fi; ` +
+	unpushedLog(`--no-merges -p `+plainPatch+` --format='%x1ecommit %h'`) + ` || printf '\036failed commits\n'; ` +
+	`if [ -z "$skip" ]; then { ` + unpushedLog(`--merges --cc `+plainPatch+` --format='%x1ecommit %h'`) + ` || printf '\036failed commits\n'; } | ` + mergeLines + ` || printf '\036failed commits\n'; fi; `
+
 // secretScript prints, in one stream through capScript, the diff of the work against HEAD (the empty tree before the
 // first commit) with only the lines added, every untracked file git does not ignore (untrackedScript), after a line
 // "\036staged" the index's diff against HEAD — what git commit carries, though a staged file may have changed or gone
-// since — and, for a push, the commits on no remote-tracking branch with their whole patches — a push sends the whole commit, whatever
-// folder the work is in — each after a line "\036commit <short sha>", those past scanCommits counted ("\036older N").
+// since — and, for a push, the commits on no remote-tracking branch with their whole patches (unpushedScript) — a push
+// sends the whole commit, whatever folder the work is in — each after a line "\036commit <short sha>", those past
+// scanCommits counted ("\036older N").
 // A line "\036failed <what>" says git could not read the folder, the work or the commits, and "\036end" closes a
 // stream that ran to its end: without it nothing is known, and the check is no clean one.
 func secretScript(dir string, push bool) string {
 	commits := ""
 	if push {
-		commits = `if [ "$base" = HEAD ]; then ` +
-			`c=$(git rev-list --no-merges --max-count=` + strconv.Itoa(countCommits) + ` HEAD --not --remotes 2>/dev/null | wc -l | tr -d ' '); ` +
-			`if [ "${c:-0}" -gt ` + strconv.Itoa(scanCommits) + ` ]; then printf '\036older %s\n' "$((c - ` + strconv.Itoa(scanCommits) + `))"; fi; ` +
-			readGit + ` -c diff.relative=false -c log.showRoot=true -c log.showSignature=false log --no-merges -n ` + strconv.Itoa(scanCommits) +
-			` -p ` + plainPatch + ` --format='%x1ecommit %h' HEAD --not --remotes 2>/dev/null || printf '\036failed commits\n'; fi; `
+		commits = `if [ "$base" = HEAD ]; then ` + unpushedScript + `fi; `
 	}
-	return `cd ` + script.Quote(dir) + ` 2>/dev/null || { printf '\036failed folder\n'; exit 0; }; ` +
+	// a partial clone is not sent for what it lacks (git 2.45 on): nothing is written, and git's failure says so
+	return `GIT_NO_LAZY_FETCH=1; export GIT_NO_LAZY_FETCH; cd ` + script.Quote(dir) + ` 2>/dev/null || { printf '\036failed folder\n'; exit 0; }; ` +
 		`git rev-parse --show-toplevel >/dev/null 2>&1 || { printf '\036failed repository\n'; exit 0; }; ` +
 		`base=HEAD; git rev-parse -q --verify HEAD >/dev/null 2>&1 || base=$(git hash-object -t tree /dev/null); ` +
 		`{ ` + gitDiff + ` --relative "$base" 2>/dev/null || printf '\036failed work\n'; ` +
