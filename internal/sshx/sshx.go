@@ -215,6 +215,32 @@ func (c *Conn) session(args ...string) *exec.Cmd {
 	return c.cmd(append([]string{"-o", "ProxyCommand=false"}, args...)...)
 }
 
+// scriptSession is a session for a script on its stdin: no terminal, which a forced one would hold the stdin open
+// for, and the stdin kept whatever the host's ssh config says, where this ssh knows the options.
+func (c *Conn) scriptSession(line string) *exec.Cmd {
+	return c.session(append(append([]string{"-T"}, keepStdin()...), c.Host, line)...)
+}
+
+// stdinKept is, by the path of the ssh binary, whether it takes StdinNull and ForkAfterAuthentication (OpenSSH 8.7):
+// an older one refuses an option it does not know, and every session with it.
+var stdinKept sync.Map
+
+func keepStdin() []string {
+	path, err := exec.LookPath("ssh")
+	if err != nil {
+		return nil
+	}
+	known, ok := stdinKept.Load(path)
+	if !ok {
+		known = exec.Command(path, "-G", "-o", "StdinNull=no", "-o", "ForkAfterAuthentication=no", "remuda.invalid").Run() == nil
+		stdinKept.Store(path, known)
+	}
+	if !known.(bool) {
+		return nil
+	}
+	return []string{"-o", "StdinNull=no", "-o", "ForkAfterAuthentication=no"}
+}
+
 // Dial starts (or reuses) a ControlMaster to host and verifies it answers.
 func Dial(host string) (*Conn, error) {
 	c := &Conn{Host: host, ctl: tmpPath("remuda-ssh-", host, ".ctl")}
@@ -321,7 +347,7 @@ func (c *Conn) run(command string, timeout time.Duration, stdin io.Reader) ([]by
 	}
 	defer leave()
 	line, stdin := RemoteWithInput(command, stdin)
-	cmd := c.session("-T", c.Host, line) // no terminal: a forced one would hold the script's stdin open
+	cmd := c.scriptSession(line)
 	var out, errb bytes.Buffer
 	cmd.Stdin = stdin
 	cmd.Stdout, cmd.Stderr = &out, &errb
@@ -359,7 +385,7 @@ func (c *Conn) Stream(command string, timeout time.Duration, sink func([]byte)) 
 	}
 	defer leave()
 	line, stdin := Remote("exec 2>&1; " + command)
-	cmd := c.session("-T", c.Host, line)
+	cmd := c.scriptSession(line)
 	cmd.Stdin = stdin
 	pr, pw := io.Pipe()
 	stderr := &lockedBuffer{max: masterErrMax}

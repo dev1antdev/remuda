@@ -27,6 +27,7 @@ func fakeLogin(t *testing.T, login string) (lines string) {
 	dir := t.TempDir()
 	lines = filepath.Join(dir, "lines")
 	stub := `#!/bin/sh
+case "$1" in -G) exit 1 ;; esac
 for line; do :; done
 printf '%s\n' "${#line}" >> ` + script.Quote(lines) + `
 if [ "${#line}" -gt 9000 ]; then echo "Exit: String too long" >&2; exit 255; fi
@@ -144,7 +145,7 @@ func TestALoginShellOfAnotherKindRunsTheScriptAsWritten(t *testing.T) {
 // empty script, cleanly; now the machine says the script did not reach it.
 func TestAScriptThatNeverArrivesFailsInWords(t *testing.T) {
 	dir := t.TempDir()
-	stub := "#!/bin/sh\nfor line; do :; done\nexec sh -c \"$line\" </dev/null\n"
+	stub := "#!/bin/sh\ncase \"$1\" in -G) exit 1 ;; esac\nfor line; do :; done\nexec sh -c \"$line\" </dev/null\n"
 	if err := os.WriteFile(filepath.Join(dir, "ssh"), []byte(stub), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -157,5 +158,21 @@ func TestAScriptThatNeverArrivesFailsInWords(t *testing.T) {
 		if err := run(); err == nil || !strings.Contains(err.Error(), "did not reach the machine whole") {
 			t.Errorf("%s: %v", name, err)
 		}
+	}
+}
+
+// TestAHostThatDiscardsStdinStillGetsTheScript: an ssh that knows StdinNull is told to keep the session's stdin, which a
+// host's config set to discard.
+func TestAHostThatDiscardsStdinStillGetsTheScript(t *testing.T) {
+	dir := t.TempDir()
+	stub := "#!/bin/sh\ncase \"$1\" in -G) exit 0 ;; esac\nkeep=\nfor word; do case \"$word\" in StdinNull=no) keep=1 ;; esac; line=$word; done\n" +
+		"if [ -n \"$keep\" ]; then exec sh -c \"$line\"; fi\nexec sh -c \"$line\" </dev/null\n"
+	if err := os.WriteFile(filepath.Join(dir, "ssh"), []byte(stub), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	c := &Conn{Host: "roofr.remote", ctl: filepath.Join(t.TempDir(), "ctl")}
+	if out, err := c.Run("echo ran", 10*time.Second); err != nil || string(out) != "ran\n" {
+		t.Errorf("%q, %v", out, err)
 	}
 }

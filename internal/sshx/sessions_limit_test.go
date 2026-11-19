@@ -22,7 +22,7 @@ func limitedSSH(t *testing.T) (peak func() int) {
 	if err := os.Mkdir(running, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	stub := "#!/bin/sh\nme=" + script.Quote(running) + "/$$\n: > \"$me\"\n" +
+	stub := "#!/bin/sh\ncase \"$1\" in -G) exit 1 ;; esac\nme=" + script.Quote(running) + "/$$\n: > \"$me\"\n" +
 		"ls " + script.Quote(running) + " | wc -l >> " + script.Quote(log) + "\n" +
 		"trap 'rm -f \"$me\"' EXIT\n" +
 		"what=\"$*\"; case \"$what\" in *eval*) what=\"$what $(cat)\" ;; esac\n" + // a script comes on stdin, a request on the line

@@ -17,6 +17,7 @@ func fakeMaster(t *testing.T) (calls string) {
 	dir := t.TempDir()
 	calls = filepath.Join(dir, "calls")
 	stub := `#!/bin/sh
+case "$1" in -G) exit 1 ;; esac
 printf '%s\n' "$*" >> ` + script.Quote(calls) + `
 ctl="$2"
 case "$*" in
