@@ -192,3 +192,28 @@ func TestAChainThatComesBackOnItselfStops(t *testing.T) {
 		t.Errorf("Lineage = %q", got)
 	}
 }
+
+func TestAContinuationOpeningOnACopiedTailIsNoFork(t *testing.T) {
+	dir := t.TempDir()
+	now := time.Now().Truncate(time.Second)
+	summary := `{"parentUuid":null,"logicalParentUuid":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2","isCompactSummary":true,"type":"user","uuid":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3","timestamp":"2026-10-06T20:30:00Z","message":{"role":"user","content":"summary"}}`
+	after := `{"parentUuid":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3","type":"assistant","uuid":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4","timestamp":"2026-10-06T20:31:00Z","message":{"role":"assistant","content":[{"type":"text","text":"Going on."}]}}`
+	old := writeSession(t, dir, oldID, now.Add(-2*time.Minute),
+		`{"parentUuid":null,"type":"user","uuid":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1","timestamp":"2026-10-06T20:00:00Z","message":{"role":"user","content":"build it"}}`,
+		`{"parentUuid":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1","type":"assistant","uuid":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2","timestamp":"2026-10-06T20:00:05Z","message":{"role":"assistant","content":[{"type":"text","text":"Built."}]}}`,
+		summary, after)
+	next := writeSession(t, dir, newID, now.Add(-time.Minute), summary, after,
+		`{"parentUuid":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4","type":"user","uuid":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa5","timestamp":"2026-10-06T21:00:00Z","message":{"role":"user","content":"and now"}}`)
+	if got := Continuation(old); got != next {
+		t.Errorf("Continuation(old) = %q", got)
+	}
+	if got := Predecessor(next); got != old {
+		t.Errorf("Predecessor(new) = %q", got)
+	}
+	if got := runScript(t, ContinuationScript(script.Quote(old))); got != next {
+		t.Errorf("continuation script printed %q", got)
+	}
+	if got := runScript(t, PredecessorScript(script.Quote(next))); got != old {
+		t.Errorf("predecessor script printed %q", got)
+	}
+}

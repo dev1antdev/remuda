@@ -507,10 +507,11 @@ components and icons as rules for whoever changes it: @docs/design.md
   with a `continued-in` record naming the new session, `continuedIn` reads
   the old file's last 64 KB for it; a Claude Code that writes none is
   followed by the new file's first `parentUuid`, a record `uuid` in the old
-  one — read in its first 64 KB, which a big snapshot record can fill — and
-  never one of its own: a fork copies the conversation it began from, so it
-  continues nothing and has no predecessor)
-  while herdr keeps naming the old id, so the chat follows `Reader.Live(path)` —
+  one — read in its first 64 KB, which a big snapshot record can fill —
+  unless the new file holds the old one's first record: a fork copies the
+  conversation it began from whole, a compaction a tail at most, so a fork
+  continues nothing and has no predecessor (`forkOf`)) while herdr keeps
+  naming the old id, so the chat follows `Reader.Live(path)` —
   `transcript.Continuation` locally, `ContinuationScript` over ssh (its
   listing, like Gemini's find, read a line at a time with `while read`,
   never split by `$(ls …)`, so a home with a space stays whole) —
