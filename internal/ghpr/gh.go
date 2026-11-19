@@ -115,7 +115,7 @@ func run(host shell.Shell, args []string, input string) (string, error) {
 }
 
 // runText is run for a write that carries the person's text: its input goes to the machine as a file first, so the
-// text is never part of the script, which is a command line there (sh -c, or the ssh session's) — read by any other
+// text is never part of the script, whose commands' arguments are command lines there — read by any other
 // user's ps, and refused by Linux past 128 KB, which a 64 KB comment of markup reaches once JSON spells < as <.
 func runText(host shell.Shell, args []string, input string) (string, error) {
 	file, err := putInput(host, input)

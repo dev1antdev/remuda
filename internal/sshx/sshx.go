@@ -5,6 +5,7 @@ package sshx
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -215,6 +216,106 @@ func (c *Conn) session(args ...string) *exec.Cmd {
 	return c.cmd(append([]string{"-o", "ProxyCommand=false"}, args...)...)
 }
 
+// scriptSession is a session for a script on its stdin: no terminal, which a forced one would hold the stdin open
+// for, and the stdin kept whatever the host's ssh config says, where this ssh knows the options.
+func (c *Conn) scriptSession(line string, keep []string) *exec.Cmd {
+	return c.session(append(append([]string{"-T"}, keep...), c.Host, line)...)
+}
+
+// stdinWithin is keepStdin within a script's time, before it takes a session: what the wait took is the script's. A
+// script holding a NUL is refused: the shell drops the byte, so the script that ran would not be the one written.
+func (c *Conn) stdinWithin(command string, timeout time.Duration) ([]string, time.Duration, error) {
+	if strings.IndexByte(command, 0) >= 0 {
+		return nil, 0, fmt.Errorf("ssh %s: a script holds a NUL byte", c.Host)
+	}
+	began := time.Now()
+	keep, answered := keepStdin(timeout) // answered only fails with a timeout
+	if timeout > 0 {
+		if timeout -= time.Since(began); !answered || timeout <= 0 {
+			return nil, 0, fmt.Errorf("ssh %s: no time left for the script once ssh was asked what it knows", c.Host)
+		}
+	}
+	return keep, timeout, nil
+}
+
+// stdinKept is, by the path of the ssh binary, whether it takes StdinNull and ForkAfterAuthentication (OpenSSH 8.7):
+// an older one refuses an option it does not know, and every session with it. It is asked reading no ssh config
+// (-F none: a Match exec there runs nothing), for at most stdinProbe, one probe at a time per binary whose answer
+// every caller waiting on it shares; an answer is kept, a probe that timed out or did not start is asked again by a
+// later caller.
+var (
+	stdinMu     sync.Mutex
+	stdinKept   = map[string]bool{}
+	stdinAsking = map[string]*stdinAsk{}
+)
+
+type stdinAsk struct {
+	done  chan struct{}
+	known bool
+}
+
+var stdinProbe = 5 * time.Second
+
+// keepStdin is the options, waiting at most wait (0: as long as the probe takes) for a probe under way; answered is
+// false when the wait ran out first, the probe going on for the callers after.
+func keepStdin(wait time.Duration) (keep []string, answered bool) {
+	path, err := exec.LookPath("ssh")
+	if err != nil {
+		return nil, true
+	}
+	stdinMu.Lock()
+	if known, kept := stdinKept[path]; kept {
+		stdinMu.Unlock()
+		return stdinOptions(known), true
+	}
+	ask := stdinAsking[path]
+	if ask == nil {
+		ask = &stdinAsk{done: make(chan struct{})}
+		stdinAsking[path] = ask
+		limit := stdinProbe // read here, not in the probe's goroutine
+		go func() {
+			known, settled := askStdin(path, limit)
+			stdinMu.Lock()
+			ask.known = known
+			if settled {
+				stdinKept[path] = known
+			}
+			delete(stdinAsking, path)
+			stdinMu.Unlock()
+			close(ask.done)
+		}()
+	}
+	stdinMu.Unlock()
+	if wait <= 0 {
+		<-ask.done
+		return stdinOptions(ask.known), true
+	}
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
+	select {
+	case <-ask.done:
+		return stdinOptions(ask.known), true
+	case <-timer.C:
+		return nil, false
+	}
+}
+
+func stdinOptions(known bool) []string {
+	if !known {
+		return nil
+	}
+	return []string{"-o", "StdinNull=no", "-o", "ForkAfterAuthentication=no"}
+}
+
+// askStdin runs the probe: known, and settled unless it timed out or did not start.
+func askStdin(path string, limit time.Duration) (known, settled bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), limit)
+	defer cancel()
+	err := exec.CommandContext(ctx, path, "-F", "none", "-G", "-o", "StdinNull=no", "-o", "ForkAfterAuthentication=no", "remuda.invalid").Run()
+	var refused *exec.ExitError
+	return err == nil, err == nil || (errors.As(err, &refused) && ctx.Err() == nil)
+}
+
 // Dial starts (or reuses) a ControlMaster to host and verifies it answers.
 func Dial(host string) (*Conn, error) {
 	c := &Conn{Host: host, ctl: tmpPath("remuda-ssh-", host, ".ctl")}
@@ -274,21 +375,36 @@ func RemoteCommand(command string) string {
 	return "sh -c " + script.Quote(command)
 }
 
-// MaxCommandLine is the longest command line a script travels as. Dropbear refuses a command past 9000 bytes by
-// dropping the whole connection ("String too long"): the master, the event stream and every session on it.
-const MaxCommandLine = 8192
+// scriptEnd closes every script sent on stdin: one that arrives without it was cut, or never sent (a host whose ssh
+// config sets StdinNull or ForkAfterAuthentication), and is not run.
+const scriptEnd = "#remuda:end"
+
+// loader is the command line that reads a script with read, then runs it, its stdin what is left.
+func loader(read string) string {
+	return RemoteCommand(`s=$(` + read + `); case "$s" in *"` + scriptEnd + `") eval "$s" ;; ` +
+		`*) echo "remuda: the script did not reach the machine whole on the stdin of its ssh session (StdinNull or ForkAfterAuthentication in its ssh config?)" >&2; exit 125 ;; esac`)
+}
 
 // readScript is the command line of a script sent on stdin: read whole, then run with stdin at its end, as a script
 // on the command line finds it.
-var readScript = RemoteCommand(`eval "$(cat)"`)
+var readScript = loader("cat")
 
-// Remote is how a script travels to a machine: as its command line while it is short, else on stdin under a short one.
+// Remote is how a script travels to a machine: on the session's stdin, under a line every login shell reads as it is
+// written (no backslash, no line break, no quote but its own pair), since sshd hands the line to the account's shell
+// first — fish reads \ and \' inside single quotes, tcsh refuses a line break inside them — and Dropbear drops the
+// whole connection over a command past 9000 bytes.
 func Remote(command string) (line string, stdin io.Reader) {
-	line = RemoteCommand(command)
-	if len(line) <= MaxCommandLine {
-		return line, nil
+	return readScript, strings.NewReader(command + "\n" + scriptEnd + "\n")
+}
+
+// RemoteWithInput is how a script travels with data for its stdin: the script first, read by dd a byte at a time to
+// its length, which the line says, so what follows it stays the script's stdin; with none it is Remote.
+func RemoteWithInput(command string, input io.Reader) (line string, stdin io.Reader) {
+	if input == nil {
+		return Remote(command)
 	}
-	return readScript, strings.NewReader(command)
+	whole := command + "\n" + scriptEnd + "\n"
+	return loader(`dd bs=1 count=` + strconv.Itoa(len(whole)) + ` 2>/dev/null`), io.MultiReader(strings.NewReader(whole), input)
 }
 
 // CommandConn starts the command and exposes its stdin and stdout as a net.Conn that the deadline ends: the way an
@@ -297,19 +413,20 @@ func CommandConn(cmd *exec.Cmd, timeout time.Duration) (net.Conn, error) {
 	return newCmdConn(cmd, timeout)
 }
 
-// run executes a remote command over the master with a deadline, stdin streamed to it when given; without stdin a
-// long script travels on it (Remote), one with stdin on the command line, its scripts being short.
+// run executes a remote command over the master with a deadline, the script on the session's stdin (Remote), the stdin
+// given after it (RemoteWithInput).
 func (c *Conn) run(command string, timeout time.Duration, stdin io.Reader) ([]byte, error) {
+	keep, timeout, err := c.stdinWithin(command, timeout)
+	if err != nil {
+		return nil, err
+	}
 	leave, timeout, err := c.enter(scriptKind(timeout), timeout)
 	if err != nil {
 		return nil, err
 	}
 	defer leave()
-	line := RemoteCommand(command)
-	if stdin == nil {
-		line, stdin = Remote(command)
-	}
-	cmd := c.session(c.Host, line)
+	line, stdin := RemoteWithInput(command, stdin)
+	cmd := c.scriptSession(line, keep)
 	var out, errb bytes.Buffer
 	cmd.Stdin = stdin
 	cmd.Stdout, cmd.Stderr = &out, &errb
@@ -341,13 +458,17 @@ func (c *Conn) run(command string, timeout time.Duration, stdin io.Reader) ([]by
 
 // Stream runs a remote command, handing sink its output (stdout and stderr) as it comes; the exit status is the error.
 func (c *Conn) Stream(command string, timeout time.Duration, sink func([]byte)) error {
+	keep, timeout, err := c.stdinWithin(command, timeout)
+	if err != nil {
+		return err
+	}
 	leave, timeout, err := c.enter(scriptKind(timeout), timeout)
 	if err != nil {
 		return err
 	}
 	defer leave()
 	line, stdin := Remote("exec 2>&1; " + command)
-	cmd := c.session(c.Host, line)
+	cmd := c.scriptSession(line, keep)
 	cmd.Stdin = stdin
 	pr, pw := io.Pipe()
 	stderr := &lockedBuffer{max: masterErrMax}

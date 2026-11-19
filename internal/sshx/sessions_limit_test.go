@@ -22,10 +22,11 @@ func limitedSSH(t *testing.T) (peak func() int) {
 	if err := os.Mkdir(running, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	stub := "#!/bin/sh\nme=" + script.Quote(running) + "/$$\n: > \"$me\"\n" +
+	stub := "#!/bin/sh\ncase \"$*\" in *\" -G \"*) exit 1 ;; esac\nme=" + script.Quote(running) + "/$$\n: > \"$me\"\n" +
 		"ls " + script.Quote(running) + " | wc -l >> " + script.Quote(log) + "\n" +
 		"trap 'rm -f \"$me\"' EXIT\n" +
-		"case \"$*\" in\n" +
+		"what=\"$*\"; case \"$what\" in *eval*) what=\"$what $(cat)\" ;; esac\n" + // a script comes on stdin, a request on the line
+		"case \"$what\" in\n" +
 		"*refuse*) echo 'debug1: asking the master' >&2; exec 1>&-; sleep 0.05; echo 'mux_client_request_session: session request failed: Session open refused by peer' >&2; exit 255 ;;\n" +
 		"*quick*) echo done ;;\n" +
 		"*hold*) rm -f \"$me\"; exec sleep 30 ;;\n" +

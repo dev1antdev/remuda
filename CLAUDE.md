@@ -307,17 +307,32 @@ components and icons as rules for whoever changes it: @docs/design.md
   `RemoteCommand(script)` is the one command line a script travels as,
   `sh -c '<script>'` — Windows' OpenSSH hands it to Git Bash with its
   quotes whole, while a line that begins with a quoted word is cut there
-  (seen on the Windows runner); **a script past `MaxCommandLine` (8 KB)
-  travels on the session's stdin** (`Remote`: the line is then `sh -c
-  'eval "$(cat)"'`, the script running with its stdin at its end as on the
-  line), since Dropbear drops the whole connection — the master, the event
-  stream, every session — over a command past 9000 bytes ("String too
-  long"; the review's badge sweep of five folders is 10 KB, seen on a Mac
-  whose sshd is Dropbear); `run` and `Stream` go through it, a script with
-  data for its stdin (`RunWithInput`, `Put`) keeps the line, its scripts
-  being short (`stdin_test.go` on an `ssh` stand-in refusing as Dropbear
-  does; `TestOnWindowsALongScriptTravelsOnStdin` on the runner, whose
-  `wintest.SSH` goes through `Remote` too); `CommandConn` is an exec as a `net.Conn`
+  (seen on the Windows runner); **every script travels on the session's
+  stdin** (`Remote`: the line reads it whole with `cat` and runs it only
+  when it ends with the `#remuda:end` mark, its stdin at its end as on the
+  line — a host whose ssh config discards the session's stdin, `StdinNull`
+  or `ForkAfterAuthentication`, gets exit 125 and words saying so, never an
+  empty run, and an ssh that knows the options, OpenSSH 8.7 on (`keepStdin`,
+  asked per binary with `ssh -F none -G`, no config read, 5 s at most, one
+  probe at a time whose answer its waiters share; an answer is kept, a
+  timeout asked again by a later caller; each caller waits for it within
+  its own time, taken before its session, `stdinWithin`, which refuses a
+  script holding a NUL byte, since the shell would drop it and run another), is told `StdinNull=no` and
+  `ForkAfterAuthentication=no`; the session asks for no terminal, `-T`), since sshd hands the line to
+  the account's login shell first — fish reads `\\` and `\'` inside single
+  quotes, tcsh refuses a line break inside them — and Dropbear drops the
+  whole connection — the master, the event stream, every session — over a
+  command past 9000 bytes ("String too long"; seen on a Mac whose sshd is
+  Dropbear); a script with data for its stdin (`RunWithInput`, `Put`) goes
+  first on that stdin, its length on the line (`RemoteWithInput`: `dd bs=1
+  count=N`, a byte at a time so the data stays the script's);
+  `run` and `Stream` go through them (`stdin_test.go` on an `ssh` stand-in
+  refusing as Dropbear does and on tcsh and fish as the login shell where
+  there is one; `TestOnWindowsALongScriptTravelsOnStdin` on the runner,
+  whose `wintest.SSH` goes through `Remote` too); an attach and an RPC
+  exec keep a line of their own, one line whose only escapes stand outside
+  its quotes, their stdin being the terminal's or herdr's; `remuda setup
+  -host` (`internal/setup`) still puts its script on the line; `CommandConn` is an exec as a `net.Conn`
   (the `nc -U` and `remuda bridge` transports, and the Windows tests);
   `Put` cuts a Windows path at its own separator (`rpath.For`).
   remuda implements no SSH itself.
@@ -1370,8 +1385,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   Windows installed, remuda.exe built into `~/.local/bin`, the runner's own
   OpenSSH server given Git Bash and a key, then every `TestOnWindows…`
   (build-tagged `windows`, gated on `REMUDA_WINDOWS_HERDR=1`, helpers in
-  `internal/wintest`: `Remote` runs a script as `sshx.RemoteCommand` words
-  it through Windows' ssh, `Host` is the runner as a remote `shell.Host`,
+  `internal/wintest`: `Remote` runs a script through Windows' ssh on its
+  stdin as `sshx.Remote` sends it, `Host` is the runner as a remote `shell.Host`,
   `Record` keeps an answer for the fixtures, uploaded as the job's
   artifact) — the server started over ssh outliving its session, the pipe
   taking a write while a read waits, the probe, the whole RPC and an event
@@ -4837,7 +4852,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   hands gh on its stdin — a comment's, a reply's JSON, any mutation's or
   REST body's (`runText`) — is put on the machine as a file first
   (`putInput`: `mktemp`, `PutFile`, removed by the script's trap), never
-  inside the script, which is a command line there (any user's `ps`;
+  inside the script, whose commands' arguments are command lines there (any user's `ps`;
   Linux refuses an argument past 128 KB, which a 64 KB comment of markup
   passes once JSON spells `<` as `<`), a read's query through a
   here-document (one line: json.Marshal never writes the

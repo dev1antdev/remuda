@@ -17,7 +17,7 @@ import (
 func TestTwoFirstAsksOfAPortMakeOneForward(t *testing.T) {
 	dir := t.TempDir()
 	calls := filepath.Join(dir, "calls")
-	stub := "#!/bin/sh\nprintf '%s\\n' \"$*\" >> " + script.Quote(calls) + "\nsleep 0.1\nexit 0\n"
+	stub := "#!/bin/sh\ncase \"$*\" in *\" -G \"*) exit 1 ;; esac\nprintf '%s\\n' \"$*\" >> " + script.Quote(calls) + "\nsleep 0.1\nexit 0\n"
 	if err := os.WriteFile(filepath.Join(dir, "ssh"), []byte(stub), 0o755); err != nil {
 		t.Fatal(err)
 	}

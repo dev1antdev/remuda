@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/exec"
@@ -63,10 +64,11 @@ func (s SSH) Run(script string, timeout time.Duration) ([]byte, error) {
 
 // RunWithInput runs a script with data on its stdin, as a cockpit hands a key over.
 func (s SSH) RunWithInput(script string, input []byte, timeout time.Duration) ([]byte, error) {
-	line, stdin := sshx.Remote(script)
+	var data io.Reader
 	if input != nil {
-		line, stdin = sshx.RemoteCommand(script), bytes.NewReader(input)
+		data = bytes.NewReader(input)
 	}
+	line, stdin := sshx.RemoteWithInput(script, data)
 	cmd := s.command(line)
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errb
@@ -102,8 +104,10 @@ func (s SSH) Stream(script string, timeout time.Duration, sink func([]byte)) err
 // ForwardingBack runs a script over the machine's ssh while its sshd forwards the machine's loopback remotePort back
 // to localPort here, as a cockpit's master does for the agents' door.
 func (s SSH) ForwardingBack(remotePort, localPort int, script string) (string, error) {
+	line, stdin := sshx.Remote(script)
 	cmd := exec.Command(`C:\Windows\System32\OpenSSH\ssh.exe`, "-F", s.Config, "-o", "ExitOnForwardFailure=yes",
-		"-R", fmt.Sprintf("127.0.0.1:%d:127.0.0.1:%d", remotePort, localPort), s.Host, sshx.RemoteCommand(script))
+		"-R", fmt.Sprintf("127.0.0.1:%d:127.0.0.1:%d", remotePort, localPort), s.Host, line)
+	cmd.Stdin = stdin
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }

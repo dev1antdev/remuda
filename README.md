@@ -895,9 +895,9 @@ in the sidebar adds an extra one by any ssh destination your OpenSSH reaches
 with keys. Either way remuda brings up one `ControlMaster` to it, autodetects
 the remote herdr binary (incl. `~/.local/bin/herdr`) and socket, reaches its
 RPC through a forwarded unix socket — or through `nc -U` over the same
-connection when that sshd refuses socket forwarding, as Dropbear does; a
-long script goes over stdin, since Dropbear drops the connection over a
-command line past 9000 bytes — and runs
+connection when that sshd refuses socket forwarding, as Dropbear does; every
+script goes over the session's stdin, so a machine whose login shell is
+fish or tcsh, or whose sshd is Dropbear, runs it as written — and runs
 `herdr terminal attach` over the master for live terminals. Nothing is
 installed on the remote (when no herdr server answers there, remuda starts
 one, as the user); removing a machine tears the SSH connection down and
