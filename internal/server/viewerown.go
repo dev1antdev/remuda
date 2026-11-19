@@ -10,6 +10,8 @@ import (
 	"github.com/dev1antdev/remuda/internal/concierge"
 	"github.com/dev1antdev/remuda/internal/feed"
 	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/schedule"
 	"github.com/dev1antdev/remuda/internal/scratch"
 	"github.com/dev1antdev/remuda/internal/timelapse"
 	"github.com/dev1antdev/remuda/internal/usage"
@@ -49,7 +51,7 @@ func (s *Server) viewerBarred(r *http.Request) bool {
 	}
 	// a session is found by its id in every project folder and nothing says whose it was: only one a pane on the viewer's
 	// roster is in now is read, by that pane or, for its subagents, by itself
-	if conversationRoute(r.URL.Path) && (session != "" || pane == "") && !s.viewerSeesSession(mc.ID(), session) {
+	if conversationRoute(r.URL.Path) && (session != "" || pane == "") && !s.viewerSeesSession(mc, pane, dir, session) {
 		return true
 	}
 	if pane == "" {
@@ -61,25 +63,43 @@ func (s *Server) viewerBarred(r *http.Request) bool {
 	return !s.viewerSeesPane(mc.ID(), pane) // the routes read the pane by its id: one the roster has not shown stays shut
 }
 
-// viewerSeesSession says the session is the one a pane on a viewer's roster reports it is in.
-func (s *Server) viewerSeesSession(machineID, session string) bool {
-	snap := s.snapshotOf(machineID)
+// viewerSeesSession says the session is the one a pane on a viewer's roster is in, as herdr names it or, after a
+// compaction, the file the conversation went on in: of the pane named, else of the panes in the folder.
+func (s *Server) viewerSeesSession(mc *machines.Machine, paneID, dir, session string) bool {
+	snap := s.snapshotOf(mc.ID())
 	if snap == nil || session == "" {
 		return false
 	}
-	return slices.ContainsFunc(snap.Panes, func(pane herdr.PaneInfo) bool {
-		return pane.AgentSession != nil && pane.AgentSession.Kind == "id" && pane.AgentSession.Value == session && !s.viewerOwn(machineID, pane.WorkspaceID)
-	})
+	for i := range snap.Panes {
+		pane := &snap.Panes[i]
+		if pane.AgentSession == nil || s.viewerOwn(mc.ID(), pane.WorkspaceID) {
+			continue
+		}
+		if paneID != pane.PaneID && (paneID != "" || !mc.Paths().Equal(pane.Dir(), dir)) {
+			continue
+		}
+		if pane.AgentSession.Kind == "id" && pane.AgentSession.Value == session {
+			return true
+		}
+		if _, live, ok := s.Chat.SessionFile(mc.ID(), pane); ok && strings.TrimSuffix(mc.Paths().Base(live), ".jsonl") == session {
+			return true
+		}
+	}
+	return false
 }
 
-// viewerPaneSilent says a viewer asking for a pane's conversation gets none: the pane reports no session of its own, and
-// the newest of its folder, which the person gets, may be anyone's.
+// viewerPaneSilent says a viewer asking for a pane's conversation gets none: the pane's own session cannot be found, and
+// the newest of its folder, which the person gets instead, may be anyone's.
 func (s *Server) viewerPaneSilent(r *http.Request, machineID, paneID string) bool {
 	if paneID == "" || !auth.IsViewer(r.Context()) {
 		return false
 	}
 	_, pane := s.paneOf(machineID, paneID)
-	return pane == nil || pane.AgentSession == nil
+	if pane == nil || pane.AgentSession == nil {
+		return true
+	}
+	_, _, found := s.Chat.SessionFile(machineID, pane)
+	return !found
 }
 
 func (s *Server) snapshotOf(machineID string) *herdr.Snapshot {
@@ -147,6 +167,8 @@ func (s *Server) ownRecording(m timelapse.Meta) bool {
 func (s *Server) viewerFeed(entries []feed.Entry) []feed.Entry {
 	return slices.DeleteFunc(entries, func(e feed.Entry) bool {
 		switch {
+		case e.Kind == schedule.KindDigest: // it quotes the agents' answers, and says not whose
+			return true
 		case e.Pane == "":
 			return false
 		case e.Own != nil:

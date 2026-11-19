@@ -165,7 +165,7 @@ func Run(ctx context.Context, o Options) error {
 	conciergeAgent := concierge.Open(o.Dir)
 	shells := scratch.Open(o.Dir) // the floating terminal's shell on each machine
 	ownWorkspace := func(machineID, workspaceID string) bool {
-		return shells.Is(machineID, workspaceID) || conciergeAgent.Is(machineID, workspaceID)
+		return shells.Is(machineID, workspaceID) || shells.Ended(machineID, workspaceID) || conciergeAgent.Is(machineID, workspaceID)
 	}
 	ownMark := func(machineID, paneID string) *bool { // nil for a pane the last snapshot does not know
 		snap, _ := watcher.Snapshot(machineID)
@@ -176,7 +176,7 @@ func Run(ctx context.Context, o Options) error {
 		if pane == nil {
 			return nil
 		}
-		return new(ownWorkspace(machineID, pane.WorkspaceID) || shells.Ended(machineID, pane.WorkspaceID))
+		return new(ownWorkspace(machineID, pane.WorkspaceID))
 	}
 	activity.Own = ownMark
 	chats := &chat.Service{Machines: fleet, Watch: watcher}

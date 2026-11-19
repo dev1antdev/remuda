@@ -19,6 +19,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/jira"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/review"
+	"github.com/dev1antdev/remuda/internal/schedule"
 	"github.com/dev1antdev/remuda/internal/scratch"
 	"github.com/dev1antdev/remuda/internal/sent"
 	"github.com/dev1antdev/remuda/internal/usage"
@@ -131,7 +132,8 @@ func TestAViewerNeverReachesRemudasOwnWorkspaces(t *testing.T) {
 	s.chatRoutes(silent)
 	s.recapRoutes(silent)
 	for _, route := range []string{"/api/chat", "/api/recap"} { // the shell reports no session: a viewer gets nothing, not the folder's newest
-		if code, body := fileCall(silent, route+"?machine=local&pane="+url.QueryEscape(appPane), true); code != 200 || strings.Contains(body, session) {
+		code, body := fileCall(silent, route+"?machine=local&pane="+url.QueryEscape(appPane), true)
+		if code != 200 || strings.Contains(body, session) || (route == "/api/recap" && !strings.Contains(body, `"recap":`)) {
 			t.Errorf("%s of a pane with no session: %d %s", route, code, body)
 		}
 	}
@@ -155,13 +157,14 @@ func TestAViewerNeverReachesRemudasOwnWorkspaces(t *testing.T) {
 	s.noteSent(context.Background(), machines.LocalID, appPane, "hello", false)
 	s.Feed.Add(sent.Entry("Phone", "unmarked-secret, its pane gone", false, machines.LocalID, "w99:p9", ""))
 	s.Feed.Add(feed.Entry{Kind: "asked", Machine: machines.LocalID, Pane: "w96:p1", Title: "unmarked-secret alert, its pane gone"})
+	s.Feed.Add(feed.Entry{Kind: schedule.KindDigest, Title: "digest-secret, quoting an answer"})
 	s.Feed.Add(feed.Entry{Kind: "done", Machine: machines.LocalID, Pane: "w98:p1", Title: "own-secret, its pane gone", Own: new(true)})
 	s.Feed.Add(feed.Entry{Kind: "done", Machine: machines.LocalID, Pane: "w97:p1", Title: "finished, its pane closed since", Own: new(false)})
 	_, body := fileCall(h, "/api/feed", true)
 	if strings.Contains(body, "secret") || !strings.Contains(body, "hello") || !strings.Contains(body, "finished") {
 		t.Errorf("a viewer's activity: %s", body)
 	}
-	if all := s.Feed.List(0); len(all) != 6 {
+	if all := s.Feed.List(0); len(all) != 7 {
 		t.Errorf("the person's activity lost rows: %+v", all)
 	}
 

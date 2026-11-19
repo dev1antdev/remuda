@@ -39,11 +39,10 @@ func (s *Server) handleRecap(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if s.viewerPaneSilent(r, mc.ID(), paneID) {
-		writeJSON(w, recap.Recap{})
-		return
+	var summary recap.Recap
+	if !s.viewerPaneSilent(r, mc.ID(), paneID) {
+		summary, err = s.Recap.Conversation(mc, paneID, sessionID, dir, since)
 	}
-	summary, err := s.Recap.Conversation(mc, paneID, sessionID, dir, since)
 	var notFound *chat.NotFoundError
 	switch {
 	case errors.As(err, &notFound):
@@ -75,7 +74,9 @@ func (s *Server) handleStandup(w http.ResponseWriter, r *http.Request) {
 	}
 	items := s.Recap.Standup(since)
 	if auth.IsViewer(r.Context()) {
-		items = slices.DeleteFunc(items, func(i recap.Item) bool { return !s.viewerSeesPane(i.Machine, i.Pane) })
+		items = slices.DeleteFunc(items, func(i recap.Item) bool {
+			return !s.viewerSeesPane(i.Machine, i.Pane) || s.viewerPaneSilent(r, i.Machine, i.Pane)
+		})
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, map[string]any{"since": sinceText(since), "items": items, "markdown": recap.Markdown(items, since.In(loc), now)})
