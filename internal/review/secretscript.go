@@ -50,7 +50,7 @@ var untrackedScript = `list=$(` + readGit + ` ls-files -z --others --exclude-sta
 	`if [ "${u:-0}" -gt ` + strconv.Itoa(scanUntracked) + ` ]; then printf '\036many %s\n' "$((u - ` + strconv.Itoa(scanUntracked) + `))"; fi; ` +
 	`names=$(printf '%s\n' "$list" | head -n ` + strconv.Itoa(scanUntracked) + ` | sed 's|^|./|'); ` +
 	`printf '%s\n' "$names" | tr '\n' '\0' | xargs -0 -r sh -c '[ $# -gt 0 ] && find "$@" -prune -type f -size +` + strconv.Itoa(scanPerFile) + `c' sh 2>/dev/null | ` +
-	`while IFS= read -r f; do if [ "$(head -c 8000 "$f" 2>/dev/null | LC_ALL=C tr -dc '\000' | wc -c | tr -d ' ')" -gt 0 ]; then printf '\036binary %s\n' "${f#./}"; else printf '\036large %s\n' "${f#./}"; fi; done; ` +
+	`while IFS= read -r f; do if nul < "$f"; then printf '\036binary %s\n' "${f#./}"; else printf '\036large %s\n' "${f#./}"; fi; done; ` +
 	`printf '\036untracked\n'; ` +
 	`printf '%s\n' "$names" | tr '\n' '\0' | xargs -0 -r sh -c '[ $# -gt 0 ] && find "$@" -prune -type f ! -size +` + strconv.Itoa(scanPerFile) + `c -print0' sh 2>/dev/null | ` +
 	`LC_ALL=C xargs -0 -r git --literal-pathspecs -c grep.fullName=false -c grep.column=false -c color.ui=never ` +
@@ -97,15 +97,14 @@ var unpushedScript = `o=0; m=0; for kind in --no-merges --merges; do ` +
 // file ("\036text <path>") and prints its diff, for the files the diff given lists: $1 is where the new side is read, "w"
 // for the working tree, else what `git show` takes before the path; a real binary file stays as git said.
 var asTextScript = `nul() { [ "$(head -c 8000 2>/dev/null | LC_ALL=C tr -dc '\000' | wc -c | tr -d ' ')" -gt 0 ]; }; ` +
-	`binaries() { LC_ALL=C awk -F '\t' '$1 == "-" && $2 == "-" { print substr($0, 5) }' | head -n ` + strconv.Itoa(scanAsText) + `; }; ` +
+	`binaries() { LC_ALL=C awk -F '\t' '/^\036/ { c = substr($0, 2) " "; next } $1 == "-" && $2 == "-" { print c substr($0, 5) }' | head -n ` + strconv.Itoa(scanAsText) + `; }; ` +
 	`again() { w=$1; shift; ` + gitDiff + ` --numstat "$@" 2>/dev/null | binaries | while IFS= read -r f; do ` +
 	`if [ "$w" = w ]; then [ -f "$f" ] && ! nul < "$f"; else git show "$w$f" 2>/dev/null | { ! nul; }; fi && ` +
 	`{ printf '\036text %s\n' "$f"; ` + gitDiff + ` --text "$@" -- ":(literal)$f" 2>/dev/null; }; done; }; `
 
 // commitsAsText is asTextScript for the commits a push would send: each such file after a line "\036again <short sha>".
 var commitsAsText = unpushedLog(`--no-merges --numstat --no-renames --format='%x1e%h'`) +
-	` | LC_ALL=C awk -F '\t' '/^\036/ { c = substr($0, 2); next } $1 == "-" && $2 == "-" { print c " " substr($0, 5) }' | head -n ` + strconv.Itoa(scanAsText) +
-	` | while read -r c f; do git show "$c:$f" 2>/dev/null | { ! nul; } && { printf '\036again %s\n' "$c"; ` +
+	` | binaries | while read -r c f; do git show "$c:$f" 2>/dev/null | { ! nul; } && { printf '\036again %s\n' "$c"; ` +
 	readGit + ` -c diff.relative=false show --format= ` + plainPatch + ` --text "$c" -- ":(top,literal)$f" 2>/dev/null; }; done; `
 
 // secretScript prints, in one stream through capScript, the diff of the work against HEAD (the empty tree before the
