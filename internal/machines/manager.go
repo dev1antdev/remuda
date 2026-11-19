@@ -58,6 +58,8 @@ type Manager struct {
 	saveMu   sync.Mutex                            // writes of machines.json, one at a time
 	onState  func(id, label, state, reason string) // hears every remote's connection move, set by OnState
 	server   bool                                  // the host serves the page only: no machine of the fleet (SetServer)
+	// herdr's machines, never saved, were read once since the start, or there is no herdr: the fleet is whole (Gone)
+	herdrRead bool
 }
 
 // ErrServerHost is what a request for the host's own herdr gets when remuda runs as a server: it has no workspaces.
@@ -275,6 +277,12 @@ func (m *Manager) SyncHerdr() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	out, err := exec.CommandContext(ctx, m.herdrBin, "machine", "list", "--json").Output()
+	if errors.Is(err, exec.ErrNotFound) || errors.Is(err, os.ErrNotExist) {
+		m.mu.Lock()
+		m.herdrRead = true
+		m.mu.Unlock()
+		return
+	}
 	if err != nil {
 		return
 	}
@@ -294,6 +302,7 @@ func (m *Manager) SyncHerdr() {
 		m.add(Config{ID: h.ID, Label: h.Label, Host: h.Target, Source: SourceHerdr})
 	}
 	m.mu.Lock()
+	m.herdrRead = true
 	var gone []string
 	for id, mc := range m.machines {
 		if mc.Cfg.Source == SourceHerdr && !live[id] {
@@ -304,6 +313,17 @@ func (m *Manager) SyncHerdr() {
 	for _, id := range gone {
 		m.drop(id)
 	}
+}
+
+// Gone says the fleet has no such machine and knows it: herdr's machines were read since the start, so an id missing
+// now was removed, not waiting to be mirrored.
+func (m *Manager) Gone(id string) bool {
+	if id == "" {
+		id = LocalID
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.machines[id] == nil && m.herdrRead
 }
 
 // drop takes a machine out of the registry and ends its connection; its watcher loop and pollers stop on their own.

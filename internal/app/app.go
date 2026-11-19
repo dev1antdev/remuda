@@ -715,8 +715,7 @@ func Run(ctx context.Context, o Options) error {
 	runWatch := &tasks.RunWatch{
 		Store: taskStore,
 		PaneState: func(machineID, paneID string) (string, time.Time, bool) {
-			_, err := fleet.Get(machineID)
-			display, ok := taskPane(chats, tracker, machineID, paneID, err == nil)
+			display, ok := taskPane(chats, tracker, machineID, paneID, !fleet.Gone(machineID))
 			return display.State, time.UnixMilli(display.Since), ok
 		},
 		LastAnswer: chats.LastAnswer,

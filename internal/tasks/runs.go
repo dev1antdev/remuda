@@ -65,6 +65,7 @@ func (w *RunWatch) Sweep() {
 			if now().Sub(first) > 2*time.Minute && now().Sub(started) > 2*time.Minute {
 				_ = w.Store.SetRun(r.ID, RunGone, "the pane is no more")
 				_, _ = w.Store.AddComment(r.TaskID, "remuda", "The agent's workspace was closed.")
+				_ = w.Store.StopPipeline(r.ID, "the agent's workspace is gone")
 				delete(w.missing, r.ID)
 			}
 			continue

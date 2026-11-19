@@ -2,6 +2,7 @@ package machines
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -169,4 +170,29 @@ func split(s string) []string {
 		return nil
 	}
 	return strings.Split(s, ",")
+}
+
+func TestTheFleetCallsAMachineGoneOnlyOnceHerdrsWereRead(t *testing.T) {
+	dir := t.TempDir()
+	herdr := filepath.Join(dir, "herdr")
+	if err := os.WriteFile(herdr, []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	m := NewManager(dir, filepath.Join(dir, "no-herdr.sock"), herdr, nil)
+	m.SyncHerdr()
+	if m.Gone("mini") {
+		t.Fatal("gone while herdr's machines could not be read")
+	}
+	if err := os.WriteFile(herdr, []byte("#!/bin/sh\necho '[]'\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	m.SyncHerdr()
+	if !m.Gone("mini") || m.Gone(LocalID) {
+		t.Fatal("a machine of no list is not gone, or the local one is")
+	}
+	none := NewManager(dir, filepath.Join(dir, "no-herdr.sock"), filepath.Join(dir, "no-such-herdr"), nil)
+	none.SyncHerdr()
+	if !none.Gone("mini") {
+		t.Fatal("without herdr the fleet is whole")
+	}
 }
