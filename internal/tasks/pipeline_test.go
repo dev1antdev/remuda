@@ -437,3 +437,18 @@ func TestAPatchWritesOnlyWhatItChanges(t *testing.T) {
 		t.Errorf("the card holds a field its project lacks: %+v", got)
 	}
 }
+
+func TestAGoneRunStopsItsPipeline(t *testing.T) {
+	st := open(t)
+	p, _ := piped(t, st)
+	_, run := startPiped(t, st, p)
+	h := newPipe(st)
+	now := time.Now().Add(3 * time.Minute)
+	h.w.Now = func() time.Time { return now }
+	h.w.Sweep()
+	now = now.Add(3 * time.Minute)
+	h.w.Sweep()
+	if got, _ := st.Run(run.ID); got.State != RunGone || got.Pipeline == PipelineOn {
+		t.Fatalf("%+v", got)
+	}
+}

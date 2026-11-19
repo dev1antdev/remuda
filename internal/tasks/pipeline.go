@@ -142,7 +142,39 @@ func (st *Store) StopPipeline(runID int64, why string) error {
 	if _, err := st.db.Exec(`UPDATE task_runs SET pipeline = ? WHERE id = ?`, pipelineStop+why, runID); err != nil {
 		return err
 	}
-	_, err = st.AddComment(r.TaskID, "remuda", "The pipeline stops at "+stageName(st, r)+": "+why+". The worktree is there; carry on by hand.")
+	return st.pipelineStopped(r, why)
+}
+
+// GoneRun ends a run whose pane is no more and its pipeline in one transaction: a gone run with its pipeline on would
+// hold the card for good, an open one with it stopped would finish past the stages left.
+func (st *Store) GoneRun(runID int64, why string) error {
+	r, err := st.Run(runID)
+	if err != nil {
+		return err
+	}
+	tx, err := st.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`UPDATE task_runs SET state = ?, error = ? WHERE id = ?`, RunGone, "the pane is no more", runID); err != nil {
+		return err
+	}
+	stopped, err := tx.Exec(`UPDATE task_runs SET pipeline = ? WHERE id = ? AND pipeline = ?`, pipelineStop+why, runID, PipelineOn)
+	if err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	if n, _ := stopped.RowsAffected(); n > 0 {
+		return st.pipelineStopped(r, why)
+	}
+	return nil
+}
+
+func (st *Store) pipelineStopped(r Run, why string) error {
+	_, err := st.AddComment(r.TaskID, "remuda", "The pipeline stops at "+stageName(st, r)+": "+why+". The worktree is there; carry on by hand.")
 	return err
 }
 

@@ -6,6 +6,7 @@ import (
 
 	"github.com/dev1antdev/remuda/internal/budget"
 	"github.com/dev1antdev/remuda/internal/chat"
+	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/limits"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/push"
@@ -46,14 +47,10 @@ func taskQueue(store *tasks.Store, fleet *machines.Manager, watcher *watch.Watch
 			return ""
 		},
 		PaneState: func(machineID, paneID string) (string, bool) {
-			pane, snap := chats.Pane(machineID, paneID)
-			if snap == nil {
-				return "unknown", true
-			}
-			if pane == nil {
-				return "", false
-			}
-			return tracker.Display(machineID, pane).State, true
+			// a machine gone from the fleet, or not back in it yet after a restart, holds its slot until the run watch ends
+			// the run, two minutes on
+			display, ok := taskPane(chats, tracker, machineID, paneID, true)
+			return display.State, ok
 		},
 		Spent: func(machineID, agent string) string {
 			if hold, held := planLimits.Holding(machineID, agent); held {
@@ -102,4 +99,23 @@ func budgetScope(b budget.Budget) string {
 		return "for " + b.Machine
 	}
 	return "for everything"
+}
+
+// taskPane is the radar's reading of a task's pane, for the queue's slots and the run watch.
+func taskPane(chats *chat.Service, tracker *radar.Tracker, machineID, paneID string, inFleet bool) (radar.Display, bool) {
+	pane, snap := chats.Pane(machineID, paneID)
+	return readTaskPane(pane, snap, inFleet, func() radar.Display { return tracker.Display(machineID, pane) })
+}
+
+// readTaskPane reads a task's pane as gone (ok false), not seen yet (unknown), left by its agent (idle) or the radar's.
+func readTaskPane(pane *herdr.PaneInfo, snap *herdr.Snapshot, inFleet bool, display func() radar.Display) (radar.Display, bool) {
+	switch {
+	case !inFleet, snap != nil && pane == nil:
+		return radar.Display{}, false
+	case snap == nil:
+		return radar.Display{State: herdr.StatusUnknown}, true
+	case pane.Agent == "":
+		return radar.Display{State: herdr.StatusIdle}, true
+	}
+	return display(), true
 }
