@@ -37,19 +37,20 @@ const gitDiff = readGit + ` ` + noAttrs + ` -c diff.relative=false diff ` + plai
 const attrsDiff = readGit + ` ` + ownAttrs + ` -c diff.relative=false diff ` + plainPatch
 
 // workDiff is the work against HEAD, read with the repository's attributes, and what they leave binary once more without
-// them (retryScript).
+// them (retryScript). The list of those is a --numstat without -U0, which would add the whole patch to it.
 var workDiff = attrsDiff + ` --relative "$base" 2>/dev/null || printf '\036failed work\n'; ` +
-	`if [ -n "$A" ]; then export A base; { ` + attrsDiff + ` --numstat -z --relative "$base" || printf 'failed\000'; } 2>/dev/null | ` +
-	`xargs -0 -r sh -c ` + script.Quote(retryScript) + ` sh; fi; `
+	`if [ -n "$A" ]; then export A base; { ` + readGit + ` ` + ownAttrs + ` -c diff.relative=false diff ` + script.PatchForm + ` --no-renames --numstat -z --relative "$base" || printf 'failed\000'; } 2>/dev/null | ` +
+	`xargs -0 -r sh -c ` + script.Quote(retryScript) + ` sh || printf '\036failed work\n'; fi; `
 
 // retryScript is given, in xargs's batches, the records of --numstat -z. The files git called binary ("-\t-\t<path>")
 // it reads again without the repository's attributes, first saying which of them an attribute converts in the working
 // tree (working-tree-encoding, filter): read by their bytes alone they may be binary to git, or other text, than what a
-// commit carries. git check-attr -z's answer comes coded in hex, so that no name breaks the stream ("\036converts <hex>").
+// commit carries. git check-attr --all -z's answer, which names only the attributes a file has, comes with "ok" after it
+// when check-attr succeeded, coded in hex so that no name breaks the stream ("\036converts <hex>").
 var retryScript = `t=$(printf '\t'); for r; do case $r in failed) printf '\036failed work\n';; "-$t-$t"*) set -- "$@" "${r#-$t-$t}";; esac; shift; done; ` +
 	`[ $# -gt 0 ] || exit 0; ` +
-	`h=$(printf '%s\000' "$@" | ` + readGit + ` check-attr -z --stdin working-tree-encoding filter 2>/dev/null | od -An -v -tx1 | tr -d ' \t\n'); ` +
-	`if [ -n "$h" ]; then printf '\036converts %s\n' "$h"; else printf '\036failed work\n'; fi; ` +
+	`h=$({ printf '%s\000' "$@" | ` + readGit + ` check-attr --all -z --stdin 2>/dev/null && printf ok; } | od -An -v -tx1 | tr -d ' \t\n'); ` +
+	`printf '\036converts %s\n' "$h"; ` +
 	`for p; do shift; set -- "$@" ":(literal)$p"; done; ` +
 	gitDiff + ` --relative "$base" -- "$@" 2>/dev/null || printf '\036failed work\n'`
 

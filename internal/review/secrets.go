@@ -131,13 +131,18 @@ func readScan(output string, push bool) (SecretScan, error) {
 			switch word {
 			case "attrs": // an attribute may be hiding text in what git calls binary: those files count as unread
 				attrs = true
-			case "converts": // check-attr -z's triplets, path, attribute and value, in hex
+			case "converts": // check-attr --all -z's triplets, path, attribute and value, in hex, then "ok"
 				answer, err := hex.DecodeString(value)
 				if err != nil {
 					return SecretScan{}, errUnreadable
 				}
-				for fields := strings.Split(string(answer), "\x00"); len(fields) >= 3; fields = fields[3:] {
-					if fields[2] != "unspecified" && fields[2] != "unset" {
+				triplets, ok := strings.CutSuffix(string(answer), "ok")
+				if !ok {
+					return SecretScan{}, errors.New(failures["work"])
+				}
+				// a value is no help: a filter may be named "unset", the word git says for one taken away
+				for fields := strings.Split(triplets, "\x00"); len(fields) >= 3; fields = fields[3:] {
+					if fields[1] == "filter" || fields[1] == "working-tree-encoding" {
 						converted[fields[0]] = true
 					}
 				}

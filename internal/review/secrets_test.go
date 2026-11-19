@@ -1155,6 +1155,55 @@ func TestAFilteredFileMarkedBinaryIsUnreadThoughItsBytesAreText(t *testing.T) {
 	}
 }
 
+func TestAFilterNamedLikeNoFilterStillLeavesItsFileUnread(t *testing.T) {
+	ownGitConfig(t)
+	if !gitHasAttrSource(t) {
+		t.Skip("git before 2.41")
+	}
+	for _, name := range []string{"unset", "unspecified"} {
+		dir, git, write := scratchCheckout(t)
+		git("config", "filter."+name+".clean", "cat")
+		write(".gitattributes", "*.env filter="+name+" -diff\n")
+		write("app.env", "A=1\n")
+		git("add", "-A")
+		git("commit", "-qm", "init")
+		write("app.env", "A=1\nB=2\n")
+		scan, err := ScanWork(shell.Local{Name: "local"}, dir, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !scan.Incomplete || len(scan.Skipped) != 1 || scan.Skipped[0] != (Skipped{Path: "app.env", Why: SkipMarked}) {
+			t.Errorf("%s: %+v", name, scan)
+		}
+	}
+}
+
+func TestASecondReadThatCannotStartFailsTheCheck(t *testing.T) {
+	ownGitConfig(t)
+	if !gitHasAttrSource(t) {
+		t.Skip("git before 2.41")
+	}
+	dir, git, write := scratchCheckout(t)
+	write(".gitattributes", "*.env -diff\n")
+	write("app.env", "A=1\n")
+	git("add", "-A")
+	git("commit", "-qm", "init")
+	write("app.env", "A=1\nexport NPM_TOKEN="+"npm_"+fakeKey(42, 36)+"\n")
+	real, err := exec.LookPath("xargs")
+	if err != nil {
+		t.Skip("no xargs")
+	}
+	bin := t.TempDir()
+	stand := "#!/bin/sh\ncase \" $* \" in *\" sh -c \"*) exit 126 ;; esac\nexec " + script.Quote(real) + " \"$@\"\n"
+	if err := os.WriteFile(filepath.Join(bin, "xargs"), []byte(stand), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	if scan, err := ScanWork(shell.Local{Name: "local"}, dir, false); err == nil {
+		t.Errorf("a second read that never ran passed: %+v", scan)
+	}
+}
+
 func TestTheDefaultDiffDriverCalledBinaryHidesNothing(t *testing.T) {
 	ownGitConfig(t)
 	dir, git, write := scratchCheckout(t)
