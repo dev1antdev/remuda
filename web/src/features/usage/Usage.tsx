@@ -235,25 +235,27 @@ export default function Usage({ machines, onClose, onOpenSession }: {
             </>
           )}
         </section>
-        <section className="usage-sessions">
-          <h3>{t("Sessions")}</h3>
-          {sum.sessions.map((s) => (
-            <button key={`${s.machine}|${s.session}`} type="button" className="usage-row" onClick={() => onOpenSession(s.machine, s.project, s.session, s.dir)} title={t("Open the transcript")}>
-              <span className="usage-row-name">
-                {s.dir ? basename(s.dir) : s.project}
-                <span className="usage-row-sub">
-                  {" "}
-                  · {s.session.slice(0, 8)}
-                  {who(s.machine)}
+        {sum.sessions.length > 0 && (
+          <section className="usage-sessions">
+            <h3>{t("Sessions")}</h3>
+            {sum.sessions.map((s) => (
+              <button key={`${s.machine}|${s.session}`} type="button" className="usage-row" onClick={() => onOpenSession(s.machine, s.project, s.session, s.dir)} title={t("Open the transcript")}>
+                <span className="usage-row-name">
+                  {s.dir ? basename(s.dir) : s.project}
+                  <span className="usage-row-sub">
+                    {" "}
+                    · {s.session.slice(0, 8)}
+                    {who(s.machine)}
+                  </span>
                 </span>
-              </span>
-              <span className="usage-row-meta">
-                {plural(s.turns, "response")} · {ago(s.last)}
-              </span>
-              <span className="usage-row-cost">{usd(s.cost)}</span>
-            </button>
-          ))}
-        </section>
+                <span className="usage-row-meta">
+                  {plural(s.turns, "response")} · {ago(s.last)}
+                </span>
+                <span className="usage-row-cost">{usd(s.cost)}</span>
+              </button>
+            ))}
+          </section>
+        )}
       </div>
     </Dialog>
   );

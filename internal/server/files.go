@@ -34,13 +34,16 @@ func (s *Server) viewerReachOn(ctx context.Context, mc *machines.Machine) (viewe
 	if !auth.IsViewer(ctx) {
 		return viewer.Reach{}, false
 	}
+	return s.viewerReach(mc), true
+}
+
+// viewerReach is what a viewer may read on a machine, by the watcher's last snapshot.
+func (s *Server) viewerReach(mc *machines.Machine) viewer.Reach {
 	var dirs []string
-	if s.Watch != nil {
-		if snap, _ := s.Watch.Snapshot(mc.ID()); snap != nil {
-			dirs = s.editorFolders(mc.ID(), snap)
-		}
+	if snap := s.snapshotOf(mc.ID()); snap != nil {
+		dirs = s.foldersBut(mc.ID(), snap, s.viewerOwn)
 	}
-	return viewer.Of(dirs, mc.Home(), mc.StateDir(), mc.Paths(), mc.Local()), true
+	return viewer.Of(dirs, mc.Home(), mc.StateDir(), mc.Paths(), mc.Local())
 }
 
 func (s *Server) fileRoutes(api *http.ServeMux) {

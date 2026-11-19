@@ -24,7 +24,7 @@ func statusScript(root string) string {
 	return `cd ` + script.Quote(root) + ` 2>/dev/null || exit 0
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || { printf 'none\n'; exit 0; }
 printf 'repo\n'; git rev-parse --show-prefix; printf '\036\n'
-{ err=$( { git --no-optional-locks -c core.fsmonitor=false -c core.quotepath=off status --porcelain=v1 -z --no-renames --ignored=matching --untracked-files=normal 2>&4 | head -c ` + fmt.Sprint(statusLimit) + ` >&3; } 4>&1 ); } 3>&1
+{ err=$( { ` + script.ReadGit + ` -c core.quotepath=off status --porcelain=v1 -z --no-renames --ignored=matching --untracked-files=normal 2>&4 | head -c ` + fmt.Sprint(statusLimit) + ` >&3; } 4>&1 ); } 3>&1
 printf '\036\n%s' "$err"`
 }
 

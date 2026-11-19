@@ -31,7 +31,7 @@ const numstatScript = readGit + ` diff --no-ext-diff --no-renames --relative --n
 
 // newBytesScript prints the untracked files' bytes and how many they are: wc reads a file's size off its inode, so
 // the files are not read; a name starting with a dash reaches it as ./-name.
-const newBytesScript = `git ls-files -z --others --exclude-standard 2>/dev/null | tr '\0' '\n' | sed 's|^|./|' | tr '\n' '\0' | ` +
+const newBytesScript = readGit + ` ls-files -z --others --exclude-standard 2>/dev/null | tr '\0' '\n' | sed 's|^|./|' | tr '\n' '\0' | ` +
 	`xargs -0 -r wc -c 2>/dev/null | awk '$2 != "total" { s += $1; n++ } END { print s + 0, n + 0 }'`
 
 // remoteScript prints the address of the folder's origin, else of its first remote, on a line of its own.

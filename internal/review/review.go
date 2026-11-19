@@ -189,7 +189,7 @@ func summaryScript(dir, baselineHead string) string {
 		`base=` + script.Quote(baselineHead) + `; if [ -n "$base" ] && git cat-file -e "$base^{commit}" 2>/dev/null; then :; else base=HEAD; fi; ` +
 		`if [ "$base" != HEAD ]; then git log --first-parent -n ` + strconv.Itoa(maxCommits) + ` --format='%h%x1f%s%x1f%ct' "$base"..HEAD 2>/dev/null; fi; printf '\036\n'; ` +
 		readGit + ` diff --no-renames --relative --numstat HEAD 2>/dev/null; printf '\036\n'; ` +
-		`git -c core.quotepath=off ls-files --others --exclude-standard 2>/dev/null; printf '\036\n'; ` +
+		readGit + ` ls-files --others --exclude-standard 2>/dev/null; printf '\036\n'; ` +
 		blobsScript() + `; printf '\036\n'; ` +
 		`if [ "$base" != HEAD ]; then git -c core.quotepath=off log --first-parent -n ` + strconv.Itoa(maxCommits) + ` --raw --no-renames --no-abbrev --relative --format='%H' "$base"..HEAD 2>/dev/null; fi; printf '\036\n'; ` +
 		`if [ "$base" != HEAD ]; then git rev-list --count --first-parent "$base"..HEAD 2>/dev/null; fi; printf '\036\n'; ` +
@@ -201,7 +201,7 @@ func summaryScript(dir, baselineHead string) string {
 // Paths are relative to the folder; a rename is a deletion plus an addition. The tracked files are numstat's: unlike
 // --name-only, it leaves out a file only touched without git refreshing its stat in the index (readGit).
 func blobsScript() string {
-	return `{ ` + readGit + ` diff --no-renames --relative --numstat HEAD 2>/dev/null | cut -f3-; git -c core.quotepath=off ls-files --others --exclude-standard 2>/dev/null; } | ` +
+	return `{ ` + readGit + ` diff --no-renames --relative --numstat HEAD 2>/dev/null | cut -f3-; ` + readGit + ` ls-files --others --exclude-standard 2>/dev/null; } | ` +
 		`{ t=$(mktemp 2>/dev/null) || t=/tmp/remuda-blobs.$$; : > "$t"; while IFS= read -r f; do if [ -f "$f" ]; then printf '%s\n' "$f" >> "$t"; else printf '%s\037gone\n' "$f"; fi; done; ` +
 		`if [ -s "$t" ]; then git -c core.quotepath=off hash-object --stdin-paths < "$t" 2>/dev/null | paste -d "$(printf '\037')" "$t" -; fi; rm -f "$t"; }`
 }
@@ -367,7 +367,7 @@ func (store *Store) Diff(host shell.Host, dir, path string) (string, error) {
 		// the script prints the temp file's name first; the diff headers carry it
 		fromBlob := script.InDir(dir) + `t=$(mktemp "${TMPDIR:-/tmp}/remuda-seen.XXXXXX") || exit 0; printf '%s\n' "$t"; ` +
 			`p=` + quotedPath + `; [ -e "$p" ] || p=/dev/null; ` + // a reviewed file the agent deleted since: the diff is its removal
-			`if git cat-file -p ` + reviewedBlob + ` > "$t" 2>/dev/null; then git -c color.ui=never -c core.quotepath=off diff --no-ext-diff --no-index -- "$t" "$p" | head -c 600000; fi; rm -f "$t"; exit 0`
+			`if git cat-file -p ` + reviewedBlob + ` > "$t" 2>/dev/null; then ` + readGit + ` -c color.ui=never diff --no-ext-diff --no-index -- "$t" "$p" | head -c 600000; fi; rm -f "$t"; exit 0`
 		output, err := shell.Text(host, fromBlob, 60*time.Second)
 		if err != nil {
 			return output, err
@@ -379,9 +379,9 @@ func (store *Store) Diff(host shell.Host, dir, path string) (string, error) {
 		return strings.ReplaceAll(diff, "a"+tempFile, "a/"+path), nil
 	}
 	fromHead := script.InDir(dir) +
-		`if git ls-files --error-unmatch -- ` + quotedPath + ` >/dev/null 2>&1 || git cat-file -e "HEAD:./"` + quotedPath + ` 2>/dev/null; then ` +
-		`git -c color.ui=never -c core.quotepath=off diff --no-ext-diff --relative HEAD -- ` + quotedPath + ` | head -c 600000; ` +
-		`else git -c color.ui=never diff --no-ext-diff --no-index -- /dev/null ` + quotedPath + ` | head -c 600000; fi; exit 0`
+		`if ` + readGit + ` ls-files --error-unmatch -- ` + quotedPath + ` >/dev/null 2>&1 || git cat-file -e "HEAD:./"` + quotedPath + ` 2>/dev/null; then ` +
+		readGit + ` -c color.ui=never diff --no-ext-diff --relative HEAD -- ` + quotedPath + ` | head -c 600000; ` +
+		`else ` + readGit + ` -c color.ui=never diff --no-ext-diff --no-index -- /dev/null ` + quotedPath + ` | head -c 600000; fi; exit 0`
 	return shell.Text(host, fromHead, 60*time.Second)
 }
 

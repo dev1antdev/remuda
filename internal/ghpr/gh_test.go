@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/shell"
 )
 
@@ -109,7 +110,7 @@ func TestRepositoriesAndAddressesAreReadStrictly(t *testing.T) {
 	if c.Branch != "offline-trips" || c.Repo != "sam/app" || len(c.Remotes) != 3 || c.Remotes[2].Repo != "" {
 		t.Fatalf("checkout = %+v", c)
 	}
-	if !strings.Contains(CheckoutScript("/w/app"), "git --no-optional-locks -c core.fsmonitor=false symbolic-ref") {
+	if !strings.Contains(CheckoutScript("/w/app"), script.ReadGit+" symbolic-ref") {
 		t.Fatal("the checkout's read can take the index lock")
 	}
 }

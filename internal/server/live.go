@@ -4,10 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/coder/websocket"
+
+	"github.com/dev1antdev/remuda/internal/auth"
 )
 
 // The page's event stream: one WebSocket per page carrying the hub's events out and the page's watched panes in.
@@ -86,6 +89,12 @@ func (s *Server) handleEventsWS(w http.ResponseWriter, r *http.Request) {
 		var msg liveClientMsg
 		if json.Unmarshal(data, &msg) != nil || msg.Sub == nil {
 			continue
+		}
+		if auth.IsViewer(r.Context()) {
+			msg.Sub = slices.DeleteFunc(msg.Sub, func(key string) bool {
+				machine, pane, _ := strings.Cut(key, "|")
+				return !s.viewerSeesPane(machine, pane)
+			})
 		}
 		sub.Watch(msg.Sub)
 	}

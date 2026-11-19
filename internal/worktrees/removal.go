@@ -64,7 +64,7 @@ func changesScript() string {
 			git + " ls-files -o --exclude-standard >/dev/null || echo $$; " +
 			git + ` ls-files -z -o --exclude-standard | xargs -0 sh -c "for p; do find \"./\$p\" -type f -exec cksum {} + && find \"./\$p\" -type l -exec ls -ld {} + || echo \$\$; done" sh`
 	}
-	return "{ " + work(repos.Git) + "; " + repos.Git + " submodule foreach --quiet --recursive '" + work("git") + "; git rev-parse HEAD; git for-each-ref refs/heads refs/stash; true' || echo $$; } 2>/dev/null | cksum"
+	return "{ " + work(repos.Git) + "; " + repos.Git + " submodule foreach --quiet --recursive '" + work(script.ReadGit) + "; git rev-parse HEAD; git for-each-ref refs/heads refs/stash; true' || echo $$; } 2>/dev/null | cksum"
 }
 
 // ParseLook reads the script's answer.

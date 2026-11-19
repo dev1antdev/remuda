@@ -145,9 +145,10 @@ not style.
   person picked it for, never remembered; git's own words shown
   when it fails; the secret check before a commit and a push, hooks
   skipped or not. Every read
-  of the Git lens and the Changes lens runs `git --no-optional-locks -c
-  core.fsmonitor=false -c diff.autoRefreshIndex=false`, so a look never
-  touches the index (the first two alone still let git's diff write it).
+  that diffs or lists a checkout runs `git --no-optional-locks -c
+  core.fsmonitor=false -c diff.autoRefreshIndex=false` (`script.ReadGit`;
+  `script/readtest` checks a script for it), so a look never touches the
+  index (the first two alone still let git's diff write it).
 - **GitHub is written only at the person's press** (the person's decision
   of 2026-11-13, `internal/ghpr`): remuda comments, replies in a thread,
   resolves or reopens one, asks a reviewer again, merges (merge, squash,

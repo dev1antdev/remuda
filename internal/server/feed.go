@@ -3,6 +3,8 @@ package server
 import (
 	"net/http"
 	"strconv"
+
+	"github.com/dev1antdev/remuda/internal/auth"
 )
 
 // The activity panel: what happened across the agents, newest first.
@@ -19,6 +21,10 @@ func (s *Server) handleFeed(w http.ResponseWriter, r *http.Request) {
 			limit = n
 		}
 	}
+	entries := s.Feed.List(limit)
+	if auth.IsViewer(r.Context()) {
+		entries = s.viewerFeed(entries)
+	}
 	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, map[string]any{"entries": s.Feed.List(limit)})
+	writeJSON(w, map[string]any{"entries": entries})
 }

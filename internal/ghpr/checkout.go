@@ -25,7 +25,7 @@ type Checkout struct {
 }
 
 // gitRead is how every git read here starts: no optional lock, no file-system monitor, so a read never touches the index.
-const gitRead = "git --no-optional-locks -c core.fsmonitor=false"
+const gitRead = script.ReadGit
 
 // CheckoutScript reads the folder's branch, its branch's tracking remote and every remote's address, one a line.
 func CheckoutScript(dir string) string {
