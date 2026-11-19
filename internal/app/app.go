@@ -162,6 +162,23 @@ func Run(ctx context.Context, o Options) error {
 	defer taskStore.Close()
 
 	watcher := watch.New(fleet, bus)
+	conciergeAgent := concierge.Open(o.Dir)
+	shells := scratch.Open(o.Dir) // the floating terminal's shell on each machine
+	ownWorkspace := func(machineID, workspaceID string) bool {
+		return shells.Is(machineID, workspaceID) || shells.Ended(machineID, workspaceID) || conciergeAgent.Is(machineID, workspaceID)
+	}
+	ownMark := func(machineID, paneID string) *bool { // nil for a pane the last snapshot does not know
+		snap, _ := watcher.Snapshot(machineID)
+		if snap == nil {
+			return nil
+		}
+		pane := snap.Pane(paneID)
+		if pane == nil {
+			return nil
+		}
+		return new(ownWorkspace(machineID, pane.WorkspaceID))
+	}
+	activity.Own = ownMark
 	chats := &chat.Service{Machines: fleet, Watch: watcher}
 	var srv *server.Server // named here: the live hub fingerprints the roster as the server serves it
 	hub := live.New(live.Inputs{
@@ -279,6 +296,7 @@ func Run(ctx context.Context, o Options) error {
 		Folder: func(machineID, dir string, ws *herdr.WorkspaceInfo) string {
 			return server.FolderOf(ws.Worktree, reviews.Root(machineID, dir), dir)
 		},
+		Own: ownWorkspace,
 	})
 	defer recorder.Close()
 	if !o.Record {
@@ -376,7 +394,6 @@ func Run(ctx context.Context, o Options) error {
 	}
 	// the concierge: remuda's own Claude Code agent the person asks what the others are doing; the panes of its
 	// workspace are no chat to bring back, no work to report and no alert to send
-	conciergeAgent := concierge.Open(o.Dir)
 	restarter.Memory.Skip = conciergeAgent.Is
 	restarter.Skip = conciergeAgent.Is // its own arguments would be lost on a resume: it starts again from its own place
 	pushSvc.Quiet = func(machineID, paneID string) bool {
@@ -517,7 +534,7 @@ func Run(ctx context.Context, o Options) error {
 	if o.MirrorClosed != "" {
 		log.Printf("remuda's figures and alerts stay out of herdr: %s", o.MirrorClosed)
 	}
-	recaps := &recap.Service{Machines: fleet, Watch: watcher, Chat: chats, Radar: tracker, Skip: conciergeAgent.Is}
+	recaps := &recap.Service{Machines: fleet, Watch: watcher, Chat: chats, Radar: tracker, Skip: ownWorkspace}
 	schedules := schedule.New(o.Dir, input.SubmitToFolder, pushSvc.Broadcast, func(since time.Time) (string, string, bool) {
 		return recap.Digest(recaps.Standup(since), since, time.Now())
 	})
@@ -618,7 +635,6 @@ func Run(ctx context.Context, o Options) error {
 	}
 	events.Subscribe(bus, func(e events.Snapshot) { keepAwake.Observe(e.Machine, awake.Working(e.Snap)) })
 	events.Subscribe(bus, func(e events.MachineRemoved) { keepAwake.Forget(e.Machine) })
-	shells := scratch.Open(o.Dir) // the floating terminal's shell on each machine
 	events.Subscribe(bus, func(e events.MachineRemoved) { shells.Forget(e.Machine) })
 	events.Subscribe(bus, func(e events.Snapshot) { conciergeAgent.Observe(e.Machine, e.Snap) })
 	events.Subscribe(bus, func(e events.MachineRemoved) { conciergeAgent.Forget(e.Machine) })
@@ -766,9 +782,7 @@ func Run(ctx context.Context, o Options) error {
 	events.Subscribe(bus, func(e events.MachineRemoved) { fleetSetup.Forget(e.Machine) })
 	projectSettings := repos.Open(o.Dir) // each repository's worktree defaults, setup script and run actions
 	events.Subscribe(bus, func(e events.MachineRemoved) { projectSettings.Forget(e.Machine) })
-	repoSync := repositories(o.Dir, fleet, watcher, reviews, turns.Tracker, func(machineID, workspaceID string) bool {
-		return shells.Is(machineID, workspaceID) || conciergeAgent.Is(machineID, workspaceID)
-	})
+	repoSync := repositories(o.Dir, fleet, watcher, reviews, turns.Tracker, ownWorkspace)
 	events.Subscribe(bus, func(e events.MachineRemoved) { repoSync.Forget(e.Machine, true) })
 	arenas := &arena.Service{Store: arena.Open(o.Dir), Machines: fleet, Watch: watcher, Input: input, Tasks: taskStore, Notify: pushSvc.Notify, Dir: o.Dir,
 		ModelOf: func(machineID, paneID string) string {

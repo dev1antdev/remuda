@@ -151,6 +151,11 @@ func (s *Service) Observe(machine string, snap *herdr.Snapshot) {
 
 // Forget drops a removed machine's place; herdr there is not asked anything.
 func (s *Service) Forget(machine string) {
+	s.mu.Lock()
+	if workspace := s.kept.Places[machine].Workspace; workspace != "" {
+		s.ended[machine+"|"+workspace] = true // herdr there goes on, and the machine may come back with it standing
+	}
+	s.mu.Unlock()
 	s.update(machine, func(p *Place) { *p = Place{} })
 }
 

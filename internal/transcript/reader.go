@@ -248,7 +248,7 @@ func (r *Reader) ResolveSession(agent, cwd, kind, value string) (string, error) 
 		return "", fmt.Errorf("session id %q does not look like one", value)
 	}
 	format := FormatOfAgent(agent)
-	key := string(format) + "|" + value
+	key := string(format) + "|" + cwd + "|" + value // one id may have a copy in each project: the folder's own comes first
 	r.mu.Lock()
 	cached, ok := r.sessionPath[key]
 	missedAt, missed := r.sessionMiss[key]
