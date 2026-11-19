@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -26,9 +27,10 @@ import (
 
 const (
 	LocalID     = "local"
-	labelsFile  = "labels.json" // the user's own names for machines, by id
-	macsFile    = "macs.json"   // the MAC address of a machine the person may want to wake, by id
-	SourceHerdr = "herdr"       // mirrored from `herdr machine list`
+	labelsFile  = "labels.json"  // the user's own names for machines, by id
+	macsFile    = "macs.json"    // the MAC address of a machine the person may want to wake, by id
+	removedFile = "removed.json" // the machines the person removed, by id, until one of that id comes back (Gone)
+	SourceHerdr = "herdr"        // mirrored from `herdr machine list`
 
 	StateConnected  = "connected"
 	StateConnecting = "connecting"
@@ -60,7 +62,7 @@ type Manager struct {
 	server   bool                                  // the host serves the page only: no machine of the fleet (SetServer)
 	// herdr's machines, never saved, were read once since the start, or there is no herdr: the fleet is whole (Gone)
 	herdrRead bool
-	removed   map[string]bool // the machines the person removed since the start, until one of that id comes back
+	removed   map[string]bool // removed.json
 }
 
 // ErrServerHost is what a request for the host's own herdr gets when remuda runs as a server: it has no workspaces.
@@ -211,6 +213,10 @@ func NewManager(dir, localSocket, localHerdrBin string, door *Door) *Manager {
 		m.macs = map[string]string{}
 	}
 	_ = state.LoadJSON(m.dir, orderFile, &m.placed)
+	_ = state.LoadJSON(m.dir, removedFile, &m.removed)
+	if m.removed == nil {
+		m.removed = map[string]bool{}
+	}
 	local.setLabel(m.names[LocalID])
 	for _, cfg := range m.load() {
 		m.add(cfg)
@@ -254,8 +260,12 @@ func (m *Manager) add(cfg Config) *Machine {
 	mc.setLabel(m.names[cfg.ID])
 	m.machines[cfg.ID] = mc
 	m.order = append(m.order, cfg.ID)
+	back := m.removed[cfg.ID]
 	delete(m.removed, cfg.ID)
 	m.mu.Unlock()
+	if back {
+		_ = m.saveRemoved()
+	}
 	go mc.connect()
 	return mc
 }
@@ -321,6 +331,16 @@ func (m *Manager) SyncHerdr() {
 	for _, id := range gone {
 		m.drop(id)
 	}
+}
+
+// saveRemoved keeps the removals for a restart, while herdr's machines may still be unread (Gone).
+func (m *Manager) saveRemoved() error {
+	m.saveMu.Lock()
+	defer m.saveMu.Unlock()
+	m.mu.Lock()
+	removed := maps.Clone(m.removed)
+	m.mu.Unlock()
+	return state.SaveJSON(m.dir, removedFile, removed)
 }
 
 // Gone says the fleet has no such machine and knows it: the person removed it, or herdr's machines were read since the
@@ -416,11 +436,11 @@ func (m *Manager) Remove(id string) error {
 		return fmt.Errorf("machine %q not found", id)
 	}
 	m.mu.Lock()
-	if m.removed == nil {
-		m.removed = map[string]bool{}
-	}
 	m.removed[id] = true
 	m.mu.Unlock()
+	if err := m.saveRemoved(); err != nil {
+		return err
+	}
 	return m.save()
 }
 

@@ -205,6 +205,11 @@ func TestTheFleetCallsAMachineGoneOnlyOnceHerdrsWereRead(t *testing.T) {
 	if !failing.Gone(added.ID()) {
 		t.Fatal("a machine the person removed is not gone while herdr fails")
 	}
+	again := NewManager(failing.dir, filepath.Join(dir, "no-herdr.sock"), herdr+"-failing", nil)
+	again.SyncHerdr()
+	if !again.Gone(added.ID()) {
+		t.Fatal("a removal is forgotten across a restart while herdr fails")
+	}
 	if _, err := failing.Add("Mini", "mini.invalid"); err != nil || failing.Gone(added.ID()) {
 		t.Fatalf("a machine added again is still gone: %v", err)
 	}

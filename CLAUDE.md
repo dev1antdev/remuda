@@ -6511,7 +6511,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   stays; the push title says `→ Testing`); a pane gone two minutes →
   `gone`, its pipeline stopped in the same transaction (`GoneRun`), and so
   is a run on a machine gone from the fleet that long (`Manager.Gone`: one
-  the person removed, or any once herdr's machines, never saved, were read
+  the person removed, kept in `removed.json` until that id comes back, or
+  any once herdr's machines, never saved, were read
   since the start; `internal/app`'s `readTaskPane`, which also reads a pane its agent left
   as idle, so a last answer not reported yet is its finish). **What a run was denied** (`denied.go`, `denied_test.go`): the
   finish reads, through `RunWatch.Denied` (`chat.Service.Denied`), the
