@@ -29,8 +29,8 @@ func TestOnWindowsTheMachineIsReadAsTheConnectionReadsIt(t *testing.T) {
 	}
 }
 
-// TestOnWindowsALongScriptTravelsOnStdin: a script past the command line's length (sshx.Remote) goes on stdin under a
-// short line, and Git Bash behind Windows' OpenSSH runs it as it would have run it on that line.
+// TestOnWindowsALongScriptTravelsOnStdin: a script goes on stdin under a short line (sshx.Remote), and Git Bash behind
+// Windows' OpenSSH runs it as it would have run it on that line.
 func TestOnWindowsALongScriptTravelsOnStdin(t *testing.T) {
 	wintest.Live(t)
 	long := "# " + strings.Repeat("x", 20000) + "\n" +

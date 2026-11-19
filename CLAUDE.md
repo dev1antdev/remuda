@@ -321,8 +321,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   refusing as Dropbear does and on tcsh and fish as the login shell where
   there is one; `TestOnWindowsALongScriptTravelsOnStdin` on the runner,
   whose `wintest.SSH` goes through `Remote` too); an attach and an RPC
-  exec keep a line of their own, one line with no backslash, their stdin
-  being the terminal's or herdr's; `CommandConn` is an exec as a `net.Conn`
+  exec keep a line of their own, one line whose only escapes stand outside
+  its quotes, their stdin being the terminal's or herdr's; `remuda setup
+  -host` (`internal/setup`) still puts its script on the line; `CommandConn` is an exec as a `net.Conn`
   (the `nc -U` and `remuda bridge` transports, and the Windows tests);
   `Put` cuts a Windows path at its own separator (`rpath.For`).
   remuda implements no SSH itself.
@@ -1372,8 +1373,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   Windows installed, remuda.exe built into `~/.local/bin`, the runner's own
   OpenSSH server given Git Bash and a key, then every `TestOnWindows…`
   (build-tagged `windows`, gated on `REMUDA_WINDOWS_HERDR=1`, helpers in
-  `internal/wintest`: `Remote` runs a script as `sshx.RemoteCommand` words
-  it through Windows' ssh, `Host` is the runner as a remote `shell.Host`,
+  `internal/wintest`: `Remote` runs a script through Windows' ssh on its
+  stdin as `sshx.Remote` sends it, `Host` is the runner as a remote `shell.Host`,
   `Record` keeps an answer for the fixtures, uploaded as the job's
   artifact) — the server started over ssh outliving its session, the pipe
   taking a write while a read waits, the probe, the whole RPC and an event
@@ -4826,7 +4827,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   hands gh on its stdin — a comment's, a reply's JSON, any mutation's or
   REST body's (`runText`) — is put on the machine as a file first
   (`putInput`: `mktemp`, `PutFile`, removed by the script's trap), never
-  inside the script, which is a command line there (any user's `ps`;
+  inside the script, whose commands' arguments are command lines there (any user's `ps`;
   Linux refuses an argument past 128 KB, which a 64 KB comment of markup
   passes once JSON spells `<` as `<`), a read's query through a
   here-document (one line: json.Marshal never writes the

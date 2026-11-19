@@ -18,13 +18,19 @@ import (
 // 9000 bytes as Dropbear does — by dropping the connection; it keeps every command line it was given.
 func fakeDropbear(t *testing.T) (lines string) {
 	t.Helper()
+	return fakeLogin(t, "sh")
+}
+
+// fakeLogin is fakeDropbear with the account's login shell given: sshd runs the line through it.
+func fakeLogin(t *testing.T, login string) (lines string) {
+	t.Helper()
 	dir := t.TempDir()
 	lines = filepath.Join(dir, "lines")
 	stub := `#!/bin/sh
 for line; do :; done
 printf '%s\n' "${#line}" >> ` + script.Quote(lines) + `
 if [ "${#line}" -gt 9000 ]; then echo "Exit: String too long" >&2; exit 255; fi
-exec sh -c "$line"
+exec ` + script.Quote(login) + ` -c "$line"
 `
 	if err := os.WriteFile(filepath.Join(dir, "ssh"), []byte(stub), 0o755); err != nil {
 		t.Fatal(err)
@@ -121,12 +127,7 @@ func TestALoginShellOfAnotherKindRunsTheScriptAsWritten(t *testing.T) {
 		if err != nil {
 			continue
 		}
-		dir := t.TempDir()
-		stub := "#!/bin/sh\nfor line; do :; done\nexec " + script.Quote(path) + " -c \"$line\"\n"
-		if err := os.WriteFile(filepath.Join(dir, "ssh"), []byte(stub), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+		fakeLogin(t, path)
 		c := &Conn{Host: "roofr.remote", ctl: filepath.Join(t.TempDir(), "ctl")}
 		written := "printf '%s\\n' 'a\\b' \"it's\"\nprintf '\\036x\\n' | od -An -c | tr -d ' \\n'; echo\n"
 		out, err := c.Run(written, 10*time.Second)

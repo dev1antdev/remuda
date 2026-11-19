@@ -287,8 +287,11 @@ func Remote(command string) (line string, stdin io.Reader) {
 }
 
 // RemoteWithInput is how a script travels with data for its stdin: the script first, read by dd a byte at a time to
-// its length, which the line says, so what follows it stays the script's stdin.
+// its length, which the line says, so what follows it stays the script's stdin; with none it is Remote.
 func RemoteWithInput(command string, input io.Reader) (line string, stdin io.Reader) {
+	if input == nil {
+		return Remote(command)
+	}
 	read := `eval "$(dd bs=1 count=` + strconv.Itoa(len(command)) + ` 2>/dev/null)"`
 	return RemoteCommand(read), io.MultiReader(strings.NewReader(command), input)
 }
@@ -307,11 +310,7 @@ func (c *Conn) run(command string, timeout time.Duration, stdin io.Reader) ([]by
 		return nil, err
 	}
 	defer leave()
-	line, input := Remote(command)
-	if stdin != nil {
-		line, input = RemoteWithInput(command, stdin)
-	}
-	stdin = input
+	line, stdin := RemoteWithInput(command, stdin)
 	cmd := c.session(c.Host, line)
 	var out, errb bytes.Buffer
 	cmd.Stdin = stdin
