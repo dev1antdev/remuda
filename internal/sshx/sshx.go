@@ -274,16 +274,26 @@ func RemoteCommand(command string) string {
 	return "sh -c " + script.Quote(command)
 }
 
+// scriptEnd closes every script sent on stdin: one that arrives without it was cut, or never sent (a host whose ssh
+// config sets StdinNull or ForkAfterAuthentication), and is not run.
+const scriptEnd = "#remuda:end"
+
+// loader is the command line that reads a script with read, then runs it, its stdin what is left.
+func loader(read string) string {
+	return RemoteCommand(`s=$(` + read + `); case "$s" in *"` + scriptEnd + `") eval "$s" ;; ` +
+		`*) echo "remuda: the script did not reach the machine whole on the stdin of its ssh session (StdinNull or ForkAfterAuthentication in its ssh config?)" >&2; exit 125 ;; esac`)
+}
+
 // readScript is the command line of a script sent on stdin: read whole, then run with stdin at its end, as a script
 // on the command line finds it.
-var readScript = RemoteCommand(`eval "$(cat)"`)
+var readScript = loader("cat")
 
 // Remote is how a script travels to a machine: on the session's stdin, under a line every login shell reads as it is
 // written (no backslash, no line break, no quote but its own pair), since sshd hands the line to the account's shell
 // first — fish reads \ and \' inside single quotes, tcsh refuses a line break inside them — and Dropbear drops the
 // whole connection over a command past 9000 bytes.
 func Remote(command string) (line string, stdin io.Reader) {
-	return readScript, strings.NewReader(command)
+	return readScript, strings.NewReader(command + "\n" + scriptEnd + "\n")
 }
 
 // RemoteWithInput is how a script travels with data for its stdin: the script first, read by dd a byte at a time to
@@ -292,8 +302,8 @@ func RemoteWithInput(command string, input io.Reader) (line string, stdin io.Rea
 	if input == nil {
 		return Remote(command)
 	}
-	read := `eval "$(dd bs=1 count=` + strconv.Itoa(len(command)) + ` 2>/dev/null)"`
-	return RemoteCommand(read), io.MultiReader(strings.NewReader(command), input)
+	whole := command + "\n" + scriptEnd + "\n"
+	return loader(`dd bs=1 count=` + strconv.Itoa(len(whole)) + ` 2>/dev/null`), io.MultiReader(strings.NewReader(whole), input)
 }
 
 // CommandConn starts the command and exposes its stdin and stdout as a net.Conn that the deadline ends: the way an
@@ -311,7 +321,7 @@ func (c *Conn) run(command string, timeout time.Duration, stdin io.Reader) ([]by
 	}
 	defer leave()
 	line, stdin := RemoteWithInput(command, stdin)
-	cmd := c.session(c.Host, line)
+	cmd := c.session("-T", c.Host, line) // no terminal: a forced one would hold the script's stdin open
 	var out, errb bytes.Buffer
 	cmd.Stdin = stdin
 	cmd.Stdout, cmd.Stderr = &out, &errb
@@ -349,7 +359,7 @@ func (c *Conn) Stream(command string, timeout time.Duration, sink func([]byte)) 
 	}
 	defer leave()
 	line, stdin := Remote("exec 2>&1; " + command)
-	cmd := c.session(c.Host, line)
+	cmd := c.session("-T", c.Host, line)
 	cmd.Stdin = stdin
 	pr, pw := io.Pipe()
 	stderr := &lockedBuffer{max: masterErrMax}

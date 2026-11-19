@@ -308,15 +308,18 @@ components and icons as rules for whoever changes it: @docs/design.md
   `sh -c '<script>'` — Windows' OpenSSH hands it to Git Bash with its
   quotes whole, while a line that begins with a quoted word is cut there
   (seen on the Windows runner); **every script travels on the session's
-  stdin** (`Remote`: the line is `sh -c 'eval "$(cat)"'`, the script running
-  with its stdin at its end as on the line), since sshd hands the line to
+  stdin** (`Remote`: the line reads it whole with `cat` and runs it only
+  when it ends with the `#remuda:end` mark, its stdin at its end as on the
+  line — a host whose ssh config discards the session's stdin, `StdinNull`
+  or `ForkAfterAuthentication`, gets exit 125 and words saying so, never an
+  empty run; the session asks for no terminal, `-T`), since sshd hands the line to
   the account's login shell first — fish reads `\\` and `\'` inside single
   quotes, tcsh refuses a line break inside them — and Dropbear drops the
   whole connection — the master, the event stream, every session — over a
   command past 9000 bytes ("String too long"; seen on a Mac whose sshd is
   Dropbear); a script with data for its stdin (`RunWithInput`, `Put`) goes
-  first on that stdin, its length on the line (`RemoteWithInput`: `eval
-  "$(dd bs=1 count=N)"`, a byte at a time so the data stays the script's);
+  first on that stdin, its length on the line (`RemoteWithInput`: `dd bs=1
+  count=N`, a byte at a time so the data stays the script's);
   `run` and `Stream` go through them (`stdin_test.go` on an `ssh` stand-in
   refusing as Dropbear does and on tcsh and fish as the login shell where
   there is one; `TestOnWindowsALongScriptTravelsOnStdin` on the runner,

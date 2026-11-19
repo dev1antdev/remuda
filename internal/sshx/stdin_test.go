@@ -139,3 +139,23 @@ func TestALoginShellOfAnotherKindRunsTheScriptAsWritten(t *testing.T) {
 		}
 	}
 }
+
+// TestAScriptThatNeverArrivesFailsInWords: an ssh config that discards the session's stdin (StdinNull) used to run an
+// empty script, cleanly; now the machine says the script did not reach it.
+func TestAScriptThatNeverArrivesFailsInWords(t *testing.T) {
+	dir := t.TempDir()
+	stub := "#!/bin/sh\nfor line; do :; done\nexec sh -c \"$line\" </dev/null\n"
+	if err := os.WriteFile(filepath.Join(dir, "ssh"), []byte(stub), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	c := &Conn{Host: "roofr.remote", ctl: filepath.Join(t.TempDir(), "ctl")}
+	for name, run := range map[string]func() error{
+		"run":        func() error { _, err := c.Run("echo ran", 10*time.Second); return err },
+		"with input": func() error { _, err := c.RunWithInput("cat", []byte("data"), 10*time.Second); return err },
+	} {
+		if err := run(); err == nil || !strings.Contains(err.Error(), "did not reach the machine whole") {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+}
