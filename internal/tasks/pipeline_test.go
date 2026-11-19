@@ -1,6 +1,9 @@
 package tasks
 
 import (
+	"encoding/json"
+	"errors"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -304,5 +307,133 @@ func TestOnlyThePipelineMovesTheCardWhileItRuns(t *testing.T) {
 	}
 	if got, _ := st.Run(first.ID); got.Pipeline != PipelinePassed {
 		t.Fatalf("the first run is %q", got.Pipeline)
+	}
+}
+
+func TestAnAgentsKeyKeepsARunningPipelinesCardAsItIs(t *testing.T) {
+	st, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	projects, _ := st.Projects()
+	title, words := "The person's words", "Do this instead"
+	card, err := st.CreateFrom(projects[0].ID, Patch{Title: &title}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	run, err := st.StartStageRun(Run{TaskID: card.ID}, 1, Stage{}, "w1:p2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.Update(card.ID, Patch{Title: &words, ByAgent: true}); !errors.Is(err, ErrCardHeld) {
+		t.Fatalf("an agent's key rewrote the card the next stage reads: %v", err)
+	}
+	priority := 3
+	if _, err := st.Update(card.ID, Patch{Priority: &priority, ByAgent: true}); err != nil {
+		t.Errorf("a priority is not the card's words: %v", err)
+	}
+	if _, err := st.Update(card.ID, Patch{Description: &words}); err != nil {
+		t.Errorf("the person's edit: %v", err)
+	}
+	other, err := st.CreateProject("Elsewhere", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.Update(card.ID, Patch{ProjectID: &other.ID, ByAgent: true}); !errors.Is(err, ErrCardHeld) {
+		t.Fatalf("an agent's key took the card to another project, losing what its fields hold: %v", err)
+	}
+	if err := st.StopPipeline(run.ID, "the person moved it"); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := st.Update(card.ID, Patch{Title: &words, ByAgent: true}); err != nil || got.Title != words {
+		t.Errorf("after the pipeline: %+v, %v", got, err)
+	}
+}
+
+func TestAPatchWritesOnlyWhatItChanges(t *testing.T) {
+	st, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	queueOf := func(project Project) int64 {
+		t.Helper()
+		if _, err := st.SetStatuses(project.ID, append(project.Statuses, Status{Title: "Queued", Kind: KindOpen, OnQueue: true}), nil); err != nil {
+			t.Fatal(err)
+		}
+		p, err := st.Project(project.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return flagged(p.Statuses, func(s Status) bool { return s.OnQueue }).ID
+	}
+	projects, _ := st.Projects()
+	here := projects[0]
+	there, err := st.CreateProject("Elsewhere", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	queueHere, queueThere := queueOf(here), queueOf(there)
+	title, old := "The card", "<p>old</p>"
+	card, err := st.CreateFrom(here.ID, Patch{Title: &title, Description: &old, StatusID: &queueHere}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	corrected, newTitle := "<p>corrected</p>", "The card, corrected"
+	clock := st.now
+	personActs := func(id int64, patch Patch) *bool { // between the next patch's read of the card and its write
+		acted := false
+		st.now = func() time.Time {
+			if !acted {
+				acted = true
+				if _, err := st.Update(id, patch); err != nil {
+					t.Error(err)
+				}
+			}
+			return clock()
+		}
+		return &acted
+	}
+	acted := personActs(card.ID, Patch{Title: &newTitle, Description: &corrected, ProjectID: &there.ID, StatusID: &queueThere})
+	priority := 3
+	got, err := st.Update(card.ID, Patch{Priority: &priority, ByAgent: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !*acted || got.Title != newTitle || got.Description != corrected || got.ProjectID != there.ID || got.StatusID != queueThere || got.Priority != 3 {
+		t.Errorf("the person's edit and move were undone: %+v", got)
+	}
+
+	second, err := st.CreateFrom(here.ID, Patch{Title: &title, StatusID: &queueHere}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	current, _ := st.Project(here.ID)
+	open := landing(current.Statuses).ID
+	acted = personActs(second.ID, Patch{ProjectID: &there.ID, StatusID: &queueThere})
+	if _, err := st.Update(second.ID, Patch{StatusID: &open, ByAgent: true}); !errors.Is(err, ErrInvalid) {
+		t.Errorf("a column move reckoned from the old place: %v", err)
+	}
+	if got, _ := st.Get(second.ID); !*acted || got.ProjectID != there.ID || got.StatusID != queueThere {
+		t.Errorf("the card was pulled back: %+v", got)
+	}
+
+	fields, err := st.SetFields(here.ID, []Field{{Title: "Criteria", Kind: "text"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	third, err := st.CreateFrom(here.ID, Patch{Title: &title}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	st.now = clock
+	acted = personActs(third.ID, Patch{ProjectID: &there.ID})
+	key := strconv.FormatInt(fields[0].ID, 10)
+	if _, err := st.Update(third.ID, Patch{Fields: map[string]json.RawMessage{key: json.RawMessage(`"done means done"`)}, ByAgent: true}); !errors.Is(err, ErrInvalid) {
+		t.Errorf("a field of the project the card has left: %v", err)
+	}
+	if got, _ := st.Get(third.ID); !*acted || got.ProjectID != there.ID || len(got.Fields) != 0 {
+		t.Errorf("the card holds a field its project lacks: %+v", got)
 	}
 }

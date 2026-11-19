@@ -67,10 +67,6 @@ func (s *Server) tasksRoutes(api *http.ServeMux) {
 		if !decode(w, r, &req) {
 			return
 		}
-		if auth.CallerName(r.Context()) != "" {
-			httpErr(w, http.StatusForbidden, fmt.Errorf("an agent's key cannot change a project's columns"))
-			return
-		}
 		if _, err := s.Tasks.SetStatuses(id, req.Statuses, req.Moves); err != nil {
 			s.taskReply(w, nil, err)
 			return
@@ -105,10 +101,6 @@ func (s *Server) tasksRoutes(api *http.ServeMux) {
 			Automation tasks.Automation `json:"automation"`
 		}
 		if !decode(w, r, &req) {
-			return
-		}
-		if auth.CallerName(r.Context()) != "" {
-			httpErr(w, http.StatusForbidden, fmt.Errorf("an agent's key cannot change how a project's agents start"))
 			return
 		}
 		p, err := s.Tasks.SetAutomation(id, req.Automation)
@@ -188,10 +180,15 @@ func (s *Server) tasksRoutes(api *http.ServeMux) {
 				return
 			}
 		}
+		req.Patch.ByAgent = auth.CallerName(r.Context()) != ""
 		t, err := s.Tasks.Update(id, req.Patch)
 		s.taskReply(w, t, err)
 	})
 	api.HandleFunc("DELETE /api/tasks/{id}", func(w http.ResponseWriter, r *http.Request) {
+		if auth.CallerName(r.Context()) != "" {
+			httpErr(w, http.StatusForbidden, fmt.Errorf("an agent's key cannot delete a task: mark it done, or leave the person a comment"))
+			return
+		}
 		if id, ok := pathID(w, r, "id"); ok {
 			s.taskReply(w, map[string]bool{"ok": true}, s.Tasks.Delete(id))
 		}
@@ -298,6 +295,8 @@ func (s *Server) taskReply(w http.ResponseWriter, v any, err error) {
 		httpErr(w, http.StatusNotFound, err)
 	case errors.Is(err, tasks.ErrInvalid):
 		httpErr(w, http.StatusBadRequest, err)
+	case errors.Is(err, tasks.ErrCardHeld):
+		httpErr(w, http.StatusForbidden, err)
 	default:
 		httpErr(w, http.StatusInternalServerError, err)
 	}

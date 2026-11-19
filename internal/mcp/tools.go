@@ -70,7 +70,7 @@ func Specs() []Spec {
 				"labels":      map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "label names; a missing one is created"},
 				"fields":      map[string]any{"type": "object", "description": "the project's fields by title, each with its value", "additionalProperties": true},
 			})},
-		{Name: "task_update", Description: "Change a task: move it to another column (or mark it done), retitle it, rewrite its description, set its due date or priority. Only the fields given change.",
+		{Name: "task_update", Description: "Change a task: move it to another column (or mark it done), retitle it, rewrite its description, set its due date or priority. Only the fields given change. A card in the Queued column or a running pipeline keeps its title, description and fields.",
 			InputSchema: schema([]string{"id"}, map[string]any{
 				"id":          prop("integer", "the task's id"),
 				"title":       prop("string", "a new title"),
