@@ -957,10 +957,12 @@ components and icons as rules for whoever changes it: @docs/design.md
   release's x.y.z is newer than the machine's (a build past a tag,
   `v0.4.0-24-g…`, is 0.4.0) and it has `remuda-<os>-<arch>` for the
   machine; `ReleaseScript` is what the machine runs on Run: curl the asset
-  to `~/.local/bin/remuda.new`, check it against the release's
+  to `~/.local/bin/remuda.new.<the job's pid>`, its own so two updates at
+  once never install each other's file, check it against the release's
   `checksums.txt` when there is one (a mismatch keeps the old binary;
   none → installed with a "not verified" line), `InstallScript` (chmod,
-  `-version`, mv) and `RestartScript` (launchctl kickstart / systemctl
+  `-version`, mv; a binary that does not run fails the job, nothing restarted)
+  and `RestartScript` (launchctl kickstart / systemctl
   restart, a line saying so where neither exists) — the machine serving
   the page restarts detached two seconds after the job instead, so the
   job ends first and the stale-page pill
@@ -1454,7 +1456,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   remote) for the page to poll (`GET /api/jobs/{id}`) and publishes
   `events.JobDone`, on which the vitals are re-read; `updates.Plan(what,
   report)` is the update command for herdr (brew or `herdr update --handoff`;
-  every brew path runs `brew update` first, once per job),
+  every brew path runs `brew update` first, once per job; an install that
+  fails ends the job with its status, with no hooks step and no restart of
+  the server),
   claude / codex / gemini / kimi (brew, npm or the agent's own updater, by
   where the binary lives), or every agent (`restart.Kinds("agents")` is the
   one list of them); `what=hooks` is `herdr integration
@@ -2394,10 +2398,12 @@ components and icons as rules for whoever changes it: @docs/design.md
   named unread — with no merge run again, no driver, and no partial clone's
   fetch (`GIT_NO_LAZY_FETCH`; a partial clone on a git before 2.45, which
   would fetch regardless, leaves its merges unread), so no object written):
-  what the push would send. Every diff and the untracked files' grep read files
-  as text (`--text`), since an attribute (`*.env -diff`) can call any file
-  binary; a line holding a NUL says the file is binary after all (`noNUL`,
-  `capScript`). The awk drops a diff's removed lines, cuts each
+  what the push would send. An attribute (`*.env -diff`) cannot hide a text
+  file from it: git is told to judge files by their bytes (`--attr-source` on
+  the empty tree, git 2.41, and no `core.attributesFile`). Where that cannot
+  reach, the repository's `info/attributes` and on an older git any
+  `.gitattributes` marking a file binary, every file git calls binary counts
+  as unread (`\036attrs`). The awk drops a diff's removed lines, cuts each
   file at 1 MB (`\036partly`) and the stream at `scanTotal` 8 MB, the commits' own 8 MB after the work's
   (`\036budget <path>` / `\036unread <path>` for the rest), so a remote
   sends megabytes at most; `readScan` feeds the added lines, with their

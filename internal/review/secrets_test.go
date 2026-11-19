@@ -778,6 +778,24 @@ func TestABinaryFileOfAMergeStaysUnread(t *testing.T) {
 	}
 }
 
+func TestATextFileAMergeBringsIsReadThoughMarkedBinary(t *testing.T) {
+	ownGitConfig(t)
+	dir := mergeBringing(t, "brought.env", "export NPM_TOKEN="+"npm_"+fakeKey(34, 36)+"\n")
+	if err := os.WriteFile(filepath.Join(dir, ".gitattributes"), []byte("*.env -diff\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if !gitHasAttrSource(t) {
+		t.Skip("git before 2.41")
+	}
+	scan, err := ScanWork(shell.Local{Name: "local"}, dir, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(scan.Findings) != 1 || scan.Findings[0].File != "brought.env" {
+		t.Errorf("%+v", scan.Findings)
+	}
+}
+
 func TestAMergeReadThatBrokeOffIsNoCleanCheck(t *testing.T) {
 	ownGitConfig(t)
 	dir := mergeBringing(t, "d.txt", "d\n")
@@ -854,8 +872,17 @@ func TestAPartialCloneOnAnOlderGitLeavesItsMergesUnread(t *testing.T) {
 	}
 }
 
-func TestAFileMarkedBinaryIsReadAsTheTextItIs(t *testing.T) {
-	ownGitConfig(t)
+// gitHasAttrSource says this git can be told to ignore the repository's attributes.
+func gitHasAttrSource(t *testing.T) bool {
+	t.Helper()
+	cmd := exec.Command("git", "--attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904", "--version")
+	return cmd.Run() == nil
+}
+
+// markedCheckout has a committed, a staged, a changed and a new file marked binary that hold a secret each, and real
+// binary files beside them.
+func markedCheckout(t *testing.T) string {
+	t.Helper()
 	secret := func(seed uint32) string { return "export NPM_TOKEN=" + "npm_" + fakeKey(seed, 36) + "\n" }
 	dir, git, write := scratchCheckout(t)
 	write(".gitattributes", "*.env -diff\n*.bin binary\n")
@@ -869,6 +896,7 @@ func TestAFileMarkedBinaryIsReadAsTheTextItIs(t *testing.T) {
 	git("commit", "-qm", "init")
 	git("update-ref", "refs/remotes/origin/main", "HEAD")
 	write("sent.env", secret(31))
+	write("sent.bin", "\x00\x01binary\x00")
 	git("add", "-A")
 	git("commit", "-qm", "the commit a push sends")
 	write("work.env", "A=1\n"+secret(32))
@@ -877,6 +905,15 @@ func TestAFileMarkedBinaryIsReadAsTheTextItIs(t *testing.T) {
 	write("real.bin", "\x00\x01binary\x00")
 	write("new.bin", "\x00\x01binary\x00")
 	git("add", "staged.env", "real.bin")
+	return dir
+}
+
+func TestAFileMarkedBinaryIsReadAsTheTextItIs(t *testing.T) {
+	ownGitConfig(t)
+	if !gitHasAttrSource(t) {
+		t.Skip("git before 2.41")
+	}
+	dir := markedCheckout(t)
 	for _, from := range []string{dir, filepath.Join(dir, "sub")} {
 		scan, err := ScanWork(shell.Local{Name: "local"}, from, true)
 		if err != nil {
@@ -895,17 +932,70 @@ func TestAFileMarkedBinaryIsReadAsTheTextItIs(t *testing.T) {
 				t.Errorf("from %s, %s went unread: %+v", from, file, scan.Findings)
 			}
 		}
-		if from == dir {
-			binaries := map[string]bool{}
-			for _, skip := range scan.Skipped {
-				if skip.Why != SkipBinary {
-					t.Errorf("skipped: %+v", skip)
-				}
-				binaries[skip.Path] = true
-			}
-			if !binaries["real.bin"] || !binaries["new.bin"] || len(binaries) != 2 {
-				t.Errorf("the real binary files are still said: %+v", scan.Skipped)
-			}
+		if scan.PushUnread() {
+			t.Errorf("a real binary file of a commit holds the push: %+v", scan.Skipped)
 		}
+	}
+}
+
+// gitWithoutAttrSource puts a git first on PATH that refuses --attr-source as one before 2.41 does.
+func gitWithoutAttrSource(t *testing.T) {
+	t.Helper()
+	real, err := exec.LookPath("git")
+	if err != nil {
+		t.Skip("no git")
+	}
+	bin := t.TempDir()
+	stand := "#!/bin/sh\nfor a in \"$@\"; do case \"$a\" in --attr-source=*) exit 129 ;; esac; done\nexec " + script.Quote(real) + " \"$@\"\n"
+	if err := os.WriteFile(filepath.Join(bin, "git"), []byte(stand), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
+func TestAnOlderGitLeavesWhatAttributesMayHideUnread(t *testing.T) {
+	ownGitConfig(t)
+	dir := markedCheckout(t)
+	gitWithoutAttrSource(t)
+	scan, err := ScanWork(shell.Local{Name: "local"}, dir, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !scan.PushUnread() || !scan.Incomplete {
+		t.Errorf("a file an attribute may be hiding counted as read: %+v", scan)
+	}
+}
+
+func TestAnOlderGitTrustsARepositoryThatMarksNothing(t *testing.T) {
+	ownGitConfig(t)
+	dir := mergeBringing(t, "plain.txt", "p\n")
+	if err := os.WriteFile(filepath.Join(dir, "blob.bin"), []byte("\x00\x01binary\x00"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitWithoutAttrSource(t)
+	scan, err := ScanWork(shell.Local{Name: "local"}, dir, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if scan.PushUnread() || scan.Incomplete {
+		t.Errorf("%+v", scan)
+	}
+}
+
+func TestLocalAttributesLeaveWhatTheyMayHideUnread(t *testing.T) {
+	ownGitConfig(t)
+	dir := mergeBringing(t, "plain.txt", "p\n")
+	if err := os.WriteFile(filepath.Join(dir, ".git", "info", "attributes"), []byte("*.env -diff\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "local.env"), []byte("\x00not text\x00"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	scan, err := ScanWork(shell.Local{Name: "local"}, dir, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !scan.Incomplete {
+		t.Errorf("%+v", scan)
 	}
 }

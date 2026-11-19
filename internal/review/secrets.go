@@ -96,7 +96,7 @@ func readScan(output string, push bool) (SecretScan, error) {
 	read := map[string]bool{}
 	var file, commit string
 	var number int
-	header, ended := false, false
+	header, ended, attrs := false, false, false
 	skipped := map[Skipped]bool{} // a file the work and the index both carry is said once
 	skip := func(path, why string) {
 		entry := Skipped{Path: path, Why: why, InCommit: commit != "" && commit != secrets.Staged}
@@ -110,7 +110,7 @@ func readScan(output string, push bool) (SecretScan, error) {
 			return
 		}
 		collector.Binary(path, commit)
-		if (commit == "" || commit == secrets.Staged) && !secrets.KeyFile(path) { // a keystore is a finding, not a file left unread
+		if (commit == "" || commit == secrets.Staged || attrs) && !secrets.KeyFile(path) { // a keystore is a finding, not a file left unread
 			skip(path, SkipBinary)
 		}
 	}
@@ -121,6 +121,8 @@ func readScan(output string, push bool) (SecretScan, error) {
 		case strings.HasPrefix(line, script.RS):
 			word, value, _ := strings.Cut(line[len(script.RS):], " ")
 			switch word {
+			case "attrs": // an attribute may be hiding text in what git calls binary: those files count as unread
+				attrs = true
 			case "commit":
 				commit, file, header = value, "", false
 				scan.Commits++
@@ -142,9 +144,6 @@ func readScan(output string, push bool) (SecretScan, error) {
 				skip(file, SkipPartly)
 				file = ""
 			case SkipBudget:
-				if path := pathOf(value); secrets.KeyFile(path) { // by its name, read or not
-					binary(path)
-				}
 				skip(pathOf(value), SkipBudget)
 			case "unread":
 				skip(value, SkipBudget)
@@ -167,9 +166,6 @@ func readScan(output string, push bool) (SecretScan, error) {
 			header, number = false, newStart(line)
 		case header && strings.HasPrefix(line, "+++ "):
 			file = pathOf(line[len("+++ "):])
-			if secrets.KeyFile(file) { // every diff reads files as text: a keystore goes by its name
-				binary(file)
-			}
 			if file != "" && commit == "" {
 				read[file] = true
 			}
@@ -189,7 +185,7 @@ func readScan(output string, push bool) (SecretScan, error) {
 		return SecretScan{}, errUnfinished
 	}
 	scan.Findings, scan.More, scan.Files = collector.Findings(), collector.More(), len(read)
-	scan.Incomplete = slices.ContainsFunc(scan.Skipped, func(skip Skipped) bool { return skip.Why != SkipBinary || skip.InCommit })
+	scan.Incomplete = slices.ContainsFunc(scan.Skipped, func(skip Skipped) bool { return skip.Why != SkipBinary || skip.InCommit || attrs })
 	return scan, nil
 }
 
