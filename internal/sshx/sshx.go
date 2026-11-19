@@ -274,21 +274,23 @@ func RemoteCommand(command string) string {
 	return "sh -c " + script.Quote(command)
 }
 
-// MaxCommandLine is the longest command line a script travels as. Dropbear refuses a command past 9000 bytes by
-// dropping the whole connection ("String too long"): the master, the event stream and every session on it.
-const MaxCommandLine = 8192
-
 // readScript is the command line of a script sent on stdin: read whole, then run with stdin at its end, as a script
 // on the command line finds it.
 var readScript = RemoteCommand(`eval "$(cat)"`)
 
-// Remote is how a script travels to a machine: as its command line while it is short, else on stdin under a short one.
+// Remote is how a script travels to a machine: on the session's stdin, under a line every login shell reads as it is
+// written (no backslash, no line break, no quote but its own pair), since sshd hands the line to the account's shell
+// first — fish reads \ and \' inside single quotes, tcsh refuses a line break inside them — and Dropbear drops the
+// whole connection over a command past 9000 bytes.
 func Remote(command string) (line string, stdin io.Reader) {
-	line = RemoteCommand(command)
-	if len(line) <= MaxCommandLine {
-		return line, nil
-	}
 	return readScript, strings.NewReader(command)
+}
+
+// RemoteWithInput is how a script travels with data for its stdin: the script first, read by dd a byte at a time to
+// its length, which the line says, so what follows it stays the script's stdin.
+func RemoteWithInput(command string, input io.Reader) (line string, stdin io.Reader) {
+	read := `eval "$(dd bs=1 count=` + strconv.Itoa(len(command)) + ` 2>/dev/null)"`
+	return RemoteCommand(read), io.MultiReader(strings.NewReader(command), input)
 }
 
 // CommandConn starts the command and exposes its stdin and stdout as a net.Conn that the deadline ends: the way an
@@ -297,18 +299,19 @@ func CommandConn(cmd *exec.Cmd, timeout time.Duration) (net.Conn, error) {
 	return newCmdConn(cmd, timeout)
 }
 
-// run executes a remote command over the master with a deadline, stdin streamed to it when given; without stdin a
-// long script travels on it (Remote), one with stdin on the command line, its scripts being short.
+// run executes a remote command over the master with a deadline, the script on the session's stdin (Remote), the stdin
+// given after it (RemoteWithInput).
 func (c *Conn) run(command string, timeout time.Duration, stdin io.Reader) ([]byte, error) {
 	leave, timeout, err := c.enter(scriptKind(timeout), timeout)
 	if err != nil {
 		return nil, err
 	}
 	defer leave()
-	line := RemoteCommand(command)
-	if stdin == nil {
-		line, stdin = Remote(command)
+	line, input := Remote(command)
+	if stdin != nil {
+		line, input = RemoteWithInput(command, stdin)
 	}
+	stdin = input
 	cmd := c.session(c.Host, line)
 	var out, errb bytes.Buffer
 	cmd.Stdin = stdin

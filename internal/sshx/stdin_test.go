@@ -3,6 +3,7 @@ package sshx
 import (
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -88,27 +89,52 @@ func TestAStreamedLongScriptTravelsOnStdin(t *testing.T) {
 	}
 }
 
-// TestAShortScriptStaysOnTheCommandLine: what fits travels as before, and a script with data for its stdin keeps the
-// command line, the data being the stdin's.
-func TestAShortScriptStaysOnTheCommandLine(t *testing.T) {
+// TestEveryScriptTravelsOnStdin: a short script and one with data for its stdin go on stdin too, under a line any login
+// shell reads as written.
+func TestEveryScriptTravelsOnStdin(t *testing.T) {
 	lines := fakeDropbear(t)
 	c := &Conn{Host: "roofr.remote", ctl: filepath.Join(t.TempDir(), "ctl")}
 	short := `printf '%s' "$HOME" >/dev/null; echo short`
 	if out, err := c.Run(short, 10*time.Second); err != nil || string(out) != "short\n" {
 		t.Fatalf("the short script: %q, %v", out, err)
 	}
-	if out, err := c.RunWithInput(`IFS= read -r key; echo "got $key"`, []byte("k-1\n"), 10*time.Second); err != nil || string(out) != "got k-1\n" {
+	withInput := `IFS= read -r key; echo "got $key"; cat`
+	if out, err := c.RunWithInput(withInput, []byte("k-1\nrest\n"), 10*time.Second); err != nil || string(out) != "got k-1\nrest\n" {
 		t.Fatalf("the script with input: %q, %v", out, err)
 	}
-	got := lengths(t, lines)
-	if len(got) != 2 || got[0] != strconv.Itoa(len(RemoteCommand(short))) {
+	withLine, _ := RemoteWithInput(withInput, strings.NewReader(""))
+	if got := lengths(t, lines); len(got) != 2 || got[0] != strconv.Itoa(len(readScript)) || got[1] != strconv.Itoa(len(withLine)) {
 		t.Fatalf("command lines of %v bytes", got)
 	}
-	line, stdin := Remote(strings.Repeat("y", MaxCommandLine-len(RemoteCommand(""))))
-	if len(line) != MaxCommandLine || stdin != nil {
-		t.Fatalf("a script just fitting left the command line: %d bytes", len(line))
+	for _, line := range []string{readScript, withLine} {
+		if strings.ContainsAny(line, "\\\n") || strings.Count(line, "'") != 2 {
+			t.Errorf("a login shell may read %q otherwise", line)
+		}
 	}
-	if line, stdin := Remote(strings.Repeat("y", MaxCommandLine)); line != readScript || stdin == nil {
-		t.Fatalf("a script past the length stayed on the command line")
+}
+
+// TestALoginShellOfAnotherKindRunsTheScriptAsWritten: sshd hands the line to the account's own shell; tcsh refuses a
+// line break inside quotes and fish reads backslashes there, so a script on the line broke under either.
+func TestALoginShellOfAnotherKindRunsTheScriptAsWritten(t *testing.T) {
+	for _, login := range []string{"tcsh", "fish"} {
+		path, err := exec.LookPath(login)
+		if err != nil {
+			continue
+		}
+		dir := t.TempDir()
+		stub := "#!/bin/sh\nfor line; do :; done\nexec " + script.Quote(path) + " -c \"$line\"\n"
+		if err := os.WriteFile(filepath.Join(dir, "ssh"), []byte(stub), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+		c := &Conn{Host: "roofr.remote", ctl: filepath.Join(t.TempDir(), "ctl")}
+		written := "printf '%s\\n' 'a\\b' \"it's\"\nprintf '\\036x\\n' | od -An -c | tr -d ' \\n'; echo\n"
+		out, err := c.Run(written, 10*time.Second)
+		if err != nil || string(out) != "a\\b\nit's\n036x\\n\n" {
+			t.Errorf("%s: %q, %v", login, out, err)
+		}
+		if out, err := c.RunWithInput("IFS= read -r key\necho \"got $key\"", []byte("k\\1\n"), 10*time.Second); err != nil || string(out) != "got k\\1\n" {
+			t.Errorf("%s with input: %q, %v", login, out, err)
+		}
 	}
 }

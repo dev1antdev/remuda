@@ -307,17 +307,22 @@ components and icons as rules for whoever changes it: @docs/design.md
   `RemoteCommand(script)` is the one command line a script travels as,
   `sh -c '<script>'` — Windows' OpenSSH hands it to Git Bash with its
   quotes whole, while a line that begins with a quoted word is cut there
-  (seen on the Windows runner); **a script past `MaxCommandLine` (8 KB)
-  travels on the session's stdin** (`Remote`: the line is then `sh -c
-  'eval "$(cat)"'`, the script running with its stdin at its end as on the
-  line), since Dropbear drops the whole connection — the master, the event
-  stream, every session — over a command past 9000 bytes ("String too
-  long"; the review's badge sweep of five folders is 10 KB, seen on a Mac
-  whose sshd is Dropbear); `run` and `Stream` go through it, a script with
-  data for its stdin (`RunWithInput`, `Put`) keeps the line, its scripts
-  being short (`stdin_test.go` on an `ssh` stand-in refusing as Dropbear
-  does; `TestOnWindowsALongScriptTravelsOnStdin` on the runner, whose
-  `wintest.SSH` goes through `Remote` too); `CommandConn` is an exec as a `net.Conn`
+  (seen on the Windows runner); **every script travels on the session's
+  stdin** (`Remote`: the line is `sh -c 'eval "$(cat)"'`, the script running
+  with its stdin at its end as on the line), since sshd hands the line to
+  the account's login shell first — fish reads `\\` and `\'` inside single
+  quotes, tcsh refuses a line break inside them — and Dropbear drops the
+  whole connection — the master, the event stream, every session — over a
+  command past 9000 bytes ("String too long"; seen on a Mac whose sshd is
+  Dropbear); a script with data for its stdin (`RunWithInput`, `Put`) goes
+  first on that stdin, its length on the line (`RemoteWithInput`: `eval
+  "$(dd bs=1 count=N)"`, a byte at a time so the data stays the script's);
+  `run` and `Stream` go through them (`stdin_test.go` on an `ssh` stand-in
+  refusing as Dropbear does and on tcsh and fish as the login shell where
+  there is one; `TestOnWindowsALongScriptTravelsOnStdin` on the runner,
+  whose `wintest.SSH` goes through `Remote` too); an attach and an RPC
+  exec keep a line of their own, one line with no backslash, their stdin
+  being the terminal's or herdr's; `CommandConn` is an exec as a `net.Conn`
   (the `nc -U` and `remuda bridge` transports, and the Windows tests);
   `Put` cuts a Windows path at its own separator (`rpath.For`).
   remuda implements no SSH itself.

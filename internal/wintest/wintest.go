@@ -65,7 +65,7 @@ func (s SSH) Run(script string, timeout time.Duration) ([]byte, error) {
 func (s SSH) RunWithInput(script string, input []byte, timeout time.Duration) ([]byte, error) {
 	line, stdin := sshx.Remote(script)
 	if input != nil {
-		line, stdin = sshx.RemoteCommand(script), bytes.NewReader(input)
+		line, stdin = sshx.RemoteWithInput(script, bytes.NewReader(input))
 	}
 	cmd := s.command(line)
 	var out, errb bytes.Buffer
