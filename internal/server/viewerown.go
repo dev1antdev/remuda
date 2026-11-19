@@ -49,10 +49,17 @@ func (s *Server) viewerBarred(r *http.Request) bool {
 	if dir != "" && s.ownFolder(mc.ID(), dir) {
 		return true
 	}
-	// a session is found by its id in every project folder and nothing says whose it was: only one a pane on the viewer's
-	// roster is in now is read, by that pane or, for its subagents, by itself
-	if conversationRoute(r.URL.Path) && (session != "" || pane == "") && !s.viewerSeesSession(mc, pane, dir, session) {
-		return true
+	// a session is found by its id in every project folder and nothing says whose it was: one a pane on the viewer's
+	// roster is in is read through that pane, the very file it is writing, and no other is read at all
+	if conversationRoute(r.URL.Path) && (session != "" || pane == "") {
+		pane = s.viewerSessionPane(mc, pane, dir, session)
+		if pane == "" {
+			return true
+		}
+		q.Set("pane", pane)
+		q.Del("dir")
+		q.Del("session")
+		r.URL.RawQuery = q.Encode()
 	}
 	if pane == "" {
 		return false
@@ -63,12 +70,12 @@ func (s *Server) viewerBarred(r *http.Request) bool {
 	return !s.viewerSeesPane(mc.ID(), pane) // the routes read the pane by its id: one the roster has not shown stays shut
 }
 
-// viewerSeesSession says the session is the one a pane on a viewer's roster is in, as herdr names it or, after a
-// compaction, the file the conversation went on in: of the pane named, else of the panes in the folder or its workspace.
-func (s *Server) viewerSeesSession(mc *machines.Machine, paneID, dir, session string) bool {
+// viewerSessionPane is the pane on a viewer's roster that is in the session, as herdr names it or, after a compaction, by
+// the file the conversation went on in: the pane named, else one in the folder or its workspace; "" when none is.
+func (s *Server) viewerSessionPane(mc *machines.Machine, paneID, dir, session string) string {
 	snap := s.snapshotOf(mc.ID())
 	if snap == nil || session == "" {
-		return false
+		return ""
 	}
 	style := mc.Paths()
 	for i := range snap.Panes {
@@ -77,16 +84,16 @@ func (s *Server) viewerSeesSession(mc *machines.Machine, paneID, dir, session st
 			continue
 		}
 		if pane.AgentSession.Kind == "id" && pane.AgentSession.Value == session {
-			return true
+			return pane.PaneID
 		}
 		if ws := snap.Workspace(pane.WorkspaceID); paneID == "" && !style.Equal(pane.Dir(), dir) && (ws == nil || !style.Equal(snap.WorkspaceDir(ws), dir)) {
 			continue // finding the file below asks the machine: only for the panes the request is about
 		}
 		if _, live, ok := s.Chat.SessionFile(mc.ID(), pane); ok && strings.TrimSuffix(style.Base(live), ".jsonl") == session {
-			return true
+			return pane.PaneID
 		}
 	}
-	return false
+	return ""
 }
 
 func (s *Server) snapshotOf(machineID string) *herdr.Snapshot {

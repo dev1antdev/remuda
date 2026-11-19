@@ -6764,9 +6764,11 @@ components and icons as rules for whoever changes it: @docs/design.md
   shown, on the routes that read a pane by its id). **A viewer reads the
   conversation a pane on its roster reports it is in and no other**: a
   session is found by its id in every project folder and nothing says whose
-  it was, so the chat and the recap refuse any other session id (a compacted
-  conversation's later file counts as the pane's), answer nothing for a pane
-  whose own session cannot be found, and list no folder's sessions;
+  it was, so the chat and the recap read a session id only through the pane that is
+  in it (`viewerSessionPane`, a compacted conversation's later file counting
+  as the pane's; the request is rewritten to that pane), refuse any other,
+  answer nothing for a pane whose own session cannot be found
+  (`chat.OpenOwn`), and list no folder's sessions;
   their timelapses are left out of
   the list, the search and the id (`ownRecording`: `Meta.Own`, set when the
   take begins; an older one only from a folder the viewer reaches now and
