@@ -19,7 +19,8 @@ type SecretScan struct {
 	Findings []secrets.Finding `json:"findings"`
 	More     int               `json:"more,omitempty"` // findings past the caps
 	Skipped  []Skipped         `json:"skipped,omitempty"`
-	// Incomplete says text was left unread, so finding nothing does not clear it; a binary file has none to read.
+	// Incomplete says text was left unread, so finding nothing does not clear it; a binary file has none to read, unless an
+	// attribute may have called a text file binary (SkipMarked).
 	Incomplete bool      `json:"incomplete,omitempty"`
 	Files      int       `json:"files"`             // files of the work read
 	Commits    int       `json:"commits,omitempty"` // commits read, for a push
@@ -49,6 +50,7 @@ const (
 	SkipBudget = "budget" // past scanTotal, for the work or for the commits, not read
 	SkipMany   = "many"   // untracked files past scanUntracked
 	SkipOlder  = "older"  // commits not pushed yet past scanCommits, for a push
+	SkipMarked = "marked" // what git calls binary where an attribute the check cannot set aside may be hiding text
 )
 
 // The bounds of one check: what crosses from a remote machine stays a few megabytes, and the person waits seconds.
@@ -110,7 +112,11 @@ func readScan(output string, push bool) (SecretScan, error) {
 			return
 		}
 		collector.Binary(path, commit)
-		if (commit == "" || commit == secrets.Staged || attrs) && !secrets.KeyFile(path) { // a keystore is a finding, not a file left unread
+		switch {
+		case secrets.KeyFile(path): // a keystore is a finding, not a file left unread
+		case attrs:
+			skip(path, SkipMarked)
+		case commit == "" || commit == secrets.Staged:
 			skip(path, SkipBinary)
 		}
 	}
@@ -135,7 +141,7 @@ func readScan(output string, push bool) (SecretScan, error) {
 				binary(value)
 			case "binarymerge": // what a merge brought in it cannot be told: a keystore is a finding, the rest stays unread
 				binary(pathOf(value))
-				if path := pathOf(value); path != "" && !secrets.KeyFile(path) {
+				if path := pathOf(value); path != "" && !secrets.KeyFile(path) && !attrs {
 					skip(path, SkipBinary)
 				}
 			case "binarydiff": // past the budget, still named: a keystore is a finding
@@ -185,7 +191,7 @@ func readScan(output string, push bool) (SecretScan, error) {
 		return SecretScan{}, errUnfinished
 	}
 	scan.Findings, scan.More, scan.Files = collector.Findings(), collector.More(), len(read)
-	scan.Incomplete = slices.ContainsFunc(scan.Skipped, func(skip Skipped) bool { return skip.Why != SkipBinary || skip.InCommit || attrs })
+	scan.Incomplete = slices.ContainsFunc(scan.Skipped, func(skip Skipped) bool { return skip.Why != SkipBinary || skip.InCommit })
 	return scan, nil
 }
 

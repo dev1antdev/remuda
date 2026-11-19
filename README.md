@@ -437,7 +437,8 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   agent works or asks in that checkout; a push is never forced and never
   carries tags, and the secret check stands before it as before Approve &
   open PR, holding it for findings and for commits it could not read whole
-  (past its size limits, or past the latest 200) — Push anyway… asks first. **Push without hooks**, right under
+  (past its size limits, past the latest 200, or marked binary by an attribute it cannot
+  set aside) — Push anyway… asks first. **Push without hooks**, right under
   Push here and in the Git lens's menu, is the same push with
   `--no-verify`: the repository's pre-push hook does not run, the secret
   check still does. What goes is what the check read: a
@@ -1754,7 +1755,8 @@ it finds holds the button back: the dialog lists each one by file and
 line with the secret masked, a click shows its row in the diff, marked,
 and **Send anyway…** goes only after a confirm that says how many. A check
 that cannot run, or could not read all of the work, says so and names the
-files, and Send anyway is the way past it too; a plain
+files (an attribute such as `*.env -diff` hides no text from it, except on
+a git older than 2.41, where a file it marks binary counts as unread), and Send anyway is the way past it too; a plain
 Approve, Reject and Mark reviewed never wait. A line ending in
 `gitleaks:allow` (or `remuda:allow-secret`) is let through, so a test
 fixture can say it is one. The lens head also warns when Claude Code's

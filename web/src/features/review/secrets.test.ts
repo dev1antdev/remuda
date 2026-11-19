@@ -90,6 +90,8 @@ describe("the check's words", () => {
     expect(skippedWords([{ path: "a.png", why: "binary" }, { path: "b.png", why: "binary" }, { path: "dump.sql", why: "large" }, { why: "many", count: 12 }])).toBe(
       "Not read: 2 binary files, 1 file over 1 MB, 12 more untracked files.",
     );
+    expect(skippedWords([{ path: "app.env", why: "marked" }])).toBe("Not read: 1 file an attribute marks binary, which may hold text.");
+    expect(unreadPaths([{ path: "app.env", why: "marked" }])).toBe("app.env");
     expect(skippedWords([{ why: "older", count: 340 }])).toBe("Not read: 340 older commits not pushed yet.");
   });
 });

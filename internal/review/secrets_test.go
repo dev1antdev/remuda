@@ -964,6 +964,29 @@ func TestAnOlderGitLeavesWhatAttributesMayHideUnread(t *testing.T) {
 	if !scan.PushUnread() || !scan.Incomplete {
 		t.Errorf("a file an attribute may be hiding counted as read: %+v", scan)
 	}
+	named := false
+	for _, skip := range scan.Skipped {
+		named = named || (skip.Why == SkipMarked && skip.Path == "sent.env" && skip.InCommit)
+	}
+	if !named {
+		t.Errorf("the file is not named: %+v", scan.Skipped)
+	}
+}
+
+func TestACommentInAnAttributesFileMarksNothing(t *testing.T) {
+	ownGitConfig(t)
+	dir := mergeBringing(t, ".gitattributes", "# binary files are stored as they are\n*.txt text\n")
+	if err := os.WriteFile(filepath.Join(dir, "blob.bin"), []byte("\x00\x01binary\x00"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitWithoutAttrSource(t)
+	scan, err := ScanWork(shell.Local{Name: "local"}, dir, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if scan.PushUnread() || scan.Incomplete {
+		t.Errorf("%+v", scan)
+	}
 }
 
 func TestAnOlderGitTrustsARepositoryThatMarksNothing(t *testing.T) {

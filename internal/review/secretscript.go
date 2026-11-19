@@ -23,8 +23,8 @@ const attrsMark = `(^|[[:space:]])(binary|-diff|!diff)([[:space:]]|$)`
 var attrsScript = `A=; e=$(git hash-object -t tree /dev/null); i=$(git rev-parse --git-path info/attributes 2>/dev/null); ` +
 	`if git --attr-source="$e" rev-parse --git-dir >/dev/null 2>&1; then A="--attr-source=$e"; fi; ` +
 	`m='` + attrsMark + `'; if [ -n "$(git config --get-regexp '^diff\..*\.binary$' 2>/dev/null)" ]; then m="$m|(^|[[:space:]])diff="; fi; ` +
-	`attrs=; grep -qE "$m" "$i" 2>/dev/null && attrs=1; ` +
-	`if [ -z "$A" ] && ` + readGit + ` grep --untracked --no-exclude-standard -qE "$m" -- ':(top,glob)**/.gitattributes' 2>/dev/null; then attrs=1; fi; `
+	`attrs=; grep -E "$m" "$i" 2>/dev/null | grep -qvE '^[[:space:]]*#' && attrs=1; ` +
+	`if [ -z "$A" ] && ` + readGit + ` grep --untracked --no-exclude-standard -hE "$m" -- ':(top,glob)**/.gitattributes' 2>/dev/null | grep -qvE '^[[:space:]]*#'; then attrs=1; fi; `
 
 // gitDiff is git's diff as the check reads it, writing nothing; each call says itself whether it is relative to the folder.
 const gitDiff = readGit + ` ` + noAttrs + ` -c diff.relative=false diff ` + plainPatch
@@ -130,7 +130,8 @@ func secretScript(dir string, push bool) string {
 		commits = `if [ "$base" = HEAD ]; then ` + unpushedScript + `fi; `
 	}
 	// a partial clone is not sent for what it lacks (git 2.45 on): nothing is written, and git's failure says so
-	return `GIT_NO_LAZY_FETCH=1; export GIT_NO_LAZY_FETCH; cd ` + script.Quote(dir) + ` 2>/dev/null || { printf '\036failed folder\n'; exit 0; }; ` +
+	// nor are the machine's own attributes read (GIT_ATTR_NOSYSTEM), which nothing here could set aside
+	return `GIT_NO_LAZY_FETCH=1; GIT_ATTR_NOSYSTEM=1; export GIT_NO_LAZY_FETCH GIT_ATTR_NOSYSTEM; cd ` + script.Quote(dir) + ` 2>/dev/null || { printf '\036failed folder\n'; exit 0; }; ` +
 		`git rev-parse --show-toplevel >/dev/null 2>&1 || { printf '\036failed repository\n'; exit 0; }; ` +
 		`base=HEAD; git rev-parse -q --verify HEAD >/dev/null 2>&1 || base=$(git hash-object -t tree /dev/null); ` +
 		attrsScript +
