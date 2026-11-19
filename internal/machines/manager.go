@@ -276,6 +276,12 @@ type herdrMachine struct {
 func (m *Manager) SyncHerdr() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	if m.herdrBin == "" { // no herdr was found at the start
+		m.mu.Lock()
+		m.herdrRead = true
+		m.mu.Unlock()
+		return
+	}
 	out, err := exec.CommandContext(ctx, m.herdrBin, "machine", "list", "--json").Output()
 	if errors.Is(err, exec.ErrNotFound) || errors.Is(err, os.ErrNotExist) {
 		m.mu.Lock()

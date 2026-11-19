@@ -63,10 +63,11 @@ func (w *RunWatch) Sweep() {
 				continue
 			}
 			if now().Sub(first) > 2*time.Minute && now().Sub(started) > 2*time.Minute {
-				_ = w.Store.SetRun(r.ID, RunGone, "the pane is no more")
-				_, _ = w.Store.AddComment(r.TaskID, "remuda", "The agent's workspace was closed.")
-				_ = w.Store.StopPipeline(r.ID, "the agent's workspace is gone")
-				delete(w.missing, r.ID)
+				// the pipeline first: a run left open is retired on the next sweep, a gone one never looked at again
+				if w.Store.StopPipeline(r.ID, "the agent's workspace is gone") == nil && w.Store.SetRun(r.ID, RunGone, "the pane is no more") == nil {
+					_, _ = w.Store.AddComment(r.TaskID, "remuda", "The agent's workspace was closed.")
+					delete(w.missing, r.ID)
+				}
 			}
 			continue
 		}
