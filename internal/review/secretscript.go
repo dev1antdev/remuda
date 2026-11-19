@@ -92,6 +92,22 @@ var unpushedScript = `o=0; m=0; for kind in --no-merges --merges; do ` +
 	unpushedLog(`--no-merges -p `+plainPatch+` --format='%x1ecommit %h'`) + ` || printf '\036failed commits\n'; ` +
 	`if [ -z "$skip" ]; then { ` + unpushedLog(`--merges --cc `+plainPatch+` --format='%x1ecommit %h'`) + ` || printf '\036failed commits\n'; } | ` + mergeLines + ` || printf '\036failed commits\n'; fi; `
 
+// asTextScript defines what reads again, as text, a file git calls binary only because an attribute says so (*.env -diff):
+// its new side, as git itself would judge it, holds no NUL in its first 8000 bytes. nul reads stdin. again names such a
+// file ("\036text <path>") and prints its diff, for the files the diff given lists: $1 is where the new side is read, "w"
+// for the working tree, else what `git show` takes before the path; a real binary file stays as git said.
+var asTextScript = `nul() { [ "$(head -c 8000 2>/dev/null | LC_ALL=C tr -dc '\000' | wc -c | tr -d ' ')" -gt 0 ]; }; ` +
+	`binaries() { LC_ALL=C awk -F '\t' '$1 == "-" && $2 == "-" { print substr($0, 5) }' | head -n ` + strconv.Itoa(scanAsText) + `; }; ` +
+	`again() { w=$1; shift; ` + gitDiff + ` --numstat "$@" 2>/dev/null | binaries | while IFS= read -r f; do ` +
+	`if [ "$w" = w ]; then [ -f "$f" ] && ! nul < "$f"; else git show "$w$f" 2>/dev/null | { ! nul; }; fi && ` +
+	`{ printf '\036text %s\n' "$f"; ` + gitDiff + ` --text "$@" -- ":(literal)$f" 2>/dev/null; }; done; }; `
+
+// commitsAsText is asTextScript for the commits a push would send: each such file after a line "\036again <short sha>".
+var commitsAsText = unpushedLog(`--no-merges --numstat --no-renames --format='%x1e%h'`) +
+	` | LC_ALL=C awk -F '\t' '/^\036/ { c = substr($0, 2); next } $1 == "-" && $2 == "-" { print c " " substr($0, 5) }' | head -n ` + strconv.Itoa(scanAsText) +
+	` | while read -r c f; do git show "$c:$f" 2>/dev/null | { ! nul; } && { printf '\036again %s\n' "$c"; ` +
+	readGit + ` -c diff.relative=false show --format= ` + plainPatch + ` --text "$c" -- ":(top,literal)$f" 2>/dev/null; }; done; `
+
 // secretScript prints, in one stream through capScript, the diff of the work against HEAD (the empty tree before the
 // first commit) with only the lines added, every untracked file git does not ignore (untrackedScript), after a line
 // "\036staged" the index's diff against HEAD — what git commit carries, though a staged file may have changed or gone
@@ -103,16 +119,17 @@ var unpushedScript = `o=0; m=0; for kind in --no-merges --merges; do ` +
 func secretScript(dir string, push bool) string {
 	commits := ""
 	if push {
-		commits = `if [ "$base" = HEAD ]; then ` + unpushedScript + `fi; `
+		commits = `if [ "$base" = HEAD ]; then ` + unpushedScript + commitsAsText + `fi; `
 	}
 	// a partial clone is not sent for what it lacks (git 2.45 on): nothing is written, and git's failure says so
 	return `GIT_NO_LAZY_FETCH=1; export GIT_NO_LAZY_FETCH; cd ` + script.Quote(dir) + ` 2>/dev/null || { printf '\036failed folder\n'; exit 0; }; ` +
 		`git rev-parse --show-toplevel >/dev/null 2>&1 || { printf '\036failed repository\n'; exit 0; }; ` +
 		`base=HEAD; git rev-parse -q --verify HEAD >/dev/null 2>&1 || base=$(git hash-object -t tree /dev/null); ` +
-		`{ ` + gitDiff + ` --relative "$base" 2>/dev/null || printf '\036failed work\n'; ` +
+		asTextScript +
+		`{ ` + gitDiff + ` --relative "$base" 2>/dev/null || printf '\036failed work\n'; again w --relative "$base"; ` +
 		untrackedScript +
-		`printf '\036staged\n'; ` + gitDiff + ` --cached --relative "$base" 2>/dev/null || printf '\036failed work\n'; ` +
+		`printf '\036staged\n'; ` + gitDiff + ` --cached --relative "$base" 2>/dev/null || printf '\036failed work\n'; again ":./" --cached --relative "$base"; ` +
 		// a folder inside the repository commits the whole index: what is staged outside it is read too, named from the top
-		`p=$(git rev-parse --show-prefix 2>/dev/null); if [ -n "$p" ]; then ` + gitDiff + ` --cached "$base" -- ':(top)' ":(top,literal,exclude)$p" 2>/dev/null || printf '\036failed work\n'; fi; ` +
+		`p=$(git rev-parse --show-prefix 2>/dev/null); if [ -n "$p" ]; then ` + gitDiff + ` --cached "$base" -- ':(top)' ":(top,literal,exclude)$p" 2>/dev/null || printf '\036failed work\n'; again ":" --cached "$base"; fi; ` +
 		commits + `printf '\036end\n'; } | ` + capScript
 }

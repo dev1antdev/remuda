@@ -853,3 +853,43 @@ func TestAPartialCloneOnAnOlderGitLeavesItsMergesUnread(t *testing.T) {
 		}
 	}
 }
+
+func TestAFileMarkedBinaryIsReadAsTheTextItIs(t *testing.T) {
+	ownGitConfig(t)
+	secret := func(seed uint32) string { return "export NPM_TOKEN=" + "npm_" + fakeKey(seed, 36) + "\n" }
+	dir, git, write := scratchCheckout(t)
+	write(".gitattributes", "*.env -diff\n*.bin binary\n")
+	write("work.env", "A=1\n")
+	write("staged.env", "A=1\n")
+	git("add", "-A")
+	git("commit", "-qm", "init")
+	git("update-ref", "refs/remotes/origin/main", "HEAD")
+	write("sent.env", secret(31))
+	git("add", "-A")
+	git("commit", "-qm", "the commit a push sends")
+	write("work.env", "A=1\n"+secret(32))
+	write("staged.env", "A=1\n"+secret(33))
+	write("real.bin", "\x00\x01binary\x00")
+	git("add", "staged.env", "real.bin")
+	scan, err := ScanWork(shell.Local{Name: "local"}, dir, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := map[string]bool{}
+	for _, finding := range scan.Findings {
+		found[finding.File] = true
+	}
+	for _, file := range []string{"sent.env", "work.env", "staged.env"} {
+		if !found[file] {
+			t.Errorf("%s went unread: %+v", file, scan.Findings)
+		}
+	}
+	for _, skip := range scan.Skipped {
+		if skip.Path != "real.bin" || skip.Why != SkipBinary {
+			t.Errorf("skipped: %+v", skip)
+		}
+	}
+	if len(scan.Skipped) != 1 {
+		t.Errorf("a real binary file is still said: %+v", scan.Skipped)
+	}
+}
