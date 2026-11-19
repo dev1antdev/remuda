@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -26,9 +27,10 @@ import (
 
 const (
 	LocalID     = "local"
-	labelsFile  = "labels.json" // the user's own names for machines, by id
-	macsFile    = "macs.json"   // the MAC address of a machine the person may want to wake, by id
-	SourceHerdr = "herdr"       // mirrored from `herdr machine list`
+	labelsFile  = "labels.json"  // the user's own names for machines, by id
+	macsFile    = "macs.json"    // the MAC address of a machine the person may want to wake, by id
+	removedFile = "removed.json" // the machines the person removed, by id, until one of that id comes back (Gone)
+	SourceHerdr = "herdr"        // mirrored from `herdr machine list`
 
 	StateConnected  = "connected"
 	StateConnecting = "connecting"
@@ -58,6 +60,9 @@ type Manager struct {
 	saveMu   sync.Mutex                            // writes of machines.json, one at a time
 	onState  func(id, label, state, reason string) // hears every remote's connection move, set by OnState
 	server   bool                                  // the host serves the page only: no machine of the fleet (SetServer)
+	// herdr's machines, never saved, were read once since the start, or there is no herdr: the fleet is whole (Gone)
+	herdrRead bool
+	removed   map[string]bool // removed.json
 }
 
 // ErrServerHost is what a request for the host's own herdr gets when remuda runs as a server: it has no workspaces.
@@ -208,6 +213,10 @@ func NewManager(dir, localSocket, localHerdrBin string, door *Door) *Manager {
 		m.macs = map[string]string{}
 	}
 	_ = state.LoadJSON(m.dir, orderFile, &m.placed)
+	_ = state.LoadJSON(m.dir, removedFile, &m.removed)
+	if m.removed == nil {
+		m.removed = map[string]bool{}
+	}
 	local.setLabel(m.names[LocalID])
 	for _, cfg := range m.load() {
 		m.add(cfg)
@@ -251,7 +260,12 @@ func (m *Manager) add(cfg Config) *Machine {
 	mc.setLabel(m.names[cfg.ID])
 	m.machines[cfg.ID] = mc
 	m.order = append(m.order, cfg.ID)
+	back := m.removed[cfg.ID]
+	delete(m.removed, cfg.ID)
 	m.mu.Unlock()
+	if back {
+		_ = m.saveRemoved()
+	}
 	go mc.connect()
 	return mc
 }
@@ -274,7 +288,19 @@ type herdrMachine struct {
 func (m *Manager) SyncHerdr() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	if m.herdrBin == "" { // no herdr was found at the start
+		m.mu.Lock()
+		m.herdrRead = true
+		m.mu.Unlock()
+		return
+	}
 	out, err := exec.CommandContext(ctx, m.herdrBin, "machine", "list", "--json").Output()
+	if errors.Is(err, exec.ErrNotFound) || errors.Is(err, os.ErrNotExist) {
+		m.mu.Lock()
+		m.herdrRead = true
+		m.mu.Unlock()
+		return
+	}
 	if err != nil {
 		return
 	}
@@ -294,6 +320,7 @@ func (m *Manager) SyncHerdr() {
 		m.add(Config{ID: h.ID, Label: h.Label, Host: h.Target, Source: SourceHerdr})
 	}
 	m.mu.Lock()
+	m.herdrRead = true
 	var gone []string
 	for id, mc := range m.machines {
 		if mc.Cfg.Source == SourceHerdr && !live[id] {
@@ -304,6 +331,27 @@ func (m *Manager) SyncHerdr() {
 	for _, id := range gone {
 		m.drop(id)
 	}
+}
+
+// saveRemoved keeps the removals for a restart, while herdr's machines may still be unread (Gone).
+func (m *Manager) saveRemoved() error {
+	m.saveMu.Lock()
+	defer m.saveMu.Unlock()
+	m.mu.Lock()
+	removed := maps.Clone(m.removed)
+	m.mu.Unlock()
+	return state.SaveJSON(m.dir, removedFile, removed)
+}
+
+// Gone says the fleet has no such machine and knows it: the person removed it, or herdr's machines were read since the
+// start, so an id missing now is not waiting to be mirrored.
+func (m *Manager) Gone(id string) bool {
+	if id == "" {
+		id = LocalID
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.machines[id] == nil && (m.herdrRead || m.removed[id])
 }
 
 // drop takes a machine out of the registry and ends its connection; its watcher loop and pollers stop on their own.
@@ -379,14 +427,24 @@ func (m *Manager) Remove(id string) error {
 	}
 	m.mu.Lock()
 	mc := m.machines[id]
-	if mc != nil && mc.Cfg.Source == SourceHerdr {
+	if mc == nil {
+		m.mu.Unlock()
+		return fmt.Errorf("machine %q not found", id)
+	}
+	if mc.Cfg.Source == SourceHerdr {
 		m.mu.Unlock()
 		return fmt.Errorf("%s comes from herdr's machine list — remove it with `herdr machine remove`", mc.Label())
 	}
+	m.removed[id] = true
 	m.mu.Unlock()
-	if m.drop(id) == nil {
-		return fmt.Errorf("machine %q not found", id)
+	// the removal is kept before the machine goes: one that could not be noted stays, and Gone never says it went
+	if err := m.saveRemoved(); err != nil {
+		m.mu.Lock()
+		delete(m.removed, id)
+		m.mu.Unlock()
+		return err
 	}
+	m.drop(id)
 	return m.save()
 }
 

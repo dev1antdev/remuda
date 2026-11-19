@@ -715,15 +715,8 @@ func Run(ctx context.Context, o Options) error {
 	runWatch := &tasks.RunWatch{
 		Store: taskStore,
 		PaneState: func(machineID, paneID string) (string, time.Time, bool) {
-			pane, snap := chats.Pane(machineID, paneID)
-			if snap == nil {
-				return "unknown", time.Time{}, true // not seen yet (a restart, a reconnect): not gone
-			}
-			if pane == nil {
-				return "", time.Time{}, false
-			}
-			display := tracker.Display(machineID, pane)
-			return display.State, time.UnixMilli(display.Since), true
+			display, ok := taskPane(chats, tracker, machineID, paneID, !fleet.Gone(machineID))
+			return display.State, time.UnixMilli(display.Since), ok
 		},
 		LastAnswer: chats.LastAnswer,
 		Denied:     chats.Denied,

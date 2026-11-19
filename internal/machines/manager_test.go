@@ -2,6 +2,7 @@ package machines
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -169,4 +170,63 @@ func split(s string) []string {
 		return nil
 	}
 	return strings.Split(s, ",")
+}
+
+func TestTheFleetCallsAMachineGoneOnlyOnceHerdrsWereRead(t *testing.T) {
+	dir := t.TempDir()
+	herdr := filepath.Join(dir, "herdr")
+	if err := os.WriteFile(herdr, []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	m := NewManager(dir, filepath.Join(dir, "no-herdr.sock"), herdr, nil)
+	m.SyncHerdr()
+	if m.Gone("mini") {
+		t.Fatal("gone while herdr's machines could not be read")
+	}
+	if err := os.WriteFile(herdr, []byte("#!/bin/sh\necho '[]'\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	m.SyncHerdr()
+	if !m.Gone("mini") || m.Gone(LocalID) {
+		t.Fatal("a machine of no list is not gone, or the local one is")
+	}
+	failing := NewManager(t.TempDir(), filepath.Join(dir, "no-herdr.sock"), herdr+"-failing", nil)
+	if err := os.WriteFile(herdr+"-failing", []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	failing.SyncHerdr()
+	added, err := failing.Add("Mini", "mini.invalid")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(failing.dir, removedFile), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := failing.Remove(added.ID()); err == nil || failing.Gone(added.ID()) {
+		t.Fatalf("a removal that could not be noted went through: %v", err)
+	}
+	if err := os.Remove(filepath.Join(failing.dir, removedFile)); err != nil {
+		t.Fatal(err)
+	}
+	if err := failing.Remove(added.ID()); err != nil {
+		t.Fatal(err)
+	}
+	if !failing.Gone(added.ID()) {
+		t.Fatal("a machine the person removed is not gone while herdr fails")
+	}
+	again := NewManager(failing.dir, filepath.Join(dir, "no-herdr.sock"), herdr+"-failing", nil)
+	again.SyncHerdr()
+	if !again.Gone(added.ID()) {
+		t.Fatal("a removal is forgotten across a restart while herdr fails")
+	}
+	if _, err := failing.Add("Mini", "mini.invalid"); err != nil || failing.Gone(added.ID()) {
+		t.Fatalf("a machine added again is still gone: %v", err)
+	}
+	for _, bin := range []string{filepath.Join(dir, "no-such-herdr"), ""} {
+		none := NewManager(dir, filepath.Join(dir, "no-herdr.sock"), bin, nil)
+		none.SyncHerdr()
+		if !none.Gone("mini") {
+			t.Fatalf("without herdr (%q) the fleet is whole", bin)
+		}
+	}
 }

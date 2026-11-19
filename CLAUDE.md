@@ -522,15 +522,18 @@ components and icons as rules for whoever changes it: @docs/design.md
   with a `continued-in` record naming the new session, `continuedIn` reads
   the old file's last 64 KB for it; a Claude Code that writes none is
   followed by the new file's first `parentUuid`, a record `uuid` in the old
-  one — read in its first 64 KB, which a big snapshot record can fill)
-  while herdr keeps naming the old id, so the chat follows `Reader.Live(path)` —
+  one — read in its first 64 KB, which a big snapshot record can fill —
+  unless the new file holds the old one's first record: a fork copies the
+  conversation it began from whole, a compaction a tail at most, so a fork
+  continues nothing and has no predecessor (`forkOf`)) while herdr keeps
+  naming the old id, so the chat follows `Reader.Live(path)` —
   `transcript.Continuation` locally, `ContinuationScript` over ssh (its
   listing, like Gemini's find, read a line at a time with `while read`,
   never split by `$(ls …)`, so a home with a space stays whole) —
   re-checked a minute at a time per file. `transcript.Reader` (reader.go)
   is the session files of one machine: `Version`, `DirVersions`,
   `ReadFrom`, `Turns`, `ResolveSession`, `Live` / `Chain` / `Lineage`
-  (every file a conversation lived in) and `Predecessor`, in process here
+  (every file a conversation lived in, each once, to the chain's end) and `Predecessor`, in process here
   and by script over a `shell.Host` on a remote. **A session's subagents**
   (`subagents.go`, tested): the agents it spawned through its Agent tool
   live at `<session>/subagents/agent-<id>.jsonl`, a `.meta.json` beside
@@ -2413,7 +2416,19 @@ components and icons as rules for whoever changes it: @docs/design.md
   named unread — with no merge run again, no driver, and no partial clone's
   fetch (`GIT_NO_LAZY_FETCH`; a partial clone on a git before 2.45, which
   would fetch regardless, leaves its merges unread), so no object written):
-  what the push would send. The awk drops a diff's removed lines, cuts each
+  what the push would send. An attribute (`*.env -diff`) cannot hide a text
+  file from it: git is told to judge files by their bytes (`--attr-source` on
+  the empty tree, git 2.41, and no `core.attributesFile`). Where that cannot
+  reach, the repository's `info/attributes` and on an older git any
+  `.gitattributes` marking a file binary (a comment aside, a diff driver the
+  configuration calls binary included), every file git calls binary counts
+  as unread (`\036attrs`, skip `marked`). The work is read with the
+  repository's attributes, which decode a `working-tree-encoding` file, and
+  what they leave binary once more without them, names kept whole (`-z`); a
+  file an attribute converts there (`working-tree-encoding`, `filter`, said
+  as `\036converts <hex of the path>`, any value but `unspecified`, the
+  values kept on the machine; a filter named so marks every binary file) stays `marked` whatever its bytes say. The machine's own
+  attributes file is never read (`GIT_ATTR_NOSYSTEM`). The awk drops a diff's removed lines, cuts each
   file at 1 MB (`\036partly`) and the stream at `scanTotal` 8 MB, the commits' own 8 MB after the work's
   (`\036budget <path>` / `\036unread <path>` for the rest), so a remote
   sends megabytes at most; `readScan` feeds the added lines, with their
@@ -2429,7 +2444,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   that failed and a cut-off script once all read as clean); 45 s at most
   (`scanTimeout`, said as "it took longer than 45s", never ssh's quoting
   of the script). **A check that left text unread is no clean one either**: any skip
-  but `binary` sets `incomplete`, and a commit, a pull request's approval
+  but `binary` sets `incomplete` (`marked`, a file git calls binary where an
+  attribute the check cannot set aside may hide text, does too), and a commit, a pull request's approval
   and a push (`check-incomplete`) wait for a confirm that says so, the
   skips listed. `SecretScan{findings, more, skipped [{path, why,
   count}], incomplete, files, commits, push, at}`. Route: `GET
@@ -6524,7 +6540,12 @@ components and icons as rules for whoever changes it: @docs/design.md
   a push, and `Store.OnFinish` moves the task to the `on_finish` column
   when it still sits in `on_start` (a card the person moved meanwhile
   stays; the push title says `→ Testing`); a pane gone two minutes →
-  `gone`. **What a run was denied** (`denied.go`, `denied_test.go`): the
+  `gone`, its pipeline stopped in the same transaction (`GoneRun`), and so
+  is a run on a machine gone from the fleet that long (`Manager.Gone`: one
+  the person removed, kept in `removed.json` until that id comes back, or
+  any once herdr's machines, never saved, were read
+  since the start; `internal/app`'s `readTaskPane`, which also reads a pane its agent left
+  as idle, so a last answer not reported yet is its finish). **What a run was denied** (`denied.go`, `denied_test.go`): the
   finish reads, through `RunWatch.Denied` (`chat.Service.Denied`), the
   calls Claude Code refused without asking after the record reported
   last, and a comment by "remuda" lists them (`deniedComment`: each tool
@@ -6611,7 +6632,11 @@ components and icons as rules for whoever changes it: @docs/design.md
   `Queued` (the run's `by_queue`), once the machine is connected, fewer
   than `Max` of the project's tasks the queue started still work or ask
   (`queueWorking`: a start under way, or a pane the radar reads working,
-  blocked or unknown; a pipeline's passed stage counts through the next),
+  blocked or unknown; a pipeline's passed stage counts through the next;
+  `internal/app`'s `readTaskPane` reads a pane its agent left (/exit, a
+  sleep, a reboot) as idle, so it holds no slot for good, and a woken or
+  resumed agent may take the project past `Max`; a machine gone from the
+  fleet holds its slot until the run watch ends the run),
   the agent kind's plan window holds nothing (`limits.Holding`: under
   95 % and not forecast to run out within half an hour — held, the card
   is offered once to the person to run now on the other vendor, `Offer`,

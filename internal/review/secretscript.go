@@ -9,8 +9,53 @@ import (
 // plainPatch is a patch in the one form readScan reads: no renames, no context.
 const plainPatch = script.PatchForm + ` --no-renames -U0`
 
+// noAttrs is what makes git judge a file by its bytes alone, whatever an attribute (*.env -diff) says of it; $A is set by
+// attrsScript.
+const noAttrs = `$A ` + ownAttrs
+
+// ownAttrs keeps the person's own attributes file and a configured default diff driver from calling text binary.
+const ownAttrs = `-c core.attributesFile=/dev/null -c diff.default.binary=auto`
+
+// attrsMark is what, in an attributes file, can make git call a text file binary.
+const attrsMark = `(^|[[:space:]"])(binary|-diff|!diff)([[:space:]=]|$)` // a quoted pattern may run into its attributes
+
+// attrsScript points git's attributes at the empty tree where it can (--attr-source, git 2.41). What that leaves, the
+// repository's info/attributes and on an older git every .gitattributes, tracked or not, in the index too, is said with a line "\036attrs"
+// when it marks anything, a diff driver the configuration calls binary included: the files git then calls binary may be
+// text the check cannot read.
+var attrsScript = `A=; e=$(git hash-object -t tree /dev/null); i=$(git rev-parse --git-path info/attributes 2>/dev/null); ` +
+	`if git --attr-source="$e" rev-parse --git-dir >/dev/null 2>&1; then A="--attr-source=$e"; fi; ` +
+	`m='` + attrsMark + `'; if [ -n "$(git config --get-regexp '^diff\..*\.binary$' 2>/dev/null)" ]; then m="$m|(^|[[:space:]\"])diff="; fi; ` +
+	`attrs=; grep -E "$m" "$i" 2>/dev/null | grep -qvE '^[[:space:]]*#' && attrs=1; ` +
+	`if [ -n "$(git config --get-regexp '^filter\.unspecified\.' 2>/dev/null)" ]; then attrs=1; fi; ` + // retryScript's word for none
+	`if [ -z "$A" ] && { ` + readGit + ` grep --untracked --no-exclude-standard -hE "$m" -- ':(top,glob)**/.gitattributes' 2>/dev/null; ` +
+	readGit + ` grep --cached -hE "$m" -- ':(top,glob)**/.gitattributes' 2>/dev/null; } | grep -qvE '^[[:space:]]*#'; then attrs=1; fi; `
+
 // gitDiff is git's diff as the check reads it, writing nothing; each call says itself whether it is relative to the folder.
-const gitDiff = readGit + ` -c diff.relative=false diff ` + plainPatch
+const gitDiff = readGit + ` ` + noAttrs + ` -c diff.relative=false diff ` + plainPatch
+
+// attrsDiff is the diff with the repository's attributes, which say how a working-tree-encoding file decodes.
+const attrsDiff = readGit + ` ` + ownAttrs + ` -c diff.relative=false diff ` + plainPatch
+
+// workDiff is the work against HEAD, read with the repository's attributes, and what they leave binary once more without
+// them (retryScript). The list of those is a --numstat without -U0, which would add the whole patch to it.
+var workDiff = attrsDiff + ` --relative "$base" 2>/dev/null || printf '\036failed work\n'; ` +
+	`if [ -n "$A" ]; then export A base; { ` + readGit + ` ` + ownAttrs + ` -c diff.relative=false diff ` + script.PatchForm + ` --no-renames --numstat -z --relative "$base" || printf 'failed\000'; } 2>/dev/null | ` +
+	`xargs -0 -r sh -c ` + script.Quote(retryScript) + ` sh || printf '\036failed work\n'; fi; `
+
+// retryScript is given, in xargs's batches, the records of --numstat -z. The files git called binary ("-\t-\t<path>")
+// it reads again without the repository's attributes, first saying which of them an attribute converts in the working
+// tree (working-tree-encoding, filter): read by their bytes alone they may be binary to git, or other text, than what a
+// commit carries. git check-attr -z's answer, followed by "ok" when check-attr succeeded, is read here a byte at a time
+// (od), and only the paths with a value other than git's "unspecified" leave the machine, coded in hex so that no name
+// breaks the stream ("\036converts <hex of the path>").
+var retryScript = `t=$(printf '\t'); for r; do case $r in failed) printf '\036failed work\n';; "-$t-$t"*) set -- "$@" "${r#-$t-$t}";; esac; shift; done; ` +
+	`[ $# -gt 0 ] || exit 0; ` +
+	`{ printf '%s\000' "$@" | ` + readGit + ` check-attr -z --stdin filter working-tree-encoding 2>/dev/null && printf ok; } | od -An -v -tx1 | tr -s ' \t' '\n' | ` +
+	`LC_ALL=C awk 'NF { if ($1 != "00") { f = f $1; next } n++; if (n % 3 == 1) p = f; else if (n % 3 == 0 && f != "756e737065636966696564") print "\036converts " p; f = "" } ` +
+	`END { if (f != "6f6b" || n % 3) print "\036failed work" }'; ` +
+	`for p; do shift; set -- "$@" ":(literal)$p"; done; ` +
+	gitDiff + ` --relative "$base" -- "$@" 2>/dev/null || printf '\036failed work\n'`
 
 // capScript cuts the stream on its way out: a diff's removed lines go, nothing to find in them, and each file's lines at scanPerFile (a line "\036partly" says where), and
 // every file once scanTotal is spent, the commits having a scanTotal of their own so the work beside them cannot use it up (each named on a line "\036budget <path>", "\036unread <path>" for an untracked
@@ -53,13 +98,13 @@ var untrackedScript = `list=$(` + readGit + ` ls-files -z --others --exclude-sta
 	`while IFS= read -r f; do if [ "$(head -c 8000 "$f" 2>/dev/null | LC_ALL=C tr -dc '\000' | wc -c | tr -d ' ')" -gt 0 ]; then printf '\036binary %s\n' "${f#./}"; else printf '\036large %s\n' "${f#./}"; fi; done; ` +
 	`printf '\036untracked\n'; ` +
 	`printf '%s\n' "$names" | tr '\n' '\0' | xargs -0 -r sh -c '[ $# -gt 0 ] && find "$@" -prune -type f ! -size +` + strconv.Itoa(scanPerFile) + `c -print0' sh 2>/dev/null | ` +
-	`LC_ALL=C xargs -0 -r git --literal-pathspecs -c grep.fullName=false -c grep.column=false -c color.ui=never ` +
+	`LC_ALL=C xargs -0 -r git --literal-pathspecs ` + noAttrs + ` -c grep.fullName=false -c grep.column=false -c color.ui=never ` +
 	`grep --untracked --no-color -G -n -z -e '' -- 2>/dev/null | tr '\0' '\037'; ` +
 	`fi; `
 
 // unpushedLog is git's log of the commits a push would send, in the form given.
 func unpushedLog(form string) string {
-	return readGit + ` -c diff.relative=false -c log.showRoot=true -c log.showSignature=false log -n ` + strconv.Itoa(scanCommits) + ` ` + form +
+	return readGit + ` ` + noAttrs + ` -c diff.relative=false -c log.showRoot=true -c log.showSignature=false log -n ` + strconv.Itoa(scanCommits) + ` ` + form +
 		` HEAD --not --remotes 2>/dev/null`
 }
 
@@ -106,10 +151,12 @@ func secretScript(dir string, push bool) string {
 		commits = `if [ "$base" = HEAD ]; then ` + unpushedScript + `fi; `
 	}
 	// a partial clone is not sent for what it lacks (git 2.45 on): nothing is written, and git's failure says so
-	return `GIT_NO_LAZY_FETCH=1; export GIT_NO_LAZY_FETCH; cd ` + script.Quote(dir) + ` 2>/dev/null || { printf '\036failed folder\n'; exit 0; }; ` +
+	// nor are the machine's own attributes read (GIT_ATTR_NOSYSTEM), which nothing here could set aside
+	return `GIT_NO_LAZY_FETCH=1; GIT_ATTR_NOSYSTEM=1; export GIT_NO_LAZY_FETCH GIT_ATTR_NOSYSTEM; cd ` + script.Quote(dir) + ` 2>/dev/null || { printf '\036failed folder\n'; exit 0; }; ` +
 		`git rev-parse --show-toplevel >/dev/null 2>&1 || { printf '\036failed repository\n'; exit 0; }; ` +
 		`base=HEAD; git rev-parse -q --verify HEAD >/dev/null 2>&1 || base=$(git hash-object -t tree /dev/null); ` +
-		`{ ` + gitDiff + ` --relative "$base" 2>/dev/null || printf '\036failed work\n'; ` +
+		attrsScript +
+		`{ if [ -n "$attrs" ]; then printf '\036attrs\n'; fi; ` + workDiff +
 		untrackedScript +
 		`printf '\036staged\n'; ` + gitDiff + ` --cached --relative "$base" 2>/dev/null || printf '\036failed work\n'; ` +
 		// a folder inside the repository commits the whole index: what is staged outside it is read too, named from the top
