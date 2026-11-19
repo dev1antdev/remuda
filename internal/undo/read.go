@@ -89,7 +89,7 @@ func readScript(dir string, o readOptions) string {
 		limit = MaxCheckpoint
 	}
 	var b strings.Builder
-	b.WriteString(script.PATH + "\n")
+	b.WriteString(script.PATH + "\n" + script.ReadGitAll)
 	b.WriteString("cd " + script.Quote(dir) + " 2>/dev/null || exit 0\n")
 	b.WriteString(`root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
 cd "$root" || exit 0

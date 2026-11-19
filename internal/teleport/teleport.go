@@ -71,8 +71,8 @@ func inspectScript(dir string) string {
 		`if [ -n "$(git for-each-ref --count=1 refs/remotes)" ]; then ahead=$(git rev-list --count HEAD --not --remotes 2>/dev/null); else ahead=$(git rev-list --count HEAD 2>/dev/null); fi; ` +
 		`printf '%s\037%s\037%s\037%s\037%s\037%s\037%s\037%s\037%s\037%s\037%s' "$root" "$(git symbolic-ref --short -q HEAD)" "$(git rev-parse -q --verify HEAD)" "$(` + remoteScript + `)" ` +
 		`"$(git rev-list --max-parents=0 HEAD 2>/dev/null | head -n 1)" "${ahead:-0}" ` +
-		`"$(git diff --cached --name-only | wc -l | tr -d ' ')" "$(git diff --name-only | wc -l | tr -d ' ')" "$(git ls-files --others --exclude-standard | wc -l | tr -d ' ')" ` +
-		`"$st" "$(git diff --name-only --diff-filter=U | wc -l | tr -d ' ')"`
+		`"$(` + script.ReadGit + ` diff --cached --name-only | wc -l | tr -d ' ')" "$(` + script.ReadGit + ` diff --numstat | wc -l | tr -d ' ')" "$(` + script.ReadGit + ` ls-files --others --exclude-standard | wc -l | tr -d ' ')" ` +
+		`"$st" "$(` + script.ReadGit + ` diff --name-only --diff-filter=U | wc -l | tr -d ' ')"`
 }
 
 // Inspect reads the checkout the work is in, refusing one that cannot travel: outside git, on no branch, in the middle

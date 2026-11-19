@@ -7,13 +7,15 @@ package gitsync
 import (
 	"strings"
 	"time"
+
+	"github.com/dev1antdev/remuda/internal/script"
 )
 
 // Timeout bounds one action on a checkout, its read after it included, and one machine's read of all its repositories.
 const Timeout = 60 * time.Second
 
 // read is how every git read here starts: no optional lock taken, no fsmonitor started, so a read never touches the index.
-const read = `git --no-optional-locks -c core.fsmonitor=false`
+const read = script.ReadGit
 
 // quietNetwork is the environment a fetch, pull or push runs in: saved credentials and ssh's own configuration still
 // work, but nothing may stop to ask for a login. Git tries an askpass before GIT_TERMINAL_PROMPT, so an empty

@@ -44,7 +44,7 @@ cut { next }
 // "\036untracked"; those past the count are counted ("\036many N"), a file over scanPerFile is named and not read
 // ("\036large <path>", or "\036binary <path>" when its first bytes hold a NUL, as git tells), and a link or a folder (a repository inside) is passed over. The names travel NUL-separated
 // to find and git, so a blank, a quote or a leading dash in one is no trouble; one holding a line break is lost.
-var untrackedScript = `list=$(git ls-files -z --others --exclude-standard 2>/dev/null | tr '\0' '\n'); ` +
+var untrackedScript = `list=$(` + readGit + ` ls-files -z --others --exclude-standard 2>/dev/null | tr '\0' '\n'); ` +
 	`if [ -n "$list" ]; then ` +
 	`u=$(printf '%s\n' "$list" | wc -l | tr -d ' '); ` +
 	`if [ "${u:-0}" -gt ` + strconv.Itoa(scanUntracked) + ` ]; then printf '\036many %s\n' "$((u - ` + strconv.Itoa(scanUntracked) + `))"; fi; ` +

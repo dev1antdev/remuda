@@ -419,6 +419,6 @@ func (mc *Machine) GitDiff(p string) (Diff, error) {
 func gitDiffScript(folder, quotedPath string) string {
 	return `d=` + script.Quote(folder) + `; while [ ! -d "$d" ]; do up=$(dirname "$d"); [ "$up" = "$d" ] && exit 0; d=$up; done; ` +
 		`cd "$d" 2>/dev/null || exit 0; root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; ` +
-		`printf '%s\n' "$root"; if git ls-files --error-unmatch -- ` + quotedPath + ` >/dev/null 2>&1 || [ -n "$(git ls-tree --name-only HEAD -- ` + quotedPath + ` 2>/dev/null)" ]; then echo tracked; ` +
-		`git --no-optional-locks -c diff.autoRefreshIndex=false -c color.ui=never diff --no-ext-diff --no-textconv HEAD -- ` + quotedPath + ` | head -c 400000; else echo untracked; fi`
+		`printf '%s\n' "$root"; if ` + script.ReadGit + ` ls-files --error-unmatch -- ` + quotedPath + ` >/dev/null 2>&1 || [ -n "$(git ls-tree --name-only HEAD -- ` + quotedPath + ` 2>/dev/null)" ]; then echo tracked; ` +
+		script.ReadGit + ` -c color.ui=never diff --no-ext-diff --no-textconv HEAD -- ` + quotedPath + ` | head -c 400000; else echo untracked; fi`
 }

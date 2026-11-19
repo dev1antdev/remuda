@@ -62,7 +62,7 @@ type checkout struct {
 // folder, NUL-separated.
 const probeScript = `top=$(git rev-parse --show-toplevel 2>/dev/null) || { echo none; exit 0; }; printf '%s\n' "$top"; ` +
 	`if git rev-parse -q --verify HEAD >/dev/null 2>&1; then echo head; else echo nohead; fi; ` +
-	`git --no-optional-locks -c core.quotepath=off ls-files -u -z -- . 2>/dev/null | tr '\0' '\n' | cut -f2- | ` +
+	script.ReadGit + ` -c core.quotepath=off ls-files -u -z -- . 2>/dev/null | tr '\0' '\n' | cut -f2- | ` +
 	`while IFS= read -r p; do printf '%s\0' "$p"; done`
 
 // prepare reads the checkout and refuses while an agent is busy there, holding the checkout's lock on success: the

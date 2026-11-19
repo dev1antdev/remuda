@@ -66,7 +66,7 @@ func GitHubRepo(remote string) (repo, host string, ok bool) {
 	return rest, host, true
 }
 
-const git = "git --no-optional-locks -c core.fsmonitor=false"
+const git = script.ReadGit
 
 // originsScript prints, for each folder, a D line — the folder, its checkout's top, its repository's common git dir and
 // its origin's address — and an L line for each branch its config links to an issue. A folder gone or outside git has
