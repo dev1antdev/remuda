@@ -89,7 +89,7 @@ func readScript(dir string, o readOptions) string {
 		limit = MaxCheckpoint
 	}
 	var b strings.Builder
-	b.WriteString(script.PATH + "\n")
+	b.WriteString(script.PATH + "\n" + script.ReadGitAll)
 	b.WriteString("cd " + script.Quote(dir) + " 2>/dev/null || exit 0\n")
 	b.WriteString(`root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
 cd "$root" || exit 0
@@ -129,7 +129,7 @@ index=$(git rev-parse --git-path index)
 mkdir "$d/objects" || exit 4
 GIT_INDEX_FILE="$d/index"; GIT_OBJECT_DIRECTORY="$d/objects"; GIT_ALTERNATE_OBJECT_DIRECTORIES="$objects"
 export GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES
-{ cp "$index" "$d/index" 2>/dev/null && git -c core.fsmonitor=false add -A 2>/dev/null; } || { rm -f "$d/index"; git read-tree HEAD && git -c core.fsmonitor=false add -A; } || { echo 'git could not read the work' >&2; exit 4; }
+{ cp "$index" "$d/index" 2>/dev/null && git add -A 2>/dev/null; } || { rm -f "$d/index"; git read-tree HEAD && git add -A; } || { echo 'git could not read the work' >&2; exit 4; }
 git -c core.quotepath=off diff-index --cached -z --no-renames --no-abbrev --ignore-submodules=all HEAD
 printf '\036\n'
 `)

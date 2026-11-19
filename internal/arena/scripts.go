@@ -19,7 +19,7 @@ func HeadScript(dir string) string {
 // folder $d, which the caller removes through cleanup. Without a folder nothing else runs.
 func throwaway(base string) string {
 	return `d=$(mktemp -d "${TMPDIR:-/tmp}/remuda-arena.XXXXXX") && t="$d/index" && ` +
-		`GIT_INDEX_FILE="$t" git read-tree ` + script.Quote(base) + ` 2>/dev/null && GIT_INDEX_FILE="$t" git -c core.fsmonitor=false add -A 2>/dev/null`
+		`GIT_INDEX_FILE="$t" git read-tree ` + script.Quote(base) + ` 2>/dev/null && GIT_INDEX_FILE="$t" git add -A 2>/dev/null`
 }
 
 // cleanup removes throwaway's folder, and nothing at all when mktemp made none.
@@ -35,7 +35,7 @@ type Stat struct {
 // StatsScript prints, for every lane, its id and then git's numstat of its work, a section each.
 func StatsScript(lanes []Lane) string {
 	var b strings.Builder
-	b.WriteString(script.PATH + "\n")
+	b.WriteString(script.PATH + "\n" + script.ReadGitAll)
 	for _, l := range lanes {
 		if l.Dir == "" || l.Base == "" {
 			continue
@@ -75,7 +75,7 @@ func ParseStats(out string) map[int]Stat {
 // PatchScript prints the lane's whole work against its base as a binary patch git apply takes back: through the
 // plumbing diff-index, which no external diff tool, textconv, colour or prefix setting of the person's changes.
 func PatchScript(dir, base string) string {
-	return script.PATH + "\ncd " + script.Quote(dir) + " 2>/dev/null || { echo 'the worktree is not there'; exit 3; }\n" +
+	return script.PATH + "\n" + script.ReadGitAll + "cd " + script.Quote(dir) + " 2>/dev/null || { echo 'the worktree is not there'; exit 3; }\n" +
 		throwaway(base) + " || { " + cleanup + "; echo 'git could not read the work'; exit 4; }\n" +
 		`GIT_INDEX_FILE="$t" git diff-index --cached -p --binary ` + script.Quote(base) + " --; status=$?; " + cleanup + "; exit $status\n"
 }

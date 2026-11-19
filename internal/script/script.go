@@ -41,6 +41,9 @@ func Stat(file, gnuFormat, bsdFormat string) string {
 // and no fsmonitor hook of the person's runs. A touched file then counts in `diff --name-only`; `--numstat` leaves it out.
 const ReadGit = `git --no-optional-locks -c core.fsmonitor=false -c diff.autoRefreshIndex=false`
 
+// ReadGitAll makes every later `git` of a script ReadGit, for a script that reads through many of them.
+const ReadGitAll = `git() { command ` + ReadGit + ` "$@"; }` + "\n"
+
 // PatchForm is git's patch in one shape whatever the person's or the repository's settings make of it, for whatever
 // reads its lines: no colour, no external driver or textconv, a moved submodule as a plain hunk, paths under a/ and b/.
 const PatchForm = `--no-color --no-ext-diff --no-textconv --submodule=short --src-prefix=a/ --dst-prefix=b/`
