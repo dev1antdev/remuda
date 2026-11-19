@@ -218,18 +218,38 @@ func (c *Conn) session(args ...string) *exec.Cmd {
 
 // scriptSession is a session for a script on its stdin: no terminal, which a forced one would hold the stdin open
 // for, and the stdin kept whatever the host's ssh config says, where this ssh knows the options.
-func (c *Conn) scriptSession(line string) *exec.Cmd {
-	return c.session(append(append([]string{"-T"}, keepStdin()...), c.Host, line)...)
+func (c *Conn) scriptSession(line string, keep []string) *exec.Cmd {
+	return c.session(append(append([]string{"-T"}, keep...), c.Host, line)...)
+}
+
+// stdinWithin is keepStdin within a script's time: what the probe took is the script's, before it takes a session.
+func (c *Conn) stdinWithin(timeout time.Duration) ([]string, time.Duration, error) {
+	began := time.Now()
+	keep := keepStdin()
+	if timeout <= 0 {
+		return keep, timeout, nil
+	}
+	if timeout -= time.Since(began); timeout <= 0 {
+		return nil, 0, fmt.Errorf("ssh %s: no time left for the script once ssh was asked what it knows", c.Host)
+	}
+	return keep, timeout, nil
 }
 
 // stdinKept is, by the path of the ssh binary, whether it takes StdinNull and ForkAfterAuthentication (OpenSSH 8.7):
-// an older one refuses an option it does not know, and every session with it. It is asked one caller at a time,
-// reading no ssh config (-F none: a Match exec there runs nothing), for at most stdinProbe; an answer is kept, a probe
-// that timed out or did not start is asked again next time.
+// an older one refuses an option it does not know, and every session with it. It is asked reading no ssh config
+// (-F none: a Match exec there runs nothing), for at most stdinProbe, one probe at a time per binary whose answer
+// every caller waiting on it shares; an answer is kept, a probe that timed out or did not start is asked again by a
+// later caller.
 var (
-	stdinMu   sync.Mutex
-	stdinKept = map[string]bool{}
+	stdinMu     sync.Mutex
+	stdinKept   = map[string]bool{}
+	stdinAsking = map[string]*stdinAsk{}
 )
+
+type stdinAsk struct {
+	done  chan struct{}
+	known bool
+}
 
 var stdinProbe = 5 * time.Second
 
@@ -239,23 +259,43 @@ func keepStdin() []string {
 		return nil
 	}
 	stdinMu.Lock()
-	known, asked := stdinKept[path]
-	if !asked {
-		ctx, cancel := context.WithTimeout(context.Background(), stdinProbe)
-		err := exec.CommandContext(ctx, path, "-F", "none", "-G", "-o", "StdinNull=no", "-o", "ForkAfterAuthentication=no", "remuda.invalid").Run()
-		late := ctx.Err() != nil
-		cancel()
-		var refused *exec.ExitError
-		if err == nil || (errors.As(err, &refused) && !late) {
-			known = err == nil
+	known, kept := stdinKept[path]
+	ask := stdinAsking[path]
+	switch {
+	case kept:
+		stdinMu.Unlock()
+	case ask != nil:
+		stdinMu.Unlock()
+		<-ask.done
+		known = ask.known
+	default:
+		ask = &stdinAsk{done: make(chan struct{})}
+		stdinAsking[path] = ask
+		stdinMu.Unlock()
+		var settled bool
+		known, settled = askStdin(path)
+		stdinMu.Lock()
+		ask.known = known
+		if settled {
 			stdinKept[path] = known
 		}
+		delete(stdinAsking, path)
+		stdinMu.Unlock()
+		close(ask.done)
 	}
-	stdinMu.Unlock()
 	if !known {
 		return nil
 	}
 	return []string{"-o", "StdinNull=no", "-o", "ForkAfterAuthentication=no"}
+}
+
+// askStdin runs the probe: known, and settled unless it timed out or did not start.
+func askStdin(path string) (known, settled bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), stdinProbe)
+	defer cancel()
+	err := exec.CommandContext(ctx, path, "-F", "none", "-G", "-o", "StdinNull=no", "-o", "ForkAfterAuthentication=no", "remuda.invalid").Run()
+	var refused *exec.ExitError
+	return err == nil, err == nil || (errors.As(err, &refused) && ctx.Err() == nil)
 }
 
 // Dial starts (or reuses) a ControlMaster to host and verifies it answers.
@@ -358,13 +398,17 @@ func CommandConn(cmd *exec.Cmd, timeout time.Duration) (net.Conn, error) {
 // run executes a remote command over the master with a deadline, the script on the session's stdin (Remote), the stdin
 // given after it (RemoteWithInput).
 func (c *Conn) run(command string, timeout time.Duration, stdin io.Reader) ([]byte, error) {
+	keep, timeout, err := c.stdinWithin(timeout)
+	if err != nil {
+		return nil, err
+	}
 	leave, timeout, err := c.enter(scriptKind(timeout), timeout)
 	if err != nil {
 		return nil, err
 	}
 	defer leave()
 	line, stdin := RemoteWithInput(command, stdin)
-	cmd := c.scriptSession(line)
+	cmd := c.scriptSession(line, keep)
 	var out, errb bytes.Buffer
 	cmd.Stdin = stdin
 	cmd.Stdout, cmd.Stderr = &out, &errb
@@ -396,13 +440,17 @@ func (c *Conn) run(command string, timeout time.Duration, stdin io.Reader) ([]by
 
 // Stream runs a remote command, handing sink its output (stdout and stderr) as it comes; the exit status is the error.
 func (c *Conn) Stream(command string, timeout time.Duration, sink func([]byte)) error {
+	keep, timeout, err := c.stdinWithin(timeout)
+	if err != nil {
+		return err
+	}
 	leave, timeout, err := c.enter(scriptKind(timeout), timeout)
 	if err != nil {
 		return err
 	}
 	defer leave()
 	line, stdin := Remote("exec 2>&1; " + command)
-	cmd := c.scriptSession(line)
+	cmd := c.scriptSession(line, keep)
 	cmd.Stdin = stdin
 	pr, pw := io.Pipe()
 	stderr := &lockedBuffer{max: masterErrMax}

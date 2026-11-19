@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -209,5 +210,58 @@ func TestAProbeThatTimedOutIsAskedAgain(t *testing.T) {
 	}
 	if got := keepStdin(); len(got) != 4 {
 		t.Errorf("asked again: %q", got)
+	}
+}
+
+// TestCallersWaitingOnOneProbeShareItsAnswer: while a probe stalls, the callers waiting on it get its answer when it
+// times out, and not one probe each.
+func TestCallersWaitingOnOneProbeShareItsAnswer(t *testing.T) {
+	dir := t.TempDir()
+	probes := filepath.Join(dir, "probes")
+	stub := "#!/bin/sh\ncase \"$*\" in *\" -G \"*) echo x >> " + script.Quote(probes) + "; sleep 5 ;; esac\nexit 1\n"
+	if err := os.WriteFile(filepath.Join(dir, "ssh"), []byte(stub), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	was := stdinProbe
+	stdinProbe = 300 * time.Millisecond
+	t.Cleanup(func() { stdinProbe = was })
+	began := time.Now()
+	var wg sync.WaitGroup
+	for range 3 {
+		wg.Add(1)
+		go func() { defer wg.Done(); keepStdin() }()
+	}
+	wg.Wait()
+	if took := time.Since(began); took > 2*stdinProbe {
+		t.Errorf("three callers took %s", took)
+	}
+	if got := lengths(t, probes); len(got) != 1 {
+		t.Errorf("%d probes for one stall", len(got))
+	}
+	keepStdin()
+	if got := lengths(t, probes); len(got) != 2 {
+		t.Errorf("a later caller did not ask again: %d probes", len(got))
+	}
+}
+
+// TestAScriptWithNoTimeLeftAfterTheProbeNeverStarts: what the probe took is the script's own time.
+func TestAScriptWithNoTimeLeftAfterTheProbeNeverStarts(t *testing.T) {
+	dir := t.TempDir()
+	ran := filepath.Join(dir, "ran")
+	stub := "#!/bin/sh\ncase \"$*\" in *\" -G \"*) sleep 5 ;; esac\n: > " + script.Quote(ran) + "\n"
+	if err := os.WriteFile(filepath.Join(dir, "ssh"), []byte(stub), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	was := stdinProbe
+	stdinProbe = 300 * time.Millisecond
+	t.Cleanup(func() { stdinProbe = was })
+	c := &Conn{Host: "roofr.remote", ctl: filepath.Join(t.TempDir(), "ctl")}
+	if _, err := c.Run("true", 100*time.Millisecond); err == nil {
+		t.Error("a script ran past its time")
+	}
+	if _, err := os.Stat(ran); err == nil {
+		t.Error("ssh was started past the script's time")
 	}
 }
