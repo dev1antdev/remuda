@@ -2385,7 +2385,13 @@ components and icons as rules for whoever changes it: @docs/design.md
   the commits on no remote-tracking branch (`git log -p --no-merges -n 200
   HEAD --not --remotes`, each after `\036commit <sha>`, outside the folder
   too, paths the repository's: a push sends whole commits; the ones past
-  200 counted, `\036older N`): what the push would send. The awk drops a diff's removed lines, cuts each
+  200 of each kind, plain and merge, counted, `\036older N`; the merges by `--cc`, `mergeLines` keeping as
+  added only the lines no parent had — a conflict's resolution among them,
+  nothing for a merge that only merged, a file some parent holds as binary
+  named unread — with no merge run again, no driver, and no partial clone's
+  fetch (`GIT_NO_LAZY_FETCH`; a partial clone on a git before 2.45, which
+  would fetch regardless, leaves its merges unread), so no object written):
+  what the push would send. The awk drops a diff's removed lines, cuts each
   file at 1 MB (`\036partly`) and the stream at `scanTotal` 8 MB, the commits' own 8 MB after the work's
   (`\036budget <path>` / `\036unread <path>` for the rest), so a remote
   sends megabytes at most; `readScan` feeds the added lines, with their
