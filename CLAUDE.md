@@ -6596,7 +6596,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   `Queued` (the run's `by_queue`), once the machine is connected, fewer
   than `Max` of the project's tasks the queue started still work or ask
   (`queueWorking`: a start under way, or a pane the radar reads working,
-  blocked or unknown; a pipeline's passed stage counts through the next),
+  blocked or unknown; a pipeline's passed stage counts through the next;
+  `internal/app`'s `readTaskPane` reads a pane its agent left as idle and a
+  machine gone from the fleet as gone, so neither holds a slot for good),
   the agent kind's plan window holds nothing (`limits.Holding`: under
   95 % and not forecast to run out within half an hour — held, the card
   is offered once to the person to run now on the other vendor, `Offer`,
