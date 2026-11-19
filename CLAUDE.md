@@ -6762,15 +6762,15 @@ components and icons as rules for whoever changes it: @docs/design.md
   out under an ETag of its own, `viewerOwnGuard` answers 404 to an `/api/`
   request naming their pane or folder (and to a pane the roster has not
   shown, on the routes that read a pane by its id). **A viewer reads the
-  conversation a pane on its roster is in and no other**: a session is found
-  by its id in every project folder and nothing says whose it was, so the
-  chat and the recap refuse a folder and id, drop a session named beside a
-  pane, and answer no list of a folder's sessions;
+  conversation a pane on its roster reports it is in and no other**: a
+  session is found by its id in every project folder and nothing says whose
+  it was, so the chat and the recap refuse any other session id, answer
+  nothing for a pane that reports none, and list no folder's sessions;
   their timelapses are left out of
   the list, the search and the id (`ownRecording`: `Meta.Own`, set when the
-  take begins; an older one by the name the workspace is made under, a
-  folder no viewer reads, or a machine no longer there to ask), the usage report lists only the folders it
-  reaches and no session (its totals still count the rest), the standup keeps the panes on the viewer's roster, the feed goes
+  take begins; an older one only from a folder the viewer reaches now and
+  under neither name those workspaces are made with), the usage report lists only the folders it
+  reaches and no session (its totals still count the rest), the standup, which leaves them out for everyone, keeps the panes on the viewer's roster, the feed goes
   by the `Own` a row was written with and hides a row without one whose pane
   is gone, and its event
   stream watches none of them; a floating terminal just ended stays hidden

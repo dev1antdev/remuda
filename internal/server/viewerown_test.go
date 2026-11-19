@@ -10,7 +10,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dev1antdev/remuda/internal/auth"
 	"github.com/dev1antdev/remuda/internal/concierge"
 	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/feed"
@@ -116,22 +115,42 @@ func TestAViewerNeverReachesRemudasOwnWorkspaces(t *testing.T) {
 	}
 	const session = "11111111-1111-4111-8111-111111111111"
 	for _, route := range []string{"/api/chat", "/api/recap"} {
-		if code, _ := fileCall(passes, route+"?machine=local&dir="+url.QueryEscape(appDir)+"&session="+session, true); code != http.StatusNotFound {
-			t.Errorf("%s: a conversation by folder and id: %d", route, code)
+		for _, query := range []string{"dir=" + url.QueryEscape(appDir) + "&session=" + session, "pane=" + url.QueryEscape(appPane) + "&session=" + session} {
+			if code, _ := fileCall(passes, route+"?machine=local&"+query, true); code != http.StatusNotFound {
+				t.Errorf("%s?%s: a session no pane on the roster is in: %d", route, query, code)
+			}
+			if code, _ := fileCall(passes, route+"?machine=local&"+query, false); code != 200 || asked.Get("session") != session {
+				t.Errorf("%s?%s: the person's: %d %v", route, query, code, asked)
+			}
 		}
-		if code, _ := fileCall(passes, route+"?machine=local&pane="+url.QueryEscape(appPane)+"&session="+session, true); code != 200 || asked.Has("session") || asked.Get("pane") != appPane {
-			t.Errorf("%s: a session named beside a pane: %d %v", route, code, asked)
+		if code, _ := fileCall(passes, route+"?machine=local&pane="+url.QueryEscape(appPane), true); code != 200 {
+			t.Errorf("%s: a pane's own conversation: %d", route, code)
 		}
-		if code, _ := fileCall(passes, route+"?machine=local&dir="+url.QueryEscape(appDir)+"&session="+session, false); code != 200 || asked.Get("session") != session {
-			t.Errorf("%s: the person's: %d %v", route, code, asked)
+	}
+	silent := http.NewServeMux()
+	s.chatRoutes(silent)
+	s.recapRoutes(silent)
+	for _, route := range []string{"/api/chat", "/api/recap"} { // the shell reports no session: a viewer gets nothing, not the folder's newest
+		if code, body := fileCall(silent, route+"?machine=local&pane="+url.QueryEscape(appPane), true); code != 200 || strings.Contains(body, session) {
+			t.Errorf("%s of a pane with no session: %d %s", route, code, body)
 		}
 	}
 	report := &usage.Report{Projects: []usage.ProjectTotals{{Dir: appDir}, {Dir: shellDir}, {Dir: "/elsewhere"}}, Sessions: []usage.SessionTotals{{Session: session, Dir: appDir}}}
-	s.viewerUsage([]usage.MachineReport{{ID: machines.LocalID, Report: report}})
+	gone := &usage.Report{Projects: []usage.ProjectTotals{{Dir: appDir}}, Sessions: []usage.SessionTotals{{Session: session}}}
+	s.viewerUsage([]usage.MachineReport{{ID: machines.LocalID, Report: report}, {ID: "removed meanwhile", Report: gone}})
 	if len(report.Projects) != 1 || report.Projects[0].Dir != appDir || report.Sessions == nil || len(report.Sessions) != 0 {
 		t.Errorf("a viewer's usage: %+v", report)
 	}
+	if len(gone.Projects) != 0 || len(gone.Sessions) != 0 {
+		t.Errorf("a viewer's usage of a machine removed meanwhile: %+v", gone)
+	}
 
+	s.Feed.Own = func(machineID, paneID string) *bool {
+		if _, pane := s.paneOf(machineID, paneID); pane == nil {
+			return nil
+		}
+		return new(s.ownPane(machineID, paneID))
+	}
 	s.noteSent(context.Background(), machines.LocalID, ownPane, "the-secret", false)
 	s.noteSent(context.Background(), machines.LocalID, appPane, "hello", false)
 	s.Feed.Add(sent.Entry("Phone", "unmarked-secret, its pane gone", false, machines.LocalID, "w99:p9", ""))
@@ -159,8 +178,7 @@ func TestAViewerNeverReachesRemudasOwnWorkspaces(t *testing.T) {
 	if s.ownFolder(machines.LocalID, shellDir) != true {
 		t.Error("the folder of a floating terminal just ended counts as the person's")
 	}
-	reach, _ := s.viewerReachOn(auth.WithViewer(context.Background()), mc)
-	if reach.Allows(filepath.Join(shellDir, "notes.txt")) {
+	if s.viewerReach(mc).Allows(filepath.Join(shellDir, "notes.txt")) {
 		t.Error("a viewer reaches into the folder of a floating terminal just ended")
 	}
 }
@@ -185,7 +203,11 @@ func TestAViewerGetsNoRecordingOfRemudasOwnWorkspaces(t *testing.T) {
 	if !s.ownRecording(meta) {
 		t.Error("an unmarked recording made in a state dir")
 	}
-	meta.Machine, meta.Dir = "a machine removed since", "/anywhere"
+	meta.Dir = "/a/folder/no/workspace/stands/in"
+	if !s.ownRecording(meta) {
+		t.Error("an unmarked recording of a folder out of a viewer's reach")
+	}
+	meta.Machine = "a machine removed since"
 	if !s.ownRecording(meta) {
 		t.Error("an unmarked recording of a machine that can no longer be asked")
 	}

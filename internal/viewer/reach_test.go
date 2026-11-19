@@ -211,14 +211,3 @@ func TestAPatchShowingASecretIsRefused(t *testing.T) {
 		}
 	}
 }
-
-func TestClosedPlacesAreKnownByPath(t *testing.T) {
-	reach := Of([]string{"/home/me/app"}, "/home/me", "/home/me/.config/remuda", rpath.POSIX, false)
-	if !reach.Closes("/home/me/.config/remuda/concierge") || reach.Closes("/home/me/app") {
-		t.Error("a state dir's folders are closed, a workspace is not")
-	}
-	var unread Reach
-	if !unread.Closes("/home/me/app") {
-		t.Error("a machine not read yet closes everything")
-	}
-}

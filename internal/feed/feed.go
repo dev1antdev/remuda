@@ -33,6 +33,8 @@ type Entry struct {
 
 // Service is the list, loaded once and saved on every addition.
 type Service struct {
+	Own func(machineID, paneID string) *bool // whether a pane is of a workspace remuda keeps for itself; set before the first Add
+
 	dir string
 	mu  sync.Mutex
 	all []Entry // newest first
@@ -49,6 +51,9 @@ func New(dir string) *Service {
 
 // Add puts an entry first, stamped now and numbered after the newest, and keeps the list at Max.
 func (s *Service) Add(e Entry) Entry {
+	if e.Own == nil && e.Pane != "" && s.Own != nil {
+		e.Own = s.Own(e.Machine, e.Pane)
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	e.At = time.Now()

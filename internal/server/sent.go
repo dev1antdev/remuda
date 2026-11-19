@@ -15,9 +15,7 @@ func (s *Server) noteSent(ctx context.Context, machineID, paneID, text string, k
 	if s.Feed == nil {
 		return
 	}
-	entry := sent.Entry(s.senderName(ctx), text, keys, machineID, paneID, s.workspaceOf(machineID, paneID))
-	entry.Own = s.ownMark(machineID, paneID)
-	s.Feed.Add(entry)
+	s.Feed.Add(sent.Entry(s.senderName(ctx), text, keys, machineID, paneID, s.workspaceOf(machineID, paneID)))
 }
 
 // senderName is the caller as a person would name it: the device's name, an agent key's name, else an API client.

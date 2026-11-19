@@ -137,10 +137,7 @@ func (s *Store) Close(machine string, client Herdr, snap *herdr.Snapshot) error 
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.ended == nil {
-		s.ended = map[string]bool{}
-	}
-	s.ended[machine+"|"+id] = true
+	s.endedLocked(machine, id)
 	if s.ids[machine] == id {
 		delete(s.ids, machine)
 	}
@@ -151,13 +148,22 @@ func (s *Store) Close(machine string, client Herdr, snap *herdr.Snapshot) error 
 func (s *Store) Forget(machine string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if _, ok := s.ids[machine]; !ok {
+	id, ok := s.ids[machine]
+	if !ok {
 		return
 	}
+	s.endedLocked(machine, id) // herdr there goes on, and the machine may come back with the shell still standing
 	delete(s.ids, machine)
 	if err := s.save(); err != nil {
 		log.Printf("%s: %v", file, err)
 	}
+}
+
+func (s *Store) endedLocked(machine, id string) {
+	if s.ended == nil {
+		s.ended = map[string]bool{}
+	}
+	s.ended[machine+"|"+id] = true
 }
 
 func (s *Store) save() error { return state.SaveJSON(s.dir, file, s.ids) }

@@ -65,11 +65,6 @@ func (r Reach) Allows(path string) bool {
 	return false
 }
 
-// Closes says the path is a place no viewer reads, whichever folder it is asked through; on a machine not read yet, any.
-func (r Reach) Closes(path string) bool {
-	return r.home == "" || r.inClosed(path)
-}
-
 // AllowsCheckout says the viewer may see the history of the checkout at top, "" for a folder outside git: a commit names
 // files of every folder of it, so it may hold neither a home nor a closed place.
 func (r Reach) AllowsCheckout(top string) bool {

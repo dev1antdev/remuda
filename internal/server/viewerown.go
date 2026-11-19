@@ -18,20 +18,12 @@ import (
 // The workspaces remuda keeps for itself — the floating terminal's shell, where a token may stand on the screen, and
 // the concierge — are the person's alone: to a viewer they do not exist.
 
-// viewerOwnGuard answers a viewer who names a pane or a folder of those workspaces as it answers an unknown one. A viewer
-// reads the conversation a pane on its roster is in and no other: a session is found by its id in every project folder,
-// and nothing there tells whose it was, so a session named beside a pane is ignored and one named alone is refused.
+// viewerOwnGuard answers a viewer who names a pane or a folder of those workspaces as it answers an unknown one.
 func (s *Server) viewerOwnGuard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if auth.IsViewer(r.Context()) {
-			if s.viewerBarred(r) {
-				httpErr(w, http.StatusNotFound, errors.New("not found"))
-				return
-			}
-			if q := r.URL.Query(); conversationRoute(r.URL.Path) && q.Has("session") {
-				q.Del("session")
-				r.URL.RawQuery = q.Encode()
-			}
+		if auth.IsViewer(r.Context()) && s.viewerBarred(r) {
+			httpErr(w, http.StatusNotFound, errors.New("not found"))
+			return
 		}
 		next.ServeHTTP(w, r)
 	})
@@ -44,7 +36,7 @@ func (s *Server) viewerBarred(r *http.Request) bool {
 		return false // the page's own address names a pane too, and one gone since must still load it
 	}
 	q := r.URL.Query()
-	pane, dir := q.Get("pane"), q.Get("dir")
+	pane, dir, session := q.Get("pane"), q.Get("dir"), q.Get("session")
 	if pane == "" && dir == "" {
 		return false
 	}
@@ -55,13 +47,39 @@ func (s *Server) viewerBarred(r *http.Request) bool {
 	if dir != "" && s.ownFolder(mc.ID(), dir) {
 		return true
 	}
+	// a session is found by its id in every project folder and nothing says whose it was: only one a pane on the viewer's
+	// roster is in now is read, by that pane or, for its subagents, by itself
+	if conversationRoute(r.URL.Path) && (session != "" || pane == "") && !s.viewerSeesSession(mc.ID(), session) {
+		return true
+	}
 	if pane == "" {
-		return conversationRoute(r.URL.Path)
+		return false
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/timelapse/") {
 		return s.ownPane(mc.ID(), pane) // a recording outlives its pane; the listing itself leaves out the person's
 	}
 	return !s.viewerSeesPane(mc.ID(), pane) // the routes read the pane by its id: one the roster has not shown stays shut
+}
+
+// viewerSeesSession says the session is the one a pane on a viewer's roster reports it is in.
+func (s *Server) viewerSeesSession(machineID, session string) bool {
+	snap := s.snapshotOf(machineID)
+	if snap == nil || session == "" {
+		return false
+	}
+	return slices.ContainsFunc(snap.Panes, func(pane herdr.PaneInfo) bool {
+		return pane.AgentSession != nil && pane.AgentSession.Kind == "id" && pane.AgentSession.Value == session && !s.viewerOwn(machineID, pane.WorkspaceID)
+	})
+}
+
+// viewerPaneSilent says a viewer asking for a pane's conversation gets none: the pane reports no session of its own, and
+// the newest of its folder, which the person gets, may be anyone's.
+func (s *Server) viewerPaneSilent(r *http.Request, machineID, paneID string) bool {
+	if paneID == "" || !auth.IsViewer(r.Context()) {
+		return false
+	}
+	_, pane := s.paneOf(machineID, paneID)
+	return pane == nil || pane.AgentSession == nil
 }
 
 func (s *Server) snapshotOf(machineID string) *herdr.Snapshot {
@@ -111,27 +129,17 @@ func (s *Server) ownFolder(machineID, dir string) bool {
 	return slices.ContainsFunc(snap.WorkspaceDirs(), same) && !slices.ContainsFunc(s.foldersBut(machineID, snap, s.viewerOwn), same)
 }
 
-// ownMark is whether the pane stands in one of remuda's own workspaces, for what is written about it; nil when the
-// snapshot does not know the pane.
-func (s *Server) ownMark(machineID, paneID string) *bool {
-	_, pane := s.paneOf(machineID, paneID)
-	if pane == nil {
-		return nil
-	}
-	return new(s.viewerOwn(machineID, pane.WorkspaceID))
-}
-
-// ownRecording says a timelapse is of remuda's own workspaces, as marked when it began; one made before the mark goes
-// by the name they are made under, the pane and folder they hold now, or a folder no viewer reads.
+// ownRecording says a timelapse is of remuda's own workspaces, as marked when it began. One made before the mark is
+// shown only from a folder a viewer reaches now, under no name those workspaces are made with.
 func (s *Server) ownRecording(m timelapse.Meta) bool {
 	if m.Own != nil {
 		return *m.Own
 	}
-	if m.Workspace == scratch.Label || m.Workspace == concierge.Label || s.ownPane(m.Machine, m.Pane) || s.ownFolder(m.Machine, m.Dir) {
+	if m.Workspace == scratch.Label || m.Workspace == concierge.Label || s.ownPane(m.Machine, m.Pane) {
 		return true
 	}
 	mc, err := s.Machines.Get(m.Machine)
-	return err != nil || s.viewerReach(mc).Closes(m.Dir) // the concierge's folder lies in a state dir; a machine gone tells nothing
+	return err != nil || !s.viewerReach(mc).Allows(m.Dir)
 }
 
 // viewerFeed is the activity without remuda's own workspaces, by the mark a row was written with; a row without one, of
@@ -151,14 +159,18 @@ func (s *Server) viewerFeed(entries []feed.Entry) []feed.Entry {
 // viewerUsage keeps the folders within a viewer's reach and no session: what it would open one by is not a viewer's.
 func (s *Server) viewerUsage(reports []usage.MachineReport) []usage.MachineReport {
 	for i := range reports {
-		mc, err := s.Machines.Get(reports[i].ID)
 		report := reports[i].Report
-		if err != nil || report == nil {
+		if report == nil {
+			continue
+		}
+		report.Sessions = []usage.SessionTotals{}
+		mc, err := s.Machines.Get(reports[i].ID)
+		if err != nil {
+			report.Projects = []usage.ProjectTotals{}
 			continue
 		}
 		reach := s.viewerReach(mc)
 		report.Projects = slices.DeleteFunc(report.Projects, func(p usage.ProjectTotals) bool { return !reach.Allows(p.Dir) })
-		report.Sessions = []usage.SessionTotals{}
 	}
 	return reports
 }

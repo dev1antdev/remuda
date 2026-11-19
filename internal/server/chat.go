@@ -52,6 +52,10 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 400, fmt.Errorf("pane, or dir and session, required"))
 		return
 	}
+	if s.viewerPaneSilent(r, mc.ID(), paneID) {
+		writeJSON(w, map[string]any{"sessions": []any{}, "turns": []any{}, "subagents": []any{}})
+		return
+	}
 	last := 0
 	if v := r.URL.Query().Get("last"); v != "" {
 		n, err := strconv.Atoi(v)

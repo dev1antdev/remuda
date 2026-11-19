@@ -178,6 +178,7 @@ func Run(ctx context.Context, o Options) error {
 		}
 		return new(ownWorkspace(machineID, pane.WorkspaceID) || shells.Ended(machineID, pane.WorkspaceID))
 	}
+	activity.Own = ownMark
 	chats := &chat.Service{Machines: fleet, Watch: watcher}
 	var srv *server.Server // named here: the live hub fingerprints the roster as the server serves it
 	hub := live.New(live.Inputs{
@@ -189,7 +190,7 @@ func Run(ctx context.Context, o Options) error {
 	defer pushSvc.Sockets.Close() // the Mac app's alert stream ends with "remuda is stopping", as the page's events do
 	var mirrored *mirror.Service  // named here: an alert the feed records may pop up inside herdr too
 	pushSvc.OnAlert = func(p push.Payload) {
-		activity.Add(feed.Entry{Kind: p.Kind, Machine: p.Machine, Pane: p.Pane, Title: p.Title, Body: p.Body, Worked: p.Worked, Own: ownMark(p.Machine, p.Pane)})
+		activity.Add(feed.Entry{Kind: p.Kind, Machine: p.Machine, Pane: p.Pane, Title: p.Title, Body: p.Body, Worked: p.Worked})
 		hub.RosterChanged() // the bell's dot rides on the roster
 		if mirrored != nil {
 			mirrored.Alert(p)
@@ -533,7 +534,7 @@ func Run(ctx context.Context, o Options) error {
 	if o.MirrorClosed != "" {
 		log.Printf("remuda's figures and alerts stay out of herdr: %s", o.MirrorClosed)
 	}
-	recaps := &recap.Service{Machines: fleet, Watch: watcher, Chat: chats, Radar: tracker, Skip: conciergeAgent.Is}
+	recaps := &recap.Service{Machines: fleet, Watch: watcher, Chat: chats, Radar: tracker, Skip: ownWorkspace}
 	schedules := schedule.New(o.Dir, input.SubmitToFolder, pushSvc.Broadcast, func(since time.Time) (string, string, bool) {
 		return recap.Digest(recaps.Standup(since), since, time.Now())
 	})

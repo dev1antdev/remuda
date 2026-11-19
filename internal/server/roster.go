@@ -394,6 +394,10 @@ func (s *Server) rosterFor(viewer bool) ([]byte, string) {
 				entry.Limits = &reading
 			}
 		}
+		if viewer {
+			entry.Stopped = slices.DeleteFunc(entry.Stopped, func(x restart.Stopped) bool { return !s.viewerSeesPane(mc.ID(), x.Pane) })
+			entry.Retiring = slices.DeleteFunc(entry.Retiring, func(x retire.Hit) bool { return x.Kind == "pane" && !s.viewerSeesPane(mc.ID(), x.ID) })
+		}
 		out = append(out, entry)
 	}
 	roster := map[string]any{"machines": out, "agents": sessions.Agents, "version": buildversion.Build, "latest": s.Health.Latest(), "retirements": retire.Table}

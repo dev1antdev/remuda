@@ -39,6 +39,10 @@ func (s *Server) handleRecap(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if s.viewerPaneSilent(r, mc.ID(), paneID) {
+		writeJSON(w, recap.Recap{})
+		return
+	}
 	summary, err := s.Recap.Conversation(mc, paneID, sessionID, dir, since)
 	var notFound *chat.NotFoundError
 	switch {
