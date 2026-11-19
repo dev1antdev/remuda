@@ -27,7 +27,7 @@ func TestAJobStreamsItsOutputAndSaysWhenItEnded(t *testing.T) {
 	}}
 	runner := New(bus)
 
-	job := runner.StartThen(host, "say hello", "echo hello", func(say func(string)) { say("before") }, func(say func(string)) error { say("after"); return nil })
+	job := runner.StartThen(host, "say hello", "echo hello", func(say func(string)) { say("before") }, func(say func(string), _ error) error { say("after"); return nil })
 	failed := runner.Start(host, "fail", "fail now")
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
