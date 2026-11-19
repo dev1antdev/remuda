@@ -80,13 +80,17 @@ n == 0 || length($0) < n || /^\\/ { if (n == 0) print; next }
 
 // unpushedScript prints the commits a push would send, those with one parent as patches and the merges by what they
 // brought themselves (mergeLines): a merge that only merged shows nothing. A combined diff merges nothing again, so no
-// driver runs.
-var unpushedScript = `o=0; for kind in --no-merges --merges; do ` +
+// driver runs. It reads the parents' files, which a partial clone may lack and a git before 2.45 would fetch whatever it
+// is told: there the merges are left unread, counted with the commits past the limit.
+var unpushedScript = `o=0; m=0; for kind in --no-merges --merges; do ` +
 	`c=$(git rev-list --count "$kind" --max-count=` + strconv.Itoa(countCommits) + ` HEAD --not --remotes 2>/dev/null) || printf '\036failed commits\n'; ` +
+	`if [ "$kind" = --merges ]; then m=${c:-0}; fi; ` +
 	`if [ "${c:-0}" -gt ` + strconv.Itoa(scanCommits) + ` ]; then o=$((o + c - ` + strconv.Itoa(scanCommits) + `)); fi; done; ` +
+	`skip=; if [ "$m" -gt 0 ] && [ -n "$(git config --get-regexp '^remote\..*\.promisor$' 2>/dev/null)" ] && ! git --no-lazy-fetch version >/dev/null 2>&1; then ` +
+	`skip=1; if [ "$m" -gt ` + strconv.Itoa(scanCommits) + ` ]; then m=` + strconv.Itoa(scanCommits) + `; fi; o=$((o + m)); fi; ` +
 	`if [ "$o" -gt 0 ]; then printf '\036older %s\n' "$o"; fi; ` +
 	unpushedLog(`--no-merges -p `+plainPatch+` --format='%x1ecommit %h'`) + ` || printf '\036failed commits\n'; ` +
-	`{ ` + unpushedLog(`--merges --cc `+plainPatch+` --format='%x1ecommit %h'`) + ` || printf '\036failed commits\n'; } | ` + mergeLines + ` || printf '\036failed commits\n'; `
+	`if [ -z "$skip" ]; then { ` + unpushedLog(`--merges --cc `+plainPatch+` --format='%x1ecommit %h'`) + ` || printf '\036failed commits\n'; } | ` + mergeLines + ` || printf '\036failed commits\n'; fi; `
 
 // secretScript prints, in one stream through capScript, the diff of the work against HEAD (the empty tree before the
 // first commit) with only the lines added, every untracked file git does not ignore (untrackedScript), after a line

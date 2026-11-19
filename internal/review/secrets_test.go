@@ -824,3 +824,31 @@ func TestAKeystoreAMergeDeletedIsNoFinding(t *testing.T) {
 		t.Errorf("%+v", scan)
 	}
 }
+
+func TestAPartialCloneOnAnOlderGitLeavesItsMergesUnread(t *testing.T) {
+	ownGitConfig(t)
+	secret := "export NPM_TOKEN=" + "npm_" + fakeKey(25, 36)
+	dir := conflictedMerge(t, secret)
+	config := exec.Command("git", "config", "remote.origin.promisor", "true")
+	config.Dir = dir
+	if err := config.Run(); err != nil {
+		t.Fatal(err)
+	}
+	real, err := exec.LookPath("git")
+	if err != nil {
+		t.Skip("no git")
+	}
+	bin := t.TempDir()
+	stand := "#!/bin/sh\n[ \"$1\" = --no-lazy-fetch ] && exit 129\nexec " + script.Quote(real) + " \"$@\"\n"
+	if err := os.WriteFile(filepath.Join(bin, "git"), []byte(stand), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	scan, err := ScanWork(shell.Local{Name: "local"}, dir, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !scan.PushUnread() || !scan.Incomplete || len(scan.Findings) != 0 {
+		t.Errorf("merges left unread must say so: %+v", scan)
+	}
+}
