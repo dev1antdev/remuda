@@ -229,15 +229,11 @@ func (c *Conn) stdinWithin(command string, timeout time.Duration) ([]string, tim
 		return nil, 0, fmt.Errorf("ssh %s: a script holds a NUL byte", c.Host)
 	}
 	began := time.Now()
-	keep, answered := keepStdin(timeout)
-	if !answered {
-		return nil, 0, fmt.Errorf("ssh %s: no time left for the script once ssh was asked what it knows", c.Host)
-	}
-	if timeout <= 0 {
-		return keep, timeout, nil
-	}
-	if timeout -= time.Since(began); timeout <= 0 {
-		return nil, 0, fmt.Errorf("ssh %s: no time left for the script once ssh was asked what it knows", c.Host)
+	keep, answered := keepStdin(timeout) // answered only fails with a timeout
+	if timeout > 0 {
+		if timeout -= time.Since(began); !answered || timeout <= 0 {
+			return nil, 0, fmt.Errorf("ssh %s: no time left for the script once ssh was asked what it knows", c.Host)
+		}
 	}
 	return keep, timeout, nil
 }
