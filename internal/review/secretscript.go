@@ -63,21 +63,25 @@ func unpushedLog(form string) string {
 		` HEAD --not --remotes 2>/dev/null`
 }
 
-// commitPatches is the commits with their patches, merges read as mergeForm says.
-func commitPatches(mergeForm string) string {
-	return unpushedLog(mergeForm + ` -p ` + plainPatch + ` --format='%x1ecommit %h'`)
-}
+// mergeLines turns git's combined diff of the merges into the plain diff the rest of the stream reads. A line marked
+// added against every parent is what the merge brought itself, a conflict's resolution or anything else, and stays
+// added; a line one parent already had is context, since that parent's commit is read or already out; a line the result
+// lacks goes.
+const mergeLines = `LC_ALL=C awk '
+/^\036/ { n = 0; print; next }
+/^diff --cc / { n = 0; path = substr($0, 11); print "diff --git " path " " path; next }
+/^@@@+ / { match($0, /^@+/); n = RLENGTH - 1; start = $(n + 2); sub(/^\+/, "", start); sub(/,.*/, "", start); print "@@ -0,0 +" start " @@"; next }
+n == 0 || length($0) < n || /^\\/ { if (n == 0) print; next }
+{ mark = substr($0, 1, n); if (index(mark, "-")) next
+  text = substr($0, n + 1); gsub(/\+/, "", mark); print (mark == "" ? "+" : " ") text }'`
 
-// unpushedScript prints the commits a push would send. --remerge-diff (git 2.35) shows what a merge itself brought, its
-// conflicts' resolutions and anything else beside the automatic result, and nothing for a merge that only merged. A git
-// without it reads the other commits and names each merge holding changes of its own ("\036merge <short sha>"): its
-// combined diff tells such a merge from a plain one, not what it added in a form the check can read.
+// unpushedScript prints the commits a push would send, those with one parent as patches and the merges by what they
+// brought themselves (mergeLines): a merge that only merged shows nothing. A combined diff merges nothing again: no
+// driver runs and no object is written.
 var unpushedScript = `c=$(git rev-list --max-count=` + strconv.Itoa(countCommits) + ` HEAD --not --remotes 2>/dev/null | wc -l | tr -d ' '); ` +
 	`if [ "${c:-0}" -gt ` + strconv.Itoa(scanCommits) + ` ]; then printf '\036older %s\n' "$((c - ` + strconv.Itoa(scanCommits) + `))"; fi; ` +
-	commitPatches(`--remerge-diff`) + ` || { ` +
-	commitPatches(`--no-merges`) + ` || printf '\036failed commits\n'; ` +
-	`m=$(` + unpushedLog(`--merges --cc --name-only --no-color --format='%x1emerge %h'`) + `) || printf '\036failed commits\n'; ` +
-	`printf '%s\n' "$m" | LC_ALL=C awk '/^\036merge /{ m = $0; next } NF && m != "" { print m; m = "" }'; }; `
+	unpushedLog(`--no-merges -p `+plainPatch+` --format='%x1ecommit %h'`) + ` || printf '\036failed commits\n'; ` +
+	`{ ` + unpushedLog(`--merges --cc `+plainPatch+` --format='%x1ecommit %h'`) + ` || printf '\036failed commits\n'; } | ` + mergeLines + `; `
 
 // secretScript prints, in one stream through capScript, the diff of the work against HEAD (the empty tree before the
 // first commit) with only the lines added, every untracked file git does not ignore (untrackedScript), after a line

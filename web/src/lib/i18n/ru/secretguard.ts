@@ -73,7 +73,6 @@ export const secretguard: Dictionary = {
   "{n} files past the 8 MB read in all": ["{n} файл сверх 8 МБ на всё", "{n} файла сверх 8 МБ на всё", "{n} файлов сверх 8 МБ на всё"],
   "{n} more untracked files": ["ещё {n} неотслеживаемый файл", "ещё {n} неотслеживаемых файла", "ещё {n} неотслеживаемых файлов"],
   "{n} older commits not pushed yet": ["{n} более старый ещё не отправленный коммит", "{n} более старых ещё не отправленных коммита", "{n} более старых ещё не отправленных коммитов"],
-  "{n} merge commits with changes of their own": ["{n} merge-коммит со своими изменениями", "{n} merge-коммита со своими изменениями", "{n} merge-коммитов со своими изменениями"],
   "Not read: {what}.": "Не прочитано: {what}.",
   "Untrack it with git rm --cached {path} and add it to .gitignore.": "Уберите его из git командой git rm --cached {path} и добавьте в .gitignore.",
   "{what} at line {line}": "{what} в строке {line}",
