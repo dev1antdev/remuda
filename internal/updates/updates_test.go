@@ -36,7 +36,7 @@ func TestPlan(t *testing.T) {
 	if u, _ := Plan("agents", r); strings.Count(u.Command, "brew update ||") != 1 || strings.Contains(u.Command, "brew update && brew upgrade") {
 		t.Fatalf("agents: brew update once, up front: %s", u.Command)
 	}
-	if u, _ := Plan("herdr", &health.Report{Herdr: "0.9.3", HerdrVia: "brew"}); !strings.Contains(u.Command, "brew update && brew upgrade herdr && herdr --version || exit $?\nfor a in $(herdr integration status") || !strings.Contains(u.Command, `do herdr integration install "$a"`) || !strings.Contains(u.Command, "done\n#") {
+	if u, _ := Plan("herdr", &health.Report{Herdr: "0.9.3", HerdrVia: "brew"}); !strings.Contains(u.Command, "brew update && brew upgrade herdr && herdr --version &&\nfor a in $(herdr integration status") || !strings.Contains(u.Command, `do herdr integration install "$a"`) || !strings.Contains(u.Command, "done\n#") {
 		t.Fatalf("herdr brew: %s", u.Command)
 	}
 	if ups := Offered(&health.Report{Herdr: "0.9.3", HerdrVia: "installer", HerdrServer: "0.9.1"}, health.Latest{}); len(ups) != 1 || !strings.HasPrefix(ups[0].Note, "The server runs 0.9.1 while 0.9.3 is installed.") {

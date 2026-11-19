@@ -95,7 +95,7 @@ func ReleaseScript(url, sums, asset string, local bool) string {
 	b.WriteString("set -e; " + script.PATH + "\n")
 	b.WriteString(`mkdir -p "$HOME/.local/bin"` + "\n")
 	b.WriteString(downloadScript(url, sums, asset, "remuda.new"))
-	b.WriteString(InstallScript + installedOrStop + "\n") // set -e does not stop on a failure inside an && list
+	b.WriteString(InstallScript + " &&\n")
 	if local {
 		b.WriteString(restartLater)
 	} else {
