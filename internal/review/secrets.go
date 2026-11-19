@@ -1,6 +1,7 @@
 package review
 
 import (
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"slices"
@@ -19,7 +20,8 @@ type SecretScan struct {
 	Findings []secrets.Finding `json:"findings"`
 	More     int               `json:"more,omitempty"` // findings past the caps
 	Skipped  []Skipped         `json:"skipped,omitempty"`
-	// Incomplete says text was left unread, so finding nothing does not clear it; a binary file has none to read.
+	// Incomplete says text was left unread, so finding nothing does not clear it; a binary file has none to read, unless an
+	// attribute may have called a text file binary (SkipMarked).
 	Incomplete bool      `json:"incomplete,omitempty"`
 	Files      int       `json:"files"`             // files of the work read
 	Commits    int       `json:"commits,omitempty"` // commits read, for a push
@@ -49,6 +51,7 @@ const (
 	SkipBudget = "budget" // past scanTotal, for the work or for the commits, not read
 	SkipMany   = "many"   // untracked files past scanUntracked
 	SkipOlder  = "older"  // commits not pushed yet past scanCommits, for a push
+	SkipMarked = "marked" // what git calls binary where an attribute the check cannot set aside may be hiding text
 )
 
 // The bounds of one check: what crosses from a remote machine stays a few megabytes, and the person waits seconds.
@@ -96,8 +99,9 @@ func readScan(output string, push bool) (SecretScan, error) {
 	read := map[string]bool{}
 	var file, commit string
 	var number int
-	header, ended := false, false
-	skipped := map[Skipped]bool{} // a file the work and the index both carry is said once
+	header, ended, attrs := false, false, false
+	converted := map[string]bool{} // converted in the working tree: its bytes alone say nothing of what a commit carries
+	skipped := map[Skipped]bool{}  // a file the work and the index both carry is said once
 	skip := func(path, why string) {
 		entry := Skipped{Path: path, Why: why, InCommit: commit != "" && commit != secrets.Staged}
 		if path != "" && !skipped[entry] {
@@ -110,7 +114,11 @@ func readScan(output string, push bool) (SecretScan, error) {
 			return
 		}
 		collector.Binary(path, commit)
-		if (commit == "" || commit == secrets.Staged) && !secrets.KeyFile(path) { // a keystore is a finding, not a file left unread
+		switch {
+		case secrets.KeyFile(path): // a keystore is a finding, not a file left unread
+		case attrs:
+			skip(path, SkipMarked)
+		case commit == "" || commit == secrets.Staged:
 			skip(path, SkipBinary)
 		}
 	}
@@ -121,6 +129,15 @@ func readScan(output string, push bool) (SecretScan, error) {
 		case strings.HasPrefix(line, script.RS):
 			word, value, _ := strings.Cut(line[len(script.RS):], " ")
 			switch word {
+			case "attrs": // an attribute may be hiding text in what git calls binary: those files count as unread
+				attrs = true
+			case "converts": // a path in hex: "unset" may be a filter's name as well as git's word for one taken away, either
+				// counts; a filter named "unspecified", git's word for none, makes the script mark every binary file (attrsScript)
+				path, err := hex.DecodeString(value)
+				if err != nil {
+					return SecretScan{}, errUnreadable
+				}
+				converted[string(path)] = true
 			case "commit":
 				commit, file, header = value, "", false
 				scan.Commits++
@@ -133,7 +150,7 @@ func readScan(output string, push bool) (SecretScan, error) {
 				binary(value)
 			case "binarymerge": // what a merge brought in it cannot be told: a keystore is a finding, the rest stays unread
 				binary(pathOf(value))
-				if path := pathOf(value); path != "" && !secrets.KeyFile(path) {
+				if path := pathOf(value); path != "" && !secrets.KeyFile(path) && !attrs {
 					skip(path, SkipBinary)
 				}
 			case "binarydiff": // past the budget, still named: a keystore is a finding
@@ -182,6 +199,14 @@ func readScan(output string, push bool) (SecretScan, error) {
 	if !ended {
 		return SecretScan{}, errUnfinished
 	}
+	// the work's second read settles what the first called binary: a converted file stays unread whatever its bytes say,
+	// the rest is read as text or binary indeed
+	for i, skip := range scan.Skipped {
+		if skip.Why == SkipBinary && !skip.InCommit && converted[skip.Path] {
+			scan.Skipped[i].Why = SkipMarked
+		}
+	}
+	scan.Skipped = slices.DeleteFunc(scan.Skipped, func(skip Skipped) bool { return skip.Why == SkipBinary && !skip.InCommit && read[skip.Path] })
 	scan.Findings, scan.More, scan.Files = collector.Findings(), collector.More(), len(read)
 	scan.Incomplete = slices.ContainsFunc(scan.Skipped, func(skip Skipped) bool { return skip.Why != SkipBinary || skip.InCommit })
 	return scan, nil

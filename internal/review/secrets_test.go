@@ -778,6 +778,24 @@ func TestABinaryFileOfAMergeStaysUnread(t *testing.T) {
 	}
 }
 
+func TestATextFileAMergeBringsIsReadThoughMarkedBinary(t *testing.T) {
+	ownGitConfig(t)
+	dir := mergeBringing(t, "brought.env", "export NPM_TOKEN="+"npm_"+fakeKey(34, 36)+"\n")
+	if err := os.WriteFile(filepath.Join(dir, ".gitattributes"), []byte("*.env -diff\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if !gitHasAttrSource(t) {
+		t.Skip("git before 2.41")
+	}
+	scan, err := ScanWork(shell.Local{Name: "local"}, dir, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(scan.Findings) != 1 || scan.Findings[0].File != "brought.env" {
+		t.Errorf("%+v", scan.Findings)
+	}
+}
+
 func TestAMergeReadThatBrokeOffIsNoCleanCheck(t *testing.T) {
 	ownGitConfig(t)
 	dir := mergeBringing(t, "d.txt", "d\n")
@@ -851,5 +869,409 @@ func TestAPartialCloneOnAnOlderGitLeavesItsMergesUnread(t *testing.T) {
 		if !scan.PushUnread() || !scan.Incomplete || len(scan.Findings) != 0 {
 			t.Errorf("%s: merges left unread must say so: %+v", key, scan)
 		}
+	}
+}
+
+// gitHasAttrSource says this git can be told to ignore the repository's attributes.
+func gitHasAttrSource(t *testing.T) bool {
+	t.Helper()
+	cmd := exec.Command("git", "--attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904", "--version")
+	return cmd.Run() == nil
+}
+
+// markedCheckout has a committed, a staged, a changed and a new file marked binary that hold a secret each, and real
+// binary files beside them.
+func markedCheckout(t *testing.T) string {
+	t.Helper()
+	secret := func(seed uint32) string { return "export NPM_TOKEN=" + "npm_" + fakeKey(seed, 36) + "\n" }
+	dir, git, write := scratchCheckout(t)
+	write(".gitattributes", "*.env -diff\n*.bin binary\n")
+	write("work.env", "A=1\n")
+	write("staged.env", "A=1\n")
+	if err := os.Mkdir(filepath.Join(dir, "sub"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write("sub/keep.txt", "k\n")
+	git("add", "-A")
+	git("commit", "-qm", "init")
+	git("update-ref", "refs/remotes/origin/main", "HEAD")
+	write("sent.env", secret(31))
+	write("sent.bin", "\x00\x01binary\x00")
+	git("add", "-A")
+	git("commit", "-qm", "the commit a push sends")
+	write("work.env", "A=1\n"+secret(32))
+	write("staged.env", "A=1\n"+secret(33))
+	write("new.env", secret(35))
+	write("real.bin", "\x00\x01binary\x00")
+	write("new.bin", "\x00\x01binary\x00")
+	git("add", "staged.env", "real.bin")
+	return dir
+}
+
+func TestAFileMarkedBinaryIsReadAsTheTextItIs(t *testing.T) {
+	ownGitConfig(t)
+	if !gitHasAttrSource(t) {
+		t.Skip("git before 2.41")
+	}
+	dir := markedCheckout(t)
+	for _, from := range []string{dir, filepath.Join(dir, "sub")} {
+		scan, err := ScanWork(shell.Local{Name: "local"}, from, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		found := map[string]bool{}
+		for _, finding := range scan.Findings {
+			found[filepath.Base(finding.File)] = true
+		}
+		want := []string{"sent.env", "staged.env"}
+		if from == dir { // the work and the new files are the folder's
+			want = append(want, "work.env", "new.env")
+		}
+		for _, file := range want {
+			if !found[file] {
+				t.Errorf("from %s, %s went unread: %+v", from, file, scan.Findings)
+			}
+		}
+		if scan.PushUnread() {
+			t.Errorf("a real binary file of a commit holds the push: %+v", scan.Skipped)
+		}
+	}
+}
+
+// gitWithoutAttrSource puts a git first on PATH that refuses --attr-source as one before 2.41 does.
+func gitWithoutAttrSource(t *testing.T) {
+	t.Helper()
+	real, err := exec.LookPath("git")
+	if err != nil {
+		t.Skip("no git")
+	}
+	bin := t.TempDir()
+	stand := "#!/bin/sh\nfor a in \"$@\"; do case \"$a\" in --attr-source=*) exit 129 ;; esac; done\nexec " + script.Quote(real) + " \"$@\"\n"
+	if err := os.WriteFile(filepath.Join(bin, "git"), []byte(stand), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
+func TestAnOlderGitLeavesWhatAttributesMayHideUnread(t *testing.T) {
+	ownGitConfig(t)
+	dir := markedCheckout(t)
+	gitWithoutAttrSource(t)
+	scan, err := ScanWork(shell.Local{Name: "local"}, dir, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !scan.PushUnread() || !scan.Incomplete {
+		t.Errorf("a file an attribute may be hiding counted as read: %+v", scan)
+	}
+	named := false
+	for _, skip := range scan.Skipped {
+		named = named || (skip.Why == SkipMarked && skip.Path == "sent.env" && skip.InCommit)
+	}
+	if !named {
+		t.Errorf("the file is not named: %+v", scan.Skipped)
+	}
+}
+
+func TestACommentInAnAttributesFileMarksNothing(t *testing.T) {
+	ownGitConfig(t)
+	dir := mergeBringing(t, ".gitattributes", "# binary files are stored as they are\n*.txt text\n")
+	if err := os.WriteFile(filepath.Join(dir, "blob.bin"), []byte("\x00\x01binary\x00"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitWithoutAttrSource(t)
+	scan, err := ScanWork(shell.Local{Name: "local"}, dir, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if scan.PushUnread() || scan.Incomplete {
+		t.Errorf("%+v", scan)
+	}
+}
+
+func TestAnOlderGitTrustsARepositoryThatMarksNothing(t *testing.T) {
+	ownGitConfig(t)
+	dir := mergeBringing(t, "plain.txt", "p\n")
+	if err := os.WriteFile(filepath.Join(dir, "blob.bin"), []byte("\x00\x01binary\x00"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitWithoutAttrSource(t)
+	scan, err := ScanWork(shell.Local{Name: "local"}, dir, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if scan.PushUnread() || scan.Incomplete {
+		t.Errorf("%+v", scan)
+	}
+}
+
+func TestLocalAttributesLeaveWhatTheyMayHideUnread(t *testing.T) {
+	ownGitConfig(t)
+	dir := mergeBringing(t, "plain.txt", "p\n")
+	if err := os.WriteFile(filepath.Join(dir, ".git", "info", "attributes"), []byte("*.env -diff\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "local.env"), []byte("\x00not text\x00"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	scan, err := ScanWork(shell.Local{Name: "local"}, dir, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !scan.Incomplete {
+		t.Errorf("%+v", scan)
+	}
+}
+
+func TestAnEncodedWorkingTreeFileIsRead(t *testing.T) {
+	ownGitConfig(t)
+	utf16 := func(s string) string {
+		var b strings.Builder
+		for i := range len(s) {
+			b.WriteByte(s[i])
+			b.WriteByte(0)
+		}
+		return b.String()
+	}
+	dir, git, write := scratchCheckout(t)
+	write(".gitattributes", "*.ps1 text working-tree-encoding=UTF-16LE\n")
+	write("run.ps1", utf16("A=1\n"))
+	git("add", "-A")
+	git("commit", "-qm", "init")
+	write("run.ps1", utf16("A=1\nexport NPM_TOKEN="+"npm_"+fakeKey(36, 36)+"\n"))
+	scan, err := ScanWork(shell.Local{Name: "local"}, dir, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(scan.Findings) != 1 || scan.Findings[0].File != "run.ps1" {
+		t.Errorf("%+v", scan)
+	}
+}
+
+func TestADiffDriverCalledBinaryLeavesItsFilesUnread(t *testing.T) {
+	ownGitConfig(t)
+	dir := mergeBringing(t, "hidden.env", "export NPM_TOKEN="+"npm_"+fakeKey(37, 36)+"\n")
+	if err := os.WriteFile(filepath.Join(dir, ".git", "info", "attributes"), []byte("*.env diff=opaque\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	config := exec.Command("git", "config", "diff.opaque.binary", "true")
+	config.Dir = dir
+	if err := config.Run(); err != nil {
+		t.Fatal(err)
+	}
+	scan, err := ScanWork(shell.Local{Name: "local"}, dir, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !scan.PushUnread() || !scan.Incomplete {
+		t.Errorf("%+v", scan)
+	}
+}
+
+func TestAnOlderGitHeedsAnUntrackedAttributesFile(t *testing.T) {
+	ownGitConfig(t)
+	dir := mergeBringing(t, "hidden.env", "export NPM_TOKEN="+"npm_"+fakeKey(38, 36)+"\n")
+	if err := os.WriteFile(filepath.Join(dir, ".gitattributes"), []byte("*.env -diff\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitWithoutAttrSource(t)
+	scan, err := ScanWork(shell.Local{Name: "local"}, dir, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !scan.PushUnread() || !scan.Incomplete {
+		t.Errorf("%+v", scan)
+	}
+}
+
+func TestAWorkFileReadTheSecondTimeIsNotSaidUnread(t *testing.T) {
+	ownGitConfig(t)
+	if !gitHasAttrSource(t) {
+		t.Skip("git before 2.41")
+	}
+	dir, git, write := scratchCheckout(t)
+	write(".gitattributes", "*.env -diff\n")
+	name := "producción \"quoted\"\tand\nnew line.env"
+	write(name, "A=1\n")
+	git("add", "-A")
+	git("commit", "-qm", "init")
+	write(name, "A=1\nexport NPM_TOKEN="+"npm_"+fakeKey(39, 36)+"\n")
+	scan, err := ScanWork(shell.Local{Name: "local"}, dir, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(scan.Findings) != 1 || len(scan.Skipped) != 0 {
+		t.Errorf("%+v", scan)
+	}
+}
+
+func TestAnEncodedFileMarkedBinaryIsUnread(t *testing.T) {
+	ownGitConfig(t)
+	if !gitHasAttrSource(t) {
+		t.Skip("git before 2.41")
+	}
+	utf16 := func(s string) string {
+		var b strings.Builder
+		for i := range len(s) {
+			b.WriteByte(s[i])
+			b.WriteByte(0)
+		}
+		return b.String()
+	}
+	dir, git, write := scratchCheckout(t)
+	write(".gitattributes", "*.ps1 text working-tree-encoding=UTF-16LE -diff\n")
+	write("run.ps1", utf16("A=1\n"))
+	git("add", "-A")
+	git("commit", "-qm", "init")
+	write("run.ps1", utf16("A=1\nB=2\n"))
+	scan, err := ScanWork(shell.Local{Name: "local"}, dir, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !scan.Incomplete || len(scan.Skipped) != 1 || scan.Skipped[0] != (Skipped{Path: "run.ps1", Why: SkipMarked}) {
+		t.Errorf("%+v", scan)
+	}
+}
+
+func TestAFilteredFileMarkedBinaryIsUnreadThoughItsBytesAreText(t *testing.T) {
+	ownGitConfig(t)
+	if !gitHasAttrSource(t) {
+		t.Skip("git before 2.41")
+	}
+	dir, git, write := scratchCheckout(t)
+	git("config", "filter.swap.clean", "tr a-z A-Z")
+	git("config", "filter.swap.smudge", "cat")
+	write(".gitattributes", "\"*\\t'odd\" filter=swap -diff\n")
+	write("\t'odd", "a=1\n")
+	git("add", "-A")
+	git("commit", "-qm", "init")
+	write("\t'odd", "a=1\nb=2\n")
+	scan, err := ScanWork(shell.Local{Name: "local"}, dir, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !scan.Incomplete || len(scan.Skipped) != 1 || scan.Skipped[0] != (Skipped{Path: "\t'odd", Why: SkipMarked}) {
+		t.Errorf("%+v", scan)
+	}
+}
+
+func TestAFilterNamedLikeNoFilterStillLeavesItsFileUnread(t *testing.T) {
+	ownGitConfig(t)
+	if !gitHasAttrSource(t) {
+		t.Skip("git before 2.41")
+	}
+	for _, name := range []string{"unset", "unspecified"} {
+		dir, git, write := scratchCheckout(t)
+		git("config", "filter."+name+".clean", "cat")
+		write(".gitattributes", "*.env filter="+name+" -diff\n")
+		write("app.env", "A=1\n")
+		git("add", "-A")
+		git("commit", "-qm", "init")
+		write("app.env", "A=1\nB=2\n")
+		scan, err := ScanWork(shell.Local{Name: "local"}, dir, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !scan.Incomplete || len(scan.Skipped) != 1 || scan.Skipped[0] != (Skipped{Path: "app.env", Why: SkipMarked}) {
+			t.Errorf("%s: %+v", name, scan)
+		}
+	}
+}
+
+func TestASecondReadThatCannotStartFailsTheCheck(t *testing.T) {
+	ownGitConfig(t)
+	if !gitHasAttrSource(t) {
+		t.Skip("git before 2.41")
+	}
+	dir, git, write := scratchCheckout(t)
+	write(".gitattributes", "*.env -diff\n")
+	write("app.env", "A=1\n")
+	git("add", "-A")
+	git("commit", "-qm", "init")
+	write("app.env", "A=1\nexport NPM_TOKEN="+"npm_"+fakeKey(42, 36)+"\n")
+	real, err := exec.LookPath("xargs")
+	if err != nil {
+		t.Skip("no xargs")
+	}
+	bin := t.TempDir()
+	stand := "#!/bin/sh\ncase \" $* \" in *\" sh -c \"*) exit 126 ;; esac\nexec " + script.Quote(real) + " \"$@\"\n"
+	if err := os.WriteFile(filepath.Join(bin, "xargs"), []byte(stand), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	if scan, err := ScanWork(shell.Local{Name: "local"}, dir, false); err == nil {
+		t.Errorf("a second read that never ran passed: %+v", scan)
+	}
+}
+
+func TestAQuotedPatternRunningIntoItsMarkIsHeeded(t *testing.T) {
+	ownGitConfig(t)
+	dir := mergeBringing(t, "hidden.env", "export NPM_TOKEN="+"npm_"+fakeKey(43, 36)+"\n")
+	if err := os.WriteFile(filepath.Join(dir, ".git", "info", "attributes"), []byte("\"*.env\"-diff\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	scan, err := ScanWork(shell.Local{Name: "local"}, dir, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !scan.PushUnread() || !scan.Incomplete {
+		t.Errorf("%+v", scan)
+	}
+}
+
+func TestAMarkGivenAValueIsHeeded(t *testing.T) {
+	ownGitConfig(t)
+	dir := mergeBringing(t, "hidden.env", "export NPM_TOKEN="+"npm_"+fakeKey(44, 36)+"\n")
+	if err := os.WriteFile(filepath.Join(dir, ".git", "info", "attributes"), []byte("*.env -diff=off\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	scan, err := ScanWork(shell.Local{Name: "local"}, dir, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !scan.PushUnread() || !scan.Incomplete {
+		t.Errorf("%+v", scan)
+	}
+}
+
+func TestTheDefaultDiffDriverCalledBinaryHidesNothing(t *testing.T) {
+	ownGitConfig(t)
+	dir, git, write := scratchCheckout(t)
+	write("a.txt", "a\n")
+	git("add", "-A")
+	git("commit", "-qm", "init")
+	git("config", "diff.default.binary", "true")
+	git("update-ref", "refs/remotes/origin/main", "HEAD")
+	write("app.go", "const token = \""+"npm_"+fakeKey(40, 36)+"\"\n")
+	git("add", "-A")
+	git("commit", "-qm", "the commit a push sends")
+	scan, err := ScanWork(shell.Local{Name: "local"}, dir, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(scan.Findings) != 1 {
+		t.Errorf("%+v", scan)
+	}
+}
+
+func TestAnOlderGitHeedsTheIndexedAttributes(t *testing.T) {
+	ownGitConfig(t)
+	dir, git, write := scratchCheckout(t)
+	write(".gitattributes", "*.env -diff\n")
+	write("app.env", "A=1\n")
+	git("add", "-A")
+	git("commit", "-qm", "init")
+	write("app.env", "A=1\nexport NPM_TOKEN="+"npm_"+fakeKey(41, 36)+"\n")
+	git("add", "app.env")
+	if err := os.Remove(filepath.Join(dir, ".gitattributes")); err != nil {
+		t.Fatal(err)
+	}
+	gitWithoutAttrSource(t)
+	scan, err := ScanWork(shell.Local{Name: "local"}, dir, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !scan.Incomplete {
+		t.Errorf("%+v", scan)
 	}
 }

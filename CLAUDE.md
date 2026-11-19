@@ -2401,7 +2401,19 @@ components and icons as rules for whoever changes it: @docs/design.md
   named unread — with no merge run again, no driver, and no partial clone's
   fetch (`GIT_NO_LAZY_FETCH`; a partial clone on a git before 2.45, which
   would fetch regardless, leaves its merges unread), so no object written):
-  what the push would send. The awk drops a diff's removed lines, cuts each
+  what the push would send. An attribute (`*.env -diff`) cannot hide a text
+  file from it: git is told to judge files by their bytes (`--attr-source` on
+  the empty tree, git 2.41, and no `core.attributesFile`). Where that cannot
+  reach, the repository's `info/attributes` and on an older git any
+  `.gitattributes` marking a file binary (a comment aside, a diff driver the
+  configuration calls binary included), every file git calls binary counts
+  as unread (`\036attrs`, skip `marked`). The work is read with the
+  repository's attributes, which decode a `working-tree-encoding` file, and
+  what they leave binary once more without them, names kept whole (`-z`); a
+  file an attribute converts there (`working-tree-encoding`, `filter`, said
+  as `\036converts <hex of the path>`, any value but `unspecified`, the
+  values kept on the machine; a filter named so marks every binary file) stays `marked` whatever its bytes say. The machine's own
+  attributes file is never read (`GIT_ATTR_NOSYSTEM`). The awk drops a diff's removed lines, cuts each
   file at 1 MB (`\036partly`) and the stream at `scanTotal` 8 MB, the commits' own 8 MB after the work's
   (`\036budget <path>` / `\036unread <path>` for the rest), so a remote
   sends megabytes at most; `readScan` feeds the added lines, with their
@@ -2417,7 +2429,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   that failed and a cut-off script once all read as clean); 45 s at most
   (`scanTimeout`, said as "it took longer than 45s", never ssh's quoting
   of the script). **A check that left text unread is no clean one either**: any skip
-  but `binary` sets `incomplete`, and a commit, a pull request's approval
+  but `binary` sets `incomplete` (`marked`, a file git calls binary where an
+  attribute the check cannot set aside may hide text, does too), and a commit, a pull request's approval
   and a push (`check-incomplete`) wait for a confirm that says so, the
   skips listed. `SecretScan{findings, more, skipped [{path, why,
   count}], incomplete, files, commits, push, at}`. Route: `GET
