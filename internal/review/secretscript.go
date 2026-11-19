@@ -86,7 +86,7 @@ var unpushedScript = `o=0; m=0; for kind in --no-merges --merges; do ` +
 	`c=$(git rev-list --count "$kind" --max-count=` + strconv.Itoa(countCommits) + ` HEAD --not --remotes 2>/dev/null) || printf '\036failed commits\n'; ` +
 	`if [ "$kind" = --merges ]; then m=${c:-0}; fi; ` +
 	`if [ "${c:-0}" -gt ` + strconv.Itoa(scanCommits) + ` ]; then o=$((o + c - ` + strconv.Itoa(scanCommits) + `)); fi; done; ` +
-	`skip=; if [ "$m" -gt 0 ] && [ -n "$(git config --get-regexp '^remote\..*\.promisor$' 2>/dev/null)" ] && ! git --no-lazy-fetch version >/dev/null 2>&1; then ` +
+	`skip=; if [ "$m" -gt 0 ] && [ -n "$(git config --get-regexp '^(remote\..*\.(promisor|partialclonefilter)|extensions\.partialclone)$' 2>/dev/null)" ] && ! git --no-lazy-fetch version >/dev/null 2>&1; then ` +
 	`skip=1; if [ "$m" -gt ` + strconv.Itoa(scanCommits) + ` ]; then m=` + strconv.Itoa(scanCommits) + `; fi; o=$((o + m)); fi; ` +
 	`if [ "$o" -gt 0 ]; then printf '\036older %s\n' "$o"; fi; ` +
 	unpushedLog(`--no-merges -p `+plainPatch+` --format='%x1ecommit %h'`) + ` || printf '\036failed commits\n'; ` +
