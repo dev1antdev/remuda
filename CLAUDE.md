@@ -1451,7 +1451,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   remote) for the page to poll (`GET /api/jobs/{id}`) and publishes
   `events.JobDone`, on which the vitals are re-read; `updates.Plan(what,
   report)` is the update command for herdr (brew or `herdr update --handoff`;
-  every brew path runs `brew update` first, once per job),
+  every brew path runs `brew update` first, once per job; an install that
+  fails ends the job with its status, before the hooks step, as a release
+  that does not run ends its job before the restart),
   claude / codex / gemini / kimi (brew, npm or the agent's own updater, by
   where the binary lives), or every agent (`restart.Kinds("agents")` is the
   one list of them); `what=hooks` is `herdr integration

@@ -25,6 +25,10 @@ type Update struct {
 // once a day at most, so without it an upgrade can miss a version that is out.
 const brewUpdate = "brew update && "
 
+// installedOrStop ends an install's line: the steps after it would otherwise leave their own exit status, and a failed
+// install would read as done.
+const installedOrStop = " || exit $?"
+
 // hooksStep follows an install of herdr: every agent integration the new herdr reports outdated is installed again, so the hooks match it.
 const hooksStep = "\nfor a in $(" + health.OutdatedHooks + " | cut -d' ' -f1); do herdr integration install \"$a\" || echo \"!! the $a hooks did not update\"; done"
 
@@ -86,14 +90,14 @@ func Plan(what string, r *health.Report) (Update, error) {
 			return Update{}, fmt.Errorf("herdr is not installed there")
 		}
 		if r.HerdrVia == "brew" {
-			return Update{What: what, Title: "Update herdr", Command: path + brewUpdate + "brew upgrade herdr && herdr --version" + hooksStep + serverStep,
+			return Update{What: what, Title: "Update herdr", Command: path + brewUpdate + "brew upgrade herdr && herdr --version" + installedOrStop + hooksStep + serverStep,
 				Note: "Installed with Homebrew: the formulae are refreshed first, then the upgrade. " + hooksNote + serverNote}, nil
 		}
 		if windowsReport(r) {
-			return Update{What: what, Title: "Update herdr", Command: path + "herdr update && herdr --version" + hooksStep + serverStep,
+			return Update{What: what, Title: "Update herdr", Command: path + "herdr update && herdr --version" + installedOrStop + hooksStep + serverStep,
 				Note: "herdr's own updater, through its Windows installer: Windows has no live handoff, so the running server keeps its panes on the old version. " + hooksNote + serverNote}, nil
 		}
-		return Update{What: what, Title: "Update herdr", Command: path + "herdr update --handoff && herdr --version" + hooksStep + serverStep,
+		return Update{What: what, Title: "Update herdr", Command: path + "herdr update --handoff && herdr --version" + installedOrStop + hooksStep + serverStep,
 			Note: "herdr's own updater, with a live handoff: the new server takes the running panes over. " + hooksNote + serverNote}, nil
 	case "hooks":
 		if r == nil || len(r.OutdatedHooks) == 0 {
