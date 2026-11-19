@@ -17,7 +17,7 @@ const noAttrs = `$A ` + ownAttrs
 const ownAttrs = `-c core.attributesFile=/dev/null -c diff.default.binary=auto`
 
 // attrsMark is what, in an attributes file, can make git call a text file binary.
-const attrsMark = `(^|[[:space:]"])(binary|-diff|!diff)([[:space:]]|$)` // a quoted pattern may run into its attributes
+const attrsMark = `(^|[[:space:]"])(binary|-diff|!diff)([[:space:]=]|$)` // a quoted pattern may run into its attributes
 
 // attrsScript points git's attributes at the empty tree where it can (--attr-source, git 2.41). What that leaves, the
 // repository's info/attributes and on an older git every .gitattributes, tracked or not, in the index too, is said with a line "\036attrs"
@@ -46,12 +46,14 @@ var workDiff = attrsDiff + ` --relative "$base" 2>/dev/null || printf '\036faile
 // retryScript is given, in xargs's batches, the records of --numstat -z. The files git called binary ("-\t-\t<path>")
 // it reads again without the repository's attributes, first saying which of them an attribute converts in the working
 // tree (working-tree-encoding, filter): read by their bytes alone they may be binary to git, or other text, than what a
-// commit carries. git check-attr -z's answer, two attributes a file, comes with "ok" after it when check-attr succeeded,
-// coded in hex so that no name breaks the stream ("\036converts <hex>").
+// commit carries. git check-attr -z's answer, followed by "ok" when check-attr succeeded, is read here a byte at a time
+// (od), and only the paths with a value other than git's "unspecified" leave the machine, coded in hex so that no name
+// breaks the stream ("\036converts <hex of the path>").
 var retryScript = `t=$(printf '\t'); for r; do case $r in failed) printf '\036failed work\n';; "-$t-$t"*) set -- "$@" "${r#-$t-$t}";; esac; shift; done; ` +
 	`[ $# -gt 0 ] || exit 0; ` +
-	`h=$({ printf '%s\000' "$@" | ` + readGit + ` check-attr -z --stdin filter working-tree-encoding 2>/dev/null && printf ok; } | od -An -v -tx1 | tr -d ' \t\n'); ` +
-	`printf '\036converts %s\n' "$h"; ` +
+	`{ printf '%s\000' "$@" | ` + readGit + ` check-attr -z --stdin filter working-tree-encoding 2>/dev/null && printf ok; } | od -An -v -tx1 | tr -s ' \t' '\n' | ` +
+	`LC_ALL=C awk 'NF { if ($1 != "00") { f = f $1; next } n++; if (n % 3 == 1) p = f; else if (n % 3 == 0 && f != "756e737065636966696564") print "\036converts " p; f = "" } ` +
+	`END { if (f != "6f6b" || n % 3) print "\036failed work" }'; ` +
 	`for p; do shift; set -- "$@" ":(literal)$p"; done; ` +
 	gitDiff + ` --relative "$base" -- "$@" 2>/dev/null || printf '\036failed work\n'`
 
