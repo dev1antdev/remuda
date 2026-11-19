@@ -22,17 +22,12 @@ import (
 	"github.com/dev1antdev/remuda/internal/review"
 	"github.com/dev1antdev/remuda/internal/scratch"
 	"github.com/dev1antdev/remuda/internal/sent"
-	"github.com/dev1antdev/remuda/internal/transcript"
+	"github.com/dev1antdev/remuda/internal/usage"
 	"github.com/dev1antdev/remuda/internal/watch"
 )
 
 func TestAViewerNeverReachesRemudasOwnWorkspaces(t *testing.T) {
-	t.Setenv("HOME", t.TempDir()) // the transcripts below are this test's own
 	sock := herdrtest.Server(t)
-	home, err := os.UserHomeDir() // the throwaway herdr may have set one of its own
-	if err != nil {
-		t.Fatal(err)
-	}
 	client := herdr.NewClient(sock)
 	// herdr names a folder as the system resolves it
 	appDir, err := filepath.EvalSymlinks(t.TempDir())
@@ -114,50 +109,27 @@ func TestAViewerNeverReachesRemudasOwnWorkspaces(t *testing.T) {
 		t.Error("the two rosters share an ETag: one would be answered 304 with the other's")
 	}
 
-	passes := s.viewerOwnGuard(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	var asked url.Values
+	passes := s.viewerOwnGuard(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) { asked = r.URL.Query() }))
 	if code, _ := fileCall(passes, "/?machine=local&pane=w99:p9", true); code != 200 {
 		t.Errorf("the page's own address, naming a pane gone since: %d", code)
 	}
-	const conciergeSession, appSession = "11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222"
-	const closedShellSession = "33333333-3333-4333-8333-333333333333"
-	elsewhere := filepath.Join(home, "private-project") // where the floating terminal stood, no workspace there now
-	projects := filepath.Join(home, ".claude", "projects")
-	for session, folder := range map[string]string{conciergeSession: filepath.Join(mc.StateDir(), "concierge"), appSession: appDir, closedShellSession: elsewhere} {
-		dir := filepath.Join(projects, transcript.EncodePath(folder))
-		if err := os.MkdirAll(dir, 0o700); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(dir, session+".jsonl"), []byte("{}\n"), 0o600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	const codexSession = "44444444-4444-4444-8444-444444444444"
-	rollouts := filepath.Join(home, ".codex", "sessions", "2026", "11", "19")
-	if err := os.MkdirAll(rollouts, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(rollouts, "rollout-2026-11-19T00-00-00-"+codexSession+".jsonl"), []byte("{}\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	const session = "11111111-1111-4111-8111-111111111111"
 	for _, route := range []string{"/api/chat", "/api/recap"} {
-		if code, _ := fileCall(passes, route+"?machine=local&dir="+url.QueryEscape(appDir)+"&session="+codexSession, true); code != http.StatusNotFound {
-			t.Errorf("%s: a Codex session nothing ties to the folder: %d", route, code)
+		if code, _ := fileCall(passes, route+"?machine=local&dir="+url.QueryEscape(appDir)+"&session="+session, true); code != http.StatusNotFound {
+			t.Errorf("%s: a conversation by folder and id: %d", route, code)
 		}
-		if code, _ := fileCall(passes, route+"?machine=local&dir="+url.QueryEscape(appDir)+"&session="+conciergeSession, true); code != http.StatusNotFound {
-			t.Errorf("%s: the concierge's session asked for through another folder: %d", route, code)
+		if code, _ := fileCall(passes, route+"?machine=local&pane="+url.QueryEscape(appPane)+"&session="+session, true); code != 200 || asked.Has("session") || asked.Get("pane") != appPane {
+			t.Errorf("%s: a session named beside a pane: %d %v", route, code, asked)
 		}
-		if code, _ := fileCall(passes, route+"?machine=local&dir="+url.QueryEscape(filepath.Join(mc.StateDir(), "concierge"))+"&session="+appSession, true); code != http.StatusNotFound {
-			t.Errorf("%s: the concierge's folder: %d", route, code)
+		if code, _ := fileCall(passes, route+"?machine=local&dir="+url.QueryEscape(appDir)+"&session="+session, false); code != 200 || asked.Get("session") != session {
+			t.Errorf("%s: the person's: %d %v", route, code, asked)
 		}
-		if code, _ := fileCall(passes, route+"?machine=local&dir="+url.QueryEscape(appDir)+"&session="+closedShellSession, true); code != http.StatusNotFound {
-			t.Errorf("%s: a conversation of a folder no workspace stands in: %d", route, code)
-		}
-		if code, _ := fileCall(passes, route+"?machine=local&dir="+url.QueryEscape(elsewhere)+"&session="+closedShellSession, true); code != http.StatusNotFound {
-			t.Errorf("%s: a folder no workspace stands in: %d", route, code)
-		}
-		if code, _ := fileCall(passes, route+"?machine=local&dir="+url.QueryEscape(appDir)+"&session="+appSession, true); code != 200 {
-			t.Errorf("%s: a session of the person's folder: %d", route, code)
-		}
+	}
+	report := &usage.Report{Projects: []usage.ProjectTotals{{Dir: appDir}, {Dir: shellDir}, {Dir: "/elsewhere"}}, Sessions: []usage.SessionTotals{{Session: session, Dir: appDir}}}
+	s.viewerUsage([]usage.MachineReport{{ID: machines.LocalID, Report: report}})
+	if len(report.Projects) != 1 || report.Projects[0].Dir != appDir || report.Sessions == nil || len(report.Sessions) != 0 {
+		t.Errorf("a viewer's usage: %+v", report)
 	}
 
 	s.noteSent(context.Background(), machines.LocalID, ownPane, "the-secret", false)

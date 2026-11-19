@@ -98,7 +98,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sessions := conv.Sessions
-	if sessions == nil {
+	if sessions == nil || auth.IsViewer(r.Context()) { // a viewer reads the conversation the pane is in
 		sessions = []transcript.SessionInfo{}
 	}
 	answer := map[string]any{"session_id": conv.ID, "sessions": sessions, "turns": tail.Turns}

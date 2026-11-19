@@ -4,7 +4,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -22,12 +21,6 @@ type Report struct {
 	Sessions []SessionTotals `json:"sessions"`
 	Files    int             `json:"files"`           // transcript files read
 	Daily    []Day           `json:"daily,omitempty"` // every day folder by folder, when asked for (ScanHomeDays)
-}
-
-// WithoutFolders drops the projects and sessions of the folders named; the totals still count them.
-func (r *Report) WithoutFolders(hidden func(dir string) bool) {
-	r.Projects = slices.DeleteFunc(r.Projects, func(p ProjectTotals) bool { return hidden(p.Dir) })
-	r.Sessions = slices.DeleteFunc(r.Sessions, func(s SessionTotals) bool { return hidden(s.Dir) })
 }
 
 type DayTotals struct {

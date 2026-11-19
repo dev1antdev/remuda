@@ -168,11 +168,3 @@ func TestTrackerReadsOnlyTheGrowth(t *testing.T) {
 		t.Fatalf("twice chained %+v", d)
 	}
 }
-
-func TestAReportLeavesOutTheFoldersAskedFor(t *testing.T) {
-	r := Report{Projects: []ProjectTotals{{Dir: "/kept"}, {Dir: "/hidden"}}, Sessions: []SessionTotals{{Session: "a", Dir: "/hidden"}, {Session: "b", Dir: "/kept"}}}
-	r.WithoutFolders(func(dir string) bool { return dir == "/hidden" })
-	if len(r.Projects) != 1 || r.Projects[0].Dir != "/kept" || len(r.Sessions) != 1 || r.Sessions[0].Session != "b" {
-		t.Errorf("%+v", r)
-	}
-}

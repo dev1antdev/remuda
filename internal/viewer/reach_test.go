@@ -3,7 +3,6 @@ package viewer
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/dev1antdev/remuda/internal/rpath"
@@ -213,25 +212,13 @@ func TestAPatchShowingASecretIsRefused(t *testing.T) {
 	}
 }
 
-func TestATranscriptFolderIsReachedThroughItsWorkspace(t *testing.T) {
-	reach := Of([]string{"/home/me/app", "/home/me/app/.config/remuda"}, "/home/me", "/home/me/app/.config/remuda", rpath.POSIX, false)
-	encode := func(path string) string { return strings.NewReplacer("/", "-", ".", "-").Replace(path) }
-	for path, want := range map[string]bool{
-		"/home/me/app":                      true,
-		"/home/me/app/sub":                  true,
-		"/home/me/app2":                     false,
-		"/home/me/other":                    false,
-		"/home/me/app/.config/remuda/agent": false,
-	} {
-		if got := reach.HoldsProject(encode(path), encode); got != want {
-			t.Errorf("%s: %v, want %v", path, got, want)
-		}
-	}
-	if !reach.Closes("/home/me/app/.config/remuda/concierge") || reach.Closes("/home/me/app") {
+func TestClosedPlacesAreKnownByPath(t *testing.T) {
+	reach := Of([]string{"/home/me/app"}, "/home/me", "/home/me/.config/remuda", rpath.POSIX, false)
+	if !reach.Closes("/home/me/.config/remuda/concierge") || reach.Closes("/home/me/app") {
 		t.Error("a state dir's folders are closed, a workspace is not")
 	}
 	var unread Reach
-	if !unread.Closes("/home/me/app") || unread.HoldsProject("-home-me-app", encode) {
-		t.Error("a machine not read yet reaches nothing")
+	if !unread.Closes("/home/me/app") {
+		t.Error("a machine not read yet closes everything")
 	}
 }

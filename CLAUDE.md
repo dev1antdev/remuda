@@ -6761,21 +6761,20 @@ components and icons as rules for whoever changes it: @docs/design.md
   (`internal/server/viewerown.go`, tested): the roster it gets leaves them
   out under an ETag of its own, `viewerOwnGuard` answers 404 to an `/api/`
   request naming their pane or folder (and to a pane the roster has not
-  shown, on the routes that read a pane by its id; a conversation by folder
-  and id only within the workspaces it reaches, the folder and Claude Code's
-  transcript both, since a session is looked for in every project folder,
-  and no Codex or Gemini file by id, nothing tying it to the folder),
+  shown, on the routes that read a pane by its id). **A viewer reads the
+  conversation a pane on its roster is in and no other**: a session is found
+  by its id in every project folder and nothing says whose it was, so the
+  chat and the recap refuse a folder and id, drop a session named beside a
+  pane, and answer no list of a folder's sessions;
   their timelapses are left out of
   the list, the search and the id (`ownRecording`: `Meta.Own`, set when the
   take begins; an older one by the name the workspace is made under, a
   folder no viewer reads, or a machine no longer there to ask), the usage report lists only the folders it
-  reaches, with their sessions (its totals still count the rest), the standup keeps the panes on the viewer's roster, the feed goes
+  reaches and no session (its totals still count the rest), the standup keeps the panes on the viewer's roster, the feed goes
   by the `Own` a row was written with and hides a row without one whose pane
   is gone, and its event
   stream watches none of them; a floating terminal just ended stays hidden
-  (`scratch.Store.Ended`) while the last snapshot shows it. A conversation
-  run from the floating terminal inside a folder a visible workspace also
-  uses is that folder's like any other: nothing tells them apart. `ViewerAllows(method, path)`
+  (`scratch.Store.Ended`) while the last snapshot shows it. `ViewerAllows(method, path)`
   is a GET of `viewerRoutes` — the roster, the chat, the screen, the
   scrollback, a recap, the standup, the feed, a file, its stat and a folder of the project tree (kept
   by `internal/viewer`, tested: `Reach` is the machine's workspace folders

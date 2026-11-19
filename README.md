@@ -932,7 +932,8 @@ own, and never `~/.ssh` or remuda's state folder. Every call past that is refuse
 viewing only", a viewer's look marks nothing as seen, and the header says
 *Viewing only*. The floating terminal and the concierge are yours alone: a
 viewer link does not see them, their screens, their conversations or their
-timelapses. The link is shown once; revoking it signs every screen it
+timelapses. It reads the conversation each pane is in, not the earlier
+sessions of a folder. The link is shown once; revoking it signs every screen it
 opened out at once, and the pairing link opened on such a screen makes it
 a device of your own.
 
