@@ -66,22 +66,25 @@ func unpushedLog(form string) string {
 // mergeLines turns git's combined diff of the merges into the plain diff the rest of the stream reads. A line marked
 // added against every parent is what the merge brought itself, a conflict's resolution or anything else, and stays
 // added; a line one parent already had is context, since that parent's commit is read or already out; a line the result
-// lacks goes.
+// lacks goes. A file a parent holds as binary has no lines to tell, and is named ("\036binarymerge <path>").
 const mergeLines = `LC_ALL=C awk '
 /^\036/ { n = 0; print; next }
 /^diff --cc / { n = 0; path = substr($0, 11); print "diff --git " path " " path; next }
+/^Binary files differ$/ { print "\036binarymerge " path; next }
 /^@@@+ / { match($0, /^@+/); n = RLENGTH - 1; start = $(n + 2); sub(/^\+/, "", start); sub(/,.*/, "", start); print "@@ -0,0 +" start " @@"; next }
 n == 0 || length($0) < n || /^\\/ { if (n == 0) print; next }
 { mark = substr($0, 1, n); if (index(mark, "-")) next
   text = substr($0, n + 1); gsub(/\+/, "", mark); print (mark == "" ? "+" : " ") text }'`
 
 // unpushedScript prints the commits a push would send, those with one parent as patches and the merges by what they
-// brought themselves (mergeLines): a merge that only merged shows nothing. A combined diff merges nothing again: no
-// driver runs and no object is written.
-var unpushedScript = `c=$(git rev-list --max-count=` + strconv.Itoa(countCommits) + ` HEAD --not --remotes 2>/dev/null | wc -l | tr -d ' '); ` +
-	`if [ "${c:-0}" -gt ` + strconv.Itoa(scanCommits) + ` ]; then printf '\036older %s\n' "$((c - ` + strconv.Itoa(scanCommits) + `))"; fi; ` +
+// brought themselves (mergeLines): a merge that only merged shows nothing. A combined diff merges nothing again, so no
+// driver runs, and a partial clone is not sent for what it lacks: nothing is written, and git's failure says so.
+var unpushedScript = `GIT_NO_LAZY_FETCH=1; export GIT_NO_LAZY_FETCH; o=0; for kind in --no-merges --merges; do ` +
+	`c=$(git rev-list "$kind" --max-count=` + strconv.Itoa(countCommits) + ` HEAD --not --remotes 2>/dev/null | wc -l | tr -d ' '); ` +
+	`if [ "${c:-0}" -gt ` + strconv.Itoa(scanCommits) + ` ]; then o=$((o + c - ` + strconv.Itoa(scanCommits) + `)); fi; done; ` +
+	`if [ "$o" -gt 0 ]; then printf '\036older %s\n' "$o"; fi; ` +
 	unpushedLog(`--no-merges -p `+plainPatch+` --format='%x1ecommit %h'`) + ` || printf '\036failed commits\n'; ` +
-	`{ ` + unpushedLog(`--merges --cc `+plainPatch+` --format='%x1ecommit %h'`) + ` || printf '\036failed commits\n'; } | ` + mergeLines + `; `
+	`{ ` + unpushedLog(`--merges --cc `+plainPatch+` --format='%x1ecommit %h'`) + ` || printf '\036failed commits\n'; } | ` + mergeLines + ` || printf '\036failed commits\n'; `
 
 // secretScript prints, in one stream through capScript, the diff of the work against HEAD (the empty tree before the
 // first commit) with only the lines added, every untracked file git does not ignore (untrackedScript), after a line

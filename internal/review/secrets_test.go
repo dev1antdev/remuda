@@ -732,3 +732,66 @@ func TestALineAddedByAMergeOfSeveralBranchesIsRead(t *testing.T) {
 		t.Errorf("%+v", scan.Findings)
 	}
 }
+
+// mergeBringing is a checkout whose unpushed merge, of branches that touch other files, adds one file of its own.
+func mergeBringing(t *testing.T, name, body string) string {
+	t.Helper()
+	dir, git, write := scratchCheckout(t)
+	write("a.txt", "a\n")
+	git("add", "-A")
+	git("commit", "-qm", "init")
+	git("branch", "-M", "main")
+	git("checkout", "-qb", "side")
+	write("b.txt", "b\n")
+	git("add", "-A")
+	git("commit", "-qm", "side")
+	git("checkout", "-q", "main")
+	write("c.txt", "c\n")
+	git("add", "-A")
+	git("commit", "-qm", "main")
+	git("merge", "-q", "--no-commit", "side")
+	write(name, body)
+	git("add", "-A")
+	git("commit", "-qm", "merged")
+	return dir
+}
+
+func TestAKeystoreOnlyAMergeBringsIsFound(t *testing.T) {
+	ownGitConfig(t)
+	scan, err := ScanWork(shell.Local{Name: "local"}, mergeBringing(t, "store.p12", "\x00\x01binary\x00"), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(scan.Findings) != 1 || scan.Findings[0].File != "store.p12" || scan.PushUnread() {
+		t.Errorf("%+v", scan)
+	}
+}
+
+func TestABinaryFileOfAMergeStaysUnread(t *testing.T) {
+	ownGitConfig(t)
+	scan, err := ScanWork(shell.Local{Name: "local"}, mergeBringing(t, "blob.bin", "\x00\x01binary\x00"), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !scan.PushUnread() || !scan.Incomplete || len(scan.Skipped) != 1 || scan.Skipped[0].Path != "blob.bin" || scan.Skipped[0].Why != SkipBinary {
+		t.Errorf("a merge's binary file counted as read: %+v", scan)
+	}
+}
+
+func TestAMergeReadThatBrokeOffIsNoCleanCheck(t *testing.T) {
+	ownGitConfig(t)
+	dir := mergeBringing(t, "d.txt", "d\n")
+	real, err := exec.LookPath("awk")
+	if err != nil {
+		t.Skip("no awk")
+	}
+	bin := t.TempDir()
+	stand := "#!/bin/sh\ncase \"$*\" in *'diff --cc'*) cat >/dev/null; exit 2;; esac\nexec " + script.Quote(real) + " \"$@\"\n"
+	if err := os.WriteFile(filepath.Join(bin, "awk"), []byte(stand), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	if scan, err := ScanWork(shell.Local{Name: "local"}, dir, true); err == nil {
+		t.Errorf("a check that lost the merges counted as finished: %+v", scan)
+	}
+}

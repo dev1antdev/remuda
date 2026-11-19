@@ -131,6 +131,11 @@ func readScan(output string, push bool) (SecretScan, error) {
 				read[file] = true
 			case "binary":
 				binary(value)
+			case "binarymerge": // what a merge brought in it cannot be told: a keystore is a finding, the rest stays unread
+				binary(pathOf(value))
+				if path := pathOf(value); path != "" && !secrets.KeyFile(path) {
+					skip(path, SkipBinary)
+				}
 			case "binarydiff": // past the budget, still named: a keystore is a finding
 				binary(binaryPath(value))
 			case SkipPartly:
@@ -178,7 +183,7 @@ func readScan(output string, push bool) (SecretScan, error) {
 		return SecretScan{}, errUnfinished
 	}
 	scan.Findings, scan.More, scan.Files = collector.Findings(), collector.More(), len(read)
-	scan.Incomplete = slices.ContainsFunc(scan.Skipped, func(skip Skipped) bool { return skip.Why != SkipBinary })
+	scan.Incomplete = slices.ContainsFunc(scan.Skipped, func(skip Skipped) bool { return skip.Why != SkipBinary || skip.InCommit })
 	return scan, nil
 }
 
