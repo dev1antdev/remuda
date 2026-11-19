@@ -32,9 +32,11 @@ func windowsReleaseScript(url, sums, asset string) string {
 }
 
 // stagingScript clears a job's own download when it ends: named after the job's shell, so that two updates of one machine
-// at once never install each other's half-written file.
+// at once never install each other's half-written file. A job stopped by a signal ends through the same trap, which some
+// shells skip when the signal itself ends them.
 func stagingScript(staged string) string {
-	return `trap 'rm -f "$HOME/.local/bin/` + staged + `" "$HOME/.local/bin/remuda.sums.$$"' EXIT` + "\n"
+	return `trap 'rm -f "$HOME/.local/bin/` + staged + `" "$HOME/.local/bin/remuda.sums.$$"' EXIT` + "\n" +
+		`trap 'exit 129' HUP; trap 'exit 130' INT; trap 'exit 143' TERM` + "\n"
 }
 
 // downloadScript fetches the asset into ~/.local/bin/<into> and, when the release has its checksums, checks it.

@@ -1,10 +1,13 @@
 package updates
 
 import (
+	"bufio"
 	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"syscall"
 	"testing"
 
 	"github.com/dev1antdev/remuda/internal/health"
@@ -86,5 +89,35 @@ func TestAReleaseThatDoesNotRunIsNotInstalled(t *testing.T) {
 	}
 	if left, _ := filepath.Glob(filepath.Join(home, ".local", "bin", "remuda.new*")); len(left) != 0 {
 		t.Errorf("the download stayed behind: %v", left)
+	}
+}
+
+func TestAReleaseStoppedPartWayLeavesNoDownloadBehind(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("no signals to a shell here")
+	}
+	for _, name := range []string{"sh", "dash", "bash"} {
+		shell, err := exec.LookPath(name)
+		if err != nil {
+			continue
+		}
+		home := standIns(t, nil)
+		cmd := exec.Command(shell, "-c", stagingScript("remuda.new.$$")+`: > "$HOME/.local/bin/remuda.new.$$"; echo started; sleep 30 & wait`)
+		cmd.Env = []string{"HOME=" + home, "PATH=/usr/bin:/bin"}
+		out, err := cmd.StdoutPipe()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := cmd.Start(); err != nil {
+			t.Fatal(err)
+		}
+		bufio.NewReader(out).ReadString('\n')
+		if err := cmd.Process.Signal(syscall.SIGTERM); err != nil {
+			t.Fatal(err)
+		}
+		cmd.Wait()
+		if left, _ := filepath.Glob(filepath.Join(home, ".local", "bin", "remuda.new*")); len(left) != 0 {
+			t.Errorf("%s: the download stayed behind: %v", name, left)
+		}
 	}
 }
