@@ -17,15 +17,24 @@ const noAttrs = `$A -c core.attributesFile=/dev/null`
 const attrsMark = `(^|[[:space:]])(binary|-diff|!diff)([[:space:]]|$)`
 
 // attrsScript points git's attributes at the empty tree where it can (--attr-source, git 2.41). What that leaves, the
-// repository's info/attributes and on an older git every .gitattributes, is said with a line "\036attrs" when it marks
-// anything: the files git then calls binary may be text the check cannot read.
+// repository's info/attributes and on an older git every .gitattributes, tracked or not, is said with a line "\036attrs"
+// when it marks anything, a diff driver the configuration calls binary included: the files git then calls binary may be
+// text the check cannot read.
 var attrsScript = `A=; e=$(git hash-object -t tree /dev/null); i=$(git rev-parse --git-path info/attributes 2>/dev/null); ` +
 	`if git --attr-source="$e" rev-parse --git-dir >/dev/null 2>&1; then A="--attr-source=$e"; fi; ` +
-	`attrs=; grep -qE '` + attrsMark + `' "$i" 2>/dev/null && attrs=1; ` +
-	`if [ -z "$A" ] && ` + readGit + ` grep -qE '` + attrsMark + `' -- ':(top,glob)**/.gitattributes' 2>/dev/null; then attrs=1; fi; `
+	`m='` + attrsMark + `'; if [ -n "$(git config --get-regexp '^diff\..*\.binary$' 2>/dev/null)" ]; then m="$m|(^|[[:space:]])diff="; fi; ` +
+	`attrs=; grep -qE "$m" "$i" 2>/dev/null && attrs=1; ` +
+	`if [ -z "$A" ] && ` + readGit + ` grep --untracked --no-exclude-standard -qE "$m" -- ':(top,glob)**/.gitattributes' 2>/dev/null; then attrs=1; fi; `
 
 // gitDiff is git's diff as the check reads it, writing nothing; each call says itself whether it is relative to the folder.
 const gitDiff = readGit + ` ` + noAttrs + ` -c diff.relative=false diff ` + plainPatch
+
+// workDiff is the work against HEAD. It is read with the repository's attributes, which say how a working-tree-encoding
+// file decodes, and what they leave binary again without them.
+const workDiff = readGit + ` -c core.attributesFile=/dev/null -c diff.relative=false diff ` + plainPatch + ` --relative "$base" 2>/dev/null || printf '\036failed work\n'; ` +
+	`if [ -n "$A" ]; then ` + readGit + ` -c core.attributesFile=/dev/null -c diff.relative=false diff ` + plainPatch + ` --numstat --relative "$base" 2>/dev/null | ` +
+	`LC_ALL=C awk -F '\t' '$1 == "-" && $2 == "-" { print ":(literal)" substr($0, 5) }' | tr '\n' '\0' | ` +
+	`xargs -0 -r ` + gitDiff + ` --relative "$base" -- 2>/dev/null || printf '\036failed work\n'; fi; `
 
 // capScript cuts the stream on its way out: a diff's removed lines go, nothing to find in them, and each file's lines at scanPerFile (a line "\036partly" says where), and
 // every file once scanTotal is spent, the commits having a scanTotal of their own so the work beside them cannot use it up (each named on a line "\036budget <path>", "\036unread <path>" for an untracked
@@ -125,7 +134,7 @@ func secretScript(dir string, push bool) string {
 		`git rev-parse --show-toplevel >/dev/null 2>&1 || { printf '\036failed repository\n'; exit 0; }; ` +
 		`base=HEAD; git rev-parse -q --verify HEAD >/dev/null 2>&1 || base=$(git hash-object -t tree /dev/null); ` +
 		attrsScript +
-		`{ if [ -n "$attrs" ]; then printf '\036attrs\n'; fi; ` + gitDiff + ` --relative "$base" 2>/dev/null || printf '\036failed work\n'; ` +
+		`{ if [ -n "$attrs" ]; then printf '\036attrs\n'; fi; ` + workDiff +
 		untrackedScript +
 		`printf '\036staged\n'; ` + gitDiff + ` --cached --relative "$base" 2>/dev/null || printf '\036failed work\n'; ` +
 		// a folder inside the repository commits the whole index: what is staged outside it is read too, named from the top

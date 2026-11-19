@@ -999,3 +999,64 @@ func TestLocalAttributesLeaveWhatTheyMayHideUnread(t *testing.T) {
 		t.Errorf("%+v", scan)
 	}
 }
+
+func TestAnEncodedWorkingTreeFileIsRead(t *testing.T) {
+	ownGitConfig(t)
+	utf16 := func(s string) string {
+		var b strings.Builder
+		for i := range len(s) {
+			b.WriteByte(s[i])
+			b.WriteByte(0)
+		}
+		return b.String()
+	}
+	dir, git, write := scratchCheckout(t)
+	write(".gitattributes", "*.ps1 text working-tree-encoding=UTF-16LE\n")
+	write("run.ps1", utf16("A=1\n"))
+	git("add", "-A")
+	git("commit", "-qm", "init")
+	write("run.ps1", utf16("A=1\nexport NPM_TOKEN="+"npm_"+fakeKey(36, 36)+"\n"))
+	scan, err := ScanWork(shell.Local{Name: "local"}, dir, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(scan.Findings) != 1 || scan.Findings[0].File != "run.ps1" {
+		t.Errorf("%+v", scan)
+	}
+}
+
+func TestADiffDriverCalledBinaryLeavesItsFilesUnread(t *testing.T) {
+	ownGitConfig(t)
+	dir := mergeBringing(t, "hidden.env", "export NPM_TOKEN="+"npm_"+fakeKey(37, 36)+"\n")
+	if err := os.WriteFile(filepath.Join(dir, ".git", "info", "attributes"), []byte("*.env diff=opaque\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	config := exec.Command("git", "config", "diff.opaque.binary", "true")
+	config.Dir = dir
+	if err := config.Run(); err != nil {
+		t.Fatal(err)
+	}
+	scan, err := ScanWork(shell.Local{Name: "local"}, dir, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !scan.PushUnread() || !scan.Incomplete {
+		t.Errorf("%+v", scan)
+	}
+}
+
+func TestAnOlderGitHeedsAnUntrackedAttributesFile(t *testing.T) {
+	ownGitConfig(t)
+	dir := mergeBringing(t, "hidden.env", "export NPM_TOKEN="+"npm_"+fakeKey(38, 36)+"\n")
+	if err := os.WriteFile(filepath.Join(dir, ".gitattributes"), []byte("*.env -diff\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitWithoutAttrSource(t)
+	scan, err := ScanWork(shell.Local{Name: "local"}, dir, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !scan.PushUnread() || !scan.Incomplete {
+		t.Errorf("%+v", scan)
+	}
+}
