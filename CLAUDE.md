@@ -6509,9 +6509,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   a push, and `Store.OnFinish` moves the task to the `on_finish` column
   when it still sits in `on_start` (a card the person moved meanwhile
   stays; the push title says `→ Testing`); a pane gone two minutes →
-  `gone`, its pipeline stopped, and so is a run on a machine gone from the
-  fleet that long (`Manager.Gone`: only once herdr's machines, never saved,
-  were read since the start; `internal/app`'s `readTaskPane`, which also reads a pane its agent left
+  `gone`, its pipeline stopped in the same transaction (`GoneRun`), and so
+  is a run on a machine gone from the fleet that long (`Manager.Gone`: one
+  the person removed, or any once herdr's machines, never saved, were read
+  since the start; `internal/app`'s `readTaskPane`, which also reads a pane its agent left
   as idle, so a last answer not reported yet is its finish). **What a run was denied** (`denied.go`, `denied_test.go`): the
   finish reads, through `RunWatch.Denied` (`chat.Service.Denied`), the
   calls Claude Code refused without asking after the record reported

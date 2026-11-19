@@ -60,6 +60,7 @@ type Manager struct {
 	server   bool                                  // the host serves the page only: no machine of the fleet (SetServer)
 	// herdr's machines, never saved, were read once since the start, or there is no herdr: the fleet is whole (Gone)
 	herdrRead bool
+	removed   map[string]bool // the machines the person removed since the start, until one of that id comes back
 }
 
 // ErrServerHost is what a request for the host's own herdr gets when remuda runs as a server: it has no workspaces.
@@ -253,6 +254,7 @@ func (m *Manager) add(cfg Config) *Machine {
 	mc.setLabel(m.names[cfg.ID])
 	m.machines[cfg.ID] = mc
 	m.order = append(m.order, cfg.ID)
+	delete(m.removed, cfg.ID)
 	m.mu.Unlock()
 	go mc.connect()
 	return mc
@@ -321,15 +323,15 @@ func (m *Manager) SyncHerdr() {
 	}
 }
 
-// Gone says the fleet has no such machine and knows it: herdr's machines were read since the start, so an id missing
-// now was removed, not waiting to be mirrored.
+// Gone says the fleet has no such machine and knows it: the person removed it, or herdr's machines were read since the
+// start, so an id missing now is not waiting to be mirrored.
 func (m *Manager) Gone(id string) bool {
 	if id == "" {
 		id = LocalID
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.machines[id] == nil && m.herdrRead
+	return m.machines[id] == nil && (m.herdrRead || m.removed[id])
 }
 
 // drop takes a machine out of the registry and ends its connection; its watcher loop and pollers stop on their own.
@@ -413,6 +415,12 @@ func (m *Manager) Remove(id string) error {
 	if m.drop(id) == nil {
 		return fmt.Errorf("machine %q not found", id)
 	}
+	m.mu.Lock()
+	if m.removed == nil {
+		m.removed = map[string]bool{}
+	}
+	m.removed[id] = true
+	m.mu.Unlock()
 	return m.save()
 }
 
