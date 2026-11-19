@@ -427,20 +427,24 @@ func (m *Manager) Remove(id string) error {
 	}
 	m.mu.Lock()
 	mc := m.machines[id]
-	if mc != nil && mc.Cfg.Source == SourceHerdr {
+	if mc == nil {
+		m.mu.Unlock()
+		return fmt.Errorf("machine %q not found", id)
+	}
+	if mc.Cfg.Source == SourceHerdr {
 		m.mu.Unlock()
 		return fmt.Errorf("%s comes from herdr's machine list — remove it with `herdr machine remove`", mc.Label())
 	}
-	m.mu.Unlock()
-	if m.drop(id) == nil {
-		return fmt.Errorf("machine %q not found", id)
-	}
-	m.mu.Lock()
 	m.removed[id] = true
 	m.mu.Unlock()
+	// the removal is kept before the machine goes: one that could not be noted stays, and Gone never says it went
 	if err := m.saveRemoved(); err != nil {
+		m.mu.Lock()
+		delete(m.removed, id)
+		m.mu.Unlock()
 		return err
 	}
+	m.drop(id)
 	return m.save()
 }
 

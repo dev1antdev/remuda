@@ -199,6 +199,15 @@ func TestTheFleetCallsAMachineGoneOnlyOnceHerdrsWereRead(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := os.Mkdir(filepath.Join(failing.dir, removedFile), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := failing.Remove(added.ID()); err == nil || failing.Gone(added.ID()) {
+		t.Fatalf("a removal that could not be noted went through: %v", err)
+	}
+	if err := os.Remove(filepath.Join(failing.dir, removedFile)); err != nil {
+		t.Fatal(err)
+	}
 	if err := failing.Remove(added.ID()); err != nil {
 		t.Fatal(err)
 	}
