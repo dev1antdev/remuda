@@ -29,8 +29,8 @@ const maxSettings = 65536
 // file itself and a line holding GS alone.
 var settingsScript = `for d in . "$root"; do if [ "$d" = "$root" ] && [ "$(pwd -P)" = "$root" ]; then continue; fi; ` +
 	`for n in ` + settingsLocal + ` settings.json; do p="$d/.claude/$n"; [ -f "$p" ] || continue; ` +
-	`t=no; git ls-files --error-unmatch -- "$p" >/dev/null 2>&1 && t=yes; ` +
-	`i=no; git check-ignore -q -- "$p" 2>/dev/null && i=yes; ` +
+	`t=no; ` + readGit + ` ls-files --error-unmatch -- "$p" >/dev/null 2>&1 && t=yes; ` +
+	`i=no; ` + readGit + ` check-ignore -q -- "$p" 2>/dev/null && i=yes; ` +
 	`printf '%s\037%s\037%s\n' "$p" "$t" "$i"; head -c ` + strconv.Itoa(maxSettings) + ` "$p"; printf '\n\035\n'; done; done`
 
 // readSettings reads settingsScript's answer.

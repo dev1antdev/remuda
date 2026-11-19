@@ -55,7 +55,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   service, lists who hears which event (the one place the subscriptions
   live), starts the loops and serves. Nothing here does work of its own.
 - `internal/script/` — every POSIX script remuda runs is built with it:
-  `Quote`, the `PATH` line (`~/.local/bin`, Homebrew, Kimi Code's own
+  `ReadGit` (git for any read that diffs or lists a checkout: no optional
+  lock, no fsmonitor hook, no stat refresh, so an agent's `git add` never
+  meets an index.lock of ours; `script/readtest.LeavesIndex` checks a script
+  for it on a real checkout), `Quote`, the `PATH` line (`~/.local/bin`, Homebrew, Kimi Code's own
   `~/.kimi-code/bin`; on a Windows machine, in Git Bash's spelling of the
   profile, herdr's stable alias `~/AppData/Local/Programs/Herdr/bin` before
   `$PATH` and npm's `~/AppData/Roaming/npm` after it — folders that are
@@ -4606,8 +4609,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   (`removal.go`, tested on real repositories: clean, dirty, a commit of
   its own, a submodule with a commit pushed nowhere; after Orca's remove
   dialog): `GET /api/worktrees/{id}/removal?machine` is `LookAt` — one
-  read-only script in the worktree (`--no-optional-locks`, fsmonitor
-  off): its branch and main checkout, every `git status --porcelain`
+  read-only script in the worktree (`script.ReadGit`): its branch and main checkout, every `git status --porcelain`
   entry (`dirty`, `first`), the branch's commits on no remote
   (`unpushed`) and of those the ones the main checkout's HEAD lacks too
   (`unmerged`: lost with the branch), the commit it ends on (`Tip`, in the

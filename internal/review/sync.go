@@ -14,7 +14,7 @@ type Sync struct {
 
 // syncScript prints, inside a checkout whose branch has an upstream, git's count of the commits on either side of it,
 // "2\t1"; an empty line for a detached HEAD or a branch with no upstream.
-const syncScript = `s=$(git --no-optional-locks -c core.fsmonitor=false rev-list --left-right --count 'HEAD...@{u}' 2>/dev/null); printf '%s\n' "$s"`
+const syncScript = `s=$(` + readGit + ` rev-list --left-right --count 'HEAD...@{u}' 2>/dev/null); printf '%s\n' "$s"`
 
 // parseSync reads syncScript's line; false for none.
 func parseSync(line string) (Sync, bool) {
