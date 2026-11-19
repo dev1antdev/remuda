@@ -276,8 +276,9 @@ func keepStdin(wait time.Duration) (keep []string, answered bool) {
 	if ask == nil {
 		ask = &stdinAsk{done: make(chan struct{})}
 		stdinAsking[path] = ask
+		limit := stdinProbe // read here, not in the probe's goroutine
 		go func() {
-			known, settled := askStdin(path)
+			known, settled := askStdin(path, limit)
 			stdinMu.Lock()
 			ask.known = known
 			if settled {
@@ -311,8 +312,8 @@ func stdinOptions(known bool) []string {
 }
 
 // askStdin runs the probe: known, and settled unless it timed out or did not start.
-func askStdin(path string) (known, settled bool) {
-	ctx, cancel := context.WithTimeout(context.Background(), stdinProbe)
+func askStdin(path string, limit time.Duration) (known, settled bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), limit)
 	defer cancel()
 	err := exec.CommandContext(ctx, path, "-F", "none", "-G", "-o", "StdinNull=no", "-o", "ForkAfterAuthentication=no", "remuda.invalid").Run()
 	var refused *exec.ExitError
