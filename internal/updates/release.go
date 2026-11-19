@@ -91,11 +91,13 @@ func ReleaseScript(url, sums, asset string, local bool) string {
 	if windowsAsset(asset) {
 		return windowsReleaseScript(url, sums, asset)
 	}
+	const staged = "remuda.new.$$"
 	var b strings.Builder
 	b.WriteString("set -e; " + script.PATH + "\n")
 	b.WriteString(`mkdir -p "$HOME/.local/bin"` + "\n")
-	b.WriteString(downloadScript(url, sums, asset, "remuda.new"))
-	b.WriteString(InstallScript + "\n")
+	b.WriteString(stagingScript(staged))
+	b.WriteString(downloadScript(url, sums, asset, staged))
+	b.WriteString(strings.ReplaceAll(InstallScript, "remuda.new", staged) + " &&\n")
 	if local {
 		b.WriteString(restartLater)
 	} else {

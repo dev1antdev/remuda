@@ -25,8 +25,9 @@ type Update struct {
 // once a day at most, so without it an upgrade can miss a version that is out.
 const brewUpdate = "brew update && "
 
-// hooksStep follows an install of herdr: every agent integration the new herdr reports outdated is installed again, so the hooks match it.
-const hooksStep = "\nfor a in $(" + health.OutdatedHooks + " | cut -d' ' -f1); do herdr integration install \"$a\" || echo \"!! the $a hooks did not update\"; done"
+// hooksStep follows an install of herdr, only one that went through: every agent integration the new herdr reports
+// outdated is installed again, so the hooks match it.
+const hooksStep = " &&\nfor a in $(" + health.OutdatedHooks + " | cut -d' ' -f1); do herdr integration install \"$a\" || echo \"!! the $a hooks did not update\"; done"
 
 const hooksNote = "The agent hooks the new herdr reports outdated are installed again. "
 

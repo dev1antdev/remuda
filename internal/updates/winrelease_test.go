@@ -16,7 +16,7 @@ func TestAWindowsMachineGetsTheReleasesExeAndNoServiceRestart(t *testing.T) {
 	if !ok {
 		t.Fatal("no release offered to a Windows machine")
 	}
-	for _, want := range []string{"remuda-windows-amd64.exe", `"$HOME/.local/bin/remuda.new.exe"`, `mv -f "$b/remuda.exe" "$b/remuda.exe.old.$$"`, "checksum ok"} {
+	for _, want := range []string{"remuda-windows-amd64.exe", `"$HOME/.local/bin/remuda.new.$$.exe"`, `mv -f "$b/remuda.exe" "$b/remuda.exe.old.$$"`, "checksum ok"} {
 		if !strings.Contains(u.Command, want) {
 			t.Errorf("the command lacks %q:\n%s", want, u.Command)
 		}
