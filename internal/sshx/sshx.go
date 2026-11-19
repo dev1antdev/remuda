@@ -223,24 +223,36 @@ func (c *Conn) scriptSession(line string) *exec.Cmd {
 }
 
 // stdinKept is, by the path of the ssh binary, whether it takes StdinNull and ForkAfterAuthentication (OpenSSH 8.7):
-// an older one refuses an option it does not know, and every session with it. It is asked once, reading no ssh config
-// (-F none: a Match exec there runs nothing) and for at most stdinProbe.
-var stdinKept sync.Map
+// an older one refuses an option it does not know, and every session with it. It is asked one caller at a time,
+// reading no ssh config (-F none: a Match exec there runs nothing), for at most stdinProbe; an answer is kept, a probe
+// that timed out or did not start is asked again next time.
+var (
+	stdinMu   sync.Mutex
+	stdinKept = map[string]bool{}
+)
 
-const stdinProbe = 5 * time.Second
+var stdinProbe = 5 * time.Second
 
 func keepStdin() []string {
 	path, err := exec.LookPath("ssh")
 	if err != nil {
 		return nil
 	}
-	known, _ := stdinKept.LoadOrStore(path, sync.OnceValue(func() bool {
+	stdinMu.Lock()
+	known, asked := stdinKept[path]
+	if !asked {
 		ctx, cancel := context.WithTimeout(context.Background(), stdinProbe)
-		defer cancel()
-		probe := exec.CommandContext(ctx, path, "-F", "none", "-G", "-o", "StdinNull=no", "-o", "ForkAfterAuthentication=no", "remuda.invalid")
-		return probe.Run() == nil
-	}))
-	if !known.(func() bool)() {
+		err := exec.CommandContext(ctx, path, "-F", "none", "-G", "-o", "StdinNull=no", "-o", "ForkAfterAuthentication=no", "remuda.invalid").Run()
+		late := ctx.Err() != nil
+		cancel()
+		var refused *exec.ExitError
+		if err == nil || (errors.As(err, &refused) && !late) {
+			known = err == nil
+			stdinKept[path] = known
+		}
+	}
+	stdinMu.Unlock()
+	if !known {
 		return nil
 	}
 	return []string{"-o", "StdinNull=no", "-o", "ForkAfterAuthentication=no"}

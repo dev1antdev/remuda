@@ -191,3 +191,23 @@ func TestTheOptionProbeReadsNoConfig(t *testing.T) {
 		t.Errorf("%q after %s", got, time.Since(began))
 	}
 }
+
+// TestAProbeThatTimedOutIsAskedAgain: a slow first probe leaves the options off for that call only.
+func TestAProbeThatTimedOutIsAskedAgain(t *testing.T) {
+	dir := t.TempDir()
+	slow := filepath.Join(dir, "slow")
+	stub := "#!/bin/sh\ncase \"$*\" in *\" -G \"*) if [ ! -e " + script.Quote(slow) + " ]; then : > " + script.Quote(slow) + "; sleep 5; fi; exit 0 ;; esac\nexit 1\n"
+	if err := os.WriteFile(filepath.Join(dir, "ssh"), []byte(stub), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	was := stdinProbe
+	stdinProbe = 300 * time.Millisecond
+	t.Cleanup(func() { stdinProbe = was })
+	if got := keepStdin(); got != nil {
+		t.Fatalf("a probe that timed out said %q", got)
+	}
+	if got := keepStdin(); len(got) != 4 {
+		t.Errorf("asked again: %q", got)
+	}
+}
