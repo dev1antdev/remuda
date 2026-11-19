@@ -776,12 +776,6 @@ func firstParent(path string) string {
 	return string(m[1])
 }
 
-// forkOf says a file holds the record its first parentUuid names: it opens on a copy of a conversation, a fork's or
-// the first file's own, not on a parent elsewhere.
-func forkOf(path, parent string) bool {
-	return hasRecord(path, parent)
-}
-
 // hasRecord says whether the file holds a record with this uuid.
 // The parent of a continuation sits near the old file's end, so the tail is read first.
 func hasRecord(path, uuid string) bool {
@@ -818,7 +812,7 @@ func hasRecord(path, uuid string) bool {
 // A compaction moves the conversation to a new file while herdr keeps naming the old id: the old file ends with a
 // continued-in record naming the new session, and the new file's first parentUuid names a record of the old one (the
 // only trace an older Claude Code left, and read when the record is missing). A fork copies the conversation it began
-// from, so its first parentUuid is a record of its own (forkOf): it continues nothing.
+// from, so its first parentUuid is a record of its own: it continues nothing, and has no predecessor.
 func Continuation(path string) string {
 	st, err := os.Stat(path)
 	if err != nil {
@@ -853,7 +847,7 @@ func Continuation(path string) string {
 	}
 	sort.Slice(cands, func(i, j int) bool { return cands[i].mod.Before(cands[j].mod) })
 	for _, c := range cands {
-		if p := firstParent(c.path); p != "" && hasRecord(path, p) && !forkOf(c.path, p) {
+		if p := firstParent(c.path); p != "" && hasRecord(path, p) && !hasRecord(c.path, p) {
 			return c.path
 		}
 	}
@@ -883,7 +877,7 @@ func Predecessor(path string) string {
 		}
 	}
 	parent := firstParent(path)
-	if parent == "" || forkOf(path, parent) {
+	if parent == "" || hasRecord(path, parent) {
 		return ""
 	}
 	for _, p := range siblings {
