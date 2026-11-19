@@ -50,3 +50,26 @@ func TestRemoteScriptsKeepAHomeWithASpaceWhole(t *testing.T) {
 		t.Fatalf("a Gemini chat over the remote script = %q, %v; want %q", got, err, chat)
 	}
 }
+
+func TestASessionIsFoundForEachFolderApart(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	const id = "55555555-5555-4555-8555-555555555555"
+	paths := map[string]string{}
+	for _, cwd := range []string{"/work/private", "/work/visible"} {
+		dir := filepath.Join(home, ".claude", "projects", EncodePath(cwd))
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		paths[cwd] = filepath.Join(dir, id+".jsonl")
+		if err := os.WriteFile(paths[cwd], []byte("{}\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	reader := NewReader(shell.Local{Name: "local"})
+	for _, cwd := range []string{"/work/private", "/work/visible", "/work/private"} {
+		if got, err := reader.ResolveSession("claude", cwd, "id", id); err != nil || got != paths[cwd] {
+			t.Errorf("%s: %q, %v, want its own copy %q", cwd, got, err, paths[cwd])
+		}
+	}
+}
