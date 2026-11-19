@@ -2394,9 +2394,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   named unread — with no merge run again, no driver, and no partial clone's
   fetch (`GIT_NO_LAZY_FETCH`; a partial clone on a git before 2.45, which
   would fetch regardless, leaves its merges unread), so no object written):
-  what the push would send. A file git calls binary only because an attribute says so (`*.env -diff`), with no
-  NUL in its first 8000 bytes, is read again as text in the work, the index and the commits
-  (`asTextScript`, `commitsAsText`, at most 200 each). The awk drops a diff's removed lines, cuts each
+  what the push would send. Every diff and the untracked files' grep read files
+  as text (`--text`), since an attribute (`*.env -diff`) can call any file
+  binary; a line holding a NUL says the file is binary after all (`noNUL`,
+  `capScript`). The awk drops a diff's removed lines, cuts each
   file at 1 MB (`\036partly`) and the stream at `scanTotal` 8 MB, the commits' own 8 MB after the work's
   (`\036budget <path>` / `\036unread <path>` for the rest), so a remote
   sends megabytes at most; `readScan` feeds the added lines, with their

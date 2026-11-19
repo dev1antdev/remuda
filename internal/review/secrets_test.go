@@ -861,6 +861,10 @@ func TestAFileMarkedBinaryIsReadAsTheTextItIs(t *testing.T) {
 	write(".gitattributes", "*.env -diff\n*.bin binary\n")
 	write("work.env", "A=1\n")
 	write("staged.env", "A=1\n")
+	if err := os.Mkdir(filepath.Join(dir, "sub"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write("sub/keep.txt", "k\n")
 	git("add", "-A")
 	git("commit", "-qm", "init")
 	git("update-ref", "refs/remotes/origin/main", "HEAD")
@@ -869,27 +873,39 @@ func TestAFileMarkedBinaryIsReadAsTheTextItIs(t *testing.T) {
 	git("commit", "-qm", "the commit a push sends")
 	write("work.env", "A=1\n"+secret(32))
 	write("staged.env", "A=1\n"+secret(33))
+	write("new.env", secret(35))
 	write("real.bin", "\x00\x01binary\x00")
+	write("new.bin", "\x00\x01binary\x00")
 	git("add", "staged.env", "real.bin")
-	scan, err := ScanWork(shell.Local{Name: "local"}, dir, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	found := map[string]bool{}
-	for _, finding := range scan.Findings {
-		found[finding.File] = true
-	}
-	for _, file := range []string{"sent.env", "work.env", "staged.env"} {
-		if !found[file] {
-			t.Errorf("%s went unread: %+v", file, scan.Findings)
+	for _, from := range []string{dir, filepath.Join(dir, "sub")} {
+		scan, err := ScanWork(shell.Local{Name: "local"}, from, true)
+		if err != nil {
+			t.Fatal(err)
 		}
-	}
-	for _, skip := range scan.Skipped {
-		if skip.Path != "real.bin" || skip.Why != SkipBinary {
-			t.Errorf("skipped: %+v", skip)
+		found := map[string]bool{}
+		for _, finding := range scan.Findings {
+			found[filepath.Base(finding.File)] = true
 		}
-	}
-	if len(scan.Skipped) != 1 {
-		t.Errorf("a real binary file is still said: %+v", scan.Skipped)
+		want := []string{"sent.env", "staged.env"}
+		if from == dir { // the work and the new files are the folder's
+			want = append(want, "work.env", "new.env")
+		}
+		for _, file := range want {
+			if !found[file] {
+				t.Errorf("from %s, %s went unread: %+v", from, file, scan.Findings)
+			}
+		}
+		if from == dir {
+			binaries := map[string]bool{}
+			for _, skip := range scan.Skipped {
+				if skip.Why != SkipBinary {
+					t.Errorf("skipped: %+v", skip)
+				}
+				binaries[skip.Path] = true
+			}
+			if !binaries["real.bin"] || !binaries["new.bin"] || len(binaries) != 2 {
+				t.Errorf("the real binary files are still said: %+v", scan.Skipped)
+			}
+		}
 	}
 }

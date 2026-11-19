@@ -57,7 +57,6 @@ const (
 	scanTotal     = 8 << 20
 	scanUntracked = 2000
 	scanCommits   = 200
-	scanAsText    = 200    // files marked binary read again as text, in each diff
 	countCommits  = 100000 // how far the commits past scanCommits are counted
 	scanTimeout   = 45 * time.Second
 )
@@ -99,7 +98,6 @@ func readScan(output string, push bool) (SecretScan, error) {
 	var number int
 	header, ended := false, false
 	skipped := map[Skipped]bool{} // a file the work and the index both carry is said once
-	asText := map[string]bool{}   // marked binary, and read as the text it is
 	skip := func(path, why string) {
 		entry := Skipped{Path: path, Why: why, InCommit: commit != "" && commit != secrets.Staged}
 		if path != "" && !skipped[entry] {
@@ -131,10 +129,6 @@ func readScan(output string, push bool) (SecretScan, error) {
 			case "file": // an untracked file's lines follow, numbered from the first
 				file, header, number = value, false, 1
 				read[file] = true
-			case "text":
-				asText[value] = true
-			case "again": // a file of a commit read again, the commit already counted
-				commit, file, header = value, "", false
 			case "binary":
 				binary(value)
 			case "binarymerge": // what a merge brought in it cannot be told: a keystore is a finding, the rest stays unread
@@ -148,6 +142,9 @@ func readScan(output string, push bool) (SecretScan, error) {
 				skip(file, SkipPartly)
 				file = ""
 			case SkipBudget:
+				if path := pathOf(value); secrets.KeyFile(path) { // by its name, read or not
+					binary(path)
+				}
 				skip(pathOf(value), SkipBudget)
 			case "unread":
 				skip(value, SkipBudget)
@@ -170,6 +167,9 @@ func readScan(output string, push bool) (SecretScan, error) {
 			header, number = false, newStart(line)
 		case header && strings.HasPrefix(line, "+++ "):
 			file = pathOf(line[len("+++ "):])
+			if secrets.KeyFile(file) { // every diff reads files as text: a keystore goes by its name
+				binary(file)
+			}
 			if file != "" && commit == "" {
 				read[file] = true
 			}
@@ -188,7 +188,6 @@ func readScan(output string, push bool) (SecretScan, error) {
 	if !ended {
 		return SecretScan{}, errUnfinished
 	}
-	scan.Skipped = slices.DeleteFunc(scan.Skipped, func(skip Skipped) bool { return skip.Why == SkipBinary && !skip.InCommit && asText[skip.Path] })
 	scan.Findings, scan.More, scan.Files = collector.Findings(), collector.More(), len(read)
 	scan.Incomplete = slices.ContainsFunc(scan.Skipped, func(skip Skipped) bool { return skip.Why != SkipBinary || skip.InCommit })
 	return scan, nil
