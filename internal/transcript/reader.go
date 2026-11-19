@@ -334,20 +334,17 @@ func (r *Reader) Live(path string) string {
 	return chain[len(chain)-1]
 }
 
-// Chain is the file and every file it went on in, oldest first, up to 8 hops. Only Claude Code moves a
-// conversation between files: another format's chain is the file alone.
+// Chain is the file and every file it went on in, oldest first, each once. Only Claude Code moves a conversation
+// between files: another format's chain is the file alone.
 func (r *Reader) Chain(path string) []string {
 	chain := []string{path}
 	if FormatOf(path) != Claude {
 		return chain
 	}
-	for hops := 0; hops < 8; hops++ {
-		next := r.nextContinuation(path)
-		if next == "" {
-			break
-		}
+	seen := map[string]bool{path: true}
+	for next := r.nextContinuation(path); next != "" && !seen[next]; next = r.nextContinuation(next) {
+		seen[next] = true
 		chain = append(chain, next)
-		path = next
 	}
 	return chain
 }
@@ -355,11 +352,12 @@ func (r *Reader) Chain(path string) []string {
 // Lineage is every file a conversation has lived in, oldest first: the files path continues, path, and the files it went on in.
 func (r *Reader) Lineage(path string) []string {
 	chain := r.Chain(path)
-	for hops := 0; hops < 8; hops++ {
-		earlier := r.Predecessor(chain[0])
-		if earlier == "" {
-			break
-		}
+	seen := map[string]bool{}
+	for _, p := range chain {
+		seen[p] = true
+	}
+	for earlier := r.Predecessor(chain[0]); earlier != "" && !seen[earlier]; earlier = r.Predecessor(earlier) {
+		seen[earlier] = true
 		chain = append([]string{earlier}, chain...)
 	}
 	return chain

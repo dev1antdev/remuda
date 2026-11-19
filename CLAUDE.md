@@ -507,15 +507,18 @@ components and icons as rules for whoever changes it: @docs/design.md
   with a `continued-in` record naming the new session, `continuedIn` reads
   the old file's last 64 KB for it; a Claude Code that writes none is
   followed by the new file's first `parentUuid`, a record `uuid` in the old
-  one — read in its first 64 KB, which a big snapshot record can fill)
-  while herdr keeps naming the old id, so the chat follows `Reader.Live(path)` —
+  one — read in its first 64 KB, which a big snapshot record can fill —
+  unless the new file holds the old one's first record: a fork copies the
+  conversation it began from whole, a compaction a tail at most, so a fork
+  continues nothing and has no predecessor (`forkOf`)) while herdr keeps
+  naming the old id, so the chat follows `Reader.Live(path)` —
   `transcript.Continuation` locally, `ContinuationScript` over ssh (its
   listing, like Gemini's find, read a line at a time with `while read`,
   never split by `$(ls …)`, so a home with a space stays whole) —
   re-checked a minute at a time per file. `transcript.Reader` (reader.go)
   is the session files of one machine: `Version`, `DirVersions`,
   `ReadFrom`, `Turns`, `ResolveSession`, `Live` / `Chain` / `Lineage`
-  (every file a conversation lived in) and `Predecessor`, in process here
+  (every file a conversation lived in, each once, to the chain's end) and `Predecessor`, in process here
   and by script over a `shell.Host` on a remote. **A session's subagents**
   (`subagents.go`, tested): the agents it spawned through its Agent tool
   live at `<session>/subagents/agent-<id>.jsonl`, a `.meta.json` beside
