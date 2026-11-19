@@ -36,6 +36,11 @@ func Stat(file, gnuFormat, bsdFormat string) string {
 	return "stat -c " + Quote(gnuFormat) + " " + file + " 2>/dev/null || stat -f " + Quote(bsdFormat) + " " + file
 }
 
+// ReadGit is git for a read of a checkout, which an agent may be committing in at that moment: no optional lock and no
+// refresh of a touched file's stat by diff, so the index is never written and git add never meets an index.lock of ours,
+// and no fsmonitor hook of the person's runs. A touched file then counts in `diff --name-only`; `--numstat` leaves it out.
+const ReadGit = `git --no-optional-locks -c core.fsmonitor=false -c diff.autoRefreshIndex=false`
+
 // PatchForm is git's patch in one shape whatever the person's or the repository's settings make of it, for whatever
 // reads its lines: no colour, no external driver or textconv, a moved submodule as a plain hunk, paths under a/ and b/.
 const PatchForm = `--no-color --no-ext-diff --no-textconv --submodule=short --src-prefix=a/ --dst-prefix=b/`

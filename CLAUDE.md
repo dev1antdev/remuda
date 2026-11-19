@@ -55,7 +55,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   service, lists who hears which event (the one place the subscriptions
   live), starts the loops and serves. Nothing here does work of its own.
 - `internal/script/` — every POSIX script remuda runs is built with it:
-  `Quote`, the `PATH` line (`~/.local/bin`, Homebrew, Kimi Code's own
+  `ReadGit` (git for any read that diffs or lists a checkout: no optional
+  lock, no fsmonitor hook, no stat refresh, so an agent's `git add` never
+  meets an index.lock of ours; `script/readtest.LeavesIndex` checks a script
+  for it on a real checkout), `Quote`, the `PATH` line (`~/.local/bin`, Homebrew, Kimi Code's own
   `~/.kimi-code/bin`; on a Windows machine, in Git Bash's spelling of the
   profile, herdr's stable alias `~/AppData/Local/Programs/Herdr/bin` before
   `$PATH` and npm's `~/AppData/Roaming/npm` after it — folders that are

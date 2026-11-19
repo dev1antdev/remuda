@@ -16,7 +16,7 @@ func TestInspectReadsTheWorktreeAndRefusesNothingItself(t *testing.T) {
 	if info.Path != "/home/me/repo/.worktrees/task-20" || info.Branch != "task-20-pr-to-end" || info.Repo != "/home/me/repo" || info.Dirty != "M internal/x.go" {
 		t.Fatalf("info = %+v", info)
 	}
-	if s := host.Scripts()[0]; !strings.Contains(s, "cd '/home/me/repo/.worktrees/task-20'") || !strings.Contains(s, "git status --porcelain") || strings.Contains(s, "--force") {
+	if s := host.Scripts()[0]; !strings.Contains(s, "cd '/home/me/repo/.worktrees/task-20'") || !strings.Contains(s, " status --porcelain") || strings.Contains(s, "--force") {
 		t.Fatalf("script = %q", s)
 	}
 
