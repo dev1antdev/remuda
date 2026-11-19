@@ -131,7 +131,7 @@ func readScan(output string, push bool) (SecretScan, error) {
 			switch word {
 			case "attrs": // an attribute may be hiding text in what git calls binary: those files count as unread
 				attrs = true
-			case "converts": // check-attr --all -z's triplets, path, attribute and value, in hex, then "ok"
+			case "converts": // check-attr -z's triplets, path, attribute and value, in hex, then "ok"
 				answer, err := hex.DecodeString(value)
 				if err != nil {
 					return SecretScan{}, errUnreadable
@@ -140,9 +140,10 @@ func readScan(output string, push bool) (SecretScan, error) {
 				if !ok {
 					return SecretScan{}, errors.New(failures["work"])
 				}
-				// a value is no help: a filter may be named "unset", the word git says for one taken away
+				// "unset" may be a filter's name as well as git's word for one taken away: either counts; a filter named
+				// "unspecified", git's word for none, makes the script mark every binary file (attrsScript)
 				for fields := strings.Split(triplets, "\x00"); len(fields) >= 3; fields = fields[3:] {
-					if fields[1] == "filter" || fields[1] == "working-tree-encoding" {
+					if fields[2] != "unspecified" {
 						converted[fields[0]] = true
 					}
 				}

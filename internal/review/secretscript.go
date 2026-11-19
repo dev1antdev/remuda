@@ -17,7 +17,7 @@ const noAttrs = `$A ` + ownAttrs
 const ownAttrs = `-c core.attributesFile=/dev/null -c diff.default.binary=auto`
 
 // attrsMark is what, in an attributes file, can make git call a text file binary.
-const attrsMark = `(^|[[:space:]])(binary|-diff|!diff)([[:space:]]|$)`
+const attrsMark = `(^|[[:space:]"])(binary|-diff|!diff)([[:space:]]|$)` // a quoted pattern may run into its attributes
 
 // attrsScript points git's attributes at the empty tree where it can (--attr-source, git 2.41). What that leaves, the
 // repository's info/attributes and on an older git every .gitattributes, tracked or not, in the index too, is said with a line "\036attrs"
@@ -25,8 +25,9 @@ const attrsMark = `(^|[[:space:]])(binary|-diff|!diff)([[:space:]]|$)`
 // text the check cannot read.
 var attrsScript = `A=; e=$(git hash-object -t tree /dev/null); i=$(git rev-parse --git-path info/attributes 2>/dev/null); ` +
 	`if git --attr-source="$e" rev-parse --git-dir >/dev/null 2>&1; then A="--attr-source=$e"; fi; ` +
-	`m='` + attrsMark + `'; if [ -n "$(git config --get-regexp '^diff\..*\.binary$' 2>/dev/null)" ]; then m="$m|(^|[[:space:]])diff="; fi; ` +
+	`m='` + attrsMark + `'; if [ -n "$(git config --get-regexp '^diff\..*\.binary$' 2>/dev/null)" ]; then m="$m|(^|[[:space:]\"])diff="; fi; ` +
 	`attrs=; grep -E "$m" "$i" 2>/dev/null | grep -qvE '^[[:space:]]*#' && attrs=1; ` +
+	`if [ -n "$(git config --get-regexp '^filter\.unspecified\.' 2>/dev/null)" ]; then attrs=1; fi; ` + // retryScript's word for none
 	`if [ -z "$A" ] && { ` + readGit + ` grep --untracked --no-exclude-standard -hE "$m" -- ':(top,glob)**/.gitattributes' 2>/dev/null; ` +
 	readGit + ` grep --cached -hE "$m" -- ':(top,glob)**/.gitattributes' 2>/dev/null; } | grep -qvE '^[[:space:]]*#'; then attrs=1; fi; `
 
@@ -45,11 +46,11 @@ var workDiff = attrsDiff + ` --relative "$base" 2>/dev/null || printf '\036faile
 // retryScript is given, in xargs's batches, the records of --numstat -z. The files git called binary ("-\t-\t<path>")
 // it reads again without the repository's attributes, first saying which of them an attribute converts in the working
 // tree (working-tree-encoding, filter): read by their bytes alone they may be binary to git, or other text, than what a
-// commit carries. git check-attr --all -z's answer, which names only the attributes a file has, comes with "ok" after it
-// when check-attr succeeded, coded in hex so that no name breaks the stream ("\036converts <hex>").
+// commit carries. git check-attr -z's answer, two attributes a file, comes with "ok" after it when check-attr succeeded,
+// coded in hex so that no name breaks the stream ("\036converts <hex>").
 var retryScript = `t=$(printf '\t'); for r; do case $r in failed) printf '\036failed work\n';; "-$t-$t"*) set -- "$@" "${r#-$t-$t}";; esac; shift; done; ` +
 	`[ $# -gt 0 ] || exit 0; ` +
-	`h=$({ printf '%s\000' "$@" | ` + readGit + ` check-attr --all -z --stdin 2>/dev/null && printf ok; } | od -An -v -tx1 | tr -d ' \t\n'); ` +
+	`h=$({ printf '%s\000' "$@" | ` + readGit + ` check-attr -z --stdin filter working-tree-encoding 2>/dev/null && printf ok; } | od -An -v -tx1 | tr -d ' \t\n'); ` +
 	`printf '\036converts %s\n' "$h"; ` +
 	`for p; do shift; set -- "$@" ":(literal)$p"; done; ` +
 	gitDiff + ` --relative "$base" -- "$@" 2>/dev/null || printf '\036failed work\n'`

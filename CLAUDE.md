@@ -2408,7 +2408,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   repository's attributes, which decode a `working-tree-encoding` file, and
   what they leave binary once more without them, names kept whole (`-z`); a
   file an attribute converts there (`working-tree-encoding`, `filter`, said
-  as `\036converts <hex of check-attr --all -z, then "ok">`, whatever the value) stays `marked` whatever its bytes say. The machine's own
+  as `\036converts <hex of check-attr -z, then "ok">`, any value but
+  `unspecified`; a filter named so marks every binary file) stays `marked` whatever its bytes say. The machine's own
   attributes file is never read (`GIT_ATTR_NOSYSTEM`). The awk drops a diff's removed lines, cuts each
   file at 1 MB (`\036partly`) and the stream at `scanTotal` 8 MB, the commits' own 8 MB after the work's
   (`\036budget <path>` / `\036unread <path>` for the rest), so a remote

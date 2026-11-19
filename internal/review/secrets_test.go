@@ -1204,6 +1204,21 @@ func TestASecondReadThatCannotStartFailsTheCheck(t *testing.T) {
 	}
 }
 
+func TestAQuotedPatternRunningIntoItsMarkIsHeeded(t *testing.T) {
+	ownGitConfig(t)
+	dir := mergeBringing(t, "hidden.env", "export NPM_TOKEN="+"npm_"+fakeKey(43, 36)+"\n")
+	if err := os.WriteFile(filepath.Join(dir, ".git", "info", "attributes"), []byte("\"*.env\"-diff\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	scan, err := ScanWork(shell.Local{Name: "local"}, dir, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !scan.PushUnread() || !scan.Incomplete {
+		t.Errorf("%+v", scan)
+	}
+}
+
 func TestTheDefaultDiffDriverCalledBinaryHidesNothing(t *testing.T) {
 	ownGitConfig(t)
 	dir, git, write := scratchCheckout(t)
