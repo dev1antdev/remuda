@@ -84,4 +84,7 @@ func TestAReleaseThatDoesNotRunIsNotInstalled(t *testing.T) {
 	if body, _ := os.ReadFile(filepath.Join(home, ".local", "bin", "remuda")); string(body) != "#!/bin/sh\necho old\n" {
 		t.Errorf("the old binary was replaced: %q", body)
 	}
+	if left, _ := filepath.Glob(filepath.Join(home, ".local", "bin", "remuda.new*")); len(left) != 0 {
+		t.Errorf("the download stayed behind: %v", left)
+	}
 }

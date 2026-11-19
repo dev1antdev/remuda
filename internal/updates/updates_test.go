@@ -131,10 +131,10 @@ func TestReleaseUpdate(t *testing.T) {
 		t.Fatalf("remote: %+v %v", u, ok)
 	}
 	for _, want := range []string{
-		`curl -fsSL --retry 3 -o "$HOME/.local/bin/remuda.new" 'https://github.com/dev1antdev/remuda/releases/download/v0.5.0/remuda-darwin-arm64'`,
+		`curl -fsSL --retry 3 -o "$HOME/.local/bin/remuda.new.$$" 'https://github.com/dev1antdev/remuda/releases/download/v0.5.0/remuda-darwin-arm64'`,
 		`/v0.5.0/checksums.txt`,
 		`awk -v n='remuda-darwin-arm64'`,
-		`mv "$HOME/.local/bin/remuda.new" "$HOME/.local/bin/remuda"`,
+		`mv "$HOME/.local/bin/remuda.new.$$" "$HOME/.local/bin/remuda"`,
 		`launchctl kickstart -k`,
 	} {
 		if !strings.Contains(u.Command, want) {

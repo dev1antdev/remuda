@@ -954,7 +954,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   release's x.y.z is newer than the machine's (a build past a tag,
   `v0.4.0-24-g…`, is 0.4.0) and it has `remuda-<os>-<arch>` for the
   machine; `ReleaseScript` is what the machine runs on Run: curl the asset
-  to `~/.local/bin/remuda.new`, check it against the release's
+  to `~/.local/bin/remuda.new.<the job's pid>`, its own so two updates at
+  once never install each other's file, check it against the release's
   `checksums.txt` when there is one (a mismatch keeps the old binary;
   none → installed with a "not verified" line), `InstallScript` (chmod,
   `-version`, mv; a binary that does not run fails the job, nothing restarted)

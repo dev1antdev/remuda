@@ -24,9 +24,17 @@ func windowsReleaseScript(url, sums, asset string) string {
 	var b strings.Builder
 	b.WriteString("set -e; " + script.PATH + "\n")
 	b.WriteString(`mkdir -p "$HOME/.local/bin"` + "\n")
-	b.WriteString(downloadScript(url, sums, asset, "remuda.new.exe"))
-	b.WriteString(windowsInstall)
+	const staged = "remuda.new.$$.exe"
+	b.WriteString(stagingScript(staged))
+	b.WriteString(downloadScript(url, sums, asset, staged))
+	b.WriteString(strings.ReplaceAll(windowsInstall, "remuda.new.exe", staged))
 	return b.String()
+}
+
+// stagingScript clears a job's own download when it ends: named after the job's shell, so that two updates of one machine
+// at once never install each other's half-written file.
+func stagingScript(staged string) string {
+	return `trap 'rm -f "$HOME/.local/bin/` + staged + `" "$HOME/.local/bin/remuda.sums.$$"' EXIT` + "\n"
 }
 
 // downloadScript fetches the asset into ~/.local/bin/<into> and, when the release has its checksums, checks it.
@@ -39,10 +47,10 @@ func downloadScript(url, sums, asset, into string) string {
 		b.WriteString(`echo "(this release carries no checksums.txt; the download is not verified)"` + "\n")
 		return b.String()
 	}
-	b.WriteString(`if curl -fsSL --retry 3 -o "$HOME/.local/bin/remuda.sums" ` + script.Quote(sums) + `; then` + "\n")
-	b.WriteString(`  want=$(awk -v n=` + script.Quote(asset) + ` '{ f=$NF; sub(/^\*/, "", f); if (f == n) print $1 }' "$HOME/.local/bin/remuda.sums" | head -1)` + "\n")
+	b.WriteString(`if curl -fsSL --retry 3 -o "$HOME/.local/bin/remuda.sums.$$" ` + script.Quote(sums) + `; then` + "\n")
+	b.WriteString(`  want=$(awk -v n=` + script.Quote(asset) + ` '{ f=$NF; sub(/^\*/, "", f); if (f == n) print $1 }' "$HOME/.local/bin/remuda.sums.$$" | head -1)` + "\n")
 	b.WriteString(`  have=$( (shasum -a 256 ` + file + ` 2>/dev/null || sha256sum ` + file + `) | cut -d' ' -f1)` + "\n")
-	b.WriteString(`  rm -f "$HOME/.local/bin/remuda.sums"` + "\n")
+	b.WriteString(`  rm -f "$HOME/.local/bin/remuda.sums.$$"` + "\n")
 	b.WriteString(`  if [ -z "$want" ] || [ "$want" != "$have" ]; then echo "!! checksum mismatch: the download is not what the release says (want ${want:-?}, got $have)"; rm -f ` + file + `; exit 1; fi` + "\n")
 	b.WriteString(`  echo "checksum ok"` + "\n")
 	b.WriteString(`else echo "!! could not fetch the release's checksums.txt"; rm -f ` + file + `; exit 1; fi` + "\n")
