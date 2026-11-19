@@ -218,7 +218,7 @@ func (s *Server) Handler() http.Handler {
 	root := http.NewServeMux()
 	root.HandleFunc("GET /api/health", s.handleHealth)
 	root.HandleFunc("POST /api/login", s.Guard.HandleLogin)
-	root.Handle("/", s.Guard.Middleware(api))
+	root.Handle("/", s.Guard.Middleware(s.viewerOwnGuard(api)))
 	return secureHeaders(csrfGuard(root))
 }
 

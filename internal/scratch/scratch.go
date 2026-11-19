@@ -36,6 +36,7 @@ type Store struct {
 	dir      string
 	mu       sync.Mutex
 	ids      map[string]string      // machine id → workspace id
+	ended    map[string]bool        // "machine|workspace" of the shells ended since remuda started
 	machines map[string]*sync.Mutex // machine id → the lock its shell is made and ended under
 }
 
@@ -75,6 +76,14 @@ func (s *Store) Is(machine, workspace string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return workspace != "" && s.ids[machine] == workspace
+}
+
+// Ended says the workspace was the machine's scratch shell, ended since remuda started: the watcher's last snapshot may
+// still show it, and what stood there stays the person's.
+func (s *Store) Ended(machine, workspace string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.ended[machine+"|"+workspace]
 }
 
 // Ensure is the machine's scratch shell: the kept workspace while a fresh snapshot still has it, else a new one in
@@ -128,6 +137,7 @@ func (s *Store) Close(machine string, client Herdr, snap *herdr.Snapshot) error 
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.endedLocked(machine, id)
 	if s.ids[machine] == id {
 		delete(s.ids, machine)
 	}
@@ -138,13 +148,22 @@ func (s *Store) Close(machine string, client Herdr, snap *herdr.Snapshot) error 
 func (s *Store) Forget(machine string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if _, ok := s.ids[machine]; !ok {
+	id, ok := s.ids[machine]
+	if !ok {
 		return
 	}
+	s.endedLocked(machine, id) // herdr there goes on, and the machine may come back with the shell still standing
 	delete(s.ids, machine)
 	if err := s.save(); err != nil {
 		log.Printf("%s: %v", file, err)
 	}
+}
+
+func (s *Store) endedLocked(machine, id string) {
+	if s.ended == nil {
+		s.ended = map[string]bool{}
+	}
+	s.ended[machine+"|"+id] = true
 }
 
 func (s *Store) save() error { return state.SaveJSON(s.dir, file, s.ids) }

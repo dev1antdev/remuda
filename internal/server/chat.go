@@ -61,7 +61,11 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		}
 		last = n
 	}
-	conv, err := s.Chat.Open(mc, paneID, sessionID, dir, last > 0 || subagent != "")
+	open := s.Chat.Open
+	if auth.IsViewer(r.Context()) {
+		open = s.Chat.OpenOwn
+	}
+	conv, err := open(mc, paneID, sessionID, dir, last > 0 || subagent != "")
 	var notFound *chat.NotFoundError
 	switch {
 	case errors.As(err, &notFound):
@@ -98,7 +102,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sessions := conv.Sessions
-	if sessions == nil {
+	if sessions == nil || auth.IsViewer(r.Context()) { // a viewer reads the conversation the pane is in
 		sessions = []transcript.SessionInfo{}
 	}
 	answer := map[string]any{"session_id": conv.ID, "sessions": sessions, "turns": tail.Turns}

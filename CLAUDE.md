@@ -6762,7 +6762,28 @@ components and icons as rules for whoever changes it: @docs/design.md
   name, never "", which is the person's). **Viewer links** (the same `Keys` store,
   scope `viewer`, prefix `rv_…`, `MintViewer(name)` — several side by
   side, named for whose screen it is): a read-only sign-in for the TV in
-  the office or a colleague watching a run. `ViewerAllows(method, path)`
+  the office or a colleague watching a run. **remuda's own workspaces, the
+  floating terminal's shell and the concierge, do not exist for it**
+  (`internal/server/viewerown.go`, tested): the roster it gets leaves them
+  out under an ETag of its own, `viewerOwnGuard` answers 404 to an `/api/`
+  request naming their pane or folder (and to a pane the roster has not
+  shown, on the routes that read a pane by its id). **A viewer reads the
+  conversation a pane on its roster reports it is in and no other**: a
+  session is found by its id in every project folder and nothing says whose
+  it was, so the chat and the recap read a session id only through the pane that is
+  in it (`viewerSessionPane`, a compacted conversation's later file counting
+  as the pane's; the request is rewritten to that pane), refuse any other,
+  answer nothing for a pane whose own session cannot be found
+  (`chat.OpenOwn`), and list no folder's sessions;
+  their timelapses are left out of
+  the list, the search and the id (`ownRecording`: `Meta.Own`, set when the
+  take begins; an older one only from a folder the viewer reaches now and
+  under neither name those workspaces are made with), the usage report lists only the folders it
+  reaches and no session (its totals still count the rest), the standup, which leaves them out for everyone, keeps the panes on the viewer's roster, the feed goes
+  by the `Own` a row was written with and hides a row without one whose pane
+  is gone, and its event
+  stream watches none of them; a floating terminal just ended stays hidden
+  (`scratch.Store.Ended`) while the last snapshot shows it. `ViewerAllows(method, path)`
   is a GET of `viewerRoutes` — the roster, the chat, the screen, the
   scrollback, a recap, the standup, the feed, a file, its stat and a folder of the project tree (kept
   by `internal/viewer`, tested: `Reach` is the machine's workspace folders

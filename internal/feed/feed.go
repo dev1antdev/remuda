@@ -28,10 +28,13 @@ type Entry struct {
 	Body    string    `json:"body,omitempty"`
 	Quiet   bool      `json:"quiet,omitempty"`  // no news: what a device sent through remuda; the bell's dot skips it
 	Worked  int64     `json:"worked,omitempty"` // a finish: the turn's seconds, for a page's own "long turns only"
+	Own     *bool     `json:"own,omitempty"`    // of a workspace remuda keeps for itself, as known when written (nil: not known): true is never a viewer's
 }
 
 // Service is the list, loaded once and saved on every addition.
 type Service struct {
+	Own func(machineID, paneID string) *bool // whether a pane is of a workspace remuda keeps for itself; set before the first Add
+
 	dir string
 	mu  sync.Mutex
 	all []Entry // newest first
@@ -48,6 +51,9 @@ func New(dir string) *Service {
 
 // Add puts an entry first, stamped now and numbered after the newest, and keeps the list at Max.
 func (s *Service) Add(e Entry) Entry {
+	if e.Own == nil && e.Pane != "" && s.Own != nil {
+		e.Own = s.Own(e.Machine, e.Pane)
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	e.At = time.Now()

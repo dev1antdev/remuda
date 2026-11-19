@@ -393,6 +393,16 @@ func (c *tailCache) remember(key tailKey, tail Tail) {
 // or, without a pane, a session by folder and id, read-only. An unknown pane or session is a NotFoundError; a Path of "" is an empty chat.
 // For a tail only (a tile's last turns) the folder's sessions are not listed: a tile never shows them, and the listing reads every file's title.
 func (c *Service) Open(mc *machines.Machine, paneID, sessionID, dir string, tail bool) (Conversation, error) {
+	return c.open(mc, paneID, sessionID, dir, tail, true)
+}
+
+// OpenOwn is Open for a reader who may see only the pane's own conversation: a pane whose session cannot be found is an
+// empty chat, never the newest session of its folder, which may be anyone's.
+func (c *Service) OpenOwn(mc *machines.Machine, paneID, sessionID, dir string, tail bool) (Conversation, error) {
+	return c.open(mc, paneID, sessionID, dir, tail, false)
+}
+
+func (c *Service) open(mc *machines.Machine, paneID, sessionID, dir string, tail, newest bool) (Conversation, error) {
 	conv := Conversation{reader: mc.Transcripts, tails: &c.tails}
 	if paneID == "" {
 		path, err := mc.Transcripts.ResolveSession("", dir, "id", sessionID)
@@ -422,7 +432,7 @@ func (c *Service) Open(mc *machines.Machine, paneID, sessionID, dir string, tail
 		if conv.Path == "" && pane.AgentSession != nil {
 			conv.Path, _ = mc.Transcripts.ResolveSession(pane.AgentSession.Agent, conv.Dir, pane.AgentSession.Kind, pane.AgentSession.Value)
 		}
-		if conv.Path == "" && mc.Local() {
+		if conv.Path == "" && mc.Local() && newest {
 			if conv.Sessions == nil {
 				conv.Sessions, _ = transcript.Sessions(format, conv.Dir)
 			}

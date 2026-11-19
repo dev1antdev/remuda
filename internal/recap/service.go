@@ -28,7 +28,18 @@ func (s *Service) reports(machineID string, pane *herdr.PaneInfo) bool {
 
 // Conversation is the recap of one conversation: a pane's live one, a session of its folder, or a transcript on its own.
 func (s *Service) Conversation(mc *machines.Machine, paneID, sessionID, dir string, since time.Time) (Recap, error) {
-	conv, err := s.Chat.Open(mc, paneID, sessionID, dir, false)
+	return s.recapOf(s.Chat.Open, mc, paneID, sessionID, dir, since)
+}
+
+// ConversationOwn is Conversation by chat.Service.OpenOwn: a pane's own conversation or none.
+func (s *Service) ConversationOwn(mc *machines.Machine, paneID, sessionID, dir string, since time.Time) (Recap, error) {
+	return s.recapOf(s.Chat.OpenOwn, mc, paneID, sessionID, dir, since)
+}
+
+type opener func(mc *machines.Machine, paneID, sessionID, dir string, tail bool) (chat.Conversation, error)
+
+func (s *Service) recapOf(open opener, mc *machines.Machine, paneID, sessionID, dir string, since time.Time) (Recap, error) {
+	conv, err := open(mc, paneID, sessionID, dir, false)
 	if err != nil {
 		return Recap{}, err
 	}
@@ -45,7 +56,12 @@ func (s *Service) Conversation(mc *machines.Machine, paneID, sessionID, dir stri
 }
 
 // Standup is one item per agent pane on every connected machine, the machines read side by side, in the roster's order.
-func (s *Service) Standup(since time.Time) []Item {
+func (s *Service) Standup(since time.Time) []Item { return s.standup(s.Chat.Open, since) }
+
+// StandupOwn is Standup with each pane's recap by chat.Service.OpenOwn.
+func (s *Service) StandupOwn(since time.Time) []Item { return s.standup(s.Chat.OpenOwn, since) }
+
+func (s *Service) standup(open opener, since time.Time) []Item {
 	list := s.Machines.List()
 	perMachine := make([][]Item, len(list))
 	var wg sync.WaitGroup
@@ -68,7 +84,7 @@ func (s *Service) Standup(since time.Time) []Item {
 				item := Item{Machine: mc.ID(), Label: mc.Label(), Workspace: snap.WorkspaceLabel(pane.WorkspaceID), Pane: pane.PaneID, Dir: pane.Dir(), Agent: pane.AgentName()}
 				display := s.Radar.Display(mc.ID(), pane)
 				item.State, item.Alert = display.State, display.Alert
-				recap, err := s.Conversation(mc, pane.PaneID, "", "", since)
+				recap, err := s.recapOf(open, mc, pane.PaneID, "", "", since)
 				if err != nil {
 					item.Error = err.Error()
 				}

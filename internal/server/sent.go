@@ -33,14 +33,7 @@ func (s *Server) senderName(ctx context.Context) string {
 
 // workspaceOf is the pane's workspace as the sidebar names it, from the watcher's snapshot; "" when unknown.
 func (s *Server) workspaceOf(machineID, paneID string) string {
-	if s.Watch == nil {
-		return ""
-	}
-	snap, err := s.Watch.Snapshot(machineID)
-	if err != nil || snap == nil {
-		return ""
-	}
-	pane := snap.Pane(paneID)
+	snap, pane := s.paneOf(machineID, paneID)
 	if pane == nil {
 		return ""
 	}

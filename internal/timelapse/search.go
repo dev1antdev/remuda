@@ -47,6 +47,7 @@ type SearchQuery struct {
 	Pane    string
 	Dir     string
 	Since   time.Time
+	Skip    func(Meta) bool // recordings this reader may not see; asked outside the recorder's lock
 }
 
 // Appearance is one stretch of time the text stood on the screen.
@@ -95,6 +96,9 @@ func (r *Recorder) Search(ctx context.Context, q SearchQuery) ScreenResult {
 		return out
 	}
 	scope := r.scope(q)
+	if q.Skip != nil {
+		scope = slices.DeleteFunc(scope, func(e entry) bool { return q.Skip(e.meta) })
+	}
 	since := r.plain.begin()
 	deadline := r.now().Add(r.searchFor)
 	late := func() bool { return ctx.Err() != nil || !r.now().Before(deadline) }

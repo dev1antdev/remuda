@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -328,9 +329,10 @@ func (s *Server) handleRoster(w http.ResponseWriter, r *http.Request) {
 	s.Jira.Touch()      // and the Jira issues the workspaces name
 	s.Subagents.Touch() // and the subagents the conversations run
 	s.Ports.Touch()     // and the ports the workspaces' processes listen on
-	body, etag := s.rosterBody()
+	viewer := auth.IsViewer(r.Context())
+	body, etag := s.rosterFor(viewer)
 	w.Header().Set("X-Remuda-Version", buildversion.Build) // a page older than the server offers a reload
-	if auth.IsViewer(r.Context()) {
+	if viewer {
 		w.Header().Set("X-Remuda-Viewer", "1") // a viewer link signed this page in: it draws, and hides every control that would type or change
 	}
 	if r.Header.Get("If-None-Match") == etag {
@@ -349,8 +351,11 @@ func (s *Server) RosterETag() string {
 	return etag
 }
 
-// rosterBody is the roster as served, with its ETag, from the caches alone.
-func (s *Server) rosterBody() ([]byte, string) {
+// rosterBody is the roster as the person gets it, with its ETag, from the caches alone.
+func (s *Server) rosterBody() ([]byte, string) { return s.rosterFor(false) }
+
+// rosterFor is the roster as served: a viewer's leaves out the workspaces remuda keeps for itself, under an ETag of its own.
+func (s *Server) rosterFor(viewer bool) ([]byte, string) {
 	list := s.Machines.List()
 	out := make([]rosterMachine, 0, len(list))
 	for _, mc := range list {
@@ -363,6 +368,9 @@ func (s *Server) rosterBody() ([]byte, string) {
 			snap, err := s.Watch.Snapshot(mc.ID())
 			if snap != nil {
 				entry.Sessions = s.sessionsFromSnapshot(mc.ID(), snap)
+				if viewer {
+					entry.Sessions = slices.DeleteFunc(entry.Sessions, func(x rosterSession) bool { return s.viewerOwn(mc.ID(), x.ID) })
+				}
 			}
 			if err != nil {
 				entry.State, entry.Error = machines.StateError, err.Error()
@@ -385,6 +393,10 @@ func (s *Server) rosterBody() ([]byte, string) {
 			if reading := s.Limits.Of(mc.ID()); len(reading.Windows) > 0 || reading.Wrapped {
 				entry.Limits = &reading
 			}
+		}
+		if viewer {
+			entry.Stopped = slices.DeleteFunc(entry.Stopped, func(x restart.Stopped) bool { return !s.viewerSeesPane(mc.ID(), x.Pane) })
+			entry.Retiring = slices.DeleteFunc(entry.Retiring, func(x retire.Hit) bool { return x.Kind == "pane" && !s.viewerSeesPane(mc.ID(), x.ID) })
 		}
 		out = append(out, entry)
 	}

@@ -14,11 +14,16 @@ import (
 // editorFolders are the folders the machine's workspaces live in, remuda's own — the floating terminal's home-folder
 // shell, the concierge's folder — left out
 func (s *Server) editorFolders(machineID string, snap *herdr.Snapshot) []string {
+	return s.foldersBut(machineID, snap, s.ownWorkspace)
+}
+
+// foldersBut is the folders of the snapshot's workspaces, each once, without those of the workspaces left out.
+func (s *Server) foldersBut(machineID string, snap *herdr.Snapshot, out func(machineID, workspaceID string) bool) []string {
 	var folders []string
 	seen := map[string]bool{}
 	for i := range snap.Workspaces {
 		ws := &snap.Workspaces[i]
-		if s.ownWorkspace(machineID, ws.WorkspaceID) {
+		if out(machineID, ws.WorkspaceID) {
 			continue
 		}
 		if dir := snap.WorkspaceDir(ws); dir != "" && !seen[dir] {
