@@ -11,30 +11,40 @@ const plainPatch = script.PatchForm + ` --no-renames -U0`
 
 // noAttrs is what makes git judge a file by its bytes alone, whatever an attribute (*.env -diff) says of it; $A is set by
 // attrsScript.
-const noAttrs = `$A -c core.attributesFile=/dev/null`
+const noAttrs = `$A ` + ownAttrs
+
+// ownAttrs keeps the person's own attributes file and a configured default diff driver from calling text binary.
+const ownAttrs = `-c core.attributesFile=/dev/null -c diff.default.binary=auto`
 
 // attrsMark is what, in an attributes file, can make git call a text file binary.
 const attrsMark = `(^|[[:space:]])(binary|-diff|!diff)([[:space:]]|$)`
 
 // attrsScript points git's attributes at the empty tree where it can (--attr-source, git 2.41). What that leaves, the
-// repository's info/attributes and on an older git every .gitattributes, tracked or not, is said with a line "\036attrs"
+// repository's info/attributes and on an older git every .gitattributes, tracked or not, in the index too, is said with a line "\036attrs"
 // when it marks anything, a diff driver the configuration calls binary included: the files git then calls binary may be
 // text the check cannot read.
 var attrsScript = `A=; e=$(git hash-object -t tree /dev/null); i=$(git rev-parse --git-path info/attributes 2>/dev/null); ` +
 	`if git --attr-source="$e" rev-parse --git-dir >/dev/null 2>&1; then A="--attr-source=$e"; fi; ` +
 	`m='` + attrsMark + `'; if [ -n "$(git config --get-regexp '^diff\..*\.binary$' 2>/dev/null)" ]; then m="$m|(^|[[:space:]])diff="; fi; ` +
 	`attrs=; grep -E "$m" "$i" 2>/dev/null | grep -qvE '^[[:space:]]*#' && attrs=1; ` +
-	`if [ -z "$A" ] && ` + readGit + ` grep --untracked --no-exclude-standard -hE "$m" -- ':(top,glob)**/.gitattributes' 2>/dev/null | grep -qvE '^[[:space:]]*#'; then attrs=1; fi; `
+	`if [ -z "$A" ] && { ` + readGit + ` grep --untracked --no-exclude-standard -hE "$m" -- ':(top,glob)**/.gitattributes' 2>/dev/null; ` +
+	readGit + ` grep --cached -hE "$m" -- ':(top,glob)**/.gitattributes' 2>/dev/null; } | grep -qvE '^[[:space:]]*#'; then attrs=1; fi; `
 
 // gitDiff is git's diff as the check reads it, writing nothing; each call says itself whether it is relative to the folder.
 const gitDiff = readGit + ` ` + noAttrs + ` -c diff.relative=false diff ` + plainPatch
 
-// workDiff is the work against HEAD. It is read with the repository's attributes, which say how a working-tree-encoding
-// file decodes, and what they leave binary again without them.
-const workDiff = readGit + ` -c core.attributesFile=/dev/null -c diff.relative=false diff ` + plainPatch + ` --relative "$base" 2>/dev/null || printf '\036failed work\n'; ` +
-	`if [ -n "$A" ]; then ` + readGit + ` -c core.attributesFile=/dev/null -c diff.relative=false diff ` + plainPatch + ` --numstat --relative "$base" 2>/dev/null | ` +
-	`LC_ALL=C awk -F '\t' '$1 == "-" && $2 == "-" { print ":(literal)" substr($0, 5) }' | tr '\n' '\0' | ` +
-	`xargs -0 -r ` + gitDiff + ` --relative "$base" -- 2>/dev/null || printf '\036failed work\n'; fi; `
+// attrsDiff is the diff with the repository's attributes, which say how a working-tree-encoding file decodes.
+const attrsDiff = readGit + ` ` + ownAttrs + ` -c diff.relative=false diff ` + plainPatch
+
+// workDiff is the work against HEAD, read with the repository's attributes, and what they leave binary once more without
+// them; of those, the ones an attribute converts in the working tree are named ("\036encoded <path>"): read by their
+// bytes alone they may be binary to git though they hold text a commit would carry.
+const workDiff = attrsDiff + ` --relative "$base" 2>/dev/null || printf '\036failed work\n'; ` +
+	`if [ -n "$A" ]; then b=$(` + attrsDiff + ` --numstat -z --relative "$base" 2>/dev/null | tr '\0' '\n' | ` +
+	`LC_ALL=C awk -F '\t' '$1 == "-" && $2 == "-" { print substr($0, 5) }') || printf '\036failed work\n'; ` +
+	`if [ -n "$b" ]; then printf '%s\n' "$b" | ` + readGit + ` check-attr --stdin working-tree-encoding 2>/dev/null | ` +
+	`LC_ALL=C awk '{ v = $NF; sub(/: working-tree-encoding: [^:]*$/, ""); if (v != "unspecified" && v != "unset") print "\036encoded " $0 }'; ` +
+	`printf '%s\n' "$b" | sed 's|^|:(literal)|' | tr '\n' '\0' | xargs -0 -r ` + gitDiff + ` --relative "$base" -- 2>/dev/null || printf '\036failed work\n'; fi; fi; `
 
 // capScript cuts the stream on its way out: a diff's removed lines go, nothing to find in them, and each file's lines at scanPerFile (a line "\036partly" says where), and
 // every file once scanTotal is spent, the commits having a scanTotal of their own so the work beside them cannot use it up (each named on a line "\036budget <path>", "\036unread <path>" for an untracked

@@ -99,6 +99,7 @@ func readScan(output string, push bool) (SecretScan, error) {
 	var file, commit string
 	var number int
 	header, ended, attrs := false, false, false
+	encoded := map[string]bool{}  // converted in the working tree: binary by its bytes says nothing of what a commit carries
 	skipped := map[Skipped]bool{} // a file the work and the index both carry is said once
 	skip := func(path, why string) {
 		entry := Skipped{Path: path, Why: why, InCommit: commit != "" && commit != secrets.Staged}
@@ -129,6 +130,8 @@ func readScan(output string, push bool) (SecretScan, error) {
 			switch word {
 			case "attrs": // an attribute may be hiding text in what git calls binary: those files count as unread
 				attrs = true
+			case "encoded":
+				encoded[value] = true
 			case "commit":
 				commit, file, header = value, "", false
 				scan.Commits++
@@ -190,6 +193,14 @@ func readScan(output string, push bool) (SecretScan, error) {
 	if !ended {
 		return SecretScan{}, errUnfinished
 	}
+	// the work's second read settles what the first called binary: read as text, or still unknown for a converted file
+	scan.Skipped = slices.DeleteFunc(scan.Skipped, func(skip Skipped) bool { return skip.Why == SkipBinary && !skip.InCommit && read[skip.Path] })
+	for i, skip := range scan.Skipped {
+		if skip.Why == SkipBinary && !skip.InCommit && encoded[skip.Path] {
+			scan.Skipped[i].Why = SkipMarked
+		}
+	}
+	scan.Skipped = slices.CompactFunc(scan.Skipped, func(a, b Skipped) bool { return a == b })
 	scan.Findings, scan.More, scan.Files = collector.Findings(), collector.More(), len(read)
 	scan.Incomplete = slices.ContainsFunc(scan.Skipped, func(skip Skipped) bool { return skip.Why != SkipBinary || skip.InCommit })
 	return scan, nil

@@ -1756,7 +1756,8 @@ line with the secret masked, a click shows its row in the diff, marked,
 and **Send anyway…** goes only after a confirm that says how many. A check
 that cannot run, or could not read all of the work, says so and names the
 files (an attribute such as `*.env -diff` hides no text from it, except on
-a git older than 2.41, where a file it marks binary counts as unread), and Send anyway is the way past it too; a plain
+a git older than 2.41 or through the repository's own `.git/info/attributes`,
+where a file it marks binary counts as unread), and Send anyway is the way past it too; a plain
 Approve, Reject and Mark reviewed never wait. A line ending in
 `gitleaks:allow` (or `remuda:allow-secret`) is let through, so a test
 fixture can say it is one. The lens head also warns when Claude Code's

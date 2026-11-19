@@ -1083,3 +1083,93 @@ func TestAnOlderGitHeedsAnUntrackedAttributesFile(t *testing.T) {
 		t.Errorf("%+v", scan)
 	}
 }
+
+func TestAWorkFileReadTheSecondTimeIsNotSaidUnread(t *testing.T) {
+	ownGitConfig(t)
+	if !gitHasAttrSource(t) {
+		t.Skip("git before 2.41")
+	}
+	dir, git, write := scratchCheckout(t)
+	write(".gitattributes", "*.env -diff\n")
+	write("producción \"quoted\".env", "A=1\n")
+	git("add", "-A")
+	git("commit", "-qm", "init")
+	write("producción \"quoted\".env", "A=1\nexport NPM_TOKEN="+"npm_"+fakeKey(39, 36)+"\n")
+	scan, err := ScanWork(shell.Local{Name: "local"}, dir, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(scan.Findings) != 1 || len(scan.Skipped) != 0 {
+		t.Errorf("%+v", scan)
+	}
+}
+
+func TestAnEncodedFileMarkedBinaryIsUnread(t *testing.T) {
+	ownGitConfig(t)
+	if !gitHasAttrSource(t) {
+		t.Skip("git before 2.41")
+	}
+	utf16 := func(s string) string {
+		var b strings.Builder
+		for i := range len(s) {
+			b.WriteByte(s[i])
+			b.WriteByte(0)
+		}
+		return b.String()
+	}
+	dir, git, write := scratchCheckout(t)
+	write(".gitattributes", "*.ps1 text working-tree-encoding=UTF-16LE -diff\n")
+	write("run.ps1", utf16("A=1\n"))
+	git("add", "-A")
+	git("commit", "-qm", "init")
+	write("run.ps1", utf16("A=1\nB=2\n"))
+	scan, err := ScanWork(shell.Local{Name: "local"}, dir, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !scan.Incomplete || len(scan.Skipped) != 1 || scan.Skipped[0] != (Skipped{Path: "run.ps1", Why: SkipMarked}) {
+		t.Errorf("%+v", scan)
+	}
+}
+
+func TestTheDefaultDiffDriverCalledBinaryHidesNothing(t *testing.T) {
+	ownGitConfig(t)
+	dir, git, write := scratchCheckout(t)
+	write("a.txt", "a\n")
+	git("add", "-A")
+	git("commit", "-qm", "init")
+	git("config", "diff.default.binary", "true")
+	git("update-ref", "refs/remotes/origin/main", "HEAD")
+	write("app.go", "const token = \""+"npm_"+fakeKey(40, 36)+"\"\n")
+	git("add", "-A")
+	git("commit", "-qm", "the commit a push sends")
+	scan, err := ScanWork(shell.Local{Name: "local"}, dir, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(scan.Findings) != 1 {
+		t.Errorf("%+v", scan)
+	}
+}
+
+func TestAnOlderGitHeedsTheIndexedAttributes(t *testing.T) {
+	ownGitConfig(t)
+	dir, git, write := scratchCheckout(t)
+	write(".gitattributes", "*.env -diff\n")
+	write("app.env", "A=1\n")
+	git("add", "-A")
+	git("commit", "-qm", "init")
+	write("app.env", "A=1\nexport NPM_TOKEN="+"npm_"+fakeKey(41, 36)+"\n")
+	git("add", "app.env")
+	if err := os.Remove(filepath.Join(dir, ".gitattributes")); err != nil {
+		t.Fatal(err)
+	}
+	gitWithoutAttrSource(t)
+	scan, err := ScanWork(shell.Local{Name: "local"}, dir, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !scan.Incomplete {
+		t.Errorf("%+v", scan)
+	}
+}
