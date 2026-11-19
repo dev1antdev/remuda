@@ -1,6 +1,7 @@
 package review
 
 import (
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"slices"
@@ -99,8 +100,8 @@ func readScan(output string, push bool) (SecretScan, error) {
 	var file, commit string
 	var number int
 	header, ended, attrs := false, false, false
-	encoded := map[string]bool{}  // converted in the working tree: binary by its bytes says nothing of what a commit carries
-	skipped := map[Skipped]bool{} // a file the work and the index both carry is said once
+	converted := map[string]bool{} // converted in the working tree: its bytes alone say nothing of what a commit carries
+	skipped := map[Skipped]bool{}  // a file the work and the index both carry is said once
 	skip := func(path, why string) {
 		entry := Skipped{Path: path, Why: why, InCommit: commit != "" && commit != secrets.Staged}
 		if path != "" && !skipped[entry] {
@@ -130,8 +131,16 @@ func readScan(output string, push bool) (SecretScan, error) {
 			switch word {
 			case "attrs": // an attribute may be hiding text in what git calls binary: those files count as unread
 				attrs = true
-			case "encoded":
-				encoded[value] = true
+			case "converts": // check-attr -z's triplets, path, attribute and value, in hex
+				answer, err := hex.DecodeString(value)
+				if err != nil {
+					return SecretScan{}, errUnreadable
+				}
+				for fields := strings.Split(string(answer), "\x00"); len(fields) >= 3; fields = fields[3:] {
+					if fields[2] != "unspecified" && fields[2] != "unset" {
+						converted[fields[0]] = true
+					}
+				}
 			case "commit":
 				commit, file, header = value, "", false
 				scan.Commits++
@@ -193,14 +202,14 @@ func readScan(output string, push bool) (SecretScan, error) {
 	if !ended {
 		return SecretScan{}, errUnfinished
 	}
-	// the work's second read settles what the first called binary: read as text, or still unknown for a converted file
-	scan.Skipped = slices.DeleteFunc(scan.Skipped, func(skip Skipped) bool { return skip.Why == SkipBinary && !skip.InCommit && read[skip.Path] })
+	// the work's second read settles what the first called binary: a converted file stays unread whatever its bytes say,
+	// the rest is read as text or binary indeed
 	for i, skip := range scan.Skipped {
-		if skip.Why == SkipBinary && !skip.InCommit && encoded[skip.Path] {
+		if skip.Why == SkipBinary && !skip.InCommit && converted[skip.Path] {
 			scan.Skipped[i].Why = SkipMarked
 		}
 	}
-	scan.Skipped = slices.CompactFunc(scan.Skipped, func(a, b Skipped) bool { return a == b })
+	scan.Skipped = slices.DeleteFunc(scan.Skipped, func(skip Skipped) bool { return skip.Why == SkipBinary && !skip.InCommit && read[skip.Path] })
 	scan.Findings, scan.More, scan.Files = collector.Findings(), collector.More(), len(read)
 	scan.Incomplete = slices.ContainsFunc(scan.Skipped, func(skip Skipped) bool { return skip.Why != SkipBinary || skip.InCommit })
 	return scan, nil

@@ -1091,10 +1091,11 @@ func TestAWorkFileReadTheSecondTimeIsNotSaidUnread(t *testing.T) {
 	}
 	dir, git, write := scratchCheckout(t)
 	write(".gitattributes", "*.env -diff\n")
-	write("producción \"quoted\".env", "A=1\n")
+	name := "producción \"quoted\"\tand\nnew line.env"
+	write(name, "A=1\n")
 	git("add", "-A")
 	git("commit", "-qm", "init")
-	write("producción \"quoted\".env", "A=1\nexport NPM_TOKEN="+"npm_"+fakeKey(39, 36)+"\n")
+	write(name, "A=1\nexport NPM_TOKEN="+"npm_"+fakeKey(39, 36)+"\n")
 	scan, err := ScanWork(shell.Local{Name: "local"}, dir, false)
 	if err != nil {
 		t.Fatal(err)
@@ -1128,6 +1129,28 @@ func TestAnEncodedFileMarkedBinaryIsUnread(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !scan.Incomplete || len(scan.Skipped) != 1 || scan.Skipped[0] != (Skipped{Path: "run.ps1", Why: SkipMarked}) {
+		t.Errorf("%+v", scan)
+	}
+}
+
+func TestAFilteredFileMarkedBinaryIsUnreadThoughItsBytesAreText(t *testing.T) {
+	ownGitConfig(t)
+	if !gitHasAttrSource(t) {
+		t.Skip("git before 2.41")
+	}
+	dir, git, write := scratchCheckout(t)
+	git("config", "filter.swap.clean", "tr a-z A-Z")
+	git("config", "filter.swap.smudge", "cat")
+	write(".gitattributes", "\"*\\t'odd\" filter=swap -diff\n")
+	write("\t'odd", "a=1\n")
+	git("add", "-A")
+	git("commit", "-qm", "init")
+	write("\t'odd", "a=1\nb=2\n")
+	scan, err := ScanWork(shell.Local{Name: "local"}, dir, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !scan.Incomplete || len(scan.Skipped) != 1 || scan.Skipped[0] != (Skipped{Path: "\t'odd", Why: SkipMarked}) {
 		t.Errorf("%+v", scan)
 	}
 }

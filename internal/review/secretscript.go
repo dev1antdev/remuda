@@ -37,14 +37,21 @@ const gitDiff = readGit + ` ` + noAttrs + ` -c diff.relative=false diff ` + plai
 const attrsDiff = readGit + ` ` + ownAttrs + ` -c diff.relative=false diff ` + plainPatch
 
 // workDiff is the work against HEAD, read with the repository's attributes, and what they leave binary once more without
-// them; of those, the ones an attribute converts in the working tree are named ("\036encoded <path>"): read by their
-// bytes alone they may be binary to git though they hold text a commit would carry.
-const workDiff = attrsDiff + ` --relative "$base" 2>/dev/null || printf '\036failed work\n'; ` +
-	`if [ -n "$A" ]; then b=$(` + attrsDiff + ` --numstat -z --relative "$base" 2>/dev/null | tr '\0' '\n' | ` +
-	`LC_ALL=C awk -F '\t' '$1 == "-" && $2 == "-" { print substr($0, 5) }') || printf '\036failed work\n'; ` +
-	`if [ -n "$b" ]; then printf '%s\n' "$b" | ` + readGit + ` check-attr --stdin working-tree-encoding 2>/dev/null | ` +
-	`LC_ALL=C awk '{ v = $NF; sub(/: working-tree-encoding: [^:]*$/, ""); if (v != "unspecified" && v != "unset") print "\036encoded " $0 }'; ` +
-	`printf '%s\n' "$b" | sed 's|^|:(literal)|' | tr '\n' '\0' | xargs -0 -r ` + gitDiff + ` --relative "$base" -- 2>/dev/null || printf '\036failed work\n'; fi; fi; `
+// them (retryScript).
+var workDiff = attrsDiff + ` --relative "$base" 2>/dev/null || printf '\036failed work\n'; ` +
+	`if [ -n "$A" ]; then export A base; { ` + attrsDiff + ` --numstat -z --relative "$base" || printf 'failed\000'; } 2>/dev/null | ` +
+	`xargs -0 -r sh -c ` + script.Quote(retryScript) + ` sh; fi; `
+
+// retryScript is given, in xargs's batches, the records of --numstat -z. The files git called binary ("-\t-\t<path>")
+// it reads again without the repository's attributes, first saying which of them an attribute converts in the working
+// tree (working-tree-encoding, filter): read by their bytes alone they may be binary to git, or other text, than what a
+// commit carries. git check-attr -z's answer comes coded in hex, so that no name breaks the stream ("\036converts <hex>").
+var retryScript = `t=$(printf '\t'); for r; do case $r in failed) printf '\036failed work\n';; "-$t-$t"*) set -- "$@" "${r#-$t-$t}";; esac; shift; done; ` +
+	`[ $# -gt 0 ] || exit 0; ` +
+	`h=$(printf '%s\000' "$@" | ` + readGit + ` check-attr -z --stdin working-tree-encoding filter 2>/dev/null | od -An -v -tx1 | tr -d ' \t\n'); ` +
+	`if [ -n "$h" ]; then printf '\036converts %s\n' "$h"; else printf '\036failed work\n'; fi; ` +
+	`for p; do shift; set -- "$@" ":(literal)$p"; done; ` +
+	gitDiff + ` --relative "$base" -- "$@" 2>/dev/null || printf '\036failed work\n'`
 
 // capScript cuts the stream on its way out: a diff's removed lines go, nothing to find in them, and each file's lines at scanPerFile (a line "\036partly" says where), and
 // every file once scanTotal is spent, the commits having a scanTotal of their own so the work beside them cannot use it up (each named on a line "\036budget <path>", "\036unread <path>" for an untracked
