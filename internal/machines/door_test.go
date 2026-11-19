@@ -113,7 +113,7 @@ func doorOverSSH(t *testing.T, sshd sshdAtTheDoor) doorRun {
 	runs, resume := filepath.Join(dir, "runs"), filepath.Join(dir, "resume")
 	kept, asks, cancels := filepath.Join(dir, "scripts"), filepath.Join(dir, "asks"), filepath.Join(dir, "cancels")
 	stub := `#!/bin/sh
-case "$1" in -G) exit 1 ;; esac
+case "$*" in *" -G "*) exit 1 ;; esac
 case " $* " in
 *" -M "*) while [ "$1" != -S ]; do shift; done; : > "$2"; exec sleep 30 ;;
 *" -O cancel "*) echo "$*" >> ` + script.Quote(cancels) + `; exit 0 ;;
@@ -486,8 +486,8 @@ func doorClock(t *testing.T, seconds int, duringLook string) string {
 	t.Helper()
 	tools := t.TempDir()
 	for name, stub := range map[string]string{
-		"date": "#!/bin/sh\ncase \"$1\" in -G) exit 1 ;; esac\necho " + strconv.Itoa(seconds) + "\n",
-		"curl": "#!/bin/sh\ncase \"$1\" in -G) exit 1 ;; esac\n" + duringLook + "\n",
+		"date": "#!/bin/sh\ncase \"$*\" in *\" -G \"*) exit 1 ;; esac\necho " + strconv.Itoa(seconds) + "\n",
+		"curl": "#!/bin/sh\ncase \"$*\" in *\" -G \"*) exit 1 ;; esac\n" + duringLook + "\n",
 	} {
 		if err := os.WriteFile(filepath.Join(tools, name), []byte(stub), 0o755); err != nil {
 			t.Fatal(err)
@@ -529,7 +529,7 @@ func TestDoorScriptLosingALockAsItTakesItIsBusy(t *testing.T) {
 		t.Fatal(err)
 	}
 	tools := doorClock(t, 3000, ":")
-	stub := "#!/bin/sh\ncase \"$1\" in -G) exit 1 ;; esac\n" + script.Quote(realMkdir) + ` "$@" || exit
+	stub := "#!/bin/sh\ncase \"$*\" in *\" -G \"*) exit 1 ;; esac\n" + script.Quote(realMkdir) + ` "$@" || exit
 case "$1" in *agent-door.lock.100) rm -rf "$1" ;; esac
 `
 	if err := os.WriteFile(filepath.Join(tools, "mkdir"), []byte(stub), 0o755); err != nil {

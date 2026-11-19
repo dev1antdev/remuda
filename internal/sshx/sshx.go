@@ -5,6 +5,7 @@ package sshx
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -222,20 +223,24 @@ func (c *Conn) scriptSession(line string) *exec.Cmd {
 }
 
 // stdinKept is, by the path of the ssh binary, whether it takes StdinNull and ForkAfterAuthentication (OpenSSH 8.7):
-// an older one refuses an option it does not know, and every session with it.
+// an older one refuses an option it does not know, and every session with it. It is asked once, reading no ssh config
+// (-F none: a Match exec there runs nothing) and for at most stdinProbe.
 var stdinKept sync.Map
+
+const stdinProbe = 5 * time.Second
 
 func keepStdin() []string {
 	path, err := exec.LookPath("ssh")
 	if err != nil {
 		return nil
 	}
-	known, ok := stdinKept.Load(path)
-	if !ok {
-		known = exec.Command(path, "-G", "-o", "StdinNull=no", "-o", "ForkAfterAuthentication=no", "remuda.invalid").Run() == nil
-		stdinKept.Store(path, known)
-	}
-	if !known.(bool) {
+	known, _ := stdinKept.LoadOrStore(path, sync.OnceValue(func() bool {
+		ctx, cancel := context.WithTimeout(context.Background(), stdinProbe)
+		defer cancel()
+		probe := exec.CommandContext(ctx, path, "-F", "none", "-G", "-o", "StdinNull=no", "-o", "ForkAfterAuthentication=no", "remuda.invalid")
+		return probe.Run() == nil
+	}))
+	if !known.(func() bool)() {
 		return nil
 	}
 	return []string{"-o", "StdinNull=no", "-o", "ForkAfterAuthentication=no"}

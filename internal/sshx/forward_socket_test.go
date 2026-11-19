@@ -14,7 +14,7 @@ func fakeSSH(t *testing.T) (calls string) {
 	t.Helper()
 	dir := t.TempDir()
 	calls = filepath.Join(dir, "calls")
-	stub := "#!/bin/sh\ncase \"$1\" in -G) exit 1 ;; esac\nprintf '%s\\n' \"$*\" >> " + script.Quote(calls) + "\nexit 0\n"
+	stub := "#!/bin/sh\ncase \"$*\" in *\" -G \"*) exit 1 ;; esac\nprintf '%s\\n' \"$*\" >> " + script.Quote(calls) + "\nexit 0\n"
 	if err := os.WriteFile(filepath.Join(dir, "ssh"), []byte(stub), 0o755); err != nil {
 		t.Fatal(err)
 	}

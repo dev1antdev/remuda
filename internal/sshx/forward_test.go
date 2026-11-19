@@ -29,7 +29,7 @@ func TestForwardBackAsksTheMasterForAReverseForward(t *testing.T) {
 func answeringSSH(t *testing.T, answer, complaint string, code string) {
 	t.Helper()
 	dir := t.TempDir()
-	stub := "#!/bin/sh\ncase \"$1\" in -G) exit 1 ;; esac\nprintf '%s' " + script.Quote(answer) + "\nprintf '%s' " + script.Quote(complaint) + " >&2\nexit " + code + "\n"
+	stub := "#!/bin/sh\ncase \"$*\" in *\" -G \"*) exit 1 ;; esac\nprintf '%s' " + script.Quote(answer) + "\nprintf '%s' " + script.Quote(complaint) + " >&2\nexit " + code + "\n"
 	if err := os.WriteFile(filepath.Join(dir, "ssh"), []byte(stub), 0o755); err != nil {
 		t.Fatal(err)
 	}
