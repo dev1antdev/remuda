@@ -31,12 +31,13 @@ type processSessions struct {
 	complained time.Time
 }
 
-// process is an agent's process as last read: its kind and folder, its session ("" for none found) and when.
+// process is an agent's process as last read: its kind and folder, its session ("" for none found), when it was last
+// read and when a read was last tried, whatever came of it.
 type process struct {
-	running transcript.Running
-	session string
-	readAt  time.Time
-	asked   time.Time
+	running         transcript.Running
+	session         string
+	readAt, triedAt time.Time
+	asked           time.Time
 }
 
 func newProcessSessions(name string, read func([]transcript.Running) (map[int]string, error)) *processSessions {
@@ -54,10 +55,10 @@ func (s *processSessions) of(agent string, pid int, cwd string) *herdr.AgentSess
 		s.procs[pid] = p
 	}
 	p.running, p.asked = transcript.Running{PID: pid, Agent: agent, CWD: cwd}, now
-	if now.Sub(p.readAt) >= s.fresh && !s.reading {
+	if now.Sub(p.triedAt) >= s.fresh && !s.reading {
 		s.reading = true
 		since := now.Add(-s.fresh)
-		go s.readDue(since)
+		go s.readDue(since, false)
 	}
 	if p.session == "" {
 		return nil
@@ -68,12 +69,13 @@ func (s *processSessions) of(agent string, pid int, cwd string) *herdr.AgentSess
 // readNow reads every process asked about lately again before it answers, for a step about to stop an agent and
 // resume it on its session: a snapshot answers what the last read found, and a /resume may have moved the agent since.
 func (s *processSessions) readNow() error {
-	return s.readDue(time.Now())
+	return s.readDue(time.Now(), true)
 }
 
-// readDue reads every process asked about lately whose answer was read before since, and forgets the ones nobody asks
-// about; a failure keeps the answers read before.
-func (s *processSessions) readDue(since time.Time) error {
+// readDue reads every process asked about lately whose read was last tried before since — read, when the answer must
+// be one read since (another caller's failed try is none) — and forgets the ones nobody asks about; a failure keeps
+// the answers read before.
+func (s *processSessions) readDue(since time.Time, read bool) error {
 	s.readMu.Lock()
 	defer s.readMu.Unlock()
 	s.mu.Lock()
@@ -83,7 +85,7 @@ func (s *processSessions) readDue(since time.Time) error {
 		switch {
 		case now.Sub(p.asked) > s.forget:
 			delete(s.procs, pid)
-		case p.readAt.Before(since) || p.readAt.Equal(since):
+		case !p.triedAt.After(since), read && !p.readAt.After(since):
 			due = append(due, p.running)
 		}
 	}
@@ -98,9 +100,9 @@ func (s *processSessions) readDue(since time.Time) error {
 	}
 	for _, r := range due {
 		if p := s.procs[r.PID]; p != nil && p.running.Agent == r.Agent {
-			p.readAt = now
+			p.triedAt = now
 			if err == nil {
-				p.session = found[r.PID]
+				p.session, p.readAt = found[r.PID], now
 			}
 		}
 	}

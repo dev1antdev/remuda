@@ -404,7 +404,7 @@ func (r *Restarter) recover(mc *machines.Machine, panes []string, auto bool, say
 	}
 	defer r.releaseRecovery(mc.ID())
 	say(fmt.Sprintf("%s stopped with the reboot on %s", chatsWord(len(stopped)), mc.Label()))
-	checks := func(s Stopped) error { return CanResume(mc, s.chat.Kind, s.chat.Session, s.chat.Dir) }
+	checks := func(s Stopped, dir string) error { return CanResume(mc, s.chat.Kind, s.chat.Session, dir) }
 	out := r.resume(client, mc.ID(), stopped, checks, say)
 	var lines []string
 	for _, o := range out {
@@ -501,8 +501,9 @@ func (os outcomes) failed() (list []string) {
 	return
 }
 
-// resume is the recovery over a client: a fresh look at each pane, the checks, the start on the session.
-func (r *Restarter) resume(client starter, machineID string, stopped []Stopped, checks func(Stopped) error, say func(string)) outcomes {
+// resume is the recovery over a client: a fresh look at each pane, the checks of the folder its shell stands in now,
+// the start on the session.
+func (r *Restarter) resume(client starter, machineID string, stopped []Stopped, checks func(Stopped, string) error, say func(string)) outcomes {
 	var out outcomes
 	for _, s := range stopped {
 		out = append(out, r.resumeOne(client, machineID, s, checks, say))
@@ -510,7 +511,7 @@ func (r *Restarter) resume(client starter, machineID string, stopped []Stopped, 
 	return out
 }
 
-func (r *Restarter) resumeOne(client starter, machineID string, s Stopped, checks func(Stopped) error, say func(string)) outcome {
+func (r *Restarter) resumeOne(client starter, machineID string, s Stopped, checks func(Stopped, string) error, say func(string)) outcome {
 	if r.Lock != nil {
 		l := r.Lock(machineID, s.Pane)
 		l.Lock()
@@ -546,7 +547,7 @@ func (r *Restarter) resumeOne(client starter, machineID string, s Stopped, check
 	case !s.chat.in(p.Dir()):
 		return settle(false, fmt.Sprintf("· %s (%s): the shell is in %s now, not %s — left as it is", s.Title, s.Pane, p.Dir(), s.chat.Dir))
 	}
-	if err := checks(s); err != nil {
+	if err := checks(s, p.Dir()); err != nil {
 		return settle(false, fmt.Sprintf("· %s (%s): %v", s.Title, s.Pane, err))
 	}
 	args := a.resume(s.chat.Session)

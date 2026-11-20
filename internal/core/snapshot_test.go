@@ -1,9 +1,13 @@
 package core
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"slices"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/dev1antdev/remuda/internal/herdr"
 )
@@ -208,5 +212,60 @@ func TestAShellTheCoreGaveANewOneIsRestoredUntilAnAgentTakesIt(t *testing.T) {
 		if got := restored(&a.state, address); got != want {
 			t.Errorf("%s restored %v after a fill, want %v", address, got, want)
 		}
+	}
+}
+
+// One older pane the core refuses to keep (busy a moment) holds no other back, and is asked again until it is kept,
+// on the same subscription; a terminal that is not remuda's, or kept already, is never asked about.
+func TestOlderPanesAreKeptOneByOneAndARefusedOneAgain(t *testing.T) {
+	var mu sync.Mutex
+	asked := map[string]int{}
+	client := New(fakeCore("", func(p peer, s sent) {
+		if s.method != "terminal.keep" {
+			return
+		}
+		var request struct {
+			Params struct {
+				Terminal string `json:"terminal"`
+			} `json:"params"`
+		}
+		json.Unmarshal(s.payload, &request)
+		mu.Lock()
+		asked[request.Params.Terminal]++
+		first := asked[request.Params.Terminal] == 1
+		mu.Unlock()
+		if request.Params.Terminal == "t1" && first {
+			p.write(0, frameData, fmt.Appendf(nil, `{"jsonrpc":"2.0","id":%d,"error":{"code":-32000,"message":"busy","data":{"kind":"unavailable"}}}`, s.id))
+			return
+		}
+		p.reply(s.id, `{}`)
+	}))
+	t.Cleanup(func() { client.Close() })
+	life, stop := context.WithCancel(context.Background())
+	t.Cleanup(stop)
+	labelled := map[string]string{LabelSpace: "w1", LabelTab: "a"}
+	a := &Adapter{client: client, life: life, state: mirror{terminals: map[string]*Terminal{
+		"t1": {Address: "t1", State: "live", Labels: labelled},
+		"t2": {Address: "t2", State: "live", Labels: labelled},
+		"t3": {Address: "t3", State: "live"},
+		"t4": {Address: "t4", State: "live", Labels: labelled, Keep: true},
+	}}}
+	a.keepOlder([]string{"t1", "t2", "t3", "t4"})
+	for start := time.Now(); ; time.Sleep(10 * time.Millisecond) {
+		mu.Lock()
+		done := asked["t1"] == 2 && asked["t2"] == 1
+		mu.Unlock()
+		if done {
+			break
+		}
+		if time.Since(start) > 5*time.Second {
+			t.Fatalf("asked %v", asked)
+		}
+	}
+	time.Sleep(3 * retryFrom)
+	mu.Lock()
+	defer mu.Unlock()
+	if asked["t2"] != 1 || asked["t3"] != 0 || asked["t4"] != 0 {
+		t.Fatalf("asked %v", asked)
 	}
 }

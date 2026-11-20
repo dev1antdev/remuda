@@ -434,7 +434,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   the last answer (logged once an hour), a process nobody asked about for
   `sessionsForget` 2 min dropped; the snapshot reads only what was last
   found, never waiting — `Adapter.RereadSessions` (`AdapterHooks.Reread`,
-  `processSessions.readNow`) reads them all again and waits, for what is
+  `processSessions.readNow`) reads them all again and waits, a read that
+  failed counting as none (`readAt` apart from `triedAt`, which paces the
+  background reads), for what is
   about to stop an agent and resume it (`restart.Reread`, under the pane's
   lock: a sleep's plan and each agent's exit, an update's restart), a read
   that fails refusing the step. Output watches go
@@ -488,7 +490,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   throwaway core with the gate lifted; an exit or a kill stays final; a
   pane remuda started before it kept them, one carrying a workspace's
   label, is kept as the mirror fills, `keepOlder` through `Client.Keep`,
-  a refusal tried again at the next fill), and wait for the core's
+  one by one, a refused one asked again `keepTries` 10 times 250 ms → 5 s
+  apart while it stands unkept, then at the next fill), and wait for the core's
   own news of it (`runShell`: the mirror alone puts terminals in it, so the
   pane answered is in the next snapshot and a reply never brings back a
   shell that ended meanwhile — one the core said went, `mirror.gone`, fails
@@ -2076,7 +2079,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   agent pane with a session in `<state>/chats.json` (written on change;
   `Ran` the agent's own folder when it is not its pane's, since remuda-core
   gives a lost shell back where the program that held the terminal last
-  stood, either folder counting as the chat's;
+  stood, either folder counting as the chat's, and the resume's check
+  judging the folder the shell stands in;
   on a remuda-core machine only Claude Code's and Codex's, the sessions
   read off a process there being theirs alone);
   a remembered pane that is a bare shell in the same folder counts as

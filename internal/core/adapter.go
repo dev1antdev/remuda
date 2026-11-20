@@ -200,25 +200,53 @@ func (a *Adapter) follow(ctx context.Context) (filled bool, err error) {
 }
 
 // keepOlder has the panes remuda started before it kept them kept too, so a reboot brings them back as well — each
-// one carrying a workspace's label, never another program's terminal; one refused is tried again at the next fill.
+// one carrying a workspace's label, never another program's terminal. One refused does not hold the others back and
+// is tried again, keepTries times at most, retryFrom → retryUpTo apart, while it stands unkept; the next fill tries
+// again after that.
 func (a *Adapter) keepOlder(addresses []string) {
 	if len(addresses) == 0 {
 		return
 	}
 	go func() {
-		for _, address := range addresses {
-			ctx, cancel := context.WithTimeout(a.life, callWithin)
-			err := a.client.Keep(ctx, address, true)
-			cancel()
-			if err != nil && !IsKind(err, "not_found") {
-				if a.life.Err() != nil {
+		wait := retryFrom
+		var err error
+		for try := 0; try < keepTries && len(addresses) > 0; try++ {
+			if try > 0 {
+				select {
+				case <-a.life.Done():
 					return
+				case <-time.After(wait):
 				}
-				log.Printf("remuda-core: %s is not kept, so a reboot would close it: %v", address, err)
-				return
+				wait = min(wait*2, retryUpTo)
 			}
+			var refused []string
+			for _, address := range addresses {
+				if !a.unkept(address) {
+					continue
+				}
+				ctx, cancel := context.WithTimeout(a.life, callWithin)
+				if refusal := a.client.Keep(ctx, address, true); refusal != nil && !IsKind(refusal, "not_found") {
+					refused, err = append(refused, address), refusal
+				}
+				cancel()
+			}
+			addresses = refused
+		}
+		if len(addresses) > 0 && a.life.Err() == nil {
+			log.Printf("remuda-core: %s not kept, so a reboot would close them: %v", strings.Join(addresses, ", "), err)
 		}
 	}()
+}
+
+// keepTries is how often keepOlder asks the core to keep a pane before it leaves it to the next fill.
+const keepTries = 10
+
+// unkept says whether the mirror holds the terminal live, one of remuda's panes, and not kept.
+func (a *Adapter) unkept(address string) bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	t := a.state.terminals[address]
+	return t != nil && !t.Keep && t.Labels[LabelSpace] != ""
 }
 
 // bounded runs a step of the subscription within its time. A step the core lets run out on a connection it holds

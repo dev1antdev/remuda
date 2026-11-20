@@ -11,6 +11,7 @@ import (
 
 	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/machines"
 )
 
 const sid = "9b1c2d3e-4f50-4a6b-8c7d-0e1f2a3b4c5d"
@@ -227,7 +228,7 @@ func TestResumeStartsEachStoppedChatOnItsSessionAndSaysWhyNot(t *testing.T) {
 		// w1:p7 is gone
 	)
 	client := &fakeHerdr{snap: fresh, refuse: map[string]error{"w1:p2": errors.New("agent_start_failed: no such binary")}}
-	checks := func(s Stopped) error {
+	checks := func(s Stopped, _ string) error {
 		if s.Pane == "w1:p6" {
 			return errors.New("its folder /work/api is gone — nothing to resume into")
 		}
@@ -306,8 +307,34 @@ func TestAChatIsStoppedWhereItsAgentRanThoughItsShellStoodElsewhere(t *testing.T
 	}
 	client := &fakeHerdr{snap: snapshot(restored)}
 	r := &Restarter{Memory: m}
-	out := r.resume(client, "gog", stopped, func(Stopped) error { return nil }, func(string) {})
-	if len(client.started) != 1 || len(out.back()) != 1 {
-		t.Fatalf("started %v, back %v", client.started, out.back())
+	var checked string
+	checks := func(_ Stopped, dir string) error {
+		checked = dir
+		if dir != "/work/api/sub" {
+			return fmt.Errorf("its folder %s is gone — nothing to resume into", dir) // the pane's own went
+		}
+		return nil
+	}
+	out := r.resume(client, "gog", stopped, checks, func(string) {})
+	if checked != "/work/api/sub" || len(client.started) != 1 || len(out.back()) != 1 {
+		t.Fatalf("checked %q, started %v, back %v", checked, client.started, out.back())
+	}
+}
+
+// CanResume, the recovery's check, judges the folder it is handed — the one the restored shell stands in — so a chat
+// whose pane's own folder went resumes where its agent ran.
+func TestTheResumeCheckJudgesTheFolderTheShellStandsIn(t *testing.T) {
+	fleet := machines.NewCoreManager(t.TempDir(), "", nil, true) // a page-only host: no core is started
+	defer fleet.Close()
+	mc, err := fleet.Get(machines.LocalID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ran, gone := t.TempDir(), filepath.Join(t.TempDir(), "gone")
+	if err := CanResume(mc, "codex", sid, gone); err == nil {
+		t.Fatal("a folder that is gone passed the check")
+	}
+	if err := CanResume(mc, "codex", sid, ran); err != nil {
+		t.Fatalf("the folder the agent ran in: %v", err)
 	}
 }

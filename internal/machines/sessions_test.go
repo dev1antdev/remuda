@@ -119,6 +119,22 @@ func TestAFreshReadAnswersTheConversationTheAgentRunsNow(t *testing.T) {
 	if got := s.of("claude", 100, "/work/api"); got == nil || got.Value != "sid-b" {
 		t.Fatalf("a failed fresh read lost what was known: %+v", got)
 	}
+
+	// a fresh read asked for before that failed one began, queued behind it: the failure is no read for it either
+	queued := time.Now()
+	time.Sleep(time.Millisecond)
+	if err := s.readNow(); err == nil {
+		t.Fatal("the read in front did not fail")
+	}
+	reads.mu.Lock()
+	reads.fail = nil
+	reads.mu.Unlock()
+	if err := s.readDue(queued, true); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.of("claude", 100, "/work/api"); got == nil || got.Value != "sid-c" {
+		t.Fatalf("the queued fresh read took the failed one for its own: %+v", got)
+	}
 }
 
 func TestProcessesNobodyAsksAboutAreForgotten(t *testing.T) {
