@@ -244,9 +244,9 @@ export function connect(stream: Stream): Transport {
           if (!res.ok) throw new Error(`read failed (${res.status})`);
           const buf = new Uint8Array(await res.arrayBuffer());
           if (stopped) return;
-          if (buf.length) stream.onBytes(buf);
-          const grid = gridHeader(res.headers.get("X-Remuda-Grid"));
+          const grid = gridHeader(res.headers.get("X-Remuda-Grid")); // the grid these bytes are drawn at, on every read
           if (grid) stream.onGrid?.(grid.cols, grid.rows);
+          if (buf.length) stream.onBytes(buf);
           if (res.headers.get("X-Remuda-End") === "1") {
             // the server dropped it already; the attach ended (herdr restarted, say) and a fresh one is asked for, as the socket does
             streamGone();

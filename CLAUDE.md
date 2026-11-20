@@ -449,8 +449,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   order with the bytes, an `Out` of its own ahead of the paint drawn at it —
   never a sequence in the bytes, which the program could print itself (the
   socket sends it as a text frame `{"type":"grid","cols","rows"}`, never
-  merged with bytes across it; the HTTP read ends at it with `X-Remuda-Grid:
-  <cols>x<rows>`; the engine sizes its grid by it, see the size modes);
+  merged with bytes across it; every HTTP read carries the grid its bytes are
+  drawn at, `X-Remuda-Grid: <cols>x<rows>`, a grid that comes after some
+  bytes ending the read and opening the next, so a read lost on the way
+  loses no grid; the engine sizes its grid by it, see the size modes);
   a goroutine hands the stream's bytes to the viewer and reads no further
   while the viewer has not taken them, so the core's credit waits and it
   repaints a viewer gone 4 MB behind; the bytes close with the program,
@@ -6885,7 +6887,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   remuda-core is the live terminal only watched (`/ws/pane` is a viewer's
   route; `handlePaneWS` opens it `Observe`, drops what the page sends,
   refuses a viewer on herdr with a 403 before any peer is asked, and asks
-  again before every write and every `viewerRecheck` 5 s on a quiet terminal
+  again right before every write (a frame gathers at most `maxFrame` 256 KB,
+  so a terminal that never stops printing is asked about that often) and
+  every `viewerRecheck` 5 s on a quiet terminal
   whether the link still stands (`Guard.StillViewer`: its key, or the viewer
   device it signed in, not revoked), closing with "this link was revoked"
   — tested on a throwaway core; the page's

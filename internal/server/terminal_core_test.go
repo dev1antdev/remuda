@@ -24,9 +24,15 @@ import (
 	"github.com/dev1antdev/remuda/internal/watch"
 )
 
-// coreTerminalServer is a remuda on remuda-core in front of a throwaway core with one terminal printing every 100 ms:
-// the routes of the live terminal behind the real guard, its token, its agent keys and the terminal.
-func coreTerminalServer(t *testing.T, ctx context.Context) (srv *httptest.Server, token string, keys *auth.Keys, terminal string) {
+// ticker prints a line every 100 ms; flood prints as fast as it can.
+var (
+	ticker = []string{"sh", "-c", "while :; do echo tick; sleep 0.1; done"}
+	flood  = []string{"yes", "tick"}
+)
+
+// coreTerminalServer is a remuda on remuda-core in front of a throwaway core with one terminal running argv: the routes
+// of the live terminal behind the real guard, its token, its agent keys and the terminal.
+func coreTerminalServer(t *testing.T, ctx context.Context, argv []string) (srv *httptest.Server, token string, keys *auth.Keys, terminal string) {
 	c := coretest.Server(t)
 	for _, kv := range c.Env {
 		key, value, _ := strings.Cut(kv, "=")
@@ -40,7 +46,7 @@ func coreTerminalServer(t *testing.T, ctx context.Context) (srv *httptest.Server
 	if err != nil {
 		t.Fatal(err)
 	}
-	ticking, err := c.Client(t).Run(ctx, core.RunParams{Argv: []string{"sh", "-c", "while :; do echo tick; sleep 0.1; done"}, Size: &core.Size{Cols: 100, Rows: 30}})
+	ticking, err := c.Client(t).Run(ctx, core.RunParams{Argv: argv, Size: &core.Size{Cols: 100, Rows: 30}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,9 +80,17 @@ func coreTerminalServer(t *testing.T, ctx context.Context) (srv *httptest.Server
 // A viewer link watching a live terminal on remuda-core is cut off once the link is revoked, whatever the terminal
 // prints next; the first thing it is told is the terminal's grid, a text frame of its own.
 func TestARevokedViewerLinkSeesNoMoreOfTheTerminal(t *testing.T) {
+	for name, argv := range map[string][]string{"a line every 100 ms": ticker, "a flood of output": flood} {
+		t.Run(name, func(t *testing.T) { revokedWhileWatching(t, argv) })
+	}
+}
+
+// revokedWhileWatching revokes a viewer link while it watches a terminal running argv: the socket ends within a second
+// with the reason, however fast the terminal prints (a frame gathers at most maxFrame bytes before the link is asked).
+func revokedWhileWatching(t *testing.T, argv []string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	srv, _, keys, terminal := coreTerminalServer(t, ctx)
+	srv, _, keys, terminal := coreTerminalServer(t, ctx, argv)
 
 	link, rec, err := keys.MintViewer("the office TV")
 	if err != nil {
@@ -113,17 +127,18 @@ func TestARevokedViewerLinkSeesNoMoreOfTheTerminal(t *testing.T) {
 			t.Fatalf("after the revocation the socket ended with %v", err)
 		}
 		if took := time.Since(revokedAt); took > time.Second {
-			t.Fatalf("a terminal printing every 100 ms kept a revoked link for %v", took)
+			t.Fatalf("a terminal kept a revoked link for %v", took)
 		}
 		return
 	}
 }
 
-// Over the HTTP transport a viewer that keeps the size is told the grid in a header that ends its read.
-func TestAKeepViewerOverHTTPIsToldTheGrid(t *testing.T) {
+// Over the HTTP transport a viewer that keeps the size is told on every read the grid its bytes are drawn at, so a read
+// lost on the way loses no grid: after the terminal is resized, every read carries the new one.
+func TestAKeepViewerOverHTTPIsToldTheGridOnEveryRead(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	srv, token, _, terminal := coreTerminalServer(t, ctx)
+	srv, token, _, terminal := coreTerminalServer(t, ctx, ticker)
 	call := func(method, path string) *http.Response {
 		req, _ := http.NewRequestWithContext(ctx, method, srv.URL+path, nil)
 		req.Header.Set("Authorization", "Bearer "+token)
@@ -133,20 +148,38 @@ func TestAKeepViewerOverHTTPIsToldTheGrid(t *testing.T) {
 		}
 		return res
 	}
-	opened := call("POST", "/api/term/open?machine=local&id="+terminal+"&cols=40&rows=10&keep=1")
-	var answer struct{ SID string }
-	if err := json.NewDecoder(opened.Body).Decode(&answer); err != nil || answer.SID == "" {
-		t.Fatalf("open: %d %v", opened.StatusCode, err)
+	open := func(query string) string {
+		res := call("POST", "/api/term/open?machine=local&id="+terminal+"&"+query)
+		defer res.Body.Close()
+		var answer struct{ SID string }
+		if err := json.NewDecoder(res.Body).Decode(&answer); err != nil || answer.SID == "" {
+			t.Fatalf("open %s: %d %v", query, res.StatusCode, err)
+		}
+		return answer.SID
 	}
-	opened.Body.Close()
-	read := call("GET", "/api/term/read?sid="+answer.SID+"&wait=5")
-	body, _ := io.ReadAll(read.Body)
-	read.Body.Close()
-	if grid := read.Header.Get("X-Remuda-Grid"); grid != "100x30" {
-		t.Fatalf("the first read's grid %q (body %q)", grid, body)
+	gridOfRead := func(sid string) string {
+		res := call("GET", "/api/term/read?sid="+sid+"&wait=2")
+		io.Copy(io.Discard, res.Body)
+		res.Body.Close()
+		return res.Header.Get("X-Remuda-Grid")
 	}
-	if len(body) != 0 {
-		t.Fatalf("bytes before the first grid: %q", body)
+	phone := open("cols=40&rows=10&keep=1")
+	if grid := gridOfRead(phone); grid != "100x30" {
+		t.Fatalf("the first read's grid %q", grid)
 	}
-	call("DELETE", "/api/term/close?sid="+answer.SID).Body.Close()
+	desk := open("cols=100&rows=30")
+	call("POST", "/api/term/resize?sid="+desk+"&cols=90&rows=28").Body.Close()
+	for start := time.Now(); gridOfRead(phone) != "90x28"; {
+		if time.Since(start) > 10*time.Second {
+			t.Fatal("the phone's reads never carried the new grid")
+		}
+	}
+	for range 3 { // a read the phone never got is no grid lost: the next ones carry it still
+		if grid := gridOfRead(phone); grid != "90x28" {
+			t.Fatalf("a later read's grid %q", grid)
+		}
+	}
+	for _, sid := range []string{phone, desk} {
+		call("DELETE", "/api/term/close?sid="+sid).Body.Close()
+	}
 }

@@ -31,6 +31,10 @@ func (s *Server) terminalRoutes(api *http.ServeMux) {
 // viewerRecheck is how often a quiet socket asks again whether its viewer link still stands.
 const viewerRecheck = 5 * time.Second
 
+// maxFrame bounds the bytes one frame gathers, so a terminal that never stops printing still ends a frame, and with it
+// a viewer link's check, at least this often.
+const maxFrame = 256 << 10
+
 // viewerStands says the viewer link of a request is not revoked since it came in.
 func (s *Server) viewerStands(r *http.Request) bool {
 	return s.Guard != nil && s.Guard.StillViewer(r)
@@ -154,17 +158,17 @@ func (s *Server) handlePaneWS(w http.ResponseWriter, r *http.Request) {
 				c.Close(websocket.StatusNormalClosure, "terminal detached")
 				return
 			}
-			if revoked() {
-				return
-			}
 			if next.Grid() {
+				if revoked() {
+					return
+				}
 				if err := c.Write(wctx, websocket.MessageText, gridFrame(next)); err != nil {
 					return
 				}
 				continue
 			}
 			data := next.Data
-			for more := true; more; {
+			for more := len(data) < maxFrame; more; more = more && len(data) < maxFrame {
 				select {
 				case extra, ok := <-out:
 					switch {
@@ -179,6 +183,9 @@ func (s *Server) handlePaneWS(w http.ResponseWriter, r *http.Request) {
 				default:
 					more = false
 				}
+			}
+			if revoked() { // asked once the batch is whole: nothing that came after a revocation goes out
+				return
 			}
 			if err := c.Write(wctx, websocket.MessageBinary, data); err != nil {
 				return
