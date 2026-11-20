@@ -1480,7 +1480,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   stream through `remuda.exe bridge` over ssh, the door's files and its
   reverse forward, the vitals, keep-awake, the file viewer's scripts, the
   Changes lens with the secret check, a session found, read and searched
-  through remuda.exe, `remuda setup -host` and `mcp install -host` against
+  through remuda.exe, a Claude Code session found by its native process's
+  pid, `remuda setup -host` and `mcp install -host` against
   the runner, and a release's install beside a running remuda.exe. The
   check job vets and builds for `GOOS=windows`. What the runner cannot
   prove: a person's own PC, Windows on arm64, a cockpit's ControlMaster to
