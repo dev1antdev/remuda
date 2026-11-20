@@ -1,6 +1,7 @@
 package updates
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"runtime"
@@ -192,7 +193,7 @@ func (s *Service) Start(mc *machines.Machine, what, command string) (jobs.Job, e
 	if what == "herdr" {
 		then = s.herdrThen(mc)
 	}
-	return s.Jobs.StartThen(mc, u.Title, u.Command, first, then), nil
+	return s.Jobs.StartThen(mc, u.Title, u.run(), first, then), nil
 }
 
 // serverRestartPlan offers a restart of herdr's server when it still runs an older version than the one installed.
@@ -363,9 +364,20 @@ func (s *Service) restartHooks(mc *machines.Machine, what string) (first func(sa
 		}
 		say("")
 		say("== chats onto the new version")
-		return s.Restart.Now(mc, changed, say)
+		return chatsMoved(s.Restart.Now(mc, changed, say), say)
 	}
 	return first, then
+}
+
+// chatsMoved is the verdict on the chats an agent's update moves onto it: a machine connected without its remuda-core
+// has none this remuda sees, and the update itself went through.
+func chatsMoved(err error, say func(string)) error {
+	var noCore *machines.NoCoreError
+	if errors.As(err, &noCore) {
+		say("no chat there to move: " + err.Error())
+		return nil
+	}
+	return err
 }
 
 func agentVersion(r *health.Report, kind string) string {

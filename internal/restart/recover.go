@@ -14,6 +14,7 @@ package restart
 // workspace on its folder (carryOn).
 
 import (
+	"cmp"
 	"fmt"
 	"log"
 	"sort"
@@ -42,6 +43,22 @@ type Chat struct {
 	Title   string `json:"title,omitempty"`
 	// Core marks a chat remembered off remuda-core; one without it, on a fleet moved to the core, ran in herdr
 	Core bool `json:"core,omitempty"`
+	// Ran is the folder the agent itself ran in when it was not its pane's: remuda-core gives a lost shell back in the
+	// folder of the program that last held the terminal.
+	Ran string `json:"ran,omitempty"`
+}
+
+// in says whether a shell standing in dir is where the chat was: its pane's folder, or the agent's own.
+func (c Chat) in(dir string) bool {
+	return dir == c.Dir || c.Ran != "" && dir == c.Ran
+}
+
+// ranIn is the folder the pane's agent runs in when it is not the pane's own, else "".
+func ranIn(p *herdr.PaneInfo, dir string) string {
+	if p.ForegroundCWD != dir {
+		return p.ForegroundCWD
+	}
+	return ""
 }
 
 // FromHerdr is the From of an agent that ran in herdr before its machine moved to remuda-core: its pane is gone with
@@ -154,7 +171,8 @@ func (m *Memory) observe(e events.Snapshot) bool {
 			if sid := sessionOf(p); sid != "" {
 				running[sid] = true
 				m.faces[key] = faceOf(e.Snap, p)
-				c := Chat{Kind: p.Agent, Session: sid, Dir: paneDir(e.Snap, p), Title: firstNonEmpty(e.Snap.WorkspaceLabel(p.WorkspaceID), p.DisplayTitle()), Core: onCore}
+				dir := paneDir(e.Snap, p)
+				c := Chat{Kind: p.Agent, Session: sid, Dir: dir, Ran: ranIn(p, dir), Title: firstNonEmpty(e.Snap.WorkspaceLabel(p.WorkspaceID), p.DisplayTitle()), Core: onCore}
 				if old, ok := m.chats[key]; !ok || old != c {
 					m.chats[key] = c
 					changed = true
@@ -175,7 +193,7 @@ func (m *Memory) observe(e events.Snapshot) bool {
 			// a restored pane reads the server's folder as its own for a moment: the folder is judged after the grace
 			switch {
 			case e.At.Sub(since) < stoppedGrace:
-			case p.Dir() == c.Dir:
+			case c.in(p.Dir()):
 				stopped = append(stopped, stoppedOf(p.PaneID, c, firstNonEmpty(c.Title, p.DisplayTitle())))
 			default:
 				delete(m.chats, key)
@@ -456,7 +474,7 @@ func (r *Restarter) recover(mc *machines.Machine, panes []string, auto bool, say
 	if len(fromHerdr) > 0 {
 		say(fmt.Sprintf("%s from herdr to carry on on %s", chatsWord(len(fromHerdr)), mc.Label()))
 	}
-	checks := func(s Stopped) error { return CanResume(mc, s.chat.Kind, s.chat.Session, s.chat.Dir) }
+	checks := func(s Stopped, dir string) error { return CanResume(mc, s.chat.Kind, s.chat.Session, dir) }
 	out := append(r.resume(client, mc.ID(), rebooted, checks, say), r.carryOn(client, mc.ID(), fromHerdr, checks, say)...)
 	var lines []string
 	for _, o := range out {
@@ -597,8 +615,9 @@ func (os outcomes) failed() (list []string) {
 	return
 }
 
-// resume is the recovery over a client: a fresh look at each pane, the checks, the start on the session.
-func (r *Restarter) resume(client starter, machineID string, stopped []Stopped, checks func(Stopped) error, say func(string)) outcomes {
+// resume is the recovery over a client: a fresh look at each pane, the checks of the folder its shell stands in now,
+// the start on the session.
+func (r *Restarter) resume(client starter, machineID string, stopped []Stopped, checks func(Stopped, string) error, say func(string)) outcomes {
 	var out outcomes
 	for _, s := range stopped {
 		out = append(out, r.resumeOne(client, machineID, s, checks, say))
@@ -606,7 +625,7 @@ func (r *Restarter) resume(client starter, machineID string, stopped []Stopped, 
 	return out
 }
 
-func (r *Restarter) resumeOne(client starter, machineID string, s Stopped, checks func(Stopped) error, say func(string)) outcome {
+func (r *Restarter) resumeOne(client starter, machineID string, s Stopped, checks func(Stopped, string) error, say func(string)) outcome {
 	if r.Lock != nil {
 		l := r.Lock(machineID, s.Pane)
 		l.Lock()
@@ -626,10 +645,10 @@ func (r *Restarter) resumeOne(client starter, machineID string, s Stopped, check
 		return settle(true, fmt.Sprintf("· %s (%s): %s is back already", s.Title, s.Pane, a.Title))
 	case p.Agent != "":
 		return settle(false, fmt.Sprintf("· %s (%s): runs %q now — left as it is", s.Title, s.Pane, p.Agent))
-	case p.Dir() != s.chat.Dir:
+	case !s.chat.in(p.Dir()):
 		return settle(false, fmt.Sprintf("· %s (%s): the shell is in %s now, not %s — left as it is", s.Title, s.Pane, p.Dir(), s.chat.Dir))
 	}
-	if err := checks(s); err != nil {
+	if err := checks(s, p.Dir()); err != nil {
 		return settle(false, fmt.Sprintf("· %s (%s): %v", s.Title, s.Pane, err))
 	}
 	args := a.resume(s.chat.Session)
@@ -643,7 +662,7 @@ func (r *Restarter) resumeOne(client starter, machineID string, s Stopped, check
 // carryOn starts herdr's agents on remuda-core, each on its session in a tab of a workspace on its folder, else a new
 // workspace named as herdr's was, so the agents of one herdr workspace in one folder become tabs of one; an agent whose
 // session one of the core is on already counts as back, and a session twice on the list starts once.
-func (r *Restarter) carryOn(client placer, machineID string, fromHerdr []Stopped, checks func(Stopped) error, say func(string)) outcomes {
+func (r *Restarter) carryOn(client placer, machineID string, fromHerdr []Stopped, checks func(Stopped, string) error, say func(string)) outcomes {
 	var out outcomes
 	started := map[string]bool{}
 	for _, s := range fromHerdr {
@@ -652,16 +671,17 @@ func (r *Restarter) carryOn(client placer, machineID string, fromHerdr []Stopped
 	return out
 }
 
-func (r *Restarter) carryOneOn(client placer, machineID string, s Stopped, checks func(Stopped) error, started map[string]bool, say func(string)) outcome {
+func (r *Restarter) carryOneOn(client placer, machineID string, s Stopped, checks func(Stopped, string) error, started map[string]bool, say func(string)) outcome {
 	a := agents[s.chat.Kind]
 	if started[s.chat.Session] {
 		return r.done(machineID, s, true, fmt.Sprintf("· %s (%s, from herdr): %s is on its session already", s.Title, s.Pane, a.Title), say)
 	}
-	if err := checks(s); err != nil {
+	dir := cmp.Or(s.chat.Ran, s.chat.Dir) // where the agent itself ran: its session is that folder's
+	if err := checks(s, dir); err != nil {
 		return r.done(machineID, s, false, fmt.Sprintf("· %s (%s, from herdr): %v", s.Title, s.Pane, err), say)
 	}
-	say(fmt.Sprintf("· %s (%s, from herdr): %s in %s", s.Title, s.Pane, Resume(a.Kind, s.chat.Session), s.chat.Dir))
-	place, open, err := startOnSession(client, s.chat.Dir, s.Title, "", a.Kind, s.chat.Session)
+	say(fmt.Sprintf("· %s (%s, from herdr): %s in %s", s.Title, s.Pane, Resume(a.Kind, s.chat.Session), dir))
+	place, open, err := startOnSession(client, dir, s.Title, "", a.Kind, s.chat.Session)
 	switch {
 	case open != nil:
 		return r.done(machineID, s, true, fmt.Sprintf("  ✓ %s is on its session already, in %s", a.Title, open.PaneID), say)

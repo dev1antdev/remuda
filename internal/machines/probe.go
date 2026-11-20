@@ -119,9 +119,16 @@ func errNoRemuda(host string) error {
 	return fmt.Errorf("remuda.exe is not on %s: it is how this cockpit reaches herdr's named pipe there. Run `remuda setup -host %s` from here", host, host)
 }
 
+// NoCoreError is Ready's answer on a remote connected without a remuda-core it can follow, its master still up: none
+// installed there (errNoCore), or none answering.
+type NoCoreError struct{ Reason error }
+
+func (e *NoCoreError) Error() string { return e.Reason.Error() }
+func (e *NoCoreError) Unwrap() error { return e.Reason }
+
 // errNoCore is the connection's word for a machine without remuda-core, to a remuda that speaks it (-core).
 func errNoCore(host string) error {
-	return fmt.Errorf("remuda-core is not on %s. Run `remuda core -host %s install` from here", host, host)
+	return fmt.Errorf("remuda-core is not installed on %s: Install remuda-core in its Updates, or run `remuda core -host %s install` from here", host, host)
 }
 
 // windowsSocket is herdr's default socket on a Windows machine: %APPDATA%\herdr\herdr.sock, a named pipe of that name.

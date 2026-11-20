@@ -6,8 +6,9 @@ import type { Machine } from "./api";
 
 const MAC = /^([0-9a-f]{2}[:-]){5}[0-9a-f]{2}$|^([0-9a-f]{4}\.){2}[0-9a-f]{4}$/i;
 
-// canWake says whether the Wake up row applies: the machine is not connected and an address is known
-export const canWake = (m: Pick<Machine, "state" | "mac">): boolean => m.state !== "connected" && !!m.mac;
+// canWake says whether the Wake up row applies: the machine is away — not connected, its ssh master down too — and an
+// address is known
+export const canWake = (m: Pick<Machine, "state" | "mac" | "reached">): boolean => m.state !== "connected" && !m.reached && !!m.mac;
 
 // isMAC accepts the three spellings the server reads: aa:bb:cc:dd:ee:ff, aa-bb-cc-dd-ee-ff, aabb.ccdd.eeff
 export const isMAC = (s: string): boolean => MAC.test(s.trim());

@@ -155,7 +155,7 @@ func TestCarryOnMakesHerdrsWorkspaceAgainWithItsAgentsAsTabs(t *testing.T) {
 	running := agentPane("t9", "claude", "/work/web")
 	running.AgentSession = &herdr.AgentSession{Kind: "id", Value: fourth}
 	client := &fakeCore{snap: &herdr.Snapshot{Panes: []herdr.PaneInfo{running}}}
-	checks := func(s Stopped) error {
+	checks := func(s Stopped, _ string) error {
 		if s.chat.Dir == "/work/gone" {
 			return errors.New("its folder /work/gone is gone — nothing to resume into")
 		}
@@ -217,5 +217,20 @@ func TestHerdrsAgentsWaitForItsServer(t *testing.T) {
 	}
 	if rebooted := Rebooted(stopped); len(rebooted) != 1 || rebooted[0].Pane != "t1" {
 		t.Fatalf("Rebooted: %+v", rebooted)
+	}
+}
+
+// TestCarryOnStartsWhereTheAgentRan: a chat whose agent ran in another folder than its pane's carries on there, where
+// its session belongs.
+func TestCarryOnStartsWhereTheAgentRan(t *testing.T) {
+	m := onCore(OpenMemory(""))
+	r := New(nil)
+	r.Memory = m
+	m.Adopt("gog", map[string]Chat{"w1:p1": {Kind: "claude", Session: sid, Dir: "/work/api", Ran: "/work/api/cli", Title: "api"}})
+	client := &fakeCore{snap: &herdr.Snapshot{}}
+	checked := ""
+	r.carryOn(client, "gog", m.Stopped("gog"), func(_ Stopped, dir string) error { checked = dir; return nil }, func(string) {})
+	if checked != "/work/api/cli" || len(client.snap.Workspaces) != 1 || client.snap.Workspaces[0].Folder != "/work/api/cli" {
+		t.Fatalf("checked %q, made %+v", checked, client.snap.Workspaces)
 	}
 }

@@ -3,6 +3,7 @@ package core_test
 import (
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/dev1antdev/remuda/internal/core"
 	"github.com/dev1antdev/remuda/internal/core/coretest"
@@ -61,5 +62,43 @@ func TestPanesComeBackAsShellsAfterTheCoreRestartsAndTheirAgentsResumeInThem(t *
 	for pane := range folders {
 		startIn(t, adapter, pane, "9b1c2d3e-4f50-4a6b-8c7d-0e1f2a3b4c5d")
 		screenSays(t, adapter, pane, "--resume")
+	}
+}
+
+// A pane remuda started before it kept its panes is kept once the adapter connects, so the next stop brings it back
+// as well; a terminal of another program's, without remuda's labels, is left as it is.
+func TestAPaneStartedBeforeTheUpgradeIsKeptToo(t *testing.T) {
+	ctx := within(t, 30*time.Second)
+	c := coretest.Server(t)
+	client := c.Client(t)
+	older, err := client.Run(ctx, core.RunParams{Rm: true, Labels: map[string]string{core.LabelSpace: "w1", core.LabelTab: "a"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := client.Run(ctx, core.RunParams{Argv: []string{"sleep", "60"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	adapterOf(t, client, core.AdapterHooks{})
+	for start := time.Now(); ; time.Sleep(50 * time.Millisecond) {
+		if got, err := client.Get(ctx, older.Address); err == nil && got.Keep {
+			break
+		}
+		if time.Since(start) > 10*time.Second {
+			t.Fatal("the older pane was never kept")
+		}
+	}
+	if got, err := client.Get(ctx, other.Address); err != nil || got.Keep {
+		t.Fatalf("another program's terminal: %+v %v", got, err)
+	}
+
+	c.Restart(t)
+	for start := time.Now(); ; time.Sleep(50 * time.Millisecond) {
+		if got, err := client.Get(ctx, older.Address); err == nil && got.State == "live" && got.Pid != 0 && got.Pid != older.Pid {
+			break
+		}
+		if time.Since(start) > 15*time.Second {
+			t.Fatal("the older pane did not come back after the core's stop")
+		}
 	}
 }

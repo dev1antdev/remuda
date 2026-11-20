@@ -220,6 +220,7 @@ export type Machine = {
   source?: "herdr";
   state: "connected" | "connecting" | "error";
   error?: string;
+  reached?: boolean; // its ssh master is up, though its herdr or remuda-core may not answer: nothing to wake
   os?: string; // "darwin" | "linux" | "windows", absent while unknown: a Windows PC's panes have the screen terminal (features/roster/system.ts)
   core?: boolean; // reached through remuda-core instead of herdr (a remuda started with -core)
   sessions: Session[];
