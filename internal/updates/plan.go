@@ -139,6 +139,22 @@ func Plan(what string, r *health.Report) (Update, error) {
 			return Update{}, fmt.Errorf("remuda is not installed there to run its installer")
 		}
 		return Update{What: what, Title: "Update code-server", Command: path + remudaThere + `"$r" code install && readlink "$HOME/.local/opt/code-server"`, Note: "remuda's own installer: the pinned release, its checksum verified, the service restarted; an editor open on it reconnects (Reload the editor if it does not)."}, nil
+	case "core":
+		if r == nil || r.Remuda == "" {
+			return Update{}, fmt.Errorf("remuda is not installed there to run remuda-core's installer")
+		}
+		if AssetName(r.OS, r.Arch) == "" || windowsReport(r) && r.Arch == "arm64" { // remuda's own builds, less Windows on arm
+			return Update{}, fmt.Errorf("remuda-core has no build for %s %s", r.OS, r.Arch)
+		}
+		if r.RemudaCore != "" && !health.Newer(r.RemudaCore, health.PinnedCore) {
+			return Update{}, fmt.Errorf("remuda-core %s is there already", r.RemudaCore)
+		}
+		u := Update{What: what, Title: "Install remuda-core", Note: "The terminal runtime remuda's machines move to, the pinned release with its checksum verified, put in ~/.local/bin. Nothing starts until remuda connects to it; herdr and its agents carry on as they are."}
+		if r.RemudaCore != "" {
+			u.Title, u.Note = "Update remuda-core", r.RemudaCore+arrow(health.PinnedCore)+". Swapped by its own update: its terminals keep running."
+		}
+		u.Command = path + remudaThere + `"$r" -h 2>&1 | grep -q 'remuda core ' || { echo "the remuda here is older than remuda-core's installer: update remuda here first"; exit 1; }; "$r" core install`
+		return u, nil
 	case "mcp":
 		if r == nil || r.Remuda == "" {
 			return Update{}, fmt.Errorf("remuda is not installed there to serve the tasks")
@@ -253,6 +269,9 @@ func Offered(r *health.Report, l health.Latest) []Update {
 		} else {
 			u.Note = r.CodeServer + " is what this remuda installs. " + u.Note
 		}
+		out = append(out, u)
+	}
+	if u, err := Plan("core", r); err == nil {
 		out = append(out, u)
 	}
 	if u, err := Plan("mcp", r); err == nil {

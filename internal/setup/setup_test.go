@@ -17,7 +17,7 @@ import (
 )
 
 func TestScriptsParse(t *testing.T) {
-	for name, script := range map[string]string{"setup": setupScript, "install-service": serviceScript, "install": installScript, "uninstall": uninstallScript, "install-code": codeScript, "install-mcp": mcpScript} {
+	for name, script := range map[string]string{"setup": setupScript, "install-service": serviceScript, "install": installScript, "uninstall": uninstallScript, "install-code": codeScript, "install-mcp": mcpScript, "install-core": coreScript} {
 		cmd := exec.Command("sh", "-n")
 		cmd.Stdin = strings.NewReader(script)
 		if out, err := cmd.CombinedOutput(); err != nil {
@@ -238,6 +238,12 @@ func machine(t *testing.T) (string, func() string) {
 	write(t, filepath.Join(dir, ".config", "code-server", "config.yaml"), "# written by remuda (`remuda code`)\n", 0o644)
 	write(t, filepath.Join(dir, ".config", "herdr", "config.toml"), "", 0o644)
 	write(t, filepath.Join(dir, ".local", "state", "herdr", "x"), "", 0o644)
+	write(t, filepath.Join(bin, "remuda-core"), "#!/bin/sh\necho \"remuda-core $*\" >> \"$HOME/calls.log\"\n", 0o755)
+	if err := os.Symlink("remuda-core", filepath.Join(bin, "rc")); err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(dir, ".local", "state", "remuda-core", "default", "docs.json"), "{}", 0o600)
+	write(t, filepath.Join(dir, ".config", "remuda-core", "config.toml"), "", 0o644)
 
 	return dir, func() string {
 		b, _ := os.ReadFile(filepath.Join(dir, "calls.log"))
@@ -277,7 +283,7 @@ func TestPlanSaysWhatWouldGoAndTouchesNothing(t *testing.T) {
 	if err != nil || !some {
 		t.Fatalf("some=%v err=%v\n%s", some, err, out.String())
 	}
-	for _, want := range []string{"remove  the service", "remove  ~/.local/bin/remuda", "keep    your data", "(-data removes it)", "keep    code-server", "keep    herdr"} {
+	for _, want := range []string{"remove  the service", "remove  ~/.local/bin/remuda", "keep    your data", "(-data removes it)", "keep    code-server", "keep    remuda-core", "keep    herdr"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("the plan lacks %q:\n%s", want, out.String())
 		}
@@ -294,10 +300,10 @@ func TestPlanSaysWhatWouldGoAndTouchesNothing(t *testing.T) {
 	}
 
 	out.Reset()
-	if _, err := (Removal{Data: true, Code: true, Herdr: true}).Plan(&out); err != nil {
+	if _, err := (Removal{Data: true, Code: true, Core: true, Herdr: true}).Plan(&out); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"remove  your data", "remove  code-server", "remove  herdr", "its hooks for: claude codex", "every agent and shell in its panes ends"} {
+	for _, want := range []string{"remove  your data", "remove  code-server", "remove  remuda-core", "every agent and shell in their terminals ends", "remove  herdr", "its hooks for: claude codex", "every agent and shell in its panes ends"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("the plan for everything lacks %q:\n%s", want, out.String())
 		}
@@ -337,7 +343,7 @@ func TestRemovalTakesRemudaAndLeavesWhatIsNotItsOwn(t *testing.T) {
 			t.Errorf("%s is still there\n%s", f, out.String())
 		}
 	}
-	for _, f := range []string{filepath.Join(stateDir(dir), "tasks.db"), serviceFile(dir, "code-server"), filepath.Join(dir, ".local", "opt", "code-server-4.140.0"), filepath.Join(dir, ".local", "bin", "herdr"), filepath.Join(dir, ".config", "herdr", "config.toml")} {
+	for _, f := range []string{filepath.Join(stateDir(dir), "tasks.db"), serviceFile(dir, "code-server"), filepath.Join(dir, ".local", "opt", "code-server-4.140.0"), filepath.Join(dir, ".local", "bin", "herdr"), filepath.Join(dir, ".config", "herdr", "config.toml"), filepath.Join(dir, ".local", "bin", "remuda-core"), filepath.Join(dir, ".local", "state", "remuda-core")} {
 		if !exists(f) {
 			t.Errorf("%s went without being asked for\n%s", f, out.String())
 		}
@@ -360,13 +366,14 @@ func TestRemovalTakesRemudaAndLeavesWhatIsNotItsOwn(t *testing.T) {
 
 func TestRemovalOfEverythingLeavesNothing(t *testing.T) {
 	dir, calls := machine(t)
-	all := Removal{Data: true, Code: true, Herdr: true}
+	all := Removal{Data: true, Code: true, Core: true, Herdr: true}
 	var out strings.Builder
 	if err := all.Remove(&out); err != nil {
 		t.Fatalf("%v\n%s", err, out.String())
 	}
 	for _, f := range []string{
 		filepath.Join(dir, ".local", "bin", "remuda"), serviceFile(dir, "remuda"), stateDir(dir),
+		filepath.Join(dir, ".local", "bin", "remuda-core"), filepath.Join(dir, ".local", "bin", "rc"), filepath.Join(dir, ".local", "state", "remuda-core"), filepath.Join(dir, ".config", "remuda-core"),
 		serviceFile(dir, "code-server"), filepath.Join(dir, ".local", "opt"), filepath.Join(dir, ".local", "share", "code-server"), filepath.Join(dir, ".config", "code-server"),
 		filepath.Join(dir, ".local", "bin", "herdr"), filepath.Join(dir, ".config", "herdr"), filepath.Join(dir, ".local", "state", "herdr"),
 	} {
@@ -381,6 +388,9 @@ func TestRemovalOfEverythingLeavesNothing(t *testing.T) {
 	}
 	if hooks > stop {
 		t.Errorf("the server was stopped before the hooks were removed: a pane running this would end half way\n%s", log)
+	}
+	if !strings.Contains(log, "remuda-core server stop") {
+		t.Errorf("remuda-core's core was not stopped before its binary went:\n%s", log)
 	}
 	if strings.Contains(log, "integration uninstall pi") {
 		t.Errorf("a hook that was never installed was removed:\n%s", log)

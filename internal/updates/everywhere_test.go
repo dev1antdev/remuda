@@ -2,6 +2,7 @@ package updates
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -24,7 +25,7 @@ func TestOnlyAnUpdateWithSomethingNewerIsAStepEverywhere(t *testing.T) {
 	report := &health.Report{Herdr: "0.9.4", Claude: "2.1.300", Codex: "0.80.0", CodeServer: "4.139.0", OutdatedHooks: []health.Hook{{Agent: "codex"}}}
 	latest := health.Latest{Herdr: "0.9.5", Claude: "2.1.300", Code: "4.140.0"}
 	for what, want := range map[string]bool{
-		"herdr": true, "claude": false, "codex": false, "gemini": false, "hooks": true, "code": true,
+		"herdr": true, "claude": false, "codex": false, "gemini": false, "hooks": true, "code": true, "core": true,
 		"remuda-release": true, "mcp": false, "statusline": false, "plugins": false, "restart-claude": false,
 	} {
 		if got := pendingUpdate(what, report, latest); got != want {
@@ -34,6 +35,7 @@ func TestOnlyAnUpdateWithSomethingNewerIsAStepEverywhere(t *testing.T) {
 	if pendingUpdate("hooks", &health.Report{}, latest) || pendingUpdate("code", &health.Report{}, latest) {
 		t.Error("nothing installed counts as an update")
 	}
+
 }
 
 func TestEverywhereRefusesAStepThatMovedAndRunsNoneOfThem(t *testing.T) {
@@ -117,5 +119,15 @@ func TestAServersHostIsOfferedItsReleaseAlone(t *testing.T) {
 		if u.What != "remuda-release" {
 			t.Errorf("a server's host is offered %s", u.What)
 		}
+	}
+}
+
+func TestRemudaCoreFollowsARemotesReleaseAndPrecedesTheHosts(t *testing.T) {
+	at := func(order []string, what string) int { return slices.Index(order, what) }
+	if at(remoteOrder, "core") < at(remoteOrder, "remuda-release") {
+		t.Error("a remote's remuda-core step runs before its new remuda, the one that knows `remuda core`")
+	}
+	if at(everywhereOrder, "core") > at(everywhereOrder, "remuda-release") {
+		t.Error("the host's remuda-core step comes after the release that restarts this very remuda")
 	}
 }

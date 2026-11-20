@@ -14,7 +14,7 @@ import (
 // before its agent, or in a Setup tab beside it; and the workspace a branch checked out already stands on.
 
 // setupThenAgent types the setup into the worktree's own terminal and, once it has ended, starts the agent there.
-func (s *Server) setupThenAgent(mc *machines.Machine, client *herdr.Client, ref events.PaneRef, setup, root, path, branch, agent string, start sessions.Start, prompt string) {
+func (s *Server) setupThenAgent(mc *machines.Machine, client herdr.API, ref events.PaneRef, setup, root, path, branch, agent string, start sessions.Start, prompt string) {
 	line, err := worktrees.WriteSetup(mc, setup, root, path)
 	if err == nil {
 		err = s.Input.TypeLine(client, ref, line)
@@ -40,7 +40,7 @@ func (s *Server) setupThenAgent(mc *machines.Machine, client *herdr.Client, ref 
 }
 
 // setupInTab runs the setup in a Setup tab of the new workspace, the agent's tab staying in front.
-func (s *Server) setupInTab(mc *machines.Machine, client *herdr.Client, workspace, setup, root, path, branch string) {
+func (s *Server) setupInTab(mc *machines.Machine, client herdr.API, workspace, setup, root, path, branch string) {
 	tab, err := client.TabCreateIn(workspace, "Setup", path, nil)
 	if err != nil {
 		s.setupNote(events.PaneRef{Machine: mc.ID()}, branch, "The setup of "+branch+" did not start", err)

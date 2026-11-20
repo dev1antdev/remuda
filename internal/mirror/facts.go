@@ -9,7 +9,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/usage"
 )
 
-// Herdr is one machine's herdr as the mirror writes to it; *herdr.Client is one.
+// Herdr is one machine's herdr as the mirror writes to it; any herdr.API is one.
 type Herdr interface {
 	PaneReportMetadata(herdr.PaneMetadata) error
 	WorkspaceReportMetadata(herdr.WorkspaceMetadata) error

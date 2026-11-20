@@ -25,7 +25,7 @@ Three rings, and a dependency may only point inwards.
 │  schedule · search · usage · quick · recipes · scenes · code         │
 ├─ the floor ──────────────────────────────────────────────────────────┤
 │  machines   the registry; a Machine is a shell.Host with herdr on it │
-│  herdr      the RPC client, the attach PTYs, the snapshot questions  │
+│  herdr      herdr.API / Terminals; the RPC client, the attach PTYs   │
 │  core       remuda-core's client, which is to take herdr's place     │
 │  transcript the session file parser and the per-machine Reader       │
 │  shell      the port: Run / Stream, Host, Fake                       │
@@ -67,7 +67,11 @@ The contexts are the bounded contexts of the product, in its own words:
    built with `internal/script`: quoting, the `PATH` line, the `cd ||
    exit 0` preludes, the portable `stat`, the separators an answer is
    cut by. `review`, `jobs`, `search` and `usage` are written this way;
-   their tests run on a `shell.Fake` with a recorded answer.
+   their tests run on a `shell.Fake` with a recorded answer. A package
+   that asks a machine's herdr takes `herdr.API` and `herdr.Terminals`
+   from `Machine.Ready()`, never `*herdr.Client` or
+   `*herdr.AttachManager`: remuda-core's adapter is to stand behind the
+   same two interfaces.
 3. **Packages hear each other through the bus.** `watch` publishes
    `events.Snapshot`, `events.PaneStatus` and, off herdr's event stream,
    `events.OutputMatched`; `jobs` publishes
@@ -150,8 +154,8 @@ lens is a context with a vocabulary of its own, and the code uses that
 vocabulary (`Input.Submit`, `Conversation`, `Baseline`, `Update`,
 `Launcher`). The domain is thin — the state lives in herdr, git and the
 session files — so there are no aggregates, repositories or command
-buses: a service with methods, a port for the one thing every context
-needs (a shell on a machine), and a bus for the few things they tell
+buses: a service with methods, ports for the two things every context
+needs (a shell on a machine, and its herdr), and a bus for the few things they tell
 each other. Hexagonal in shape, light in weight. The page mirrors it:
 no global state manager, no router library — one small store, one
 query hook, folders named after the lenses.

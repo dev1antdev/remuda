@@ -183,7 +183,7 @@ func (s *Service) startLane(a Arena, lane Lane) error {
 
 // deliver hands the prompt to a lane's fresh agent; Claude Code's "trust this folder" question for that very worktree
 // is answered yes, as a task's start does, any other question is pushed to the person once and waited for.
-func (s *Service) deliver(mc *machines.Machine, client *herdr.Client, a Arena, laneID int, pane, dir string) {
+func (s *Service) deliver(mc *machines.Machine, client herdr.API, a Arena, laneID int, pane, dir string) {
 	lock := s.Input.Lock(mc.ID(), pane)
 	deadline := s.now().Add(DeliverTimeout)
 	nudged, trusted := false, false

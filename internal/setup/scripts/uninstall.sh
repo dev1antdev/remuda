@@ -9,6 +9,8 @@
 #                      keys, the tailnet node's state
 #   REMUDA_RM_CODE=1   code-server: its service, the release under
 #                      ~/.local/opt, the editor's settings and extensions
+#   REMUDA_RM_CORE=1   remuda-core: its core (every terminal in it ends),
+#                      the binary, its folders
 #   REMUDA_RM_HERDR=1  herdr: its agent hooks, its server (every pane in
 #                      it ends), the binary, its folders
 # Nothing needs sudo; what would is named and left where it is. There is
@@ -261,6 +263,81 @@ code_part() {
     fi
 }
 
+# remuda-core as install-core.sh put it: the core of every session under its
+# state folder stopped first (every terminal in them ends) — nothing goes
+# while any remuda-core of this account still runs, one on a socket of its
+# own too — then the binary with its rc link, ConPTY on Windows, the app
+# bundles on a Mac, its state and config folders.
+# core_running prints the pids of this account's remuda-core processes, nothing for none; it fails when it cannot tell.
+core_running() {
+    if [ "$OS" = Windows ]; then
+        rc_ps="$(tasklist //FI "IMAGENAME eq remuda-core.exe" //FO CSV //NH 2>/dev/null)" || return 1
+        printf '%s\n' "$rc_ps" | sed -n 's/^"remuda-core.exe","\([0-9]*\)".*/\1/p' | tr '\n' ' ' | sed 's/ *$//'
+    else
+        rc_ps="$(pgrep -u "$UID_NUM" -x remuda-core 2>/dev/null)"
+        [ "$?" -le 1 ] || return 1
+        printf '%s' "$rc_ps" | tr '\n' ' ' | sed 's/ *$//'
+    fi
+}
+core_part() {
+    rc_bin="$HOME/.local/bin/remuda-core"
+    rc_state="${XDG_STATE_HOME:-$HOME/.local/state}/remuda-core"
+    rc_config="${XDG_CONFIG_HOME:-$HOME/.config}/remuda-core"
+    if [ "$OS" = Windows ]; then
+        rc_bin="$rc_bin.exe"
+        rc_state="$LOCALAPPDATA_U/remuda-core"
+        rc_config="$APPDATA_U/remuda-core"
+    fi
+    if [ ! -e "$rc_bin" ] && [ ! -d "$rc_state" ]; then
+        return 0
+    fi
+    sessions=""
+    for d in "$rc_state"/*/ "$rc_state"/.[!.]*/ "$rc_state"/..?*/; do
+        [ -d "$d" ] && sessions="${sessions:+$sessions, }$(basename "$d")"
+    done
+    what="remuda-core at $(tilde "$rc_bin"), its cores and the terminals in them, $(tilde "$rc_state"), $(tilde "$rc_config")"
+    if [ "${REMUDA_RM_CORE:-0}" != 1 ]; then
+        keep "$what  (-core removes it)"
+        return 0
+    fi
+    if [ "$ACTION" = plan ]; then
+        will "$what"
+        say "          its cores stop first${sessions:+ (sessions: $sessions)}: every agent and shell in their terminals ends"
+        if [ "$OS" = Linux ]; then say "          linger stays on for your account (loginctl disable-linger turns it off)"; fi
+        return 0
+    fi
+    if [ ! -x "$rc_bin" ]; then
+        fail "no $(tilde "$rc_bin") to stop remuda-core's cores with: its folders stay"
+        return 0
+    fi
+    up=0
+    for d in "$rc_state"/*/ "$rc_state"/.[!.]*/ "$rc_state"/..?*/; do
+        [ -d "$d" ] || continue
+        s="$(basename "$d")"
+        RC_SESSION="$s" "$rc_bin" server stop >/dev/null 2>&1 || { up=1; fail "remuda-core's $s core did not stop: RC_SESSION=$s $rc_bin server stop"; }
+    done
+    i=0
+    while [ "$i" -lt 10 ] && left="$(core_running)" && [ -n "$left" ]; do
+        sleep 0.5
+        i=$((i + 1))
+    done
+    if ! left="$(core_running)"; then
+        up=1
+        fail "could not tell whether a remuda-core still runs"
+    elif [ -n "$left" ]; then
+        up=1
+        fail "a remuda-core still runs (pid $left), a session on a socket of its own perhaps: stop it, then remove remuda-core again"
+    fi
+    if [ "$up" = 1 ]; then
+        fail "remuda-core's files stay while one of its cores runs"
+        return 0
+    fi
+    case "$(readlink "$HOME/.local/bin/rc" 2>/dev/null)" in
+    remuda-core | */share/remuda-core/*) rm -f "$HOME/.local/bin/rc" ;;
+    esac
+    if rm -rf "$rc_bin" "$HOME/.local/bin/conpty" "$HOME/.local/share/remuda-core" "$rc_state" "$rc_config"; then gone "remuda-core and its folders"; else fail "could not remove all of remuda-core's files (a core still running holds its own)"; fi
+}
+
 # herdr, last: stopping its server ends every pane, and this script may be
 # running in one. The hooks first (they call the binary), then the server,
 # the binary by the way it came, the folders.
@@ -379,6 +456,7 @@ esac
 remuda_part
 data_part
 code_part
+core_part
 herdr_part
 
 if [ "$ACTION" = plan ]; then
