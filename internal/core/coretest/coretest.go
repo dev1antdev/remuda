@@ -23,6 +23,10 @@ type Core struct {
 	// Env is the environment it runs under, for a `remuda-core` command aimed at it.
 	Env []string
 	Bin string
+
+	root    string
+	process *os.Process
+	exited  chan struct{}
 }
 
 // Server starts a core and stops it when the test ends, skipping the test without the binary: RC_BIN, else
@@ -50,7 +54,7 @@ func Server(t testing.TB) *Core {
 			t.Fatal(err)
 		}
 	}
-	c := &Core{Socket: filepath.Join(root, "c.sock"), Bin: bin}
+	c := &Core{Socket: filepath.Join(root, "c.sock"), Bin: bin, root: root}
 	c.Env = []string{
 		"PATH=" + os.Getenv("PATH"),
 		"HOME=" + root,
@@ -63,13 +67,37 @@ func Server(t testing.TB) *Core {
 		"RC_LAUNCHD_DIRECT=" + strconv.Itoa(os.Getpid()),
 		"RC_HEARTBEAT_MS=300",
 	}
-	logPath := filepath.Join(root, "core.log")
-	log, err := os.Create(logPath)
+	t.Cleanup(func() {
+		c.stop(t)
+		if t.Failed() {
+			said, _ := os.ReadFile(c.logPath())
+			t.Logf("core.log:\n%s", said)
+		}
+		os.RemoveAll(root)
+	})
+	c.serve(t)
+	return c
+}
+
+// Restart stops the core and starts it again on the same state, as a reboot or the core's own stop would: its kept
+// terminals come back with new shells.
+func (c *Core) Restart(t testing.TB) {
+	t.Helper()
+	c.stop(t)
+	c.serve(t)
+}
+
+func (c *Core) logPath() string { return filepath.Join(c.root, "core.log") }
+
+// serve starts `remuda-core serve` and waits for its socket.
+func (c *Core) serve(t testing.TB) {
+	t.Helper()
+	log, err := os.OpenFile(c.logPath(), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
 		t.Fatal(err)
 	}
-	serve := exec.Command(bin, "serve")
-	serve.Env, serve.Dir, serve.Stdout, serve.Stderr = c.Env, root, log, log
+	serve := exec.Command(c.Bin, "serve")
+	serve.Env, serve.Dir, serve.Stdout, serve.Stderr = c.Env, c.root, log, log
 	if err := serve.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -79,22 +107,15 @@ func Server(t testing.TB) *Core {
 		log.Close()
 		close(exited)
 	}()
-	t.Cleanup(func() {
-		c.stop(t, exited, serve.Process)
-		if t.Failed() {
-			said, _ := os.ReadFile(logPath)
-			t.Logf("core.log:\n%s", said)
-		}
-		os.RemoveAll(root)
-	})
+	c.process, c.exited = serve.Process, exited
 	for start := time.Now(); ; time.Sleep(20 * time.Millisecond) {
 		if probe, err := net.Dial("unix", c.Socket); err == nil {
 			probe.Close()
-			return c
+			return
 		}
 		select {
 		case <-exited:
-			said, _ := os.ReadFile(logPath)
+			said, _ := os.ReadFile(c.logPath())
 			t.Fatalf("remuda-core serve exited: %s", said)
 		default:
 		}
@@ -127,9 +148,14 @@ func (c *Core) Client(t testing.TB) *core.Client {
 	return client
 }
 
-// stop asks the core to stop on a plain connection of its own, which ends every terminal it holds, and waits for
-// it; one that does not stop in time is killed.
-func (c *Core) stop(t testing.TB, exited <-chan struct{}, process *os.Process) {
+// stop asks the core to stop on a plain connection of its own, which ends every terminal it holds (a kept one waits
+// for the next start), and waits for it; one that does not stop in time is killed.
+func (c *Core) stop(t testing.TB) {
+	exited, process := c.exited, c.process
+	if exited == nil {
+		return
+	}
+	c.exited = nil
 	if plain, err := net.DialTimeout("unix", c.Socket, 5*time.Second); err == nil {
 		plain.SetDeadline(time.Now().Add(10 * time.Second))
 		plain.Write([]byte(`{"jsonrpc":"2.0","id":1,"method":"server.stop","params":{}}` + "\n"))

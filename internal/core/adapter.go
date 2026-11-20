@@ -230,16 +230,22 @@ func (a *Adapter) readDoc(ctx context.Context, cn *conn) (Document, error) {
 }
 
 // fill replaces the mirror with a snapshot of the core's — this machine's terminals, not those of a machine it
-// added, which come addressed as `machine/t7` — and tells every stream that the machine moved.
+// added, which come addressed as `machine/t7` — and tells every stream that the machine moved. A terminal waiting for
+// a new shell, or whose shell is another than the one the mirror held before, was restored meanwhile.
 func (a *Adapter) fill(terminals []Terminal, doc Document, version string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	before := a.state.terminals
 	a.state = mirror{terminals: make(map[string]*Terminal, len(terminals)), doc: doc, version: version, gone: map[string]bool{}}
 	for i := range terminals {
-		if terminals[i].State == "live" && local(terminals[i].Address) {
-			followShell(&terminals[i])
-			a.state.terminals[terminals[i].Address] = &terminals[i]
+		t := &terminals[i]
+		if t.State != "live" || !local(t.Address) {
+			continue
 		}
+		followShell(t)
+		was := before[t.Address]
+		t.restored = agentOf(t) == "" && (t.Reason != "" || was != nil && (was.restored || was.Pid != t.Pid))
+		a.state.terminals[t.Address] = t
 	}
 	a.held, a.lost = true, nil
 	a.answer()
@@ -331,6 +337,7 @@ func (m *mirror) apply(ev Event) (herdr.Event, bool) {
 			m.went(record.Address)
 			return herdr.Event{Kind: "pane.closed", PaneID: record.Address}, t != nil
 		}
+		record.restored = ev.Type == "restarted"
 		return m.add(record), true
 	case "removed", "finished":
 		m.went(ev.Terminal)
@@ -394,7 +401,7 @@ func (m *mirror) apply(ev Event) (herdr.Event, bool) {
 			ExitCode **int   `json:"exit_code"`
 			Signal   **int   `json:"signal"`
 		}{&t.Reason, &t.ExitCode, &t.Signal})
-		t.Pid, t.Foreground = 0, nil
+		t.Pid, t.Foreground, t.restored = 0, nil, true
 		told.Kind = "pane.exited"
 	case "keep":
 		json.Unmarshal(ev.Data, &struct {
@@ -406,7 +413,7 @@ func (m *mirror) apply(ev Event) (herdr.Event, bool) {
 	}
 	if became := agentOf(t); became != agent {
 		if became != "" {
-			t.agentAt = now
+			t.agentAt, t.restored = now, false
 			// a report naming this agent that came before the foreground's next look was the agent's own, its first
 			if t.Status != nil && appAgent(t.Status.App) == became && now.Sub(t.statusAt) <= foregroundLag {
 				t.agentAt = t.statusAt

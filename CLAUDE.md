@@ -342,7 +342,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   skipped; `serve` started as the test's own child with its own
   `RC_SESSION`, `RC_SOCKET`, XDG folders and HOME, `RC_LAUNCHD_DIRECT` so
   macOS does not hand it to launchd, `RC_HEARTBEAT_MS` 300, stopped through
-  `server.stop`; `Core.Use(t)` sets that environment on the test process,
+  `server.stop`, `Core.Restart(t)` stopping it and starting it again on
+  the same state; `Core.Use(t)` sets that environment on the test process,
   the core's binary first on PATH, for a `-core` fleet's `remuda-core
   connect`) — calls side by side, a refusal's kind, documents, an
   attach's echo and exit code, a stream nobody reads beside a live one, events
@@ -377,7 +378,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   `foreground` → `pane.updated` — `pane.agent_detected` when the agent
   changed — `labels` → `pane.moved`, `size` and the document →
   `layout.updated`, `created` and `restarted` → `pane.created`, `finished`
-  and `removed` → `pane.closed`, `lost` → `pane.exited`); a stream that falls `maxQueued` 4096
+  and `removed` → `pane.closed`, `lost` → `pane.exited`; a terminal lost or
+  `restarted`, or found waiting for its new shell or holding another shell
+  than before when the mirror fills again, is `restored` — the pane's
+  `Restored` — until an agent takes it); a stream that falls `maxQueued` 4096
   behind ends with `events_lost`, as herdr's does, and every stream ends when
   the subscription is lost, which is tried again 250 ms → 5 s apart (the
   machine hears `TransportError`). Each step is bounded (`bounded`: the
@@ -455,8 +459,12 @@ components and icons as rules for whoever changes it: @docs/design.md
   renames, `WorkspaceClose`, `TabClose` — and `panes.go` — `PaneSplit`
   (`splitBeside`, half the room) and `PaneClose` (`withoutPane`; a tab goes
   with its last pane and a workspace with its last tab, as herdr's) — run
-  the machine's shell in a new terminal with the place's labels and
-  `rm` (gone when its shell ends, as a herdr pane), and wait for the core's
+  the machine's shell in a new terminal with the place's labels,
+  `rm` (gone when its shell ends, as a herdr pane) and `keep` (a shell lost
+  to a reboot or the core's own stop comes back as a new one in its
+  folder, as herdr restores its panes, its agent the restart memory's to
+  bring back: "Resume after restart", and sleep and wake, run through the
+  adapter as on herdr; an exit or a kill stays final), and wait for the core's
   own news of it (`runShell`: the mirror alone puts terminals in it, so the
   pane answered is in the next snapshot and a reply never brings back a
   shell that ended meanwhile — one the core said went, `mirror.gone`, fails
@@ -1993,7 +2001,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   a remembered pane that is a bare shell in the same folder counts as
   *stopped* only when the change was not watched happening — the
   snapshot's `First` flag, set by the watcher on a machine's first
-  snapshot and on the first after its polls failed — and is forgotten
+  snapshot and on the first after its polls failed, or the pane's
+  `Restored` on a remuda-core machine, whose shell the core gave a new
+  one while remuda watched (see `internal/core`, Core 21) — and is forgotten
   when the person left the agent themselves, moved the shell elsewhere
   or closed the pane; `Restarter.Server` pauses the memory for its
   machine while it restarts herdr itself; a pane `Memory.Asleep` names (`sleep.Store.Holds`: a

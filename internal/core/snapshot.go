@@ -148,7 +148,7 @@ func paneOf(t *Terminal, tab, space string, sessionOf func(agent string, pid int
 	pane := herdr.PaneInfo{
 		PaneID: t.Address, TabID: tab, WorkspaceID: space, TerminalID: t.Address,
 		Agent: agentOf(t), AgentStatus: statusOf(t), CWD: t.Cwd,
-		Title: t.Title, TitleStripped: strings.TrimLeftFunc(t.Title, notWordStart),
+		Title: t.Title, TitleStripped: strings.TrimLeftFunc(t.Title, notWordStart), Restored: t.restored,
 	}
 	if t.Foreground != nil {
 		pane.ForegroundCWD = t.Foreground.Cwd

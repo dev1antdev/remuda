@@ -98,7 +98,8 @@ func OpenMemory(dir string) *Memory {
 
 // Observe folds a machine's snapshot in: an agent pane with a session is remembered; a remembered pane that is a
 // bare shell in the same folder was stopped by a reboot when the change was not watched happening (the snapshot is
-// the machine's first, or the first after its herdr was away) and has stood so for stoppedGrace, and is forgotten
+// the machine's first, or the first after its herdr was away, or remuda-core gave the pane a new shell in place of a
+// lost one: Restored) and has stood so for stoppedGrace, and is forgotten
 // when the person left the agent themselves; a pane no longer there was closed — listed as such, then forgotten.
 func (m *Memory) Observe(e events.Snapshot) {
 	if m.observe(e) && m.OnStopped != nil {
@@ -150,7 +151,7 @@ func (m *Memory) observe(e events.Snapshot) bool {
 			continue
 		}
 		since, unwatched := m.shells[key]
-		if p.Agent == "" && (unwatched || e.First) {
+		if p.Agent == "" && (unwatched || e.First || p.Restored) {
 			if !unwatched {
 				since = e.At
 				m.shells[key] = since

@@ -268,3 +268,22 @@ func TestResumeStartsEachStoppedChatOnItsSessionAndSaysWhyNot(t *testing.T) {
 		t.Fatal("chatsWord")
 	}
 }
+
+// TestARestoredShellIsStoppedThoughTheChangeWasWatched: remuda-core gives a lost shell a new one while remuda watches
+// (its own stop, a kill), so the snapshot is no first one; the pane's mark says the agent did not leave at the
+// person's word.
+func TestARestoredShellIsStoppedThoughTheChangeWasWatched(t *testing.T) {
+	noGrace(t)
+	m := OpenMemory("")
+	observe(m, "gog", true, agentPane("t1", "claude", "/work/api"), agentPane("t2", "codex", "/work/web"))
+	restored := shellPane("t1", "/work/api")
+	restored.Restored = true
+	observe(m, "gog", false, restored, shellPane("t2", "/work/web"))
+	stopped := m.Stopped("gog")
+	if len(stopped) != 1 || stopped[0].Pane != "t1" || stopped[0].Command != "claude --resume "+sid {
+		t.Fatalf("stopped: %+v", stopped)
+	}
+	if _, ok := m.chats["gog|t2"]; ok {
+		t.Fatal("an agent the person left is still remembered")
+	}
+}
