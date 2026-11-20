@@ -35,7 +35,23 @@ type Chat struct {
 	Kind    string `json:"kind"`
 	Session string `json:"session"`
 	Dir     string `json:"dir"`
-	Title   string `json:"title,omitempty"`
+	// Ran is the folder the agent itself ran in when it was not its pane's: remuda-core gives a lost shell back in the
+	// folder of the program that last held the terminal.
+	Ran   string `json:"ran,omitempty"`
+	Title string `json:"title,omitempty"`
+}
+
+// in says whether a shell standing in dir is where the chat was: its pane's folder, or the agent's own.
+func (c Chat) in(dir string) bool {
+	return dir == c.Dir || c.Ran != "" && dir == c.Ran
+}
+
+// ranIn is the folder the pane's agent runs in when it is not the pane's own, else "".
+func ranIn(p *herdr.PaneInfo, dir string) string {
+	if p.ForegroundCWD != dir {
+		return p.ForegroundCWD
+	}
+	return ""
 }
 
 // Stopped is a remembered chat whose pane came back as a bare shell; the roster carries it, with the folder and the
@@ -138,7 +154,8 @@ func (m *Memory) observe(e events.Snapshot) bool {
 			delete(m.shells, key)
 			if sid := sessionOf(p); sid != "" {
 				m.faces[key] = faceOf(e.Snap, p)
-				c := Chat{Kind: p.Agent, Session: sid, Dir: paneDir(e.Snap, p), Title: firstNonEmpty(e.Snap.WorkspaceLabel(p.WorkspaceID), p.DisplayTitle())}
+				dir := paneDir(e.Snap, p)
+				c := Chat{Kind: p.Agent, Session: sid, Dir: dir, Ran: ranIn(p, dir), Title: firstNonEmpty(e.Snap.WorkspaceLabel(p.WorkspaceID), p.DisplayTitle())}
 				if old, ok := m.chats[key]; !ok || old != c {
 					m.chats[key] = c
 					changed = true
@@ -159,7 +176,7 @@ func (m *Memory) observe(e events.Snapshot) bool {
 			// a restored pane reads the server's folder as its own for a moment: the folder is judged after the grace
 			switch {
 			case e.At.Sub(since) < stoppedGrace:
-			case p.Dir() == c.Dir:
+			case c.in(p.Dir()):
 				stopped = append(stopped, stoppedOf(p.PaneID, c, firstNonEmpty(c.Title, p.DisplayTitle())))
 			default:
 				delete(m.chats, key)
@@ -526,7 +543,7 @@ func (r *Restarter) resumeOne(client starter, machineID string, s Stopped, check
 		return settle(true, fmt.Sprintf("· %s (%s): %s is back already", s.Title, s.Pane, a.Title))
 	case p.Agent != "":
 		return settle(false, fmt.Sprintf("· %s (%s): runs %q now — left as it is", s.Title, s.Pane, p.Agent))
-	case p.Dir() != s.chat.Dir:
+	case !s.chat.in(p.Dir()):
 		return settle(false, fmt.Sprintf("· %s (%s): the shell is in %s now, not %s — left as it is", s.Title, s.Pane, p.Dir(), s.chat.Dir))
 	}
 	if err := checks(s); err != nil {

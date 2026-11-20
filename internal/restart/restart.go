@@ -184,6 +184,9 @@ func (r *Restarter) Now(mc *machines.Machine, kinds []string, say func(string)) 
 	if err != nil {
 		return err
 	}
+	if err := Reread(client); err != nil {
+		return err
+	}
 	snap, err := client.SessionSnapshot()
 	if err != nil {
 		return err
@@ -275,6 +278,9 @@ func (r *Restarter) Pane(mc *machines.Machine, paneID string, say func(string)) 
 	if err != nil {
 		return err
 	}
+	if err := Reread(client); err != nil {
+		return err
+	}
 	p, found, err := look(client, paneID)
 	if err != nil {
 		return err
@@ -317,6 +323,9 @@ func (r *Restarter) one(mc *machines.Machine, paneID, kind, session string, say 
 	if err != nil {
 		r.book(mc.ID(), paneID, kind, session)
 		return fmt.Errorf("%s: %v — booked for later", paneID, err)
+	}
+	if err := Reread(client); err != nil {
+		return fmt.Errorf("%s: %v — left as it is", paneID, err)
 	}
 	p, found := pane(client, paneID)
 	if !found {

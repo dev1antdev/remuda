@@ -91,6 +91,36 @@ func TestAnAgentsSessionIsReadOffItsProcessWhenNewAndAgainOnceDue(t *testing.T) 
 	}
 }
 
+// A sleep or a restart about to stop an agent reads its session afresh, though the last answer is not due: a /resume
+// moved the agent to another conversation in the same process; a read that fails says so and keeps what was known.
+func TestAFreshReadAnswersTheConversationTheAgentRunsNow(t *testing.T) {
+	reads := &sessionReads{answers: map[int]string{100: "sid-a"}}
+	s := newProcessSessions("gog", reads.read)
+	s.fresh = time.Hour
+	sessionAfter(t, s, "claude", 100, "sid-a")
+	reads.mu.Lock()
+	reads.answers[100] = "sid-b"
+	reads.mu.Unlock()
+	if got := s.of("claude", 100, "/work/api"); got == nil || got.Value != "sid-a" {
+		t.Fatalf("the answer was read again before it was due: %+v", got)
+	}
+	if err := s.readNow(); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.of("claude", 100, "/work/api"); got == nil || got.Value != "sid-b" {
+		t.Fatalf("after a fresh read: %+v", got)
+	}
+	reads.mu.Lock()
+	reads.answers[100], reads.fail = "sid-c", errors.New("ssh: connection lost")
+	reads.mu.Unlock()
+	if err := s.readNow(); err == nil {
+		t.Fatal("a fresh read that failed answered nothing")
+	}
+	if got := s.of("claude", 100, "/work/api"); got == nil || got.Value != "sid-b" {
+		t.Fatalf("a failed fresh read lost what was known: %+v", got)
+	}
+}
+
 func TestProcessesNobodyAsksAboutAreForgotten(t *testing.T) {
 	reads := &sessionReads{answers: map[int]string{100: "sid-a", 200: "sid-b"}}
 	s := newProcessSessions("gog", reads.read)

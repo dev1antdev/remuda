@@ -158,6 +158,11 @@ func (c *Client) Kill(ctx context.Context, terminal string) (Terminal, error) {
 	return t, c.Call(ctx, "terminal.kill", map[string]any{"terminal": terminal}, &t)
 }
 
+// Keep sets whether a lost program is replaced by the machine's shell in place (terminal.keep).
+func (c *Client) Keep(ctx context.Context, terminal string, keep bool) error {
+	return c.Call(ctx, "terminal.keep", map[string]any{"terminal": terminal, "keep": keep}, nil)
+}
+
 // Label sets labels; an empty value removes one.
 func (c *Client) Label(ctx context.Context, terminal string, labels map[string]string) (Terminal, error) {
 	var t Terminal

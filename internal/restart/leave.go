@@ -88,3 +88,15 @@ func Knows(kind string) bool {
 	_, ok := agents[kind]
 	return ok
 }
+
+// Reread has a remuda-core machine read its agents' sessions off their processes again before the look that follows,
+// so a step about to stop an agent and resume it names the conversation the agent runs now, not the one its last read
+// found (a /resume moves it under the same process); herdr reports its own as they change.
+func Reread(client any) error {
+	if c, ok := client.(interface{ RereadSessions() error }); ok {
+		if err := c.RereadSessions(); err != nil {
+			return fmt.Errorf("its session could not be read off its process: %w", err)
+		}
+	}
+	return nil
+}

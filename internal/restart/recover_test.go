@@ -287,3 +287,27 @@ func TestARestoredShellIsStoppedThoughTheChangeWasWatched(t *testing.T) {
 		t.Fatal("an agent the person left is still remembered")
 	}
 }
+
+// TestAChatIsStoppedWhereItsAgentRanThoughItsShellStoodElsewhere: an agent started in a folder of its own (`cd sub &&
+// exec claude` from the pane's /work/api) comes back, after remuda-core's stop, as a shell in the agent's folder, the
+// one the core saw last: the chat is stopped there, and resumed there.
+func TestAChatIsStoppedWhereItsAgentRanThoughItsShellStoodElsewhere(t *testing.T) {
+	noGrace(t)
+	m := OpenMemory("")
+	ran := agentPane("t1", "claude", "/work/api")
+	ran.ForegroundCWD = "/work/api/sub"
+	observe(m, "gog", true, ran)
+	restored := shellPane("t1", "/work/api/sub")
+	restored.Restored = true
+	observe(m, "gog", false, restored)
+	stopped := m.Stopped("gog")
+	if len(stopped) != 1 || stopped[0].Pane != "t1" {
+		t.Fatalf("stopped: %+v", stopped)
+	}
+	client := &fakeHerdr{snap: snapshot(restored)}
+	r := &Restarter{Memory: m}
+	out := r.resume(client, "gog", stopped, func(Stopped) error { return nil }, func(string) {})
+	if len(client.started) != 1 || len(out.back()) != 1 {
+		t.Fatalf("started %v, back %v", client.started, out.back())
+	}
+}

@@ -24,6 +24,7 @@ type processSessions struct {
 	name          string // the machine's, for the log
 	fresh, forget time.Duration
 
+	readMu     sync.Mutex // one read on the machine at a time
 	mu         sync.Mutex
 	procs      map[int]*process
 	reading    bool
@@ -55,7 +56,8 @@ func (s *processSessions) of(agent string, pid int, cwd string) *herdr.AgentSess
 	p.running, p.asked = transcript.Running{PID: pid, Agent: agent, CWD: cwd}, now
 	if now.Sub(p.readAt) >= s.fresh && !s.reading {
 		s.reading = true
-		go s.readDue()
+		since := now.Add(-s.fresh)
+		go s.readDue(since)
 	}
 	if p.session == "" {
 		return nil
@@ -63,8 +65,17 @@ func (s *processSessions) of(agent string, pid int, cwd string) *herdr.AgentSess
 	return &herdr.AgentSession{Kind: "id", Value: p.session}
 }
 
-// readDue reads every process asked about lately whose answer is due, and forgets the ones nobody asks about.
-func (s *processSessions) readDue() {
+// readNow reads every process asked about lately again before it answers, for a step about to stop an agent and
+// resume it on its session: a snapshot answers what the last read found, and a /resume may have moved the agent since.
+func (s *processSessions) readNow() error {
+	return s.readDue(time.Now())
+}
+
+// readDue reads every process asked about lately whose answer was read before since, and forgets the ones nobody asks
+// about; a failure keeps the answers read before.
+func (s *processSessions) readDue(since time.Time) error {
+	s.readMu.Lock()
+	defer s.readMu.Unlock()
 	s.mu.Lock()
 	now := time.Now()
 	var due []transcript.Running
@@ -72,7 +83,7 @@ func (s *processSessions) readDue() {
 		switch {
 		case now.Sub(p.asked) > s.forget:
 			delete(s.procs, pid)
-		case now.Sub(p.readAt) >= s.fresh:
+		case p.readAt.Before(since) || p.readAt.Equal(since):
 			due = append(due, p.running)
 		}
 	}
@@ -93,4 +104,5 @@ func (s *processSessions) readDue() {
 			}
 		}
 	}
+	return err
 }

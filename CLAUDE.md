@@ -433,7 +433,11 @@ components and icons as rules for whoever changes it: @docs/design.md
   `/resume` changes the session under the same pid), a failed read keeping
   the last answer (logged once an hour), a process nobody asked about for
   `sessionsForget` 2 min dropped; the snapshot reads only what was last
-  found, never waiting. Output watches go
+  found, never waiting — `Adapter.RereadSessions` (`AdapterHooks.Reread`,
+  `processSessions.readNow`) reads them all again and waits, for what is
+  about to stop an agent and resume it (`restart.Reread`, under the pane's
+  lock: a sleep's plan and each agent's exit, an update's restart), a read
+  that fails refusing the step. Output watches go
   in **feeds** (`feeds.go`, tested on a fake: shared, closed with the last
   stream, opened again after, a rule edited leaving the other watches'
   feeds standing, and 120 feeds' 4,800 standing rows told as they open, all
@@ -481,7 +485,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   agent's own `/exit` or `/restart`, a prompt, so on a machine they wait for
   a core with `send_foreground`, 0.2.1 — the pinned 0.2.0 refuses them (a
   sleep ends "did not stop"), while `lifecycle_test.go` runs both on a
-  throwaway core with the gate lifted; an exit or a kill stays final), and wait for the core's
+  throwaway core with the gate lifted; an exit or a kill stays final; a
+  pane remuda started before it kept them, one carrying a workspace's
+  label, is kept as the mirror fills, `keepOlder` through `Client.Keep`,
+  a refusal tried again at the next fill), and wait for the core's
   own news of it (`runShell`: the mirror alone puts terminals in it, so the
   pane answered is in the next snapshot and a reply never brings back a
   shell that ended meanwhile — one the core said went, `mirror.gone`, fails
@@ -2067,6 +2074,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   every `events.Snapshot` (`Restarter.Observe`) and keeps, per
   machine|pane, the agent kind, session id, folder and title of every
   agent pane with a session in `<state>/chats.json` (written on change;
+  `Ran` the agent's own folder when it is not its pane's, since remuda-core
+  gives a lost shell back where the program that held the terminal last
+  stood, either folder counting as the chat's;
   on a remuda-core machine only Claude Code's and Codex's, the sessions
   read off a process there being theirs alone);
   a remembered pane that is a bare shell in the same folder counts as
@@ -2171,7 +2181,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   merged with what an earlier sleep of it still holds) — so the roster
   says asleep and the restart memory skips its panes from the next
   snapshot — and a job ("Sleep api") makes every agent leave side by side,
-  each under its pane's hold (`sessions.Input.Hold`, as a restart): a fresh look (a pane gone stays asleep, a
+  each under its pane's hold (`sessions.Input.Hold`, as a restart): a fresh look — on remuda-core with its session
+  read off its process again, `restart.Reread`, an agent that moved to another conversation since the plan left
+  awake — (a pane gone stays asleep, a
   wake opens a tab for it; another conversation there is left), an Esc
   for one at work or asking (`interrupt`, a quiet "sent" row of the
   activity like the exit, `Typed`) and a wait for it to rest, then

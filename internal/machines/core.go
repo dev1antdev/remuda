@@ -62,7 +62,7 @@ func newCoreLink(mc *Machine, client *core.Client, transportError func(error)) *
 	sessions := newProcessSessions(mc.Label(), mc.Transcripts.SessionsOf)
 	return &coreLink{
 		client:    client,
-		adapter:   core.NewAdapter(client, mc, core.AdapterHooks{TransportError: transportError, SessionOf: sessions.of}),
+		adapter:   core.NewAdapter(client, mc, core.AdapterHooks{TransportError: transportError, SessionOf: sessions.of, Reread: sessions.readNow}),
 		terminals: core.NewTerminals(client),
 	}
 }
