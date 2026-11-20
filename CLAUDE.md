@@ -340,7 +340,15 @@ components and icons as rules for whoever changes it: @docs/design.md
   hello nobody answers, a cancel racing its reply, a slow encoder). CI's check job installs
   release remuda-v0.2.0 against its `checksums.txt`. Never start a core for a
   test any other way: one without its own `RC_SOCKET` and XDG folders reaches
-  the person's.
+  the person's. **A screen with its colours** (`screen.go`, tested on a
+  recorded pair in `testdata/` and on a throwaway core): `Read` with format
+  "vt" gives every row of the screen as text and SGR alone, each opening with
+  a reset — what herdr's `pane.read` (format ansi) gives, rows apart by `\n`
+  where herdr's are `\r\n` — so `ScreenText` only leaves out the blank rows
+  under the last one that shows anything, as herdr does (a row of coloured
+  spaces shows); the page's `parseAnsi` draws both the same span for span
+  (`ansi.test.ts` reads the pair), and `timelapse.Plain` reads either. A core
+  machine's `PaneScreen` is to be `ScreenText` of a vt `Read` (Core 15).
 - `internal/sshx/` — one OpenSSH `ControlMaster` per host (BatchMode: fail,
   never prompt; sshd's MaxSessions is 10 by default, so every session takes
   one of 9 places first (`Conn.enter`, `sessionCount`), waiting within its
