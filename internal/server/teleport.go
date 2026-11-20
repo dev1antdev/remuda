@@ -196,7 +196,7 @@ func (s *Server) handleTeleport(w http.ResponseWriter, r *http.Request) {
 	result := &teleported{Machine: target.ID()}
 	move := teleport.Move{Source: mc, SourceDir: dir, Target: target, TargetDir: req.Folder, Start: func(landed teleport.Landed, src teleport.Source) error {
 		snap, _ := s.Watch.Snapshot(target.ID())
-		place, err := sessions.StartIn(client, snap, landed.Dir, to, req.Agent, start)
+		place, err := sessions.StartIn(client, snap, landed.Dir, "", to, req.Agent, start)
 		s.Watch.Refresh(target)
 		if err != nil {
 			return err

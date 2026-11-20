@@ -139,7 +139,7 @@ func (s *Service) wakeInTab(client Client, snap *herdr.Snapshot, workspaceID str
 		a.Pane, a.Tab = res.RootPane.PaneID, res.Tab.TabID
 		return start(client, a, say, keep)
 	}
-	place, err := sessions.StartIn(client, snap, a.Dir, a.TabName, a.Kind, sessions.Start{Resume: a.Session})
+	place, err := sessions.StartIn(client, snap, a.Dir, "", a.TabName, a.Kind, sessions.Start{Resume: a.Session})
 	if place.Pane != "" {
 		a.Pane, a.Tab = place.Pane, place.Tab
 	}

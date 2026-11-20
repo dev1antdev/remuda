@@ -12,10 +12,12 @@ type fakePlacer struct {
 	fakeClient
 	tabs       []string // the workspaces tabs were made in
 	workspaces []string // the folders workspaces were made on
+	named      []string // the names they were given
 }
 
 func (f *fakePlacer) WorkspaceCreate(cwd, label string) (*herdr.WorkspaceCreateResult, error) {
 	f.workspaces = append(f.workspaces, cwd)
+	f.named = append(f.named, label)
 	return &herdr.WorkspaceCreateResult{Workspace: herdr.WorkspaceInfo{WorkspaceID: "w9"}, RootPane: herdr.PaneInfo{PaneID: "w9:p1", TabID: "w9:t1", WorkspaceID: "w9"}}, nil
 }
 
@@ -30,7 +32,7 @@ func TestStartInUsesTheFoldersWorkspaceElseMakesOne(t *testing.T) {
 		Panes:      []herdr.PaneInfo{{PaneID: "w2:p1", WorkspaceID: "w2", CWD: "/home/me/remuda"}},
 	}
 	client := &fakePlacer{}
-	place, err := StartIn(client, snap, "/home/me/remuda", "scout", "codex", Start{Model: "gpt-5", Args: []string{"--full-auto"}})
+	place, err := StartIn(client, snap, "/home/me/remuda", "", "scout", "codex", Start{Model: "gpt-5", Args: []string{"--full-auto"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,24 +49,24 @@ func TestStartInUsesTheFoldersWorkspaceElseMakesOne(t *testing.T) {
 		}
 	}
 
-	elsewhere, err := StartIn(client, snap, "/home/me/other", "scout", "codex", Start{})
+	elsewhere, err := StartIn(client, snap, "/home/me/other", "notes", "scout", "codex", Start{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !elsewhere.MadeWorkspace || elsewhere.Workspace != "w9" || elsewhere.Pane != "w9:p1" || len(client.workspaces) != 1 || client.workspaces[0] != "/home/me/other" {
-		t.Fatalf("a workspace on a folder without one: %+v made %v", elsewhere, client.workspaces)
+	if !elsewhere.MadeWorkspace || elsewhere.Workspace != "w9" || elsewhere.Pane != "w9:p1" || len(client.workspaces) != 1 || client.workspaces[0] != "/home/me/other" || client.named[0] != "notes" {
+		t.Fatalf("a workspace on a folder without one, under its name: %+v made %v %v", elsewhere, client.workspaces, client.named)
 	}
-	if _, err := StartIn(client, nil, "/home/me/other", "", "shell", Start{}); err == nil {
+	if _, err := StartIn(client, nil, "/home/me/other", "", "", "shell", Start{}); err == nil {
 		t.Fatal("a shell started")
 	}
-	if _, err := StartIn(client, nil, "/home/me/other", "", "nobody", Start{}); err == nil {
+	if _, err := StartIn(client, nil, "/home/me/other", "", "", "nobody", Start{}); err == nil {
 		t.Fatal("an unknown agent started")
 	}
 }
 
 func TestStartInKeepsThePlaceWhenTheAgentRefuses(t *testing.T) {
 	client := &fakePlacer{fakeClient: fakeClient{startErrs: []*herdr.Error{{Code: "agent_kind_unknown"}}}}
-	place, err := StartIn(client, nil, "/x", "", "claude", Start{})
+	place, err := StartIn(client, nil, "/x", "", "", "claude", Start{})
 	if err == nil || place.Pane != "w9:p1" || !place.MadeWorkspace {
 		t.Fatalf("err %v place %+v", err, place)
 	}

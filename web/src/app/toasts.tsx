@@ -7,7 +7,7 @@ import { alertText, LINGER_MS, type OnPageAlert } from "@/features/alerts/onpage
 import { hiddenWords } from "@/features/roster/sharing";
 import { usePref } from "@/lib/prefs";
 import { newer } from "@/lib/version";
-import { episodeKey, remember, stoppedWords } from "@/features/roster/stopped";
+import { episodeKey, remember, toastWords } from "@/features/roster/stopped";
 import { reopen } from "@/features/reopen/offer";
 import { previewServed } from "@/features/triggers/offer";
 import { offersToShow, offerWords, rememberOffer } from "@/features/triggers/triggers";
@@ -180,7 +180,7 @@ export function useToasts(): ToastItem[] {
     toasts.push({
       id: `recover-${m.id}`,
       tone: "warn",
-      text: `${m.label}: ${stoppedWords(stopped.length)}`,
+      text: toastWords(stopped, m.label),
       action: (
         <button
           type="button"

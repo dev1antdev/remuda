@@ -118,6 +118,7 @@ type Server struct {
 	Backup     *backup.Service     // the cockpit's state dir copied to another machine, nightly and on demand
 	Previews   *preview.Service    // the machines' dev servers opened on the cockpit, nil without
 	SelfPort   int                 // the port of -addr, never offered as a preview
+	HerdrStops bool                // stops herdr's server on a machine moved to remuda-core at the person's press; never a scratch instance
 	Opinions   *opinion.Service    // the second opinions another agent gave on a folder's changes
 	Subagents  *subagents.Tracker  // how many subagents each Claude Code pane's conversation runs, for the sidebar's tree
 	Retire     *retire.Service     // what is set to a model or mode being retired, nil without

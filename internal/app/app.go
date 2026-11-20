@@ -94,6 +94,7 @@ type Options struct {
 	MirrorClosed  string // why this remuda writes nothing into herdr (a scratch instance beside the real one); "" writes
 	Record        bool   // record the agents' timelapses (off for a scratch instance: the real one records)
 	Core          bool   // reach every machine through remuda-core instead of herdr (-core), while the move off herdr is built
+	HerdrStops    bool   // stop herdr's server on a machine moved to remuda-core at the person's press (never a scratch instance: herdr there is the real one's)
 }
 
 // Run builds remuda and serves until ctx ends.
@@ -398,6 +399,7 @@ func Run(ctx context.Context, o Options) error {
 	restarter.Lock = input.Hold
 	// the chats a reboot stops: remembered here, offered back as one Resume, noted in the activity when they return
 	restarter.Memory = restart.OpenMemory(o.Dir)
+	restarter.Memory.Core = fleet.Core // a chat remembered in herdr, on a fleet moved to remuda-core, is offered to carry on there
 	restarter.Memory.Note = func(machineID, title, body string) {
 		activity.Add(feed.Entry{Kind: "recover", Machine: machineID, Title: title, Body: body})
 		hub.RosterChanged()
@@ -836,6 +838,7 @@ func Run(ctx context.Context, o Options) error {
 		Sleep:      sleeps,
 		Issues:     githubIssues,
 		Sync:       repoSync,
+		HerdrStops: o.HerdrStops,
 	}
 	previews := &preview.Service{Allow: srv.Guard.SignedIn, IdleAfter: 30 * time.Minute, Listen: preview.LoopbackListen(o.Addr)}
 	srv.Previews = previews

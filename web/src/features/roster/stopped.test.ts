@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAX_SEEN, episodeKey, remember, stoppedNames, stoppedWords } from "./stopped";
+import { MAX_SEEN, concernWords, episodeKey, fromHerdr, herdrWords, remember, stoppedNames, stoppedWords, toastWords } from "./stopped";
 
 const stopped = [
   { pane: "w3:p1", agent: "codex", title: "web" },
@@ -17,6 +17,21 @@ describe("stopped chats", () => {
     expect(stoppedWords(3)).toBe("3 chats stopped with the reboot");
     expect(stoppedNames(stopped)).toBe("Codex in web, Claude Code in api");
     expect(stoppedNames([{ pane: "w2:p1", agent: "skynet", title: "" }])).toBe("skynet in w2:p1");
+  });
+  it("tells herdr's agents apart from what a reboot stopped", () => {
+    const herdr = [
+      { pane: "w4:p1", agent: "claude", title: "notes", from: "herdr" as const },
+      { pane: "w4:p2", agent: "codex", title: "notes", from: "herdr" as const },
+    ];
+    expect(fromHerdr(herdr[0]!)).toBe(true);
+    expect(fromHerdr(stopped[0]!)).toBe(false);
+    expect(herdrWords(1, "GOG")).toBe("1 agent from herdr on GOG can carry on");
+    expect(herdrWords(2, "GOG")).toBe("2 agents from herdr on GOG can carry on");
+    expect(toastWords(herdr, "GOG")).toBe("2 agents from herdr on GOG can carry on");
+    expect(toastWords(stopped, "GOG")).toBe("GOG: 2 chats stopped with the reboot");
+    expect(toastWords([...stopped, herdr[0]!], "GOG")).toBe("GOG: 2 chats stopped with the reboot · 1 agent from herdr on GOG can carry on");
+    expect(concernWords(herdr, "GOG")).toBe("2 agents from herdr on GOG can carry on: Claude Code in notes, Codex in notes");
+    expect(concernWords([stopped[1]!, herdr[1]!], "GOG")).toBe("1 chat stopped with the reboot: Claude Code in api · 1 agent from herdr on GOG can carry on: Codex in notes");
   });
   it("keeps the dismissed episodes, the newest last, no more than MAX_SEEN", () => {
     expect(remember([], "a")).toEqual(["a"]);

@@ -233,8 +233,9 @@ export type Machine = {
 };
 
 // StoppedChat is a chat whose pane came back from a reboot as a bare shell: the agent it ran and the pane's title
-// dir and command: the folder it lived in and the command that brings it back, as "Resume after restart" shows them
-export type StoppedChat = { pane: string; agent: string; title: string; dir?: string; command?: string };
+// dir and command: the folder it lived in and the command that brings it back, as "Resume after restart" shows them;
+// from "herdr": an agent that ran in herdr before the machine moved to remuda-core, its pane gone with herdr
+export type StoppedChat = { pane: string; agent: string; title: string; dir?: string; command?: string; from?: "herdr" };
 
 // Asleep is a workspace the person put to sleep: since when, and how many agents wait to be woken
 export type Asleep = { at: string; agents: number };

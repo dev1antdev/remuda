@@ -8,6 +8,10 @@ package restart
 // their sessions. Nothing starts by itself unless the person switched on
 // "Resume automatically next time" (OnStopped, then AutoRecover). A workspace put
 // to sleep (Asleep) is the sleep's to wake: its panes are neither stopped nor closed.
+// On a fleet moved to remuda-core (Core) a chat remembered in herdr, whose pane the
+// core does not have, is listed the same way From herdr — never resumed by itself,
+// nor while herdr's server still answers there — and carries on in a tab of a
+// workspace on its folder (carryOn).
 
 import (
 	"fmt"
@@ -20,6 +24,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/sessions"
 	"github.com/dev1antdev/remuda/internal/state"
 	"github.com/dev1antdev/remuda/internal/transcript"
 )
@@ -36,16 +41,23 @@ type Chat struct {
 	Session string `json:"session"`
 	Dir     string `json:"dir"`
 	Title   string `json:"title,omitempty"`
+	// Core marks a chat remembered off remuda-core; one without it, on a fleet moved to the core, ran in herdr
+	Core bool `json:"core,omitempty"`
 }
 
-// Stopped is a remembered chat whose pane came back as a bare shell; the roster carries it, with the folder and the
-// command that brings it back, for the dialog to show.
+// FromHerdr is the From of an agent that ran in herdr before its machine moved to remuda-core: its pane is gone with
+// herdr, and it carries on in a tab of a workspace on its folder.
+const FromHerdr = "herdr"
+
+// Stopped is a remembered chat whose pane came back as a bare shell, or one that ran in herdr before the move to
+// remuda-core (From); the roster carries it, with the folder and the command that brings it back, for the dialog to show.
 type Stopped struct {
 	Pane    string `json:"pane"`
 	Agent   string `json:"agent"`
 	Title   string `json:"title"`
 	Dir     string `json:"dir"`
 	Command string `json:"command"`
+	From    string `json:"from,omitempty"`
 	chat    Chat
 }
 
@@ -64,6 +76,8 @@ type Memory struct {
 	Asleep func(machineID, workspaceID, paneID string) bool
 	// OnStopped hears a machine whose list of chats a reboot stopped has gained some, outside the memory's lock.
 	OnStopped func(machineID string)
+	// Core says the fleet is reached through remuda-core: a chat remembered in herdr is then one to carry on there.
+	Core func() bool
 
 	mu      sync.Mutex
 	chats   map[string]Chat      // machine|pane
@@ -117,8 +131,10 @@ func (m *Memory) observe(e events.Snapshot) bool {
 	if m.paused[e.Machine] {
 		return false
 	}
+	onCore := m.Core != nil && m.Core()
 	prefix := e.Machine + "|"
 	seen := map[string]bool{}
+	running := map[string]bool{} // the sessions an agent of the snapshot is on
 	var stopped []Stopped
 	changed := false
 	for i := range e.Snap.Panes {
@@ -137,8 +153,9 @@ func (m *Memory) observe(e events.Snapshot) bool {
 		if _, known := agents[p.Agent]; known {
 			delete(m.shells, key)
 			if sid := sessionOf(p); sid != "" {
+				running[sid] = true
 				m.faces[key] = faceOf(e.Snap, p)
-				c := Chat{Kind: p.Agent, Session: sid, Dir: paneDir(e.Snap, p), Title: firstNonEmpty(e.Snap.WorkspaceLabel(p.WorkspaceID), p.DisplayTitle())}
+				c := Chat{Kind: p.Agent, Session: sid, Dir: paneDir(e.Snap, p), Title: firstNonEmpty(e.Snap.WorkspaceLabel(p.WorkspaceID), p.DisplayTitle()), Core: onCore}
 				if old, ok := m.chats[key]; !ok || old != c {
 					m.chats[key] = c
 					changed = true
@@ -174,12 +191,22 @@ func (m *Memory) observe(e events.Snapshot) bool {
 	}
 	closed := false
 	for key, c := range m.chats {
-		if strings.HasPrefix(key, prefix) && !seen[key] {
-			m.noteClosedLocked(e.Machine, key, strings.TrimPrefix(key, prefix), c, e.At)
-			delete(m.chats, key)
-			delete(m.shells, key)
-			changed, closed = true, true
+		if !strings.HasPrefix(key, prefix) || seen[key] {
+			continue
 		}
+		paneID := strings.TrimPrefix(key, prefix)
+		switch {
+		case onCore && !c.Core && !running[c.Session]: // ran in herdr before the move: carried on through Resume after restart
+			stopped = append(stopped, herdrStopped(paneID, c))
+			continue
+		case onCore && !c.Core: // an agent of the core is on its session again
+		default:
+			m.noteClosedLocked(e.Machine, key, paneID, c, e.At)
+			closed = true
+		}
+		delete(m.chats, key)
+		delete(m.shells, key)
+		changed = true
 	}
 	for key := range m.faces {
 		if strings.HasPrefix(key, prefix) && !seen[key] {
@@ -202,18 +229,45 @@ func (m *Memory) observe(e events.Snapshot) bool {
 	return joined
 }
 
-// gained says whether the new list names a pane the old one did not.
+// gained says whether the new list names a pane a reboot stopped that the old one did not; herdr's agents are no
+// reboot's, and nothing resumes them by itself.
 func gained(old, now []Stopped) bool {
 	had := map[string]bool{}
 	for _, s := range old {
 		had[s.Pane] = true
 	}
 	for _, s := range now {
-		if !had[s.Pane] {
+		if s.From == "" && !had[s.Pane] {
 			return true
 		}
 	}
 	return false
+}
+
+// herdrStopped is the roster's entry for an agent that ran in herdr's pane before the move to remuda-core.
+func herdrStopped(paneID string, c Chat) Stopped {
+	s := stoppedOf(paneID, c, c.Title)
+	s.From = FromHerdr
+	return s
+}
+
+// Adopt takes in, by pane, the agents of a workspace that slept in herdr before the move to remuda-core: herdr's
+// agents like any other it remembered, offered at once in Resume after restart.
+func (m *Memory) Adopt(machineID string, chats map[string]Chat) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	listed := map[string]bool{}
+	for _, s := range m.stopped[machineID] {
+		listed[s.Pane] = true
+	}
+	for paneID, c := range chats {
+		m.chats[machineID+"|"+paneID] = c
+		if !listed[paneID] {
+			m.stopped[machineID] = append(m.stopped[machineID], herdrStopped(paneID, c))
+		}
+	}
+	sort.Slice(m.stopped[machineID], func(i, j int) bool { return m.stopped[machineID][i].Pane < m.stopped[machineID][j].Pane })
+	m.saveLocked()
 }
 
 // paneDir is the folder a chat lives in: the pane's own, else its workspace's.
@@ -294,14 +348,18 @@ func (m *Memory) Unpause(machineID string) {
 	delete(m.paused, machineID)
 }
 
-// settle takes a pane off the stopped list once a recovery dealt with it; one that will not come back is forgotten.
+// settle takes a pane off the stopped list once a recovery dealt with it; one that will not come back is forgotten, and
+// so is herdr's pane, whose agent carries on in a pane of the core.
 func (m *Memory) settle(machineID, paneID string, back bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	forget := !back
 	var kept []Stopped
 	for _, s := range m.stopped[machineID] {
 		if s.Pane != paneID {
 			kept = append(kept, s)
+		} else if s.From == FromHerdr {
+			forget = true
 		}
 	}
 	if len(kept) == 0 {
@@ -310,7 +368,7 @@ func (m *Memory) settle(machineID, paneID string, back bool) {
 		m.stopped[machineID] = kept
 	}
 	delete(m.shells, machineID+"|"+paneID)
-	if !back {
+	if forget {
 		if _, ok := m.chats[machineID+"|"+paneID]; ok {
 			delete(m.chats, machineID+"|"+paneID)
 			m.saveLocked()
@@ -375,6 +433,9 @@ func (r *Restarter) AutoRecover(mc *machines.Machine, say func(string)) error {
 
 func (r *Restarter) recover(mc *machines.Machine, panes []string, auto bool, say func(string)) error {
 	stopped := r.Picked(mc.ID(), panes)
+	if auto {
+		stopped = Rebooted(stopped)
+	}
 	if len(stopped) == 0 {
 		return fmt.Errorf("no chat stopped by a reboot on %s", mc.Label())
 	}
@@ -386,22 +447,75 @@ func (r *Restarter) recover(mc *machines.Machine, panes []string, auto bool, say
 		return fmt.Errorf("the chats stopped on %s are being resumed already", mc.Label())
 	}
 	defer r.releaseRecovery(mc.ID())
-	say(fmt.Sprintf("%s stopped with the reboot on %s", chatsWord(len(stopped)), mc.Label()))
+	if err := r.MayCarryOn(mc, stopped); err != nil {
+		return err
+	}
+	fromHerdr, rebooted := splitHerdr(stopped)
+	if len(rebooted) > 0 {
+		say(fmt.Sprintf("%s stopped with the reboot on %s", chatsWord(len(rebooted)), mc.Label()))
+	}
+	if len(fromHerdr) > 0 {
+		say(fmt.Sprintf("%s from herdr to carry on on %s", chatsWord(len(fromHerdr)), mc.Label()))
+	}
 	checks := func(s Stopped) error { return CanResume(mc, s.chat.Kind, s.chat.Session, s.chat.Dir) }
-	out := r.resume(client, mc.ID(), stopped, checks, say)
+	out := append(r.resume(client, mc.ID(), rebooted, checks, say), r.carryOn(client, mc.ID(), fromHerdr, checks, say)...)
 	var lines []string
 	for _, o := range out {
 		lines = append(lines, strings.TrimSpace(o.line))
 	}
 	if r.Memory != nil && r.Memory.Note != nil {
 		title := fmt.Sprintf("%s back after the reboot on %s", chatsWord(len(out.back())), mc.Label())
-		if auto {
+		switch {
+		case auto:
 			title = fmt.Sprintf("%s resumed by itself after the reboot on %s", chatsWord(len(out.back())), mc.Label())
+		case len(fromHerdr) > 0:
+			title = fmt.Sprintf("%s back on %s after the move from herdr", chatsWord(len(out.back())), mc.Label())
 		}
 		r.Memory.Note(mc.ID(), title, strings.Join(lines, "\n"))
 	}
 	if failed := out.failed(); len(failed) > 0 {
 		return fmt.Errorf("%s not back: %s", chatsWord(len(failed)), strings.Join(failed, ", "))
+	}
+	return nil
+}
+
+// Rebooted is the stopped chats a reboot stopped, herdr's agents left out: nothing resumes those by itself.
+func Rebooted(stopped []Stopped) []Stopped {
+	_, rebooted := splitHerdr(stopped)
+	return rebooted
+}
+
+func splitHerdr(stopped []Stopped) (fromHerdr, rebooted []Stopped) {
+	for _, s := range stopped {
+		if s.From == FromHerdr {
+			fromHerdr = append(fromHerdr, s)
+		} else {
+			rebooted = append(rebooted, s)
+		}
+	}
+	return fromHerdr, rebooted
+}
+
+// HerdrRunning refuses to carry herdr's agents on while its server answers on the machine: an agent there may still be
+// on the conversation, and a second one resumed on it would write the same session file.
+type HerdrRunning struct{ Machine string }
+
+func (e *HerdrRunning) Error() string {
+	return "herdr's server still runs on " + e.Machine + ": its agents may still be on these conversations, and a second agent on one would write the same session. Stop herdr's server there first."
+}
+
+// MayCarryOn says why herdr's agents among the stopped cannot carry on now — its server still answers on the machine
+// (*HerdrRunning), or nobody can tell — nil when they can, or none is herdr's.
+func (r *Restarter) MayCarryOn(mc *machines.Machine, stopped []Stopped) error {
+	if fromHerdr, _ := splitHerdr(stopped); len(fromHerdr) == 0 {
+		return nil
+	}
+	up, err := r.Serving(mc)
+	if err != nil {
+		return err
+	}
+	if up {
+		return &HerdrRunning{Machine: mc.Label()}
 	}
 	return nil
 }
@@ -500,23 +614,10 @@ func (r *Restarter) resumeOne(client starter, machineID string, s Stopped, check
 		defer l.Unlock()
 	}
 	a := agents[s.chat.Kind]
-	o := outcome{title: s.Title}
-	settle := func(back bool, line string) outcome {
-		o.back, o.line = back, line
-		say(line)
-		if r.Memory != nil {
-			r.Memory.settle(machineID, s.Pane, back)
-		}
-		return o
-	}
-	fail := func(line string) outcome {
-		o.failed, o.line = true, line
-		say(line)
-		return o
-	}
+	settle := func(back bool, line string) outcome { return r.done(machineID, s, back, line, say) }
 	snap, err := client.SessionSnapshot()
 	if err != nil {
-		return fail(fmt.Sprintf("· %s (%s): herdr did not answer: %v", s.Title, s.Pane, err))
+		return notStarted(s, fmt.Sprintf("· %s (%s): herdr did not answer: %v", s.Title, s.Pane, err), say)
 	}
 	p, found := Lookup(snap, s.Pane)
 	switch {
@@ -535,9 +636,67 @@ func (r *Restarter) resumeOne(client starter, machineID string, s Stopped, check
 	args := a.resume(s.chat.Session)
 	say(fmt.Sprintf("· %s (%s): %s %s", s.Title, s.Pane, a.Kind, strings.Join(args, " ")))
 	if err := startResumed(client, s.Pane, a.Kind, args); err != nil {
-		return fail(fmt.Sprintf("  ✗ %s: %v — the pane is at its shell; run `%s` there", s.Title, err, Resume(a.Kind, s.chat.Session)))
+		return notStarted(s, fmt.Sprintf("  ✗ %s: %v — the pane is at its shell; run `%s` there", s.Title, err, Resume(a.Kind, s.chat.Session)), say)
 	}
 	return settle(true, fmt.Sprintf("  ✓ %s is back in %s, session %s resumed", a.Title, s.Title, short(s.chat.Session)))
+}
+
+// carryOn starts herdr's agents on remuda-core, each on its session in a tab of a workspace on its folder, else a new
+// workspace named as herdr's was, so the agents of one herdr workspace in one folder become tabs of one; an agent whose
+// session one of the core is on already counts as back, and a session twice on the list starts once.
+func (r *Restarter) carryOn(client placer, machineID string, fromHerdr []Stopped, checks func(Stopped) error, say func(string)) outcomes {
+	var out outcomes
+	started := map[string]bool{}
+	for _, s := range fromHerdr {
+		out = append(out, r.carryOneOn(client, machineID, s, checks, started, say))
+	}
+	return out
+}
+
+func (r *Restarter) carryOneOn(client placer, machineID string, s Stopped, checks func(Stopped) error, started map[string]bool, say func(string)) outcome {
+	a := agents[s.chat.Kind]
+	snap, err := client.SessionSnapshot()
+	if err != nil {
+		return notStarted(s, fmt.Sprintf("· %s (%s, from herdr): remuda-core did not answer: %v", s.Title, s.Pane, err), say)
+	}
+	if started[s.chat.Session] || paneOnSession(snap, s.chat.Session) != nil {
+		return r.done(machineID, s, true, fmt.Sprintf("· %s (%s, from herdr): %s is on its session already", s.Title, s.Pane, a.Title), say)
+	}
+	if err := checks(s); err != nil {
+		return r.done(machineID, s, false, fmt.Sprintf("· %s (%s, from herdr): %v", s.Title, s.Pane, err), say)
+	}
+	say(fmt.Sprintf("· %s (%s, from herdr): %s in %s", s.Title, s.Pane, Resume(a.Kind, s.chat.Session), s.chat.Dir))
+	place, err := sessions.StartIn(client, snap, s.chat.Dir, s.Title, "", a.Kind, sessions.Start{Resume: s.chat.Session})
+	if err != nil {
+		return notStarted(s, fmt.Sprintf("  ✗ %s: %v", s.Title, err), say)
+	}
+	started[s.chat.Session] = true
+	return r.done(machineID, s, true, fmt.Sprintf("  ✓ %s carries on in %s, session %s resumed", a.Title, place.Pane, short(s.chat.Session)), say)
+}
+
+// done is a stopped chat dealt with: off the list, and forgotten unless it is back.
+func (r *Restarter) done(machineID string, s Stopped, back bool, line string, say func(string)) outcome {
+	say(line)
+	if r.Memory != nil {
+		r.Memory.settle(machineID, s.Pane, back)
+	}
+	return outcome{title: s.Title, back: back, line: line}
+}
+
+// notStarted is a chat whose start failed: it stays on the list, for Resume to be pressed again.
+func notStarted(s Stopped, line string, say func(string)) outcome {
+	say(line)
+	return outcome{title: s.Title, failed: true, line: line}
+}
+
+// paneOnSession is the pane whose agent is on the session, nil for none.
+func paneOnSession(snap *herdr.Snapshot, session string) *herdr.PaneInfo {
+	for i := range snap.Panes {
+		if p := &snap.Panes[i]; sessionOf(p) == session {
+			return p
+		}
+	}
+	return nil
 }
 
 // startResumed starts the agent on its session under a name of the pane's own, waiting out a shell still coming up.

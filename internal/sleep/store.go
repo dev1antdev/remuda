@@ -6,11 +6,13 @@
 package sleep
 
 import (
+	"cmp"
 	"log"
 	"sync"
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/events"
+	"github.com/dev1antdev/remuda/internal/restart"
 	"github.com/dev1antdev/remuda/internal/state"
 )
 
@@ -36,6 +38,8 @@ type Workspace struct {
 	Dir    string    `json:"dir"`
 	At     time.Time `json:"at"`
 	Agents []Agent   `json:"agents"`
+	// Core marks a workspace put to sleep on remuda-core; one without it, on a fleet moved to the core, slept in herdr
+	Core bool `json:"core,omitempty"`
 }
 
 // Status is what the roster says of a workspace asleep: since when, and how many agents wait to be woken.
@@ -54,6 +58,11 @@ type Settings struct {
 // Store keeps the workspaces asleep, by machine and workspace id, and the settings.
 type Store struct {
 	dir string
+	// Core says the fleet is reached through remuda-core: a workspace asleep in herdr is then handed to FromHerdr.
+	Core func() bool
+	// FromHerdr takes the agents of a workspace that slept in herdr, by pane, for Resume after restart to carry on
+	// (restart.Memory.Adopt).
+	FromHerdr func(machineID string, chats map[string]restart.Chat)
 
 	mu       sync.Mutex
 	asleep   map[string]map[string]Workspace
@@ -111,6 +120,7 @@ func (s *Store) Holds(machineID, workspaceID, paneID string) bool {
 
 // put records a workspace asleep; the agents a record of it held already stay, the newer word for a pane winning.
 func (s *Store) put(machineID, workspaceID string, w Workspace) {
+	w.Core = s.Core != nil && s.Core()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if old, ok := s.asleep[machineID][workspaceID]; ok {
@@ -187,10 +197,15 @@ func (s *Store) dropLocked(machineID, workspaceID string) {
 }
 
 // Observe forgets a workspace asleep that a watched snapshot no longer shows: it was closed. A machine's first
-// snapshot after it was away decides nothing, since herdr may still be restoring what it had.
+// snapshot after it was away decides nothing, since herdr may still be restoring what it had. On a fleet moved to
+// remuda-core a workspace that slept in herdr is handed over (handOver) before anything is forgotten.
 func (s *Store) Observe(e events.Snapshot) bool {
-	if e.Snap == nil || e.First {
+	if e.Snap == nil {
 		return false
+	}
+	moved := s.handOver(e.Machine)
+	if e.First {
+		return moved
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -204,7 +219,39 @@ func (s *Store) Observe(e events.Snapshot) bool {
 	if changed {
 		s.saveLocked()
 	}
-	return changed
+	return changed || moved
+}
+
+// handOver gives FromHerdr the agents of the machine's workspaces that slept in herdr, on a fleet moved to remuda-core,
+// and forgets those workspaces once their agents are given: outside the store's lock, since the memory's is taken there.
+func (s *Store) handOver(machineID string) bool {
+	if s.Core == nil || !s.Core() || s.FromHerdr == nil {
+		return false
+	}
+	s.mu.Lock()
+	var slept []string
+	chats := map[string]restart.Chat{}
+	for workspaceID, w := range s.asleep[machineID] {
+		if w.Core {
+			continue
+		}
+		slept = append(slept, workspaceID)
+		for _, a := range w.Agents {
+			chats[a.Pane] = restart.Chat{Kind: a.Kind, Session: a.Session, Dir: a.Dir, Title: cmp.Or(w.Name, a.Title)}
+		}
+	}
+	s.mu.Unlock()
+	if len(slept) == 0 {
+		return false
+	}
+	s.FromHerdr(machineID, chats)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, workspaceID := range slept {
+		s.dropLocked(machineID, workspaceID)
+	}
+	s.saveLocked()
+	return true
 }
 
 // Forget drops a machine's workspaces asleep (it left the registry).

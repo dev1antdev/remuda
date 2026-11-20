@@ -198,13 +198,11 @@ func (r *Restarter) reopenWith(client placer, machineID string, c Closed) (sessi
 	if err != nil {
 		return sessions.Place{}, err
 	}
-	for i := range snap.Panes {
-		if p := &snap.Panes[i]; sessionOf(p) == c.Session {
-			r.Memory.dropClosed(machineID, c.ID)
-			return sessions.Place{Pane: p.PaneID, Workspace: p.WorkspaceID}, &OpenAlready{Pane: p.PaneID}
-		}
+	if p := paneOnSession(snap, c.Session); p != nil {
+		r.Memory.dropClosed(machineID, c.ID)
+		return sessions.Place{Pane: p.PaneID, Workspace: p.WorkspaceID}, &OpenAlready{Pane: p.PaneID}
 	}
-	place, err := sessions.StartIn(client, snap, c.Dir, c.Tab, c.Agent, sessions.Start{Resume: c.Session})
+	place, err := sessions.StartIn(client, snap, c.Dir, "", c.Tab, c.Agent, sessions.Start{Resume: c.Session})
 	if err != nil {
 		return place, err
 	}

@@ -25,21 +25,22 @@ type Place struct {
 	MadeWorkspace bool   `json:"made_workspace"`
 }
 
-// StartIn starts an agent in a folder: a new tab of the folder's workspace when the snapshot has one, else a new
-// workspace on the folder; the place comes back with the agent's refusal when the tab is there but the agent is not.
-func StartIn(client Placer, snap *herdr.Snapshot, dir, label, kind string, start Start) (Place, error) {
+// StartIn starts an agent in a folder: a new tab named tab of the folder's workspace when the snapshot has one, else a
+// new workspace on the folder named workspace ("" names it after the folder); the place comes back with the agent's
+// refusal when the tab is there but the agent is not.
+func StartIn(client Placer, snap *herdr.Snapshot, dir, workspace, tab, kind string, start Start) (Place, error) {
 	if kind == "" || kind == "shell" || !KnownAgent(kind) {
 		return Place{}, fmt.Errorf("an agent is required, not %q", kind)
 	}
 	var place Place
 	if workspaceID := WorkspaceIn(snap, dir); workspaceID != "" {
-		res, err := client.TabCreate(workspaceID, label)
+		res, err := client.TabCreate(workspaceID, tab)
 		if err != nil {
 			return Place{}, err
 		}
 		place = Place{Pane: res.RootPane.PaneID, Tab: res.Tab.TabID, Workspace: workspaceID}
 	} else {
-		res, err := client.WorkspaceCreate(dir, "")
+		res, err := client.WorkspaceCreate(dir, workspace)
 		if err != nil {
 			return Place{}, err
 		}
@@ -84,7 +85,7 @@ func (l *Launcher) StartInFolder(machineID, dir, label, kind string, start Start
 		return Place{}, err
 	}
 	snap, _ := l.Watch.Snapshot(machineID)
-	place, err := StartIn(client, snap, dir, label, kind, start)
+	place, err := StartIn(client, snap, dir, "", label, kind, start)
 	l.Watch.Refresh(mc)
 	if err != nil {
 		return place, err
