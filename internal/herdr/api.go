@@ -6,7 +6,7 @@ import "time"
 // is herdr's own; remuda-core's adapter is the other, so the packages that ask a machine never name either.
 type API interface {
 	SessionSnapshot() (*Snapshot, error)
-	Subscribe(subs []Subscription) (Events, error)
+	Subscribe(subs []Subscription) (EventStream, error)
 	Bridged() bool
 
 	WorkspaceCreate(cwd, label string) (*WorkspaceCreateResult, error)
@@ -44,8 +44,8 @@ type API interface {
 	NotificationShow(t Toast) (Shown, error)
 }
 
-// Events is one open event stream: the events in order, then the error it ended on.
-type Events interface {
+// EventStream is one open event stream: the events in order, then the error it ended on.
+type EventStream interface {
 	Next() (Event, error)
 	Close() error
 }

@@ -174,8 +174,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   one is picked), the time, how many stay, the last run, the next, Back
   up now, the copies there; never for a viewer.
 - `internal/herdr/` — everything herdr. `api.go`: what remuda asks of a
-  machine, as interfaces — `API` (the snapshot, the event stream as `Events`,
-  every request), `Terminals` (a viewer joining a live terminal, typing,
+  machine, as interfaces — `API` (the snapshot, the event stream as
+  `EventStream`, every request), `Terminals` (a viewer joining a live terminal, typing,
   resizing, `Viewers`) — which `Machine.Ready()` hands out and every package
   takes instead of `*Client` and `*AttachManager` (only `internal/herdr` and
   `internal/machines` name those), so remuda-core's adapter can stand in for

@@ -68,7 +68,7 @@ const maxEventLine = 16 << 20
 
 // Subscribe opens a stream with the subscriptions given, answering once herdr said subscription_started.
 // A refusal is herdr's *Error; a failure to reach herdr goes to OnTransportError as a call's would.
-func (c *Client) Subscribe(subs []Subscription) (Events, error) {
+func (c *Client) Subscribe(subs []Subscription) (EventStream, error) {
 	s, err := c.subscribe(subs)
 	if err != nil {
 		var he *Error
