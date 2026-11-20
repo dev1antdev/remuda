@@ -233,11 +233,11 @@ func parseSessionsByPID(out string, procs []Running, style rpath.Style, clock ma
 	for _, p := range procs {
 		cwds[p.PID], seen[p.PID], started[p.PID], sinceBoot[p.PID] = p.CWD, p.Seen, p.Started, p.SinceBoot
 	}
-	found, unsure, linux, boot := map[int]string{}, map[int]bool{}, false, linuxBoot{}
+	found, unsure, boot := map[int]string{}, map[int]bool{}, linuxBoot{}
 	var bootID, timeNS string // the machine's boot and the lookup's time namespace, on Linux
 	for _, record := range script.Sections(out) {
 		if system, ok := strings.CutPrefix(strings.TrimSpace(record), "system"+script.US); ok {
-			linux, boot = strings.HasPrefix(system, "Linux"), bootOf(system)
+			boot = bootOf(system)
 			continue
 		}
 		if since, ok := strings.CutPrefix(strings.TrimSpace(record), "since"+script.US); ok {
@@ -275,7 +275,7 @@ func parseSessionsByPID(out string, procs []Running, style rpath.Style, clock ma
 			}
 		} else if told := started[pid]; told != 0 {
 			fits, sure := boot.mayBe(ticks, told)
-			if !sameCreation(start, told, linux) || sure && !fits {
+			if !sameCreation(start, told, boot.linux) || sure && !fits {
 				continue // another process than the one seen: the pid changed hands before it was read
 			}
 			if !sure {

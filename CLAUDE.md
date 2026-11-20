@@ -75,8 +75,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   Application Support, `%APPDATA%\remuda` through `cygpath`, XDG — the door,
   the limits, the backups' target and keep-awake use it),
   `WindowsDefaultShell` (the one PowerShell line that makes Git Bash the
-  PC's ssh shell), and the separators `GS` / `RS`
-  / `US` with `Sections` / `Lines` / `Fields` for reading an answer.
+  PC's ssh shell), `CwdOf` (the shell function `cwd_of PID`: a process's
+  folder whole, `/proc/<pid>/cwd` or lsof under a UTF-8 locale), and the
+  separators `GS` / `RS` / `US` / `FS` with `Sections` / `Lines` / `Fields`
+  for reading an answer.
 - `internal/rpath/` — **a path on a machine of the fleet in that machine's
   spelling** (tested): `Style{Windows}`, `For(home)` (a Windows machine's
   home is `C:\Users\me`, so a home tells the spelling), `Clean` (Windows:
@@ -438,7 +440,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   which that process must have — remuda-core 0.2.2 (#12) — and `SinceBoot`,
   its start since boot on Linux as one advertising `foreground_since_boot`
   tells it (`Foreground.SinceBoot`: boot id, time namespace, ticks), which no
-  step of the clock moves — remuda-core 0.2.3 (#359) — so the binding takes
+  step of the clock moves — remuda-core 0.2.3 (remuda-core #13, task #359) — so the binding takes
   effect once the pin moves to them; until then every machine reads with the
   sighting bound, which a step of the machine's clock on macOS or Windows can
   fool; nil,
@@ -462,7 +464,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   background reads), for what is
   about to stop an agent and resume it (`restart.Reread`, under the pane's
   lock: a sleep's plan and each agent's exit, an update's restart), a read
-  that fails refusing the step. Output watches go
+  that fails refusing the step — and so does one that leaves any agent on the
+  machine unverified (a clock or a boot that could not be read), whichever
+  agent the step is about. Output watches go
   in **feeds** (`feeds.go`, tested on a fake: shared, closed with the last
   stream, opened again after, a rule edited leaving the other watches'
   feeds standing, and 120 feeds' 4,800 standing rows told as they open, all
@@ -1037,7 +1041,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   locally and by `findScript` over ssh. **A session found by the agent's
   process** (`bypid.go`, tested on real processes in a temp HOME and on
   `shell.Fake`), for a machine whose runtime names no session (remuda-core,
-  Core 12): `Reader.SessionsOf([]Running{pid, agent, cwd, seen, started})` is one script
+  Core 12): `Reader.SessionsOf([]Running{pid, agent, cwd, seen, started, sinceBoot})` is one script
   on the machine, here or over ssh, answering pid → session id — Claude
   Code's from `<config dir>/sessions/<pid>.json` (`CLAUDE_CONFIG_DIR` read
   off the process's environment, `/proc/<pid>/environ` or `ps -E`, whose

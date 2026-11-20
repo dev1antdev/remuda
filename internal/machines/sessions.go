@@ -56,8 +56,7 @@ func newProcessSessions(name string, read func([]transcript.Running) (map[int]st
 // of is the core adapter's SessionLookup: what the last read found of the process, a read booked when it is new or due.
 func (s *processSessions) of(asked core.AgentProcess) *herdr.AgentSession {
 	now := time.Now()
-	since := transcript.SinceBoot{BootID: asked.SinceBoot.BootID, TimeNS: asked.SinceBoot.TimeNS, Ticks: asked.SinceBoot.Ticks}
-	running := transcript.Running{PID: asked.PID, Agent: asked.Agent, CWD: asked.Cwd, Seen: asked.Seen, Started: asked.Started, SinceBoot: since}
+	running := transcript.Running{PID: asked.PID, Agent: asked.Agent, CWD: asked.Cwd, Seen: asked.Seen, Started: asked.Started, SinceBoot: transcript.SinceBoot(asked.SinceBoot)}
 	key := processKey{terminal: asked.Terminal, held: asked.Held, pid: asked.PID}
 	s.mu.Lock()
 	defer s.mu.Unlock()
