@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"slices"
 	"sync"
 	"time"
 )
@@ -22,20 +23,21 @@ const (
 
 	headerSize = 9
 	maxPayload = 16 << 20
-	// helloWithin bounds a connection's opening when the caller's context sets no deadline.
+	// helloWithin bounds a connection's dial and opening.
 	helloWithin = 15 * time.Second
 )
 
 // writeWithin bounds one frame's write: a core that stops reading ends the connection rather than every caller.
 var writeWithin = 30 * time.Second
 
-// conn is one framed connection: one goroutine reads every frame, writers take turns.
+// conn is one framed connection: one goroutine reads every frame, one writes what the others queue, and nobody else
+// touches the wire, so a caller only ever waits for its answer or its context.
 type conn struct {
 	nc     net.Conn
 	reader *bufio.Reader
 	hello  Hello
-	// writing is held by the one write under way; waiting for it ends with the caller's context.
-	writing chan struct{}
+	// writeWithin is the package's, as it was when the connection opened.
+	writeWithin time.Duration
 
 	mu      sync.Mutex
 	nextID  uint64
@@ -46,8 +48,12 @@ type conn struct {
 	// open from the moment the core takes the call.
 	orphans     map[uint32][][]byte
 	subscribing int
-	done        chan struct{}
-	err         error
+	// queue is what the writer sends in order; credits, owed per channel, go before it.
+	queue   []*outgoing
+	credits map[uint32]int
+	pulse   bell
+	done    chan struct{}
+	err     error
 }
 
 type pending struct {
@@ -62,13 +68,21 @@ type answer struct {
 	err    error
 }
 
-// open says hello in plain mode, switches the connection to frames and starts reading them.
+// outgoing is one frame waiting for the writer; written, when set, hears how its write went.
+type outgoing struct {
+	frame   []byte
+	taken   bool
+	written chan error
+}
+
+// open says hello in plain mode, switches the connection to frames and starts its reader and writer. Ending ctx
+// abandons the hello.
 func open(ctx context.Context, nc net.Conn) (*conn, error) {
-	deadline, ok := ctx.Deadline()
-	if !ok {
-		deadline = time.Now().Add(helloWithin)
+	stop := context.AfterFunc(ctx, func() { nc.SetDeadline(time.Unix(1, 0)) })
+	defer stop()
+	if deadline, ok := ctx.Deadline(); ok {
+		nc.SetDeadline(deadline)
 	}
-	nc.SetDeadline(deadline)
 	line, _ := json.Marshal(request{JSONRPC: "2.0", ID: 0, Method: "hello", Params: map[string]any{"generation": Generation, "framed": true}})
 	if _, err := nc.Write(append(line, '\n')); err != nil {
 		return nil, &TransportError{err}
@@ -92,13 +106,17 @@ func open(ctx context.Context, nc net.Conn) (*conn, error) {
 	if !hello.Framed {
 		return nil, &TransportError{errors.New("the core did not switch to framed mode")}
 	}
+	if !stop() {
+		return nil, &TransportError{ctx.Err()}
+	}
 	nc.SetDeadline(time.Time{})
 	c := &conn{
-		nc: nc, reader: reader, hello: hello, nextID: 1, writing: make(chan struct{}, 1),
+		nc: nc, reader: reader, hello: hello, nextID: 1, writeWithin: writeWithin,
 		pending: map[uint64]*pending{}, streams: map[uint32]*Stream{}, subs: map[uint32]*Subscription{},
-		orphans: map[uint32][][]byte{}, done: make(chan struct{}),
+		orphans: map[uint32][][]byte{}, credits: map[uint32]int{}, pulse: make(bell, 1), done: make(chan struct{}),
 	}
 	go c.read()
+	go c.write()
 	return c, nil
 }
 
@@ -111,7 +129,8 @@ func (c *conn) ended() bool {
 	}
 }
 
-// call sends one request and waits for its answer; bind, when set, opens the channel the answer names.
+// call queues one request and waits for its answer or ctx; bind, when set, opens the channel the answer names. A
+// request ctx ended before the writer took it is never sent; one already on its way is followed by a cancel.
 func (c *conn) call(ctx context.Context, method string, params, result any, bind func(json.RawMessage) (func(), error)) error {
 	if params == nil {
 		params = struct{}{}
@@ -126,28 +145,24 @@ func (c *conn) call(ctx context.Context, method string, params, result any, bind
 	}
 	id := c.nextID
 	c.nextID++
+	body, err := json.Marshal(request{JSONRPC: "2.0", ID: id, Method: method, Params: params})
+	if err != nil {
+		c.mu.Unlock()
+		return err
+	}
 	wait := &pending{answer: make(chan answer, 1), bind: bind}
 	c.pending[id] = wait
 	if method == "events.subscribe" {
 		c.subscribing++
 		defer c.subscribed()
 	}
+	out := c.queueLocked(0, frameData, body, nil)
 	c.mu.Unlock()
-	body, err := json.Marshal(request{JSONRPC: "2.0", ID: id, Method: method, Params: params})
-	if err == nil {
-		err = c.write(ctx, 0, frameData, body)
-	}
-	if err != nil {
-		c.forget(id)
-		return err
-	}
 	var got answer
 	select {
 	case got = <-wait.answer:
 	case <-ctx.Done():
-		if c.forget(id) {
-			cancel, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "method": "$/cancelRequest", "params": map[string]any{"id": id}})
-			go c.write(context.Background(), 0, frameData, cancel)
+		if c.abandon(id, out) {
 			return ctx.Err()
 		}
 		got = <-wait.answer // the answer won: it is taken, its channel open, and on its way
@@ -158,14 +173,22 @@ func (c *conn) call(ctx context.Context, method string, params, result any, bind
 	return decode(got.result, result)
 }
 
-// forget takes a call back unless its answer was taken already, saying whether it did: whichever of the two takes
-// the call from pending settles it.
-func (c *conn) forget(id uint64) bool {
+// abandon takes a call back unless its answer was taken already, saying whether it did: whichever of the two takes
+// the call from pending settles it. Its request leaves the queue unsent, or is cancelled once sent.
+func (c *conn) abandon(id uint64, out *outgoing) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	_, waiting := c.pending[id]
+	if _, waiting := c.pending[id]; !waiting {
+		return false
+	}
 	delete(c.pending, id)
-	return waiting
+	if out.taken {
+		cancel, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "method": "$/cancelRequest", "params": map[string]any{"id": id}})
+		c.queueLocked(0, frameData, cancel, nil)
+	} else {
+		c.queue = slices.DeleteFunc(c.queue, func(o *outgoing) bool { return o == out })
+	}
+	return true
 }
 
 func (c *conn) subscribed() {
@@ -177,53 +200,102 @@ func (c *conn) subscribed() {
 	c.mu.Unlock()
 }
 
-// write sends one frame whole once the write before it is done, or nothing if ctx ends first. A write that fails or
-// stalls past writeWithin may have left half a frame: it ends the connection.
-func (c *conn) write(ctx context.Context, channel uint32, kind byte, payload []byte) error {
-	select {
-	case c.writing <- struct{}{}:
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-c.done:
-		return c.failure()
+// send queues one frame for the writer; with wait, it answers once the frame is written or the connection ended.
+func (c *conn) send(channel uint32, kind byte, payload []byte, wait bool) error {
+	var written chan error
+	if wait {
+		written = make(chan error, 1)
 	}
-	defer func() { <-c.writing }()
-	if err := ctx.Err(); err != nil {
-		return err
+	c.mu.Lock()
+	if c.err != nil {
+		c.mu.Unlock()
+		return c.err
 	}
-	if c.ended() {
-		return c.failure()
+	c.queueLocked(channel, kind, payload, written)
+	c.mu.Unlock()
+	if !wait {
+		return nil
 	}
+	return <-written
+}
+
+func (c *conn) queueLocked(channel uint32, kind byte, payload []byte, written chan error) *outgoing {
+	out := &outgoing{frame: frameOf(channel, kind, payload), written: written}
+	c.queue = append(c.queue, out)
+	c.pulse.ring()
+	return out
+}
+
+func frameOf(channel uint32, kind byte, payload []byte) []byte {
 	frame := make([]byte, headerSize+len(payload))
 	binary.LittleEndian.PutUint32(frame[0:4], channel)
 	frame[4] = kind
 	binary.LittleEndian.PutUint32(frame[5:9], uint32(len(payload)))
 	copy(frame[headerSize:], payload)
-	c.nc.SetWriteDeadline(time.Now().Add(writeWithin))
-	_, err := c.nc.Write(frame)
-	if err != nil {
-		return c.fail(fmt.Errorf("a write failed or stalled: %w", err))
-	}
-	c.nc.SetWriteDeadline(time.Time{}) // an ssh exec's conn ends at any deadline left standing
-	return nil
+	return frame
 }
 
-func (c *conn) failure() error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.err
-}
-
+// credit owes the core bytes read on a channel; the writer sends them ahead of the queue. It never waits.
 func (c *conn) credit(channel uint32, bytes int) {
 	if bytes <= 0 {
 		return
 	}
-	var amount [4]byte
-	binary.LittleEndian.PutUint32(amount[:], uint32(bytes))
-	c.write(context.Background(), channel, frameCredit, amount[:])
+	c.mu.Lock()
+	if c.err == nil {
+		c.credits[channel] += bytes
+		c.pulse.ring()
+	}
+	c.mu.Unlock()
 }
 
-// fail ends the connection once and answers why: every call waiting, stream and subscription hears it.
+// write is the writer: credits first, then the queue in order. A write that fails or stalls past writeWithin may
+// have left half a frame: it ends the connection.
+func (c *conn) write() {
+	for {
+		out := c.next()
+		if out == nil {
+			select {
+			case <-c.pulse:
+				continue
+			case <-c.done:
+				return
+			}
+		}
+		c.nc.SetWriteDeadline(time.Now().Add(c.writeWithin))
+		_, err := c.nc.Write(out.frame)
+		c.nc.SetWriteDeadline(time.Time{}) // an ssh exec's conn ends at any deadline left standing
+		if err != nil {
+			err = c.fail(fmt.Errorf("a write failed or stalled: %w", err))
+		}
+		if out.written != nil {
+			out.written <- err
+		}
+		if err != nil {
+			return
+		}
+	}
+}
+
+func (c *conn) next() *outgoing {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.err != nil {
+		return nil
+	}
+	for channel, owed := range c.credits {
+		delete(c.credits, channel)
+		return &outgoing{frame: frameOf(channel, frameCredit, binary.LittleEndian.AppendUint32(nil, uint32(owed))), taken: true}
+	}
+	if len(c.queue) == 0 {
+		return nil
+	}
+	out := c.queue[0]
+	c.queue = c.queue[1:]
+	out.taken = true
+	return out
+}
+
+// fail ends the connection once and answers why: every call waiting, write queued, stream and subscription hears it.
 func (c *conn) fail(cause error) error {
 	c.mu.Lock()
 	if c.err != nil {
@@ -233,12 +305,17 @@ func (c *conn) fail(cause error) error {
 	}
 	c.err = &TransportError{cause}
 	close(c.done)
-	waiting, streams, subs := c.pending, c.streams, c.subs
-	c.pending, c.streams, c.subs = map[uint64]*pending{}, map[uint32]*Stream{}, map[uint32]*Subscription{}
+	waiting, streams, subs, queued := c.pending, c.streams, c.subs, c.queue
+	c.pending, c.streams, c.subs, c.queue = map[uint64]*pending{}, map[uint32]*Stream{}, map[uint32]*Subscription{}, nil
 	c.mu.Unlock()
 	c.nc.Close()
 	for _, wait := range waiting {
 		wait.answer <- answer{err: c.err}
+	}
+	for _, out := range queued {
+		if out.written != nil {
+			out.written <- c.err
+		}
 	}
 	for _, stream := range streams {
 		stream.end(c.err, nil)
@@ -292,24 +369,26 @@ func (c *conn) reply(payload []byte) {
 	if wait != nil && wait.bind != nil && got.err == nil {
 		after, got.err = wait.bind(reply.Result)
 	}
+	if wait == nil {
+		c.closeAbandonedLocked(reply.Result)
+	}
 	c.mu.Unlock()
 	if after != nil {
 		after()
 	}
-	if wait == nil {
-		c.closeAbandoned(reply.Result)
-		return
+	if wait != nil {
+		wait.answer <- got
 	}
-	wait.answer <- got
 }
 
-// closeAbandoned ends a channel opened by a call nobody waits for any more: the core keeps it for the connection.
-func (c *conn) closeAbandoned(result json.RawMessage) {
+// closeAbandonedLocked ends a channel opened by a call nobody waits for any more: the core keeps it for the
+// connection.
+func (c *conn) closeAbandonedLocked(result json.RawMessage) {
 	var opened struct {
 		Channel uint32 `json:"channel"`
 	}
-	if json.Unmarshal(result, &opened) == nil && opened.Channel != 0 {
-		go c.write(context.Background(), opened.Channel, frameClose, nil)
+	if json.Unmarshal(result, &opened) == nil && opened.Channel != 0 && c.err == nil {
+		c.queueLocked(opened.Channel, frameClose, nil, nil)
 	}
 }
 

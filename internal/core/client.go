@@ -76,10 +76,19 @@ func (h Hello) Has(feature string) bool {
 
 // Client is one core: a connection dialled when first needed and again after it ended.
 type Client struct {
-	dial   Dialer
-	mu     sync.Mutex
-	live   *conn
-	closed bool
+	dial    Dialer
+	mu      sync.Mutex
+	live    *conn
+	dialing *attempt
+	closed  bool
+}
+
+// attempt is a dial and hello under way, which every caller needing a connection meanwhile waits for.
+type attempt struct {
+	done   chan struct{}
+	conn   *conn
+	err    error
+	cancel context.CancelFunc
 }
 
 // New is a client that reaches its core through dial.
@@ -105,37 +114,70 @@ func (c *Client) Call(ctx context.Context, method string, params, result any) er
 	return cn.call(ctx, method, params, result, nil)
 }
 
-// Close ends the connection: calls in flight, streams and subscriptions end with a transport error.
+// Close ends the connection, or the dial under way: calls in flight, streams and subscriptions end with a transport
+// error.
 func (c *Client) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.closed = true
+	if c.dialing != nil {
+		c.dialing.cancel()
+	}
 	if c.live != nil {
 		c.live.fail(net.ErrClosed)
 	}
 	return nil
 }
 
+// connection is the live connection, or the one a dial under way gives; the dial is the client's, bound by
+// helloWithin, so a caller giving up leaves it to the others.
 func (c *Client) connection(ctx context.Context) (*conn, error) {
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	if c.closed {
+		c.mu.Unlock()
 		return nil, &TransportError{net.ErrClosed}
 	}
 	if c.live != nil && !c.live.ended() {
-		return c.live, nil
+		live := c.live
+		c.mu.Unlock()
+		return live, nil
 	}
+	dialing := c.dialing
+	if dialing == nil {
+		attemptCtx, cancel := context.WithTimeout(context.Background(), helloWithin)
+		dialing = &attempt{done: make(chan struct{}), cancel: cancel}
+		c.dialing = dialing
+		go c.connect(attemptCtx, dialing)
+	}
+	c.mu.Unlock()
+	select {
+	case <-dialing.done:
+		return dialing.conn, dialing.err
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+func (c *Client) connect(ctx context.Context, dialing *attempt) {
+	defer dialing.cancel()
 	nc, err := c.dial(ctx)
 	if err != nil {
-		return nil, &TransportError{err}
-	}
-	cn, err := open(ctx, nc)
-	if err != nil {
+		dialing.err = &TransportError{err}
+	} else if dialing.conn, err = open(ctx, nc); err != nil {
 		nc.Close()
-		return nil, err
+		dialing.err = err
 	}
-	c.live = cn
-	return cn, nil
+	c.mu.Lock()
+	c.dialing = nil
+	if dialing.conn != nil && c.closed {
+		dialing.conn.fail(net.ErrClosed)
+		dialing.conn, dialing.err = nil, &TransportError{net.ErrClosed}
+	}
+	if dialing.conn != nil {
+		c.live = dialing.conn
+	}
+	c.mu.Unlock()
+	close(dialing.done)
 }
 
 type request struct {

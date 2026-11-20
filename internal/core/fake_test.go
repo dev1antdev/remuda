@@ -170,7 +170,7 @@ func TestACallWhoseContextEndedSendsNothing(t *testing.T) {
 	}
 }
 
-func TestACoreThatStopsReadingEndsTheConnectionNotTheCallsBehindIt(t *testing.T) {
+func TestACoreThatStopsReadingEndsTheConnectionNotTheCallers(t *testing.T) {
 	writeWithin = 400 * time.Millisecond
 	t.Cleanup(func() { writeWithin = 30 * time.Second })
 	client := New(fakeCore("", nil))
@@ -178,21 +178,68 @@ func TestACoreThatStopsReadingEndsTheConnectionNotTheCallsBehindIt(t *testing.T)
 	if _, err := client.Hello(within(t, 5*time.Second)); err != nil {
 		t.Fatal(err)
 	}
-	stalled := make(chan error, 1)
-	go func() { stalled <- client.Call(context.Background(), "terminal.list", nil, nil) }()
-	time.Sleep(50 * time.Millisecond)
-	start := time.Now()
-	err := client.Call(within(t, 100*time.Millisecond), "terminal.list", nil, nil)
-	if !errors.Is(err, context.DeadlineExceeded) || time.Since(start) > 300*time.Millisecond {
-		t.Fatalf("a call behind a stalled write: %v after %s", err, time.Since(start))
+	for range 2 { // the call whose request is on the wire, and one behind it
+		start := time.Now()
+		err := client.Call(within(t, 100*time.Millisecond), "terminal.list", nil, nil)
+		if !errors.Is(err, context.DeadlineExceeded) || time.Since(start) > 300*time.Millisecond {
+			t.Fatalf("a call on a stalled connection: %v after %s", err, time.Since(start))
+		}
 	}
+	unbounded := make(chan error, 1)
+	go func() { unbounded <- client.Call(context.Background(), "terminal.list", nil, nil) }()
 	select {
-	case err := <-stalled:
+	case err := <-unbounded:
 		if !IsTransport(err) {
-			t.Fatalf("the stalled write: %v", err)
+			t.Fatalf("a call without a deadline: %v", err)
 		}
 	case <-time.After(5 * time.Second):
-		t.Fatal("the stalled write never ended")
+		t.Fatal("the stalled write never ended the connection")
+	}
+}
+
+func TestTheReaderGoesOnWhileTheCreditItOwesCannotBeWritten(t *testing.T) {
+	writeWithin = 5 * time.Second
+	t.Cleanup(func() { writeWithin = 30 * time.Second })
+	client := New(fakeCore(`"events"`, func(core peer, frame sent) {
+		if frame.method != "events.subscribe" {
+			return
+		}
+		go func() {
+			early := event(11, "created")
+			core.write(5, frameData, early[:30]) // half a line before the reply: its bytes are credited at once
+			core.reply(frame.id, `{"seq":10,"terminals":[],"channel":5}`)
+			core.write(5, frameData, early[30:])
+		}()
+		select {} // and the core reads nothing more: every credit stays unwritten
+	}))
+	defer client.Close()
+	ctx := within(t, 2*time.Second)
+	sub, err := client.Subscribe(ctx, SubscribeParams{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	notice, err := sub.Next(ctx)
+	if err != nil || notice.Seq != 11 {
+		t.Fatalf("the event after the reply: %+v %v", notice, err)
+	}
+}
+
+func TestAHandshakeNobodyAnswersHoldsUpNoCallAndNoClose(t *testing.T) {
+	client := New(func(ctx context.Context) (net.Conn, error) {
+		ours, theirs := net.Pipe()
+		go io.Copy(io.Discard, theirs) // takes the hello, answers nothing
+		return ours, nil
+	})
+	for range 2 {
+		start := time.Now()
+		if _, err := client.List(within(t, 100*time.Millisecond), false, nil); !errors.Is(err, context.DeadlineExceeded) || time.Since(start) > 300*time.Millisecond {
+			t.Fatalf("a call while the hello waits: %v after %s", err, time.Since(start))
+		}
+	}
+	start := time.Now()
+	client.Close()
+	if _, err := client.List(within(t, 5*time.Second), false, nil); !IsTransport(err) || time.Since(start) > 300*time.Millisecond {
+		t.Fatalf("after Close: %v after %s", err, time.Since(start))
 	}
 }
 

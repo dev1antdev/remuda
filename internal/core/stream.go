@@ -130,8 +130,8 @@ func (s *Stream) Write(p []byte) (int, error) {
 		return 0, err
 	}
 	for sent := 0; sent < len(p); {
-		chunk := min(len(p)-sent, 64<<10) // calls go between the chunks of a long paste
-		if err := s.conn.write(context.Background(), s.channel, frameData, p[sent:sent+chunk]); err != nil {
+		chunk := min(len(p)-sent, 64<<10) // a chunk at a time, so calls go between the chunks of a long paste
+		if err := s.conn.send(s.channel, frameData, p[sent:sent+chunk], true); err != nil {
 			return sent, err
 		}
 		sent += chunk
@@ -147,7 +147,7 @@ func (s *Stream) Resize(cols, rows uint16) error {
 	var size [4]byte
 	binary.LittleEndian.PutUint16(size[0:2], cols)
 	binary.LittleEndian.PutUint16(size[2:4], rows)
-	return s.conn.write(context.Background(), s.channel, frameResize, size[:])
+	return s.conn.send(s.channel, frameResize, size[:], false)
 }
 
 // Focus tells the core this viewer gained or lost the focus.
@@ -159,7 +159,7 @@ func (s *Stream) Focus(focused bool) error {
 	if focused {
 		flag[0] = 1
 	}
-	return s.conn.write(context.Background(), s.channel, frameFocus, flag)
+	return s.conn.send(s.channel, frameFocus, flag, false)
 }
 
 // Close detaches: what is still queued is dropped and Read answers io.EOF.
@@ -169,7 +169,7 @@ func (s *Stream) Close() error {
 	s.mu.Unlock()
 	s.end(io.EOF, nil)
 	if wasOpen {
-		return s.conn.write(context.Background(), s.channel, frameClose, nil)
+		return s.conn.send(s.channel, frameClose, nil, false)
 	}
 	return nil
 }
