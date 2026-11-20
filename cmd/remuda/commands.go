@@ -23,6 +23,7 @@ var commands = map[string]func(args []string){
 	"setup":      setupCmd,
 	"uninstall":  uninstallCmd,
 	"code":       codeCmd,
+	"core":       coreCmd,
 	"search":     searchCmd,
 	"usage":      usageCmd,
 	"mcp":        mcpCmd,
@@ -123,18 +124,19 @@ func setupCmd(args []string) {
 	}
 }
 
-// uninstallCmd is `remuda uninstall [-host H] [-data] [-code] [-herdr] [-all] [-yes] [-n]`: what would go is shown first, then asked about.
+// uninstallCmd is `remuda uninstall [-host H] [-data] [-code] [-core] [-herdr] [-all] [-yes] [-n]`: what would go is shown first, then asked about.
 func uninstallCmd(args []string) {
 	fs := flag.NewFlagSet("uninstall", flag.ExitOnError)
 	host := fs.String("host", "", "a remote machine over ssh instead of this one")
 	data := fs.Bool("data", false, "also your data: the token, tasks, schedules, push keys")
 	codeToo := fs.Bool("code", false, "also code-server, with the editor's settings and extensions")
+	coreToo := fs.Bool("core", false, "also remuda-core: its core and every terminal running in it, the binary, its folders")
 	herdrToo := fs.Bool("herdr", false, "also herdr: its hooks, its server and every agent running in it, the binary")
-	all := fs.Bool("all", false, "everything: -data -code -herdr")
+	all := fs.Bool("all", false, "everything: -data -code -core -herdr")
 	yes := fs.Bool("yes", false, "do not ask")
 	dry := fs.Bool("n", false, "only say what would be removed")
 	fs.Parse(args)
-	r := setup.Removal{Host: *host, Data: *data || *all, Code: *codeToo || *all, Herdr: *herdrToo || *all}
+	r := setup.Removal{Host: *host, Data: *data || *all, Code: *codeToo || *all, Core: *coreToo || *all, Herdr: *herdrToo || *all}
 	some, err := r.Plan(os.Stdout)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "uninstall:", err)
@@ -169,6 +171,26 @@ func codeCmd(args []string) {
 	}
 	if err := setup.Code(*host, action, *port, os.Stdout); err != nil {
 		fmt.Fprintln(os.Stderr, "code:", err)
+		os.Exit(1)
+	}
+}
+
+// coreCmd is `remuda core [-host H] [install|status]`: remuda-core, the pinned release, by the script the binary carries;
+// `remuda uninstall -core` takes it away.
+func coreCmd(args []string) {
+	fs := flag.NewFlagSet("core", flag.ExitOnError)
+	host := fs.String("host", "", "a remote machine over ssh instead of this one")
+	fs.Parse(args)
+	action := "install"
+	if fs.NArg() > 0 {
+		action = fs.Arg(0)
+	}
+	if action != "install" && action != "status" {
+		fmt.Fprintln(os.Stderr, "usage: remuda core [-host H] [install|status] (remuda uninstall -core takes it away)")
+		os.Exit(2)
+	}
+	if err := setup.Core(*host, action, os.Stdout); err != nil {
+		fmt.Fprintln(os.Stderr, "core:", err)
 		os.Exit(1)
 	}
 }

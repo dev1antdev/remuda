@@ -44,8 +44,8 @@ type Batch struct {
 }
 
 // everywhereOrder is the order of a machine's steps: herdr first, then the hooks it writes, the agents, code-server,
-// and remuda's own release last, since installing it restarts that machine's remuda
-var everywhereOrder = []string{"herdr", "hooks", "claude", "codex", "gemini", "kimi", "code", "remuda-release"}
+// remuda-core, and remuda's own release last, since installing it restarts that machine's remuda
+var everywhereOrder = []string{"herdr", "hooks", "claude", "codex", "gemini", "kimi", "code", "core", "remuda-release"}
 
 // StepTimeout is how long a step's job may run before the next one starts anyway.
 var StepTimeout = 30 * time.Minute
@@ -54,7 +54,8 @@ var StepTimeout = 30 * time.Minute
 var stepPoll = time.Second
 
 // pendingUpdate says whether an offer installs something newer than the machine has: a tool's newer version known,
-// hooks behind the installed herdr, a code-server older than the one remuda installs; a release is offered only when newer
+// hooks behind the installed herdr, a code-server older than the one remuda installs, a remuda-core missing or older
+// than it installs; a release is offered only when newer
 func pendingUpdate(what string, r *health.Report, l health.Latest) bool {
 	switch what {
 	case "herdr":
@@ -66,6 +67,8 @@ func pendingUpdate(what string, r *health.Report, l health.Latest) bool {
 		return len(r.OutdatedHooks) > 0
 	case "code":
 		return r.CodeServer != "" && l.Code != "" && health.Newer(r.CodeServer, l.Code)
+	case "core":
+		return r.RemudaCore == "" || l.Core != "" && health.Newer(r.RemudaCore, l.Core)
 	case "remuda-release":
 		return true
 	}

@@ -124,14 +124,15 @@ func help() {
 	fmt.Fprint(w, `remuda — a browser and phone cockpit for the coding agents herdr runs
 
   remuda [flags]       the server (the background service runs this); -server for a host that only serves the page
-  remuda setup         herdr, its server, the agent hooks and the service, here or -host H
+  remuda setup         herdr, its server, the agent hooks, remuda-core and the service, here or -host H
   remuda code          code-server for the Code mode, here or -host H
+  remuda core          remuda-core, the terminal runtime remuda moves to, here or -host H
   remuda mcp           your task list for the coding agents, over MCP; mcp install registers it with each agent, here or -host H
   remuda tasks         your tasks from a shell: list, show, add, move, comment
   remuda statusline    Claude Code's plan limits for remuda; statusline install puts it before your status line, here or -host H
   remuda backup        the cockpit's state copied to the machine Settings › Backups names: backup now, backup list
   remuda restore       a backup back into this machine's state dir, the service stopped first
-  remuda uninstall     take remuda off this machine again (-all: herdr and your data too)
+  remuda uninstall     take remuda off this machine again (-all: herdr, remuda-core and your data too)
 
 Each command lists its own flags with -h. The server's:
 

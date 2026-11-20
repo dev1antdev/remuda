@@ -24,7 +24,7 @@ func TestOnlyAnUpdateWithSomethingNewerIsAStepEverywhere(t *testing.T) {
 	report := &health.Report{Herdr: "0.9.4", Claude: "2.1.300", Codex: "0.80.0", CodeServer: "4.139.0", OutdatedHooks: []health.Hook{{Agent: "codex"}}}
 	latest := health.Latest{Herdr: "0.9.5", Claude: "2.1.300", Code: "4.140.0"}
 	for what, want := range map[string]bool{
-		"herdr": true, "claude": false, "codex": false, "gemini": false, "hooks": true, "code": true,
+		"herdr": true, "claude": false, "codex": false, "gemini": false, "hooks": true, "code": true, "core": true,
 		"remuda-release": true, "mcp": false, "statusline": false, "plugins": false, "restart-claude": false,
 	} {
 		if got := pendingUpdate(what, report, latest); got != want {
@@ -33,6 +33,9 @@ func TestOnlyAnUpdateWithSomethingNewerIsAStepEverywhere(t *testing.T) {
 	}
 	if pendingUpdate("hooks", &health.Report{}, latest) || pendingUpdate("code", &health.Report{}, latest) {
 		t.Error("nothing installed counts as an update")
+	}
+	if pendingUpdate("core", &health.Report{RemudaCore: "0.2.0"}, health.Latest{Core: "0.2.0"}) {
+		t.Error("a remuda-core as new as the one remuda installs counts as an update")
 	}
 }
 

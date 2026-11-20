@@ -9,6 +9,8 @@
 #                      keys, the tailnet node's state
 #   REMUDA_RM_CODE=1   code-server: its service, the release under
 #                      ~/.local/opt, the editor's settings and extensions
+#   REMUDA_RM_CORE=1   remuda-core: its core (every terminal in it ends),
+#                      the binary, its folders
 #   REMUDA_RM_HERDR=1  herdr: its agent hooks, its server (every pane in
 #                      it ends), the binary, its folders
 # Nothing needs sudo; what would is named and left where it is. There is
@@ -261,6 +263,34 @@ code_part() {
     fi
 }
 
+# remuda-core as install-core.sh put it: its core stopped first (every
+# terminal in it ends), the binary with its rc link, ConPTY on Windows, the
+# app bundles on a Mac, its state and config folders.
+core_part() {
+    rc_bin="$HOME/.local/bin/remuda-core"
+    rc_state="$HOME/.local/state/remuda-core"
+    rc_config="${XDG_CONFIG_HOME:-$HOME/.config}/remuda-core"
+    if [ "$OS" = Windows ]; then
+        rc_bin="$rc_bin.exe"
+        rc_state="$LOCALAPPDATA_U/remuda-core"
+        rc_config="$APPDATA_U/remuda-core"
+    fi
+    if [ ! -e "$rc_bin" ] && [ ! -d "$rc_state" ]; then
+        return 0
+    fi
+    what="remuda-core at $(tilde "$rc_bin"), its core and the terminals in it, $(tilde "$rc_state"), $(tilde "$rc_config")"
+    if [ "${REMUDA_RM_CORE:-0}" != 1 ]; then
+        keep "$what  (-core removes it)"
+    elif [ "$ACTION" = plan ]; then
+        will "$what"
+        say "          a running core stops first: every agent and shell in its terminals ends"
+    else
+        if [ -x "$rc_bin" ]; then "$rc_bin" server stop >/dev/null 2>&1 || fail "remuda-core's core did not stop: $rc_bin server stop"; fi
+        if [ "$(readlink "$HOME/.local/bin/rc" 2>/dev/null)" = remuda-core ]; then rm -f "$HOME/.local/bin/rc"; fi
+        if rm -rf "$rc_bin" "$HOME/.local/bin/conpty" "$HOME/.local/share/remuda-core" "$rc_state" "$rc_config"; then gone "remuda-core and its folders"; else fail "could not remove all of remuda-core's files (a core still running holds its own)"; fi
+    fi
+}
+
 # herdr, last: stopping its server ends every pane, and this script may be
 # running in one. The hooks first (they call the binary), then the server,
 # the binary by the way it came, the folders.
@@ -379,6 +409,7 @@ esac
 remuda_part
 data_part
 code_part
+core_part
 herdr_part
 
 if [ "$ACTION" = plan ]; then
