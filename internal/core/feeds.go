@@ -28,6 +28,10 @@ type feed struct {
 // opensAtOnce is how many feeds a stream subscribes side by side.
 const opensAtOnce = 8
 
+// joinWithin bounds a stream's subscribing of all its new watches together, as one request is bounded. A test
+// shortens it.
+var joinWithin = callWithin
+
 // feedKey names a watch by its pane and what it looks for.
 func feedKey(w OutputWatch) string {
 	return w.Terminal + "\x00" + w.Match.Type + "\x00" + w.Match.Value + "\x00" + strconv.Itoa(w.Lines)
@@ -90,6 +94,8 @@ func (a *Adapter) join(s *eventStream, watches []OutputWatch) error {
 			missing = append(missing, w)
 		}
 	}
+	ctx, cancel := context.WithTimeout(a.life, joinWithin) // one deadline for them all, cut short by Close
+	defer cancel()
 	subs := make([]*Subscription, len(missing))
 	errs := make([]error, len(missing))
 	var wg sync.WaitGroup
@@ -98,10 +104,13 @@ func (a *Adapter) join(s *eventStream, watches []OutputWatch) error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			slots <- struct{}{}
+			select {
+			case slots <- struct{}{}:
+			case <-ctx.Done():
+				errs[i] = ctx.Err()
+				return
+			}
 			defer func() { <-slots }()
-			ctx, cancel := context.WithTimeout(context.Background(), callWithin)
-			defer cancel()
 			subs[i], errs[i] = a.client.Subscribe(ctx, SubscribeParams{Labels: map[string]string{outputOnly: "1"}, Output: []OutputWatch{w}})
 		}()
 	}

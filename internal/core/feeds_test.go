@@ -244,3 +244,65 @@ func TestAnEditedRuleLeavesTheOtherWatchesFeedsStanding(t *testing.T) {
 		}
 	}
 }
+
+// A core that takes requests and answers none: a stream's watches subscribe within one deadline all together, and
+// the adapter's Close ends the wait at once.
+func TestWatchesTheCoreNeverAnswersEndByOneDeadlineOrTheAdaptersClose(t *testing.T) {
+	saved := joinWithin
+	t.Cleanup(func() { joinWithin = saved })
+	silent := func() *Adapter {
+		client := New(fakeCore(`"output_watches"`, func(c peer, frame sent) {
+			switch {
+			case frame.method == "events.subscribe" && bytes.Contains(frame.payload, []byte(outputOnly)):
+				// never answered
+			case frame.method == "events.subscribe":
+				c.reply(frame.id, `{"seq":1,"terminals":[{"address":"t1","state":"live"}],"channel":3}`)
+			case frame.method == "doc.get":
+				c.reply(frame.id, `{"value":null,"version":0}`)
+			}
+		}))
+		t.Cleanup(func() { client.Close() })
+		adapter := NewAdapter(client, AdapterHooks{})
+		if _, err := adapter.SessionSnapshot(); err != nil {
+			t.Fatal(err)
+		}
+		return adapter
+	}
+	var subs []herdr.Subscription
+	for i := 0; i < 20; i++ { // more than opensAtOnce: three rounds of eight
+		subs = append(subs, herdr.Subscription{Type: herdr.EventOutputMatched, PaneID: "t1", Match: &herdr.OutputMatch{Type: "substring", Value: fmt.Sprint("FAIL ", i)}})
+	}
+
+	joinWithin = 300 * time.Millisecond
+	adapter := silent()
+	start := time.Now()
+	if _, err := adapter.Subscribe(subs); err == nil {
+		t.Fatal("watches the core never answered stand")
+	}
+	if took := time.Since(start); took > 2*joinWithin {
+		t.Fatalf("the watches took %s to give up, past one deadline of %s", took, joinWithin)
+	}
+	adapter.Close()
+
+	joinWithin = time.Minute
+	adapter = silent()
+	ended := make(chan error, 1)
+	go func() {
+		_, err := adapter.Subscribe(subs)
+		ended <- err
+	}()
+	time.Sleep(100 * time.Millisecond)
+	closed := time.Now()
+	adapter.Close()
+	select {
+	case err := <-ended:
+		if err == nil {
+			t.Fatal("watches subscribed through a closed adapter")
+		}
+		if took := time.Since(closed); took > time.Second {
+			t.Fatalf("Close ended the wait %s later", took)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Close did not end the wait")
+	}
+}

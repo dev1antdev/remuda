@@ -422,7 +422,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   watch (its pane, what it looks for, its lines), filtered by a label no
   terminal carries (`outputOnly`), shared by every stream asking for that
   watch — the watcher's swap joins the feeds that stand and subscribes only
-  the new watches, side by side (`opensAtOnce` 8), so the core never tells a
+  the new watches, side by side (`opensAtOnce` 8) within one deadline for
+  them all (`joinWithin`, a request's 10 s) that the adapter's Close cuts
+  short, a refusal or the deadline closing what did open, so the core never tells a
   kept watch's rows still on the screen as if new, nor misses one printed
   while the streams swap; a new watch's rows that stood are where things
   stood — its rows go out as

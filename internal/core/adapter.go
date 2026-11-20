@@ -19,6 +19,7 @@ import (
 type Adapter struct {
 	client *Client
 	hooks  AdapterHooks
+	life   context.Context // ends with Close
 	stop   context.CancelFunc
 	done   chan struct{}
 
@@ -63,7 +64,7 @@ var quietFor = 45 * time.Second
 func NewAdapter(client *Client, hooks AdapterHooks) *Adapter {
 	ctx, stop := context.WithCancel(context.Background())
 	a := &Adapter{
-		client: client, hooks: hooks, stop: stop, done: make(chan struct{}),
+		client: client, hooks: hooks, life: ctx, stop: stop, done: make(chan struct{}),
 		state: mirror{terminals: map[string]*Terminal{}}, answered: make(chan struct{}), streams: map[*eventStream]struct{}{},
 		feeds: map[string]*feed{},
 	}
