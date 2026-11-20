@@ -437,27 +437,38 @@ components and icons as rules for whoever changes it: @docs/design.md
   it is, the action refused; the doc write failing ends the terminal just
   made; a workspace or tab the snapshot shows that the document lacks (made
   of labels alone) is adopted into it (`adopt`, `adoptTab`); ids are
-  `ws-` / `tab-` and eight hex digits (`newID`); closing ends the place's
+  `ws-` / `tab-` and `state.NewID`; closing ends the place's
   terminals side by side (`kill`, `killWithin` 15 s each, one already
   gone counting as gone). `input.go` — `AgentStartWith` types the agent's
   command line into the pane's shell at its prompt, as herdr's agent.start
   runs it, the shell staying under the agent (`terminal.send`: pasted and
-  Enter; quoted for the shell at the prompt, `commandLine`: POSIX,
-  PowerShell's `''`, cmd's `""`, a plain word left bare; the command is the
-  kind's name, `cursor-agent` for cursor); a shell not at its prompt is
-  `agent_pane_busy`, which `sessions.StartAgent` tries again; the start
-  counts once something else holds the terminal, and fails when the shell
-  is still at its prompt `startSeen` 10 s on; the name is herdr's alone.
-  `AgentPrompt` is `terminal.send` (the person's draft in the terminal
-  waited for, `sendWithin` 75 s): `agent_not_found` with no agent,
-  `agent_not_ready` until it has come up (`readyForPrompt`: a status
-  reported since it took the terminal — the mirror stamps `agentAt` and
-  `statusAt`, a report the foreground's next look comes after, within
-  `foregroundLag` 3 s, being its first — or `unreportedReady` 10 s for one
-  that reports none), the core's `blocked` → `agent_blocked`, `unavailable`
-  → `agent_not_ready`; `PaneSendKeys` is `terminal.keys` with `now` (keys
-  the person pressed); `PaneSendText` types bytes as they are through a
-  `keep_size` attach of its own, since the core takes text only as a paste;
+  Enter; quoted for the shell at the prompt, `commandLine`: POSIX, pwsh's
+  `''`, Windows PowerShell 5.1's `''` with inner double quotes as `\"` —
+  5.1 drops them on the way to a program — cmd's `""`, a plain word left
+  bare; the command is `herdr.AgentCommand`, the one agent table beside
+  `AgentProgram`, every kind `sessions.Agents` offers, `cursor-agent` for
+  cursor); a shell not at its prompt is `agent_pane_busy`, which
+  `sessions.StartAgent` tries again; the start counts once something else
+  holds the terminal, and fails when the shell is still at its prompt
+  `startSeen` 10 s on; the name is herdr's alone. `AgentPrompt` is
+  `terminal.send` (the person's draft in the terminal waited for,
+  `sendWithin` 75 s — shorter would cancel a prompt already typed — under
+  the pane's lock, so keys and answers through remuda wait behind it while
+  a draft stands; no person types into a core terminal before Core 14):
+  `agent_not_found` with no agent, `agent_not_ready` until it has reported
+  a status since it took the terminal (`readyForPrompt`: the mirror stamps
+  `agentAt` and `statusAt`, a report the foreground's next look comes
+  after, within `foregroundLag` 3 s, being its first; one running before
+  the mirror looked needs a status) — **an agent that reports no status
+  through OSC 7501 takes no prompt on a core machine** (Claude Code before
+  2.1.325, and agents without it): the core reads no dialog off the screen,
+  and an Enter typed into one could approve it — the core's `blocked` →
+  `agent_blocked`, `unavailable` → `agent_not_ready`; `PaneSendKeys` is
+  `terminal.keys` with `now` (keys the person pressed); `PaneSendText` types
+  bytes as they are through a `keep_size` attach of its own, since the core
+  takes text only as a paste, but the bytes sessions sends for home, end,
+  pageup, pagedown and delete (herdr 0.9.5 names none) go as the core's
+  named keys, encoded for the program's keyboard modes (`keyBytes`);
   `PaneSendInput` refuses a paste of several lines (typed raw, each would
   run). Still answering `invalid_request` "… is not on remuda-core yet":
   worktrees (Core 20), `LayoutExport` / `LayoutApply` (Core 22),

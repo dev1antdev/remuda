@@ -13,7 +13,8 @@ func TestACommandLineIsQuotedForTheShellAtThePrompt(t *testing.T) {
 	for shell, want := range map[string]string{
 		"zsh":        `claude --resume abc-12 --settings '{"a":"it'\''s"}'`,
 		"sh":         `claude --resume abc-12 --settings '{"a":"it'\''s"}'`,
-		"powershell": `claude --resume abc-12 --settings '{"a":"it''s"}'`,
+		"pwsh":       `claude --resume abc-12 --settings '{"a":"it''s"}'`,
+		"powershell": `claude --resume abc-12 --settings '{\"a\":\"it''s\"}'`,
 		"cmd":        `claude --resume abc-12 --settings "{""a"":""it's""}"`,
 	} {
 		if got := commandLine(shell, words); got != want {
@@ -57,21 +58,21 @@ func TestASplitAndAClosedPaneReshapeTheTabsTree(t *testing.T) {
 }
 
 func TestAnAgentTakesAPromptOnceItHasReported(t *testing.T) {
-	now := time.Now()
-	started := now.Add(-2 * time.Second)
+	started := time.Now().Add(-2 * time.Second)
 	cases := []struct {
 		name  string
 		term  Terminal
 		ready bool
 	}{
-		{"seen before the mirror looked", Terminal{}, true},
+		{"running before the mirror looked, reporting", Terminal{Status: &Status{State: "idle"}}, true},
+		{"running before the mirror looked, reporting nothing", Terminal{}, false},
 		{"no report since it started", Terminal{agentAt: started, statusAt: started.Add(-time.Minute)}, false},
 		{"reported since it started", Terminal{agentAt: started, statusAt: started.Add(time.Second)}, true},
 		{"its first report named it", Terminal{agentAt: started, statusAt: started}, true},
-		{"reports nothing but has been up a while", Terminal{agentAt: now.Add(-unreportedReady)}, true},
+		{"reports nothing however long it runs", Terminal{agentAt: started.Add(-time.Hour)}, false},
 	}
 	for _, c := range cases {
-		if got := readyForPrompt(&c.term, now); got != c.ready {
+		if got := readyForPrompt(&c.term); got != c.ready {
 			t.Errorf("%s: ready %v", c.name, got)
 		}
 	}
@@ -82,7 +83,7 @@ func TestAReportBeforeTheForegroundsLookCountsAsTheAgentsFirst(t *testing.T) {
 	m := mirror{terminals: map[string]*Terminal{"t1": {Address: "t1", State: "live", Pid: 10, Foreground: shell}}}
 	m.apply(Event{Type: "status", Terminal: "t1", Data: json.RawMessage(`{"status":{"state":"idle","app":"claude-code"},"reported":true}`)})
 	m.apply(Event{Type: "foreground", Terminal: "t1", Data: json.RawMessage(`{"pid":11,"name":"claude","argv":["claude"]}`)})
-	if term := m.terminals["t1"]; agentOf(term) != "claude" || !readyForPrompt(term, time.Now()) {
-		t.Fatalf("the agent is %q, ready %v", agentOf(term), readyForPrompt(term, time.Now()))
+	if term := m.terminals["t1"]; agentOf(term) != "claude" || !readyForPrompt(term) {
+		t.Fatalf("the agent is %q, ready %v", agentOf(term), readyForPrompt(term))
 	}
 }

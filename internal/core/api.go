@@ -277,11 +277,20 @@ func (a *Adapter) AgentGet(target string) (herdr.AgentInfo, error) {
 	if err != nil {
 		return herdr.AgentInfo{}, err
 	}
-	agent := agentOf(&t)
-	if agent == "" {
-		return herdr.AgentInfo{}, &herdr.Error{Code: "agent_not_found", Message: "no agent in " + target}
+	agent, err := agentIn(&t, target)
+	if err != nil {
+		return herdr.AgentInfo{}, err
 	}
 	return herdr.AgentInfo{Agent: agent, Status: statusOf(&t)}, nil
+}
+
+// agentIn is the agent a terminal runs, agent_not_found when it runs none.
+func agentIn(t *Terminal, target string) (string, error) {
+	agent := agentOf(t)
+	if agent == "" {
+		return "", &herdr.Error{Code: "agent_not_found", Message: "no agent in " + target}
+	}
+	return agent, nil
 }
 
 func (a *Adapter) WorkspaceReportMetadata(m herdr.WorkspaceMetadata) error {

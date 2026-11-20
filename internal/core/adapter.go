@@ -281,10 +281,7 @@ func (a *Adapter) apply(ctx context.Context, cn *conn, ev Event) error {
 		if err != nil {
 			return err
 		}
-		a.mu.Lock()
-		a.state.doc = doc
-		a.tellLocked(herdr.Event{Kind: "layout.updated"})
-		a.mu.Unlock()
+		a.setDoc(doc)
 		return nil
 	}
 	a.mu.Lock()
@@ -293,6 +290,14 @@ func (a *Adapter) apply(ctx context.Context, cn *conn, ev Event) error {
 		a.tellLocked(told)
 	}
 	return nil
+}
+
+// setDoc is the document as the mirror holds it now, which every stream hears as a layout that moved.
+func (a *Adapter) setDoc(doc Document) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.state.doc = doc
+	a.tellLocked(herdr.Event{Kind: "layout.updated"})
 }
 
 func (a *Adapter) tellLocked(ev herdr.Event) {
@@ -317,10 +322,7 @@ func (m *mirror) apply(ev Event) (herdr.Event, bool) {
 			delete(m.terminals, record.Address)
 			return herdr.Event{Kind: "pane.closed", PaneID: record.Address}, t != nil
 		}
-		followShell(&record)
-		m.terminals[record.Address] = &record
-		told.Kind = "pane.created"
-		return told, true
+		return m.add(record), true
 	case "removed", "finished":
 		if t == nil {
 			return told, false
@@ -406,6 +408,13 @@ func (m *mirror) apply(ev Event) (herdr.Event, bool) {
 		}
 	}
 	return told, true
+}
+
+// add puts a live terminal in the mirror, its folder its shell's, and answers it as herdr's news of a pane made.
+func (m *mirror) add(record Terminal) herdr.Event {
+	followShell(&record)
+	m.terminals[record.Address] = &record
+	return herdr.Event{Kind: "pane.created", PaneID: record.Address}
 }
 
 // local says an address is this machine's terminal: one on a machine the core added comes as `machine/t7`.

@@ -3,14 +3,13 @@ package core
 import (
 	"cmp"
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"slices"
 	"sync"
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/state"
 )
 
 // docTries is how often a change of the document is made again when another writer moved it in between.
@@ -19,24 +18,7 @@ const docTries = 5
 // killWithin bounds the end of one terminal: hangup, then terminate, then kill.
 const killWithin = 15 * time.Second
 
-// newID is a workspace's or a tab's id in the document: its prefix and eight hex digits.
-func newID(prefix string) string {
-	var b [4]byte
-	rand.Read(b[:])
-	return prefix + hex.EncodeToString(b[:])
-}
-
 func leaf(address string) *herdr.LayoutNode { return &herdr.LayoutNode{Type: "pane", PaneID: address} }
-
-// shown is the machine as the mirror holds it now, laid out as the snapshot shows it.
-func (a *Adapter) shown() (*herdr.Snapshot, error) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	if !a.held {
-		return nil, a.whyNotHeld()
-	}
-	return a.state.snapshot(nil), nil
-}
 
 // editDoc reads the document, changes it and writes it at the version read; a write another remuda made in between
 // has the change made again on what it wrote. The mirror takes the written document at once, so the snapshot asked for
@@ -63,10 +45,7 @@ func (a *Adapter) editDoc(ctx context.Context, change func(*Document) error) err
 		if err != nil {
 			return a.refusal(err, "workspace_not_found")
 		}
-		a.mu.Lock()
-		a.state.doc = doc
-		a.tellLocked(herdr.Event{Kind: "layout.updated"})
-		a.mu.Unlock()
+		a.setDoc(doc)
 		return nil
 	}
 }
@@ -79,11 +58,8 @@ func (a *Adapter) runShell(ctx context.Context, space, tab, cwd string, env map[
 		return Terminal{}, a.refusal(err, "workspace_not_found")
 	}
 	a.mu.Lock()
-	if a.held && local(t.Address) && a.state.terminals[t.Address] == nil {
-		record := t
-		followShell(&record)
-		a.state.terminals[t.Address] = &record
-		a.tellLocked(herdr.Event{Kind: "pane.created", PaneID: t.Address})
+	if a.held && t.State == "live" && local(t.Address) && a.state.terminals[t.Address] == nil {
+		a.tellLocked(a.state.add(t))
 	}
 	a.mu.Unlock()
 	return t, nil
@@ -126,10 +102,8 @@ func adoptTab(ws *DocWorkspace, snap *herdr.Snapshot, tab string) *DocTab {
 		return &ws.Tabs[i]
 	}
 	label := ""
-	for _, t := range snap.Tabs {
-		if t.TabID == tab {
-			label = t.Label
-		}
+	if shown := snap.Tab(tab); shown != nil {
+		label = shown.Label
 	}
 	ws.Tabs = append(ws.Tabs, DocTab{ID: tab, Label: label})
 	return &ws.Tabs[len(ws.Tabs)-1]
@@ -145,12 +119,12 @@ func tabMissing(tab string) error {
 
 // WorkspaceCreate opens a workspace on a folder (the core's own when none): a shell in a tab of its own.
 func (a *Adapter) WorkspaceCreate(cwd, label string) (*herdr.WorkspaceCreateResult, error) {
-	if _, err := a.shown(); err != nil {
+	if _, err := a.SessionSnapshot(); err != nil {
 		return nil, err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), callWithin)
 	defer cancel()
-	space, tab := newID("ws-"), newID("tab-")
+	space, tab := "ws-"+state.NewID(), "tab-"+state.NewID()
 	t, err := a.runShell(ctx, space, tab, cwd, nil)
 	if err != nil {
 		return nil, err
@@ -178,7 +152,7 @@ func (a *Adapter) TabCreate(workspaceID, label string) (*herdr.TabCreateResult, 
 
 // TabCreateIn opens another tab of the workspace, its shell in the folder given (the workspace's when none) with env.
 func (a *Adapter) TabCreateIn(workspaceID, label, cwd string, env map[string]string) (*herdr.TabCreateResult, error) {
-	snap, err := a.shown()
+	snap, err := a.SessionSnapshot()
 	if err != nil {
 		return nil, err
 	}
@@ -191,7 +165,7 @@ func (a *Adapter) TabCreateIn(workspaceID, label, cwd string, env map[string]str
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), callWithin)
 	defer cancel()
-	tab := newID("tab-")
+	tab := "tab-" + state.NewID()
 	t, err := a.runShell(ctx, workspaceID, tab, cwd, env)
 	if err != nil {
 		return nil, err
@@ -225,7 +199,7 @@ func (a *Adapter) inDoc(space string) bool {
 
 // WorkspaceRename names a workspace.
 func (a *Adapter) WorkspaceRename(workspaceID, label string) error {
-	snap, err := a.shown()
+	snap, err := a.SessionSnapshot()
 	if err != nil {
 		return err
 	}
@@ -243,7 +217,7 @@ func (a *Adapter) WorkspaceRename(workspaceID, label string) error {
 
 // TabRename names a tab; an empty label leaves it unnamed.
 func (a *Adapter) TabRename(tabID, label string) error {
-	snap, err := a.shown()
+	snap, err := a.SessionSnapshot()
 	if err != nil {
 		return err
 	}
@@ -264,10 +238,8 @@ func (a *Adapter) TabRename(tabID, label string) error {
 }
 
 func spaceOfTab(snap *herdr.Snapshot, tab string) string {
-	for _, t := range snap.Tabs {
-		if t.TabID == tab {
-			return t.WorkspaceID
-		}
+	if shown := snap.Tab(tab); shown != nil {
+		return shown.WorkspaceID
 	}
 	return ""
 }
@@ -294,7 +266,7 @@ func panesWhere(snap *herdr.Snapshot, pick func(*herdr.PaneInfo) bool) []string 
 
 // WorkspaceClose ends every terminal of the workspace and takes it out of the document.
 func (a *Adapter) WorkspaceClose(workspaceID string) error {
-	snap, err := a.shown()
+	snap, err := a.SessionSnapshot()
 	if err != nil {
 		return err
 	}
@@ -315,7 +287,7 @@ func (a *Adapter) WorkspaceClose(workspaceID string) error {
 // TabClose ends every terminal of the tab and takes it out of the document; the workspace goes with its last tab, as
 // herdr's does.
 func (a *Adapter) TabClose(tabID string) error {
-	snap, err := a.shown()
+	snap, err := a.SessionSnapshot()
 	if err != nil {
 		return err
 	}

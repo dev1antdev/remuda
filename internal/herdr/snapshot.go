@@ -23,6 +23,16 @@ func (s *Snapshot) Workspace(workspaceID string) *WorkspaceInfo {
 	return nil
 }
 
+// Tab finds a tab by id, or nil.
+func (s *Snapshot) Tab(tabID string) *TabInfo {
+	for i := range s.Tabs {
+		if s.Tabs[i].TabID == tabID {
+			return &s.Tabs[i]
+		}
+	}
+	return nil
+}
+
 // WorkspaceLabel is the label of the workspace with that id, "" for none.
 func (s *Snapshot) WorkspaceLabel(workspaceID string) string {
 	for i := range s.Workspaces {

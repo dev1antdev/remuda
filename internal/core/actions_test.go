@@ -247,6 +247,7 @@ func TestAnAgentStartsInTheShellAndTakesPromptsAndKeys(t *testing.T) {
 }
 
 func TestAnAgentThatCannotRunFailsItsStart(t *testing.T) {
+	t.Setenv("PATH", "/usr/bin:/bin") // no amp on it
 	client := coretest.Server(t).Client(t)
 	adapter := adapterOf(t, client, core.AdapterHooks{})
 	eventually(t, adapter, func(*herdr.Snapshot) bool { return true })
@@ -256,11 +257,14 @@ func TestAnAgentThatCannotRunFailsItsStart(t *testing.T) {
 	}
 	var started error
 	for start := time.Now(); time.Since(start) < 10*time.Second; time.Sleep(200 * time.Millisecond) {
-		if started = adapter.AgentStart(made.RootPane.PaneID, "no-such-agent"); !herdr.IsCode(started, "agent_pane_busy") {
+		if started = adapter.AgentStart(made.RootPane.PaneID, "amp"); !herdr.IsCode(started, "agent_pane_busy") {
 			break
 		}
 	}
 	if started == nil || !strings.Contains(started.Error(), "did not start") {
 		t.Fatalf("an agent that is not there: %v", started)
+	}
+	if err := adapter.AgentStart(made.RootPane.PaneID, "no-such-agent"); !herdr.IsCode(err, "agent_kind_unknown") {
+		t.Fatalf("an agent remuda does not know: %v", err)
 	}
 }

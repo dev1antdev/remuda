@@ -14,7 +14,7 @@ func (a *Adapter) PaneSplit(paneID, direction, cwd string) (*herdr.PaneInfo, err
 	if direction != "right" && direction != "down" {
 		return nil, &herdr.Error{Code: "invalid_request", Message: fmt.Sprintf("a split is right or down, not %q", direction)}
 	}
-	snap, err := a.shown()
+	snap, err := a.SessionSnapshot()
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +86,7 @@ func withoutPane(tree *herdr.LayoutNode, pane string) *herdr.LayoutNode {
 // PaneClose ends the pane's terminal and takes it out of its tab's tree; the tab goes with its last pane and the
 // workspace with its last tab, as herdr's do.
 func (a *Adapter) PaneClose(paneID string) error {
-	snap, err := a.shown()
+	snap, err := a.SessionSnapshot()
 	if err != nil {
 		return err
 	}
