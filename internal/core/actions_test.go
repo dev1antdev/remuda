@@ -25,6 +25,7 @@ say idle
 while IFS= read -r line; do
   printf 'got: %s\n' "$line"
   if [ "$line" = ask ]; then say blocked; continue; fi
+  if [ "$line" = leaving ]; then say clear; continue; fi
   say working
   sleep 0.2
   say idle
@@ -234,6 +235,13 @@ func TestAnAgentStartsInTheShellAndTakesPromptsAndKeys(t *testing.T) {
 	eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Pane(pane).AgentStatus == herdr.StatusBlocked })
 	if err := adapter.AgentPrompt(pane, "an answer typed into its dialog"); !herdr.IsCode(err, "agent_blocked") {
 		t.Fatalf("a prompt to an agent asking something: %v", err)
+	}
+	if err := adapter.PaneSendKeys(pane, []string{"l", "e", "a", "v", "i", "n", "g", "enter"}); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Pane(pane).AgentStatus == herdr.StatusUnknown })
+	if err := adapter.AgentPrompt(pane, "echo typed into the shell"); err == nil {
+		t.Fatal("a prompt went to an agent that cleared its status, as one leaving does")
 	}
 	if err := adapter.PaneSendInput(pane, "two\nlines", nil); err == nil {
 		t.Fatal("a paste of several lines typed raw")

@@ -476,7 +476,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   and an Enter typed into one could approve it — the core's `blocked` →
   `agent_blocked`, `unavailable` → `agent_not_ready`; right before the send
   the core's own view of the terminal is read (`terminal.get`) and must
-  still show that agent, and a send to an idle agent names that status
+  still show that agent with a status — a cleared one, as an agent leaving
+  reports, gets nothing — and a send to an idle agent names that status
   (`if`, never for a working one, whose turn may end as it goes), so an
   agent that cleared its status leaving — Claude Code reports
   `state=clear` — has the prompt refused (`status_mismatch` →

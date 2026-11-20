@@ -113,8 +113,9 @@ func readyForPrompt(t *Terminal) bool {
 // AgentPrompt hands the agent in the pane a message: the core pastes it and presses Enter, and refuses while the agent
 // asks something (agent_blocked). A pane whose agent has not come up, or that has none, gets nothing: what is written
 // for an agent never reaches a shell. The core's own view of the terminal is read right before, so an agent that left
-// since the mirror's last news is not taken for there, and a send to an idle agent names that status (`if`): an agent
-// that cleared it on its way out (Claude Code reports state=clear) has the prompt refused (status_mismatch).
+// since the mirror's last news is not taken for there; an agent whose status is cleared (Claude Code reports
+// state=clear on its way out) gets nothing, and a send to an idle agent names that status (`if`), so one that clears
+// it as the prompt goes has it refused too (status_mismatch).
 func (a *Adapter) AgentPrompt(target, text string) error {
 	t, err := a.terminal(target)
 	if err != nil {
@@ -135,6 +136,9 @@ func (a *Adapter) AgentPrompt(target, text string) error {
 	}
 	if agentOf(&now) != agent {
 		return &herdr.Error{Code: "agent_not_found", Message: "the agent in " + target + " has left"}
+	}
+	if now.Status == nil {
+		return &herdr.Error{Code: "agent_not_ready", Message: "the agent in " + target + " cleared its status, as one leaving does: nothing was sent"}
 	}
 	params := map[string]any{"terminal": target, "text": text}
 	if statusOf(&now) == herdr.StatusIdle {
