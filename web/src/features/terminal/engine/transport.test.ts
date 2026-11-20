@@ -57,6 +57,26 @@ describe("the HTTP transport", () => {
   }, 10000);
 });
 
+describe("a viewer link's transport", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("never opens the HTTP stream a viewer may not, and says a proxy drops its WebSockets", async () => {
+    const { fetch, asked } = server([], []);
+    vi.stubGlobal("WebSocket", DeadSocket);
+    vi.stubGlobal("location", { protocol: "http:", host: "remuda" });
+    vi.stubGlobal("fetch", fetch);
+    const notes: string[] = [];
+    const transport = connect({ query: "machine=local&id=w1:p1", size: () => ({ cols: 80, rows: 24 }), onOpen: () => {}, onBytes: () => {}, note: (text) => notes.push(text), inputLost: () => {}, wsOnly: true });
+    try {
+      await vi.waitFor(() => expect(asked.filter((path) => path === "/ws/pane").length).toBeGreaterThanOrEqual(2), { timeout: 6000, interval: 20 });
+    } finally {
+      transport.close();
+    }
+    expect(notes).toContain("this network drops WebSockets, which a viewing link's live terminal needs");
+    expect(asked).not.toContain("/api/term/open");
+  }, 10000);
+});
+
 // A stream on a fake clock: opens and reads answer as told (a read not told never answers), each POST of input takes the
 // next answer, and every stream opened has its own id.
 function typing(answers: (() => Promise<Response>)[], { opens = [], reads = [] }: { opens?: (() => Promise<Response>)[]; reads?: (() => Promise<Response>)[] } = {}) {

@@ -158,7 +158,8 @@ func LocalAttachCommand(bin, socket string) func(string) *exec.Cmd {
 	}
 }
 
-func validSize(cols, rows int) bool {
+// ValidSize says a viewer's grid is one to give a terminal: a collapsed or hidden mount measures nonsense.
+func ValidSize(cols, rows int) bool {
 	return cols >= 20 && rows >= 5 && cols <= 500 && rows <= 300
 }
 
@@ -195,7 +196,7 @@ func (m *AttachManager) Subscribe(termID string, cols, rows int) (ch chan []byte
 			return nil, nil, err
 		}
 	}
-	if joined && validSize(cols, rows) {
+	if joined && ValidSize(cols, rows) {
 		go a.repaint(cols, rows)
 	}
 
@@ -326,7 +327,7 @@ func (m *AttachManager) takePlace() (func(), error) {
 
 func (m *AttachManager) start(termID string, cols, rows int, release func()) (*attach, error) {
 	cmd := m.NewCommand(termID)
-	if !validSize(cols, rows) {
+	if !ValidSize(cols, rows) {
 		cols, rows = 80, 24
 	}
 	f, err := pty.StartWithSize(cmd, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)})
@@ -452,7 +453,7 @@ func (m *AttachManager) Write(termID string, data []byte) error {
 
 // Resize changes the attach PTY size; herdr reflows the pane for the smallest attached client.
 func (m *AttachManager) Resize(termID string, cols, rows int) error {
-	if !validSize(cols, rows) {
+	if !ValidSize(cols, rows) {
 		return nil
 	}
 	a, err := m.get(termID)

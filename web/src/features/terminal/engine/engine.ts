@@ -64,6 +64,9 @@ export function createEngine(mount: HTMLElement, machineId: string, paneId: stri
   const search = installSearch(term, () => flavorNow, () => forgetSelection());
 
   let lastSize = "";
+  // On remuda-core a viewer that keeps the size, or only watches, is told the terminal's grid in its own bytes — xterm's
+  // CSI 8;rows;cols t, ahead of the paint drawn at it — and keeps that grid rather than the roster's.
+  let grid: { cols: number; rows: number } | null = null;
   let transport: Transport | null = null;
   const note = (text: string) => term.write(`\r\n\x1b[2m[remuda] ${text}\x1b[0m\r\n`);
   // sendResize sends the grid to the shared PTY only when it changed since the connect request carried it.
@@ -93,10 +96,28 @@ export function createEngine(mount: HTMLElement, machineId: string, paneId: stri
       fontNow = props().fontFamily;
       term.options.fontFamily = fontNow;
     }
-    if (applyGeometry(term, fit, mount, props())) sendResize();
+    if (applyGeometry(term, fit, mount, grid ? { ...props(), ...grid } : props())) sendResize();
     if (props().core && transport && keeps() !== keptAt) reattach();
   };
   apply();
+
+  const gridSet = term.parser.registerCsiHandler({ final: "t" }, (params) => {
+    if (params[0] !== 8 || !props().core || props().mode !== "keep") return false; // xterm's own: ignored
+    const rows = Number(params[1]);
+    const cols = Number(params[2]);
+    if (rows > 0 && cols > 0) {
+      grid = { cols, rows };
+      apply(); // now, while parsing, so the bytes after it are drawn at that grid
+    }
+    return true;
+  });
+  // On remuda-core the terminal takes the size of the viewer last active: a desk turned to claims it back.
+  const claimSize = () => {
+    if (!props().core || readOnly || props().mode === "keep") return;
+    lastSize = "";
+    sendResize();
+  };
+  term.textarea?.addEventListener("focus", claimSize);
 
   const modes = interceptModes(term, mount);
   const reporter = createReporter(term, modes, sendInput);
@@ -161,9 +182,11 @@ export function createEngine(mount: HTMLElement, machineId: string, paneId: stri
     onBytes: paint,
     note,
     inputLost: () => actions.notify(t("What you typed may not have gone through. It will not be sent again."), { error: true }),
+    wsOnly: readOnly,
   };
   const reattach = () => {
     keptAt = keeps();
+    grid = null;
     transport?.close();
     transport = connect(stream);
   };
@@ -177,6 +200,8 @@ export function createEngine(mount: HTMLElement, machineId: string, paneId: stri
     dispose: () => {
       props().onReady(null);
       onData.dispose();
+      gridSet.dispose();
+      term.textarea?.removeEventListener("focus", claimSize);
       selection.dispose();
       layer.dispose();
       modes.dispose();

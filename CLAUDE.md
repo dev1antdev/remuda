@@ -438,15 +438,22 @@ components and icons as rules for whoever changes it: @docs/design.md
   `viewers_test.go`): `core.NewTerminals(client)` is a core machine's
   `herdr.Terminals`; `Open` attaches one viewer of its own (`AttachParams`:
   the grid, `KeepSize` for a viewer in keep mode, `Observe` for a viewer
-  link, `ResizeNotifications` for either), so each gets the core's first
-  paint, any number share a terminal with no refusal and no repaint through
-  a resize, a phone keeping the size or a link watching never sizes the
-  desk's, and the core answers the terminal's queries itself (no
-  `queries.go`); a goroutine hands the stream's bytes to the viewer and
-  reads no further while the viewer has not taken them, so the core's
-  credit waits and it repaints a viewer gone 4 MB behind; the bytes close
-  with the program, the stream or the viewer; a viewer that watches is
-  refused its keys and sends no size; `Viewers` counts the open ones.
+  link, `ResizeNotifications` for either, the grid by herdr's `ValidSize`),
+  so each gets the core's first paint, any number share a terminal with no
+  refusal and no repaint through a resize, a phone keeping the size or a
+  link watching never sizes the desk's, and the core answers the
+  terminal's queries itself and strips them (no `queries.go`; xterm sees
+  none to answer, so what a page sends is a person's and goes as DATA);
+  a keep-size or watching viewer is handed each grid the core announces in
+  order with the bytes, as xterm's own `CSI 8;rows;cols t` ahead of the
+  paint drawn at it (the engine sizes its grid by it, see the size modes);
+  a goroutine hands the stream's bytes to the viewer and reads no further
+  while the viewer has not taken them, so the core's credit waits and it
+  repaints a viewer gone 4 MB behind; the bytes close with the program,
+  the stream or the viewer; the core ignores what a watcher types (the
+  page sends none, `handlePaneWS` drops it); `Viewers` counts the
+  person's open ones, never a link's, so a TV watching never silences a
+  push.
 - `internal/sshx/` — one OpenSSH `ControlMaster` per host (BatchMode: fail,
   never prompt; sshd's MaxSessions is 10 by default, so every session takes
   one of 9 places first (`Conn.enter`, `sessionCount`), waiting within its
@@ -977,10 +984,16 @@ components and icons as rules for whoever changes it: @docs/design.md
   would squeeze the desktop's view), **keep** attaches at the pane's own
   grid (`cols`/`rows` from the snapshot layouts, in the roster) and shrinks
   the font to fit the width, scrolling when it can't. Touch defaults to
-  keep. The connect request says keep (`&keep=1`): on a machine on
-  remuda-core a keep viewer is a `keep_size` attach, which types but never
-  sizes the terminal, so the engine attaches again when the mode changes
-  there (`core` on the engine's props); herdr reads nothing of it. Agent status lines (ccstatusline etc.) only fit in keep mode on a
+  keep. On a machine on remuda-core the terminal takes the size of the
+  viewer last active (attached, typed, resized or focused), so **fit** there
+  claims it back whenever the xterm gets the focus (a resize sent again);
+  the connect request says keep (`&keep=1`), a `keep_size` attach that
+  types but never sizes the terminal, so the engine attaches again when the
+  mode changes there (`core` on the engine's props), and a keep viewer's
+  grid is the one the core hands it in the stream (`CSI 8;rows;cols t`,
+  a parser hook in `engine.ts`) rather than the roster's; a viewer link is
+  keep and `wsOnly` (no HTTP fallback, a line saying the network drops
+  WebSockets). herdr reads none of it. Agent status lines (ccstatusline etc.) only fit in keep mode on a
   phone. A grid wider than the screen (keep, or fit with a minimum width),
   or a keep-mode one taller than it, scrolls under the wheel and under a
   finger alike (`gridScrolls` / `panOf` in `engine/pointer.ts`, tested): a
@@ -6822,9 +6835,12 @@ components and icons as rules for whoever changes it: @docs/design.md
   history in the Git lens (`/api/git/log`, `/api/git/state`,
   `/api/git/commit`, `/api/git/diff`, a workspace's own folder only:
   `gitTarget`), and the
-  upgrade of `/ws/events` — or of the page itself and its files (anything outside
-  `/api/`, `/ws/` and the code-server proxy `/code/`); never `/ws/pane`,
-  a submit, a key, the tasks or any change: 403 "this link is for
+  upgrades of `/ws/events` and of `/ws/pane` (a live terminal only watched,
+  on a machine on remuda-core alone: herdr's answers 403, and
+  `viewerOwnGuard` keeps it to a pane of the viewer's roster by its `id`) —
+  or of the page itself and its files (anything outside
+  `/api/`, `/ws/` and the code-server proxy `/code/`); never the HTTP
+  terminal, a submit, a key, the tasks or any change: 403 "this link is for
   viewing only". A page opened with
   `?viewer=rv_…` (`Guard.viewerLink`) mints a **viewer device**
   (`Device.Viewer`, `Device.Key` the link's id; `Kind()` "viewer · Chrome

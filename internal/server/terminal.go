@@ -45,12 +45,8 @@ func (s *Server) handlePaneWS(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 404, err)
 		return
 	}
-	// a viewer link only watches, which remuda-core alone lets a viewer do, and only a pane its roster shows
+	// a viewer link only watches, which remuda-core alone lets a viewer do (viewerOwnGuard keeps it to its roster's panes)
 	watching := auth.IsViewer(r.Context())
-	if watching && !s.viewerSeesPane(mc.ID(), pane.PaneID) {
-		httpErr(w, http.StatusNotFound, errors.New("not found"))
-		return
-	}
 	if watching && !mc.OnCore() {
 		httpErr(w, http.StatusForbidden, errors.New("this link is for viewing only"))
 		return

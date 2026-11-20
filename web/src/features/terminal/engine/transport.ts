@@ -16,6 +16,7 @@ export type Stream = {
   onBytes: (buf: Uint8Array) => void;
   note: (text: string) => void; // a line on the screen from remuda itself, while the stream is down
   inputLost: () => void; // typing did not surely go through, and will not be sent again
+  wsOnly?: boolean; // a viewer link: the HTTP transport is not its to open, so a proxy that drops WebSockets is said instead
 };
 
 // refusal is why the server would not open a stream, in its own words — another client holds the terminal — else the status
@@ -97,7 +98,9 @@ export function connect(stream: Stream): Transport {
       }
       void wsWouldAccept().then((would) => {
         if (closed) return;
-        if (would && ++wsFailures >= 2) {
+        if (would && stream.wsOnly) {
+          stream.note("this network drops WebSockets, which a viewing link's live terminal needs");
+        } else if (would && ++wsFailures >= 2) {
           preferHTTP = true;
           stream.note("WebSocket unavailable here — using the HTTP transport");
           current = connectHTTP();
@@ -250,7 +253,7 @@ export function connect(stream: Stream): Transport {
     };
   };
 
-  current = preferHTTP ? connectHTTP() : connectWS();
+  current = preferHTTP && !stream.wsOnly ? connectHTTP() : connectWS();
   return {
     input: (data) => current?.input(data),
     resize: (cols, rows) => current?.resize(cols, rows),

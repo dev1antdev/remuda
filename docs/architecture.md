@@ -71,7 +71,7 @@ The contexts are the bounded contexts of the product, in its own words:
    that asks a machine's herdr takes `herdr.API` and `herdr.Terminals`
    from `Machine.Ready()`, never `*herdr.Client` or
    `*herdr.AttachManager`: remuda-core's adapter (`core.Adapter`) stands
-   behind `herdr.API`, its terminals are to stand behind `herdr.Terminals`.
+   behind `herdr.API`, its terminals (`core.Terminals`) behind `herdr.Terminals`.
 3. **Packages hear each other through the bus.** `watch` publishes
    `events.Snapshot`, `events.PaneStatus` and, off herdr's event stream,
    `events.OutputMatched`; `jobs` publishes

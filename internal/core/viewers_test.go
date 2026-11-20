@@ -48,6 +48,7 @@ func TestTwoViewersShareATerminalWithoutTakingItsSize(t *testing.T) {
 	if n := terminals.Viewers(cat.Address); n != 2 {
 		t.Fatalf("viewers = %d, want 2", n)
 	}
+	seen(t, phone, "\x1b[8;30;100t") // a viewer that keeps the size is told the terminal's grid before its paint
 	if err := phone.Write([]byte("from the phone\r")); err != nil {
 		t.Fatal(err)
 	}
@@ -70,6 +71,7 @@ func TestTwoViewersShareATerminalWithoutTakingItsSize(t *testing.T) {
 			t.Fatal("the desk's resize never reached the terminal")
 		}
 	}
+	seen(t, phone, "\x1b[8;28;90t")
 	phone.Close()
 	if n := terminals.Viewers(cat.Address); n != 1 {
 		t.Fatalf("viewers after the phone left = %d, want 1", n)
@@ -89,18 +91,22 @@ func TestAViewerThatOnlyWatchesCannotType(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer link.Close()
-	if err := link.Write([]byte("typed by a link\r")); err == nil {
-		t.Fatal("a viewer that only watches typed")
-	}
+	_ = link.Write([]byte("typed by a link\r"))
 	desk, err := terminals.Open(cat.Address, herdr.View{Cols: 80, Rows: 24})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer desk.Close()
+	if n := terminals.Viewers(cat.Address); n != 1 {
+		t.Fatalf("viewers = %d: a link that only watches is not the person looking", n)
+	}
 	if err := desk.Write([]byte("typed at the desk\r")); err != nil {
 		t.Fatal(err)
 	}
 	seen(t, link, "typed at the desk")
+	if got, _ := client.Read(ctx, cat.Address, 0, ""); strings.Contains(got.Text, "typed by a link") {
+		t.Fatalf("a viewer that only watches typed: %q", got.Text)
+	}
 }
 
 func TestAViewerEndsWithItsProgram(t *testing.T) {
