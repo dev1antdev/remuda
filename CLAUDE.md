@@ -1050,14 +1050,21 @@ components and icons as rules for whoever changes it: @docs/design.md
   second the core's or the one before (`sameCreation`: ps counts the boot in
   whole seconds), `linuxBoot.mayBe`, within `coreBootSlack` 10 ms of the
   core's own reading), so a later process given the pid in the same second is
-  another; a reading wider than `maxBootSpan` 20 ms, or none (a `date`
+  another — unless the machine's clock stepped between the core's look and
+  the lookup: remuda-core's `started_ms` moves with a step, as ps's start does,
+  so a process born as much later as the clock went back carries the very
+  value the one before had, which neither the core nor this lookup can tell
+  apart (task #359: the core's start since boot, which no step moves); a
+  reading wider than `maxBootSpan` 20 ms, or none (a `date`
   telling no milliseconds), leaves the processes the second cannot settle out
   of the answer, as a clock not read does (below); a FILETIME's millisecond
   on Windows; on macOS, where ps tells no millisecond, `ps -o lstart`'s second
   alone — a later process given the pid within that
   very second passes there, until the core's next look (half a second) tells
-  the foreground's new creation; no clock read for any of it, so a step of the
-  machine's clock neither lets a later process in nor hides the one seen),
+  the foreground's new creation; no clock of remuda's read for any of it, so a
+  step of the machine's clock lets a later process in only as said above, and
+  hides the one seen only until the core's next look tells the creation as
+  the step moved it, a new `Started` read at once),
   and a Claude Code file then counts only with a
   `startedAt` no earlier than that creation (a second alone does not tell two
   processes given the pid within it apart; a step of the clock on Linux makes

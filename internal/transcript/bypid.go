@@ -348,7 +348,9 @@ func bootOf(system string) linuxBoot {
 
 // mayBe says whether a Linux process started that many ticks after the boot fits the one remuda-core saw born at told
 // (unix ms), reckoned as the core reckons it: the boot held to ps's whole second, plus the ticks — and whether the
-// reading of the boot and the start was good enough to tell. Off Linux it has nothing to say: anything fits.
+// reading of the boot and the start was good enough to tell. Off Linux it has nothing to say: anything fits. Told is
+// wall-clock time, moved by a step of the clock as the core moves it: a process born as much later as the clock went
+// back between the core's look and this one fits too.
 func (b linuxBoot) mayBe(ticks string, told int64) (fits, sure bool) {
 	if !b.linux {
 		return true, true
