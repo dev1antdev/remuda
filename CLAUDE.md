@@ -427,7 +427,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   the foreground's pid, its folder, and the terminal with `held`, the count
   of the moment its foreground last changed hands — back to the shell too —
   or the mirror took it in (a fill, a terminal made or given a new shell), one
-  counter for every mirror, so a later process always counts higher; nil,
+  counter for every mirror, so a later process always counts higher, and
+  `heldAt`, when that was here, which the process holding the pid when it is
+  read must have begun by; nil,
   none), which a machine gives as its `processSessions`
   (`internal/machines/sessions.go`, tested on paper and on a throwaway core
   with a stand-in Claude Code keeping its session file in a temp HOME):
@@ -988,7 +990,11 @@ components and icons as rules for whoever changes it: @docs/design.md
   run-together text gives candidate folders, a relative one taken from the
   agent's folder, then the default one; a process gone, or one whose start
   neither `ps` nor, on Git Bash, PowerShell tells, has no session, nothing
-  telling it from another given its pid; every
+  telling it from another given its pid, nor does one that began after the
+  agent was seen running (`Running.Seen`: a later process took the pid
+  before it was read), the machine's clock read off the script's first line
+  (`date +%s`, `clockOf`), the span of the call and a second of `ps`'s the
+  slack; every
   candidate's file is sent and Go weighs them; only
   regular files are read, a FIFO never holds the script; a process that
   stands in another folder than the pane was seen in now (`/proc/<pid>/cwd`,

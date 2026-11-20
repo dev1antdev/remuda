@@ -12,11 +12,13 @@ import (
 	"github.com/dev1antdev/remuda/internal/text"
 )
 
-// Running is an agent process whose session is looked up: its pid, its kind (claude, codex) and its folder.
+// Running is an agent process whose session is looked up: its pid, its kind (claude, codex) and its folder, and when
+// it was seen running here (zero: not known), which the process holding the pid now must have begun by.
 type Running struct {
 	PID   int
 	Agent string
 	CWD   string
+	Seen  time.Time
 }
 
 // SessionsOf answers, pid by pid, the session each running Claude Code or Codex is in, read off its process.
@@ -25,14 +27,44 @@ func (r *Reader) SessionsOf(procs []Running) (map[int]string, error) {
 	if lookup == "" {
 		return map[int]string{}, nil
 	}
+	asked := time.Now()
 	out, err := shell.Text(r.host, lookup, 15*time.Second)
 	if err != nil {
 		return nil, err
 	}
-	return parseSessionsByPID(out, procs, rpath.For(r.host.Home())), nil
+	return parseSessionsByPID(out, procs, rpath.For(r.host.Home()), clockOf(out, asked, time.Now())), nil
 }
 
-// sessionsByPIDScript prints a record per process, split by US:
+// machineClock is how far the machine's clock runs ahead of this one's, and how much either way that reading may be
+// off; a zero value is no reading, and nothing is checked against it.
+type machineClock struct {
+	ahead, within time.Duration
+	read          bool
+}
+
+// clockOf reads the machine's time the script told first, between asked and answered here: to the second, wherever in
+// that span it was taken.
+func clockOf(out string, asked, answered time.Time) machineClock {
+	first, _, _ := strings.Cut(out, script.RS)
+	secs, err := strconv.ParseInt(strings.TrimSpace(strings.TrimPrefix(first, "now"+script.US)), 10, 64)
+	if err != nil || !strings.HasPrefix(first, "now"+script.US) {
+		return machineClock{}
+	}
+	half := answered.Sub(asked) / 2
+	return machineClock{ahead: time.Unix(secs, 0).Sub(asked.Add(half)), within: half + time.Second, read: true}
+}
+
+// begunBy says whether a process whose start the script told can be the one seen running here at seen: it began by
+// then, give or take the clocks' reading and a second of ps's; one whose start reads as no time cannot be told.
+func (c machineClock) begunBy(start string, seen time.Time) bool {
+	if !c.read || seen.IsZero() {
+		return true
+	}
+	began, known := startedMS(start)
+	return known && time.UnixMilli(began).Before(seen.Add(c.ahead+c.within+time.Second))
+}
+
+// sessionsByPIDScript prints the machine's time ("now", US, unix seconds), then a record per process, split by US:
 //   - its pid and agent;
 //   - its start as Claude Code records it: `ps -o lstart` in UTC, "ft:<FILETIME>" from PowerShell's Get-Process for
 //     a native Windows process ps does not see (asked on Git Bash alone), "-" for one gone or whose start nothing
@@ -57,6 +89,7 @@ func sessionsByPIDScript(procs []Running) string {
 		return ""
 	}
 	return script.PATH + `
+printf 'now\037%s\036\n' "$(date +%s)"
 case "$(uname -s 2>/dev/null)" in MINGW* | MSYS* | CYGWIN*) windows=1 ;; *) windows= ;; esac
 nl='
 '
@@ -137,10 +170,10 @@ type claudeSessionFile struct {
 }
 
 // parseSessionsByPID reads sessionsByPIDScript's answer.
-func parseSessionsByPID(out string, procs []Running, style rpath.Style) map[int]string {
-	cwds := map[int]string{}
+func parseSessionsByPID(out string, procs []Running, style rpath.Style, clock machineClock) map[int]string {
+	cwds, seen := map[int]string{}, map[int]time.Time{}
 	for _, p := range procs {
-		cwds[p.PID] = p.CWD
+		cwds[p.PID], seen[p.PID] = p.CWD, p.Seen
 	}
 	found := map[int]string{}
 	for _, record := range script.Sections(out) {
@@ -164,6 +197,9 @@ func parseSessionsByPID(out string, procs []Running, style rpath.Style) map[int]
 			continue // the pid went to a process elsewhere since the pane was seen
 		case !strings.HasPrefix(start, "ft:") && after != start:
 			continue // another process took the pid while it was read, or it ended
+		}
+		if !clock.begunBy(start, seen[pid]) {
+			continue // a process that began after the one seen: the pid changed hands before it was read
 		}
 		var id string
 		switch fields[1] {

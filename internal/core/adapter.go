@@ -55,12 +55,14 @@ type AdapterHooks struct {
 type SessionLookup func(AgentProcess) *herdr.AgentSession
 
 // AgentProcess is an agent's process as the mirror sees it: its kind, pid and folder, and the terminal it holds with
-// the count of the moment it was seen take it (Terminal.held), which tell it from a later process given the same pid.
+// the count of the moment it was seen take it (Terminal.held) and when that was, here, which tell it from a later
+// process given the same pid: one seen by then had begun by then.
 type AgentProcess struct {
 	Agent, Cwd string
 	PID        int
 	Terminal   string
 	Held       uint64
+	Seen       time.Time
 }
 
 // handovers counts every moment a terminal's foreground changed hands or a terminal was taken in, across every mirror
@@ -322,7 +324,7 @@ func (a *Adapter) fill(terminals []Terminal, doc Document, version string) (unke
 			continue
 		}
 		followShell(t)
-		t.held = handovers.Add(1)
+		t.held, t.heldAt = handovers.Add(1), time.Now()
 		was := before[t.Address]
 		t.restored = agentOf(t) == "" && (t.Reason != "" || was != nil && (was.restored || was.Pid != t.Pid))
 		a.state.terminals[t.Address] = t
@@ -478,7 +480,7 @@ func (m *mirror) apply(ev Event) (herdr.Event, bool) {
 			return told, false
 		}
 		if fg == nil || t.Foreground == nil || fg.Pid != t.Foreground.Pid {
-			t.held = handovers.Add(1)
+			t.held, t.heldAt = handovers.Add(1), time.Now()
 		}
 		t.Foreground = fg
 		followShell(t)
@@ -489,7 +491,7 @@ func (m *mirror) apply(ev Event) (herdr.Event, bool) {
 			Signal   **int   `json:"signal"`
 		}{&t.Reason, &t.ExitCode, &t.Signal})
 		t.Pid, t.Foreground, t.restored = 0, nil, true
-		t.held = handovers.Add(1)
+		t.held, t.heldAt = handovers.Add(1), time.Now()
 		told.Kind = "pane.exited"
 	case "keep":
 		json.Unmarshal(ev.Data, &struct {
@@ -526,7 +528,7 @@ func (m *mirror) went(address string) {
 // add puts a live terminal in the mirror, its folder its shell's, and answers it as herdr's news of a pane made.
 func (m *mirror) add(record Terminal) herdr.Event {
 	followShell(&record)
-	record.held = handovers.Add(1)
+	record.held, record.heldAt = handovers.Add(1), time.Now()
 	m.terminals[record.Address] = &record
 	return herdr.Event{Kind: "pane.created", PaneID: record.Address}
 }

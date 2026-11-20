@@ -226,7 +226,7 @@ func TestEachProcessSeenTakingATerminalIsAnotherForItsSession(t *testing.T) {
 	later := func(what string) {
 		t.Helper()
 		a.state.snapshot(lookup)
-		if n := len(asked); n < 2 || asked[n-1].PID != 300 || asked[n-1].Terminal != "t1" || asked[n-1].Held <= asked[n-2].Held {
+		if n := len(asked); n < 2 || asked[n-1].PID != 300 || asked[n-1].Terminal != "t1" || asked[n-1].Held <= asked[n-2].Held || asked[n-1].Seen.IsZero() {
 			t.Fatalf("%s: asked %+v", what, asked)
 		}
 	}

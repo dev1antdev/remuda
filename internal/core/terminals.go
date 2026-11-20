@@ -41,7 +41,8 @@ type Terminal struct {
 	restored bool
 	// held counts the moment its foreground last changed hands, or the mirror took the record in (a fill, the news of
 	// a terminal made or given a new shell): one process later than another in the terminal always counts higher.
-	held uint64
+	held   uint64
+	heldAt time.Time
 }
 
 // Status is a program's own word: idle, working, done, blocked or error, with what it said beside it.

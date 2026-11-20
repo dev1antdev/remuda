@@ -384,6 +384,61 @@ func TestSessionsOfAsksTheMachineOnceForEveryAgent(t *testing.T) {
 	}
 }
 
+// The process holding a pid when it is read must have begun by the time the agent was seen running: a later one took
+// the pid after it. The machine's clock is read off the script, so a machine whose clock runs elsewhere is no matter.
+func TestAProcessBegunAfterTheAgentWasSeenHasNoSession(t *testing.T) {
+	const start = "Thu Nov 19 00:36:10 2026"
+	began := time.Date(2026, 11, 19, 0, 36, 10, 0, time.UTC)
+	record := "7" + script.US + "claude" + script.US + start + script.US + "/a" + script.US +
+		`{"pid":7,"sessionId":"id-1","cwd":"/a","procStart":"` + start + `"}` + script.US + start + script.RS + "\n"
+	for _, c := range []struct {
+		name  string
+		ahead time.Duration // the machine's clock against this one's
+		seen  time.Time
+		want  string
+	}{
+		{"seen running after it began", 0, began.Add(10 * time.Minute), "id-1"},
+		{"seen running the second it began", 0, began, "id-1"},
+		{"begun an hour after the agent was seen", 0, began.Add(-time.Hour), ""},
+		{"begun a minute after", 0, began.Add(-time.Minute), ""},
+		{"a machine an hour ahead, seen after it began", time.Hour, began.Add(10*time.Minute - time.Hour), "id-1"},
+		{"a machine an hour ahead, begun after the agent was seen", time.Hour, began.Add(-time.Minute - time.Hour), ""},
+		{"no sighting known", 0, time.Time{}, "id-1"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			asked := began.Add(20*time.Minute - c.ahead)
+			machineNow := asked.Add(c.ahead + 200*time.Millisecond).Unix()
+			out := "now" + script.US + strconv.FormatInt(machineNow, 10) + script.RS + "\n" + record
+			clock := clockOf(out, asked, asked.Add(400*time.Millisecond))
+			got := parseSessionsByPID(out, []Running{{PID: 7, Agent: "claude", CWD: "/a", Seen: c.seen}}, rpath.Style{}, clock)
+			if got[7] != c.want {
+				t.Fatalf("got %v, want %q", got, c.want)
+			}
+		})
+	}
+	if clockOf("7"+script.US+"claude", time.Now(), time.Now()).read {
+		t.Fatal("an answer with no time of the machine read as one")
+	}
+}
+
+// End to end on a real process: seen running now, it is found; seen an hour before it began, the process holding the
+// pid is a later one.
+func TestTheProcessHoldingAPidIsTheOneSeen(t *testing.T) {
+	home := realDir(t)
+	t.Setenv("HOME", home)
+	pid := holder(t, home, nil, nil, false, "")
+	writeSessionFile(t, filepath.Join(home, ".claude", "sessions"), pid, "4c9d6f0e-1111-4222-8333-944455556666", home, procStart(t, pid))
+	reader := NewReader(remoteHere(home))
+	got, err := reader.SessionsOf([]Running{{PID: pid, Agent: "claude", CWD: home, Seen: time.Now()}})
+	if err != nil || got[pid] != "4c9d6f0e-1111-4222-8333-944455556666" {
+		t.Fatalf("seen running now: got %v, %v", got, err)
+	}
+	got, err = reader.SessionsOf([]Running{{PID: pid, Agent: "claude", CWD: home, Seen: time.Now().Add(-time.Hour)}})
+	if err != nil || len(got) != 0 {
+		t.Fatalf("seen an hour before it began: got %v, %v", got, err)
+	}
+}
+
 func TestParseSessionsByPID(t *testing.T) {
 	read := func(pid int, agent, start, folder, payload, after string) string {
 		return strconv.Itoa(pid) + script.US + agent + script.US + start + script.US + folder + script.US + payload + script.US + after + script.RS + "\n"
@@ -407,45 +462,45 @@ func TestParseSessionsByPID(t *testing.T) {
 		style rpath.Style
 		want  string
 	}{
-		{"start matches", record(7, "claude", "S", claude(7, "id-1", "/a", "S")), []Running{{7, "claude", "/a"}}, rpath.Style{}, "id-1"},
-		{"start matches, the file of another folder", record(7, "claude", "S", claude(7, "id-1", "/a", "S")), []Running{{7, "claude", "/b"}}, rpath.Style{}, "id-1"},
-		{"the process stands in the pane's folder", standing(7, "claude", "S", "/b", claude(7, "id-1", "/a", "S")), []Running{{7, "claude", "/b"}}, rpath.Style{}, "id-1"},
-		{"the process stands elsewhere: the pid went to another", standing(7, "claude", "S", "/c", claude(7, "id-1", "/c", "S")), []Running{{7, "claude", "/b"}}, rpath.Style{}, ""},
-		{"a Windows process in its folder, spelt as Git Bash does", standing(7, "claude", "S", "/c/Work/Api", claude(7, "id-1", `C:\Work\Api`, "S")), []Running{{7, "claude", `C:\Work\Api`}}, windows, "id-1"},
-		{"start differs", record(7, "claude", "S", claude(7, "id-1", "/a", "T")), []Running{{7, "claude", "/a"}}, rpath.Style{}, ""},
-		{"another pid's file", record(7, "claude", "S", claude(8, "id-1", "/a", "S")), []Running{{7, "claude", "/a"}}, rpath.Style{}, ""},
-		{"no start here: nothing tells it from another process", record(7, "claude", "", claude(7, "id-1", `C:\Work\Api`, "S")), []Running{{7, "claude", `c:/work/api`}}, windows, ""},
-		{"the first start unknown, the second told", read(7, "claude", "-", "/a", claude(7, "id-1", "/a", "S"), "S"), []Running{{7, "claude", "/a"}}, rpath.Style{}, ""},
-		{"no start here, another folder", record(7, "claude", "", claude(7, "id-1", `C:\Work\Api`, "S")), []Running{{7, "claude", `C:\Work\Web`}}, windows, ""},
-		{"no session file", record(7, "claude", "S", ""), []Running{{7, "claude", "/a"}}, rpath.Style{}, ""},
-		{"a native process, started since", record(7, "claude", "ft:116444736050000000", `{"pid":7,"sessionId":"id-1","cwd":"C:\\a","startedAt":5200}`), []Running{{7, "claude", `C:\a`}}, windows, "id-1"},
-		{"a native process, a file from before it", record(7, "claude", "ft:116444736050000000", `{"pid":7,"sessionId":"id-1","cwd":"C:\\a","startedAt":1000}`), []Running{{7, "claude", `C:\a`}}, windows, ""},
-		{"a native process, a file half a second before it", record(7, "claude", "ft:116444736100000000", `{"pid":7,"sessionId":"id-1","cwd":"C:\\a","startedAt":9500}`), []Running{{7, "claude", `C:\a`}}, windows, ""},
-		{"a native process, its creation recorded", record(7, "claude", "ft:116444736050000000", `{"pid":7,"sessionId":"id-1","cwd":"C:\\a","startedAt":1000,"procStartFt":"116444736050000016"}`), []Running{{7, "claude", `C:\a`}}, windows, "id-1"},
-		{"a native process, its creation recorded by an agent of another folder", record(7, "claude", "ft:116444736050000000", `{"pid":7,"sessionId":"id-1","cwd":"C:\\b","startedAt":1000,"procStartFt":"116444736050000016"}`), []Running{{7, "claude", `C:\a`}}, windows, ""},
-		{"a native process, another's creation though begun since", record(7, "claude", "ft:116444736050000000", `{"pid":7,"sessionId":"id-1","cwd":"C:\\a","startedAt":9000,"procStartFt":"116444736040000000"}`), []Running{{7, "claude", `C:\a`}}, windows, ""},
-		{"a native process, a creation in another unit: when it began decides", record(7, "claude", "ft:116444736050000000", `{"pid":7,"sessionId":"id-1","cwd":"C:\\a","startedAt":5200,"procStartFt":"1795048570000000000"}`), []Running{{7, "claude", `C:\a`}}, windows, "id-1"},
-		{"no procStart, begun before the process", record(7, "claude", "Thu Nov 19 00:36:10 2026", `{"pid":7,"sessionId":"id-1","cwd":"/a","startedAt":1795048569000}`), []Running{{7, "claude", "/a"}}, rpath.Style{}, ""},
-		{"no procStart, begun since", record(7, "claude", "Thu Nov 19 00:36:10 2026", `{"pid":7,"sessionId":"id-1","cwd":"/a","startedAt":1795048570500}`), []Running{{7, "claude", "/a"}}, rpath.Style{}, "id-1"},
-		{"a process gone", record(7, "claude", "-", claude(7, "id-1", "/a", "")), []Running{{7, "claude", "/a"}}, rpath.Style{}, ""},
-		{"a verified file over a folder-only one before it", record(7, "claude", "S", claude(7, "stale", "/a", "")+script.GS+claude(7, "live", "/a", "S")+script.GS), []Running{{7, "claude", "/a"}}, rpath.Style{}, "live"},
-		{"the session_meta's id over the file name", record(7, "codex", "S", "7"+script.GS+"/x/rollout-2026-11-20T03-10-00-"+rolloutID+"_01a1f6a0-1111-7222-8333-944455556666.jsonl"+script.GS+sessionMeta(rolloutID, false)+rolloutEnd), []Running{{7, "codex", "/a"}}, rpath.Style{}, rolloutID},
-		{"the file name when the session_meta names no id", record(7, "codex", "S", "7"+script.GS+"/x/rollout-2026-11-20T02-28-48-"+rolloutID+".jsonl"+script.GS+`{"type":"session_meta","payload":{"source":"cli"}}`+rolloutEnd), []Running{{7, "codex", "/a"}}, rpath.Style{}, rolloutID},
-		{"a thread resumed in another folder than it began in", standing(7, "codex", "S", "/a", "7"+script.GS+"/x/rollout-2026-11-20T02-28-48-"+rolloutID+".jsonl"+script.GS+`{"type":"session_meta","payload":{"id":"`+rolloutID+`","cwd":"/b","thread_source":"user"}}`+rolloutEnd), []Running{{7, "codex", "/a"}}, rpath.Style{}, rolloutID},
-		{"a thread held by a process standing elsewhere", standing(7, "codex", "S", "/b", "7"+script.GS+"/x/rollout-2026-11-20T02-28-48-"+rolloutID+".jsonl"+script.GS+sessionMeta(rolloutID, false)+rolloutEnd), []Running{{7, "codex", "/a"}}, rpath.Style{}, ""},
-		{"a subagent's thread alone", record(7, "codex", "S", "7"+script.GS+"/x/rollout-2026-11-20T02-28-48-"+rolloutID+".jsonl"+script.GS+sessionMeta(rolloutID, true)+rolloutEnd), []Running{{7, "codex", "/a"}}, rpath.Style{}, ""},
-		{"a rollout whose first line is no session_meta", record(7, "codex", "S", "7"+script.GS+"/x/rollout-2026-11-20T02-28-48-"+rolloutID+".jsonl"+script.GS+`{"type":"response_item","payload":{}}`+rolloutEnd), []Running{{7, "codex", "/a"}}, rpath.Style{}, ""},
-		{"a rollout still empty", record(7, "codex", "S", "7"+script.GS+"/x/rollout-2026-11-20T02-28-48-"+rolloutID+".jsonl"+script.GS+rolloutEnd), []Running{{7, "codex", "/a"}}, rpath.Style{}, ""},
-		{"another process took the pid while it was read", read(7, "codex", "S", "/a", "7"+script.GS+"/x/rollout-2026-11-20T02-28-48-"+rolloutID+".jsonl"+script.GS+sessionMeta(rolloutID, false)+rolloutEnd, "T"), []Running{{7, "codex", "/a"}}, rpath.Style{}, ""},
-		{"the process ended while it was read", read(7, "claude", "S", "/a", claude(7, "id-1", "/a", "S"), ""), []Running{{7, "claude", "/a"}}, rpath.Style{}, ""},
-		{"a rollout under a folder with a line break", standing(7, "codex", "S", "/a", "7"+script.GS+"/x\ny/rollout-2026-11-20T02-28-48-"+rolloutID+".jsonl"+script.GS+`{"type":"session_meta","payload":{"thread_source":"user"}}`+rolloutEnd), []Running{{7, "codex", "/a"}}, rpath.Style{}, rolloutID},
-		{"an id that is not one", record(7, "claude", "S", claude(7, "--resume x", "/a", "S")), []Running{{7, "claude", "/a"}}, rpath.Style{}, ""},
-		{"no rollout open", record(7, "codex", "S", ""), []Running{{7, "codex", "/a"}}, rpath.Style{}, ""},
-		{"a pid not asked about", record(9, "codex", "S", "/x/rollout-2026-11-20T02-28-48-"+rolloutID+".jsonl"), []Running{{7, "codex", "/a"}}, rpath.Style{}, ""},
+		{"start matches", record(7, "claude", "S", claude(7, "id-1", "/a", "S")), []Running{{PID: 7, Agent: "claude", CWD: "/a"}}, rpath.Style{}, "id-1"},
+		{"start matches, the file of another folder", record(7, "claude", "S", claude(7, "id-1", "/a", "S")), []Running{{PID: 7, Agent: "claude", CWD: "/b"}}, rpath.Style{}, "id-1"},
+		{"the process stands in the pane's folder", standing(7, "claude", "S", "/b", claude(7, "id-1", "/a", "S")), []Running{{PID: 7, Agent: "claude", CWD: "/b"}}, rpath.Style{}, "id-1"},
+		{"the process stands elsewhere: the pid went to another", standing(7, "claude", "S", "/c", claude(7, "id-1", "/c", "S")), []Running{{PID: 7, Agent: "claude", CWD: "/b"}}, rpath.Style{}, ""},
+		{"a Windows process in its folder, spelt as Git Bash does", standing(7, "claude", "S", "/c/Work/Api", claude(7, "id-1", `C:\Work\Api`, "S")), []Running{{PID: 7, Agent: "claude", CWD: `C:\Work\Api`}}, windows, "id-1"},
+		{"start differs", record(7, "claude", "S", claude(7, "id-1", "/a", "T")), []Running{{PID: 7, Agent: "claude", CWD: "/a"}}, rpath.Style{}, ""},
+		{"another pid's file", record(7, "claude", "S", claude(8, "id-1", "/a", "S")), []Running{{PID: 7, Agent: "claude", CWD: "/a"}}, rpath.Style{}, ""},
+		{"no start here: nothing tells it from another process", record(7, "claude", "", claude(7, "id-1", `C:\Work\Api`, "S")), []Running{{PID: 7, Agent: "claude", CWD: `c:/work/api`}}, windows, ""},
+		{"the first start unknown, the second told", read(7, "claude", "-", "/a", claude(7, "id-1", "/a", "S"), "S"), []Running{{PID: 7, Agent: "claude", CWD: "/a"}}, rpath.Style{}, ""},
+		{"no start here, another folder", record(7, "claude", "", claude(7, "id-1", `C:\Work\Api`, "S")), []Running{{PID: 7, Agent: "claude", CWD: `C:\Work\Web`}}, windows, ""},
+		{"no session file", record(7, "claude", "S", ""), []Running{{PID: 7, Agent: "claude", CWD: "/a"}}, rpath.Style{}, ""},
+		{"a native process, started since", record(7, "claude", "ft:116444736050000000", `{"pid":7,"sessionId":"id-1","cwd":"C:\\a","startedAt":5200}`), []Running{{PID: 7, Agent: "claude", CWD: `C:\a`}}, windows, "id-1"},
+		{"a native process, a file from before it", record(7, "claude", "ft:116444736050000000", `{"pid":7,"sessionId":"id-1","cwd":"C:\\a","startedAt":1000}`), []Running{{PID: 7, Agent: "claude", CWD: `C:\a`}}, windows, ""},
+		{"a native process, a file half a second before it", record(7, "claude", "ft:116444736100000000", `{"pid":7,"sessionId":"id-1","cwd":"C:\\a","startedAt":9500}`), []Running{{PID: 7, Agent: "claude", CWD: `C:\a`}}, windows, ""},
+		{"a native process, its creation recorded", record(7, "claude", "ft:116444736050000000", `{"pid":7,"sessionId":"id-1","cwd":"C:\\a","startedAt":1000,"procStartFt":"116444736050000016"}`), []Running{{PID: 7, Agent: "claude", CWD: `C:\a`}}, windows, "id-1"},
+		{"a native process, its creation recorded by an agent of another folder", record(7, "claude", "ft:116444736050000000", `{"pid":7,"sessionId":"id-1","cwd":"C:\\b","startedAt":1000,"procStartFt":"116444736050000016"}`), []Running{{PID: 7, Agent: "claude", CWD: `C:\a`}}, windows, ""},
+		{"a native process, another's creation though begun since", record(7, "claude", "ft:116444736050000000", `{"pid":7,"sessionId":"id-1","cwd":"C:\\a","startedAt":9000,"procStartFt":"116444736040000000"}`), []Running{{PID: 7, Agent: "claude", CWD: `C:\a`}}, windows, ""},
+		{"a native process, a creation in another unit: when it began decides", record(7, "claude", "ft:116444736050000000", `{"pid":7,"sessionId":"id-1","cwd":"C:\\a","startedAt":5200,"procStartFt":"1795048570000000000"}`), []Running{{PID: 7, Agent: "claude", CWD: `C:\a`}}, windows, "id-1"},
+		{"no procStart, begun before the process", record(7, "claude", "Thu Nov 19 00:36:10 2026", `{"pid":7,"sessionId":"id-1","cwd":"/a","startedAt":1795048569000}`), []Running{{PID: 7, Agent: "claude", CWD: "/a"}}, rpath.Style{}, ""},
+		{"no procStart, begun since", record(7, "claude", "Thu Nov 19 00:36:10 2026", `{"pid":7,"sessionId":"id-1","cwd":"/a","startedAt":1795048570500}`), []Running{{PID: 7, Agent: "claude", CWD: "/a"}}, rpath.Style{}, "id-1"},
+		{"a process gone", record(7, "claude", "-", claude(7, "id-1", "/a", "")), []Running{{PID: 7, Agent: "claude", CWD: "/a"}}, rpath.Style{}, ""},
+		{"a verified file over a folder-only one before it", record(7, "claude", "S", claude(7, "stale", "/a", "")+script.GS+claude(7, "live", "/a", "S")+script.GS), []Running{{PID: 7, Agent: "claude", CWD: "/a"}}, rpath.Style{}, "live"},
+		{"the session_meta's id over the file name", record(7, "codex", "S", "7"+script.GS+"/x/rollout-2026-11-20T03-10-00-"+rolloutID+"_01a1f6a0-1111-7222-8333-944455556666.jsonl"+script.GS+sessionMeta(rolloutID, false)+rolloutEnd), []Running{{PID: 7, Agent: "codex", CWD: "/a"}}, rpath.Style{}, rolloutID},
+		{"the file name when the session_meta names no id", record(7, "codex", "S", "7"+script.GS+"/x/rollout-2026-11-20T02-28-48-"+rolloutID+".jsonl"+script.GS+`{"type":"session_meta","payload":{"source":"cli"}}`+rolloutEnd), []Running{{PID: 7, Agent: "codex", CWD: "/a"}}, rpath.Style{}, rolloutID},
+		{"a thread resumed in another folder than it began in", standing(7, "codex", "S", "/a", "7"+script.GS+"/x/rollout-2026-11-20T02-28-48-"+rolloutID+".jsonl"+script.GS+`{"type":"session_meta","payload":{"id":"`+rolloutID+`","cwd":"/b","thread_source":"user"}}`+rolloutEnd), []Running{{PID: 7, Agent: "codex", CWD: "/a"}}, rpath.Style{}, rolloutID},
+		{"a thread held by a process standing elsewhere", standing(7, "codex", "S", "/b", "7"+script.GS+"/x/rollout-2026-11-20T02-28-48-"+rolloutID+".jsonl"+script.GS+sessionMeta(rolloutID, false)+rolloutEnd), []Running{{PID: 7, Agent: "codex", CWD: "/a"}}, rpath.Style{}, ""},
+		{"a subagent's thread alone", record(7, "codex", "S", "7"+script.GS+"/x/rollout-2026-11-20T02-28-48-"+rolloutID+".jsonl"+script.GS+sessionMeta(rolloutID, true)+rolloutEnd), []Running{{PID: 7, Agent: "codex", CWD: "/a"}}, rpath.Style{}, ""},
+		{"a rollout whose first line is no session_meta", record(7, "codex", "S", "7"+script.GS+"/x/rollout-2026-11-20T02-28-48-"+rolloutID+".jsonl"+script.GS+`{"type":"response_item","payload":{}}`+rolloutEnd), []Running{{PID: 7, Agent: "codex", CWD: "/a"}}, rpath.Style{}, ""},
+		{"a rollout still empty", record(7, "codex", "S", "7"+script.GS+"/x/rollout-2026-11-20T02-28-48-"+rolloutID+".jsonl"+script.GS+rolloutEnd), []Running{{PID: 7, Agent: "codex", CWD: "/a"}}, rpath.Style{}, ""},
+		{"another process took the pid while it was read", read(7, "codex", "S", "/a", "7"+script.GS+"/x/rollout-2026-11-20T02-28-48-"+rolloutID+".jsonl"+script.GS+sessionMeta(rolloutID, false)+rolloutEnd, "T"), []Running{{PID: 7, Agent: "codex", CWD: "/a"}}, rpath.Style{}, ""},
+		{"the process ended while it was read", read(7, "claude", "S", "/a", claude(7, "id-1", "/a", "S"), ""), []Running{{PID: 7, Agent: "claude", CWD: "/a"}}, rpath.Style{}, ""},
+		{"a rollout under a folder with a line break", standing(7, "codex", "S", "/a", "7"+script.GS+"/x\ny/rollout-2026-11-20T02-28-48-"+rolloutID+".jsonl"+script.GS+`{"type":"session_meta","payload":{"thread_source":"user"}}`+rolloutEnd), []Running{{PID: 7, Agent: "codex", CWD: "/a"}}, rpath.Style{}, rolloutID},
+		{"an id that is not one", record(7, "claude", "S", claude(7, "--resume x", "/a", "S")), []Running{{PID: 7, Agent: "claude", CWD: "/a"}}, rpath.Style{}, ""},
+		{"no rollout open", record(7, "codex", "S", ""), []Running{{PID: 7, Agent: "codex", CWD: "/a"}}, rpath.Style{}, ""},
+		{"a pid not asked about", record(9, "codex", "S", "/x/rollout-2026-11-20T02-28-48-"+rolloutID+".jsonl"), []Running{{PID: 7, Agent: "codex", CWD: "/a"}}, rpath.Style{}, ""},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got := parseSessionsByPID(c.out, c.procs, c.style)
+			got := parseSessionsByPID(c.out, c.procs, c.style, machineClock{})
 			if got[c.procs[0].PID] != c.want {
 				t.Fatalf("got %v, want %q", got, c.want)
 			}
