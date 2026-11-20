@@ -395,7 +395,7 @@ func Run(ctx context.Context, o Options) error {
 	restarter.Later = func(mc *machines.Machine, title string, fn func(say func(string)) error) {
 		runner.Run(mc, title, "", fn)
 	}
-	restarter.Lock = input.Lock
+	restarter.Lock = input.Hold
 	// the chats a reboot stops: remembered here, offered back as one Resume, noted in the activity when they return
 	restarter.Memory = restart.OpenMemory(o.Dir)
 	restarter.Memory.Note = func(machineID, title, body string) {

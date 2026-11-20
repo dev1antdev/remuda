@@ -279,17 +279,27 @@ type Prompter interface {
 // ErrAgentBusy: the agent shows a menu; the message must not land in it.
 var ErrAgentBusy = errors.New("the agent is waiting for an answer — answer its prompt first")
 
+// StagedPrompter is a client whose prompt is looked at first and typed after, maybe a minute later: remuda-core holds a
+// prompt while a person finishes a draft in the terminal, and checks as it types that the agent is still in front and
+// that nothing else's input interleaves. The look needs the pane's lock; the wait does not, so the person's keys and
+// answers pass a prompt the core holds.
+type StagedPrompter interface {
+	StagePrompt(target, text string) (send func() error, err error)
+}
+
 // Input is the one door for what people type into panes: every delivery holds the pane's lock, so nothing interleaves.
+// A staged prompt holds it for its look alone, and the pane's prompts go one after another by a lock of their own.
 type Input struct {
 	Machines *machines.Manager
 	Watch    *watch.Watcher
 
-	mu    sync.Mutex
-	locks map[events.PaneRef]*sync.Mutex
+	mu      sync.Mutex
+	locks   map[events.PaneRef]*sync.Mutex
+	prompts map[events.PaneRef]*sync.Mutex
 }
 
 func NewInput(m *machines.Manager, w *watch.Watcher) *Input {
-	return &Input{Machines: m, Watch: w, locks: map[events.PaneRef]*sync.Mutex{}}
+	return &Input{Machines: m, Watch: w, locks: map[events.PaneRef]*sync.Mutex{}, prompts: map[events.PaneRef]*sync.Mutex{}}
 }
 
 // Lock is the pane's typing lock; a restart holds it from the exit to the resumed agent.
@@ -297,56 +307,113 @@ func (in *Input) Lock(machineID, paneID string) sync.Locker {
 	return in.lock(events.PaneRef{Machine: machineID, Pane: paneID})
 }
 
+// Hold is the pane's whole hold, a restart's or a sleep's from an agent's exit to the next one's start: the prompts'
+// lock, then the typing lock, as Prompt takes them, so no prompt looked at before goes in between either. An answer
+// takes the typing lock alone (Lock), and so passes a prompt remuda-core holds.
+func (in *Input) Hold(machineID, paneID string) sync.Locker {
+	ref := events.PaneRef{Machine: machineID, Pane: paneID}
+	return &held{prompts: in.paneMutex(in.prompts, ref), typing: in.lock(ref)}
+}
+
+type held struct{ prompts, typing *sync.Mutex }
+
+func (h *held) Lock() {
+	h.prompts.Lock()
+	h.typing.Lock()
+}
+
+func (h *held) Unlock() {
+	h.typing.Unlock()
+	h.prompts.Unlock()
+}
+
 func (in *Input) lock(ref events.PaneRef) *sync.Mutex {
+	return in.paneMutex(in.locks, ref)
+}
+
+func (in *Input) paneMutex(set map[events.PaneRef]*sync.Mutex, ref events.PaneRef) *sync.Mutex {
 	in.mu.Lock()
 	defer in.mu.Unlock()
-	if in.locks[ref] == nil {
-		in.locks[ref] = &sync.Mutex{}
+	if set[ref] == nil {
+		set[ref] = &sync.Mutex{}
 	}
-	return in.locks[ref]
+	return set[ref]
+}
+
+// Prompt hands text to the pane's agent and answers the client's own refusal: herdr's agent.prompt under the pane's
+// lock, or, through a StagedPrompter, the look under that lock and the typing after it.
+func (in *Input) Prompt(client Prompter, ref events.PaneRef, text string) error {
+	return in.prompt(client, ref, text, nil)
+}
+
+// prompt is Prompt with then, run under the pane's lock once the prompt went; for herdr in the same hold as the prompt.
+func (in *Input) prompt(client Prompter, ref events.PaneRef, text string, then func() error) error {
+	lock := in.lock(ref)
+	staged, ok := client.(StagedPrompter)
+	if !ok {
+		lock.Lock()
+		defer lock.Unlock()
+		if err := client.AgentPrompt(ref.Pane, text); err != nil || then == nil {
+			return err
+		}
+		return then()
+	}
+	order := in.paneMutex(in.prompts, ref)
+	order.Lock()
+	defer order.Unlock()
+	lock.Lock()
+	send, err := staged.StagePrompt(ref.Pane, text)
+	lock.Unlock()
+	if err != nil {
+		return err
+	}
+	if err := send(); err != nil || then == nil {
+		return err
+	}
+	lock.Lock()
+	defer lock.Unlock()
+	return then()
 }
 
 // Submit delivers what a person wrote for the pane's agent, the way the chat does: herdr's own submit, and for a message
 // that names a picture the Enter Claude Code loses of it (settle.go). Without an agent nothing goes.
 func (in *Input) Submit(client Prompter, ref events.PaneRef, text string) error {
-	lock := in.lock(ref)
-	lock.Lock()
-	defer lock.Unlock()
-	if err := agentPrompt(client, ref.Pane, text); err != nil {
-		return err
-	}
+	var then func() error
 	if two, ok := client.(interface {
 		Settler
 		Prompter
 	}); ok && NamesPicture(text) {
-		return enterAfterPaste(two, ref.Pane)
+		then = func() error { return enterAfterPaste(two, ref.Pane) }
 	}
-	return nil
+	return refused(in.prompt(client, ref, text, then))
 }
 
 // ErrNoAgent: the pane has no agent up to take the text, and what was written for one must not reach its shell, which
 // would run every line.
 var ErrNoAgent = errors.New("no agent is ready in that pane; nothing was sent")
 
-// agentPrompt is herdr's own submit, which makes sure an agent holds the terminal: the text is never typed into the pane.
-func agentPrompt(client Prompter, pane, text string) error {
-	err := client.AgentPrompt(pane, text)
+// ErrNotSubmitted: remuda-core pasted the text and then found the agent gone from the terminal's front, so it pressed no
+// Enter; the text may sit in the input line of whatever runs there now, the shell included.
+var ErrNotSubmitted = errors.New("your message was pasted into the terminal but not submitted: the agent left its front as it went, so no Enter was pressed — look at the terminal and clear the line before pressing Enter there")
+
+// refused words a client's refusal of a prompt for the person: the agent asking something, none up to take it, or a
+// paste left unsubmitted.
+func refused(err error) error {
 	switch {
 	case herdr.IsCode(err, "agent_blocked"):
 		return ErrAgentBusy
 	case herdr.IsCode(err, "agent_not_found"), herdr.IsCode(err, "agent_not_ready"):
 		return ErrNoAgent
+	case herdr.IsCode(err, "not_submitted"):
+		return ErrNotSubmitted
 	}
 	return err
 }
 
 // SubmitToAgent delivers text meant for an agent — a schedule's prompt, a pull request's failures, a booked "continue" —
-// under the pane's lock.
+// through Prompt.
 func (in *Input) SubmitToAgent(client Prompter, ref events.PaneRef, text string) error {
-	lock := in.lock(ref)
-	lock.Lock()
-	defer lock.Unlock()
-	return agentPrompt(client, ref.Pane, text)
+	return refused(in.Prompt(client, ref, text))
 }
 
 // FirstPromptRetry and FirstPromptTimeout pace the delivery of a first prompt: a try every so often until the agent takes it.
@@ -355,26 +422,23 @@ var (
 	FirstPromptTimeout = 2 * time.Minute
 )
 
-// FirstPrompt hands the text a person wrote for an agent they just started over once it is up: agent.prompt under the pane's
-// lock, tried again every FirstPromptRetry while the agent is still coming up, until it takes the text or the timeout passes.
-// A dialog on the agent's screen (Claude Code's trust question for the folder, which is the person's to answer) is waited
-// through, never answered; the error says why the text was not delivered.
+// FirstPrompt hands the text a person wrote for an agent they just started over once it is up: Prompt, tried again every
+// FirstPromptRetry while the agent is still coming up, until it takes the text or the timeout passes. A dialog on the
+// agent's screen (Claude Code's trust question for the folder, which is the person's to answer) is waited through,
+// never answered; the error says why the text was not delivered.
 func (in *Input) FirstPrompt(client Prompter, ref events.PaneRef, text string, timeout time.Duration) error {
-	lock := in.lock(ref)
 	deadline := time.Now().Add(timeout)
 	var last error
 	for {
 		time.Sleep(FirstPromptRetry)
-		lock.Lock()
-		err := client.AgentPrompt(ref.Pane, text)
-		lock.Unlock()
+		err := in.Prompt(client, ref, text)
 		switch {
 		case err == nil:
 			return nil
 		case herdr.IsCode(err, "agent_not_ready") || herdr.IsCode(err, "agent_not_found") || herdr.IsCode(err, "agent_blocked"):
 			last = err
 		default:
-			return err
+			return refused(err)
 		}
 		if time.Now().After(deadline) {
 			break
