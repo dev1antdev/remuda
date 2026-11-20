@@ -59,7 +59,7 @@ func TestAWorkspaceOnRemudaCoreSleepsAndWakesOnItsSession(t *testing.T) {
 	if hello, err := client.Hello(ctx); err != nil || !hello.Has("send_foreground") {
 		t.Skipf("the core does not check the agent as it types (%v): a prompt waits for remuda-core 0.2.1", err)
 	}
-	adapter := core.NewAdapter(client, nil, core.AdapterHooks{SessionOf: func(agent string, pid int) *herdr.AgentSession {
+	adapter := core.NewAdapter(client, nil, core.AdapterHooks{SessionOf: func(agent string, pid int, cwd string) *herdr.AgentSession {
 		return &herdr.AgentSession{Kind: "id", Value: sidA}
 	}})
 	t.Cleanup(func() { adapter.Close() })

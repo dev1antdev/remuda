@@ -56,11 +56,13 @@ type coreLink struct {
 }
 
 // newCoreLink follows the core the client reaches; the machine lends the adapter its shell, the git its worktrees are
-// made with, and a failure to reach the core goes to transportError (nil: none hears it).
+// made with, and its agents' sessions read off their processes; a failure to reach the core goes to transportError
+// (nil: none hears it).
 func newCoreLink(mc *Machine, client *core.Client, transportError func(error)) *coreLink {
+	sessions := newProcessSessions(mc.Label(), mc.Transcripts.SessionsOf)
 	return &coreLink{
 		client:    client,
-		adapter:   core.NewAdapter(client, mc, core.AdapterHooks{TransportError: transportError}),
+		adapter:   core.NewAdapter(client, mc, core.AdapterHooks{TransportError: transportError, SessionOf: sessions.of}),
 		terminals: core.NewTerminals(client),
 	}
 }

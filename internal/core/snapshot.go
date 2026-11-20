@@ -36,7 +36,7 @@ type placedSpace struct {
 // tab's terminals from its tree, then the ones labelled for it; a terminal labelled for a tab or workspace the
 // document lacks gets one of its own, an unlabelled terminal a workspace of its own; a tab with no live terminal and
 // a workspace with no tab are left out.
-func (m *mirror) snapshot(sessionOf func(agent string, pid int) *herdr.AgentSession) *herdr.Snapshot {
+func (m *mirror) snapshot(sessionOf SessionLookup) *herdr.Snapshot {
 	live := m.ordered()
 	placed := make(map[string]bool, len(live))
 	claim := func(t *Terminal) bool {
@@ -144,7 +144,7 @@ func addToTab(tabs []placedTab, id, space string, t *Terminal) []placedTab {
 	return append(tabs, placedTab{id: id, terminals: []*Terminal{t}})
 }
 
-func paneOf(t *Terminal, tab, space string, sessionOf func(agent string, pid int) *herdr.AgentSession) herdr.PaneInfo {
+func paneOf(t *Terminal, tab, space string, sessionOf SessionLookup) herdr.PaneInfo {
 	pane := herdr.PaneInfo{
 		PaneID: t.Address, TabID: tab, WorkspaceID: space, TerminalID: t.Address,
 		Agent: agentOf(t), AgentStatus: statusOf(t), CWD: t.Cwd,
@@ -158,7 +158,7 @@ func paneOf(t *Terminal, tab, space string, sessionOf func(agent string, pid int
 		if t.Foreground != nil {
 			pid = t.Foreground.Pid
 		}
-		pane.AgentSession = sessionOf(pane.Agent, pid)
+		pane.AgentSession = sessionOf(pane.Agent, pid, cmp.Or(pane.ForegroundCWD, pane.CWD))
 	}
 	return pane
 }

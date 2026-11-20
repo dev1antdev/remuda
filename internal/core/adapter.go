@@ -45,8 +45,12 @@ type AdapterHooks struct {
 	// TransportError hears a failure to reach the core, never its refusal: the machine marks itself dead on it.
 	TransportError func(error)
 	// SessionOf names an agent's conversation by its process. It answers from memory, never waiting; nil for none.
-	SessionOf func(agent string, pid int) *herdr.AgentSession
+	SessionOf SessionLookup
 }
+
+// SessionLookup names the conversation of the agent of a kind running as the process pid in the folder cwd; nil
+// while it is not known.
+type SessionLookup func(agent string, pid int, cwd string) *herdr.AgentSession
 
 // How long a snapshot asked for before the first fill waits for it, and how the subscription is tried again.
 const (
