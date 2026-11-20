@@ -1,6 +1,6 @@
 // Updates on a machine: what it can run, a run started, the jobs that ran.
 
-import { check, getJSON, sendJSON } from "@/lib/http";
+import { getJSON, postJSONOr409, sendJSON } from "@/lib/http";
 
 // an update the machine can run: the command the person sees before saying yes
 export type Update = { what: string; title: string; command: string; note?: string };
@@ -17,18 +17,8 @@ export const fetchJob = (id: string): Promise<Job> => getJSON(`/api/jobs/${encod
 export const restartPane = (machineId: string, paneId: string): Promise<{ job: string }> => sendJSON("POST", "/api/panes/restart", { machine: machineId, pane: paneId });
 // the chats a reboot stopped on the machine in the panes picked (every one for none) started again on their sessions: a job,
 // the refusal when none is stopped, or herdr when its server still runs there and herdr's agents are picked
-export async function recoverChats(machineId: string, panes?: string[]): Promise<{ job: string; herdr?: undefined } | { herdr: true; job?: undefined }> {
-  const res = await fetch("/api/panes/recover", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ machine: machineId, panes }) });
-  if (res.status === 409) {
-    const body = (await res
-      .clone()
-      .json()
-      .catch(() => null)) as { herdr?: boolean } | null;
-    if (body?.herdr) return { herdr: true };
-  }
-  await check(res);
-  return (await res.json()) as { job: string };
-}
+export const recoverChats = (machineId: string, panes?: string[]) =>
+  postJSONOr409<{ job?: string; herdr?: boolean }>("/api/panes/recover", { machine: machineId, panes }, (conflict) => !!conflict.herdr);
 
 // herdr's server stopped on a machine moved to remuda-core, every agent still running in it there with it
 export const stopHerdr = (machineId: string): Promise<{ stopped: boolean }> => sendJSON("POST", `/api/machines/${encodeURIComponent(machineId)}/herdr/stop`);

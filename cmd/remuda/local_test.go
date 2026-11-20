@@ -55,3 +55,9 @@ func TestOnlyTheRealServiceRecordsTimelapsesUnlessAsked(t *testing.T) {
 		t.Fatal("the real service records, a scratch instance only with -record")
 	}
 }
+
+func TestAScratchInstanceStopsNoHerdr(t *testing.T) {
+	if !herdrStops(false) || herdrStops(true) {
+		t.Fatal("the real service stops herdr's server at the person's press, a scratch instance never")
+	}
+}

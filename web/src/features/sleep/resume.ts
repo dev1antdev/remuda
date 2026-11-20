@@ -22,6 +22,16 @@ export const chatWhere = (chat: StoppedChat, machine: string): string => [chat.t
 // toggled is the ticks with one pane ticked or not
 export const toggled = (picked: string[], pane: string): string[] => (picked.includes(pane) ? picked.filter((p) => p !== pane) : [...picked, pane]);
 
+// SEEN_ON_CORE is the agents remuda-core names the session of, off their process
+const SEEN_ON_CORE = ["claude", "codex"];
+
+// unseen is an agent from herdr of a kind whose session remuda cannot see on remuda-core: one resumed there by hand
+// would run twice
+export const unseen = (chat: StoppedChat): boolean => chat.from === "herdr" && !SEEN_ON_CORE.includes(chat.agent);
+
+// firstPicks is the ticks the dialog opens with: every chat but the unseen ones
+export const firstPicks = (stopped: StoppedChat[]): string[] => stopped.filter((chat) => !unseen(chat)).map((chat) => chat.pane);
+
 // stillPicked keeps the ticks of the chats still listed, so a chat resumed meanwhile leaves the count
 export const stillPicked = (picked: string[], stopped: StoppedChat[]): string[] => picked.filter((pane) => stopped.some((chat) => chat.pane === pane));
 

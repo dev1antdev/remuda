@@ -44,7 +44,7 @@ esac
 	if !findHerdr {
 		return s + "true\n"
 	}
-	return s + `h=$(command -v herdr 2>/dev/null) || for p in "$HOME/.local/bin/herdr" /opt/homebrew/bin/herdr /usr/local/bin/herdr /usr/bin/herdr; do [ -x "$p" ] && { h=$p; break; }; done
+	return s + script.HerdrBin("h") + `
 [ -n "$h" ] && printf 'herdr=%s\n' "$h"
 true
 `

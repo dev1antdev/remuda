@@ -24,7 +24,6 @@ import (
 	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/machines"
-	"github.com/dev1antdev/remuda/internal/sessions"
 	"github.com/dev1antdev/remuda/internal/state"
 	"github.com/dev1antdev/remuda/internal/transcript"
 )
@@ -655,19 +654,18 @@ func (r *Restarter) carryOn(client placer, machineID string, fromHerdr []Stopped
 
 func (r *Restarter) carryOneOn(client placer, machineID string, s Stopped, checks func(Stopped) error, started map[string]bool, say func(string)) outcome {
 	a := agents[s.chat.Kind]
-	snap, err := client.SessionSnapshot()
-	if err != nil {
-		return notStarted(s, fmt.Sprintf("· %s (%s, from herdr): remuda-core did not answer: %v", s.Title, s.Pane, err), say)
-	}
-	if started[s.chat.Session] || paneOnSession(snap, s.chat.Session) != nil {
+	if started[s.chat.Session] {
 		return r.done(machineID, s, true, fmt.Sprintf("· %s (%s, from herdr): %s is on its session already", s.Title, s.Pane, a.Title), say)
 	}
 	if err := checks(s); err != nil {
 		return r.done(machineID, s, false, fmt.Sprintf("· %s (%s, from herdr): %v", s.Title, s.Pane, err), say)
 	}
 	say(fmt.Sprintf("· %s (%s, from herdr): %s in %s", s.Title, s.Pane, Resume(a.Kind, s.chat.Session), s.chat.Dir))
-	place, err := sessions.StartIn(client, snap, s.chat.Dir, s.Title, "", a.Kind, sessions.Start{Resume: s.chat.Session})
-	if err != nil {
+	place, open, err := startOnSession(client, s.chat.Dir, s.Title, "", a.Kind, s.chat.Session)
+	switch {
+	case open != nil:
+		return r.done(machineID, s, true, fmt.Sprintf("  ✓ %s is on its session already, in %s", a.Title, open.PaneID), say)
+	case err != nil:
 		return notStarted(s, fmt.Sprintf("  ✗ %s: %v", s.Title, err), say)
 	}
 	started[s.chat.Session] = true

@@ -740,6 +740,16 @@ Settings › Sleep and resume): then the chats a reboot stopped come back
 by themselves, and the activity says what came back. A chat you left
 yourself is never offered back.
 
+Once a machine runs its agents in remuda-core instead of herdr, the
+agents herdr was running there, and those of a workspace asleep in herdr,
+wait in the same dialog, marked **from herdr** — "2 agents from herdr on
+GOG can carry on" — and each comes back in a tab of a workspace on its
+folder; nothing resumes them by itself. While herdr's server still runs
+on that machine, its agents may still be on those conversations, so
+Resume refuses and offers **Stop herdr's server on GOG…**: after its
+confirm every agent still running in herdr there stops, herdr stays
+installed, and you press Resume again.
+
 **Put a workspace to sleep, wake it later.** "Sleep…" in a workspace's
 ⋯ menu (or the palette) asks every agent in it to leave the way you
 would — its own `/exit` or `/quit`, an Esc first for one still at work

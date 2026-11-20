@@ -16,6 +16,8 @@ export const recover: Dictionary = {
     "{n} агентов из herdr на {machine} могут продолжить работу",
   ],
   "from herdr": "из herdr",
+  "A Gemini CLI or Kimi Code from herdr starts unticked: remuda cannot see its session resumed by hand, so tick it only if it runs nowhere yet.":
+    "Gemini CLI или Kimi Code из herdr не отмечены: remuda не видит их сессию, возобновлённую вручную, поэтому отмечайте такой, только если он ещё нигде не запущен.",
   "The ones from herdr ran there before the machine moved to remuda-core: each comes back in a tab of a workspace on its folder.":
     "Агенты из herdr работали там до перехода машины на remuda-core: каждый вернётся во вкладке пространства на своей папке.",
   "herdr's server still runs on {machine}, and its agents may still be on these conversations: stop it first, or each would run twice.":

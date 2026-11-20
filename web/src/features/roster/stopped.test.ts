@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAX_SEEN, concernWords, episodeKey, fromHerdr, herdrWords, remember, stoppedNames, stoppedWords, toastWords } from "./stopped";
+import { MAX_SEEN, concernWords, countWords, episodeKey, fromHerdr, herdrWords, remember, stoppedNames, stoppedWords, toastWords } from "./stopped";
 
 const stopped = [
   { pane: "w3:p1", agent: "codex", title: "web" },
@@ -30,6 +30,7 @@ describe("stopped chats", () => {
     expect(toastWords(herdr, "GOG")).toBe("2 agents from herdr on GOG can carry on");
     expect(toastWords(stopped, "GOG")).toBe("GOG: 2 chats stopped with the reboot");
     expect(toastWords([...stopped, herdr[0]!], "GOG")).toBe("GOG: 2 chats stopped with the reboot · 1 agent from herdr on GOG can carry on");
+    expect(countWords([...stopped, herdr[0]!], "GOG")).toBe("2 chats stopped with the reboot · 1 agent from herdr on GOG can carry on");
     expect(concernWords(herdr, "GOG")).toBe("2 agents from herdr on GOG can carry on: Claude Code in notes, Codex in notes");
     expect(concernWords([stopped[1]!, herdr[1]!], "GOG")).toBe("1 chat stopped with the reboot: Claude Code in api · 1 agent from herdr on GOG can carry on: Codex in notes");
   });

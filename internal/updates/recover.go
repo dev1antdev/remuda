@@ -36,22 +36,35 @@ func (s *Service) recoverChats(mc *machines.Machine, panes []string, auto bool) 
 	if err := s.Restart.MayCarryOn(mc, stopped); err != nil {
 		return jobs.Job{}, err
 	}
+	fromHerdr := len(stopped) - len(restart.Rebooted(stopped))
 	title := fmt.Sprintf("Resume %d chat(s) stopped with the reboot", len(stopped))
-	if len(stopped) == 1 {
+	switch {
+	case fromHerdr == len(stopped):
+		title = fmt.Sprintf("Carry on %d agent(s) from herdr", fromHerdr)
+	case fromHerdr > 0:
+		title = fmt.Sprintf("Resume %d chat(s): stopped with the reboot, and from herdr", len(stopped))
+	case len(stopped) == 1:
 		title = "Resume the chat stopped with the reboot"
 	}
 	if auto {
 		title += ", by itself"
 	}
+	via, how := "herdr", "each in its own pane with its session resumed"
+	if mc.OnCore() {
+		via = "remuda-core"
+	}
+	if fromHerdr > 0 {
+		how = "each with its session resumed, in its own pane, or from herdr in a tab of a workspace on its folder"
+	}
 	var lines []string
 	for _, c := range stopped {
 		line := fmt.Sprintf("%s in %s   (%s)", restart.Title(c.Agent), c.Pane, c.Title)
 		if c.From == restart.FromHerdr {
-			line += ", from herdr: in a tab of a workspace on " + c.Dir
+			line += ", from herdr, on " + c.Dir
 		}
 		lines = append(lines, line)
 	}
-	command := "# on " + mc.Label() + ", through herdr, each in its own pane with its session resumed:\n" + strings.Join(lines, "\n")
+	command := "# on " + mc.Label() + ", through " + via + ", " + how + ":\n" + strings.Join(lines, "\n")
 	picked := make([]string, 0, len(stopped))
 	for _, c := range stopped {
 		picked = append(picked, c.Pane)

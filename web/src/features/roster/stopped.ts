@@ -33,12 +33,15 @@ export function concernWords(stopped: StoppedChat[], machine: string): string {
   return parts.filter(Boolean).join(" · ");
 }
 
-// toastWords is the toast's line: "GOG: 1 chat stopped with the reboot · 2 agents from herdr on GOG can carry on"
-export function toastWords(stopped: StoppedChat[], machine: string): string {
+// countWords is what waits on a machine, counted: "1 chat stopped with the reboot · 2 agents from herdr on GOG can carry on"
+export function countWords(stopped: StoppedChat[], machine: string): string {
   const herdr = stopped.filter(fromHerdr).length;
   const rebooted = stopped.length - herdr;
-  return [rebooted ? `${machine}: ${stoppedWords(rebooted)}` : "", herdr ? herdrWords(herdr, machine) : ""].filter(Boolean).join(" · ");
+  return [rebooted ? stoppedWords(rebooted) : "", herdr ? herdrWords(herdr, machine) : ""].filter(Boolean).join(" · ");
 }
+
+// toastWords is the toast's line, the machine named before a reboot's count: "GOG: 3 chats stopped with the reboot"
+export const toastWords = (stopped: StoppedChat[], machine: string): string => (stopped.every(fromHerdr) ? countWords(stopped, machine) : `${machine}: ${countWords(stopped, machine)}`);
 
 // MAX_SEEN is how many dismissed episodes the device keeps
 export const MAX_SEEN = 8;

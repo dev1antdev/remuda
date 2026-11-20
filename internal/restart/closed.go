@@ -194,20 +194,30 @@ func (r *Restarter) reopenWith(client placer, machineID string, c Closed) (sessi
 	if _, ok := r.Memory.closedEntry(machineID, c.ID); !ok {
 		return sessions.Place{}, ErrNoSuchClosed
 	}
-	snap, err := client.SessionSnapshot()
-	if err != nil {
-		return sessions.Place{}, err
-	}
-	if p := paneOnSession(snap, c.Session); p != nil {
+	place, open, err := startOnSession(client, c.Dir, "", c.Tab, c.Agent, c.Session)
+	if open != nil {
 		r.Memory.dropClosed(machineID, c.ID)
-		return sessions.Place{Pane: p.PaneID, Workspace: p.WorkspaceID}, &OpenAlready{Pane: p.PaneID}
+		return sessions.Place{Pane: open.PaneID, Workspace: open.WorkspaceID}, &OpenAlready{Pane: open.PaneID}
 	}
-	place, err := sessions.StartIn(client, snap, c.Dir, "", c.Tab, c.Agent, sessions.Start{Resume: c.Session})
 	if err != nil {
 		return place, err
 	}
 	r.Memory.dropClosed(machineID, c.ID)
 	return place, nil
+}
+
+// startOnSession starts the agent on its session in a tab of the folder's workspace, else a new workspace named
+// workspace, unless a pane runs that session already: that pane comes back instead, and nothing starts.
+func startOnSession(client placer, dir, workspace, tab, kind, session string) (sessions.Place, *herdr.PaneInfo, error) {
+	snap, err := client.SessionSnapshot()
+	if err != nil {
+		return sessions.Place{}, nil, err
+	}
+	if p := paneOnSession(snap, session); p != nil {
+		return sessions.Place{}, p, nil
+	}
+	place, err := sessions.StartIn(client, snap, dir, workspace, tab, kind, sessions.Start{Resume: session})
+	return place, nil, err
 }
 
 // OpenAlready is a reopen of a session some pane runs already: that pane is the one to open.

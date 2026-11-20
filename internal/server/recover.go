@@ -66,7 +66,7 @@ func (s *Server) handleHerdrStop(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 409, fmt.Errorf("%s is reached through herdr: its server runs the agents remuda sees there", mc.Label()))
 		return
 	}
-	if err := herdr.StopServing(mc); err != nil {
+	if err := herdr.StopServing(mc, mc.Cfg.HerdrBin, mc.Cfg.RemoteSocket); err != nil {
 		httpErr(w, 502, err)
 		return
 	}

@@ -36,7 +36,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   scratch instance only when it asks, so a look beside the real one never
   reads the person's screens or work into a folder of its own;
   `app.Options.Record` → `timelapse.Recorder.Scratch` and
-  `undo.Tracker.Scratch`), `-server`
+  `undo.Tracker.Scratch`; and, with no flag of its own, `herdrStops`,
+  tested: a scratch instance never stops herdr's server, which may be the
+  real one's — `app.Options.HerdrStops`, see `internal/restart`), `-server`
   (also `REMUDA_SERVER=1`; `app.Options.Server`, see "Server mode"
   below; without it the host is a machine of its own, there is no
   `-client` flag), `-core` (also `REMUDA_CORE=1`; `app.Options.Core`,
@@ -2133,23 +2135,33 @@ components and icons as rules for whoever changes it: @docs/design.md
   one is refused while herdr's server answers on the machine
   (`Restarter.MayCarryOn` → `*HerdrRunning`, a 409 `{herdr: true}` from
   `POST /api/panes/recover`, asked again inside the job; `Restarter.Serving`
-  is `herdr.Serving`, the status script over the machine's shell,
-  `internal/herdr/serving.go`); else `carryOn`: a fresh snapshot — a
-  session an agent of the core is on, or one this run started already,
-  counts as back — `CanResume`, then `sessions.StartIn` with the kind's
-  resume arguments, a tab of the workspace on the folder, else a new
+  is `herdr.Serving`, the status script over the machine's shell through
+  its own `herdr_bin` and `remote_socket`, else herdr found as the probe
+  finds it (`script.HerdrBin`) on its own socket,
+  `internal/herdr/serving.go`); else `carryOn`: a session this run started
+  already counts as back, then `CanResume`, then `startOnSession` (which
+  the reopen of a closed agent shares: a fresh snapshot, a pane already on
+  the session answered as back, else `sessions.StartIn` with the kind's
+  resume arguments), a tab of the workspace on the folder, else a new
   workspace named as herdr's was, so the agents of one herdr workspace
   in one folder become tabs of one; the record is forgotten once dealt with, a start
   that failed keeps it listed. `POST /api/machines/{id}/herdr/stop`
   (`internal/server/recover.go`, the person's only — a viewer link and an
   agent key get a 403, `internal/auth/herdrstop_test.go`; refused on a
   scratch instance, `app.Options.HerdrStops`, and on a machine still on
-  herdr) is `herdr.StopServing`: herdr's own `server stop` on its own
-  socket, waited for, herdr left installed. The page: the ⓘ and the toast
+  herdr) is `herdr.StopServing`: herdr's own `server stop` on that same
+  herdr, waited for, herdr left installed. The page: the ⓘ and the toast
   say "2 agents from herdr on GOG can carry on" (`herdrWords`,
-  `concernWords`, `toastWords` in `features/roster/stopped.ts`, tested);
+  `concernWords`, `countWords` — the palette row's hint too — and
+  `toastWords` in `features/roster/stopped.ts`, tested; the job's title
+  and command say it as well, `updates.recoverChats`);
   Resume after restart marks each such row "from herdr" and says where
-  they come back, and a refusal keeps it open with a warn notice and
+  they come back, and leaves a Gemini CLI or Kimi Code from herdr
+  unticked, saying why (`unseen`, `firstPicks` in
+  `features/sleep/resume.ts`, tested): on remuda-core only Claude Code's
+  and Codex's sessions are read off their process, so remuda cannot see
+  one of theirs resumed by hand — the memory keeps it listed and Resume
+  all would start it twice. A refusal keeps the dialog open with a warn notice and
   **Stop herdr's server on X…**, whose confirm says all agents still
   running in herdr there stop and herdr stays installed (`askStopHerdr` in
   `features/updates/recover.ts`); Resume is pressed again after it. The
@@ -7686,7 +7698,12 @@ components and icons as rules for whoever changes it: @docs/design.md
 ## Invariants
 
 - **herdr owns every process and status.** remuda holds no session state;
-  it must keep working after a restart while agents run.
+  it must keep working after a restart while agents run. On a machine moved
+  to remuda-core, herdr's server is stopped (`herdr server stop`, herdr
+  left installed) only when the person presses Stop herdr's server on X…
+  and confirms what stops — every agent still running in herdr there —
+  never from a schedule, a queue, a trigger, an agent's key or a viewer
+  link (403), nor by a scratch instance (`internal/restart`, Core 26d).
 - **The transcript is read-only**; input goes through herdr: `agent.prompt`
   preferred (refuses with `agent_blocked` while a menu is open — surface
   that as 409, never type into the menu), and for a message that
