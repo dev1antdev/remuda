@@ -299,7 +299,12 @@ func panesWhere(snap *herdr.Snapshot, pick func(*herdr.PaneInfo) bool) []string 
 	return out
 }
 
-// WorkspaceClose ends every terminal of the workspace and takes it out of the document.
+// closeBeforeWrite runs between a close's ending of the terminals it saw and its document write: a test lays a layout
+// out there.
+var closeBeforeWrite = func() {}
+
+// WorkspaceClose ends every terminal of the workspace and takes it out of the document, then ends whatever terminal
+// still carries its label: one a layout or a tab started while it closed.
 func (a *Adapter) WorkspaceClose(workspaceID string) error {
 	snap, err := a.SessionSnapshot()
 	if err != nil {
@@ -311,12 +316,32 @@ func (a *Adapter) WorkspaceClose(workspaceID string) error {
 	if err := a.kill(panesWhere(snap, func(p *herdr.PaneInfo) bool { return p.WorkspaceID == workspaceID })...); err != nil {
 		return err
 	}
+	closeBeforeWrite()
 	ctx, cancel := context.WithTimeout(context.Background(), callWithin)
 	defer cancel()
-	return a.editDoc(ctx, func(doc *Document) error {
+	err = a.editDoc(ctx, func(doc *Document) error {
 		doc.Workspaces = slices.DeleteFunc(doc.Workspaces, func(ws DocWorkspace) bool { return ws.ID == workspaceID })
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+	return a.endLabelled(map[string]string{LabelSpace: workspaceID})
+}
+
+// endLabelled ends every live terminal carrying the labels.
+func (a *Adapter) endLabelled(labels map[string]string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), callWithin)
+	defer cancel()
+	left, err := a.client.List(ctx, false, labels)
+	if err != nil {
+		return a.refusal(err, "pane_not_found")
+	}
+	addresses := make([]string, 0, len(left))
+	for _, t := range left {
+		addresses = append(addresses, t.Address)
+	}
+	return a.kill(addresses...)
 }
 
 // TabClose ends every terminal of the tab and takes it out of the document; the workspace goes with its last tab, as
@@ -335,10 +360,14 @@ func (a *Adapter) TabClose(tabID string) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), callWithin)
 	defer cancel()
-	return a.editDoc(ctx, func(doc *Document) error {
+	err = a.editDoc(ctx, func(doc *Document) error {
 		a.dropTab(doc, tabID, panes)
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+	return a.endLabelled(map[string]string{LabelTab: tabID})
 }
 
 // docSpaceOf is the workspace the mirror's document puts a tab in ("" when none does).

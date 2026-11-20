@@ -510,21 +510,25 @@ components and icons as rules for whoever changes it: @docs/design.md
   is the document's tree of the tab — a pane whose terminal ended left out,
   one placed by its labels alone put to the right of the last — each pane's
   folder as the snapshot shows it now and the label and command the layout
-  that made it gave it; `LayoutApply` runs every pane's command (else the
-  shell) in its folder (else the workspace's), then writes the tree in one
-  `doc.set` — a new tab, the one in front staying in front, or in place of a
-  tab, whose old terminals end once the new tree stands. Every terminal of
-  one apply carries the mark `remuda.layout=<id>`: a layout that fails ends
-  every terminal so marked (`sweep`), those whose start never answered too,
-  asking a core it cannot reach again for `sweepFor` 2 min; a `doc.set` whose
-  answer was lost is read back (`holdsTree`) before the layout counts as
-  failed. A workspace or tab closed while the panes started is not brought
+  that made it gave it; `LayoutApply` starts every pane as the shell in its
+  folder (else the workspace's) and types its command at the prompt, quoted
+  for that shell (`startPane`: never as the terminal's program, which the
+  core would read as a template of that name, and so with the person's own
+  PATH), then writes the tree in one `doc.set` — a new tab, the one in front
+  staying in front, or in place of a tab, whose old terminals end once the
+  new tree stands. Every terminal of one apply carries the mark
+  `remuda.layout=<id>`: a layout that fails ends every terminal so marked,
+  those whose start never answered too (one that cannot be ended is said,
+  and shows as a tab of its own); a write the core refused fails the layout,
+  any other failed write is read back (`holdsTree`) — there, the layout
+  stands; absent, it fails; unknown, its panes are left as they are and it
+  says so. A workspace or tab closed while the panes started is not brought
   back (the write checks the document as it reads then, and that every pane
-  still stands); a pane's program a core template is named after is refused
-  (`refuseTemplates`, `templates.list`: the core would run the template
-  instead). The document keeps no pane's environment; the tree is taken as
-  scenes' `checkLayout` passed it, only one with no pane refused
-  (`invalid_request`). Still answering
+  still stands), and `WorkspaceClose` / `TabClose` end, after their own
+  write, every terminal still labelled for what they closed, so a layout or
+  a tab made meanwhile goes with it. The document keeps no pane's
+  environment; the tree is taken as scenes' `checkLayout` passed it, only one
+  with no pane refused (`invalid_request`). Still answering
   `invalid_request` "… is not on remuda-core yet": worktrees (Core 20),
   `PaneScroll` (Core 25), and the writes into herdr's own UI
   (`*ReportMetadata`, `NotificationShow`). `Bridged` is false: a stream costs the core nothing. The

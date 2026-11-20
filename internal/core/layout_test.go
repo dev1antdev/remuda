@@ -275,7 +275,12 @@ func TestALayoutLaidInPlaceOfATabClosedMeanwhileFails(t *testing.T) {
 	eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Tab(other.Tab.TabID) == nil && len(s.Panes) == 1 })
 }
 
-func TestAPaneWhoseProgramIsACoreTemplateIsRefused(t *testing.T) {
+func TestAPaneWhoseProgramSharesATemplatesNameRunsTheProgram(t *testing.T) {
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "sleeper"), []byte("#!/bin/sh\necho the program ran \"$@\"\nsleep 300\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 	server := coretest.Server(t)
 	client := server.Client(t)
 	adapter := adapterOf(t, client, core.AdapterHooks{})
@@ -289,7 +294,7 @@ func TestAPaneWhoseProgramIsACoreTemplateIsRefused(t *testing.T) {
 	if err := os.MkdirAll(templates, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	template := "---\ndescription: a stand-in\ncommand: sleep 300\n---\n"
+	template := "---\ndescription: a stand-in\ncommand: echo the template ran; sleep 300\n---\n"
 	if err := os.WriteFile(filepath.Join(templates, "sleeper.md"), []byte(template), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -297,11 +302,31 @@ func TestAPaneWhoseProgramIsACoreTemplateIsRefused(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tree := herdr.LayoutNode{Type: "pane", Command: []string{"sleeper", "run", "dev"}}
-	if _, err := adapter.LayoutApply(made.Workspace.WorkspaceID, "", "", tree); !herdr.IsCode(err, "invalid_request") || !strings.Contains(err.Error(), "sleeper") {
-		t.Fatalf("a template's name as a pane's program: %v", err)
+	laid, err := adapter.LayoutApply(made.Workspace.WorkspaceID, "", "", herdr.LayoutNode{Type: "pane", Command: []string{"sleeper", "run", "dev"}})
+	if err != nil {
+		t.Fatal(err)
 	}
-	if snap, _ := adapter.SessionSnapshot(); len(snap.Panes) != 1 {
-		t.Fatalf("the refused layout started terminals: %+v", snap.Panes)
+	screenSays(t, adapter, laid.Root.PaneID, "the program ran run dev")
+}
+
+func TestAWorkspaceClosedWhileALayoutIsWrittenEndsTheLayoutsPanesToo(t *testing.T) {
+	client := coretest.Server(t).Client(t)
+	adapter := adapterOf(t, client, core.AdapterHooks{})
+	made, err := adapter.WorkspaceCreate(t.TempDir(), "")
+	if err != nil {
+		t.Fatal(err)
 	}
+	space := made.Workspace.WorkspaceID
+	core.BeforeCloseWrite(t, func() {
+		if _, err := adapter.LayoutApply(space, "", "", threePanes("")); err != nil {
+			t.Error(err)
+		}
+	})
+	if err := adapter.WorkspaceClose(space); err != nil {
+		t.Fatal(err)
+	}
+	if left, err := client.List(t.Context(), false, map[string]string{core.LabelSpace: space}); err != nil || len(left) > 0 {
+		t.Fatalf("the layout's panes outlived the close: %+v, %v", left, err)
+	}
+	eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Workspace(space) == nil && len(s.Panes) == 0 })
 }
