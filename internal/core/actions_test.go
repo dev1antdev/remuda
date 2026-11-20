@@ -27,6 +27,7 @@ while IFS= read -r line; do
   printf 'got: %s\n' "$line"
   if [ "$line" = ask ]; then say blocked; continue; fi
   if [ "$line" = leaving ]; then say clear; continue; fi
+  if [ "$line" = slow ]; then say working; sleep 3; say idle; continue; fi
   say working
   sleep 0.2
   say idle

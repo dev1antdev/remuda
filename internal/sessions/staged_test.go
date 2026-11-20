@@ -207,3 +207,19 @@ func TestAHoldWaitsForAPromptOnItsWayWithoutHoldingKeysUp(t *testing.T) {
 	<-held
 	hold.Unlock()
 }
+
+// A first prompt whose agent left the front as it went is not tried again, so it never reaches what replaced it.
+func TestAFirstPromptIsNotTriedAgainOnceItsAgentLeft(t *testing.T) {
+	retry := FirstPromptRetry
+	FirstPromptRetry = time.Millisecond
+	t.Cleanup(func() { FirstPromptRetry = retry })
+	h, in := newHolder(), NewInput(nil, nil)
+	h.sendErr = &herdr.Error{Code: "agent_left", Message: "gone from the front"}
+	h.sends <- struct{}{}
+	if err := in.FirstPrompt(h, onePane, "the task", time.Minute); !errors.Is(err, ErrNoAgent) {
+		t.Fatalf("refusal %v", err)
+	}
+	if got := h.seen(); !slices.Equal(got, []string{"look:the task", "sent:the task"}) {
+		t.Fatalf("tried again: %v", got)
+	}
+}

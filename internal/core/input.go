@@ -122,7 +122,8 @@ func readyForPrompt(t *Terminal) bool {
 // for an agent never reaches a shell. The core's own view of the terminal is read right before, so an agent that left
 // since the mirror's last news is not taken for there; an agent whose status is cleared (Claude Code reports
 // state=clear on its way out) gets nothing, and a send to an idle agent names that status (`if`), so one that clears
-// it as the prompt goes has it refused too (status_mismatch).
+// it as the prompt goes has it refused too (status_mismatch) — while one a person's own draft set working takes it as
+// a message, and one gone from the front is agent_left, never tried again (turnStarted).
 func (a *Adapter) AgentPrompt(target, text string) error {
 	send, err := a.StagePrompt(target, text)
 	if err != nil {
@@ -168,15 +169,57 @@ func (a *Adapter) StagePrompt(target, text string) (func() error, error) {
 	if now.Foreground == nil {
 		return nil, &herdr.Error{Code: "agent_not_ready", Message: "remuda-core has not seen what runs in front of " + target + " yet"}
 	}
+	return func() error {
+		err := sendPrompt(cn, target, text, &now)
+		if !IsKind(err, "status_mismatch") {
+			return a.inputRefusal(err, "agent_not_ready", "agent_blocked")
+		}
+		working, left := a.turnStarted(cn, target, agent, &now)
+		if left != nil {
+			return left
+		}
+		if err = sendPrompt(cn, target, text, &working); IsKind(err, "status_mismatch") {
+			return agentLeft(target)
+		}
+		return a.inputRefusal(err, "agent_not_ready", "agent_blocked")
+	}, nil
+}
+
+// sendPrompt is terminal.send to the agent in front under its pid, naming its status when idle, so one that clears it
+// as the prompt goes is refused untyped (status_mismatch); so is one a person's own draft set working meanwhile.
+func sendPrompt(cn *conn, target, text string, now *Terminal) error {
 	params := map[string]any{"terminal": target, "text": text, "foreground": now.Foreground.Pid}
-	if statusOf(&now) == herdr.StatusIdle {
+	if statusOf(now) == herdr.StatusIdle {
 		params["if"] = herdr.StatusIdle // not working: a turn ending as the prompt goes would refuse it
 	}
-	return func() error {
-		ctx, cancel := context.WithTimeout(context.Background(), sendWithin)
-		defer cancel()
-		return a.inputRefusal(cn.call(ctx, "terminal.send", params, nil, nil), "agent_not_ready", "agent_blocked")
-	}, nil
+	ctx, cancel := context.WithTimeout(context.Background(), sendWithin)
+	defer cancel()
+	return cn.call(ctx, "terminal.send", params, nil, nil)
+}
+
+// turnStarted reads the terminal again after a send the core refused untyped (status_mismatch), and answers it when
+// the refusal was only the agent's status: the send named idle, and the same agent, in front under the same pid, now
+// works — a turn the person's own draft started, which takes the prompt as a message. Every other such refusal is the
+// core's look at the foreground, the agent gone from the front: agent_left, which no delivery tries again, so a
+// prompt never reaches what replaced it. The core's own view of the foreground may lag its look, so a status still
+// idle counts as the foreground's refusal.
+func (a *Adapter) turnStarted(cn *conn, target, agent string, sent *Terminal) (Terminal, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), callWithin)
+	defer cancel()
+	var now Terminal
+	if err := cn.call(ctx, "terminal.get", map[string]any{"terminal": target}, &now, nil); err != nil {
+		return now, a.refusal(err, "agent_not_found")
+	}
+	named := statusOf(sent) == herdr.StatusIdle
+	same := agentOf(&now) == agent && now.Foreground != nil && now.Foreground.Pid == sent.Foreground.Pid
+	if !named || !same || now.Status == nil || statusOf(&now) == herdr.StatusIdle {
+		return now, agentLeft(target)
+	}
+	return now, nil
+}
+
+func agentLeft(target string) error {
+	return &herdr.Error{Code: "agent_left", Message: "the agent in " + target + " left the terminal's front as the prompt went: nothing was sent"}
 }
 
 // inputRefusal is the core's refusal of typed input in herdr's words: a terminal still starting or between shells is

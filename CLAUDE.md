@@ -524,7 +524,13 @@ components and icons as rules for whoever changes it: @docs/design.md
   still show that agent with a status — a cleared one, as an agent leaving
   reports, gets nothing — and a send to an idle agent names that status
   (`if`, never for a working one, whose turn may end as it goes;
-  `status_mismatch` → `agent_not_ready`); `PaneSendKeys` is
+  a `status_mismatch` — nothing typed — is read again, `turnStarted`:
+  the agent the person's own draft set working meanwhile takes the
+  prompt as a message, sent once more without `if`, and any other is
+  the core's look at the foreground, the agent gone from the front,
+  `agent_left`, which no delivery tries again — the first prompts' loops
+  fail on it and `sessions` says `ErrNoAgent` — so a prompt never
+  reaches what replaced the agent); `PaneSendKeys` is
   `terminal.keys` with `now` (keys the person pressed); `PaneSendText` types
   bytes as they are into a terminal its shell holds — a command line remuda
   types into a shell it opened — through a `keep_size` attach of its own,
