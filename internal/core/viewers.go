@@ -18,6 +18,21 @@ const attachWithin = 15 * time.Second
 // viewerChunk is the most one read hands a viewer.
 const viewerChunk = 32 << 10
 
+// attachHistory is the most rows of history above the screen a viewer is painted first: as many as the page's xterm
+// keeps (XTERM_SCROLLBACK in web/src/features/terminal/scrollback.ts, whose test reads this line), so its find reads
+// the terminal's own rows.
+const attachHistory = 2000
+
+// firstPaintWithin is how long a viewer that asked for history waits for its first paint. The core sends it at once
+// but drops it whole past its 4 MiB stream queue (remuda-core 0.2.0: a richly coloured history can weigh that), and
+// the viewer would stay blank for good, or be handed the program's next output with no screen under it; it attaches
+// again with its screen alone.
+const firstPaintWithin = 3 * time.Second
+
+// paintStart is the byte a core's first paint begins with (CAN, ending whatever sequence a backlog was cut in): a
+// first read without it is the program's output after a paint the core dropped.
+const paintStart = 0x18
+
 // Terminals opens a machine's terminals through its core client.
 type Terminals struct {
 	client *Client
@@ -34,13 +49,33 @@ func NewTerminals(client *Client) *Terminals {
 
 // Open attaches one viewer: Keep types but leaves the size to the others, Observe only watches. A viewer of either
 // kind is handed the terminal's grid in order with the bytes, an Out of its own ahead of the paint the core sends at
-// that grid — never a sequence in the bytes, which the program itself could print.
+// that grid — never a sequence in the bytes, which the program itself could print. It is painted attachHistory rows of
+// history first, or its screen alone when that paint never comes (firstPaintWithin).
 func (t *Terminals) Open(termID string, view herdr.View) (herdr.Viewer, error) {
+	v, err := t.attach(termID, view, attachHistory)
+	if err != nil {
+		return nil, err
+	}
+	timer := time.NewTimer(firstPaintWithin)
+	defer timer.Stop()
+	select {
+	case <-v.painted:
+		if v.paintCame {
+			return v, nil
+		}
+	case <-timer.C:
+	}
+	v.Close()
+	return t.attach(termID, view, 0)
+}
+
+func (t *Terminals) attach(termID string, view herdr.View, history int) (*coreViewer, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), attachWithin)
 	defer cancel()
-	v := &coreViewer{out: make(chan herdr.Out, 8), done: make(chan struct{})}
+	v := &coreViewer{out: make(chan herdr.Out, 8), done: make(chan struct{}), painted: make(chan struct{})}
 	params := AttachParams{
 		Terminal:            termID,
+		History:             history,
 		Observe:             view.Observe,
 		KeepSize:            view.Keep && !view.Observe,
 		ResizeNotifications: view.Keep || view.Observe,
@@ -82,12 +117,15 @@ func (t *Terminals) Viewers(termID string) int {
 }
 
 type coreViewer struct {
-	stream  *Stream
-	out     chan herdr.Out
-	done    chan struct{}
-	closing sync.Once
-	once    sync.Once // release, by whichever of the pump's end and Close comes first
-	release func()    // nil for a viewer nobody counts
+	stream    *Stream
+	out       chan herdr.Out
+	done      chan struct{}
+	painted   chan struct{} // closed once the first bytes came, or the stream ended without any
+	paintCame bool          // the attach stands: its first bytes were a paint, or it ended; written before painted closes
+	paint     sync.Once
+	closing   sync.Once
+	once      sync.Once // release, by whichever of the pump's end and Close comes first
+	release   func()    // nil for a viewer nobody counts
 }
 
 // pump hands the stream's bytes to the viewer until the stream ends or the viewer goes: a viewer that does not read
@@ -95,9 +133,19 @@ type coreViewer struct {
 func (v *coreViewer) pump() {
 	defer close(v.out)
 	defer v.once.Do(v.released)
+	defer v.paint.Do(func() {
+		v.paintCame = true // ended before any bytes: attaching again would meet the same end
+		close(v.painted)
+	})
 	buf := make([]byte, viewerChunk)
 	for {
 		n, err := v.stream.Read(buf)
+		if n > 0 {
+			v.paint.Do(func() {
+				v.paintCame = buf[0] == paintStart
+				close(v.painted)
+			})
+		}
 		if n > 0 && !v.hand(herdr.Out{Data: append([]byte(nil), buf[:n]...)}) {
 			return
 		}

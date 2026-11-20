@@ -102,6 +102,7 @@ func revokedWhileWatching(t *testing.T, argv []string) {
 		t.Fatal(err)
 	}
 	defer conn.CloseNow()
+	conn.SetReadLimit(maxFrame + 64<<10) // a frame gathers up to maxFrame and the chunk that passes it, the history's paint among them
 	if typ, first, err := conn.Read(ctx); err != nil || typ != websocket.MessageText || string(first) != `{"cols":100,"rows":30,"type":"grid"}` {
 		t.Fatalf("the link's first frame: %v %q %v", typ, first, err)
 	}

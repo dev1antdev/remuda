@@ -185,7 +185,7 @@ export default function PaneArea({ current }: { current: Located | null }) {
         masked={share.sessionHidden(machine.id, session)}
         tools={
           <>
-            {lens === "terminal" && !viewOnly && <FindTool what={tr("in the scrollback")} shortcut={isMac ? "⌘F" : "Ctrl+Shift+F"} />}
+            {lens === "terminal" && !viewOnly && <FindTool what={tr("in the scrollback")} shortcut={isMac ? "⌘F" : "Ctrl+Shift+F"} note={machine.core ? tr("A full-screen program keeps its own history: only its screen is found.") : ""} />}
             {lens === "terminal" && !viewOnly && <TerminalTools />}
             {lens === "chat" && <ChatTools />}
             {!viewOnly && (session.worktree || session.branch) && session.folder && <RunButton machineId={machine.id} workspace={session.id} pane={pane.id} root={session.folder} masked={share.sessionHidden(machine.id, session)} />}

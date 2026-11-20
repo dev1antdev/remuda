@@ -1,14 +1,16 @@
 // The find over the scrollback as the screen shows it: xterm's own search addon marks every match on the visible
-// rows in the page's amber and selects the current one. The rows themselves are herdr's — the attach stream repaints
+// rows in the page's amber and selects the current one. On herdr the rows are herdr's — the attach stream repaints
 // the screen, so xterm never holds a scrollback — and useTerminalFind reads them through the server and scrolls the
-// pane; what arrives here is which row of the screen to mark once the repaint has landed.
+// pane; what arrives here is which row of the screen to mark once the repaint has landed. On remuda-core xterm holds
+// the terminal's own rows (the attach paints the history first, the output after it is the program's), so find lets
+// the addon look through xterm's buffer itself, count, step and scroll xterm, never the pane.
 
 import { SearchAddon, type ISearchDecorationOptions, type ISearchOptions } from "@xterm/addon-search";
 import type { IBufferLine, Terminal as XTerm } from "@xterm/xterm";
 import { findRanges } from "@/features/chat/find";
 import { swatches, type Flavor, type Swatches } from "@/lib/theme";
 import { nearest } from "../scrollback";
-import type { SearchApi } from "./types";
+import type { FoundCount, SearchApi } from "./types";
 
 // SETTLE_MS is how long the screen gets to repaint after a scroll before the match is looked for, a few frames at a time.
 const SETTLE_MS = 1500;
@@ -83,13 +85,18 @@ export function cellSpan(line: IBufferLine | undefined, from: number, length: nu
 // is not the person's — else it would carry the mark to wherever that text seems to have moved after a repaint.
 export function installSearch(term: XTerm, flavor: () => Flavor, forgetSelection: () => void): SearchApi & { refresh: () => void; dispose: () => void } {
   let addon = new SearchAddon();
+  // heard is the core find's ear: every count the addon gives, its own find's and each it redoes as output arrives
+  let heard: ((found: FoundCount) => void) | null = null;
+  const listen = () => addon.onDidChangeResults((r) => heard?.({ total: Math.max(0, r.resultCount), at: Math.max(0, r.resultIndex) }));
   term.loadAddon(addon);
+  listen();
   // fresh replaces the addon before a find: its cache of the rows cannot know that herdr rewrote them in place (the
   // cursor ends where it began, so xterm reports no move), and a stale cache finds the screen as it was
   const fresh = () => {
     addon.dispose();
     addon = new SearchAddon();
     term.loadAddon(addon);
+    listen();
   };
   let query = "";
   let pending: ReturnType<typeof setTimeout> | null = null;
@@ -100,15 +107,25 @@ export function installSearch(term: XTerm, flavor: () => Flavor, forgetSelection
     for (let i = 0; i < term.rows; i++) out.push(buffer.getLine(buffer.viewportY + i)?.translateToString(true) ?? "");
     return out;
   };
-  // mark selects the occurrence and lets a fresh addon decorate every match on the screen, the selected one current:
-  // with no term cached, the find starts at the selection's start rather than after it
-  const mark = (row: number, col: number, length: number) => {
-    const bufferRow = term.buffer.active.viewportY + row;
+  // mark selects the occurrence at a row of the buffer and lets a fresh addon decorate every match, the selected one
+  // current: with no term cached, the find starts at the selection's start rather than after it
+  const mark = (bufferRow: number, col: number, length: number) => {
     const span = cellSpan(term.buffer.active.getLine(bufferRow), col, length);
     fresh();
     term.select(span.col, bufferRow, span.width);
     addon.findNext(query, options());
     forgetSelection();
+  };
+  // seek selects the next match, or the previous, and tells the engine the selection is not the person's
+  const seek = (back = false): boolean => {
+    const hit = back ? addon.findPrevious(query, options()) : addon.findNext(query, options());
+    forgetSelection();
+    return hit;
+  };
+  // restart starts the find over with a fresh addon from the top of the buffer
+  const restart = () => {
+    fresh();
+    term.clearSelection();
   };
   const stop = () => {
     if (pending) clearTimeout(pending);
@@ -116,6 +133,7 @@ export function installSearch(term: XTerm, flavor: () => Flavor, forgetSelection
   };
   const clear = () => {
     stop();
+    heard = null;
     query = "";
     addon.clearDecorations();
     term.clearSelection();
@@ -130,7 +148,7 @@ export function installSearch(term: XTerm, flavor: () => Flavor, forgetSelection
         const found = occurrences(screenLines(), query);
         const pick = pickNear(found, expectedRow, col);
         if (pick >= 0) {
-          mark(found[pick]!.row, found[pick]!.col, found[pick]!.length);
+          mark(term.buffer.active.viewportY + found[pick]!.row, found[pick]!.col, found[pick]!.length);
           return;
         }
         if (Date.now() - started < SETTLE_MS) {
@@ -138,19 +156,23 @@ export function installSearch(term: XTerm, flavor: () => Flavor, forgetSelection
           return;
         }
         // the screen never showed that row: what is on it is marked all the same, the first match current
-        fresh();
-        term.clearSelection();
-        addon.findNext(query, options());
-        forgetSelection();
+        restart();
+        seek();
       };
       attempt();
+    },
+    find(next, step, hear) {
+      stop();
+      heard = hear;
+      if (step === 0 || next !== query) restart();
+      query = next;
+      if (!seek(step < 0)) hear({ total: 0, at: 0 });
     },
     clear,
     refresh() {
       if (!query) return;
       fresh();
-      addon.findNext(query, options());
-      forgetSelection();
+      seek();
     },
     dispose() {
       stop();
