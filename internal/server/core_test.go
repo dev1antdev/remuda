@@ -25,6 +25,9 @@ func TestNoCheckoutIsTakenDownOrWrittenOnAMachineReachedThroughCore(t *testing.T
 	if code, out := taskCall(mux, "POST", "/api/machines/local/leftovers/remove", "", `{"paths":["/w/x"]}`); code != http.StatusConflict {
 		t.Errorf("leftovers removed on remuda-core: %d %v", code, out)
 	}
+	if code, out := taskCall(mux, "POST", "/api/machines/gone/leftovers/remove?machine=local", "", `{"paths":["/w/x"]}`); code != http.StatusConflict {
+		t.Errorf("leftovers removed on remuda-core named by the query past an unknown path: %d %v", code, out)
+	}
 	move := `{"machine":"local","pane":"w1:p1","target":"local","folder":"/w/app","agent":"claude"}`
 	if code, out := taskCall(mux, "POST", "/api/teleport", "", move); code != http.StatusBadRequest {
 		t.Errorf("a move onto remuda-core: %d %v", code, out)

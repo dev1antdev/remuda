@@ -160,7 +160,7 @@ func (s *Server) handleTeleport(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 503, errors.New("no job runner"))
 		return
 	}
-	if target, err := s.Machines.Get(req.Target); err == nil && target.OnCore() { // before the move writes a checkout there
+	if s.Machines.Core() { // every target is then on remuda-core: refused before the move writes a checkout there
 		httpErr(w, 400, errors.New("moving the work to a machine reached through remuda-core is not in this remuda yet"))
 		return
 	}
