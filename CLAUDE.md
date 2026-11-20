@@ -575,16 +575,17 @@ components and icons as rules for whoever changes it: @docs/design.md
   Code's from `<config dir>/sessions/<pid>.json` (`CLAUDE_CONFIG_DIR` read
   off the process's environment, `/proc/<pid>/environ` or `ps -E`, whose
   run-together text gives candidate folders, then the default one; every
-  candidate's file is sent and the first that is this process's wins; only
+  candidate's file is sent and Go weighs them, a start-verified one before
+  one matched by its folder alone; only
   regular files are read, a FIFO never holds the script; a file
   counts only when its `procStart` is the process's `LC_ALL=C TZ=UTC ps -o
   lstart`, or, where either side lacks it — Windows, not checked there yet —
   when its folder is the pane's), Codex's thread id from the
   `rollout-*.jsonl` of the person's thread (its `session_meta` names no
   subagent) the process, else a child of it, holds open (`/proc/<pid>/fd`,
-  else `lsof`; none on Windows), none when two are — a revert's
-  replacement file, `rollout-<time>-<id>_<rollout id>.jsonl`, carries the
-  thread's id, and the resolvers open the newest of a thread's files; an id found under a
+  else `lsof`; none on Windows), none when two are, the id the one its
+  `session_meta` names (a revert's replacement file,
+  `rollout-<time>-<id>_<rollout id>.jsonl`, keeps the thread's); an id found under a
   `CLAUDE_CONFIG_DIR` of the agent's own still names a file the readers,
   which know the default roots alone, do not open yet;
   stateless, since `/clear` and `/resume` change the session under the same

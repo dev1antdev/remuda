@@ -392,13 +392,9 @@ func MatchCodexLine(line []byte, q string) (Match, bool) {
 
 // ---- the files ----
 
-// CodexSessionID is the thread id a rollout's name carries: rollout-<time>-<id>.jsonl, or
-// rollout-<time>-<id>_<rollout id>.jsonl for the file a history revert (a prompt edited) goes on in.
+// CodexSessionID is the thread id a rollout's name carries: rollout-<time>-<id>.jsonl.
 func CodexSessionID(path string) string {
 	name := strings.TrimSuffix(filepath.Base(path), ".jsonl")
-	if i := strings.LastIndex(name, "_"); i >= 0 {
-		name = name[:i]
-	}
 	if i := strings.LastIndex(name, "-"); i >= 0 && len(name)-i-1 == 36 {
 		return name[i+1:]
 	}
@@ -532,16 +528,12 @@ func codexFirstPrompt(path string) string {
 	return title
 }
 
-// findCodexSession is the rollout of a thread id under home, wherever in the date tree it sits: the newest, which
-// is a revert's replacement file once the thread has one.
+// findCodexSession is the rollout of a thread id under home, wherever in the date tree it sits.
 func findCodexSession(home, id string) (string, error) {
 	if !text.SessionID(id) {
 		return "", os.ErrNotExist
 	}
-	root := SessionRoots(home)[Codex]
-	hits, _ := filepath.Glob(filepath.Join(root, "*", "*", "*", "rollout-*-"+id+".jsonl"))
-	replaced, _ := filepath.Glob(filepath.Join(root, "*", "*", "*", "rollout-*-"+id+"_*.jsonl"))
-	hits = append(hits, replaced...)
+	hits, _ := filepath.Glob(filepath.Join(SessionRoots(home)[Codex], "*", "*", "*", "rollout-*-"+id+".jsonl"))
 	if len(hits) == 0 {
 		return "", os.ErrNotExist
 	}
@@ -551,5 +543,5 @@ func findCodexSession(home, id string) (string, error) {
 
 // codexFindScript is findCodexSession as a shell line for a remote machine: prints the path, or nothing.
 func codexFindScript(quotedHome, id string) string {
-	return `ls ` + quotedHome + `/.codex/sessions/*/*/*/rollout-*-` + id + `.jsonl ` + quotedHome + `/.codex/sessions/*/*/*/rollout-*-` + id + `_*.jsonl 2>/dev/null | tail -1`
+	return `ls ` + quotedHome + `/.codex/sessions/*/*/*/rollout-*-` + id + `.jsonl 2>/dev/null | tail -1`
 }

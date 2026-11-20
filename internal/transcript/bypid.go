@@ -41,7 +41,8 @@ func (r *Reader) SessionsOf(procs []Running) (map[int]string, error) {
 // sessionsByPIDScript prints a record per process: pid, agent, the process's start as Claude Code records it
 // (`ps -o lstart` in UTC), then for Claude Code the text of every candidate session file (the environment's
 // folders, then the default), each ended by GS, or, for Codex, a line per open rollout:
-// the pid holding it, whether its session_meta is the person's thread (1) or a subagent's (0), its path.
+// the pid holding it, whether its session_meta is the person's thread (1) or a subagent's (0), the thread id that
+// session_meta names, its path.
 func sessionsByPIDScript(procs []Running) string {
 	var b strings.Builder
 	for _, p := range procs {
@@ -93,7 +94,8 @@ s() {
           *'"thread_source":"'*) own=0 ;;
           *) own=1 ;;
         esac
-        printf '%s\035%s\035%s\n' "$p" "$own" "$f"
+        id=$(printf '%s' "$head" | grep -o '"id":"[^"]*"' | head -n 1 | sed 's/^"id":"//; s/"$//')
+        printf '%s\035%s\035%s\035%s\n' "$p" "$own" "$id" "$f"
       done
     done
   fi
@@ -145,24 +147,25 @@ func parseSessionsByPID(out string, procs []Running, style rpath.Style) map[int]
 	return found
 }
 
-// claudeSession is the session of the first candidate file that is this very process's: its pid, and its start time
-// when both sides know it, else its folder. A file left by an ended process whose pid was given to another is not.
+// claudeSession is the session of a candidate file that is this very process's: its pid and its start time, else,
+// where a side does not know the start, its pid and its folder. A file left by an ended process whose pid was given
+// to another is not.
 func claudeSession(payload string, pid int, start, cwd string, style rpath.Style) string {
+	var byFolder string
 	for _, doc := range strings.Split(payload, script.GS) {
 		var file claudeSessionFile
 		if json.Unmarshal([]byte(doc), &file) != nil || file.PID != pid {
 			continue
 		}
 		if file.ProcStart != "" && start != "" {
-			if strings.TrimSpace(file.ProcStart) != start {
-				continue
+			if strings.TrimSpace(file.ProcStart) == start {
+				return file.SessionID
 			}
-		} else if cwd != "" && file.CWD != "" && !style.Equal(file.CWD, cwd) {
-			continue
+		} else if byFolder == "" && (cwd == "" || file.CWD == "" || style.Equal(file.CWD, cwd)) {
+			byFolder = file.SessionID
 		}
-		return file.SessionID
 	}
-	return ""
+	return byFolder
 }
 
 // heldThread is the thread of the person's conversation among the rollouts a Codex process holds open: the
@@ -171,11 +174,14 @@ func claudeSession(payload string, pid int, start, cwd string, style rpath.Style
 func heldThread(payload string, pid int) string {
 	own, children := map[string]bool{}, map[string]bool{}
 	for _, line := range strings.Split(payload, "\n") {
-		fields := strings.SplitN(line, script.GS, 3)
-		if len(fields) < 3 || fields[1] != "1" {
+		fields := strings.SplitN(line, script.GS, 4)
+		if len(fields) < 4 || fields[1] != "1" {
 			continue
 		}
-		id := CodexSessionID(fields[2])
+		id := fields[2] // session_meta's own: a revert's replacement file, <id>_<rollout id>.jsonl, keeps the thread's
+		if !text.SessionID(id) {
+			id = CodexSessionID(fields[3])
+		}
 		if id == "" {
 			continue
 		}

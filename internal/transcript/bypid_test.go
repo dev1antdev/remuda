@@ -108,7 +108,7 @@ func TestClaudeSessionComesFromItsConfigDirAndItsStart(t *testing.T) {
 	writeSessionFile(t, filepath.Join(config, "sessions"), pid, "4c9d6f0e-1111-4222-8333-944455556666", "/work/api", start)
 	writeSessionFile(t, filepath.Join(home, ".claude", "sessions"), pid, "0000aaaa-default-dir-not-this-one", "/work/api", start)
 	// a file an ended process left in the folder the value's first words name, under the same pid
-	writeSessionFile(t, filepath.Join(home, "Application Support", "Claude", "sessions"), pid, "1111bbbb-stale-not-this-one", "/work/api", "Mon Jan  1 00:00:00 2024")
+	writeSessionFile(t, filepath.Join(home, "Application Support", "Claude", "sessions"), pid, "1111bbbb-stale-not-this-one", "/work/api", "")
 
 	reader := NewReader(remoteHere(home))
 	got, err := reader.SessionsOf([]Running{{PID: pid, Agent: "claude", CWD: "/work/api"}})
@@ -227,26 +227,10 @@ func TestAPipeNamedLikeARolloutHoldsNothingUp(t *testing.T) {
 	}
 }
 
-func TestAThreadOpensTheFileARevertMovedItTo(t *testing.T) {
-	home := t.TempDir()
-	writeRollout(t, home, rolloutID, false)
-	replaced := writeRolloutNamed(t, home, "rollout-2026-11-20T03-10-00-"+rolloutID+"_01a1f6a0-1111-7222-8333-944455556666.jsonl", rolloutID, false)
-	if got, err := findCodexSession(home, rolloutID); err != nil || got != replaced {
-		t.Fatalf("here: %q, %v; want %s", got, err, replaced)
-	}
-	out, err := exec.Command("sh", "-c", codexFindScript(script.Quote(home), rolloutID)).Output()
-	if got := strings.TrimSpace(string(out)); err != nil || got != replaced {
-		t.Fatalf("by script: %q, %v; want %s", got, err, replaced)
-	}
-	if got := CodexSessionID(replaced); got != rolloutID {
-		t.Fatalf("CodexSessionID = %q", got)
-	}
-}
-
 func TestSessionsOfAsksTheMachineOnceForEveryAgent(t *testing.T) {
 	answer := "41\037claude\037Thu Nov 19 00:36:10 2026\037" +
 		`{"pid":41,"sessionId":"aaaa-1","cwd":"/w","procStart":"Thu Nov 19 00:36:10 2026"}` + "\036\n" +
-		"52\037codex\037Thu Nov 19 00:40:00 2026\03752\0351\035/home/me/.codex/sessions/2026/11/19/rollout-2026-11-19T00-40-01-" + rolloutID + ".jsonl\n\036\n"
+		"52\037codex\037Thu Nov 19 00:40:00 2026\03752\0351\035\035/home/me/.codex/sessions/2026/11/19/rollout-2026-11-19T00-40-01-" + rolloutID + ".jsonl\n\036\n"
 	host := &shell.Fake{Name: "gog", Remote: true, Dir: "/home/me", Answer: func(string) (string, error) { return answer, nil }}
 	got, err := NewReader(host).SessionsOf([]Running{{PID: 41, Agent: "claude", CWD: "/w"}, {PID: 52, Agent: "codex", CWD: "/w"}, {PID: 60, Agent: "gemini"}})
 	if err != nil {
@@ -287,6 +271,9 @@ func TestParseSessionsByPID(t *testing.T) {
 		{"no start here, the folder decides", record(7, "claude", "", claude(7, "id-1", `C:\Work\Api`, "S")), []Running{{7, "claude", `c:/work/api`}}, windows, "id-1"},
 		{"no start here, another folder", record(7, "claude", "", claude(7, "id-1", `C:\Work\Api`, "S")), []Running{{7, "claude", `C:\Work\Web`}}, windows, ""},
 		{"no session file", record(7, "claude", "S", ""), []Running{{7, "claude", "/a"}}, rpath.Style{}, ""},
+		{"a verified file over a folder-only one before it", record(7, "claude", "S", claude(7, "stale", "/a", "")+script.GS+claude(7, "live", "/a", "S")+script.GS), []Running{{7, "claude", "/a"}}, rpath.Style{}, "live"},
+		{"the session_meta's id over the file name", record(7, "codex", "S", "7"+script.GS+"1"+script.GS+rolloutID+script.GS+"/x/rollout-2026-11-20T03-10-00-"+rolloutID+"_01a1f6a0-1111-7222-8333-944455556666.jsonl\n"), []Running{{7, "codex", "/a"}}, rpath.Style{}, rolloutID},
+		{"a subagent's thread alone", record(7, "codex", "S", "7"+script.GS+"0"+script.GS+rolloutID+script.GS+"/x/rollout-2026-11-20T02-28-48-"+rolloutID+".jsonl\n"), []Running{{7, "codex", "/a"}}, rpath.Style{}, ""},
 		{"an id that is not one", record(7, "claude", "S", claude(7, "--resume x", "/a", "S")), []Running{{7, "claude", "/a"}}, rpath.Style{}, ""},
 		{"no rollout open", record(7, "codex", "S", ""), []Running{{7, "codex", "/a"}}, rpath.Style{}, ""},
 		{"a pid not asked about", record(9, "codex", "S", "/x/rollout-2026-11-20T02-28-48-"+rolloutID+".jsonl"), []Running{{7, "codex", "/a"}}, rpath.Style{}, ""},
