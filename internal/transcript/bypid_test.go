@@ -18,34 +18,46 @@ import (
 
 const rolloutID = "01a1f692-08d7-70f0-b846-42b3f2f3c1da"
 
-// TestHelperHoldsFile is not a test: run as a child process it holds REMUDA_TEST_HOLD open until it is killed, as
-// Codex holds its rollout, and keeps its environment where `ps` and /proc show it, as Claude Code's is read.
+// TestHelperHoldsFile is not a test: run as a child process with REMUDA_TEST_READY set, it holds every file of
+// REMUDA_TEST_HOLD open until it is killed, as Codex holds its rollouts, and keeps its environment where `ps` and
+// /proc show it, as Claude Code's is read. It writes REMUDA_TEST_READY once they are open.
 func TestHelperHoldsFile(t *testing.T) {
-	path := os.Getenv("REMUDA_TEST_HOLD")
-	if path == "" {
+	ready := os.Getenv("REMUDA_TEST_READY")
+	if ready == "" {
 		return
 	}
-	f, err := os.Open(path)
-	if err != nil {
+	for _, path := range filepath.SplitList(os.Getenv("REMUDA_TEST_HOLD")) {
+		f, err := os.Open(path)
+		if err != nil {
+			os.Exit(2)
+		}
+		defer f.Close()
+	}
+	if err := os.WriteFile(ready, nil, 0o600); err != nil {
 		os.Exit(2)
 	}
-	defer f.Close()
 	time.Sleep(time.Minute)
 	os.Exit(0)
 }
 
-// running starts the holder, directly or as the child of a shell, and answers the pid the lookup is asked about.
-func running(t *testing.T, hold string, env []string, asChild bool) int {
+// holder starts the helper holding holds open, with env; under a shell (a wrapper such as npm's) holding shellHolds
+// open itself when asked. It answers the pid the lookup is asked about once every file is open.
+func holder(t *testing.T, holds []string, env []string, underShell bool, shellHolds string) int {
 	t.Helper()
 	if runtime.GOOS == "windows" {
 		t.Skip("the lookup reads ps, /proc and lsof")
 	}
-	args := []string{"-test.run=^TestHelperHoldsFile$"}
-	cmd := exec.Command(os.Args[0], args...)
-	if asChild {
-		cmd = exec.Command("sh", "-c", `"$0" "$1" & wait`, os.Args[0], args[0])
+	ready := filepath.Join(t.TempDir(), "ready")
+	run := "-test.run=^TestHelperHoldsFile$"
+	cmd := exec.Command(os.Args[0], run)
+	if underShell {
+		line := `"$0" "$1" & wait`
+		if shellHolds != "" {
+			line = `exec 3<"$2"; ` + line
+		}
+		cmd = exec.Command("sh", "-c", line, os.Args[0], run, shellHolds)
 	}
-	cmd.Env = append(append(os.Environ(), "REMUDA_TEST_HOLD="+hold), env...)
+	cmd.Env = append(append(os.Environ(), "REMUDA_TEST_HOLD="+strings.Join(holds, string(os.PathListSeparator)), "REMUDA_TEST_READY="+ready), env...)
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +66,14 @@ func running(t *testing.T, hold string, env []string, asChild bool) int {
 		_ = cmd.Process.Kill()
 		_ = cmd.Wait()
 	})
-	return cmd.Process.Pid
+	for deadline := time.Now().Add(10 * time.Second); ; time.Sleep(20 * time.Millisecond) {
+		if _, err := os.Stat(ready); err == nil {
+			return cmd.Process.Pid
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the holder never opened its files")
+		}
+	}
 }
 
 // procStart is the process's start the way Claude Code records it in its session file.
@@ -83,12 +102,8 @@ func writeSessionFile(t *testing.T, dir string, pid int, id, cwd, start string) 
 func TestClaudeSessionComesFromItsConfigDirAndItsStart(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	config := filepath.Join(home, "elsewhere")
-	hold := filepath.Join(home, "held")
-	if err := os.WriteFile(hold, nil, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	pid := running(t, hold, []string{"CLAUDE_CONFIG_DIR=" + config}, false)
+	config := filepath.Join(home, "Application Support", "Claude")
+	pid := holder(t, nil, []string{"CLAUDE_CONFIG_DIR=" + config, "AFTER_IT=1"}, false, "")
 	start := procStart(t, pid)
 	writeSessionFile(t, filepath.Join(config, "sessions"), pid, "4c9d6f0e-1111-4222-8333-944455556666", "/work/api", start)
 	writeSessionFile(t, filepath.Join(home, ".claude", "sessions"), pid, "0000aaaa-default-dir-not-this-one", "/work/api", start)
@@ -106,11 +121,7 @@ func TestClaudeSessionComesFromItsConfigDirAndItsStart(t *testing.T) {
 func TestClaudeSessionLeftByAnEndedProcessIsNotTaken(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	hold := filepath.Join(home, "held")
-	if err := os.WriteFile(hold, nil, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	pid := running(t, hold, nil, false)
+	pid := holder(t, nil, nil, false, "")
 	writeSessionFile(t, filepath.Join(home, ".claude", "sessions"), pid, "4c9d6f0e-1111-4222-8333-944455556666", "/work/api", "Mon Jan  1 00:00:00 2024")
 
 	reader := NewReader(remoteHere(home))
@@ -123,34 +134,59 @@ func TestClaudeSessionLeftByAnEndedProcessIsNotTaken(t *testing.T) {
 	}
 }
 
-func TestCodexSessionIsTheRolloutItsProcessHoldsOpen(t *testing.T) {
-	for _, asChild := range []bool{false, true} {
-		t.Run(fmt.Sprintf("child=%v", asChild), func(t *testing.T) {
+// writeRollout writes a rollout of thread id whose session_meta says whose thread it is.
+func writeRollout(t *testing.T, home, id string, subagent bool) string {
+	t.Helper()
+	dir := filepath.Join(home, ".codex", "sessions", "2026", "11", "20")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	meta := `{"type":"session_meta","payload":{"id":"` + id + `","source":"cli","thread_source":"user"}}`
+	if subagent {
+		meta = `{"type":"session_meta","payload":{"id":"` + id + `","source":{"subagent":{"thread_spawn":{}}},"thread_source":"subagent"}}`
+	}
+	path := filepath.Join(dir, "rollout-2026-11-20T02-28-48-"+id+".jsonl")
+	if err := os.WriteFile(path, []byte(meta+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func TestCodexSessionIsThePersonsRolloutItsProcessHoldsOpen(t *testing.T) {
+	const other = "01a1f692-0000-70f0-b846-42b3f2f3c1db"
+	cases := []struct {
+		name  string
+		holds func(home string) (holds []string, underShell bool, shellHolds string)
+		want  string
+	}{
+		{"its own", func(home string) ([]string, bool, string) {
+			return []string{writeRollout(t, home, rolloutID, false)}, false, ""
+		}, rolloutID},
+		{"a child's, under a wrapper", func(home string) ([]string, bool, string) {
+			return []string{writeRollout(t, home, rolloutID, false)}, true, ""
+		}, rolloutID},
+		{"beside a subagent's", func(home string) ([]string, bool, string) {
+			return []string{writeRollout(t, home, other, true), writeRollout(t, home, rolloutID, false)}, false, ""
+		}, rolloutID},
+		{"its own over a child's", func(home string) ([]string, bool, string) {
+			return []string{writeRollout(t, home, other, false)}, true, writeRollout(t, home, rolloutID, false)
+		}, rolloutID},
+		{"two of the person's", func(home string) ([]string, bool, string) {
+			return []string{writeRollout(t, home, rolloutID, false), writeRollout(t, home, other, false)}, false, ""
+		}, ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
 			home := t.TempDir()
 			t.Setenv("HOME", home)
-			dir := filepath.Join(home, ".codex", "sessions", "2026", "11", "20")
-			if err := os.MkdirAll(dir, 0o755); err != nil {
+			holds, underShell, shellHolds := c.holds(home)
+			pid := holder(t, holds, nil, underShell, shellHolds)
+			got, err := NewReader(remoteHere(home)).SessionsOf([]Running{{PID: pid, Agent: "codex", CWD: home}})
+			if err != nil {
 				t.Fatal(err)
 			}
-			rollout := filepath.Join(dir, "rollout-2026-11-20T02-28-48-"+rolloutID+".jsonl")
-			if err := os.WriteFile(rollout, []byte("{}\n"), 0o600); err != nil {
-				t.Fatal(err)
-			}
-			pid := running(t, rollout, nil, asChild)
-
-			reader := NewReader(remoteHere(home))
-			var got map[int]string
-			for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
-				var err error
-				if got, err = reader.SessionsOf([]Running{{PID: pid, Agent: "codex", CWD: home}}); err != nil {
-					t.Fatal(err)
-				}
-				if got[pid] != "" {
-					break
-				}
-			}
-			if got[pid] != rolloutID {
-				t.Fatalf("session = %q, want %s", got[pid], rolloutID)
+			if got[pid] != c.want {
+				t.Fatalf("session = %q, want %q", got[pid], c.want)
 			}
 		})
 	}
@@ -159,7 +195,7 @@ func TestCodexSessionIsTheRolloutItsProcessHoldsOpen(t *testing.T) {
 func TestSessionsOfAsksTheMachineOnceForEveryAgent(t *testing.T) {
 	answer := "41\037claude\037Thu Nov 19 00:36:10 2026\037" +
 		`{"pid":41,"sessionId":"aaaa-1","cwd":"/w","procStart":"Thu Nov 19 00:36:10 2026"}` + "\036\n" +
-		"52\037codex\037Thu Nov 19 00:40:00 2026\037/home/me/.codex/sessions/2026/11/19/rollout-2026-11-19T00-40-01-" + rolloutID + ".jsonl\036\n"
+		"52\037codex\037Thu Nov 19 00:40:00 2026\03752\0351\035/home/me/.codex/sessions/2026/11/19/rollout-2026-11-19T00-40-01-" + rolloutID + ".jsonl\n\036\n"
 	host := &shell.Fake{Name: "gog", Remote: true, Dir: "/home/me", Answer: func(string) (string, error) { return answer, nil }}
 	got, err := NewReader(host).SessionsOf([]Running{{PID: 41, Agent: "claude", CWD: "/w"}, {PID: 52, Agent: "codex", CWD: "/w"}, {PID: 60, Agent: "gemini"}})
 	if err != nil {

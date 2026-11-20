@@ -21,8 +21,9 @@ type Running struct {
 
 // SessionsOf finds the session each running agent is in, by its process, in one script on the machine:
 // Claude Code's id from <config dir>/sessions/<pid>.json (CLAUDE_CONFIG_DIR read off the process's environment),
-// Codex's thread id from the rollout file the process or a child of it holds open. An agent whose session is not
-// found is left out; a session changes under the same pid (/clear, /resume), so the caller asks again as it sees fit.
+// Codex's thread id from the rollout of the person's thread the process (else a child of it) holds open, none
+// when two are open. An agent whose session is not found is left out; a session changes under the same pid
+// (/clear, /resume), so the caller asks again as it sees fit.
 func (r *Reader) SessionsOf(procs []Running) (map[int]string, error) {
 	lookup := sessionsByPIDScript(procs)
 	if lookup == "" {
@@ -36,7 +37,8 @@ func (r *Reader) SessionsOf(procs []Running) (map[int]string, error) {
 }
 
 // sessionsByPIDScript prints a record per process: pid, agent, the process's start as Claude Code records it
-// (`ps -o lstart` in UTC), then the session file's text for Claude Code or the open rollout's path for Codex.
+// (`ps -o lstart` in UTC), then the session file's text for Claude Code or, for Codex, a line per open rollout:
+// the pid holding it, whether its session_meta is the person's thread (1) or a subagent's (0), its path.
 func sessionsByPIDScript(procs []Running) string {
 	var b strings.Builder
 	for _, p := range procs {
@@ -56,18 +58,26 @@ s() {
     if [ -r "/proc/$1/environ" ]; then
       cfg=$(tr '\0' '\n' < "/proc/$1/environ" | sed -n 's/^CLAUDE_CONFIG_DIR=//p' | head -n 1)
     else
-      cfg=$(ps -E -ww -o command= -p "$1" 2>/dev/null | tr ' ' '\n' | sed -n 's/^CLAUDE_CONFIG_DIR=//p' | head -n 1)
+      cfg=$(ps -E -ww -o command= -p "$1" 2>/dev/null | sed -n 's/.* CLAUDE_CONFIG_DIR=//p' | sed 's/ [A-Za-z_][A-Za-z0-9_]*=.*//' | head -n 1)
     fi
     head -c 65536 "${cfg:-$HOME/.claude}/sessions/$1.json" 2>/dev/null
   else
-    pids="$1 $(pgrep -P "$1" 2>/dev/null | tr '\n' ' ')"
-    for p in $pids; do
+    for p in $1 $(pgrep -P "$1" 2>/dev/null); do
       if [ -d "/proc/$p/fd" ]; then
         for fd in /proc/$p/fd/*; do readlink "$fd" 2>/dev/null; done
       else
         lsof -p "$p" -Fn 2>/dev/null | sed -n 's/^n//p'
-      fi
-    done | grep '/rollout-[^/]*\.jsonl$' | tail -n 1 | tr -d '\n'
+      fi | grep '/rollout-[^/]*\.jsonl$' | sort -u | while IFS= read -r f; do
+        head=$(head -n 1 "$f" 2>/dev/null | head -c 65536)
+        case "$head" in
+          *'"source":{"subagent"'*) own=0 ;;
+          *'"thread_source":"user"'*) own=1 ;;
+          *'"thread_source":"'*) own=0 ;;
+          *) own=1 ;;
+        esac
+        printf '%s\035%s\035%s\n' "$p" "$own" "$f"
+      done
+    done
   fi
   printf '\036\n'
 }
@@ -121,11 +131,44 @@ func parseSessionsByPID(out string, procs []Running, style rpath.Style) map[int]
 			}
 			id = file.SessionID
 		case "codex":
-			id = CodexSessionID(payload)
+			id = heldThread(payload, pid)
 		}
 		if text.SessionID(id) {
 			found[pid] = id
 		}
 	}
 	return found
+}
+
+// heldThread is the thread of the person's conversation among the rollouts a Codex process holds open: the
+// foreground process's own first, a child's only when it holds none; "" when none or more than one is there,
+// since enumeration order says nothing about which one is on screen.
+func heldThread(payload string, pid int) string {
+	own, children := map[string]bool{}, map[string]bool{}
+	for _, line := range strings.Split(payload, "\n") {
+		fields := strings.SplitN(line, script.GS, 3)
+		if len(fields) < 3 || fields[1] != "1" {
+			continue
+		}
+		id := CodexSessionID(fields[2])
+		if id == "" {
+			continue
+		}
+		if fields[0] == strconv.Itoa(pid) {
+			own[id] = true
+		} else {
+			children[id] = true
+		}
+	}
+	for _, ids := range []map[string]bool{own, children} {
+		if len(ids) == 1 {
+			for id := range ids {
+				return id
+			}
+		}
+		if len(ids) > 1 {
+			return ""
+		}
+	}
+	return ""
 }
