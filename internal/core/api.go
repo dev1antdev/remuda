@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"net"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -41,24 +40,19 @@ type eventStream struct {
 // ask for. A refusal of the watches is herdr's (invalid_regex, pane_not_found).
 func (a *Adapter) Subscribe(subs []herdr.Subscription) (herdr.EventStream, error) {
 	s := &eventStream{adapter: a, wake: make(bell, 1), room: maxQueued}
-	var panes []string
-	watches := map[string][]OutputWatch{}
+	var watches []OutputWatch
 	for _, sub := range subs {
 		if sub.Type != herdr.EventOutputMatched || sub.Match == nil {
 			continue
 		}
-		if watches[sub.PaneID] == nil {
-			panes = append(panes, sub.PaneID)
-		}
-		id := strconv.Itoa(len(watches[sub.PaneID]))
 		lines := min(sub.Lines, 200)
 		if lines <= 0 {
 			lines = 40 // the core's default
 		}
-		watches[sub.PaneID] = append(watches[sub.PaneID], OutputWatch{ID: id, Terminal: sub.PaneID, Match: Match{Type: sub.Match.Type, Value: sub.Match.Value}, Lines: lines})
+		watches = append(watches, OutputWatch{ID: "0", Terminal: sub.PaneID, Match: Match{Type: sub.Match.Type, Value: sub.Match.Value}, Lines: lines})
 		s.room += lines
 	}
-	if err := a.join(s, panes, watches); err != nil {
+	if err := a.join(s, watches); err != nil {
 		return nil, err
 	}
 	a.mu.Lock()

@@ -415,15 +415,17 @@ components and icons as rules for whoever changes it: @docs/design.md
   `statusOf` takes the program's own word, `error` read as done; the session
   comes through `SessionOf` (Core 16 wires it; nil, none). Output watches go
   in **feeds** (`feeds.go`, tested on a fake: shared, closed with the last
-  stream, opened again after, and sixty panes' 4,800 standing rows told as
-  their feeds open, all held: a stream holds `maxQueued` 4096 events plus
-  every row its watches could tell at once, the sum of their `lines`): one
-  core subscription per pane's watches,
-  filtered by a label no terminal carries (`outputOnly`), shared by every
-  stream asking for the same ones — the watcher's swap joins the feed that
-  stands instead of subscribing again, so the core does not tell the rows
-  still on the screen as if new; a pane whose watches changed gets its own,
-  opened while the old one still tells — its rows go out as
+  stream, opened again after, a rule edited leaving the other watches'
+  feeds standing, and 120 feeds' 4,800 standing rows told as they open, all
+  held: a stream holds `maxQueued` 4096 events plus every row its watches
+  could tell at once, the sum of their `lines`): one core subscription per
+  watch (its pane, what it looks for, its lines), filtered by a label no
+  terminal carries (`outputOnly`), shared by every stream asking for that
+  watch — the watcher's swap joins the feeds that stand and subscribes only
+  the new watches, side by side (`opensAtOnce` 8), so the core never tells a
+  kept watch's rows still on the screen as if new, nor misses one printed
+  while the streams swap; a new watch's rows that stood are where things
+  stood — its rows go out as
   `pane.output_matched`, a `missed` there ending its streams with
   `events_lost` (the watcher subscribes again) and a row's `lost` count
   logged once a feed, a row it says stood before the watch began
@@ -3671,8 +3673,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   standing); on a remuda-core machine the adapter hands the same watches
   to core's `events.subscribe {output}` (see `internal/core`), which tells
   every matching row as it comes into the last rows, not only the first
-  while one stands, and again every one standing when a new feed begins (a
-  pane's watches changed, or the connection was lost) — so `OnMatch`
+  while one stands, and again every one standing when a watch's feed begins
+  (a new watch, or the connection was lost) — so `OnMatch`
   remembers each row a watch matched lately (`maxStanding` 64), not only the
   last, and a row told again as a stream opened is no news while one that came
   in the gap is; after a lost connection a new row with the very text of one

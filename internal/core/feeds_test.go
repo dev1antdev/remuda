@@ -121,14 +121,12 @@ func TestAStreamHoldsEveryStandingRowItsFeedsTellAsTheyOpen(t *testing.T) {
 			core = c
 			mu.Unlock()
 			channel := uint32(3 + n)
-			if n == panes {
+			if n == 2*panes {
 				time.Sleep(250 * time.Millisecond) // the last reply late, the rows before it all told
 			}
 			c.reply(frame.id, fmt.Sprintf(`{"seq":1,"terminals":[],"channel":%d}`, channel))
-			for watch := 0; watch < 2; watch++ {
-				for row := 0; row < perWatch; row++ {
-					c.write(channel, frameData, fmt.Appendf(nil, `{"jsonrpc":"2.0","method":"event","params":{"seq":2,"type":"output","data":{"watch":"%d","line":"FAIL %d","fresh":true}}}`+"\n", watch, row))
-				}
+			for row := 0; row < perWatch; row++ {
+				c.write(channel, frameData, fmt.Appendf(nil, `{"jsonrpc":"2.0","method":"event","params":{"seq":2,"type":"output","data":{"watch":"0","line":"FAIL %d","fresh":true}}}`+"\n", row))
 			}
 		case frame.method == "events.subscribe":
 			c.reply(frame.id, `{"seq":1,"terminals":[{"address":"t1","state":"live"}],"channel":3}`)
@@ -173,5 +171,76 @@ func TestAStreamHoldsEveryStandingRowItsFeedsTellAsTheyOpen(t *testing.T) {
 	}
 	if standing != panes*2*perWatch || live != 1 {
 		t.Fatalf("%d standing rows and %d live, want %d and 1", standing, live, panes*2*perWatch)
+	}
+}
+
+// A rule edited is a new watch: the stream after it subscribes that one alone, the watches it kept go on telling
+// through the feeds that stood, so a row they match while the streams swap reaches the new stream as it appears.
+func TestAnEditedRuleLeavesTheOtherWatchesFeedsStanding(t *testing.T) {
+	var mu sync.Mutex
+	var core peer
+	var asked []string
+	client := New(fakeCore(`"output_watches"`, func(c peer, frame sent) {
+		mu.Lock()
+		defer mu.Unlock()
+		core = c
+		switch {
+		case frame.method == "events.subscribe" && bytes.Contains(frame.payload, []byte(outputOnly)):
+			for _, value := range []string{"FAIL", "PASS", "DEPLOYED"} {
+				if bytes.Contains(frame.payload, []byte(`"value":"`+value+`"`)) {
+					asked = append(asked, value)
+				}
+			}
+			c.reply(frame.id, fmt.Sprintf(`{"seq":1,"terminals":[],"channel":%d}`, 3+len(asked)))
+		case frame.method == "events.subscribe":
+			c.reply(frame.id, `{"seq":1,"terminals":[{"address":"t1","state":"live"}],"channel":3}`)
+		case frame.method == "doc.get":
+			c.reply(frame.id, `{"value":null,"version":0}`)
+		}
+	}))
+	t.Cleanup(func() { client.Close() })
+	adapter := NewAdapter(client, AdapterHooks{})
+	t.Cleanup(func() { adapter.Close() })
+	if _, err := adapter.SessionSnapshot(); err != nil {
+		t.Fatal(err)
+	}
+	watching := func(values ...string) herdr.EventStream {
+		t.Helper()
+		var subs []herdr.Subscription
+		for _, value := range values {
+			subs = append(subs, herdr.Subscription{Type: herdr.EventOutputMatched, PaneID: "t1", Match: &herdr.OutputMatch{Type: "substring", Value: value}})
+		}
+		stream, err := adapter.Subscribe(subs)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return stream
+	}
+	before := watching("FAIL", "PASS")
+	after := watching("FAIL", "DEPLOYED") // PASS's rule edited to look for DEPLOYED
+	before.Close()
+	defer after.Close()
+	mu.Lock()
+	got := fmt.Sprint(asked)
+	channel := uint32(4)
+	if asked[0] != "FAIL" {
+		channel = 5
+	}
+	core.write(channel, frameData, []byte(`{"jsonrpc":"2.0","method":"event","params":{"seq":2,"type":"output","data":{"watch":"0","line":"--- FAIL: TestLogin","fresh":false}}}`+"\n"))
+	mu.Unlock()
+	if got != "[FAIL PASS DEPLOYED]" && got != "[PASS FAIL DEPLOYED]" {
+		t.Fatalf("the core was asked for %s: the kept watch is subscribed once", got)
+	}
+	for {
+		ev, err := after.Next()
+		if err != nil {
+			t.Fatalf("the kept watch's row never came: %v", err)
+		}
+		if ev.Kind == herdr.EventOutputMatched {
+			if ev.MatchedLine != "--- FAIL: TestLogin" || ev.Standing == nil || *ev.Standing {
+				t.Fatalf("heard %+v", ev)
+			}
+			return
+		}
 	}
 }
