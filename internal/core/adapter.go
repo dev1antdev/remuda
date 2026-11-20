@@ -40,7 +40,7 @@ type AdapterHooks struct {
 }
 
 // How long a snapshot asked for before the first fill waits for it, and how the subscription is tried again.
-var (
+const (
 	firstFillWait = 10 * time.Second
 	retryFrom     = 250 * time.Millisecond
 	retryUpTo     = 5 * time.Second
@@ -94,11 +94,11 @@ func (a *Adapter) whyNotHeld() error {
 
 func (a *Adapter) run(ctx context.Context) {
 	defer close(a.done)
+	defer a.drop(&TransportError{net.ErrClosed})
 	wait := retryFrom
 	for {
 		filled, err := a.follow(ctx)
 		if ctx.Err() != nil {
-			a.drop(&TransportError{net.ErrClosed})
 			return
 		}
 		a.drop(err)
@@ -110,7 +110,6 @@ func (a *Adapter) run(ctx context.Context) {
 		}
 		select {
 		case <-ctx.Done():
-			a.drop(&TransportError{net.ErrClosed})
 			return
 		case <-time.After(wait):
 		}

@@ -14,7 +14,7 @@ import (
 )
 
 // callWithin bounds one request the adapter sends on the watcher's or a handler's behalf, as herdr's client does.
-var callWithin = 10 * time.Second
+const callWithin = 10 * time.Second
 
 // maxQueued is the events a stream holds for a reader that fell behind; past it the stream ends as herdr's does,
 // with events_lost, and the reader takes a snapshot.
