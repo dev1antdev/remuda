@@ -343,7 +343,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   `RC_SESSION`, `RC_SOCKET`, XDG folders and HOME, `RC_LAUNCHD_DIRECT` so
   macOS does not hand it to launchd, `RC_HEARTBEAT_MS` 300, stopped through
   `server.stop`, `Core.Restart(t)` stopping it and starting it again on
-  the same state; `Core.Use(t)` sets that environment on the test process,
+  the same state, `StandInClaude(t, session)` a `claude` first on its PATH
+  that keeps its session file, reports through OSC 7501, answers
+  `/restart` as a build without it and leaves on `/exit`; `Core.Use(t)` sets that environment on the test process,
   the core's binary first on PATH, for a `-core` fleet's `remuda-core
   connect`) — calls side by side, a refusal's kind, documents, an
   attach's echo and exit code, a stream nobody reads beside a live one, events
@@ -473,8 +475,12 @@ components and icons as rules for whoever changes it: @docs/design.md
   `rm` (gone when its shell ends, as a herdr pane) and `keep` (a shell lost
   to a reboot or the core's own stop comes back as a new one in its
   folder, as herdr restores its panes, its agent the restart memory's to
-  bring back: "Resume after restart", and sleep and wake, run through the
-  adapter as on herdr; an exit or a kill stays final), and wait for the core's
+  bring back: "Resume after restart" and a wake start agents through the
+  adapter as on herdr; a sleep and an agent update's restart type the
+  agent's own `/exit` or `/restart`, a prompt, so on a machine they wait for
+  a core with `send_foreground`, 0.2.1 — the pinned 0.2.0 refuses them (a
+  sleep ends "did not stop"), while `lifecycle_test.go` runs both on a
+  throwaway core with the gate lifted; an exit or a kill stays final), and wait for the core's
   own news of it (`runShell`: the mirror alone puts terminals in it, so the
   pane answered is in the next snapshot and a reply never brings back a
   shell that ended meanwhile — one the core said went, `mirror.gone`, fails
@@ -2050,7 +2056,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   shell. `restart.Memory` (`Restarter.Memory`, `OpenMemory(dir)`) hears
   every `events.Snapshot` (`Restarter.Observe`) and keeps, per
   machine|pane, the agent kind, session id, folder and title of every
-  agent pane with a session in `<state>/chats.json` (written on change);
+  agent pane with a session in `<state>/chats.json` (written on change;
+  on a remuda-core machine only Claude Code's and Codex's, the sessions
+  read off a process there being theirs alone);
   a remembered pane that is a bare shell in the same folder counts as
   *stopped* only when the change was not watched happening — the
   snapshot's `First` flag, set by the watcher on a machine's first
@@ -2136,12 +2144,15 @@ components and icons as rules for whoever changes it: @docs/design.md
   closed with it), still, other, unseen; `swap` and the sleep share it.
 - `internal/sleep/` — **a workspace put to sleep and woken**, after
   Orca's hibernate mod (tested on a fake herdr: `fake_test.go`; the
-  routes' refusals on a throwaway herdr). `Plan(snap, workspace)` is
+  routes' refusals on a throwaway herdr; a sleep and a wake on a throwaway
+  remuda-core, `internal/core/lifecycle_test.go`). `Plan(snap, workspace)` is
   every agent pane of the workspace remuda can bring back on a session
   (`restart.Knows`, `restart.SessionOf`) as an `Agent{pane, tab,
   tab_name, kind, session, dir, title}`, the ones at work or asking as
   `Busy`, and the agents with no session (or of a kind remuda cannot
-  resume) left running, named. **Sleep** (`Service.Sleep(mc, workspace,
+  resume) left running, named — on a remuda-core machine every agent but
+  Claude Code and Codex, whose sessions alone are read off their processes
+  there. **Sleep** (`Service.Sleep(mc, workspace,
   anyway)`): nothing to record is refused; busy agents are a `*BusyError` (409 with `busy`,
   Orca's words: "Sleep api? Still busy: Claude Code is working…
   Sleeping interrupts them. Waking resumes their conversations where

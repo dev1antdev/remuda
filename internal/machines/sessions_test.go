@@ -2,7 +2,6 @@ package machines
 
 import (
 	"errors"
-	"os"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -119,17 +118,7 @@ func TestProcessesNobodyAsksAboutAreForgotten(t *testing.T) {
 // machine's snapshot, read off its process.
 func TestAnAgentOnTheLocalCoreIsNamedByItsSessionFile(t *testing.T) {
 	const sid = "9b1c2d3e-4f50-4a6b-8c7d-0e1f2a3b4c5d"
-	bin := t.TempDir()
-	script := `#!/bin/sh
-mkdir -p "$HOME/.claude/sessions"
-printf '{"pid":%s,"sessionId":"` + sid + `","cwd":"%s"}' $$ "$(pwd -P)" > "$HOME/.claude/sessions/$$.json"
-printf '\033]7501;state=idle:app=claude-code\033\\'
-while IFS= read -r line; do printf 'got: %s\n' "$line"; done
-`
-	if err := os.WriteFile(filepath.Join(bin, "claude"), []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	coretest.StandInClaude(t, sid)
 	c := coretest.Server(t)
 	c.Use(t)
 	m := NewCoreManager(t.TempDir(), "", nil, false)

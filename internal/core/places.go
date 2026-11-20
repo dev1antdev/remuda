@@ -59,9 +59,7 @@ func (a *Adapter) runShell(ctx context.Context, space, tab, cwd string, env map[
 // runIn starts what p says (the machine's shell when it names nothing) in a new terminal of a workspace's tab, its
 // labels beside the tab's, and waits for the core's own news of it, so the pane it answers is in the snapshot the
 // caller reads next. The mirror alone puts terminals in it: a reply to the start never does, which could bring back a
-// shell that ended meanwhile. One that ends first fails the start. The terminal is kept: a shell lost to a reboot or
-// the core's own stop comes back as a new one in its folder, as herdr restores its panes, and what ran in it is the
-// restart memory's to bring back; a shell that exits, or a kill, ends it for good.
+// shell that ended meanwhile. One that ends first fails the start. The terminal is kept: a lost shell comes back.
 func (a *Adapter) runIn(ctx context.Context, space, tab string, p RunParams) (Terminal, error) {
 	p.Labels = maps.Clone(p.Labels)
 	if p.Labels == nil {
