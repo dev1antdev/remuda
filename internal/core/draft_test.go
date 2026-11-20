@@ -12,9 +12,9 @@ import (
 	"github.com/dev1antdev/remuda/internal/sessions"
 )
 
-// While remuda-core holds a prompt for the person's draft in the terminal, the person's keys from the page go at once,
-// and the pane's prompts follow the draft in the order they were sent.
-func TestKeysPassAPromptHeldForAPersonsDraft(t *testing.T) {
+// While remuda-core holds a prompt for the person's draft in the terminal, and a restart waits for it, the person's
+// keys go at once; the pane's prompts follow the draft in the order they were sent, and the restart after them.
+func TestKeysPassAPromptHeldForAPersonsDraftAndARestartWaitingForIt(t *testing.T) {
 	core.LiftPromptGate(t)
 	client, adapter, pane := idleAgent(t)
 
@@ -39,16 +39,29 @@ func TestKeysPassAPromptHeldForAPersonsDraft(t *testing.T) {
 	case <-time.After(time.Second):
 	}
 
+	restart, held := in.Hold(ref.Machine, ref.Pane), make(chan struct{})
+	go func() { restart.Lock(); close(held) }()
 	start := time.Now()
 	if err := in.SendKeys(adapter, ref, []string{"esc"}); err != nil {
 		t.Fatal(err)
 	}
 	if took := time.Since(start); took > 2*time.Second {
-		t.Fatalf("Esc waited %s behind a prompt the core held", took)
+		t.Fatalf("Esc waited %s behind a prompt the core held and a restart waiting for it", took)
+	}
+	select {
+	case <-held:
+		t.Fatal("a restart went ahead of a prompt the core held")
+	case <-time.After(300 * time.Millisecond):
 	}
 
 	if _, err := person.Write([]byte("\x15")); err != nil { // Ctrl-U: the person clears the draft, and no turn starts
 		t.Fatal(err)
+	}
+	select {
+	case <-held:
+		restart.Unlock()
+	case <-time.After(20 * time.Second):
+		t.Fatal("the restart never took the pane once the prompt before it went")
 	}
 	for _, sent := range []chan error{first, second} {
 		select {

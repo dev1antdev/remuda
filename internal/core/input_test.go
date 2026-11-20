@@ -3,6 +3,7 @@ package core
 import (
 	"encoding/json"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -136,5 +137,19 @@ func TestAPaneClosedOutOfATreeThatPlacesAnotherKeepsTheTab(t *testing.T) {
 	}
 	if dropPane(&doc, "a", "t2") {
 		t.Fatal("a tree with no pane left still places one")
+	}
+}
+
+// A prompt the core pasted and left unsubmitted is said so, and points at the terminal, never at nothing sent; a
+// terminal under an older holder keeps the core's words that a terminal started since takes it.
+func TestAPromptLeftUnsubmittedIsToldApart(t *testing.T) {
+	a := &Adapter{}
+	pasted := a.inputRefusal(&Error{Kind: "not_submitted", Message: "t1 has 7 in front, not 5", Hint: "read the terminal before sending again"}, "agent_not_ready", "agent_blocked")
+	if !herdr.IsCode(pasted, "not_submitted") || !strings.Contains(pasted.Error(), "pasted but not submitted") || !strings.Contains(pasted.Error(), "read the terminal") || strings.Contains(pasted.Error(), "nothing was sent") {
+		t.Fatalf("pasted, no Enter: %v", pasted)
+	}
+	older := a.inputRefusal(&Error{Kind: "needs_update", Message: "t1 runs in an older rc's holder", Hint: "nothing was typed; a terminal started since rc was updated takes it"}, "agent_not_ready", "agent_blocked")
+	if !herdr.IsCode(older, "invalid_request") || !strings.Contains(older.Error(), "older") || !strings.Contains(older.Error(), "a terminal started since") {
+		t.Fatalf("an older holder: %v", older)
 	}
 }

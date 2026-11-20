@@ -191,6 +191,8 @@ func (a *Adapter) inputRefusal(err error, notReady, blocked string) error {
 		return &herdr.Error{Code: blocked, Message: err.Error()}
 	case IsKind(err, "status_mismatch"):
 		return &herdr.Error{Code: notReady, Message: "the agent moved as the prompt went, nothing was sent: " + err.Error()}
+	case IsKind(err, "not_submitted"):
+		return &herdr.Error{Code: "not_submitted", Message: "the prompt was pasted but not submitted, look at the terminal: " + err.Error()}
 	case IsKind(err, "finished"):
 		return &herdr.Error{Code: "pane_not_found", Message: err.Error()}
 	}
