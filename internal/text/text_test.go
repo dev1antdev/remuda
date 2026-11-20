@@ -23,3 +23,13 @@ func TestSessionID(t *testing.T) {
 		}
 	}
 }
+
+func TestGitsComplaintIsTheRefusalNotItsHint(t *testing.T) {
+	got := LastLine("error: the branch 'x' is not fully merged\nhint: If you are sure, run 'git branch -D x'\nhint: Disable this message\n", "none")
+	if got != "error: the branch 'x' is not fully merged" {
+		t.Errorf("got %q", got)
+	}
+	if got := LastLine(" \n", "none"); got != "none" {
+		t.Errorf("nothing said reads %q", got)
+	}
+}

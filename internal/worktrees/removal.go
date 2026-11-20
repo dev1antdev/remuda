@@ -14,6 +14,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/repos"
 	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/shell"
+	"github.com/dev1antdev/remuda/internal/text"
 )
 
 // RemoveTimeout is how long git may take to remove a worktree: a node_modules takes a while to delete.
@@ -71,11 +72,11 @@ func changesScript() string {
 func ParseLook(path, out string) (Look, error) {
 	parts := script.Sections(out)
 	if len(parts) < 4 {
-		return Look{}, errors.New(lastLine(out, "git answered nothing"))
+		return Look{}, errors.New(text.LastLine(out, "git answered nothing"))
 	}
 	head := strings.SplitN(strings.TrimRight(parts[0], "\n"), "\n", 2)
 	if len(head) < 2 || strings.TrimSpace(head[1]) == "" {
-		return Look{}, errors.New(lastLine(out, "git named no repository"))
+		return Look{}, errors.New(text.LastLine(out, "git named no repository"))
 	}
 	look := Look{Path: path, Branch: strings.TrimSpace(head[0]), Repo: strings.TrimSpace(head[1])}
 	for _, line := range script.Lines(parts[1]) {
@@ -114,7 +115,7 @@ func ParseLook(path, out string) (Look, error) {
 func LookAt(host shell.Shell, path string) (Look, error) {
 	out, err := shell.Text(host, LookScript(path), Timeout)
 	if err != nil {
-		return Look{}, errors.New(lastLine(out, err.Error()))
+		return Look{}, errors.New(text.LastLine(out, err.Error()))
 	}
 	return ParseLook(path, out)
 }
@@ -153,7 +154,7 @@ func ForceScript(look Look, deleteBranch bool) string {
 // RemoveAsShown takes the worktree down as the look says, its branch with it when asked; what stays is in the outcome.
 func RemoveAsShown(host shell.Shell, look Look, deleteBranch bool) Outcome {
 	out := Outcome{Path: look.Path, Branch: look.Branch}
-	text, err := shell.Text(host, ForceScript(look, deleteBranch), RemoveTimeout)
+	said, err := shell.Text(host, ForceScript(look, deleteBranch), RemoveTimeout)
 	var exit *shell.ExitError
 	switch {
 	case err == nil:
@@ -162,9 +163,9 @@ func RemoveAsShown(host shell.Shell, look Look, deleteBranch bool) Outcome {
 			out.BranchKept = "kept as asked"
 		}
 	case errors.As(err, &exit) && exit.Code == 5:
-		out.Removed, out.BranchKept = true, lastLine(text, err.Error())
+		out.Removed, out.BranchKept = true, text.LastLine(said, err.Error())
 	default:
-		out.Kept = lastLine(text, err.Error())
+		out.Kept = text.LastLine(said, err.Error())
 	}
 	return out
 }

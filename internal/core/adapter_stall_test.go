@@ -29,7 +29,7 @@ func TestACoreThatFallsSilentIsDialledAgainAndItsMirrorDropped(t *testing.T) {
 	})
 	defer client.Close()
 	var lost atomic.Int32
-	adapter := NewAdapter(client, AdapterHooks{TransportError: func(error) { lost.Add(1) }})
+	adapter := NewAdapter(client, nil, AdapterHooks{TransportError: func(error) { lost.Add(1) }})
 	defer adapter.Close()
 	if snap, err := adapter.SessionSnapshot(); err != nil || len(snap.Panes) != 1 {
 		t.Fatalf("first snapshot %+v %v", snap, err)
@@ -73,7 +73,7 @@ func TestOutputRowsTheCoreDroppedEndTheStreamAsHerdrsLostEvents(t *testing.T) {
 		}
 	}))
 	defer client.Close()
-	adapter := NewAdapter(client, AdapterHooks{})
+	adapter := NewAdapter(client, nil, AdapterHooks{})
 	defer adapter.Close()
 	if _, err := adapter.SessionSnapshot(); err != nil {
 		t.Fatal(err)
@@ -98,7 +98,7 @@ func TestOutputRowsTheCoreDroppedEndTheStreamAsHerdrsLostEvents(t *testing.T) {
 func TestACoreOlderThanRemudaNeedsIsRefused(t *testing.T) {
 	client := New(fakeCore(`"events","keep_size"`, func(peer, sent) {}))
 	defer client.Close()
-	adapter := NewAdapter(client, AdapterHooks{})
+	adapter := NewAdapter(client, nil, AdapterHooks{})
 	defer adapter.Close()
 	start := time.Now()
 	if _, err := adapter.SessionSnapshot(); !IsKind(err, "needs_update") || time.Since(start) > 5*time.Second {
@@ -133,7 +133,7 @@ func TestAReadNeverReachesAnOlderCoreDialledSince(t *testing.T) {
 		return older(ctx)
 	})
 	defer client.Close()
-	adapter := NewAdapter(client, AdapterHooks{})
+	adapter := NewAdapter(client, nil, AdapterHooks{})
 	defer adapter.Close()
 	if _, err := adapter.SessionSnapshot(); err != nil {
 		t.Fatal(err)
@@ -146,6 +146,48 @@ func TestAReadNeverReachesAnOlderCoreDialledSince(t *testing.T) {
 	}
 	if reads.Load() != 0 {
 		t.Fatal("a read reached the older core")
+	}
+}
+
+func TestAPromptNeverReachesACoreDialledSinceTheOneThatChecksTheAgent(t *testing.T) {
+	var dials, sends atomic.Int32
+	agent := `{"address":"t1","state":"live","pid":10,"foreground":{"pid":11,"name":"claude","argv":["claude"]},"status":{"state":"idle","app":"claude-code"}}`
+	current := fakeCore(`"output_watches","send_foreground"`, func(core peer, frame sent) {
+		switch frame.method {
+		case "events.subscribe":
+			core.reply(frame.id, `{"seq":1,"terminals":[`+agent+`],"channel":3}`)
+		case "doc.get":
+			core.reply(frame.id, `{"value":null,"version":0}`)
+		case "terminal.get":
+			core.reply(frame.id, agent)
+			core.conn.Close() // the core is rolled back between the look and the send
+		case "terminal.send":
+			sends.Add(1)
+		}
+	})
+	older := fakeCore(`"output_watches"`, func(core peer, frame sent) {
+		if frame.method == "terminal.send" {
+			sends.Add(1)
+			core.reply(frame.id, `{"status":"idle","turn":0}`)
+		}
+	})
+	client := New(func(ctx context.Context) (net.Conn, error) {
+		if dials.Add(1) == 1 {
+			return current(ctx)
+		}
+		return older(ctx)
+	})
+	defer client.Close()
+	adapter := NewAdapter(client, nil, AdapterHooks{})
+	defer adapter.Close()
+	if _, err := adapter.SessionSnapshot(); err != nil {
+		t.Fatal(err)
+	}
+	if err := adapter.AgentPrompt("t1", "rm -rf build"); err == nil {
+		t.Fatal("the prompt went through after the connection that checked was lost")
+	}
+	if sends.Load() != 0 {
+		t.Fatal("a send reached a core dialled after the one that checks the agent")
 	}
 }
 

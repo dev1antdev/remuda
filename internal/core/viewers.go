@@ -2,7 +2,6 @@ package core
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
@@ -39,12 +38,12 @@ func NewTerminals(client *Client) *Terminals {
 }
 
 // Open attaches one viewer: Keep types but leaves the size to the others, Observe only watches. A viewer of either
-// kind is handed the terminal's grid in order with the bytes, as the xterm sequence that sets it (CSI 8;rows;cols t),
-// before the paint the core sends at that grid.
+// kind is handed the terminal's grid in order with the bytes, an Out of its own ahead of the paint the core sends at
+// that grid — never a sequence in the bytes, which the program itself could print.
 func (t *Terminals) Open(termID string, view herdr.View) (herdr.Viewer, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), attachWithin)
 	defer cancel()
-	v := &coreViewer{bytes: make(chan []byte, 8), done: make(chan struct{})}
+	v := &coreViewer{out: make(chan herdr.Out, 8), done: make(chan struct{})}
 	params := AttachParams{
 		Terminal:            termID,
 		History:             attachHistory,
@@ -90,7 +89,7 @@ func (t *Terminals) Viewers(termID string) int {
 
 type coreViewer struct {
 	stream  *Stream
-	bytes   chan []byte
+	out     chan herdr.Out
 	done    chan struct{}
 	closing sync.Once
 	once    sync.Once // release, by whichever of the pump's end and Close comes first
@@ -100,12 +99,12 @@ type coreViewer struct {
 // pump hands the stream's bytes to the viewer until the stream ends or the viewer goes: a viewer that does not read
 // holds the next read back, and with it the core's credit, so the core repaints it once it has fallen far behind.
 func (v *coreViewer) pump() {
-	defer close(v.bytes)
+	defer close(v.out)
 	defer v.once.Do(v.released)
 	buf := make([]byte, viewerChunk)
 	for {
 		n, err := v.stream.Read(buf)
-		if n > 0 && !v.hand(append([]byte(nil), buf[:n]...)) {
+		if n > 0 && !v.hand(herdr.Out{Data: append([]byte(nil), buf[:n]...)}) {
 			return
 		}
 		if err != nil {
@@ -114,19 +113,19 @@ func (v *coreViewer) pump() {
 	}
 }
 
-// hand gives the viewer a chunk; false once the viewer has gone.
-func (v *coreViewer) hand(chunk []byte) bool {
+// hand gives the viewer the next Out; false once the viewer has gone.
+func (v *coreViewer) hand(out herdr.Out) bool {
 	select {
-	case v.bytes <- chunk:
+	case v.out <- out:
 		return true
 	case <-v.done:
 		return false
 	}
 }
 
-// grid tells the viewer the terminal's grid as xterm's own sequence for it, ahead of the bytes drawn at it.
+// grid tells the viewer the terminal's grid, ahead of the bytes drawn at it.
 func (v *coreViewer) grid(cols, rows uint16) {
-	v.hand(fmt.Appendf(nil, "\x1b[8;%d;%dt", rows, cols))
+	v.hand(herdr.Out{Cols: int(cols), Rows: int(rows)})
 }
 
 func (v *coreViewer) released() {
@@ -135,7 +134,7 @@ func (v *coreViewer) released() {
 	}
 }
 
-func (v *coreViewer) Bytes() <-chan []byte { return v.bytes }
+func (v *coreViewer) Out() <-chan herdr.Out { return v.out }
 
 // Write types into the terminal; the core ignores what a viewer that only watches sends.
 func (v *coreViewer) Write(data []byte) error {

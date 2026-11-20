@@ -21,3 +21,14 @@ func TestAnAgentIsKnownByItsProgramOrTheScriptAnInterpreterRuns(t *testing.T) {
 		}
 	}
 }
+
+func TestAnAgentKindStartsAsItsProgram(t *testing.T) {
+	for kind, want := range map[string]string{"claude": "claude", "codex": "codex", "cursor": "cursor-agent", "qwen": "qwen"} {
+		if got, ok := AgentCommand(kind); !ok || got != want {
+			t.Errorf("%s starts as %q %v, want %q", kind, got, ok, want)
+		}
+	}
+	if _, ok := AgentCommand("vim"); ok {
+		t.Error("a program that is no agent")
+	}
+}

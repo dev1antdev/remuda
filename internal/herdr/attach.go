@@ -46,7 +46,7 @@ type attach struct {
 	release     func()
 
 	mu     sync.Mutex
-	subs   map[chan []byte]bool
+	subs   map[chan Out]bool
 	dead   bool
 	linger *time.Timer
 }
@@ -165,7 +165,7 @@ func ValidSize(cols, rows int) bool {
 
 // Subscribe attaches (or joins the existing attach of) a terminal; the caller must call cancel when done.
 // A joiner is caught up by a repaint, never a byte tail: TUIs draw with cursor moves relative to where it was.
-func (m *AttachManager) Subscribe(termID string, cols, rows int) (ch chan []byte, cancel func(), err error) {
+func (m *AttachManager) Subscribe(termID string, cols, rows int) (ch chan Out, cancel func(), err error) {
 	if m.Unavailable != "" {
 		return nil, nil, &RefusedError{Msg: m.Unavailable}
 	}
@@ -177,7 +177,7 @@ func (m *AttachManager) Subscribe(termID string, cols, rows int) (ch chan []byte
 		}
 	}
 
-	ch = make(chan []byte, subscriberBuf)
+	ch = make(chan Out, subscriberBuf)
 	a.mu.Lock()
 	if a.dead { // it died between the lookup and here: start over
 		a.mu.Unlock()
@@ -229,11 +229,11 @@ func (m *AttachManager) Open(termID string, view View) (Viewer, error) {
 type sharedViewer struct {
 	m      *AttachManager
 	termID string
-	ch     chan []byte
+	ch     chan Out
 	cancel func()
 }
 
-func (v *sharedViewer) Bytes() <-chan []byte        { return v.ch }
+func (v *sharedViewer) Out() <-chan Out             { return v.ch }
 func (v *sharedViewer) Write(data []byte) error     { return v.m.Write(v.termID, data) }
 func (v *sharedViewer) Resize(cols, rows int) error { return v.m.Resize(v.termID, cols, rows) }
 func (v *sharedViewer) Close()                      { v.cancel() }
@@ -334,7 +334,7 @@ func (m *AttachManager) start(termID string, cols, rows int, release func()) (*a
 	if err != nil {
 		return nil, err
 	}
-	a := &attach{termID: termID, cmd: cmd, pty: f, subs: map[chan []byte]bool{}, early: make(chan []byte, 64), exited: make(chan struct{}), release: release}
+	a := &attach{termID: termID, cmd: cmd, pty: f, subs: map[chan Out]bool{}, early: make(chan []byte, 64), exited: make(chan struct{}), release: release}
 	a.readRefusal = m.ReadRefusal
 	a.watch.Store(true)
 	go a.readLoop(m)
@@ -364,7 +364,7 @@ func (a *attach) readLoop(m *AttachManager) {
 			a.mu.Lock()
 			for ch := range a.subs {
 				select {
-				case ch <- data:
+				case ch <- Out{Data: data}:
 				default: // slow viewer: drop; a reconnect repaints
 				}
 			}
@@ -411,7 +411,7 @@ func (m *AttachManager) kill(a *attach) {
 func (m *AttachManager) killLocked(a *attach) {
 	a.dead = true
 	subs := a.subs
-	a.subs = map[chan []byte]bool{}
+	a.subs = map[chan Out]bool{}
 	a.mu.Unlock()
 
 	for ch := range subs {

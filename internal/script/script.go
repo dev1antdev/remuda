@@ -121,3 +121,10 @@ func Lines(section string) []string {
 func Fields(line string) []string {
 	return strings.Split(line, US)
 }
+
+// MainFolder prints, run inside a checkout, the repository's main folder: for a linked worktree the parent of the
+// common git dir it shares with its repository, else the checkout's own top folder.
+const MainFolder = `gd=$(cd "$(git rev-parse --git-dir 2>/dev/null)" 2>/dev/null && pwd -P); ` +
+	`common=$(cd "$(git rev-parse --git-common-dir 2>/dev/null)" 2>/dev/null && pwd -P); ` +
+	`if [ -n "$gd" ] && [ "$gd" = "$common" ]; then (cd "./$(git rev-parse --show-cdup 2>/dev/null)" 2>/dev/null && pwd); ` +
+	`elif [ -n "$common" ]; then (cd "$common/.." 2>/dev/null && pwd); fi`

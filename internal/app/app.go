@@ -145,7 +145,7 @@ func Run(ctx context.Context, o Options) error {
 	}
 	var fleet *machines.Manager
 	if o.Core {
-		fleet = machines.NewCoreManager(o.Dir, bin, door)
+		fleet = machines.NewCoreManager(o.Dir, bin, door, o.Server)
 	} else {
 		fleet = machines.NewManager(o.Dir, o.Socket, bin, door)
 	}
@@ -770,6 +770,10 @@ func Run(ctx context.Context, o Options) error {
 	projectSettings := repos.Open(o.Dir) // each repository's worktree defaults, setup script and run actions
 	events.Subscribe(bus, func(e events.MachineRemoved) { projectSettings.Forget(e.Machine) })
 	repoSync := repositories(o.Dir, fleet, watcher, reviews, turns.Tracker, ownWorkspace)
+	gitOps, stage := gitWrites(watcher, turns.Tracker), stageWrites(fleet, watcher, turns)
+	if o.Core {
+		holdCheckoutWrites(gitOps, stage, repoSync, turns)
+	}
 	events.Subscribe(bus, func(e events.MachineRemoved) { repoSync.Forget(e.Machine, true) })
 	arenas := &arena.Service{Store: arena.Open(o.Dir), Machines: fleet, Watch: watcher, Input: input, Tasks: taskStore, Notify: pushSvc.Notify, Dir: o.Dir,
 		ModelOf: func(machineID, paneID string) string {
@@ -825,8 +829,8 @@ func Run(ctx context.Context, o Options) error {
 
 		Collisions: radarOfCollisions,
 		Undo:       turns,
-		GitOps:     gitWrites(watcher, turns.Tracker),
-		Stage:      stageWrites(fleet, watcher, turns),
+		GitOps:     gitOps,
+		Stage:      stage,
 		Scenes:     sceneSet,
 		Repos:      projectSettings,
 		Sleep:      sleeps,

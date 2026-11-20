@@ -13,6 +13,7 @@ import { uploadFiles } from "@/features/files/api";
 import type { OpenFile } from "@/features/files/target";
 import { installCopy } from "./copy";
 import { applyGeometry, keepFollower, type Geometry } from "./geometry";
+import { atGrid } from "./grid";
 import { applyModifier } from "./keys";
 import { createLayer } from "./layer";
 import { provideLinks } from "./links";
@@ -66,8 +67,8 @@ export function createEngine(mount: HTMLElement, machineId: string, paneId: stri
   const search = installSearch(term, () => flavorNow, () => forgetSelection());
 
   let lastSize = "";
-  // On remuda-core a viewer that keeps the size, or only watches, is told the terminal's grid in its own bytes — xterm's
-  // CSI 8;rows;cols t, ahead of the paint drawn at it — and keeps that grid rather than the roster's.
+  // On remuda-core a viewer that keeps the size, or only watches, is told the terminal's grid in order with the bytes
+  // (grid.ts) and keeps that grid rather than the roster's.
   let grid: { cols: number; rows: number } | null = null;
   let transport: Transport | null = null;
   const note = (text: string) => term.write(`\r\n\x1b[2m[remuda] ${text}\x1b[0m\r\n`);
@@ -103,16 +104,13 @@ export function createEngine(mount: HTMLElement, machineId: string, paneId: stri
   };
   apply();
 
-  const gridSet = term.parser.registerCsiHandler({ final: "t" }, (params) => {
-    if (params[0] !== 8 || !props().core || props().mode !== "keep") return false; // xterm's own: ignored
-    const rows = Number(params[1]);
-    const cols = Number(params[2]);
-    if (rows > 0 && cols > 0) {
+  const onGrid = (cols: number, rows: number) => {
+    if (!props().core || props().mode !== "keep") return;
+    atGrid(term, cols, rows, () => {
       grid = { cols, rows };
-      apply(); // now, while parsing, so the bytes after it are drawn at that grid
-    }
-    return true;
-  });
+      apply(); // the font that fits it, once the lens is on screen
+    });
+  };
   // On remuda-core the terminal takes the size of the viewer last active: a desk turned to claims it back.
   const claimSize = () => {
     if (!props().core || readOnly || props().mode === "keep") return;
@@ -182,9 +180,11 @@ export function createEngine(mount: HTMLElement, machineId: string, paneId: stri
     size: () => ({ cols: term.cols, rows: term.rows }),
     onOpen,
     onBytes: paint,
+    onGrid,
     note,
     inputLost: () => actions.notify(t("What you typed may not have gone through. It will not be sent again."), { error: true }),
     wsOnly: readOnly,
+    freshOnLoss: !!props().core,
   };
   const reattach = () => {
     keptAt = keeps();
@@ -202,7 +202,6 @@ export function createEngine(mount: HTMLElement, machineId: string, paneId: stri
     dispose: () => {
       props().onReady(null);
       onData.dispose();
-      gridSet.dispose();
       term.textarea?.removeEventListener("focus", claimSize);
       selection.dispose();
       layer.dispose();

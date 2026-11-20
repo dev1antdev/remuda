@@ -10,6 +10,20 @@ import (
 // Leftover worktrees: the ones under a machine's ~/.herdr/worktrees no workspace has open — closed in herdr itself, or
 // before closes took their worktrees down — listed, and the clean ones removed at the person's word.
 
+// errLeftoversOnCore is why a machine reached through remuda-core lists and removes no leftover worktree: herdr's
+// agents there, which this remuda does not see, may have one open.
+var errLeftoversOnCore = errors.New("leftover worktrees are not read on a machine reached through remuda-core: herdr's agents there, which this remuda does not see, may have them open")
+
+// heldOnCore answers the refusal when the fleet is reached through remuda-core, and says so: every machine then is,
+// whichever one the request names.
+func (s *Server) heldOnCore(w http.ResponseWriter) bool {
+	if s.Machines.Core() {
+		httpErr(w, http.StatusConflict, errLeftoversOnCore)
+		return true
+	}
+	return false
+}
+
 func (s *Server) leftoverRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/machines/{id}/leftovers", s.handleLeftovers)
 	api.HandleFunc("POST /api/machines/{id}/leftovers/remove", s.handleLeftoversRemove)
@@ -30,6 +44,9 @@ func (s *Server) openFolders(machineID string) ([]string, error) {
 // handleLeftovers is GET /api/machines/{id}/leftovers: the worktrees no workspace has open, each with its branch, its
 // first uncommitted change and its size.
 func (s *Server) handleLeftovers(w http.ResponseWriter, r *http.Request) {
+	if s.heldOnCore(w) {
+		return
+	}
 	mc, _, _, ok := s.ready(w, r, r.PathValue("id"))
 	if !ok {
 		return
@@ -53,7 +70,7 @@ func (s *Server) handleLeftoversRemove(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Paths []string `json:"paths"`
 	}
-	if !decode(w, r, &req) {
+	if !decode(w, r, &req) || s.heldOnCore(w) {
 		return
 	}
 	mc, _, _, ok := s.ready(w, r, r.PathValue("id"))

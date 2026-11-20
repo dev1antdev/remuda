@@ -55,11 +55,12 @@ type coreLink struct {
 	terminals *core.Terminals
 }
 
-// newCoreLink follows the core the client reaches; a failure to reach it goes to transportError (nil: none hears it).
-func newCoreLink(client *core.Client, transportError func(error)) *coreLink {
+// newCoreLink follows the core the client reaches; the machine lends the adapter its shell, the git its worktrees are
+// made with, and a failure to reach the core goes to transportError (nil: none hears it).
+func newCoreLink(mc *Machine, client *core.Client, transportError func(error)) *coreLink {
 	return &coreLink{
 		client:    client,
-		adapter:   core.NewAdapter(client, core.AdapterHooks{TransportError: transportError}),
+		adapter:   core.NewAdapter(client, mc, core.AdapterHooks{TransportError: transportError}),
 		terminals: core.NewTerminals(client),
 	}
 }
@@ -84,8 +85,12 @@ func (mc *Machine) reachCore(conn *sshx.Conn, found probe) (*coreLink, error) {
 		client.Close()
 		return nil, fmt.Errorf("remuda-core on %s not answering: %v", mc.Cfg.Host, err)
 	}
-	return newCoreLink(client, mc.transportError), nil
+	return newCoreLink(mc, client, mc.transportError), nil
 }
 
 // OnCore says whether the machine is reached through remuda-core rather than herdr.
 func (mc *Machine) OnCore() bool { return mc.speaksCore }
+
+// Core says whether every machine of the fleet is reached through remuda-core (NewCoreManager): set once, so a
+// request's guard needs no machine of its own to ask.
+func (m *Manager) Core() bool { return m.core }

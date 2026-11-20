@@ -57,6 +57,91 @@ describe("the HTTP transport", () => {
   }, 10000);
 });
 
+describe("the grid over HTTP", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("is applied before each read's bytes, and a read lost on the way loses no grid", async () => {
+    const { fetch } = server(
+      [{ status: 200, body: JSON.stringify({ sid: "s1" }) }, { status: 200, body: JSON.stringify({ sid: "s2" }) }],
+      [
+        { status: 200, body: "first", headers: { "X-Remuda-Grid": "100x30" } },
+        { status: 502 }, // the read that carried the change never arrives
+        { status: 200, body: "after", headers: { "X-Remuda-Grid": "90x28" } },
+      ],
+    );
+    vi.stubGlobal("WebSocket", DeadSocket);
+    vi.stubGlobal("location", { protocol: "http:", host: "remuda" });
+    vi.stubGlobal("fetch", fetch);
+    const seen: string[] = [];
+    const decoder = new TextDecoder();
+    const transport = connect({
+      query: "machine=local&id=w1:p1",
+      size: () => ({ cols: 40, rows: 10 }),
+      onOpen: () => {},
+      onBytes: (buf) => seen.push(`bytes ${decoder.decode(buf)}`),
+      onGrid: (cols, rows) => seen.push(`grid ${cols}x${rows}`),
+      note: () => {},
+      inputLost: () => {},
+      freshOnLoss: true,
+    });
+    try {
+      await vi.waitFor(() => expect(seen).toContain("bytes after"), { timeout: 8000, interval: 20 });
+    } finally {
+      transport.close();
+    }
+    expect(seen).toEqual(["grid 100x30", "bytes first", "grid 90x28", "bytes after"]);
+  }, 10000);
+});
+
+describe("a read lost on the way", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("on herdr reads on from the same stream, the screen and its scrollback kept", async () => {
+    const { fetch, asked } = server(
+      [{ status: 200, body: JSON.stringify({ sid: "s1" }) }, { status: 200, body: JSON.stringify({ sid: "s2" }) }],
+      [{ status: 502 }, { status: 200, body: "more" }],
+    );
+    vi.stubGlobal("WebSocket", DeadSocket);
+    vi.stubGlobal("location", { protocol: "http:", host: "remuda" });
+    vi.stubGlobal("fetch", fetch);
+    let opened = 0;
+    const painted: string[] = [];
+    const decoder = new TextDecoder();
+    const transport = connect({ query: "machine=local&id=w1:p1", size: () => ({ cols: 80, rows: 24 }), onOpen: () => opened++, onBytes: (buf) => painted.push(decoder.decode(buf)), note: () => {}, inputLost: () => {} });
+    try {
+      await vi.waitFor(() => expect(painted).toContain("more"), { timeout: 8000, interval: 20 });
+    } finally {
+      transport.close();
+    }
+    expect(opened).toBe(1);
+    expect(asked.filter((path) => path === "/api/term/open")).toHaveLength(1);
+  }, 10000);
+
+  it("on remuda-core drops its stream for a fresh one, so an idle terminal is painted again", async () => {
+    const { fetch, asked } = server(
+      [{ status: 200, body: JSON.stringify({ sid: "s1" }) }, { status: 200, body: JSON.stringify({ sid: "s2" }) }],
+      [
+        { status: 502 }, // took the only repaint with it
+        { status: 200, body: "fresh paint" }, // the new stream's first paint; the app prints nothing more
+      ],
+    );
+    vi.stubGlobal("WebSocket", DeadSocket);
+    vi.stubGlobal("location", { protocol: "http:", host: "remuda" });
+    vi.stubGlobal("fetch", fetch);
+    let opened = 0;
+    const painted: string[] = [];
+    const decoder = new TextDecoder();
+    const transport = connect({ query: "machine=local&id=w1:p1", size: () => ({ cols: 80, rows: 24 }), onOpen: () => opened++, onBytes: (buf) => painted.push(decoder.decode(buf)), note: () => {}, inputLost: () => {}, freshOnLoss: true });
+    try {
+      await vi.waitFor(() => expect(painted).toContain("fresh paint"), { timeout: 8000, interval: 20 });
+    } finally {
+      transport.close();
+    }
+    expect(opened).toBe(2);
+    expect(asked.filter((path) => path === "/api/term/close").length).toBeGreaterThanOrEqual(1);
+  }, 10000);
+});
+
 describe("a viewer link's transport", () => {
   afterEach(() => vi.unstubAllGlobals());
 

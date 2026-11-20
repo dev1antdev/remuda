@@ -16,6 +16,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/rpath"
 	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/shell"
+	"github.com/dev1antdev/remuda/internal/text"
 )
 
 // The lines a setup ends on.
@@ -106,7 +107,7 @@ func writeScript(file string) string {
 func WriteSetup(host shell.Shell, body, root, worktree string) (string, error) {
 	out, err := shell.Text(host, writeScript(SetupFile(body, root, worktree)), Timeout)
 	if err != nil {
-		return "", errors.New(lastLine(out, err.Error()))
+		return "", errors.New(text.LastLine(out, err.Error()))
 	}
 	path := strings.TrimSpace(out)
 	if path == "" {

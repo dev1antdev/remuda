@@ -12,12 +12,14 @@ import (
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/shell"
 )
 
 // Adapter is a machine's remuda-core as herdr.API: a mirror of its live terminals and the `remuda` document, kept
 // from one event subscription, so a snapshot is read from memory and every change reaches the watcher as it happens.
 type Adapter struct {
 	client *Client
+	shell  shell.Shell // the machine's: the git its worktrees are made and read with, the core knowing none
 	hooks  AdapterHooks
 	stop   context.CancelFunc
 	done   chan struct{}
@@ -29,6 +31,9 @@ type Adapter struct {
 	lost     error         // why the mirror is not held, after it was
 	streams  map[*eventStream]struct{}
 	badDoc   bool // a document that is no document was logged already
+
+	docMu   sync.Mutex // one write of the document at a time from this remuda (editDoc)
+	opening sync.Mutex // one WorktreeOpen at a time, so a second open of a checkout finds the first one's workspace
 }
 
 // AdapterHooks are what the machine hears from its adapter and lends it.
@@ -46,15 +51,20 @@ const (
 	retryUpTo     = 5 * time.Second
 )
 
+// foregroundLag is how long the core may take to look at a terminal's foreground again (about twice a second): a
+// status an agent reports in that time comes before the look that sees the agent.
+const foregroundLag = 3 * time.Second
+
 // quietFor is how long the subscription may say nothing: the core sends a heartbeat every 15 s, so three missed
 // mean it stopped answering while its connection stays open. A test shortens it.
 var quietFor = 45 * time.Second
 
-// NewAdapter starts following the core client reaches; Close stops it.
-func NewAdapter(client *Client, hooks AdapterHooks) *Adapter {
+// NewAdapter starts following the core client reaches; Close stops it. sh is the machine's shell, which its worktrees
+// need (nil only in a test that makes none: they are refused).
+func NewAdapter(client *Client, sh shell.Shell, hooks AdapterHooks) *Adapter {
 	ctx, stop := context.WithCancel(context.Background())
 	a := &Adapter{
-		client: client, hooks: hooks, stop: stop, done: make(chan struct{}),
+		client: client, shell: sh, hooks: hooks, stop: stop, done: make(chan struct{}),
 		state: mirror{terminals: map[string]*Terminal{}}, answered: make(chan struct{}), streams: map[*eventStream]struct{}{},
 	}
 	go a.run(ctx)
@@ -219,7 +229,7 @@ func (a *Adapter) readDoc(ctx context.Context, cn *conn) (Document, error) {
 func (a *Adapter) fill(terminals []Terminal, doc Document, version string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	a.state = mirror{terminals: make(map[string]*Terminal, len(terminals)), doc: doc, version: version}
+	a.state = mirror{terminals: make(map[string]*Terminal, len(terminals)), doc: doc, version: version, gone: map[string]bool{}}
 	for i := range terminals {
 		if terminals[i].State == "live" && local(terminals[i].Address) {
 			followShell(&terminals[i])
@@ -275,10 +285,7 @@ func (a *Adapter) apply(ctx context.Context, cn *conn, ev Event) error {
 		if err != nil {
 			return err
 		}
-		a.mu.Lock()
-		a.state.doc = doc
-		a.tellLocked(herdr.Event{Kind: "layout.updated"})
-		a.mu.Unlock()
+		a.setDoc(doc)
 		return nil
 	}
 	a.mu.Lock()
@@ -287,6 +294,14 @@ func (a *Adapter) apply(ctx context.Context, cn *conn, ev Event) error {
 		a.tellLocked(told)
 	}
 	return nil
+}
+
+// setDoc is the document as the mirror holds it now, which every stream hears as a layout that moved.
+func (a *Adapter) setDoc(doc Document) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.state.doc = doc
+	a.tellLocked(herdr.Event{Kind: "layout.updated"})
 }
 
 func (a *Adapter) tellLocked(ev herdr.Event) {
@@ -300,6 +315,7 @@ func (a *Adapter) tellLocked(ev herdr.Event) {
 func (m *mirror) apply(ev Event) (herdr.Event, bool) {
 	told := herdr.Event{PaneID: ev.Terminal}
 	t := m.terminals[ev.Terminal]
+	now := time.Now()
 	switch ev.Type {
 	case "created", "restarted":
 		var record Terminal
@@ -307,18 +323,15 @@ func (m *mirror) apply(ev Event) (herdr.Event, bool) {
 			return told, false
 		}
 		if record.State != "live" {
-			delete(m.terminals, record.Address)
+			m.went(record.Address)
 			return herdr.Event{Kind: "pane.closed", PaneID: record.Address}, t != nil
 		}
-		followShell(&record)
-		m.terminals[record.Address] = &record
-		told.Kind = "pane.created"
-		return told, true
+		return m.add(record), true
 	case "removed", "finished":
+		m.went(ev.Terminal)
 		if t == nil {
 			return told, false
 		}
-		delete(m.terminals, ev.Terminal)
 		told.Kind = "pane.closed"
 		return told, true
 	}
@@ -338,6 +351,7 @@ func (m *mirror) apply(ev Event) (herdr.Event, bool) {
 			return told, false
 		}
 		t.Status, t.Records, t.Reported = status.Status, status.Records, status.Reported
+		t.statusAt = now
 		told.Kind, told.AgentStatus = herdr.EventAgentStatus, statusOf(t)
 	case "turn":
 		json.Unmarshal(ev.Data, &struct {
@@ -385,10 +399,35 @@ func (m *mirror) apply(ev Event) (herdr.Event, bool) {
 	default:
 		return told, false
 	}
-	if told.Kind == "pane.updated" && agentOf(t) != agent {
-		told.Kind = "pane.agent_detected"
+	if became := agentOf(t); became != agent {
+		if became != "" {
+			t.agentAt = now
+			// a report naming this agent that came before the foreground's next look was the agent's own, its first
+			if t.Status != nil && appAgent(t.Status.App) == became && now.Sub(t.statusAt) <= foregroundLag {
+				t.agentAt = t.statusAt
+			}
+		}
+		if told.Kind == "pane.updated" {
+			told.Kind = "pane.agent_detected"
+		}
 	}
 	return told, true
+}
+
+// went takes a terminal out of the mirror and remembers it went.
+func (m *mirror) went(address string) {
+	delete(m.terminals, address)
+	if m.gone == nil {
+		m.gone = map[string]bool{}
+	}
+	m.gone[address] = true
+}
+
+// add puts a live terminal in the mirror, its folder its shell's, and answers it as herdr's news of a pane made.
+func (m *mirror) add(record Terminal) herdr.Event {
+	followShell(&record)
+	m.terminals[record.Address] = &record
+	return herdr.Event{Kind: "pane.created", PaneID: record.Address}
 }
 
 // local says an address is this machine's terminal: one on a machine the core added comes as `machine/t7`.

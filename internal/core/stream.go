@@ -124,14 +124,25 @@ func (s *Stream) Read(p []byte) (int, error) {
 	}
 }
 
-// Write sends keys and pasted text to the program.
-func (s *Stream) Write(p []byte) (int, error) {
+// Write sends keys and pasted text to the program, as a person's typing.
+func (s *Stream) Write(p []byte) (int, error) { return s.write(frameData, p) }
+
+// WriteAutomatic sends bytes the core passes on as the terminal's own, not a person's: they start no draft and leave
+// the person's quiet alone, so no send waits on them. Only on a stream whose attach confirmed AutomaticInput.
+func (s *Stream) WriteAutomatic(p []byte) (int, error) {
+	if !s.AutomaticInput {
+		return 0, &Error{Kind: "needs_update", Message: "this remuda-core takes no automatic input"}
+	}
+	return s.write(frameAutomatic, p)
+}
+
+func (s *Stream) write(kind byte, p []byte) (int, error) {
 	if err := s.open(); err != nil {
 		return 0, err
 	}
 	for sent := 0; sent < len(p); {
 		chunk := min(len(p)-sent, 64<<10) // a chunk at a time, so calls go between the chunks of a long paste
-		if err := s.conn.send(s.channel, frameData, p[sent:sent+chunk], true); err != nil {
+		if err := s.conn.send(s.channel, kind, p[sent:sent+chunk], true); err != nil {
 			return sent, err
 		}
 		sent += chunk

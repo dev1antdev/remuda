@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/review"
 	"github.com/dev1antdev/remuda/internal/rpath"
 	"github.com/dev1antdev/remuda/internal/script"
 )
@@ -20,7 +19,7 @@ type Read struct {
 }
 
 // ReadScript lists a machine's repositories and reads each one, in one script: the main folder of each folder given
-// (a workspace's; for a linked worktree, its repository's; nothing for one outside git, where MainFolderScript alone
+// (a workspace's; for a linked worktree, its repository's; nothing for one outside git, where script.MainFolder alone
 // would answer the folder itself), then the repositories the scan finds — a .git a folder down from each, -H following
 // the scan's folder when it is a link and no link below it, hidden and build folders pruned — each once by its physical
 // path (a Mac's /tmp is /private/tmp), a record per repository: its git status as porcelain v2, git's own line when
@@ -36,7 +35,7 @@ func ReadScript(style rpath.Style, folders []string, scan *Scan) string {
 	}
 	b.WriteString(`{ `)
 	for _, folder := range folders {
-		b.WriteString(`r=$(cd ` + script.Quote(style.Slash(folder)) + ` 2>/dev/null && git rev-parse --show-toplevel >/dev/null 2>&1 && { ` + review.MainFolderScript + `; }); [ -n "$r" ] && printf 'w %s\n' "$r"; `)
+		b.WriteString(`r=$(cd ` + script.Quote(style.Slash(folder)) + ` 2>/dev/null && git rev-parse --show-toplevel >/dev/null 2>&1 && { ` + script.MainFolder + `; }); [ -n "$r" ] && printf 'w %s\n' "$r"; `)
 	}
 	if scan != nil {
 		prune := `-name '.*'`
