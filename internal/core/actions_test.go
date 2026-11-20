@@ -25,6 +25,7 @@ say idle
 while IFS= read -r line; do
   printf 'got: %s\n' "$line"
   if [ "$line" = ask ]; then say blocked; continue; fi
+  if [ "$line" = leaving ]; then say clear; continue; fi
   say working
   sleep 0.2
   say idle
@@ -185,7 +186,36 @@ func TestTwoRemudasMakingWorkspacesAtOnceKeepEveryOne(t *testing.T) {
 	})
 }
 
+func TestAPromptWaitsForACoreThatChecksTheAgentAsItTypes(t *testing.T) {
+	standInAgent(t)
+	client := coretest.Server(t).Client(t)
+	adapter := adapterOf(t, client, core.AdapterHooks{})
+	eventually(t, adapter, func(*herdr.Snapshot) bool { return true })
+	made, err := adapter.WorkspaceCreate(t.TempDir(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pane := made.RootPane.PaneID
+	for start := time.Now(); time.Since(start) < 10*time.Second; time.Sleep(200 * time.Millisecond) {
+		if err = adapter.AgentStart(pane, "claude"); !herdr.IsCode(err, "agent_pane_busy") {
+			break
+		}
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Pane(pane).AgentStatus == herdr.StatusIdle })
+	if err := adapter.AgentPrompt(pane, "hello"); !herdr.IsCode(err, "invalid_request") || !strings.Contains(err.Error(), "Core 33") {
+		t.Fatalf("a prompt through a core that does not check the agent as it types: %v", err)
+	}
+	screen, _ := adapter.PaneRead(pane)
+	if strings.Contains(screen, "got: hello") {
+		t.Fatal("the prompt was typed")
+	}
+}
+
 func TestAnAgentStartsInTheShellAndTakesPromptsAndKeys(t *testing.T) {
+	core.LiftPromptGate(t)
 	standInAgent(t)
 	client := coretest.Server(t).Client(t)
 	adapter := adapterOf(t, client, core.AdapterHooks{})
@@ -220,13 +250,13 @@ func TestAnAgentStartsInTheShellAndTakesPromptsAndKeys(t *testing.T) {
 	}
 	screenSays(t, adapter, pane, "got: hello there")
 
-	if err := adapter.PaneSendText(pane, "typed"); err != nil {
+	if err := adapter.PaneSendKeys(pane, []string{"x", "enter"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := adapter.PaneSendKeys(pane, []string{"enter"}); err != nil {
-		t.Fatal(err)
+	screenSays(t, adapter, pane, "got: x")
+	if err := adapter.PaneSendText(pane, "typed raw"); !herdr.IsCode(err, "agent_pane_busy") {
+		t.Fatalf("raw typing into an agent's terminal: %v", err)
 	}
-	screenSays(t, adapter, pane, "got: typed")
 
 	if err := adapter.AgentPrompt(pane, "ask"); err != nil {
 		t.Fatal(err)
@@ -234,6 +264,13 @@ func TestAnAgentStartsInTheShellAndTakesPromptsAndKeys(t *testing.T) {
 	eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Pane(pane).AgentStatus == herdr.StatusBlocked })
 	if err := adapter.AgentPrompt(pane, "an answer typed into its dialog"); !herdr.IsCode(err, "agent_blocked") {
 		t.Fatalf("a prompt to an agent asking something: %v", err)
+	}
+	if err := adapter.PaneSendKeys(pane, []string{"l", "e", "a", "v", "i", "n", "g", "enter"}); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Pane(pane).AgentStatus == herdr.StatusUnknown })
+	if err := adapter.AgentPrompt(pane, "echo typed into the shell"); err == nil {
+		t.Fatal("a prompt went to an agent that cleared its status, as one leaving does")
 	}
 	if err := adapter.PaneSendInput(pane, "two\nlines", nil); err == nil {
 		t.Fatal("a paste of several lines typed raw")
@@ -244,6 +281,25 @@ func TestAnAgentStartsInTheShellAndTakesPromptsAndKeys(t *testing.T) {
 	if !slices.ContainsFunc(eventually(t, adapter, func(*herdr.Snapshot) bool { return true }).Panes, func(p herdr.PaneInfo) bool { return p.PaneID == pane }) {
 		t.Fatal("the pane is gone")
 	}
+}
+
+func TestRemudaTypesACommandLineIntoAShell(t *testing.T) {
+	client := coretest.Server(t).Client(t)
+	adapter := adapterOf(t, client, core.AdapterHooks{})
+	eventually(t, adapter, func(*herdr.Snapshot) bool { return true })
+	made, err := adapter.WorkspaceCreate(t.TempDir(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pane := made.RootPane.PaneID
+	eventually(t, adapter, func(*herdr.Snapshot) bool { at, _ := adapter.PaneAtPrompt(pane); return at })
+	if err := adapter.PaneSendText(pane, "echo typed-$((40+2))"); err != nil {
+		t.Fatal(err)
+	}
+	if err := adapter.PaneSendKeys(pane, []string{"enter"}); err != nil {
+		t.Fatal(err)
+	}
+	screenSays(t, adapter, pane, "typed-42")
 }
 
 func TestAnAgentThatCannotRunFailsItsStart(t *testing.T) {
