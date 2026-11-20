@@ -77,6 +77,25 @@ func holder(t *testing.T, dir string, holds []string, env []string, underShell b
 	}
 }
 
+// creationOf is a process's creation as remuda-core tells it: on Linux its birth to the millisecond, read the way the
+// lookup reads it; elsewhere ps's second.
+func creationOf(t *testing.T, pid int, began time.Time) int64 {
+	t.Helper()
+	if runtime.GOOS != "linux" {
+		return began.UnixMilli()
+	}
+	read := `read -r up _ < /proc/uptime; now=$(date +%s%3N); ` +
+		`printf 'Linux\037%s\037%s\037%s\037%s\036' "$(sed -n 's/^btime //p' /proc/stat)" "$up" "$now" "$(getconf CLK_TCK)"; ` +
+		`sed 's/.*) //' /proc/` + strconv.Itoa(pid) + `/stat | cut -d' ' -f20`
+	out, err := exec.Command("sh", "-c", read).Output()
+	system, ticks, _ := strings.Cut(string(out), script.RS)
+	born, ok := bootOf(system).born(ticks)
+	if err != nil || !ok {
+		t.Fatalf("this process's birth: %q, %v", out, err)
+	}
+	return born
+}
+
 // realDir is a folder of the test's own as a process standing in it is told: a Mac's temp folder is a link.
 func realDir(t *testing.T) string {
 	t.Helper()
@@ -198,6 +217,47 @@ func TestAnAgentInAFolderEndingInALineBreakIsFound(t *testing.T) {
 	}
 }
 
+// On Linux the process's birth is read to the millisecond, as remuda-core reads it: a later process given the pid within
+// the same second is another, whatever its own records say; no machine clock is read for it.
+func TestALinuxProcessIsKnownByItsBirthToTheMillisecond(t *testing.T) {
+	const start = "Thu Nov 19 00:36:10 2026"
+	boot := time.Date(2026, 11, 19, 0, 0, 0, 700_000_000, time.UTC) // btime counts whole seconds: :00
+	system := func(estimate time.Time) string {
+		up := float64(time.Date(2026, 11, 19, 0, 40, 0, 0, time.UTC).Sub(estimate)) / float64(time.Second)
+		now := time.Date(2026, 11, 19, 0, 40, 0, 0, time.UTC).UnixMilli()
+		return "system" + script.US + "Linux" + script.US + strconv.FormatInt(boot.Unix(), 10) + script.US +
+			strconv.FormatFloat(up, 'f', 2, 64) + script.US + strconv.FormatInt(now, 10) + script.US + "100" + script.RS + "\n"
+	}
+	record := func(ticks int64) string {
+		return "7" + script.US + "claude" + script.US + start + script.US + "/a" + script.US +
+			`{"pid":7,"sessionId":"id-1","cwd":"/a","procStart":"` + start + `","startedAt":1795048571000}` + script.US +
+			start + script.US + strconv.FormatInt(ticks, 10) + script.RS + "\n"
+	}
+	seen := boot.Add(2169400 * time.Millisecond) // the core saw it born at 00:36:10.100
+	for _, c := range []struct {
+		name     string
+		estimate time.Time // the boot as this machine's reading tells it
+		ticks    int64     // the start since boot, hundredths
+		want     string
+	}{
+		{"the very process", boot.Add(8 * time.Millisecond), 216940, "id-1"},
+		{"a reading of the boot late by its hundredth and the date's start", boot.Add(30 * time.Millisecond), 216940, "id-1"},
+		{"another born 400 ms later in the same second", boot.Add(8 * time.Millisecond), 216980, ""},
+		{"another born 60 ms later", boot.Add(8 * time.Millisecond), 216946, ""},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			procs := []Running{{PID: 7, Agent: "claude", CWD: "/a", Seen: seen, Started: seen.UnixMilli()}}
+			never := machineClock{asked: seen.Add(time.Hour), latest: seen.Add(-time.Hour)}
+			if got := parseSessionsByPID(system(c.estimate)+record(c.ticks), procs, rpath.Style{}, never); got[7] != c.want {
+				t.Fatalf("got %v, want %q", got, c.want)
+			}
+		})
+	}
+	if b := bootOf("Linux" + script.US + "1795046400" + script.US + "12.34" + script.US + "%3N" + script.US + "100"); b.hz != 0 {
+		t.Fatalf("a date without milliseconds read as a boot: %+v", b)
+	}
+}
+
 // End to end on a real process, as remuda-core tells its creation: the one told is found whatever its sighting says,
 // and a creation a second off is another process's.
 func TestARealProcessIsKnownByTheCreationTheRuntimeTold(t *testing.T) {
@@ -218,7 +278,7 @@ func TestARealProcessIsKnownByTheCreationTheRuntimeTold(t *testing.T) {
 	}
 	host := remoteHere(home)
 	reader := NewReader(host)
-	got, err := reader.SessionsOf([]Running{{PID: pid, Agent: "claude", CWD: home, Seen: time.Now().Add(-time.Hour), Started: began.UnixMilli()}})
+	got, err := reader.SessionsOf([]Running{{PID: pid, Agent: "claude", CWD: home, Seen: time.Now().Add(-time.Hour), Started: creationOf(t, pid, began)}})
 	if err != nil || got[pid] != "4c9d6f0e-1111-4222-8333-944455556666" {
 		t.Fatalf("the creation told: got %v, %v", got, err)
 	}
@@ -227,7 +287,7 @@ func TestARealProcessIsKnownByTheCreationTheRuntimeTold(t *testing.T) {
 			t.Fatal("the machine's clock was read though the runtime told the creation")
 		}
 	}
-	got, err = reader.SessionsOf([]Running{{PID: pid, Agent: "claude", CWD: home, Seen: time.Now(), Started: began.UnixMilli() - 1000}})
+	got, err = reader.SessionsOf([]Running{{PID: pid, Agent: "claude", CWD: home, Seen: time.Now(), Started: creationOf(t, pid, began) - 1000}})
 	if err != nil || len(got) != 0 {
 		t.Fatalf("a creation a second off: got %v, %v", got, err)
 	}
@@ -441,7 +501,7 @@ func TestAProcessBegunAfterTheAgentWasSeenHasNoSession(t *testing.T) {
 	const start = "Thu Nov 19 00:36:10 2026"
 	began := time.Date(2026, 11, 19, 0, 36, 10, 0, time.UTC)
 	record := "7" + script.US + "claude" + script.US + start + script.US + "/a" + script.US +
-		`{"pid":7,"sessionId":"id-1","cwd":"/a","procStart":"` + start + `"}` + script.US + start + script.RS + "\n"
+		`{"pid":7,"sessionId":"id-1","cwd":"/a","procStart":"` + start + `","startedAt":1795048571000}` + script.US + start + script.RS + "\n"
 	for _, c := range []struct {
 		name  string
 		ahead time.Duration // the machine's clock against this one's
@@ -472,12 +532,33 @@ func TestAProcessBegunAfterTheAgentWasSeenHasNoSession(t *testing.T) {
 
 	maxClockSpan = 50 * time.Millisecond
 	t.Cleanup(func() { maxClockSpan = 2 * time.Second })
+	// two agents on a machine slow to tell its time: the one the runtime told of is still found, the other has none
+	other := "8" + script.US + "codex" + script.US + start + script.US + "/b" + script.US + "8" + script.GS +
+		"/x/rollout-2026-11-20T02-28-48-" + rolloutID + ".jsonl" + script.GS + sessionMeta(rolloutID, false) + script.FS +
+		script.US + start + script.RS + "\n"
 	slow := &shell.Fake{Name: "gog", Remote: true, Answer: func(script string) (string, error) {
-		time.Sleep(100 * time.Millisecond)
-		return "1795048800\n", nil
+		if script == "date +%s" {
+			time.Sleep(100 * time.Millisecond)
+			return "1795048800\n", nil
+		}
+		return record + other, nil
 	}}
-	if got, err := NewReader(slow).SessionsOf([]Running{{PID: 7, Agent: "claude", CWD: "/a", Seen: time.Now()}}); err == nil || len(slow.Scripts()) != 1 {
-		t.Fatalf("a machine slow to tell its time: got %v, %v after %q", got, err, slow.Scripts())
+	procs := []Running{
+		{PID: 7, Agent: "claude", CWD: "/a", Seen: time.Now(), Started: began.UnixMilli() + 400},
+		{PID: 8, Agent: "codex", CWD: "/b", Seen: time.Now()},
+		{PID: 9, Agent: "gemini", CWD: "/c", Seen: time.Now()},
+	}
+	got, err := NewReader(slow).SessionsOf(procs)
+	if err != nil || got[7] != "id-1" || len(got) != 1 {
+		t.Fatalf("a machine slow to tell its time: got %v, %v", got, err)
+	}
+	gemini := &shell.Fake{Name: "gog", Remote: true, Answer: func(string) (string, error) { return record, nil }}
+	if got, err := NewReader(gemini).SessionsOf(procs[:1:1]); err != nil || got[7] != "id-1" || len(gemini.Scripts()) != 1 {
+		t.Fatalf("no agent the clock is read for: got %v, %v after %q", got, err, gemini.Scripts())
+	}
+	procs = append(procs[:1:1], procs[2])
+	if _, err := NewReader(gemini).SessionsOf(procs); err != nil || len(gemini.Scripts()) != 2 {
+		t.Fatalf("a Gemini CLI, whose session is not looked up, had the clock read: %q", gemini.Scripts())
 	}
 }
 

@@ -29,13 +29,9 @@ func (r *Reader) SessionsOf(procs []Running) (map[int]string, error) {
 	if lookup == "" {
 		return map[int]string{}, nil
 	}
-	var clock machineClock
-	if slices.ContainsFunc(procs, func(p Running) bool { return p.Started == 0 && !p.Seen.IsZero() }) {
-		read, err := r.machineClock()
-		if err != nil {
-			return nil, err
-		}
-		clock = read
+	var clock machineClock // a reading that failed or took too long leaves none: only what the runtime told stands
+	if slices.ContainsFunc(procs, func(p Running) bool { return lookedUp(p) && p.Started == 0 && !p.Seen.IsZero() }) {
+		clock, _ = r.machineClock()
 	}
 	out, err := shell.Text(r.host, lookup, 15*time.Second)
 	if err != nil {
@@ -73,18 +69,24 @@ func (r *Reader) machineClock() (machineClock, error) {
 // monotonic time, a step of this clock moves nothing; a step of the machine's moves ps's lstart with it on Linux
 // alone, so on macOS and Windows a forward step between the sighting and the read can let a later process through.
 func (c machineClock) begunBy(start string, seen time.Time) bool {
-	if c.asked.IsZero() || seen.IsZero() {
+	if seen.IsZero() {
 		return true
+	}
+	if c.asked.IsZero() {
+		return false
 	}
 	began, known := startedMS(start)
 	return known && !time.UnixMilli(began).After(c.latest.Add(-c.asked.Sub(seen)))
 }
 
+// lookedUp says whether a process is one whose session is looked up here: a Claude Code or a Codex.
+func lookedUp(p Running) bool { return p.PID > 1 && (p.Agent == "claude" || p.Agent == "codex") }
+
 // sessionsByPIDScript prints the system, then per process its pid, agent, start, folder, session files and start again.
 func sessionsByPIDScript(procs []Running) string {
 	var b strings.Builder
 	for _, p := range procs {
-		if p.PID <= 1 || (p.Agent != "claude" && p.Agent != "codex") {
+		if !lookedUp(p) {
 			continue
 		}
 		b.WriteString("s " + strconv.Itoa(p.PID) + " " + p.Agent + " " + script.Quote(p.CWD) + "\n")
@@ -93,7 +95,13 @@ func sessionsByPIDScript(procs []Running) string {
 		return ""
 	}
 	return script.PATH + "\n" + script.CwdOf + `system=$(uname -s 2>/dev/null)
-printf 'system\037%s\036\n' "$system"
+if [ "$system" = Linux ]; then
+  read -r up _ < /proc/uptime
+  now=$(date +%s%3N)
+  printf 'system\037Linux\037%s\037%s\037%s\037%s\036\n' "$(sed -n 's/^btime //p' /proc/stat)" "$up" "$now" "$(getconf CLK_TCK)"
+else
+  printf 'system\037%s\036\n' "$system"
+fi
 case "$system" in MINGW* | MSYS* | CYGWIN*) windows=1 ;; *) windows= ;; esac
 lstart() { LC_ALL=C TZ=UTC ps -o lstart= -p "$1" 2>/dev/null; }
 s() {
@@ -142,7 +150,9 @@ s() {
       fi
     done
   fi
-  printf '\037%s\036\n' "$(lstart "$1")"
+  ticks=
+  [ "$system" = Linux ] && ticks=$(sed 's/.*) //' "/proc/$1/stat" 2>/dev/null | cut -d' ' -f20)
+  printf '\037%s\037%s\036\n' "$(lstart "$1")" "$ticks"
 }
 rollout() {
   [ -f "$2" ] || return 0
@@ -169,13 +179,13 @@ func parseSessionsByPID(out string, procs []Running, style rpath.Style, clock ma
 	for _, p := range procs {
 		cwds[p.PID], seen[p.PID], started[p.PID] = p.CWD, p.Seen, p.Started
 	}
-	found, linux := map[int]string{}, false
+	found, linux, boot := map[int]string{}, false, linuxBoot{}
 	for _, record := range script.Sections(out) {
 		if system, ok := strings.CutPrefix(strings.TrimSpace(record), "system"+script.US); ok {
-			linux = system == "Linux"
+			linux, boot = strings.HasPrefix(system, "Linux"), bootOf(system)
 			continue
 		}
-		fields := strings.SplitN(record, script.US, 6)
+		fields := strings.SplitN(record, script.US, 7)
 		if len(fields) < 6 {
 			continue
 		}
@@ -196,7 +206,13 @@ func parseSessionsByPID(out string, procs []Running, style rpath.Style, clock ma
 		case !strings.HasPrefix(start, "ft:") && after != start:
 			continue // another process took the pid while it was read, or it ended
 		}
-		if told := started[pid]; told != 0 && !sameCreation(start, told, linux) || told == 0 && !clock.begunBy(start, seen[pid]) {
+		ticks := ""
+		if len(fields) == 7 {
+			ticks = fields[6]
+		}
+		born, precise := boot.born(ticks)
+		if told := started[pid]; told != 0 && !(precise && max(born-told, told-born) <= bornWithin || !precise && sameCreation(start, told, linux)) ||
+			told == 0 && !clock.begunBy(start, seen[pid]) {
 			continue // another process than the one seen: the pid changed hands before it was read
 		}
 		var id string
@@ -254,6 +270,42 @@ const (
 func filetimeOf(s string) (int64, bool) {
 	v, err := strconv.ParseInt(strings.TrimSpace(s), 10, 64)
 	return v, err == nil && v > filetimeEpoch && v < 3e17
+}
+
+// bornWithin is how far apart this machine's reading of a Linux process's birth and remuda-core's may be: /proc/uptime
+// counts hundredths, and `date` runs after it.
+const bornWithin = 50
+
+// linuxBoot is what a Linux machine told of its boot: /proc/stat's whole second (ps's), its own estimate in ms (the
+// real clock less /proc/uptime), and the clock ticks a second.
+type linuxBoot struct {
+	whole, estimate, hz int64
+}
+
+// bootOf reads the system line's boot facts: "Linux", btime, uptime, the real clock in ms, the ticks a second.
+func bootOf(system string) linuxBoot {
+	fields := strings.Split(system, script.US)
+	if len(fields) != 5 || fields[0] != "Linux" {
+		return linuxBoot{}
+	}
+	whole, errWhole := strconv.ParseInt(fields[1], 10, 64)
+	up, errUp := strconv.ParseFloat(fields[2], 64)
+	now, errNow := strconv.ParseInt(fields[3], 10, 64)
+	hz, errHz := strconv.ParseInt(fields[4], 10, 64)
+	if errWhole != nil || errUp != nil || errNow != nil || errHz != nil || hz <= 0 {
+		return linuxBoot{}
+	}
+	return linuxBoot{whole: whole, estimate: now - int64(up*1000), hz: hz}
+}
+
+// born is a Linux process's creation in unix ms from its start in ticks since boot, as remuda-core reckons it (the boot
+// held to ps's whole second); false where the machine told no boot or no start.
+func (b linuxBoot) born(ticks string) (int64, bool) {
+	since, err := strconv.ParseInt(strings.TrimSpace(ticks), 10, 64)
+	if b.hz == 0 || err != nil {
+		return 0, false
+	}
+	return min(max(b.estimate, b.whole*1000), b.whole*1000+999) + since*1000/b.hz, true
 }
 
 // sameCreation says whether the script's start is the creation the runtime told (unix ms), reading no clock.

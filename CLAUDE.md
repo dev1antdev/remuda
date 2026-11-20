@@ -1042,12 +1042,18 @@ components and icons as rules for whoever changes it: @docs/design.md
   agent's folder, then the default one; a process gone, or one whose start
   neither `ps` nor, on Git Bash, PowerShell tells, has no session, nothing
   telling it from another given its pid, nor does one whose start is not the
-  creation the runtime told (`Running.Started`, `sameCreation`: lstart's
-  second, or the one before on Linux, where ps counts the boot time in whole
-  seconds and remuda-core does not; a FILETIME's millisecond; no clock read
-  for it, so a step of the machine's clock neither lets a later process in
-  nor hides the one seen; the second before on Linux alone, by the `system`
-  the script tells first), and a Claude Code file then counts only with a
+  creation the runtime told (`Running.Started`): on Linux its birth to the
+  millisecond, read as remuda-core reads it (`/proc/<pid>/stat`'s ticks after
+  the boot the script tells first: `/proc/stat`'s whole second with the real
+  clock less `/proc/uptime`, `linuxBoot.born`) and within `bornWithin` 50 ms of
+  it, so a later process given the pid in the same second is another; a
+  FILETIME's millisecond on Windows; on macOS, where ps tells no millisecond,
+  `ps -o lstart`'s second alone (`sameCreation`; on Linux the second before
+  too where no birth was read) — a later process given the pid within that
+  very second passes there, until the core's next look (half a second) tells
+  the foreground's new creation; no clock read for any of it, so a step of the
+  machine's clock neither lets a later process in nor hides the one seen),
+  and a Claude Code file then counts only with a
   `startedAt` no earlier than that creation (a second alone does not tell two
   processes given the pid within it apart; a step of the clock on Linux makes
   it no match),
@@ -1056,9 +1062,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   took the pid before it was read), the sighting placed on the machine's
   clock by the monotonic time since it, the clock read in a call of its own
   (`date +%s`, `Reader.machineClock`) whose span bounds the doubt, a reading
-  that took over `maxClockSpan` 2 s refused as no reading, the read failing
-  (the last answers stand; 2 s is an assumption, unmeasured for Git Bash over
-  a Windows PC's sshd) — safe across a step of the machine's clock on Linux,
+  that took over `maxClockSpan` 2 s refused as no reading, and then only those
+  agents get no session, the ones whose creation the runtime told still read
+  (the clock asked at all only for a Claude Code or Codex lacking it; 2 s is
+  an assumption, unmeasured for Git Bash over a Windows PC's sshd) — safe across a step of the machine's clock on Linux,
   whose ps moves lstart with it, not on macOS or Windows, where a forward
   step between the sighting and the read can let a later process through;
   every
