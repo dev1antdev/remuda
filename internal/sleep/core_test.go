@@ -12,6 +12,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/core/coretest"
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/restart"
+	"github.com/dev1antdev/remuda/internal/sessions"
 )
 
 // standInClaude puts a `claude` on the PATH the next core starts with: it says what it was started with, reports
@@ -73,12 +74,7 @@ func TestAWorkspaceOnRemudaCoreSleepsAndWakesOnItsSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	space, pane := made.Workspace.WorkspaceID, made.RootPane.PaneID
-	for start := time.Now(); time.Since(start) < 10*time.Second; time.Sleep(200 * time.Millisecond) {
-		if err = adapter.AgentStart(pane, "claude"); !herdr.IsCode(err, "agent_pane_busy") {
-			break
-		}
-	}
-	if err != nil {
+	if err := sessions.StartAgent(adapter, pane, "claude"); err != nil {
 		t.Fatal(err)
 	}
 	snap := coreSnapshot(t, adapter, func(s *herdr.Snapshot) bool {

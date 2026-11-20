@@ -3,23 +3,17 @@ package core_test
 import (
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/dev1antdev/remuda/internal/core"
 	"github.com/dev1antdev/remuda/internal/core/coretest"
 	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/sessions"
 )
 
-// startIn starts the stand-in agent in a pane, waiting out a shell still coming up, and waits for its first word.
-func startIn(t *testing.T, adapter *core.Adapter, pane string, args []string) {
+// startIn starts the stand-in agent in a pane, on a session when one is named, and waits for its first word.
+func startIn(t *testing.T, adapter *core.Adapter, pane, session string) {
 	t.Helper()
-	var err error
-	for start := time.Now(); time.Since(start) < 10*time.Second; time.Sleep(200 * time.Millisecond) {
-		if err = adapter.AgentStartWith(pane, "claude", "claude", args, 20*time.Second); !herdr.IsCode(err, "agent_pane_busy") {
-			break
-		}
-	}
-	if err != nil {
+	if err := sessions.StartAgentWith(adapter, pane, "claude", sessions.Start{Resume: session}); err != nil {
 		t.Fatal(err)
 	}
 	eventually(t, adapter, func(s *herdr.Snapshot) bool {
@@ -47,7 +41,7 @@ func TestPanesComeBackAsShellsAfterTheCoreRestartsAndTheirAgentsResumeInThem(t *
 			t.Fatal(err)
 		}
 		folders[made.RootPane.PaneID] = folder
-		startIn(t, adapter, made.RootPane.PaneID, nil)
+		startIn(t, adapter, made.RootPane.PaneID, "")
 	}
 
 	c.Restart(t)
@@ -65,7 +59,7 @@ func TestPanesComeBackAsShellsAfterTheCoreRestartsAndTheirAgentsResumeInThem(t *
 		return true
 	})
 	for pane := range folders {
-		startIn(t, adapter, pane, []string{"--resume", "9b1c2d3e-4f50-4a6b-8c7d-0e1f2a3b4c5d"})
+		startIn(t, adapter, pane, "9b1c2d3e-4f50-4a6b-8c7d-0e1f2a3b4c5d")
 		screenSays(t, adapter, pane, "--resume")
 	}
 }

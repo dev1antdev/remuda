@@ -61,9 +61,6 @@ func TestAnAgentsSessionIsReadOffItsProcessWhenNewAndAgainOnceDue(t *testing.T) 
 		t.Fatalf("a process never read answered %+v at once", got)
 	}
 	sessionAfter(t, s, "claude", 100, "sid-a")
-	if got := s.of("gemini", 300, "/work/api"); got != nil || s.of("claude", 1, "/") != nil {
-		t.Fatal("an agent the lookup cannot read, or no process, is asked about")
-	}
 	reads.mu.Lock()
 	reads.answers[200] = "sid-b"
 	reads.mu.Unlock()

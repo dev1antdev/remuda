@@ -44,9 +44,6 @@ func newProcessSessions(name string, read func([]transcript.Running) (map[int]st
 
 // of is the core adapter's SessionLookup: what the last read found of the process, a read booked when it is new or due.
 func (s *processSessions) of(agent string, pid int, cwd string) *herdr.AgentSession {
-	if (agent != "claude" && agent != "codex") || pid <= 1 {
-		return nil
-	}
 	now := time.Now()
 	s.mu.Lock()
 	defer s.mu.Unlock()
