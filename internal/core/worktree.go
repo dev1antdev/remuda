@@ -23,15 +23,15 @@ const (
 	checkoutWithin = 20 * time.Second
 )
 
-// probeFunc prints the checkout a folder is — its top, git's common and own folders, the main checkout — or nothing
-// outside git (or on a git before 2.31, which has no --path-format).
-const probeFunc = `probe() {
-  top=$(` + script.ReadGit + ` -C "$1" rev-parse --show-toplevel 2>/dev/null) || return 0
-  common=$(` + script.ReadGit + ` -C "$1" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || return 0
-  own=$(` + script.ReadGit + ` -C "$1" rev-parse --path-format=absolute --git-dir 2>/dev/null) || return 0
-  main=$(` + script.ReadGit + ` -C "$1" worktree list --porcelain 2>/dev/null | sed -n '1s/^worktree //p')
-  printf 'top %s\ncommon %s\nown %s\nmain %s\n' "$top" "$common" "$own" "$main"
-}
+// probeFunc prints the checkout a folder is — its top, git's common and own folders, the repository's main folder as
+// the sidebar's sweep reads it (script.MainFolder) — or nothing outside git (or on a git before 2.31, which has no
+// --path-format).
+const probeFunc = `probe() ( cd "$1" 2>/dev/null || exit 0
+  top=$(` + script.ReadGit + ` rev-parse --show-toplevel 2>/dev/null) || exit 0
+  common=$(` + script.ReadGit + ` rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || exit 0
+  own=$(` + script.ReadGit + ` rev-parse --path-format=absolute --git-dir 2>/dev/null) || exit 0
+  printf 'top %s\ncommon %s\nown %s\nmain %s\n' "$top" "$common" "$own" "$(` + script.MainFolder + `)"
+)
 `
 
 // checkoutScript reads the checkout a folder is.
@@ -40,15 +40,15 @@ func checkoutScript(folder string) string {
 }
 
 // addScript makes a worktree of the checkout at dir for the branch, the way herdr's worktree.create does: a branch that
-// exists is checked out, a new one starts at base (dir's HEAD when none), in path or herdr's place for it. It prints
-// "path <folder>" and the new checkout as probe reads it; git's own words when it refuses.
+// exists is checked out, a new one starts at base (dir's HEAD when none), in path or herdr's place for it, named after
+// the repository's main folder. It prints "path <folder>" and the new checkout as probe reads it; git's own words when
+// it refuses.
 func addScript(dir, branch, base, path string) string {
 	return script.PATH + "\n" + probeFunc +
 		"cd " + script.Quote(dir) + " 2>/dev/null || { echo 'the workspace folder is not there'; exit 3; }\n" +
 		script.ReadGit + " rev-parse --show-toplevel >/dev/null 2>&1 || { echo 'the workspace folder is not a git checkout'; exit 3; }\n" +
 		"b=" + script.Quote(branch) + "; base=" + script.Quote(cmp.Or(base, "HEAD")) + "; p=" + script.Quote(path) + "\n" +
-		`if [ -z "$p" ]; then main=$(` + script.ReadGit + ` worktree list --porcelain | sed -n '1s/^worktree //p'); ` +
-		`p="$HOME/.herdr/worktrees/$(basename "$main")/"` + script.Quote(text.Slug(branch)) + "; fi\n" +
+		`[ -n "$p" ] || p="$HOME/.herdr/worktrees/$(basename "$(` + script.MainFolder + `)")/"` + script.Quote(text.Slug(branch)) + "\n" +
 		`mkdir -p "$(dirname "$p")" || exit 4` + "\n" +
 		`if git show-ref -q --verify "refs/heads/$b"; then git worktree add -q "$p" "$b" 2>&1 || exit 5; ` +
 		`else git worktree add -q -b "$b" "$p" "$base" 2>&1 || exit 5; fi` + "\n" +
@@ -112,7 +112,7 @@ func (a *Adapter) WorktreeCreateAt(workspaceID, branch, base, label, path string
 	}
 	out, err := shell.Text(a.hooks.Shell, addScript(style.Slash(dir), branch, base, path), worktreeWithin)
 	if err != nil {
-		return nil, fmt.Errorf("git worktree add: %s", lastWords(out, err))
+		return nil, fmt.Errorf("git worktree add: %s", text.LastLine(out, err.Error()))
 	}
 	made, tree := parseCheckout(out)
 	folder := made
@@ -128,29 +128,17 @@ func (a *Adapter) WorktreeCreateAt(workspaceID, branch, base, label, path string
 	return created, nil
 }
 
-// WorktreeOpen opens a checkout of the workspace's repository as a workspace; one open on it already is answered.
+// WorktreeOpen opens a checkout of the workspace's repository as a workspace. The mirror shows every workspace the
+// moment it is made, so a caller that looked for one open on the checkout (the worktree route) needs no AlreadyOpen.
 func (a *Adapter) WorktreeOpen(workspaceID, path, label string) (*herdr.WorktreeCreateResult, error) {
 	if _, err := a.sourceDir(workspaceID); err != nil {
 		return nil, err
-	}
-	snap, err := a.SessionSnapshot()
-	if err != nil {
-		return nil, err
-	}
-	style := rpath.For(path)
-	for i := range snap.Workspaces {
-		ws := &snap.Workspaces[i]
-		if style.Equal(snap.WorkspaceDir(ws), path) {
-			opened := &herdr.WorktreeCreateResult{Workspace: *ws, RootPane: frontPane(snap, ws), AlreadyOpen: true}
-			opened.Worktree.Path = path
-			return opened, nil
-		}
 	}
 	tree := a.checkoutOf(path)
 	if tree == nil {
 		return nil, &herdr.Error{Code: "invalid_request", Message: path + " is not a git checkout"}
 	}
-	res, err := a.workspaceOn(tree.CheckoutPath, cmp.Or(label, style.Base(tree.CheckoutPath)), tree)
+	res, err := a.workspaceOn(tree.CheckoutPath, cmp.Or(label, rpath.For(path).Base(tree.CheckoutPath)), tree)
 	if err != nil {
 		return nil, err
 	}
@@ -177,34 +165,4 @@ func (a *Adapter) sourceDir(workspaceID string) (string, error) {
 		return "", &herdr.Error{Code: "invalid_request", Message: "the workspace has no folder"}
 	}
 	return dir, nil
-}
-
-// frontPane is the pane a workspace shows: the focused one of its tab in front, else that tab's first.
-func frontPane(snap *herdr.Snapshot, ws *herdr.WorkspaceInfo) herdr.PaneInfo {
-	var first *herdr.PaneInfo
-	for i := range snap.Panes {
-		p := &snap.Panes[i]
-		if p.WorkspaceID != ws.WorkspaceID || p.TabID != ws.ActiveTabID {
-			continue
-		}
-		if p.Focused {
-			return *p
-		}
-		if first == nil {
-			first = p
-		}
-	}
-	if first == nil {
-		return herdr.PaneInfo{WorkspaceID: ws.WorkspaceID}
-	}
-	return *first
-}
-
-// lastWords is what a failed script said last, else its error.
-func lastWords(out string, err error) string {
-	lines := strings.Split(strings.TrimSpace(out), "\n")
-	if last := strings.TrimSpace(lines[len(lines)-1]); last != "" {
-		return last
-	}
-	return err.Error()
 }

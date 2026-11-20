@@ -33,3 +33,14 @@ func Slug(branch string) string {
 	}
 	return b.String()
 }
+
+// LastLine is git's complaint: the last line it printed that is no hint, else the fallback.
+func LastLine(out, fallback string) string {
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		if line := strings.TrimSpace(lines[i]); line != "" && !strings.HasPrefix(line, "hint:") { // git's advice after the refusal it explains
+			return line
+		}
+	}
+	return fallback
+}

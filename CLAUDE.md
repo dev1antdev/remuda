@@ -479,16 +479,18 @@ components and icons as rules for whoever changes it: @docs/design.md
   `addScript` in the source workspace's folder, as herdr's worktree.create:
   a branch that exists checked out, a new one from base (else that folder's
   HEAD), in the path given or herdr's place,
-  `~/.herdr/worktrees/<main checkout's name>/<text.Slug of the branch>` (the
+  `~/.herdr/worktrees/<main folder's name>/<text.Slug of the branch>` (the
   root `worktrees.Root` names, so those made before and after the move lie
   together and Tidy, Leftovers and the remove dialog stand), git's last line
-  when it refuses (`lastWords`, 10 min at most), then a workspace on it
-  labelled after its folder unless named; `WorktreeOpen` answers a workspace
-  open on the checkout already (`AlreadyOpen`, its front pane), else opens one
-  on it, refusing a folder outside git. **The checkout a workspace is** —
-  herdr's `WorktreeInfo`: top, `git-common-dir` as `RepoKey`, the main
-  checkout (`worktree list`'s first) as `RepoRoot` and its name, linked when
-  the git dir is not the common one (`probeFunc`, `script.ReadGit`,
+  when it refuses (`text.LastLine`, 10 min at most), then a workspace on it
+  labelled after its folder unless named; `WorktreeOpen` opens a workspace on
+  a checkout, refusing a folder outside git — never `AlreadyOpen`: the
+  mirror shows a workspace the moment it is made, so the worktree route's
+  own look for one standing on the checkout is enough. **The checkout a
+  workspace is** — herdr's `WorktreeInfo`: top, `git-common-dir` as
+  `RepoKey`, the repository's main folder (`script.MainFolder`, the sweep's
+  own rule) as `RepoRoot` and its name, linked when the git dir is not the
+  common one (`probeFunc`, `script.ReadGit`,
   `--path-format=absolute`: git 2.31 and up; `parseCheckout`, spelt by
   `rpath`) — is read once when the workspace is made (`workspaceOn`,
   `checkoutOf`, 20 s; outside git or failed: none, the workspace made all
@@ -1298,7 +1300,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   and push at the person's press** (tested on temp repositories with a bare
   remote made in the test, a HOME and no system config of their own, and on
   `shell.Fake`), after gitgraph's Manygit. **The reads**: `ReadScript` is one
-  script per machine — the main folder (`review.MainFolderScript`, only for a
+  script per machine — the main folder (`script.MainFolder`, only for a
   folder in git: alone it answers a plain folder itself) of every folder
   `Service.Folders` names (each workspace's folder as the sidebar groups it,
   `server.FolderOf`: herdr's repo_root, else `review.Store.Root`, else the
@@ -1434,7 +1436,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   `herdr plugin list` (a GitHub plugin by `github:owner/repo`, a local
   one by its kind alone, its path being the machine's own); and for the
   watcher's workspace folders the main checkout of each
-  (`review.MainFolderScript`, the folder `pwd -P`'d so a worktree and its
+  (`script.MainFolder`, the folder `pwd -P`'d so a worktree and its
   repository count once): the origin without a user or token in it
   (`sed` strips `scheme://user:token@`), the root commit when there is no
   origin, the branch, the upstream and `rev-list --left-right --count

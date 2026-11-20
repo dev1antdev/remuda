@@ -100,9 +100,14 @@ func TestWorktreesAreMadeAndOpenedOnACoreMachineWhereHerdrPutsThem(t *testing.T)
 		t.Errorf("a branch checked out already was not refused in git's words: %v", err)
 	}
 
-	open, err := adapter.WorktreeOpen(source, path, "")
-	if err != nil || !open.AlreadyOpen || open.Workspace.WorkspaceID != ws.WorkspaceID {
-		t.Errorf("opening a checkout open already answered %+v, %v", open, err)
+	byHand := filepath.Join(home, "by-hand")
+	git(t, repo, "worktree", "add", "-q", "-b", "by-hand", byHand)
+	open, err := adapter.WorktreeOpen(source, byHand, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tree := open.Workspace.Worktree; tree == nil || !tree.IsLinkedWorktree || tree.CheckoutPath != byHand || open.Workspace.Label != "by-hand" {
+		t.Errorf("a checkout made outside remuda opened as %+v", open.Workspace)
 	}
 	if _, err := adapter.WorktreeOpen(source, t.TempDir(), ""); err == nil {
 		t.Error("a folder outside git was opened as a checkout")

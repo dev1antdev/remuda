@@ -172,7 +172,7 @@ type Created struct {
 func Create(host shell.Shell, h Maker, root, workspaceID string, plan Plan, label, folder string) (Created, error) {
 	if plan.Fetch != "" {
 		if out, err := shell.Text(host, fetchScript(root, plan.Fetch), FetchTimeout); err != nil {
-			return Created{}, fmt.Errorf("git fetch: %s", lastLine(out, err.Error()))
+			return Created{}, fmt.Errorf("git fetch: %s", text.LastLine(out, err.Error()))
 		}
 	}
 	var (
@@ -193,7 +193,7 @@ func Create(host shell.Shell, h Maker, root, workspaceID string, plan Plan, labe
 	made := Created{WorktreeCreateResult: res}
 	if after := afterScript(root, plan); after != "" {
 		if out, err := shell.Text(host, after, Timeout); err != nil {
-			made.Notes = append(made.Notes, "git config: "+lastLine(out, err.Error()))
+			made.Notes = append(made.Notes, "git config: "+text.LastLine(out, err.Error()))
 		}
 	}
 	return made, nil
