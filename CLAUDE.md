@@ -347,7 +347,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   machine's core as `herdr.API`, so the packages that read a machine keep
   herdr's model. One unfiltered subscription keeps **a mirror in memory** —
   the live terminals of this machine (not a `machine/t7` of one the core
-  added) and the `remuda` document (`DocName`), read after subscribing, again
+  added, its snapshot or its events, `local`) and the `remuda` document (`DocName`), read after subscribing, again
   on its `doc` event and after `missed` — so `SessionSnapshot` answers from
   memory, never a request (before the first fill it waits `firstFillWait`
   10 s; once lost it answers why at once), and each event changes one
@@ -359,7 +359,11 @@ components and icons as rules for whoever changes it: @docs/design.md
   and `removed` → `pane.closed`, `lost` → `pane.exited`); a stream that falls `maxQueued` 4096
   behind ends with `events_lost`, as herdr's does, and every stream ends when
   the subscription is lost, which is tried again 250 ms → 5 s apart (the
-  machine hears `TransportError`). **The document** (`Document`): the
+  machine hears `TransportError`). Each step is bounded (`bounded`: the
+  setup and a document read `callWithin` 10 s, the subscription `quietFor`
+  45 s — three heartbeats): a core that holds its connection open saying
+  nothing has the connection abandoned (`Client.abandon`), so the next
+  attempt dials a new one and the stale mirror goes. **The document** (`Document`): the
   workspaces in order, each `{id, label, folder, active_tab, tabs}`, a tab
   `{id, label, layout}`, its tree herdr's `LayoutNode` with a terminal's
   address as each pane's id; a terminal carries `remuda.space` /
@@ -389,9 +393,14 @@ components and icons as rules for whoever changes it: @docs/design.md
   comes through `SessionOf` (Core 16 wires it; nil, none). Output watches go
   in a core subscription of the stream's own, filtered by a label no
   terminal carries (`outputOnly`), so it tells their rows alone as
-  `pane.output_matched`; the core's refusals read as herdr's (`not_found` →
+  `pane.output_matched`, a `missed` there ending the stream with
+  `events_lost` (the watcher subscribes again) and a row's `lost` count
+  logged once a stream; the core's refusals read as herdr's (`not_found` →
   `pane_not_found`, `invalid_regex`, `needs_update` → `invalid_request`).
-  Reads: `PaneRead`, `PaneScreen` (format vt), `PaneRecent`, `PaneAtPrompt`
+  Reads: `PaneRead`, `PaneScreen` (format vt), `PaneRecent` (format vt too,
+  its colours stripped, `withoutSGR`: a plain read with history scrolls a
+  full-screen program with the wheel under the person's hands, the vt one
+  never — such a program's history is its screen alone), `PaneAtPrompt`
   and `PaneShellPID` (off the mirror's `foreground` and `pid`), `AgentGet`;
   every write answers `invalid_request` "… is not on remuda-core yet"
   (Core 15). `Bridged` is false: a stream costs the core nothing. The

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"net"
 	"strconv"
 	"strings"
@@ -132,10 +133,15 @@ func (s *eventStream) end(err error) {
 
 // readOutput hands the stream every row its watches matched, as herdr's pane.output_matched.
 func (s *eventStream) readOutput() {
+	toldLost := false
 	for {
 		notice, err := s.output.Next(context.Background())
 		if err != nil {
 			s.end(err)
+			return
+		}
+		if notice.Kind == NoticeMissed {
+			s.end(&herdr.Error{Code: herdr.ErrEventsLost, Message: "remuda-core dropped output rows: subscribe again"})
 			return
 		}
 		if notice.Kind != NoticeEvent || notice.Event.Type != "output" {
@@ -144,9 +150,14 @@ func (s *eventStream) readOutput() {
 		var row struct {
 			Watch string `json:"watch"`
 			Line  string `json:"line"`
+			Lost  int    `json:"lost"`
 		}
 		if json.Unmarshal(notice.Event.Data, &row) != nil {
 			continue
+		}
+		if row.Lost > 0 && !toldLost {
+			log.Printf("remuda-core dropped %d rows of output watch %s on %s before this one", row.Lost, row.Watch, s.panes[row.Watch])
+			toldLost = true
 		}
 		s.push(herdr.Event{Kind: herdr.EventOutputMatched, PaneID: s.panes[row.Watch], MatchedLine: row.Line, Text: row.Line})
 	}
@@ -175,14 +186,37 @@ func (a *Adapter) PaneScreen(paneID string) (herdr.Screen, error) {
 }
 
 // PaneRecent is the terminal's last n rows down to the last with text, the screen and the history above it, and
-// whether rows before them are gone.
+// whether rows before them are gone. It reads as the colours do, which never scrolls a full-screen program for its
+// history (a plain read does, with the wheel, under the person's hands) and gives such a program's screen alone.
 func (a *Adapter) PaneRecent(paneID string, n int) (string, bool, error) {
-	read, err := a.read(paneID, n, "")
+	read, err := a.read(paneID, n, "vt")
 	if err != nil {
 		return "", false, err
 	}
-	rows := strings.Split(strings.TrimRight(read.Text, "\n "), "\n")
+	rows := strings.Split(withoutSGR(read.Text), "\n")
+	for i := range rows {
+		rows[i] = strings.TrimRight(rows[i], " ")
+	}
+	for len(rows) > 0 && rows[len(rows)-1] == "" {
+		rows = rows[:len(rows)-1]
+	}
 	return strings.Join(rows[max(0, len(rows)-n):], "\n"), !read.Complete, nil
+}
+
+// withoutSGR is a vt read's rows as plain text: they hold their text and SGR sequences, nothing else.
+func withoutSGR(vt string) string {
+	var plain strings.Builder
+	for i := 0; i < len(vt); i++ {
+		if vt[i] != 0x1b || i+1 >= len(vt) || vt[i+1] != '[' {
+			plain.WriteByte(vt[i])
+			continue
+		}
+		i += 2
+		for i < len(vt) && (vt[i] < 0x40 || vt[i] > 0x7e) {
+			i++
+		}
+	}
+	return plain.String()
 }
 
 // terminal is a copy of the mirror's record of a pane.

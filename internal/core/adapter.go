@@ -46,6 +46,10 @@ const (
 	retryUpTo     = 5 * time.Second
 )
 
+// quietFor is how long the subscription may say nothing: the core sends a heartbeat every 15 s, so three missed
+// mean it stopped answering while its connection stays open. A test shortens it.
+var quietFor = 45 * time.Second
+
 // NewAdapter starts following the core client reaches; Close stops it.
 func NewAdapter(client *Client, hooks AdapterHooks) *Adapter {
 	ctx, stop := context.WithCancel(context.Background())
@@ -120,22 +124,32 @@ func (a *Adapter) run(ctx context.Context) {
 // follow subscribes, fills the mirror from the subscription's snapshot and the document read after it, and applies
 // the changes until the subscription ends; filled says whether it got that far.
 func (a *Adapter) follow(ctx context.Context) (filled bool, err error) {
-	sub, err := a.client.Subscribe(ctx, SubscribeParams{})
-	if err != nil {
-		return false, err
+	var sub *Subscription
+	var hello Hello
+	var doc Document
+	err = a.bounded(ctx, callWithin, func(ctx context.Context) (err error) {
+		if sub, err = a.client.Subscribe(ctx, SubscribeParams{}); err != nil {
+			return err
+		}
+		if hello, err = a.client.Hello(ctx); err != nil {
+			return err
+		}
+		doc, err = a.readDoc(ctx)
+		return err
+	})
+	if sub != nil {
+		defer sub.Close()
 	}
-	defer sub.Close()
-	hello, err := a.client.Hello(ctx)
-	if err != nil {
-		return false, err
-	}
-	doc, err := a.readDoc(ctx)
 	if err != nil {
 		return false, err
 	}
 	a.fill(sub.Terminals, doc, hello.Version)
 	for {
-		notice, err := sub.Next(ctx)
+		var notice Notice
+		err := a.bounded(ctx, quietFor, func(ctx context.Context) (err error) {
+			notice, err = sub.Next(ctx)
+			return err
+		})
 		if err != nil {
 			return true, err
 		}
@@ -145,13 +159,30 @@ func (a *Adapter) follow(ctx context.Context) (filled bool, err error) {
 				return true, err
 			}
 		case NoticeMissed:
-			doc, err := a.readDoc(ctx)
+			err := a.bounded(ctx, callWithin, func(ctx context.Context) (err error) {
+				doc, err = a.readDoc(ctx)
+				return err
+			})
 			if err != nil {
 				return true, err
 			}
 			a.fill(notice.Terminals, doc, hello.Version)
 		}
 	}
+}
+
+// bounded runs a step of the subscription within its time; a step the core lets run out abandons the connection,
+// which it holds open while saying nothing, so the next attempt dials a new one.
+func (a *Adapter) bounded(ctx context.Context, within time.Duration, step func(context.Context) error) error {
+	stepCtx, cancel := context.WithTimeout(ctx, within)
+	defer cancel()
+	err := step(stepCtx)
+	if err != nil && ctx.Err() == nil && errors.Is(err, context.DeadlineExceeded) {
+		stalled := &TransportError{fmt.Errorf("remuda-core said nothing for %s", within)}
+		a.client.abandon(stalled)
+		return stalled
+	}
+	return err
 }
 
 func (a *Adapter) readDoc(ctx context.Context) (Document, error) {
@@ -178,7 +209,7 @@ func (a *Adapter) fill(terminals []Terminal, doc Document, version string) {
 	defer a.mu.Unlock()
 	a.state = mirror{terminals: make(map[string]*Terminal, len(terminals)), doc: doc, version: version}
 	for i := range terminals {
-		if terminals[i].State == "live" && !strings.Contains(terminals[i].Address, "/") {
+		if terminals[i].State == "live" && local(terminals[i].Address) {
 			followShell(&terminals[i])
 			a.state.terminals[terminals[i].Address] = &terminals[i]
 		}
@@ -208,7 +239,7 @@ func (a *Adapter) drop(err error) {
 
 // apply is one change of the core's: the document read again when it moved, a terminal's fact otherwise.
 func (a *Adapter) apply(ctx context.Context, ev Event) error {
-	if ev.Machine != "" {
+	if ev.Machine != "" || ev.Terminal != "" && !local(ev.Terminal) {
 		return nil
 	}
 	if ev.Type == "doc" {
@@ -218,7 +249,11 @@ func (a *Adapter) apply(ctx context.Context, ev Event) error {
 		if json.Unmarshal(ev.Data, &moved) != nil || moved.Name != DocName {
 			return nil
 		}
-		doc, err := a.readDoc(ctx)
+		var doc Document
+		err := a.bounded(ctx, callWithin, func(ctx context.Context) (err error) {
+			doc, err = a.readDoc(ctx)
+			return err
+		})
 		if err != nil {
 			return err
 		}
@@ -250,7 +285,7 @@ func (m *mirror) apply(ev Event) (herdr.Event, bool) {
 	switch ev.Type {
 	case "created", "restarted":
 		var record Terminal
-		if json.Unmarshal(ev.Data, &record) != nil || record.Address == "" {
+		if json.Unmarshal(ev.Data, &record) != nil || record.Address != ev.Terminal || !local(record.Address) {
 			return told, false
 		}
 		if record.State != "live" {
@@ -337,6 +372,9 @@ func (m *mirror) apply(ev Event) (herdr.Event, bool) {
 	}
 	return told, true
 }
+
+// local says an address is this machine's terminal: one on a machine the core added comes as `machine/t7`.
+func local(address string) bool { return address != "" && !strings.Contains(address, "/") }
 
 // followShell keeps a terminal's folder the shell's, as herdr's pane cwd is: where its shell stood when it last held
 // the terminal, not where a program it started went.
