@@ -622,6 +622,7 @@ func Run(ctx context.Context, o Options) error {
 	events.Subscribe(bus, func(e events.PaneStatus) { hub.PaneChanged(e.Pane.Machine, e.Pane.Pane) })
 	events.Subscribe(bus, func(e events.JobDone) {
 		if mc, err := fleet.Get(e.Machine); err == nil {
+			mc.RetryCore() // the job may have installed the remuda-core a machine was connected without
 			vitals.Refresh(mc)
 		}
 		hub.RosterChanged()
@@ -644,6 +645,11 @@ func Run(ctx context.Context, o Options) error {
 		events.Publish(bus, events.MachineState{Machine: id, Label: label, State: state, Reason: reason})
 	})
 	events.Subscribe(bus, func(e events.MachineState) { absent.Observe(e.Machine, e.Label, e.State, e.Reason) })
+	events.Subscribe(bus, func(e events.MachineState) {
+		if mc, err := fleet.Get(e.Machine); err == nil && e.State == machines.StateConnected {
+			go vitals.Refresh(mc) // a machine back, or following the remuda-core installed there by hand: its ⓘ reads it afresh
+		}
+	})
 	events.Subscribe(bus, func(e events.MachineRemoved) { absent.Forget(e.Machine) })
 	absentDone := make(chan struct{})
 	defer close(absentDone)

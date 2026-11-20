@@ -9,6 +9,7 @@ describe("wake", () => {
     expect(canWake({ state: "connecting", mac: "aa:bb:cc:dd:ee:ff" })).toBe(true);
     expect(canWake({ state: "connected", mac: "aa:bb:cc:dd:ee:ff" })).toBe(false);
     expect(canWake({ state: "error" })).toBe(false);
+    expect(canWake({ state: "error", reached: true, mac: "aa:bb:cc:dd:ee:ff" })).toBe(false); // its master is up: remuda-core or herdr there does not answer
   });
   it("reads the three spellings of an address and refuses the rest", () => {
     expect(isMAC("AA:BB:CC:DD:EE:FF")).toBe(true);
