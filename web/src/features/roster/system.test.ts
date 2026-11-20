@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { editorOption, onWindows, screenTerminalWords, systemWords } from "./system";
+import { editorOption, onWindows, screenOnly, screenTerminalWords, systemWords } from "./system";
 import { encodePath } from "@/features/search/api";
 
 describe("system", () => {
@@ -8,6 +8,12 @@ describe("system", () => {
     expect(onWindows({ os: "darwin" })).toBe(false);
     expect(onWindows({})).toBe(false);
     expect(onWindows(null)).toBe(false);
+  });
+  it("gives a Windows PC the screen terminal on herdr alone: remuda-core attaches there too", () => {
+    expect(screenOnly({ os: "windows" })).toBe(true);
+    expect(screenOnly({ os: "windows", core: true })).toBe(false);
+    expect(screenOnly({ os: "linux" })).toBe(false);
+    expect(screenOnly(null)).toBe(false);
   });
   it("names the system", () => {
     expect(systemWords("windows")).toBe("Windows");

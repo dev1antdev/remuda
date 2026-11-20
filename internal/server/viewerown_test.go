@@ -78,7 +78,16 @@ func TestAViewerNeverReachesRemudasOwnWorkspaces(t *testing.T) {
 	s.screenRoutes(mux)
 	s.questionRoutes(mux)
 	s.feedRoutes(mux)
+	s.terminalRoutes(mux)
 	h := s.viewerOwnGuard(mux)
+
+	// a link watches a live terminal only on remuda-core, and never the floating terminal's
+	if code, body := fileCall(h, "/ws/pane?machine=local&id="+url.QueryEscape(appPane), true); code != http.StatusForbidden {
+		t.Errorf("a viewer's live terminal on herdr: %d %s", code, body)
+	}
+	if code, body := fileCall(h, "/ws/pane?machine=local&id="+url.QueryEscape(ownPane), true); code != http.StatusNotFound {
+		t.Errorf("a viewer's live terminal of the floating terminal: %d %s", code, body)
+	}
 
 	for _, route := range []string{"/api/screen", "/api/scrollback", "/api/question"} {
 		path := route + "?machine=local&pane="

@@ -180,8 +180,11 @@ components and icons as rules for whoever changes it: @docs/design.md
   up now, the copies there; never for a viewer.
 - `internal/herdr/` — everything herdr. `api.go`: what remuda asks of a
   machine, as interfaces — `API` (the snapshot, the event stream as
-  `EventStream`, every request), `Terminals` (a viewer joining a live terminal, typing,
-  resizing, `Viewers`) — which `Machine.Ready()` hands out and every package
+  `EventStream`, every request), `Terminals` (`Open` a live terminal as one
+  `Viewer` — what it is handed in order (`Out`: the program's bytes, or the
+  terminal's grid), its keys, its size, `Close` — with a `View` of its grid,
+  `Keep` and `Observe`; `Viewers`; herdr's `AttachManager.Open` is one viewer of
+  the attach every viewer shares, and refuses `Observe`) — which `Machine.Ready()` hands out and every package
   takes instead of `*Client` and `*AttachManager` (only `internal/herdr` and
   `internal/machines` name those), so remuda-core's adapter can stand in for
   herdr while the move to it is built; the model (`Snapshot`, `PaneInfo`,
@@ -566,6 +569,34 @@ components and icons as rules for whoever changes it: @docs/design.md
   watcher still paces the snapshots an event asks for (`internal/watch`,
   150 ms debounce, 500 ms / 1 s apart): the mirror makes each one free, not
   sooner.
+  **The live terminals** (`viewers.go`, tested on a throwaway core:
+  `viewers_test.go`): `core.NewTerminals(client)` is a core machine's
+  `herdr.Terminals`; `Open` attaches one viewer of its own (`AttachParams`:
+  the grid, `KeepSize` for a viewer in keep mode, `Observe` for a viewer
+  link, `ResizeNotifications` for either, the grid by herdr's `ValidSize`),
+  so each gets the core's first paint, any number share a terminal with no
+  refusal and no repaint through a resize, a phone keeping the size or a
+  link watching never sizes the desk's, and the core answers the
+  terminal's queries itself and strips them (no `queries.go`; xterm sees
+  none to answer, so what a page sends is a person's and goes as DATA);
+  a keep-size or watching viewer is handed each grid the core announces in
+  order with the bytes, an `Out` of its own ahead of the paint drawn at it —
+  never a sequence in the bytes, which the program could print itself (the
+  socket sends it as a text frame `{"type":"grid","cols","rows"}`, never
+  merged with bytes across it; every HTTP read carries the grid its bytes are
+  drawn at, `X-Remuda-Grid: <cols>x<rows>`, a grid that comes after some
+  bytes ending the read and opening the next, so a read lost on the way
+  loses no grid, and on remuda-core the page drops a stream whose read
+  failed for a fresh one (`transport.ts`, `freshOnLoss`), whose first paint
+  draws an idle screen again — herdr, with no such paint, reads on and keeps
+  its scrollback; the engine sizes its grid by it, see the size modes);
+  a goroutine hands the stream's bytes to the viewer and reads no further
+  while the viewer has not taken them, so the core's credit waits and it
+  repaints a viewer gone 4 MB behind; the bytes close with the program,
+  the stream or the viewer; the core ignores what a watcher types (the
+  page sends none, `handlePaneWS` drops it); `Viewers` counts the
+  person's open ones, never a link's, so a TV watching never silences a
+  push.
 - `internal/sshx/` — one OpenSSH `ControlMaster` per host (BatchMode: fail,
   never prompt; sshd's MaxSessions is 10 by default, so every session takes
   one of 9 places first (`Conn.enter`, `sessionCount`), waiting within its
@@ -713,8 +744,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   adapter (`coreLink`: the client and `core.NewAdapter`, lent the machine
   as its shell for git, its transport
   errors heard by `transportError`, closed off the adapter's goroutine by
-  `fail` and `Close`), its terminals refuse every attach
-  (`NoAttachOnCore`) until the live terminal is built, and it has no peer
+  `fail` and `Close`), its terminals are `core.Terminals` (every viewer
+  an attach of its own, see `internal/core`), and it has no peer
   to relay through (`Peer` nil) nor a bridge on Windows. Nothing of herdr's
   is offered there — its update, hooks, integrations, plugins and server
   restart (`updates.withoutHerdr`, the ⓘ's herdr concerns) — and
@@ -1109,7 +1140,22 @@ components and icons as rules for whoever changes it: @docs/design.md
   would squeeze the desktop's view), **keep** attaches at the pane's own
   grid (`cols`/`rows` from the snapshot layouts, in the roster) and shrinks
   the font to fit the width, scrolling when it can't. Touch defaults to
-  keep. Agent status lines (ccstatusline etc.) only fit in keep mode on a
+  keep. On a machine on remuda-core the terminal takes the size of the
+  viewer last active (attached, typed, resized or focused), so **fit** there
+  claims it back whenever the xterm gets the focus (a resize sent again);
+  the connect request says keep (`&keep=1`), a `keep_size` attach that
+  types but never sizes the terminal, so the engine attaches again when the
+  mode changes there (`core` on the engine's props), and a keep viewer's
+  grid is the one the core hands it in the stream (the transport's
+  `onGrid`, `engine/grid.ts`: `atGrid` sets it through xterm's own write
+  queue, after the bytes before it and before the ones after, a hidden
+  lens's too, `validGrid` refusing what no terminal holds; a window-size
+  request the program prints stays xterm's to swallow; tested with xterm
+  itself) rather than the roster's; two fit viewers of different sizes share the
+  terminal's one grid, its last active viewer's, as herdr's one attach PTY
+  shared its last resize; a viewer link is
+  keep and `wsOnly` (no HTTP fallback, a line saying the network drops
+  WebSockets). herdr reads none of it. Agent status lines (ccstatusline etc.) only fit in keep mode on a
   phone. A grid wider than the screen (keep, or fit with a minimum width),
   or a keep-mode one taller than it, scrolls under the wheel and under a
   finger alike (`gridScrolls` / `panOf` in `engine/pointer.ts`, tested): a
@@ -3548,8 +3594,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   Drags never reach the app.
 - **The screen terminal** (`web/src/features/terminal/screen/`;
   `internal/server/screen.go`): herdr has **no `herdr terminal attach` on
-  Windows**, so a pane of a machine whose roster `os` is `windows`
-  (`onWindows` in `features/roster/system.ts`) never gets the live
+  Windows**, so a pane of a machine on herdr whose roster `os` is `windows`
+  (`screenOnly` in `features/roster/system.ts`: a Windows PC on remuda-core,
+  roster `core`, gets the live terminal like any other) never gets the live
   terminal: the terminal lens (`TerminalLens`'s `screen`), the split view's
   terminal side and the floating terminal's drawer show `ScreenTerminal`
   instead — never a WebSocket attach, never a resize of the pane.
@@ -6979,9 +7026,12 @@ components and icons as rules for whoever changes it: @docs/design.md
   history in the Git lens (`/api/git/log`, `/api/git/state`,
   `/api/git/commit`, `/api/git/diff`, a workspace's own folder only:
   `gitTarget`), and the
-  upgrade of `/ws/events` — or of the page itself and its files (anything outside
-  `/api/`, `/ws/` and the code-server proxy `/code/`); never `/ws/pane`,
-  a submit, a key, the tasks or any change: 403 "this link is for
+  upgrades of `/ws/events` and of `/ws/pane` (a live terminal only watched,
+  on a machine on remuda-core alone: herdr's answers 403, and
+  `viewerOwnGuard` keeps it to a pane of the viewer's roster by its `id`) —
+  or of the page itself and its files (anything outside
+  `/api/`, `/ws/` and the code-server proxy `/code/`); never the HTTP
+  terminal, a submit, a key, the tasks or any change: 403 "this link is for
   viewing only". A page opened with
   `?viewer=rv_…` (`Guard.viewerLink`) mints a **viewer device**
   (`Device.Viewer`, `Device.Key` the link's id; `Kind()` "viewer · Chrome
@@ -7001,8 +7051,19 @@ components and icons as rules for whoever changes it: @docs/design.md
   keeps the rail to Agents, Usage, Activity and a server's
   Server place (its panel hides Read again and the updates), the header
   wears "Viewing only" and no search, Changes is shut, the Git lens draws
-  its graph and opens no menu, the terminal lens
-  is the pane's screen (`features/terminal/Screen.tsx` over `GET /api/screen`,
+  its graph and opens no menu, the terminal lens on a machine on
+  remuda-core is the live terminal only watched (`/ws/pane` is a viewer's
+  route; `handlePaneWS` opens it `Observe`, drops what the page sends,
+  refuses a viewer on herdr with a 403 before any peer is asked, and asks
+  again right before every write (a frame gathers at most `maxFrame` 256 KB,
+  so a terminal that never stops printing is asked about that often) and
+  every `viewerRecheck` 5 s on a quiet terminal
+  whether the link still stands (`Guard.StillViewer`: its key, or the viewer
+  device it signed in, not revoked), closing with "this link was revoked"
+  — tested on a throwaway core; the page's
+  `TerminalLens` `readOnly`: the pane's own grid, xterm's `disableStdin`, no
+  key bar, nothing sent), else
+  the pane's screen (`features/terminal/Screen.tsx` over `GET /api/screen`,
   `internal/server/screen.go` → `herdr.Client.PaneScreen`, `pane.read` with
   `format: ansi`, every 3 s while its agent works, 15 s otherwise, an ETag
   over the text so an unchanged screen is a 304; no attach, so no slot is
