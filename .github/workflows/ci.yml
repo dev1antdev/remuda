@@ -50,8 +50,8 @@ jobs:
           GOOS=windows GOARCH=arm64 go build -o /dev/null ./cmd/remuda
       - &remuda-core
         name: remuda-core
-        # the release internal/core's tests (internal/core/coretest) and the e2e-core job start a throwaway core of,
-        # checked against its sums
+        # remuda-core's pinned release, checked against its sums: internal/core's tests (coretest) and the e2e-core job
+        # each start a throwaway core of it
         run: |
           mkdir -p "$RUNNER_TEMP/rc" "$HOME/.local/bin"
           cd "$RUNNER_TEMP/rc"

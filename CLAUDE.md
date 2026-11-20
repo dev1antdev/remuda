@@ -1517,10 +1517,13 @@ components and icons as rules for whoever changes it: @docs/design.md
   herdr's place (`E2E_CORE`, else `remuda-core` on PATH): `serve` started
   as the script's own child under the environment `coretest.Server` gives
   one — `RC_SESSION`, `RC_SOCKET` (`<tmp>/rc.sock`), the XDG state, config
-  and runtime folders, `HOME`, `RC_LAUNCHD_DIRECT` naming the script's
-  shell — exported for the whole run, so remuda's own `remuda-core
-  connect` reaches it and no command reaches the person's core; remuda
-  started with `-core`; at the end remuda is stopped and waited for first,
+  and runtime folders and `RC_LAUNCHD_DIRECT` naming the script's shell
+  exported for the whole run, `HOME` the run's own set on every core and
+  remuda command as for herdr (coretest's `SHELL=/bin/sh` and
+  `RC_HEARTBEAT_MS` left out: the terminals get the shell herdr's would) —
+  so remuda's own `remuda-core connect` reaches it and no command reaches
+  the person's core; remuda started with `-core`; at the end remuda is
+  stopped and waited for first,
   then `remuda-core server stop` (a remuda still up would start a core
   again through `connect`). The smoke and the display checks read the
   roster's machine `core` and there leave out what a core has not: the
