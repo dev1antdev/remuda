@@ -109,12 +109,10 @@ func sessionsByPIDScript(procs []Running) string {
 	if b.Len() == 0 {
 		return ""
 	}
-	return script.PATH + `
-case "$(uname -s 2>/dev/null)" in MINGW* | MSYS* | CYGWIN*) windows=1 ;; *) windows= ;; esac
-nl='
-'
+	return script.PATH + "\n" + script.CwdOf + `case "$(uname -s 2>/dev/null)" in MINGW* | MSYS* | CYGWIN*) windows=1 ;; *) windows= ;; esac
+lstart() { LC_ALL=C TZ=UTC ps -o lstart= -p "$1" 2>/dev/null; }
 s() {
-  start=$(LC_ALL=C TZ=UTC ps -o lstart= -p "$1" 2>/dev/null)
+  start=$(lstart "$1")
   if [ -z "$start" ]; then
     start=-
     if [ -n "$windows" ]; then
@@ -123,16 +121,7 @@ s() {
     fi
   fi
   cwd=
-  case "$start" in -|ft:*) ;; *)
-    if [ -d "/proc/$1" ]; then
-      cwd=$(readlink "/proc/$1/cwd" 2>/dev/null; printf x)
-      cwd=${cwd%x}
-      cwd=${cwd%"$nl"}
-    else
-      cwd=$(printf '%bx' "$(LC_ALL=en_US.UTF-8 lsof -a -nP -p "$1" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -n 1)")
-      cwd=${cwd%x}
-    fi ;;
-  esac
+  case "$start" in -|ft:*) ;; *) cwd_of "$1" ;; esac
   printf '%s\037%s\037%s\037%s\037' "$1" "$2" "$start" "$cwd"
   if [ "$2" = claude ]; then
     {
@@ -168,7 +157,7 @@ s() {
       fi
     done
   fi
-  printf '\037%s\036\n' "$(LC_ALL=C TZ=UTC ps -o lstart= -p "$1" 2>/dev/null)"
+  printf '\037%s\036\n' "$(lstart "$1")"
 }
 rollout() {
   [ -f "$2" ] || return 0
