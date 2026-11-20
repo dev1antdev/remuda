@@ -37,6 +37,7 @@ type Report struct {
 	HerdrServer   string            `json:"herdr_server,omitempty"`
 	Remuda        string            `json:"remuda,omitempty"`
 	CodeServer    string            `json:"code_server,omitempty"`  // the release under ~/.local/opt/code-server, as the installer links it
+	RemudaCore    string            `json:"remuda_core,omitempty"`  // ~/.local/bin/remuda-core's version (remuda-core.exe on Windows)
 	Running       bool              `json:"remuda_running"`         // a remuda answers on the machine's own port: terminals go through it
 	Statusline    bool              `json:"statusline,omitempty"`   // remuda's wrapper stands before Claude Code's status line there, keeping its plan limits
 	ClaudeLogin   *Login            `json:"claude_login,omitempty"` // when Claude Code's stored sign-in there ends (claude.go), as last read
@@ -101,6 +102,9 @@ type Latest struct {
 
 // PinnedCode is the code-server release this remuda's installer carries; the app sets it from internal/setup.
 var PinnedCode string
+
+// PinnedCore is the remuda-core release this remuda's installer carries; the app sets it from internal/setup.
+var PinnedCore string
 
 // Collector keeps the reports and the latest versions fresh.
 type Collector struct {
@@ -255,6 +259,7 @@ echo "arch=$(uname -m)"
 echo "cores=$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null)"
 r="$HOME/.local/bin/remuda"; [ -x "$r" ] || r="$r.exe"; if [ -x "$r" ]; then echo "remuda=$("$r" -version 2>/dev/null)"; fi
 cs=$(readlink "$HOME/.local/opt/code-server" 2>/dev/null); case "$cs" in *code-server-*) echo "code_server=${cs##*code-server-}";; esac
+c="$HOME/.local/bin/remuda-core"; [ -x "$c" ] || { c="$c.exe"; [ -f "$HOME/.local/bin/conpty/conpty.dll" ] && [ -f "$HOME/.local/bin/conpty/x64/OpenConsole.exe" ] || c=; }; if [ -n "$c" ] && [ -x "$c" ]; then echo "remuda_core=$("$c" --version 2>/dev/null)"; fi
 grep -q 'remuda[^"]*statusline' "$HOME/.claude/settings.json" 2>/dev/null && echo "statusline=wrapped"
 ` + SettingsScript + `echo "df=$(df -kP "$HOME" 2>/dev/null | tail -1)"
 echo "uptime=$(uptime 2>/dev/null)"
@@ -342,6 +347,8 @@ func Parse(out string) (Report, *machines.Peer) {
 			r.Remuda = strings.TrimPrefix(v, "remuda ")
 		case "code_server":
 			r.CodeServer = semver.FindString(v)
+		case "remuda_core":
+			r.RemudaCore = semver.FindString(v)
 		case "statusline":
 			r.Statusline = v == "wrapped"
 		case "df":

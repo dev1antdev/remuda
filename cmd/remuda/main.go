@@ -110,7 +110,7 @@ func mirrorClosed(withMirror, scratch bool) string {
 }
 
 // windowsServes is what remuda on Windows says when asked to serve the page: there it is the helper a cockpit reaches.
-const windowsServes = "remuda on Windows does not serve the page: it is the helper a cockpit on a Mac or Linux reaches over ssh (remuda setup -host <this PC> there). Its commands here: remuda tasks, remuda mcp, remuda statusline, remuda -version."
+const windowsServes = "remuda on Windows does not serve the page: it is the helper a cockpit on a Mac or Linux reaches over ssh (remuda setup -host <this PC> there). Its commands here: remuda tasks, remuda mcp, remuda statusline, remuda core, remuda -version."
 
 // recordsHere says whether this instance records the agents' timelapses and keeps their turns to undo: not a scratch instance (REMUDA_STATE_DIR set)
 // unless -record asks, so a second remuda beside the real one never reads the person's screens or work into a folder of its own.
@@ -124,14 +124,15 @@ func help() {
 	fmt.Fprint(w, `remuda — a browser and phone cockpit for the coding agents herdr runs
 
   remuda [flags]       the server (the background service runs this); -server for a host that only serves the page
-  remuda setup         herdr, its server, the agent hooks and the service, here or -host H
+  remuda setup         herdr, its server, the agent hooks, remuda-core and the service, here or -host H
   remuda code          code-server for the Code mode, here or -host H
+  remuda core          remuda-core, the terminal runtime remuda moves to, here or -host H
   remuda mcp           your task list for the coding agents, over MCP; mcp install registers it with each agent, here or -host H
   remuda tasks         your tasks from a shell: list, show, add, move, comment
   remuda statusline    Claude Code's plan limits for remuda; statusline install puts it before your status line, here or -host H
   remuda backup        the cockpit's state copied to the machine Settings › Backups names: backup now, backup list
   remuda restore       a backup back into this machine's state dir, the service stopped first
-  remuda uninstall     take remuda off this machine again (-all: herdr and your data too)
+  remuda uninstall     take remuda off this machine again (-all: herdr, remuda-core and your data too)
 
 Each command lists its own flags with -h. The server's:
 

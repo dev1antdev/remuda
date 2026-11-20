@@ -249,3 +249,40 @@ func TestOfferedIncludesTheStatusLineWrapperWhereClaudeAndRemudaAre(t *testing.T
 		t.Fatal("offered without remuda")
 	}
 }
+
+func TestCoreIsOfferedWhereItIsMissingOrOlder(t *testing.T) {
+	health.PinnedCore = "0.2.0"
+	t.Cleanup(func() { health.PinnedCore = "" })
+	find := func(r *health.Report) *Update {
+		for _, u := range Offered(r, health.Latest{}) {
+			if u.What == "core" {
+				return &u
+			}
+		}
+		return nil
+	}
+	mac := health.Report{Remuda: "v0.16.0", OS: "macOS 26.1", Arch: "arm64"}
+	if u := find(&mac); u == nil || u.Title != "Install remuda-core" || !strings.Contains(u.Command, `"$r" core install`) || !strings.Contains(u.Command, "older than remuda-core's installer") {
+		t.Fatalf("a Mac without remuda-core: %+v", u)
+	}
+	older := mac
+	older.RemudaCore = "0.1.9"
+	if u := find(&older); u == nil || u.Title != "Update remuda-core" || !strings.Contains(u.Note, "0.1.9 → 0.2.0") {
+		t.Fatalf("an older remuda-core: %+v", u)
+	}
+	for name, r := range map[string]health.Report{
+		"current":         {Remuda: "v0.16.0", OS: "Linux 6.12", Arch: "arm64", RemudaCore: "0.2.0"},
+		"newer":           {Remuda: "v0.16.0", OS: "Linux 6.12", Arch: "amd64", RemudaCore: "0.3.0"},
+		"no remuda":       {OS: "Linux 6.12", Arch: "amd64"},
+		"Windows on arm":  {Remuda: "v0.16.0", OS: "Windows 11 Pro", Arch: "arm64"},
+		"a 32-bit Linux":  {Remuda: "v0.16.0", OS: "Linux 6.1", Arch: "armv7l"},
+		"vitals not read": {},
+	} {
+		if u := find(&r); u != nil {
+			t.Errorf("%s: offered %+v", name, u)
+		}
+	}
+	if u := find(&health.Report{Remuda: "v0.16.0", OS: "Windows 11 Pro", Arch: "amd64"}); u == nil {
+		t.Error("a Windows PC on x86-64 is not offered remuda-core")
+	}
+}

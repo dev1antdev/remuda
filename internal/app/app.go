@@ -373,6 +373,7 @@ func Run(ctx context.Context, o Options) error {
 	}, pushSvc.Notify)
 	input := sessions.NewInput(fleet, watcher)
 	health.PinnedCode = setup.CodeVersion
+	health.PinnedCore = setup.CoreVersion
 	vitals := health.New(o.Dir, fleet, o.Version, o.VersionCheck)
 	// Claude Code's sign-in on each machine, read with the vitals: warned of three days before it ends, a day before, once ended
 	signins := signin.New(o.Dir)

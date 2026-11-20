@@ -179,7 +179,7 @@ export default function UpdatesDialog({ machine, what, onClose, onDone }: {
           <div className="updates-list">
             {data?.map((u) => (
               <button key={u.what} type="button" className="updates-row" onClick={() => setPicked(u)}>
-                <Icon name={u.what.startsWith("restart-") ? "play" : u.what === "code" ? "code" : u.what === "mcp" ? "plug" : u.what === "statusline" ? "chart" : u.what === "herdr" || u.what === "hooks" || u.what === "integrations" || u.what === "plugins" || u.what.startsWith("remuda") ? "refresh-cw" : "sparkles"} size={14} />
+                <Icon name={u.what.startsWith("restart-") ? "play" : u.what === "code" ? "code" : u.what === "mcp" ? "plug" : u.what === "statusline" ? "chart" : u.what === "herdr" || u.what === "core" || u.what === "hooks" || u.what === "integrations" || u.what === "plugins" || u.what.startsWith("remuda") ? "refresh-cw" : "sparkles"} size={14} />
                 <span className="updates-row-text">
                   <span>{redact(u.title)}</span>
                   <span className="dim">{redact(u.note?.split(". ")[0] ?? "")}</span>

@@ -26,6 +26,7 @@ Three rings, and a dependency may only point inwards.
 ├─ the floor ──────────────────────────────────────────────────────────┤
 │  machines   the registry; a Machine is a shell.Host with herdr on it │
 │  herdr      the RPC client, the attach PTYs, the snapshot questions  │
+│  core       remuda-core's client, which is to take herdr's place     │
 │  transcript the session file parser and the per-machine Reader       │
 │  shell      the port: Run / Stream, Host, Fake                       │
 │  script     building POSIX scripts, reading their answers            │
