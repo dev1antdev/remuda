@@ -207,3 +207,29 @@ func TestADenselyColouredLogStillPaintsTheScreen(t *testing.T) {
 	defer viewer.Close()
 	(&watched{viewer: viewer}).until(t, "END-OF-LOG")
 }
+
+func TestAProgramPrintingOverADroppedPaintStillShowsTheScreen(t *testing.T) {
+	ctx := within(t, 60*time.Second)
+	client := coretest.Server(t).Client(t)
+	// the same history too heavy to paint, then a line rewritten every tenth of a second under END-OF-LOG: its output
+	// reaches a viewer whose paint the core dropped, which must not pass for that paint
+	log := `awk 'BEGIN{for(r=0;r<4000;r++){for(c=0;c<80;c++)printf "\033[0;1;2;3;4;5;7;9;53;38;2;%d;%d;%d;48;2;%d;%d;%d;58;2;%d;%d;%dmx",c%256,r%256,(c*r)%256,255-c%256,255-r%256,(c+r)%256,(c*7)%256,(r*3)%256,(c+r*5)%256; printf "\033[0m\r\n"} print "END-OF-LOG"}'; i=0; while :; do i=$((i+1)); printf '\rtick %d' $i; sleep 0.1; done`
+	term, err := client.Run(ctx, core.RunParams{Argv: []string{"sh", "-c", log}, Size: &core.Size{Cols: 80, Rows: 24}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for start := time.Now(); ; time.Sleep(100 * time.Millisecond) {
+		if read, _ := client.Read(ctx, term.Address, 0, ""); strings.Contains(read.Text, "tick") {
+			break
+		}
+		if time.Since(start) > 60*time.Second {
+			t.Fatal("the log never reached the screen")
+		}
+	}
+	viewer, err := core.NewTerminals(client).Open(term.Address, herdr.View{Cols: 80, Rows: 24})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer viewer.Close()
+	(&watched{viewer: viewer}).until(t, "END-OF-LOG")
+}

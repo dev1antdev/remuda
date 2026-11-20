@@ -14,7 +14,7 @@ import { tn } from "@/lib/i18n";
 import { errMsg } from "@/lib/text";
 import { findScrollback, scrollPane } from "./api";
 import type { TermApi } from "./engine/types";
-import { blankTail, clampAt, fromBottom, offsetFor, onScreen, SCROLLBACK_ROWS, viewportRow } from "./scrollback";
+import { blankTail, clampAt, fromBottom, offsetFor, olderRead, onScreen, SCROLLBACK_ROWS, tellsOlder, viewportRow, type OlderRead } from "./scrollback";
 
 // DEBOUNCE_MS lets a query settle before the rows are read for it
 const DEBOUNCE_MS = 150;
@@ -30,17 +30,12 @@ export function useTerminalFind(api: TermApi | null, active: boolean, machineId:
   const run = useRef(0);
   // the core find's latest count, and the one read of older rows per pane and query that every step of it shares
   const counted = useRef(0);
-  const olderRead = useRef<{ key: string; matches: Promise<number>; told: boolean } | null>(null);
+  const olderHeld = useRef<OlderRead | null>(null);
 
-  // older says, once a pane and query, that the query's matches are only in rows the terminal no longer holds for the
-  // screen: the server reads them once, and whichever run of that query is current when it answers, with the count
-  // still zero, tells
+  // older says once a pane and query that the query's matches are only in rows the terminal no longer holds for the
+  // screen: whichever run of the query is current when the read answers, its count still zero, tells
   const older = async (q: string, id: number) => {
-    const key = `${machineId}|${paneId}|${q}`;
-    if (olderRead.current?.key !== key) {
-      olderRead.current = { key, matches: findScrollback(machineId, paneId, q, SCROLLBACK_ROWS).then((f) => f.matches.length), told: false };
-    }
-    const read = olderRead.current;
+    const read = (olderHeld.current = olderRead(olderHeld.current, `${machineId}|${paneId}|${q}`, () => findScrollback(machineId, paneId, q, SCROLLBACK_ROWS).then((f) => f.matches.length)));
     let n = 0;
     try {
       n = await read.matches;
@@ -49,7 +44,7 @@ export function useTerminalFind(api: TermApi | null, active: boolean, machineId:
       read.told = true;
       return;
     }
-    if (id !== run.current || read.told || !n || counted.current !== 0) return;
+    if (!tellsOlder(id === run.current, read, n, counted.current)) return;
     read.told = true;
     actions.notify(tn(n, "{n} match is only in older rows, which this terminal no longer shows", "{n} matches are only in older rows, which this terminal no longer shows"));
   };
@@ -96,6 +91,14 @@ export function useTerminalFind(api: TermApi | null, active: boolean, machineId:
     }
   };
 
+  // a lens that goes (another pane, the lens closed) ends its run, so nothing it asked lands on the next one
+  useEffect(
+    () => () => {
+      run.current++;
+    },
+    [],
+  );
+
   // the query as typed, once it settles
   useEffect(() => {
     if (!on) return;
@@ -125,7 +128,7 @@ export function useTerminalFind(api: TermApi | null, active: boolean, machineId:
     wasOn.current = on;
     if (on || !was || !api) return;
     run.current++;
-    olderRead.current = null;
+    olderHeld.current = null;
     api.search.clear();
     if (active && !open && !isTouch) api.focus();
   }, [on, api, active, open]);

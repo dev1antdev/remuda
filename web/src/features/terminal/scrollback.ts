@@ -53,3 +53,18 @@ export function nearest(rows: number[], expected: number): number {
 export function clampAt(at: number, total: number): number {
   return total <= 0 ? 0 : Math.min(Math.max(at, 0), total - 1);
 }
+
+// OlderRead is the one read, for a pane and query, of the rows older than a terminal on remuda-core holds for its
+// screen: every step of the query awaits it rather than reading again or skipping it, and it is told once.
+export type OlderRead = { key: string; matches: Promise<number>; told: boolean };
+
+// olderRead keeps the read held while the key is the same, and starts one for a new key.
+export function olderRead(held: OlderRead | null, key: string, read: () => Promise<number>): OlderRead {
+  return held?.key === key ? held : { key, matches: read(), told: false };
+}
+
+// tellsOlder says whether the older rows' matches are news: the run asking is still the current one, this read has not
+// been told, the older rows hold the query, and the terminal's own rows still hold none.
+export function tellsOlder(current: boolean, read: OlderRead, older: number, counted: number): boolean {
+  return current && !read.told && older > 0 && counted === 0;
+}
