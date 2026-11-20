@@ -37,7 +37,7 @@ var herdrSemver = regexp.MustCompile(`\d+\.\d+\.\d+`)
 
 // ErrOnCore refuses herdr's server on a machine this remuda reaches through remuda-core: herdr's agents there are not
 // the ones it sees, and a stop would end them all.
-var ErrOnCore = errors.New("this machine is reached through remuda-core: herdr's server there is not this remuda's to stop or start")
+var ErrOnCore = errors.New("this machine is reached through remuda-core: herdr there is not this remuda's to update, stop or start")
 
 // StopServer stops herdr's server on the machine, and every pane process with it.
 func (mc *Machine) StopServer() (string, error) {

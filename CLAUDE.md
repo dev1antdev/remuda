@@ -584,7 +584,14 @@ components and icons as rules for whoever changes it: @docs/design.md
   is offered there — its update, hooks, integrations, plugins and server
   restart (`updates.withoutHerdr`, the ⓘ's herdr concerns) — and
   `StopServer` / `StartServer` refuse (`ErrOnCore`): herdr's agents there
-  are not the ones this remuda sees, and a stop would end them all. `OnCore` is the
+  are not the ones this remuda sees, and a stop would end them all (an
+  update of herdr's on such a machine is refused in `Start` too). For the
+  same reason every checkout write holds back as while an agent works
+  there — the Git and Changes lenses, a pull, an undo, a worktree removed
+  (`holdCheckoutWrites` in `internal/app/core.go`) — and a page-only host
+  (`-server -core`) starts no core of its own. An exec connection keeps
+  its stdin and asks for no terminal whatever the host's ssh config says
+  (`DialExec` is a script's session). `OnCore` is the
   roster's machine `core`, where the ⓘ says a Claude Code older than
   `CORE_STATUS_CLAUDE` 2.1.325 tells remuda-core no status (`concerns.ts`).
   Each remote connects in the

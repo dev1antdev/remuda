@@ -132,10 +132,23 @@ func TestRemudaCoreFollowsARemotesReleaseAndPrecedesTheHosts(t *testing.T) {
 	}
 }
 
-func TestAMachineOnRemudaCoreIsOfferedNothingOfHerdrs(t *testing.T) {
+func TestAMachineOnRemudaCoreIsOfferedNothingOfHerdrsAndRunsNone(t *testing.T) {
 	offered := []Update{{What: "herdr"}, {What: "hooks"}, {What: "integrations"}, {What: "plugins"}, {What: "restart-herdr"}, {What: "claude"}, {What: "core"}}
 	kept := withoutHerdr(offered)
 	if len(kept) != 2 || kept[0].What != "claude" || kept[1].What != "core" {
 		t.Fatalf("a machine on remuda-core is offered %+v", kept)
+	}
+	bus := events.NewBus()
+	fleet := machines.NewCoreManager(t.TempDir(), "", nil, true) // a page-only host: no core of its own is started
+	defer fleet.Close()
+	host, err := fleet.Get(machines.LocalID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := &Service{Health: health.New("", fleet, "dev", false), Jobs: jobs.New(bus), Restart: restart.New(fleet), Watch: watch.New(fleet, bus), Machines: fleet}
+	for _, what := range []string{"herdr", "hooks", "integrations", "plugins", "restart-herdr"} {
+		if _, err := s.Start(host, what, "brew upgrade herdr"); !errors.Is(err, machines.ErrOnCore) {
+			t.Errorf("Start(%q) on remuda-core = %v, want ErrOnCore before anything runs", what, err)
+		}
 	}
 }

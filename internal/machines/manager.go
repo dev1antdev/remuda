@@ -193,13 +193,18 @@ func NewManager(dir, localSocket, localHerdrBin string, door *Door) *Manager {
 }
 
 // NewCoreManager is NewManager for a remuda that reaches every machine through remuda-core instead of herdr (-core),
-// while the move off herdr is built. herdrBin, when herdr is still here, only reads herdr's list of machines.
-func NewCoreManager(dir, herdrBin string, door *Door) *Manager {
+// while the move off herdr is built. herdrBin, when herdr is still here, only reads herdr's list of machines. A host
+// serving the page only (server) reaches no core of its own: none is started there.
+func NewCoreManager(dir, herdrBin string, door *Door, server bool) *Manager {
 	local := localMachine(dir)
 	local.speaksCore = true
-	local.link = newCoreLink(core.New(dialLocalCore), nil)
-	local.client, local.attach = local.link.adapter, noAttach()
-	return newManager(dir, herdrBin, door, local, true)
+	if !server {
+		local.link = newCoreLink(core.New(dialLocalCore), nil)
+		local.client, local.attach = local.link.adapter, noAttach()
+	}
+	m := newManager(dir, herdrBin, door, local, true)
+	m.SetServer(server)
+	return m
 }
 
 // localMachine is this host as a machine of the fleet, before its herdr or core is given.
