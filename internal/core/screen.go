@@ -9,25 +9,12 @@ import "strings"
 func ScreenText(vt string) string {
 	rows := strings.Split(vt, "\n")
 	end := len(rows)
-	for end > 0 && blankRow(rows[end-1]) {
+	for end > 0 && (rows[end-1] == "" || rows[end-1] == blankRow) {
 		end--
 	}
 	return strings.Join(rows[:end], "\n")
 }
 
-// blankRow says a row shows nothing: nothing is left past its escape sequences. A row of coloured spaces shows its
-// colour and is not blank.
-func blankRow(row string) bool {
-	for i := 0; i < len(row); i++ {
-		if row[i] != 0x1b {
-			return false
-		}
-		j := i + 1
-		if j < len(row) && row[j] == '[' {
-			for j++; j < len(row) && row[j] >= 0x20 && row[j] <= 0x3f; j++ {
-			}
-		}
-		i = j
-	}
-	return true
-}
+// blankRow is a vt row that shows nothing: every row opens with a style reset, and a blank one is the reset alone (a
+// row of coloured spaces carries its colour and shows it).
+const blankRow = "\x1b[0m"
