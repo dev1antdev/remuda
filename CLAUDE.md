@@ -173,7 +173,14 @@ components and icons as rules for whoever changes it: @docs/design.md
   `validTime`) — the machine (none by default: nothing is copied before
   one is picked), the time, how many stay, the last run, the next, Back
   up now, the copies there; never for a viewer.
-- `internal/herdr/` — everything herdr. `client.go`: newline-JSON RPC over
+- `internal/herdr/` — everything herdr. `api.go`: what remuda asks of a
+  machine, as interfaces — `API` (the snapshot, the event stream as `Events`,
+  every request), `Terminals` (a viewer joining a live terminal, typing,
+  resizing, `Viewers`) — which `Machine.Ready()` hands out and every package
+  takes instead of `*Client` and `*AttachManager` (only `internal/herdr` and
+  `internal/machines` name those), so remuda-core's adapter can stand in for
+  herdr while the move to it is built; the model (`Snapshot`, `PaneInfo`,
+  `Event`) is remuda's either way. `client.go`: newline-JSON RPC over
   the Unix socket, **one request = one connection** (herdr closes the socket
   after each response; never pool) — dialled by `DialLocal` (`local_unix.go`;
   `local_windows.go`: on Windows the socket is a named pipe named after its
