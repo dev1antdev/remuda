@@ -43,8 +43,7 @@ type Terminal struct {
 	agentAt, statusAt time.Time
 	// restored: its shell was lost (a kept terminal) and the core gives it a new one; no agent took it since.
 	restored bool
-	// held counts the moment its foreground last changed hands, or the mirror took the record in (a fill, the news of
-	// a terminal made or given a new shell): one process later than another in the terminal always counts higher.
+	// held counts, and heldAt notes, the moment its foreground last changed hands or the mirror took the record in.
 	held   uint64
 	heldAt time.Time
 }

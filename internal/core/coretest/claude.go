@@ -7,11 +7,7 @@ import (
 	"testing"
 )
 
-// StandInClaude puts a `claude` on the PATH the next core starts with, in Claude Code's ways that remuda reads: it keeps
-// its session file, sessions/<pid>.json under $HOME/.claude with its start as Claude Code records it, when given a
-// session, and moves it to another on
-// "/resume <id>", in the same process; says what it was started with ("args: …"); reports itself idle through OSC 7501;
-// answers /restart as a build without it does; leaves on /exit; and echoes any other line ("got: …").
+// StandInClaude puts on the next core's PATH a `claude` that keeps its session file as Claude Code does and echoes lines.
 func StandInClaude(t testing.TB, session string) {
 	t.Helper()
 	dir := t.TempDir()

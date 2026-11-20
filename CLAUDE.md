@@ -435,7 +435,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   `heldAt`, when that was here, which the process holding the pid when it is
   read must have begun by, and `Started`, the process's creation as a core
   advertising `foreground_started` tells it (`Foreground.StartedMS`, unix ms),
-  which that process must have; nil,
+  which that process must have — remuda-core 0.2.2 (#12), so the binding takes
+  effect once the pin moves to it; until then every machine reads with the
+  sighting bound, which a step of the machine's clock on macOS or Windows can
+  fool; nil,
   none), which a machine gives as its `processSessions`
   (`internal/machines/sessions.go`, tested on paper and on a throwaway core
   with a stand-in Claude Code keeping its session file in a temp HOME):
@@ -1031,7 +1034,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   locally and by `findScript` over ssh. **A session found by the agent's
   process** (`bypid.go`, tested on real processes in a temp HOME and on
   `shell.Fake`), for a machine whose runtime names no session (remuda-core,
-  Core 12): `Reader.SessionsOf([]Running{pid, agent, cwd})` is one script
+  Core 12): `Reader.SessionsOf([]Running{pid, agent, cwd, seen, started})` is one script
   on the machine, here or over ssh, answering pid → session id — Claude
   Code's from `<config dir>/sessions/<pid>.json` (`CLAUDE_CONFIG_DIR` read
   off the process's environment, `/proc/<pid>/environ` or `ps -E`, whose
@@ -1043,17 +1046,22 @@ components and icons as rules for whoever changes it: @docs/design.md
   second, or the one before on Linux, where ps counts the boot time in whole
   seconds and remuda-core does not; a FILETIME's millisecond; no clock read
   for it, so a step of the machine's clock neither lets a later process in
-  nor hides the one seen), and a Claude Code file then counts only with a
+  nor hides the one seen; the second before on Linux alone, by the `system`
+  the script tells first), and a Claude Code file then counts only with a
   `startedAt` no earlier than that creation (a second alone does not tell two
   processes given the pid within it apart; a step of the clock on Linux makes
   it no match),
-  nor, from a core that tells none, one that began after the
-  agent was seen running (`Running.Seen`: a later process took the pid
-  before it was read), the sighting placed on the machine's clock by the
-  monotonic time since it, the clock read in a call of its own (`date +%s`,
-  `Reader.machineClock`) whose span bounds the doubt, a reading that took
-  over `maxClockSpan` 2 s refused as no reading, the read failing (the last
-  answers stand); every
+  nor, from a core that tells none (0.2.1 and before: the pin today), one that
+  began after the agent was seen running (`Running.Seen`: a later process
+  took the pid before it was read), the sighting placed on the machine's
+  clock by the monotonic time since it, the clock read in a call of its own
+  (`date +%s`, `Reader.machineClock`) whose span bounds the doubt, a reading
+  that took over `maxClockSpan` 2 s refused as no reading, the read failing
+  (the last answers stand; 2 s is an assumption, unmeasured for Git Bash over
+  a Windows PC's sshd) — safe across a step of the machine's clock on Linux,
+  whose ps moves lstart with it, not on macOS or Windows, where a forward
+  step between the sighting and the read can let a later process through;
+  every
   candidate's file is sent and Go weighs them; only
   regular files are read, a FIFO never holds the script; a process that
   stands in another folder than the pane was seen in now (`/proc/<pid>/cwd`,

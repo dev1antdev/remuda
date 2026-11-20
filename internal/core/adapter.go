@@ -54,10 +54,7 @@ type AdapterHooks struct {
 // SessionLookup names the conversation of an agent's process; nil while it is not known.
 type SessionLookup func(AgentProcess) *herdr.AgentSession
 
-// AgentProcess is an agent's process as the mirror sees it: its kind, pid and folder, and the terminal it holds with
-// the count of the moment it was seen take it (Terminal.held) and when that was, here, which tell it from a later
-// process given the same pid: one seen by then had begun by then. Started is its creation as the core tells it
-// (Foreground.StartedMS), which tells it outright; 0 from a core that does not.
+// AgentProcess is an agent's process as the mirror sees it, with what tells it from a later one given its pid.
 type AgentProcess struct {
 	Agent, Cwd string
 	PID        int

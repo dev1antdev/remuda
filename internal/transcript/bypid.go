@@ -14,10 +14,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/text"
 )
 
-// Running is an agent process whose session is looked up: its pid, its kind (claude, codex) and its folder, and what
-// tells it from a later process given that pid: its creation as the runtime told it (Started, unix ms), which the
-// process holding the pid now must have, else when it was seen running here (Seen), which that process must have begun
-// by; zero for not known.
+// Running is an agent process whose session is looked up, with what tells it from a later process given its pid.
 type Running struct {
 	PID     int
 	Agent   string
@@ -47,12 +44,10 @@ func (r *Reader) SessionsOf(procs []Running) (map[int]string, error) {
 	return parseSessionsByPID(out, procs, rpath.For(r.host.Home()), clock), nil
 }
 
-// maxClockSpan is the longest a call reading the machine's clock may take: the moment it read is known only to within
-// the call, and a later process could hide in a wider span. A test shortens it.
+// maxClockSpan is the longest a reading of the machine's clock may take (an assumption, unmeasured on a Windows PC).
 var maxClockSpan = 2 * time.Second
 
-// machineClock is the machine's clock read in a call of its own, as short as a call gets: asked here, and no later
-// than latest there. The zero value is no reading, and nothing is checked against it.
+// machineClock is the machine's clock read in a call of its own: asked here, no later than latest there; zero, none.
 type machineClock struct {
 	asked, latest time.Time
 }
@@ -74,9 +69,9 @@ func (r *Reader) machineClock() (machineClock, error) {
 	return machineClock{asked: asked, latest: time.Unix(secs+1, 0)}, nil
 }
 
-// begunBy says whether a process whose start the script told can be the one seen running here at seen: it began by
-// then. The sighting is placed on the machine's clock by the time passed since it here, monotonic, so a step of
-// either clock moves nothing; one whose start reads as no time cannot be told.
+// begunBy says whether a process with that start can be the one seen running here at seen: it began by then. Placed by
+// monotonic time, a step of this clock moves nothing; a step of the machine's moves ps's lstart with it on Linux
+// alone, so on macOS and Windows a forward step between the sighting and the read can let a later process through.
 func (c machineClock) begunBy(start string, seen time.Time) bool {
 	if c.asked.IsZero() || seen.IsZero() {
 		return true
@@ -85,19 +80,7 @@ func (c machineClock) begunBy(start string, seen time.Time) bool {
 	return known && !time.UnixMilli(began).After(c.latest.Add(-c.asked.Sub(seen)))
 }
 
-// sessionsByPIDScript prints a record per process, split by US:
-//   - its pid and agent;
-//   - its start as Claude Code records it: `ps -o lstart` in UTC, "ft:<FILETIME>" from PowerShell's Get-Process for
-//     a native Windows process ps does not see (asked on Git Bash alone), "-" for one gone or whose start nothing
-//     tells, which then has no session: nothing would tell it from another given its pid;
-//   - the folder the process stands in now, where /proc or lsof tells it (never a native Windows process's; lsof
-//     in a UTF-8 locale, since in C's it writes a byte past ASCII as \xNN, and its \\ and \t read back by printf);
-//   - for Claude Code, every candidate sessions/<pid>.json, each ended by GS: under the CLAUDE_CONFIG_DIR its
-//     environment names (macOS's `ps -E` runs the entries together, so each reading is a candidate; a relative one
-//     from the process's folder), then the default ~/.claude;
-//   - for Codex, every rollout the process or a child holds open, each ended by FS (a path may hold a line break): the
-//     pid holding it, its path and its first line whole, split by GS;
-//   - its start again, once all that was read: another process may have taken the pid meanwhile.
+// sessionsByPIDScript prints the system, then per process its pid, agent, start, folder, session files and start again.
 func sessionsByPIDScript(procs []Running) string {
 	var b strings.Builder
 	for _, p := range procs {
@@ -109,7 +92,9 @@ func sessionsByPIDScript(procs []Running) string {
 	if b.Len() == 0 {
 		return ""
 	}
-	return script.PATH + "\n" + script.CwdOf + `case "$(uname -s 2>/dev/null)" in MINGW* | MSYS* | CYGWIN*) windows=1 ;; *) windows= ;; esac
+	return script.PATH + "\n" + script.CwdOf + `system=$(uname -s 2>/dev/null)
+printf 'system\037%s\036\n' "$system"
+case "$system" in MINGW* | MSYS* | CYGWIN*) windows=1 ;; *) windows= ;; esac
 lstart() { LC_ALL=C TZ=UTC ps -o lstart= -p "$1" 2>/dev/null; }
 s() {
   start=$(lstart "$1")
@@ -184,8 +169,12 @@ func parseSessionsByPID(out string, procs []Running, style rpath.Style, clock ma
 	for _, p := range procs {
 		cwds[p.PID], seen[p.PID], started[p.PID] = p.CWD, p.Seen, p.Started
 	}
-	found := map[int]string{}
+	found, linux := map[int]string{}, false
 	for _, record := range script.Sections(out) {
+		if system, ok := strings.CutPrefix(strings.TrimSpace(record), "system"+script.US); ok {
+			linux = system == "Linux"
+			continue
+		}
 		fields := strings.SplitN(record, script.US, 6)
 		if len(fields) < 6 {
 			continue
@@ -207,7 +196,7 @@ func parseSessionsByPID(out string, procs []Running, style rpath.Style, clock ma
 		case !strings.HasPrefix(start, "ft:") && after != start:
 			continue // another process took the pid while it was read, or it ended
 		}
-		if told := started[pid]; told != 0 && !sameCreation(start, told) || told == 0 && !clock.begunBy(start, seen[pid]) {
+		if told := started[pid]; told != 0 && !sameCreation(start, told, linux) || told == 0 && !clock.begunBy(start, seen[pid]) {
 			continue // another process than the one seen: the pid changed hands before it was read
 		}
 		var id string
@@ -224,12 +213,7 @@ func parseSessionsByPID(out string, procs []Running, style rpath.Style, clock ma
 	return found
 }
 
-// claudeSession is the session of a candidate file that is this very process's, its pid's: one whose procStart is
-// the process's start when both sides know it; for a native Windows process, whose folder the script cannot read, one
-// of its folder whose procStartFt is its creation, to the millisecond; else one of its folder that began no earlier
-// than the process. A file left by an ended process whose pid was given to another is not, nor one nothing ties to
-// the process; and where the runtime told the creation (told, unix ms), only one whose startedAt is no earlier: a
-// second alone does not tell two processes given the pid within it apart.
+// claudeSession is the session of the candidate file that is this very process's, none for one nothing ties to it.
 func claudeSession(payload string, pid int, start, cwd string, style rpath.Style, told int64) string {
 	began, known := startedMS(start)
 	creation, native := strings.CutPrefix(start, "ft:")
@@ -272,16 +256,14 @@ func filetimeOf(s string) (int64, bool) {
 	return v, err == nil && v > filetimeEpoch && v < 3e17
 }
 
-// sameCreation says whether the start the script read is the creation the runtime told (unix ms): from a FILETIME
-// its millisecond; from `ps -o lstart` its second, or the one before on Linux, where ps counts the boot time in whole
-// seconds and remuda-core does not. No clock is read for it.
-func sameCreation(start string, told int64) bool {
+// sameCreation says whether the script's start is the creation the runtime told (unix ms), reading no clock.
+func sameCreation(start string, told int64, linux bool) bool {
 	read, known := startedMS(start)
 	if strings.HasPrefix(start, "ft:") {
 		return known && read == told
 	}
-	second := told - told%1000
-	return known && (read == second || read == second-1000)
+	second := told - told%1000 // Linux's ps counts the boot time in whole seconds, remuda-core does not: one behind
+	return known && (read == second || linux && read == second-1000)
 }
 
 // startedMS is the process's creation the script told, in unix ms: PowerShell's FILETIME for a native Windows
@@ -315,15 +297,12 @@ func personsThread(head string) (string, bool) {
 	return meta.ID, !subagent && (meta.ThreadSource == "" || meta.ThreadSource == "user")
 }
 
-// rolloutEnd ends each open rollout in the script's answer: a path may hold a line break.
-const rolloutEnd = "\x1c"
-
 // heldThread is the thread of the person's conversation among the rollouts a Codex process holds open: the
 // foreground process's own first, a child's only when it holds none; "" when none or more than one is there,
 // since enumeration order says nothing about which one is on screen.
 func heldThread(payload string, pid int) string {
 	own, children := map[string]bool{}, map[string]bool{}
-	for _, entry := range strings.Split(payload, rolloutEnd) {
+	for _, entry := range strings.Split(payload, script.FS) {
 		fields := strings.SplitN(entry, script.GS, 3)
 		if len(fields) < 3 {
 			continue

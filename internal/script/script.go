@@ -112,6 +112,7 @@ func RemudaPath(home string) string {
 // The separators a script's answer is cut by, bytes no path or line of text holds.
 // A script prints them as octal escapes: printf '\036\n' ends a section.
 const (
+	FS = "\x1c" // between files, whose names may hold any of the others or a line break
 	GS = "\x1d" // between records
 	RS = "\x1e" // between sections
 	US = "\x1f" // between fields

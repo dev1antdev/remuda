@@ -77,9 +77,7 @@ func (s *processSessions) of(asked core.AgentProcess) *herdr.AgentSession {
 	return &herdr.AgentSession{Kind: "id", Value: p.session}
 }
 
-// holders is, pid by pid, the process that holds it now: of two asked about under one pid, the one seen take its
-// terminal later (a pid never goes back to an earlier process). The other gave the pid up and is never read again,
-// since a look at the pid sees the one holding it.
+// holders is, pid by pid, the process holding it now: the one seen take its terminal last.
 func (s *processSessions) holders() map[int]*process {
 	held := map[int]processKey{}
 	for key := range s.procs {

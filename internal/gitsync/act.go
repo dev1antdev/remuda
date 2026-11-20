@@ -114,7 +114,7 @@ func run(host shell.Host, style rpath.Style, top, action string) (output string,
 	whole := `cd ` + script.Quote(style.Slash(top)) + ` || exit 3; ` + quietNetwork + action +
 		`printf '\034'; ( ` + ReadScript(style, []string{top}, nil) + ` ); exit "$rc"`
 	answer, runErr := shell.Text(host, whole, Timeout)
-	output, readBack, _ := strings.Cut(answer, "\x1c")
+	output, readBack, _ := strings.Cut(answer, script.FS)
 	if repos := ParseRead(style, host.Home(), readBack).Repos; len(repos) > 0 {
 		after = &repos[0]
 	}
