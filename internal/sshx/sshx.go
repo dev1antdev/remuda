@@ -623,14 +623,20 @@ func (c *Conn) ForwardTCPTo(host string, remotePort int) (string, error) {
 	return local, nil
 }
 
-// DialExec runs a remote command over the master and exposes its stdin/stdout as a net.Conn:
-// the RPC transport for an sshd that refuses unix-socket forwarding (`nc -U <socket>` bridges to herdr).
+// DialExec runs a remote command over the master and exposes its stdin/stdout as a net.Conn: the RPC transport for an
+// sshd that refuses unix-socket forwarding (`nc -U <socket>` bridges to herdr), and remuda-core's `connect`. Its
+// session is a script's — no terminal, the stdin kept whatever the host's ssh config says — since the command's stdin
+// is the whole conversation.
 func (c *Conn) DialExec(command string, timeout time.Duration) (net.Conn, error) {
+	keep, timeout, err := c.stdinWithin(command, timeout)
+	if err != nil {
+		return nil, err
+	}
 	leave, left, err := c.enter(kindRPC, timeout)
 	if err != nil {
 		return nil, err
 	}
-	conn, err := newCmdConn(c.session(c.Host, command), left)
+	conn, err := newCmdConn(c.scriptSession(command, keep), left)
 	if err != nil {
 		leave()
 		return nil, err

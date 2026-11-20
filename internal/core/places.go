@@ -55,21 +55,44 @@ func (a *Adapter) runShell(ctx context.Context, space, tab, cwd string, env map[
 	return a.runIn(ctx, space, tab, RunParams{Cwd: cwd, Env: env})
 }
 
-// runIn starts what p says (the machine's shell when it names nothing) in a new terminal of a workspace's tab and puts
-// it in the mirror at once, so the pane it answers is there for the caller's next request; the core's own news of it
-// finds it there.
+// runIn starts what p says (the machine's shell when it names nothing) in a new terminal of a workspace's tab and
+// waits for the core's own news of it, so the pane it answers is in the snapshot the caller reads next. The mirror
+// alone puts terminals in it: a reply to the start never does, which could bring back a shell that ended meanwhile.
+// One that ends first fails the start.
 func (a *Adapter) runIn(ctx context.Context, space, tab string, p RunParams) (Terminal, error) {
 	p.Labels, p.Rm = map[string]string{LabelSpace: space, LabelTab: tab}, true
+	cwd := p.Cwd
 	t, err := a.client.Run(ctx, p)
 	if err != nil {
 		return Terminal{}, a.refusal(err, "workspace_not_found")
 	}
-	a.mu.Lock()
-	if a.held && t.State == "live" && local(t.Address) && a.state.terminals[t.Address] == nil {
-		a.tellLocked(a.state.add(t))
+	for {
+		a.mu.Lock()
+		held, gone := a.state.terminals[t.Address] != nil, a.state.gone[t.Address]
+		a.mu.Unlock()
+		switch {
+		case held:
+			return t, nil
+		case gone || t.State != "live":
+			return Terminal{}, fmt.Errorf("the shell in %s ended as soon as it started", cmp.Or(cwd, "the core's folder"))
+		}
+		select {
+		case <-ctx.Done():
+			a.kill(t.Address)
+			return Terminal{}, fmt.Errorf("remuda-core never told of the shell it started in %s: %w", cmp.Or(cwd, "the core's folder"), ctx.Err())
+		case <-time.After(20 * time.Millisecond):
+		}
 	}
+}
+
+// holds says whether a live terminal the mirror holds now, other than the ones ending, is in a place the snapshot
+// shows: read when the document is written, not before the terminals were ended, so a terminal another request put
+// there meanwhile keeps its place.
+func (a *Adapter) holds(pick func(*herdr.PaneInfo) bool, ending []string) bool {
+	a.mu.Lock()
+	snap := a.state.snapshot(nil)
 	a.mu.Unlock()
-	return t, nil
+	return len(panesWhere(snap, func(p *herdr.PaneInfo) bool { return pick(p) && !slices.Contains(ending, p.PaneID) })) > 0
 }
 
 // kill ends terminals side by side; one the core no longer has is gone already.
@@ -204,13 +227,6 @@ func (a *Adapter) inDoc(space string) bool {
 	return slices.ContainsFunc(a.state.doc.Workspaces, func(ws DocWorkspace) bool { return ws.ID == space })
 }
 
-// docSpaceOf is the workspace the mirror's document puts a tab in ("" when none does).
-func (a *Adapter) docSpaceOf(tab string) string {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return docSpaceOfTab(&a.state.doc, tab)
-}
-
 // WorkspaceRename names a workspace.
 func (a *Adapter) WorkspaceRename(workspaceID, label string) error {
 	snap, err := a.SessionSnapshot()
@@ -315,13 +331,21 @@ func (a *Adapter) TabClose(tabID string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), callWithin)
 	defer cancel()
 	return a.editDoc(ctx, func(doc *Document) error {
-		dropTab(doc, snap, tabID, panes)
+		a.dropTab(doc, tabID, panes)
 		return nil
 	})
 }
 
-// dropTab takes a tab out of the document, and its workspace when no other tab of it holds a terminal that stays.
-func dropTab(doc *Document, snap *herdr.Snapshot, tab string, ending []string) {
+// docSpaceOf is the workspace the mirror's document puts a tab in ("" when none does).
+func (a *Adapter) docSpaceOf(tab string) string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return docSpaceOfTab(&a.state.doc, tab)
+}
+
+// dropTab takes a tab out of the document as it reads now, and its workspace when the document keeps no other tab of
+// it and no terminal but the ending ones is in it.
+func (a *Adapter) dropTab(doc *Document, tab string, ending []string) {
 	for i := range doc.Workspaces {
 		ws := &doc.Workspaces[i]
 		if !slices.ContainsFunc(ws.Tabs, func(t DocTab) bool { return t.ID == tab }) {
@@ -334,8 +358,8 @@ func dropTab(doc *Document, snap *herdr.Snapshot, tab string, ending []string) {
 				ws.ActiveTab = ws.Tabs[0].ID
 			}
 		}
-		stays := panesWhere(snap, func(p *herdr.PaneInfo) bool { return p.WorkspaceID == ws.ID && !slices.Contains(ending, p.PaneID) })
-		if len(stays) == 0 {
+		space := ws.ID
+		if len(ws.Tabs) == 0 && !a.holds(func(p *herdr.PaneInfo) bool { return p.WorkspaceID == space }, ending) {
 			doc.Workspaces = slices.Delete(doc.Workspaces, i, i+1)
 		}
 		return

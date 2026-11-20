@@ -77,6 +77,12 @@ func Remuda(home, version string) (bin, guard string) {
 	return bin, guard
 }
 
+// CoreBin sets the shell variable to remuda-core's binary where `remuda core install` puts it, "" when it is not there:
+// ~/.local/bin/remuda-core, or remuda-core.exe on Windows, counted only with the ConPTY it ships beside it.
+func CoreBin(variable string) string {
+	return variable + `="$HOME/.local/bin/remuda-core"; [ -x "$` + variable + `" ] || { ` + variable + `="$` + variable + `.exe"; [ -x "$` + variable + `" ] && [ -f "$HOME/.local/bin/conpty/conpty.dll" ] && [ -f "$HOME/.local/bin/conpty/x64/OpenConsole.exe" ] || ` + variable + `=; }`
+}
+
 // RemudaPath is where remuda lives on a machine with this home: ~/.local/bin/remuda, or remuda.exe there on Windows,
 // spelled with forward slashes (C:/Users/me/.local/bin/remuda.exe), which Git Bash and Windows both read.
 func RemudaPath(home string) string {

@@ -35,9 +35,12 @@ type Machine struct {
 	os          string // darwin | linux | windows as the connection read it, "" before a remote's first connect
 
 	conn   *sshx.Conn
-	client *herdr.Client
-	attach *herdr.AttachManager
+	client herdr.API       // herdr's client, or the adapter over remuda-core (speaksCore)
+	attach herdr.Terminals // herdr's attaches, or none yet on remuda-core
 	home   string
+
+	speaksCore bool      // reached through remuda-core instead of herdr (-core, NewCoreManager)
+	link       *coreLink // the remuda-core it follows, while connected
 
 	fwds  map[forwardTo]*tcpForward // ports forwarded over the master, once asked for (code-server, a peer remuda, a preview)
 	fwdMu sync.Mutex                // one forward made at a time, so asks of a port at once make one, not one each
@@ -108,10 +111,13 @@ func (mc *Machine) fail(err error) {
 	was := mc.state
 	mc.state = StateError
 	mc.errMsg = err.Error()
-	conn := mc.conn
-	mc.conn, mc.client, mc.attach = nil, nil, nil
+	conn, link := mc.conn, mc.link
+	mc.conn, mc.client, mc.attach, mc.link = nil, nil, nil, nil
 	hook := mc.onState
 	mc.mu.Unlock()
+	if link != nil {
+		link.close()
+	}
 	if conn != nil {
 		conn.Close()
 	}
@@ -138,8 +144,12 @@ func (mc *Machine) connect() {
 		mc.fail(err)
 	}
 
-	// one round trip for $HOME, the system and the herdr binary: a non-interactive ssh PATH often misses ~/.local/bin
-	out, err := shell.Text(conn, probeScript(mc.Cfg.HerdrBin == ""), 10*time.Second)
+	// one round trip for $HOME, the system and the herdr binary (or remuda-core's): a non-interactive ssh PATH often misses ~/.local/bin
+	probing := probeScript(mc.Cfg.HerdrBin == "" && !mc.speaksCore)
+	if mc.speaksCore {
+		probing += coreLookup
+	}
+	out, err := shell.Text(conn, probing, 10*time.Second)
 	if err != nil {
 		if windowsShell(out + err.Error()) {
 			bail(errWindowsShell(mc.Cfg.Host))
@@ -152,6 +162,15 @@ func (mc *Machine) connect() {
 	home := found.home
 	if home == "" {
 		bail(fmt.Errorf("cannot read remote $HOME"))
+		return
+	}
+	if mc.speaksCore {
+		link, err := mc.reachCore(conn, found)
+		if err != nil {
+			bail(err)
+			return
+		}
+		mc.connected(conn, found, link.adapter, noAttach(), link)
 		return
 	}
 	bin := mc.Cfg.HerdrBin
@@ -195,27 +214,37 @@ func (mc *Machine) connect() {
 		return
 	}
 	client.OnTransportError = mc.transportError
+	attach := herdr.NewAttachManager(func(termID string) *exec.Cmd {
+		return conn.AttachCmd(bin, sock, termID)
+	})
+	attach.Hold = conn.HoldTerminal
+	attach.ReadRefusal = func(first string) (string, bool) { return sshx.SessionRefused(conn.Host, first) }
+	if windows {
+		attach.Unavailable = NoAttachOnWindows
+	}
+	mc.mu.Lock()
+	mc.herdrBin, mc.socket = bin, sock
+	mc.mu.Unlock()
+	mc.connected(conn, found, client, attach, nil)
+}
 
+// connected makes the connection the machine's and tells whoever listens, unless the machine was removed while it
+// was made; then opens the door there.
+func (mc *Machine) connected(conn *sshx.Conn, found probe, client herdr.API, attach herdr.Terminals, link *coreLink) {
 	mc.mu.Lock()
 	if mc.removed { // removed while this connect was in flight
 		mc.mu.Unlock()
+		if link != nil {
+			link.close()
+		}
 		conn.Close()
 		return
 	}
 	mc.conn = conn
-	mc.client = client
-	mc.home = home
+	mc.client, mc.attach, mc.link = client, attach, link
+	mc.home = found.home
 	mc.stateDir = found.state
-	mc.herdrBin, mc.socket = bin, sock
 	mc.os = found.os
-	mc.attach = herdr.NewAttachManager(func(termID string) *exec.Cmd {
-		return conn.AttachCmd(bin, sock, termID)
-	})
-	mc.attach.Hold = conn.HoldTerminal
-	mc.attach.ReadRefusal = func(first string) (string, bool) { return sshx.SessionRefused(conn.Host, first) }
-	if windows {
-		mc.attach.Unavailable = NoAttachOnWindows
-	}
 	mc.state = StateConnected
 	mc.errMsg = ""
 	hook := mc.onState
@@ -314,9 +343,9 @@ func (mc *Machine) SetPeer(p *Peer) {
 	mc.mu.Unlock()
 }
 
-// Peer is the machine's own remuda: nil when none runs there, for the local machine, or past an hour.
+// Peer is the machine's own remuda: nil when none runs there, for the local machine, on remuda-core, or past an hour.
 func (mc *Machine) Peer() *Peer {
-	if mc.local {
+	if mc.local || mc.speaksCore { // remuda-core lets every viewer attach: nothing to relay through
 		return nil
 	}
 	mc.mu.Lock()

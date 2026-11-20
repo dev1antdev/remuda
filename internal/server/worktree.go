@@ -158,6 +158,10 @@ func (s *Server) handleNewWorktree(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &req) {
 		return
 	}
+	if s.Machines.Core() { // refused before a pull request's head is fetched into a branch there
+		httpErr(w, 400, errors.New("a new worktree on a machine reached through remuda-core is not in this remuda yet"))
+		return
+	}
 	if req.Pick.Kind == "" {
 		s.createWith(w, r, &req.createReq, plainWorktree)
 		return

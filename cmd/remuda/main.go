@@ -47,6 +47,7 @@ func main() {
 	withMirror := flag.Bool("mirror", false, "write remuda's figures and alerts into herdr although REMUDA_STATE_DIR is set, which keeps them out by itself")
 	withRecord := flag.Bool("record", false, "record the agents' timelapses and keep their turns to undo although REMUDA_STATE_DIR is set, which leaves both to the real instance")
 	serverOnly := flag.Bool("server", os.Getenv("REMUDA_SERVER") == "1", "serve the page only (also REMUDA_SERVER=1): this machine is no machine of the cockpit — no workspaces here, its herdr neither needed nor kept — and its vitals stand behind the Server place on the rail; without it (the default, a client of its own herdr) the machine remuda runs on is one of the cockpit's machines")
+	useCore := flag.Bool("core", os.Getenv("REMUDA_CORE") == "1", "reach every machine through remuda-core instead of herdr (also REMUDA_CORE=1): for trying the move off herdr in a scratch instance beside the real one, gone once the move is made")
 	flag.Usage = help
 	flag.Parse()
 
@@ -84,6 +85,7 @@ func main() {
 		MirrorClosed: mirrorClosed(*withMirror, os.Getenv("REMUDA_STATE_DIR") != ""),
 		Record:       recordsHere(*withRecord, os.Getenv("REMUDA_STATE_DIR") != ""),
 		Server:       *serverOnly,
+		Core:         *useCore,
 	})
 	if err != nil {
 		log.Print(err)

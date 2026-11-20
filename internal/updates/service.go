@@ -60,7 +60,32 @@ func (s *Service) Available(mc *machines.Machine) []Update {
 	if s.Machines != nil && s.Machines.Server() && mc.Local() {
 		return serverHostOnly(offered)
 	}
+	if mc.OnCore() {
+		return withoutHerdr(offered)
+	}
 	return offered
+}
+
+// withoutHerdr is what a machine reached through remuda-core is offered: nothing of herdr's (herdrs)
+func withoutHerdr(offered []Update) []Update {
+	kept := []Update{}
+	for _, u := range offered {
+		if !herdrs(u.What) {
+			kept = append(kept, u)
+		}
+	}
+	return kept
+}
+
+// herdrs says the update is herdr's own — its update, its hooks, integrations and plugins, a restart of its server —
+// which a machine reached through remuda-core is neither offered nor run (machines.ErrOnCore): herdr's agents there are
+// not the ones this remuda sees
+func herdrs(what string) bool {
+	switch what {
+	case "herdr", "hooks", "integrations", "plugins", "restart-herdr":
+		return true
+	}
+	return false
 }
 
 // serverHostOnly is what the host of a remuda serving the page only is offered: its own release alone — a herdr, its
@@ -107,6 +132,9 @@ func (s *Service) RestartPane(mc *machines.Machine, paneID string) (jobs.Job, er
 func (s *Service) Start(mc *machines.Machine, what, command string) (jobs.Job, error) {
 	if command == "" { // the promise is "what was shown is what runs": a run without the shown text is refused
 		return jobs.Job{}, fmt.Errorf("the command shown must come back with the request")
+	}
+	if mc.OnCore() && herdrs(what) {
+		return jobs.Job{}, machines.ErrOnCore
 	}
 	report := s.Health.Report(mc.ID())
 	snap, _ := s.Watch.Snapshot(mc.ID())
