@@ -562,8 +562,35 @@ components and icons as rules for whoever changes it: @docs/design.md
   `worktree`, so no snapshot asks git. A field of the document this build
   does not know — at its top, a workspace's or a tab's — is kept as read
   and written back (`kept`, `keep`, `put`), so an older remuda's rewrite
-  drops nothing a newer one wrote there. Still answering `invalid_request`
-  "… is not on remuda-core yet": `LayoutExport` / `LayoutApply` (Core 22),
+  drops nothing a newer one wrote there.
+  **A scene's layout** (`layout.go`, tested on a throwaway core, a
+  scene's capture laid out again in another folder too): `LayoutExport(tab)`
+  is the document's tree of the tab — a pane whose terminal ended left out,
+  one placed by its labels alone put to the right of the last — each pane's
+  folder as the snapshot shows it now and its label; `LayoutApply` takes
+  only a workspace or tab the document holds and starts every pane as the
+  shell in its folder (else the workspace's), then writes the tree in one
+  `doc.set` — a new tab, the one in front staying in front, or in place of a
+  tab, whose old terminals end once the new tree stands. **A pane with a
+  command of its own** (a scene captured on herdr) is refused
+  (`invalid_request`) until the core can start a program without reading its
+  name as one of its templates, which it does before answering (Core 34):
+  argv would run a template of that name, a `line` would let cmd expand
+  `%VAR%`, a shell wrapper would hide a missing program. Every terminal of
+  one apply carries the mark
+  `remuda.layout=<id>`: a layout that fails ends every terminal so marked,
+  those whose start never answered too (one that cannot be ended is said,
+  and shows as a tab of its own); a write the core refused fails the layout,
+  any other failed write is read back (`holdsTree`) — there, the layout
+  stands; absent, it fails; unknown, its panes are left as they are and it
+  says so. A workspace or tab closed while the panes started is not brought
+  back (the write finds the target in the document as it reads then, or
+  refuses), and `WorkspaceClose` / `TabClose` end, after their own
+  write, every terminal still labelled for what they closed, so a layout or
+  a tab made meanwhile goes with it. The document keeps no pane's
+  environment; the tree is taken as scenes' `checkLayout` passed it, only one
+  with no pane refused (`invalid_request`). Still answering `invalid_request` "… is not on
+  remuda-core yet":
   `PaneScroll` (Core 25), and the writes into herdr's own UI
   (`*ReportMetadata`, `NotificationShow`). `Bridged` is false: a stream costs the core nothing. The
   watcher still paces the snapshots an event asks for (`internal/watch`,

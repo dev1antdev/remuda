@@ -250,12 +250,6 @@ func agentIn(t *Terminal, target string) (string, error) {
 func (a *Adapter) WorkspaceReportMetadata(m herdr.WorkspaceMetadata) error {
 	return notOnCore("workspace.report_metadata")
 }
-func (a *Adapter) LayoutExport(tabID string) (*herdr.LayoutDescription, error) {
-	return nil, notOnCore("layout.export")
-}
-func (a *Adapter) LayoutApply(workspaceID, tabID, tabLabel string, root herdr.LayoutNode) (*herdr.LayoutDescription, error) {
-	return nil, notOnCore("layout.apply")
-}
 func (a *Adapter) PaneScroll(paneID string, offset int) (herdr.Scroll, error) {
 	return herdr.Scroll{}, notOnCore("pane.scroll")
 }
