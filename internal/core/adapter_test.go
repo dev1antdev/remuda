@@ -185,7 +185,10 @@ func TestReadsAnswerInHerdrsWords(t *testing.T) {
 	if pid, err := adapter.PaneShellPID(printer.Address); err != nil || pid != printer.Pid {
 		t.Fatalf("shell pid %d %v, want %d", pid, err, printer.Pid)
 	}
-	if err := adapter.AgentPrompt(printer.Address, "hi"); !herdr.IsCode(err, "invalid_request") {
+	if err := adapter.AgentPrompt(printer.Address, "hi"); !herdr.IsCode(err, "agent_not_found") {
+		t.Fatalf("a prompt to a terminal with no agent: %v", err)
+	}
+	if _, err := adapter.WorktreeOpen("w1", "/tmp/x", ""); !herdr.IsCode(err, "invalid_request") {
 		t.Fatalf("a request not on core yet: %v", err)
 	}
 }
