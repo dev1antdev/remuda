@@ -480,9 +480,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   `doc.set` — a new tab, the one in front staying in front, or in place of a
   tab, whose old terminals end once the new tree stands — a terminal started
   for a tree that could not be written ended again; the document keeps no
-  pane's environment; a tree that is neither pane nor split, a split missing
-  a side, going neither right nor down or with a share past 0–1 is
-  `invalid_request`. Still answering `invalid_request` "… is not on
+  pane's environment; the tree is taken as scenes' `checkLayout` passed it,
+  only one with no pane refused (`invalid_request`). Still answering `invalid_request` "… is not on
   remuda-core yet": worktrees (Core 20), `PaneScroll` (Core 25), and the
   writes into herdr's own UI
   (`*ReportMetadata`, `NotificationShow`). `Bridged` is false: a stream costs the core nothing. The
