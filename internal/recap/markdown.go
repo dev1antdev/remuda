@@ -7,63 +7,8 @@ import (
 	"time"
 )
 
-// Item is one agent's line in a standup: where it is, how it stands, and its recap over the period.
-type Item struct {
-	Machine   string `json:"machine"`
-	Label     string `json:"label"` // the machine's name
-	Workspace string `json:"workspace"`
-	Pane      string `json:"pane"`
-	Dir       string `json:"dir"`
-	Agent     string `json:"agent"`
-	State     string `json:"state"` // the radar's: working | blocked | done | idle | unknown
-	Alert     string `json:"alert,omitempty"`
-	Recap     Recap  `json:"recap"`
-	Error     string `json:"error,omitempty"` // the conversation could not be read
-}
-
-// Markdown is one standup report ready to paste: a heading per agent that did something, the numbers in a
-// line, the files, the last answer; the agents with nothing to say listed at the end.
-func Markdown(items []Item, since time.Time, now time.Time) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "# Standup · %s\n\n", now.Format("2 Jan 2006"))
-	if !since.IsZero() {
-		fmt.Fprintf(&b, "Since %s.\n\n", since.Format("2 Jan 15:04"))
-	}
-	var quiet []string
-	busy := 0
-	for _, item := range items {
-		where := item.Workspace
-		if item.Machine != "local" && item.Label != "" {
-			where += " on " + item.Label
-		}
-		if item.Error != "" {
-			fmt.Fprintf(&b, "## %s\n\n- could not be read: %s\n\n", where, item.Error)
-			continue
-		}
-		r := item.Recap
-		if r.Quiet() {
-			quiet = append(quiet, where)
-			continue
-		}
-		busy++
-		fmt.Fprintf(&b, "## %s — %s\n\n", where, stateWords(item))
-		for _, line := range Lines(r) {
-			fmt.Fprintf(&b, "- %s\n", line)
-		}
-		b.WriteString("\n")
-	}
-	if busy == 0 && len(quiet) > 0 {
-		b.WriteString("Nothing happened in this period.\n\n")
-	}
-	if len(quiet) > 0 {
-		sort.Strings(quiet)
-		fmt.Fprintf(&b, "Nothing to report from %s.\n", strings.Join(quiet, ", "))
-	}
-	return strings.TrimRight(b.String(), "\n") + "\n"
-}
-
 // Lines is one recap as the lines of a report: the figures, the tools, what ran, the files, the subagents and
-// questions, the last answer — each without its list mark, for the standup and for a handover alike.
+// questions, the last answer — each without its list mark, for a conversation's report and for a handover alike.
 func Lines(r Recap) []string {
 	lines := []string{Numbers(r)}
 	if r.Calls > 0 {
@@ -94,7 +39,7 @@ func Lines(r Recap) []string {
 	return lines
 }
 
-// Conversation is one conversation's report: the same lines the standup gives an agent, under a heading of its own.
+// Conversation is one conversation's report: its lines under a heading of its own.
 func Conversation(r Recap, since time.Time, now time.Time) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "# Recap · %s\n\n", now.Format("2 Jan 2006"))
@@ -162,23 +107,6 @@ func Calls(r Recap) string {
 		}
 	}
 	return line
-}
-
-func stateWords(item Item) string {
-	if item.Alert != "" {
-		return "needs you: " + item.Alert
-	}
-	switch item.State {
-	case "working":
-		return "working"
-	case "blocked":
-		return "needs you"
-	case "done":
-		return "finished"
-	case "idle":
-		return "idle"
-	}
-	return item.State
 }
 
 // Spent says how long a piece of work took, as the page does: "12 s", "4 min 12 s", "1 h 12 min".

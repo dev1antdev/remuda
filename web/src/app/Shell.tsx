@@ -1,9 +1,9 @@
-// The shell: the rail, the header, the sidebar and the pane area or the other modes (the wall, tasks, code), the
+// The shell: the rail, the header, the sidebar and the pane area or the other modes (tasks, code, review), the
 // floating terminal's drawer over all of them (Ctrl+`), and the overlays. It also
 // keeps the address in step with the selection, hears the service worker, ⌘K (the palette), ⌘F (the find bar), ? (the keyboard
 // sheet), Alt+N (the next agent that needs you) and Alt+] / Alt+[ (every agent in the sidebar's order), reads the roster
-// aloud when asked, keeps the browser tab's title and favicon counting the agents that need you, says what the agents did
-// while the page was away, takes down the notifications that no longer stand, tells the server when a finished pane is
+// aloud when asked, keeps the browser tab's title and favicon counting the agents that need you, takes down the
+// notifications that no longer stand, tells the server when a finished pane is
 // being looked at, and wakes a sleeping workspace opened when the person asked for that.
 
 import { useEffect, useRef } from "react";
@@ -17,7 +17,6 @@ import { useVoice } from "@/features/alerts/useVoice";
 import { useOnPageAlerts } from "@/features/alerts/useOnPageAlerts";
 import { useWithdrawn } from "@/features/alerts/useWithdrawn";
 import { useSyncPrefs } from "@/features/settings/useSyncPrefs";
-import { useWelcomeBack } from "@/features/standup/useWelcomeBack";
 import ReviewQueue from "@/features/review/ReviewQueue";
 import Tasks from "@/features/tasks/Tasks";
 import Code from "@/features/code/Code";
@@ -27,10 +26,8 @@ import { PANELS, Resizer, Toasts } from "@/ui";
 import Header from "./Header";
 import Overlays from "./Overlays";
 import PaneArea from "./PaneArea";
-import PopOut from "./PopOut";
 import Rail from "./Rail";
 import StatusBar from "./StatusBar";
-import Wall from "./Wall";
 import { folderOf, useCurrent } from "./current";
 import { useFullKeys } from "./full";
 import { useNextKey, useNextNeedingMe, useWalkKeys } from "./next";
@@ -38,13 +35,12 @@ import { useReopenKey } from "@/features/reopen/useReopenKey";
 import { useWakeOnOpen } from "@/features/sleep/useWakeOnOpen";
 import { useSharingKey } from "./SharingChip";
 import { handShell, inShell } from "@/lib/shell";
-import { modeOf } from "./shellFeed";
 import { actions, app } from "./store";
 import { useBadge } from "./useBadge";
 import { useShellFeed } from "./useShellFeed";
 import { useToasts } from "./toasts";
 import { lensOn } from "./paneLens";
-import { panelOf, writeURL } from "./url";
+import { modeOf, panelOf, writeURL } from "./url";
 import { t } from "@/lib/i18n";
 
 export default function Shell() {
@@ -67,7 +63,6 @@ export default function Shell() {
   useOnPageAlerts();
   useWithdrawn();
   useSyncPrefs(!viewOnly);
-  useWelcomeBack();
   useBadge();
   useShellFeed();
   useWakeOnOpen(current, mode === "herdr" && !viewOnly);
@@ -125,7 +120,7 @@ export default function Shell() {
     return () => window.removeEventListener("keydown", onKey, true);
   }, []);
 
-  // a tapped notification in an already open tab arrives as a "select-pane" message from the service worker, a digest's as "open-panel";
+  // a tapped notification in an already open tab arrives as a "select-pane" message from the service worker, a panel's as "open-panel";
   // inside the Mac app the same arrives as a call on window.remudaShell, which the page's functions answer
   useEffect(() => {
     if (!viewOnly) void resyncPush(readAlertPrefs());
@@ -140,10 +135,7 @@ export default function Shell() {
           const panel = panelOf(name);
           if (panel) actions.openPanel(panel);
         },
-        openMode: (name) => {
-          const mode = modeOf(name);
-          if (mode) actions.setMode(mode);
-        },
+        openMode: (name) => actions.setMode(modeOf(name)),
         alert: () => {},
       });
     }
@@ -171,7 +163,7 @@ export default function Shell() {
   }, [viewOnly, mode, !!viewer, current?.machine.id, current?.pane.id, seenState]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className={full && (mode === "herdr" || mode === "wall") ? "app is-full" : "app"}>
+    <div className={full && mode === "herdr" ? "app is-full" : "app"}>
       <Rail />
       <div className="app-main">
         <Header current={current} />
@@ -187,7 +179,6 @@ export default function Shell() {
             />
           </div>
         )}
-        {mode === "wall" && <Wall />}
         {mode === "tasks" && <Tasks />}
         {mode === "review" && <ReviewQueue />}
         {mode === "herdr" && (
@@ -206,7 +197,6 @@ export default function Shell() {
       </div>
       <Toasts items={toasts} />
       <Overlays />
-      <PopOut />
     </div>
   );
 }

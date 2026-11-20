@@ -1,56 +1,11 @@
-// The pure part of the standup: the period's start, the order of the agents, the lines a recap reads as, the Markdown of one.
+// The pure part of one conversation's recap: the lines it reads as on the page, and its Markdown.
 
 import { shownPath } from "@/features/chat/footprint";
 import { tok, usd } from "@/features/usage/format";
 import { plural } from "@/lib/text";
 import { spent } from "@/lib/time";
-import type { Item, Recap } from "./api";
+import type { Recap } from "./api";
 import { t } from "@/lib/i18n";
-
-export type Period = "today" | "day" | "week";
-
-export const PERIODS: { value: Period; label: string }[] = [
-  { value: "today", label: t("Since midnight") },
-  { value: "day", label: t("Last 24 h") },
-  { value: "week", label: t("Last 7 days") },
-];
-
-// sinceFor is the period's start as RFC 3339, or nothing for "today": the server cuts at midnight in the device's zone
-export function sinceFor(period: Period, now = Date.now()): string | undefined {
-  if (period === "today") return undefined;
-  const hours = period === "day" ? 24 : 24 * 7;
-  return new Date(now - hours * 3600_000).toISOString();
-}
-
-// quiet is a recap with nothing in it
-export const quiet = (r: Recap) => r.prompts === 0 && r.answers === 0 && r.calls === 0;
-
-const RANK: Record<string, number> = { blocked: 0, done: 1, working: 2 };
-
-// order puts the agents that need the person first, then the finished, then the working, the dearest first within a rank
-export function order(items: Item[]): Item[] {
-  const rank = (item: Item) => (item.alert ? 0 : (RANK[item.state] ?? 3));
-  return [...items].sort((a, b) => rank(a) - rank(b) || b.recap.cost - a.recap.cost || a.workspace.localeCompare(b.workspace));
-}
-
-// stateLabel is the item's state in a word or two
-export function stateLabel(item: Item): string {
-  if (item.alert) return t("needs you");
-  switch (item.state) {
-    case "blocked":
-      return t("needs you");
-    case "done":
-      return t("finished");
-    case "working":
-      return t("working");
-    case "idle":
-      return t("idle");
-  }
-  return "";
-}
-
-// where names the agent's place: its workspace, and the machine when it is not this one
-export const where = (item: Item) => (item.machine !== "local" && item.label ? t("{workspace} on {machine}", { workspace: item.workspace, machine: item.label }) : item.workspace);
 
 // numbers is the one line of figures: prompts, answers, time, tokens, cost
 export function numbers(r: Recap): string {
@@ -81,7 +36,7 @@ export function fileList(paths: string[], dir: string, max = 6): string {
   return shown.join(", ");
 }
 
-// recapMarkdown is one conversation's recap ready to paste, the lines the standup report uses
+// recapMarkdown is one conversation's recap ready to paste
 export function recapMarkdown(title: string, r: Recap, dir: string): string {
   const code = (texts: string[], max: number) => {
     const out = texts.slice(0, max).map((text) => `\`${shownPath(text, dir).replace(/`/g, "'")}\``);

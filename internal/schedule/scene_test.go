@@ -9,7 +9,7 @@ import (
 
 func TestASceneScheduleRunsItsSceneAndNothingOfItsOwn(t *testing.T) {
 	var pushed []push.Payload
-	st := New(t.TempDir(), nil, func(p push.Payload) { pushed = append(pushed, p) }, nil)
+	st := New(t.TempDir(), nil, func(p push.Payload) { pushed = append(pushed, p) })
 	var ran []string
 	result, skip, fail := "3 started", "", error(nil)
 	st.Scenes = Scenes{
@@ -53,7 +53,7 @@ func TestASceneScheduleRunsItsSceneAndNothingOfItsOwn(t *testing.T) {
 		t.Fatalf("a failed run is pushed: %+v %v", got, pushed)
 	}
 
-	other, err := st.Put(Schedule{Kind: KindDigest, Scene: "s1", Cron: "0 9 * * *"})
+	other, err := st.Put(Schedule{Kind: KindPrompt, Machine: "local", Dir: "/tmp/x", Prompt: "hi", Scene: "s1", Cron: "0 9 * * *"})
 	if err != nil || other.Scene != "" {
 		t.Fatalf("another kind keeps no scene: %+v %v", other, err)
 	}

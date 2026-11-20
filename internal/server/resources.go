@@ -101,7 +101,7 @@ func (s *Server) handlePortStop(w http.ResponseWriter, r *http.Request) {
 }
 
 // PortTargets is every connected machine whose ports the tracker reads — a Windows machine names no listener's folder
-// — with its workspaces' folders, the floating terminal's and the concierge's left out.
+// — with its workspaces' folders, the floating terminal's left out.
 func (s *Server) PortTargets() []ports.Target {
 	var out []ports.Target
 	for _, mc := range s.Machines.List() {

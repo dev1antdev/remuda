@@ -32,7 +32,7 @@ export const TurnView = memo(
     pinned?: boolean; // the turn is in the Pins list: a mark in its corner, the pin button on
     subagents?: Subagent[]; // the conversation's, drawn under the Agent calls that spawned them
     onOpenSubagent?: (s: Subagent) => void;
-    diffs?: boolean; // an Edit's change drawn under its call, a mermaid fence drawn as its diagram: the lens, not a tile
+    diffs?: boolean; // an Edit's change drawn under its call, a mermaid fence drawn as its diagram
     undo?: string; // the kept turn of the folder this answer is, which its foot offers to undo
     onUndo?: (turn: string) => void;
     live?: boolean; // the turn under way: a call without its result is still running

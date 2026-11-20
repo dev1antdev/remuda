@@ -1,15 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { MAX_ASKING, askedOf, questionBubble, sameQuestions } from "./questions";
+import { MAX_ASKING, askedOf, questionLine, sameQuestions } from "./questions";
 
-describe("questionBubble", () => {
+describe("questionLine", () => {
   it("holds up the dialog's head and the first line of its detail", () => {
-    expect(questionBubble({ text: "Bash command\nrm -rf build\nclean the build\nDo you want to proceed?", options: [] })).toBe("Bash command · rm -rf build");
+    expect(questionLine({ text: "Bash command\nrm -rf build\nclean the build\nDo you want to proceed?", options: [] })).toBe("Bash command · rm -rf build");
   });
 
   it("holds the asking line when the dialog has no head, nothing without a dialog", () => {
-    expect(questionBubble({ text: "Which database?", options: [] })).toBe("Which database?");
-    expect(questionBubble(null)).toBe("");
+    expect(questionLine({ text: "Which database?", options: [] })).toBe("Which database?");
+    expect(questionLine(null)).toBe("");
   });
+
 });
 
 describe("sameQuestions", () => {

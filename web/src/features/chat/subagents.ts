@@ -1,11 +1,9 @@
 // A conversation's subagents on the page: which of them a turn spawned, whether a poll changed what a row shows, the
-// words of a row and of a tile's state line. Pure functions over the chat answer, tested beside.
+// words of a row. Pure functions over the chat answer, tested beside.
 
-import { plural } from "@/lib/text";
 import type { Subagent, Turn } from "./api";
 import { toolLabel } from "./footprint";
 import { firstLine } from "./said";
-import { t } from "@/lib/i18n";
 
 // the tools that spawn a subagent: Agent today, Task in older transcripts
 export const SPAWN_TOOLS = new Set(["Agent", "Task"]);
@@ -40,11 +38,4 @@ export function subagentLine(s: Subagent): string {
     return hint ? `${name} · ${hint}` : name;
   }
   return s.report ? firstLine(s.report) : "";
-}
-
-// subagentWords is what a tile's state line says of them: the lead waiting on them, or how many still work
-export function subagentWords(subs: Subagent[] | undefined, waiting: boolean): string {
-  const working = subs?.filter((s) => s.status === "working").length ?? 0;
-  if (waiting) return working > 0 ? t("waiting on {subagents}", { subagents: plural(working, "subagent") }) : t("waiting on a subagent");
-  return working > 0 ? t("{subagents} working", { subagents: plural(working, "subagent") }) : "";
 }

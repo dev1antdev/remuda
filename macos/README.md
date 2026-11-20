@@ -56,11 +56,11 @@ answer and asks again when it was never answered.
   for a finish nobody looked at — and the count beside it. The menu lists
   those agents with the first line of what they said; a click opens the
   pane's chat in the window. Then "N working · M idle", Open remuda
-  (with the hotkey beside it, ⌥⌘R unless Settings says otherwise), Wall,
-  Tasks, Standup, Settings…, Quit.
+  (with the hotkey beside it, ⌥⌘R unless Settings says otherwise),
+  Tasks, Settings…, Quit.
 - **The Dock badge** carries the same count.
 - **Notifications** are the alerts the phone would get — a question after
-  10 s, a finish after a minute, a watchdog note, a digest, a budget — with
+  10 s, a finish after a minute, a watchdog note, a budget — with
   their buttons: *Open*, *Send Esc*, the question's own two choices. The
   app is one more device of remuda's push service (`POST /api/push/socket`,
   then `/ws/alerts`), so the alert settings and quiet hours in the page's
@@ -84,8 +84,6 @@ answer and asks again when it was never answered.
 
 ## Not here
 
-- The pop-out window (Chrome's Document Picture-in-Picture API): its
-  buttons do not appear in the app.
 - Dictation in the composer: WebKit outside Safari has no
   `SpeechRecognition`.
 - Web Push: replaced by the native notifications above.

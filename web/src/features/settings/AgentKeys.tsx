@@ -28,7 +28,7 @@ export default function AgentKeys() {
           {t("Agent keys")}
           <small>
             {t(
-              "What the agents on each machine use to read and write your tasks through remuda mcp and remuda tasks, and to read who is doing what (the roster, a recap, the standup): never the rest. A revoked one is replaced when remuda next connects to that machine (this one at its next start).",
+              "What the agents on each machine use to read and write your tasks through remuda mcp and remuda tasks, and to read who is doing what (the roster, a recap): never the rest. A revoked one is replaced when remuda next connects to that machine (this one at its next start).",
             )}
           </small>
         </span>

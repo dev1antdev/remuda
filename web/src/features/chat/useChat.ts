@@ -1,5 +1,5 @@
-// useChat reads a pane's conversation at a pace: the lens polls fast while the agent works, a wall tile slower and
-// for the last few turns only. While the event socket is up the pane is watched there and a "chat" event reloads at
+// useChat reads a pane's conversation at a pace: the lens polls fast while the agent works, the files rail and Code's
+// follow slower, the latter for the last few turns only. While the event socket is up the pane is watched there and a "chat" event reloads at
 // once, so the poll slows to a safety net. An unchanged file is a 304 and the turns stay.
 
 import { useEffect, useRef } from "react";

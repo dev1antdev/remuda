@@ -134,9 +134,8 @@ function stretchesOf(x: Exchange, live: Live, last: boolean, now: number): { cal
   return { calls, base, end };
 }
 
-// ribbon is the last RIBBON_MS of a conversation: cut says the turns read may start after the window does (a tile's tail,
-// a file a compaction began), so the time before the first of them is not read rather than idle
-export function ribbon(turns: Turn[], { now, live, cut }: { now: number; live: Live; cut: boolean }): RibbonModel {
+// ribbon is the last RIBBON_MS of a conversation; a file a compaction began may start after the window does, so the time before the first of them is not read rather than idle
+export function ribbon(turns: Turn[], { now, live }: { now: number; live: Live }): RibbonModel {
   const from = now - RIBBON_MS;
   const exchanges = exchangesOf(turns);
   const stretches: Stretch[] = [];
@@ -163,7 +162,7 @@ export function ribbon(turns: Turn[], { now, live, cut }: { now: number; live: L
     }
   });
   const first = exchanges[0];
-  const startsLate = !!first && (cut || (turns[0]?.role === "user" && (turns[0].parts.find((p) => p.type === "text")?.text ?? "").startsWith(COMPACTION_PREFIX)));
+  const startsLate = !!first && turns[0]?.role === "user" && (turns[0].parts.find((p) => p.type === "text")?.text ?? "").startsWith(COMPACTION_PREFIX);
   if (startsLate && first.start > from) stretches.unshift({ key: "unread", tone: "unread", from, to: first.start, turn: "" });
   const clip = (s: Stretch): Stretch => ({ ...s, from: Math.max(s.from, from), to: Math.min(s.to, now) });
   const shown = [...stretches.filter((s) => s.to > from && s.to - s.from > 0).map(clip), ...calls.map(clip)];

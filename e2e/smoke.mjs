@@ -1,6 +1,6 @@
 // The end-to-end smoke scripts/e2e.sh runs: headless Chrome over the DevTools protocol against a remuda of
 // its own on a throwaway herdr. Sign in, a scratch workspace through the API, the terminal typed into and
-// read back, the chat, the Wall, Review, Activity and the palette, then the workspace closed. One line per
+// read back, the chat, Review, Activity and the palette, then the workspace closed. One line per
 // step; the first failure ends the run with a non-zero exit. Node's own fetch and WebSocket, no dependency.
 import { writeFileSync } from "node:fs";
 
@@ -177,11 +177,6 @@ try {
   if (await present(".lens-pane:not([hidden]) .composer textarea")) fail("a shell pane shows a chat composer");
   step("a shell pane has its terminal alone");
 
-  if (!(await clickText(".rail-btn", "Wall"))) fail("no Wall button on the rail");
-  await until("the Wall's bar", () => present(".wall-bar"));
-  step("the Wall", await evaluate(`[...document.querySelectorAll('.wall-bar button')].map((b) => b.innerText.trim()).filter(Boolean).join(' | ')`));
-  await shot("wall");
-
   if (!(await clickText(".rail-btn", "Review"))) fail("no Review button on the rail");
   await until("the Review queue", () => present(".queue-head"));
   step("the Review mode", await evaluate(`document.querySelector('.queue-head')?.innerText.replace(/\\s+/g, ' ').trim()`));
@@ -196,12 +191,12 @@ try {
   const mac = await evaluate(`/mac/i.test(navigator.platform)`);
   await key("k", "KeyK", mac ? 4 : 2);
   await until("the palette", () => present(".palette-row"));
-  await send("Input.insertText", { text: "go to the wall" });
+  await send("Input.insertText", { text: "go to tasks" });
   const first = await until(
     "the palette's answer",
     async () => {
       const title = await evaluate(`document.querySelector('.palette-row .palette-title')?.innerText ?? ''`);
-      return /wall/i.test(title) ? title : null;
+      return /tasks/i.test(title) ? title : null;
     },
     5,
   );

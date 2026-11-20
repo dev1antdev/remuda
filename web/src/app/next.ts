@@ -1,5 +1,5 @@
 // The next agent that needs the person — a question open, a watchdog note, a finish not looked at — on Alt+N and from the
-// palette: on the Wall the tile takes the wall, elsewhere the pane opens on its chat; the roster's order, round and round.
+// palette: its pane opens as a notification opens it; the roster's order, round and round.
 // And Alt+] / Alt+[, every agent one after another in the sidebar's order.
 
 import { useCallback, useEffect, useRef } from "react";
@@ -7,7 +7,7 @@ import { PINS_KEY, agentKey, stepAgent, walkOrder } from "@/features/roster/side
 import { DEFAULT_RADAR, type RadarPrefs } from "@/features/roster/radar";
 import { useRoster } from "@/features/roster/useRoster";
 import { useSharing } from "@/features/roster/useSharing";
-import { nextNeedingMe, tileKey } from "@/features/roster/wall";
+import { needingMe } from "./badge";
 import { isMac, usePref } from "@/lib/prefs";
 import { useCurrent } from "./current";
 import { nextKeyAsked, walkKeyAsked, type KeyPress } from "./nextKey";
@@ -18,29 +18,21 @@ export const NEXT_KEY = "Alt+N";
 
 export function useNextNeedingMe(): () => void {
   const { machines } = useRoster();
-  const mode = app.use((s) => s.mode);
   const current = useCurrent();
   const [radar] = usePref<RadarPrefs>("radar", DEFAULT_RADAR);
-  const [focus, setFocus] = usePref<string>("wall.focus", "");
-  const [hidden] = usePref<string[]>("wall.hidden", []);
   return useCallback(() => {
-    const onWall = mode === "wall";
-    const from = onWall && focus ? focus : current ? tileKey(current.machine.id, current.pane.id) : "";
-    const next = nextNeedingMe(machines, radar, Date.now(), from, onWall ? hidden : []);
+    const from = current ? agentKey(current.machine.id, current.pane.id) : "";
+    const next = stepAgent(needingMe(machines, radar, Date.now()), from, 1);
     if (!next) {
       actions.notify(t("Nobody needs you right now"), { brief: true });
       return;
     }
-    if (next.key === from) {
+    if (agentKey(next.machineId, next.paneId) === from) {
       actions.notify(t("No one else needs you right now"), { brief: true });
       return;
     }
-    if (onWall) {
-      setFocus(next.key);
-      return;
-    }
-    actions.openPane(next.machine.id, next.pane.id);
-  }, [machines, mode, current, radar, focus, setFocus, hidden]);
+    actions.openPane(next.machineId, next.paneId);
+  }, [machines, current, radar]);
 }
 
 // useWalkKeys binds Alt+] and Alt+[ by key code: the next or the previous agent in the order the sidebar draws them,

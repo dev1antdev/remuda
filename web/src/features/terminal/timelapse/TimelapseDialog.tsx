@@ -48,7 +48,7 @@ export default function TimelapseDialog({ machineId, paneId, dir, title, found, 
   };
   return (
     <Dialog title={t("Timelapse")} icon="film" size="lg" className="timelapse-dialog" onClose={onClose}>
-      <h3 className="standup-title">{share.redact(title)}</h3>
+      <h3 className="dialog-title">{share.redact(title)}</h3>
       {error && <Notice tone="error">{error}</Notice>}
       {listed && recordings.length === 0 && (
         <Notice tone="hint">

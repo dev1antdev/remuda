@@ -17,7 +17,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         status.onSelect = { [weak self] row in self?.open(machine: row.machine, pane: row.pane, panel: "") }
         status.onOpen = { [weak self] in self?.web?.show() }
         status.onMode = { [weak self] mode in self?.web?.show(); self?.web?.openMode(mode) }
-        status.onPanel = { [weak self] panel in self?.web?.show(); self?.web?.openPanel(panel) }
         status.onSettings = { [weak self] in self?.openSettings() }
         settings.onApply = { [weak self] text, spec in self?.apply(serverText: text, hotkey: spec) }
         settings.onAskNotifications = { [weak self] in self?.notifier?.askPermission { _ in self?.refreshSettings() } }

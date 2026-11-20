@@ -1,4 +1,4 @@
-// A hue of its own for every remote machine, from its id, so a tile, a sidebar block or a palette row is told apart at a
+// A hue of its own for every remote machine, from its id, so a sidebar block, the status bar or a palette row is told apart at a
 // glance; the local machine has none. Red and green stay out — they mean blocked and done.
 
 import type { CSSProperties } from "react";

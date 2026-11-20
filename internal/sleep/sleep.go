@@ -35,8 +35,6 @@ type Service struct {
 	// Typed hears what a sleep types into a pane — an agent's exit, or an Esc as a key — for the activity; nil hears none.
 	// The agents leave side by side, so it is called from several goroutines at once.
 	Typed func(machineID, paneID, text string, keys bool)
-	// Skip names a workspace remuda keeps for itself (the concierge's): it never sleeps.
-	Skip func(machineID, workspaceID string) bool
 
 	mu    sync.Mutex
 	doing map[string]string // machine|workspace → "sleep" | "wake" while one runs
@@ -142,9 +140,6 @@ func Plan(snap *herdr.Snapshot, workspaceID string) (w Workspace, busy []Busy, l
 // Sleep puts a workspace of the machine to sleep: its agents recorded at once, so the roster says asleep, then each
 // asked to leave in a job. Agents at work or asking refuse it with a BusyError unless the person said anyway.
 func (s *Service) Sleep(mc *machines.Machine, workspaceID string, anyway bool) (Started, error) {
-	if s.Skip != nil && s.Skip(mc.ID(), workspaceID) {
-		return Started{}, errors.New("the concierge's workspace never sleeps: stop it from its own place")
-	}
 	client, _, err := mc.Ready()
 	if err != nil {
 		return Started{}, err

@@ -36,7 +36,6 @@ export const webhooks: Dictionary = {
   "Webhook saved — press Test to see it arrive.": "Вебхук сохранён — нажмите «Проверить», чтобы увидеть, как он доходит.",
   "Webhooks": "Вебхуки",
   "a budget": "бюджет",
-  "a digest schedule's standup": "стендап по расписанию-дайджесту",
   "a finish": "завершение",
   "a limit at 80 % or crossed": "лимит на 80 % или превышен",
   "a question": "вопрос",
@@ -58,5 +57,4 @@ export const webhooks: Dictionary = {
   "off": "выкл.",
   "quiet {from}–{to}": "тихо {from}–{to}",
   "stuck, waiting too long, or looping on one call": "застрял, слишком долго ждёт или зациклился на одном вызове",
-  "the digest": "дайджест",
 };

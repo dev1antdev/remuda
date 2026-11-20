@@ -10,6 +10,5 @@ export const pr: Dictionary = {
   "Send the review comments of {pr} to the agent": "Отправить агенту комментарии ревью {pr}",
   "The failed checks of {pr} are with the agent": "Упавшие проверки {pr} переданы агенту",
   "The review comments of {pr} are with the agent": "Комментарии ревью {pr} переданы агенту",
-  "{pr}: {status}. Open it, or hand its checks or review to the agent": "{pr}: {status}. Открыть, или отдать агенту его проверки или ревью",
   "{pr} actions": "Действия с {pr}",
 };

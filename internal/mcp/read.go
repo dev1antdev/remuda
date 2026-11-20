@@ -9,19 +9,14 @@ import (
 	"github.com/dev1antdev/remuda/internal/tasksapi"
 )
 
-// The read tools: who is on what, from the roster, a conversation's recap and the standup the cockpit shows
-// the person — so an agent looks before it files a task or takes one.
+// The read tools: who is on what, from the roster and a conversation's recap the cockpit shows the person — so an
+// agent looks before it files a task or takes one.
 
 // RecapArgs names one agent's conversation.
 type RecapArgs struct {
 	Machine string `json:"machine"`
 	Pane    string `json:"pane"`
 	Since   string `json:"since"`
-}
-
-// StandupArgs is the standup's period.
-type StandupArgs struct {
-	Since string `json:"since"`
 }
 
 // Agents is agents_list: a table of every agent on every machine, the agent's own pane marked.
@@ -96,19 +91,6 @@ func (t *Tools) AgentRecap(a RecapArgs) (string, error) {
 		where += " on " + mc.Label
 	}
 	return fmt.Sprintf("%s (%s) — %s\n\n%s", where, ap.Pane.ID, agentState(ap.Pane.Radar, t.now()), rec.Markdown), nil
-}
-
-// Standup is standup: the report over every agent, since local midnight unless the period says otherwise.
-func (t *Tools) Standup(a StandupArgs) (string, error) {
-	since, err := sinceOf(a.Since, t.now())
-	if err != nil {
-		return "", err
-	}
-	standup, err := t.Client.Standup(since, time.Local.String())
-	if err != nil {
-		return "", err
-	}
-	return standup.Markdown, nil
 }
 
 func (t *Tools) now() time.Time {

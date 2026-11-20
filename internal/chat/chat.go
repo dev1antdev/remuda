@@ -351,7 +351,7 @@ func lastTurns(turns []transcript.Turn, n int) []transcript.Turn {
 	return append([]transcript.Turn(nil), turns[len(turns)-n:]...)
 }
 
-// tailCache keeps the tail of a session file at a version: the wall's tiles and the chat lens ask for the same slice within seconds of each other.
+// tailCache keeps the tail of a session file at a version: the pollers of a tail ask for the same slice within seconds of each other.
 type tailCache struct {
 	mu      sync.Mutex
 	entries map[tailKey]Tail

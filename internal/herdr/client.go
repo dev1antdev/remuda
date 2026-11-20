@@ -372,7 +372,7 @@ type Screen struct {
 	Truncated bool
 }
 
-// PaneScreen is the pane's visible screen with its colours kept (pane.read, format ansi): the wall's screen view.
+// PaneScreen is the pane's visible screen with its colours kept (pane.read, format ansi): the screen view.
 func (c *Client) PaneScreen(paneID string) (Screen, error) {
 	var out struct {
 		Read struct {

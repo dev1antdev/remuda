@@ -47,7 +47,7 @@ describe("keyGroups", () => {
     expect(viewer).toContain("Everywhere: ⌘ K");
     expect(viewer).toContain("Everywhere: Alt N");
     expect(viewer).toContain("Chat: ⌘ F");
-    expect(viewer).toContain("Wall: Esc");
+    expect(viewer).toContain("Timelapse: Space");
     expect(viewer).not.toContain("Everywhere: Alt Z");
     expect(viewer).not.toContain("Everywhere: ⌃ `");
     expect(viewer).not.toContain("Chat: ↵");

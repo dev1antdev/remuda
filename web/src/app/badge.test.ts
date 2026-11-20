@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { Machine, Pane, Session } from "@/features/roster/api";
 import { DEFAULT_RADAR } from "@/features/roster/radar";
-import { badgeOf, pressing, sameBadge, titleFor, toneOf } from "./badge";
+import { stepAgent } from "@/features/roster/sidebarAgents";
+import { badgeOf, needingMe, needsMe, pressing, sameBadge, titleFor, toneOf } from "./badge";
 
 const NOW = 1_700_000_000_000;
 
@@ -22,6 +23,38 @@ describe("titleFor", () => {
     expect(titleFor(0)).toBe("remuda");
     expect(titleFor(1)).toBe("(1) remuda");
     expect(titleFor(12)).toBe("(12) remuda");
+  });
+});
+
+describe("needsMe", () => {
+  it("is a question, a watchdog note or a finish not looked at", () => {
+    expect(needsMe(pane("b", "codex", { state: "blocked" }), DEFAULT_RADAR, NOW)).toBe(true);
+    expect(needsMe(pane("d", "claude", { state: "done" }), DEFAULT_RADAR, NOW)).toBe(true);
+    expect(needsMe(pane("a", "claude", { state: "working", alert: "stuck" }), DEFAULT_RADAR, NOW)).toBe(true);
+    expect(needsMe(pane("w", "claude", { state: "working" }), DEFAULT_RADAR, NOW)).toBe(false);
+    expect(needsMe(pane("f", "gemini", { state: "idle", last_active: NOW - 5 * 60_000 }), DEFAULT_RADAR, NOW)).toBe(false);
+  });
+});
+
+describe("needingMe, as Alt+N walks it", () => {
+  const roster = [
+    machine("local", [pane("w", "claude", { state: "working" }), pane("b", "codex", { state: "blocked" }), pane("s", "", { state: "blocked" })]),
+    machine("away", [pane("x", "claude", { state: "blocked" })], "connecting"),
+    machine("gog", [pane("d", "claude", { state: "done" }), pane("a", "claude", { state: "working", alert: "stuck" })]),
+  ];
+  const walk = (from: string) => {
+    const next = stepAgent(needingMe(roster, DEFAULT_RADAR, NOW), from, 1);
+    return next && `${next.machineId}|${next.paneId}`;
+  };
+  it("goes round the agents that need the person in the roster's order, a machine away and a shell left out", () => {
+    expect(walk("")).toBe("local|b");
+    expect(walk("local|b")).toBe("gog|d");
+    expect(walk("gog|d")).toBe("gog|a");
+    expect(walk("gog|a")).toBe("local|b");
+    expect(walk("local|w")).toBe("local|b");
+  });
+  it("finds nobody when every agent is fine", () => {
+    expect(needingMe([machine("local", [pane("w", "claude", { state: "working" })])], DEFAULT_RADAR, NOW)).toEqual([]);
   });
 });
 

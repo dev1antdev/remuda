@@ -26,7 +26,7 @@ import (
 const webhooksFile = "webhooks.json"
 
 // HookKinds are the kinds a webhook can take, as the panel offers them; HookKind maps a payload's kind to one.
-var HookKinds = []string{"question", "finish", "watchdog", "digest", "schedule", "task", "budget", "limits", "review", "machine", "backup", "signin", "tests", "trigger"}
+var HookKinds = []string{"question", "finish", "watchdog", "schedule", "task", "budget", "limits", "review", "machine", "backup", "signin", "tests", "trigger"}
 
 // WebhookKinds are the kinds of webhook.
 var WebhookKinds = []string{"telegram", "slack", "ntfy", "generic"}
@@ -113,6 +113,11 @@ func loadWebhooks(dir string) *Webhooks {
 		return w
 	}
 	w.base, w.hooks = f.Base, f.Hooks
+	for i := range w.hooks {
+		if w.hooks[i].Kinds == nil {
+			w.hooks[i].Kinds = []string{}
+		}
+	}
 	return w
 }
 
@@ -286,7 +291,7 @@ func check(h *Webhook) error {
 		}
 		h.Token, h.Chat = "", ""
 	}
-	var kinds []string
+	kinds := []string{} // never null to the page, which reads its length
 	for _, k := range h.Kinds {
 		if has(HookKinds, k) && !has(kinds, k) {
 			kinds = append(kinds, k)

@@ -13,7 +13,6 @@ final class StatusItem: NSObject {
     var onSelect: ((MenuRow) -> Void)?
     var onOpen: (() -> Void)?
     var onMode: ((String) -> Void)?
-    var onPanel: ((String) -> Void)?
     var onSettings: (() -> Void)?
 
     override init() {
@@ -60,11 +59,9 @@ final class StatusItem: NSObject {
         open.keyEquivalentModifierMask = hotkey.mask
         open.target = self
         menu.addItem(open)
-        for (title, selector) in [("Wall", #selector(wall)), ("Tasks", #selector(tasks)), ("Standup", #selector(standup))] {
-            let entry = NSMenuItem(title: title, action: selector, keyEquivalent: "")
-            entry.target = self
-            menu.addItem(entry)
-        }
+        let tasks = NSMenuItem(title: "Tasks", action: #selector(openTasks), keyEquivalent: "")
+        tasks.target = self
+        menu.addItem(tasks)
         menu.addItem(.separator())
         let settings = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
         settings.target = self
@@ -113,9 +110,7 @@ final class StatusItem: NSObject {
     }
 
     @objc private func openPage() { onOpen?() }
-    @objc private func wall() { onMode?("wall") }
-    @objc private func tasks() { onMode?("tasks") }
-    @objc private func standup() { onPanel?("standup") }
+    @objc private func openTasks() { onMode?("tasks") }
     @objc private func openSettings() { onSettings?() }
 }
 

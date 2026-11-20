@@ -18,8 +18,8 @@ export const MAX_ON_PAGE = 3;
 export const LINGER_MS = 15_000;
 
 // the kinds the server sends every device whatever the watchdog switch says (push.Broadcast: a schedule's word, a
-// digest, a backup's failure) and the person's own test
-const ALWAYS = new Set(["schedule", "digest", "backup", "test"]);
+// backup's failure) and the person's own test
+const ALWAYS = new Set(["schedule", "backup", "test"]);
 
 // the activity's rows that tell of the person's own doing, not of anything that needs them
 const NOT_ALERTS = new Set(["sent", "recover", "handover", "teleport"]);
@@ -27,7 +27,7 @@ const NOT_ALERTS = new Set(["sent", "recover", "handover", "teleport"]);
 const WARNING = new Set(["input", "stuck", "waiting", "loop", "budget", "limits", "machine", "backup", "signin", "tests", "collision"]);
 
 // the panel Open goes to for an alert that names no pane
-const PANEL_OF: Record<string, string> = { digest: "standup", budget: "usage", limits: "usage" };
+const PANEL_OF: Record<string, string> = { budget: "usage", limits: "usage" };
 
 // OnPageAlert is a toast's alert, its title and body apart so the screen-sharing mode can keep a hidden folder's words out
 export type OnPageAlert = { id: string; kind: string; title: string; body?: string; machine?: string; pane?: string; panel?: string; tone: "warn" | "success" | "info"; lingers: boolean; asked?: boolean }; // asked: its pane was seen asking

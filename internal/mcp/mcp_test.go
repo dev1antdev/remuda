@@ -47,8 +47,6 @@ func (f *fakeList) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		json.NewEncoder(w).Encode(map[string]any{"since": r.URL.Query().Get("since"), "markdown": "# Recap · 27 Oct 2026\n\n- 3 prompts · 3 answers · $0.42\n- Last answer: Fixed\n"})
-	case r.URL.Path == "/api/standup":
-		json.NewEncoder(w).Encode(map[string]any{"since": r.URL.Query().Get("since"), "markdown": "# Standup · 27 Oct 2026\n\n## remuda — working\n\n- 3 prompts\n\ntz=" + r.URL.Query().Get("tz")})
 	case r.URL.Path == "/api/tasks/projects":
 		json.NewEncoder(w).Encode([]map[string]any{{"id": 1, "title": "remuda", "statuses": []map[string]any{{"id": 9, "title": "Proposed", "position": 1, "on_agent": true}, {"id": 10, "title": "New", "position": 2, "on_new": true}, {"id": 11, "title": "In progress", "position": 3}}, "fields": []map[string]any{{"id": 5, "title": "Estimate", "kind": "number"}}}})
 	case r.URL.Path == "/api/tasks/labels" && r.Method == "GET":
@@ -178,7 +176,7 @@ func TestSessionInitializesListsAndCallsTools(t *testing.T) {
 		t.Errorf("initialize: %v", init)
 	}
 	tools := answers[1]["result"].(map[string]any)["tools"].([]any)
-	if len(tools) != 10 || tools[0].(map[string]any)["name"] != "tasks_list" {
+	if len(tools) != 9 || tools[0].(map[string]any)["name"] != "tasks_list" {
 		t.Errorf("tools/list: %d tools, first %v", len(tools), tools[0])
 	}
 	if !strings.Contains(text(answers[2]), "**remuda** (id 1): columns Proposed → New → In progress; fields Estimate (number)") {
@@ -227,10 +225,9 @@ func TestReadToolsSeeTheOtherAgents(t *testing.T) {
 		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"agent_recap","arguments":{"pane":"w1:p1","since":"24h"}}}`,
 		`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"agent_recap","arguments":{"machine":"this mac","pane":"w1:p2"}}}`,
 		`{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"agent_recap","arguments":{"machine":"GOG","pane":"w3:p1"}}}`,
-		`{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"standup","arguments":{"since":"7d"}}}`,
-		`{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"standup","arguments":{"since":"yesterday-ish"}}}`,
+		`{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"agent_recap","arguments":{"pane":"w1:p1","since":"yesterday-ish"}}}`,
 	)
-	if len(answers) != 6 {
+	if len(answers) != 5 {
 		t.Fatalf("%d answers", len(answers))
 	}
 	agents := text(answers[0])
@@ -245,14 +242,11 @@ func TestReadToolsSeeTheOtherAgents(t *testing.T) {
 	if got := text(answers[1]); !strings.HasPrefix(got, "claude in remuda (w1:p1) — working 1 h\n\n# Recap · 27 Oct 2026") || !strings.Contains(got, "- Last answer: Fixed") {
 		t.Errorf("agent_recap: %q", got)
 	}
-	for i, want := range map[int]string{2: "no agent pane w1:p2 on This Mac; its agents: w1:p1, w2:p1", 3: "GOG is connecting now", 5: "since is midnight, 24h, 7d"} {
+	for i, want := range map[int]string{2: "no agent pane w1:p2 on This Mac; its agents: w1:p1, w2:p1", 3: "GOG is connecting now", 4: "since is midnight, 24h, 7d"} {
 		result := answers[i]["result"].(map[string]any)
 		if result["isError"] != true || !strings.Contains(text(answers[i]), want) {
 			t.Errorf("answer %d: %v", i, answers[i])
 		}
-	}
-	if got := text(answers[4]); !strings.HasPrefix(got, "# Standup · 27 Oct 2026") || !strings.Contains(got, "tz="+time.Local.String()) {
-		t.Errorf("standup: %q", got)
 	}
 }
 

@@ -1,4 +1,4 @@
-// The player: one recording's frames drawn as the Wall's screen view draws a pane — the same ANSI renderer, the font
+// The player: one recording's frames drawn as the screen view draws a pane — the same ANSI renderer, the font
 // fitted to the pane's columns — the clock run at 10×, 30× or 60× the turn's own time or a frame at a time, a scrub bar
 // over the turn, a step either way, and Export as GIF. A find's step (jump) takes it to the frame the text appeared in,
 // paused, the row drawn apart; the text found is marked on whatever frame shows it.

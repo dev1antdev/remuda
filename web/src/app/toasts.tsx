@@ -45,7 +45,6 @@ function useAlertLinger(alerts: OnPageAlert[]) {
 export function useToasts(): ToastItem[] {
   const { machines, latest, tailscale, version, offline, stale, viewOnly, host } = useRoster();
   const notice = app.use((s) => s.notice);
-  const away = app.use((s) => s.away);
   const closedOffer = app.use((s) => s.closedOffer);
   const issueClosed = app.use((s) => s.issueClosed);
   const alerts = app.use((s) => s.alerts);
@@ -116,8 +115,8 @@ export function useToasts(): ToastItem[] {
       ),
       onDismiss: () => actions.setClosedOffer(null),
     });
-  // the alerts of this device's switches, shown on the page while it is in front: Open goes to the pane, a digest to
-  // the standup, a budget or limit to the usage; under the screen-sharing mode a hidden folder's alert keeps its kind
+  // the alerts of this device's switches, shown on the page while it is in front: Open goes to the pane, a budget or a
+  // limit to the usage; under the screen-sharing mode a hidden folder's alert keeps its kind
   // and neutral names but not its words, as an Activity row does
   const hiddenAlert = (alert: OnPageAlert): boolean => {
     if (!share.on || !alert.machine) return false;
@@ -241,25 +240,6 @@ export function useToasts(): ToastItem[] {
       onDismiss: seen,
     });
   }
-  if (away)
-    toasts.push({
-      id: "away",
-      tone: "info",
-      text: away,
-      action: (
-        <button
-          type="button"
-          className="btn sm primary"
-          onClick={() => {
-            actions.setAway(null);
-            actions.openPanel("standup");
-          }}
-        >
-          {t("Standup")}
-        </button>
-      ),
-      onDismiss: () => actions.setAway(null),
-    });
   if (notice) toasts.push({ id: "notice", tone: notice.error ? "error" : "success", text: notice.text, onDismiss: actions.clearNotice });
   if (tailscale?.state === "needs_login" && tailscale.login_url)
     toasts.push({

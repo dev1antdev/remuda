@@ -1,10 +1,10 @@
 // What the palette offers: every pane to jump to, and every command the page has a button or a menu item
-// for — the modes, the lenses, the dialogs, the panels, the rail, the pop-out, the search. The one place
+// for — the modes, the lenses, the dialogs, the panels, the rail, the search. The one place
 // that lists them; the palette itself only shows and ranks.
 
 import { useCallback } from "react";
 import Palette from "@/features/palette/Palette";
-import { paneEntries, paneTitle, tabName, type Entry } from "@/features/palette/rank";
+import { paneEntries, tabName, type Entry } from "@/features/palette/rank";
 import { exportConversation } from "@/features/chat/export";
 import { usePromptsShown } from "@/features/chat/PromptsList";
 import { useTimelineShown } from "@/features/chat/TimelineBar";
@@ -13,7 +13,6 @@ import { DEFAULT_RADAR, type RadarPrefs } from "@/features/roster/radar";
 import { closeWorkspace } from "@/features/roster/WorkspaceMenu";
 import { moving, useClock, useSpinner } from "@/features/roster/useClocks";
 import { useRoster } from "@/features/roster/useRoster";
-import { DEFAULT_WALL, tileKey, type WallPrefs } from "@/features/roster/wall";
 import { agentTitle, askRestart } from "@/features/updates/restartPane";
 import { isMac, usePref, writePref } from "@/lib/prefs";
 import { DEFAULT_OPEN_LENS, OPEN_LENS_KEY, openLensOf, type OpenLens } from "./openLens";
@@ -40,11 +39,8 @@ import { enterFull, leaveFull } from "./full";
 import { NEXT_KEY, useNextNeedingMe } from "./next";
 import { REOPEN_KEY } from "@/features/reopen/closed";
 import { USAGE_TAB_KEY, type UsageTab } from "@/features/usage/scorecard";
-import { holdLockScreen } from "@/features/standup/lockScreen";
-import { primeSpeech, speechSupported } from "@/lib/speech";
 import { useScenes } from "@/features/scenes/api";
 import { isCheckout } from "@/features/git/checkout";
-import { popOut, popOutSupported } from "./pip";
 import { actions, app, type Lens, type Mode } from "./store";
 import { setDarkFlavorPref, setLightFlavorPref, setTextSizePref, setThemePref, useDarkFlavorPref, useLightFlavorPref, useTextSize, useThemePref } from "./theme";
 import { TEXT_SIZE_NAMES, TEXT_SIZES } from "@/lib/look";
@@ -57,7 +53,6 @@ const FIND_KEY = isMac ? "⌘F" : "Ctrl+F";
 
 const MODES: { mode: Mode; title: string; hint: string; icon: IconName }[] = [
   { mode: "herdr", title: t("Go to Agents"), hint: t("your agents and terminals, from herdr"), icon: "terminal" },
-  { mode: "wall", title: t("Go to the Wall"), hint: t("every agent on one screen, a tile each"), icon: "layers" },
   { mode: "tasks", title: t("Go to Tasks"), hint: t("your tasks, kept on this remuda"), icon: "list" },
   { mode: "code", title: t("Go to Code"), hint: t("VS Code on a machine, through remuda"), icon: "code" },
   { mode: "review", title: t("Go to Review"), hint: t("every workspace with changes to review, in one list"), icon: "circle-check" },
@@ -96,9 +91,6 @@ function useCommands(): (query: string) => Entry[] {
   const current = useCurrent();
   const lens = lensOn(app.use((s) => s.lens), current?.pane.agent ?? ""); // a shell has its terminal alone
   const [radar] = usePref<RadarPrefs>("radar", DEFAULT_RADAR);
-  const [wall, setWall] = usePref<WallPrefs>("wall", DEFAULT_WALL);
-  const [focus, setFocus] = usePref<string>("wall.focus", "");
-  const [office, setOffice] = usePref<boolean>("wall.office", false);
   const [timelineShown, setTimelineShown] = useTimelineShown();
   const [promptsShown, setPromptsShown] = usePromptsShown();
   const [ribbonShown, setRibbonShown] = useRibbonShown();
@@ -174,9 +166,8 @@ function useCommands(): (query: string) => Entry[] {
           command("remove-worktree", t("Close & remove worktree {workspace}…", { workspace: named }), () => actions.openDialog({ kind: "remove-worktree", machineId: machine.id, session }), { hint: t("its folder deleted, its branch kept unless you flip it"), icon: "trash", danger: true, keywords: ["remove", "delete", "worktree", "cleanup", "close"] });
         if (!session.asleep && canSleep(session)) command("sleep", t("Sleep {workspace}…", { workspace: named }), () => askSleep(machine.id, session), { hint: t("its agents leave, their shells stay; waking resumes them"), icon: "moon", keywords: ["sleep", "hibernate", "pause", "suspend", "stop", "agents"] });
         command("close-workspace", t("Close workspace {workspace}", { workspace: named }), () => closeWorkspace(machine, session), { hint: t("its panes close and the agents in them stop"), icon: "x", danger: true, keywords: ["kill", "stop", "quit"] });
-        if (popOutSupported) command("popout", t("Pop out this agent"), () => void popOut(selection!), { hint: t("a small window above every other app"), icon: "pip", keywords: ["picture", "window", "float"] });
         if (current.pane.agent) command("export", t("Export this conversation as Markdown"), () => void exportConversation(machine.id, current.pane.id, chatSession, folderOf(current), { agent: current.pane.agent, workspace: session.name, machine: machine.label }).catch(toastError), { hint: t("the session shown, as a file"), icon: "download", keywords: ["save", "download", "markdown", "transcript", "share", "file"] });
-        if (current.pane.agent) command("recap", t("Recap this conversation"), () => actions.openDialog({ kind: "recap", machineId: machine.id, paneId: current.pane.id, session: chatSession, dir: folderOf(current), title: titled }), { hint: t("prompts, answers, tools, files, cost — Copy as Markdown"), icon: "sun", keywords: ["recap", "summary", "report", "standup", "digest", "what happened"] });
+        if (current.pane.agent) command("recap", t("Recap this conversation"), () => actions.openDialog({ kind: "recap", machineId: machine.id, paneId: current.pane.id, session: chatSession, dir: folderOf(current), title: titled }), { hint: t("prompts, answers, tools, files, cost — Copy as Markdown"), icon: "sun", keywords: ["recap", "summary", "report", "what happened"] });
         if (current.pane.agent) command("timelapse", t("Timelapse of this pane…"), () => openTimelapse({ machineId: machine.id, paneId: current.pane.id, dir: folderOf(current), agent: current.pane.agent, workspace: session.name, machine: machine.label }), { hint: t("its turns as they looked on screen, played back in seconds; export as GIF"), icon: "film", keywords: ["timelapse", "replay", "recording", "record", "screen", "gif", "video", "playback", "fast"] });
         if (canFork(current.pane.agent)) command("fork", forkLabel(current.pane.agent), () => void forkPane(machine.id, current.pane.id, current.pane.agent, chatSession), { hint: t("the same history in a new tab, a second path; this one goes on as it is"), icon: "columns", keywords: ["fork", "copy", "branch", "try", "another way", "duplicate", "conversation"] });
         if (current.pane.agent) command("handover", t("Continue this conversation with another agent"), () => actions.openDialog({ kind: "handover", machineId: machine.id, paneId: current.pane.id, session: chatSession, agent: current.pane.agent, workspace: titled }), { hint: t("a new tab here with Codex, Gemini or a fresh Claude, the gist of this conversation as its first prompt"), icon: "arrow-right", keywords: ["handover", "hand over", "continue", "switch", "codex", "gemini", "kimi", "another agent", "model", "cheaper", "stuck"] });
@@ -202,39 +193,12 @@ function useCommands(): (query: string) => Entry[] {
         const machine = machines.find((m) => m.id === viewer.machine);
         if (!viewer.subagent) command("export-viewer", t("Export this transcript as Markdown"), () => void exportConversation(viewer.machine, "", viewer.session, viewer.dir, { agent: "", workspace: basename(viewer.dir) || viewer.dir, machine: machine?.label ?? viewer.machine }).catch(toastError), { hint: t("the one open from the search, as a file"), icon: "download", keywords: ["save", "download", "markdown", "share", "file"] });
         command("find-viewer", t("Find in this transcript"), () => actions.openFind(), { hint: `${FIND_KEY}: ${t("every match marked, Enter walks them")}`, icon: "search", keywords: ["search", "text", "match", "highlight", "where"] });
-        command("recap-viewer", t("Recap this transcript"), () => actions.openDialog({ kind: "recap", machineId: viewer.machine, paneId: "", session: viewer.session, dir: viewer.dir, title: basename(viewer.dir) || viewer.dir }), { hint: t("prompts, answers, tools, files, cost — Copy as Markdown"), icon: "sun", keywords: ["recap", "summary", "report", "standup", "digest"] });
+        command("recap-viewer", t("Recap this transcript"), () => actions.openDialog({ kind: "recap", machineId: viewer.machine, paneId: "", session: viewer.session, dir: viewer.dir, title: basename(viewer.dir) || viewer.dir }), { hint: t("prompts, answers, tools, files, cost — Copy as Markdown"), icon: "sun", keywords: ["recap", "summary", "report"] });
         command("timeline-viewer", timelineShown ? t("Hide the session timeline") : t("Show the session timeline"), () => setTimelineShown(!timelineShown), { hint: t("prompts and answers in time over the transcript; the first error, the longest call, loops and questions marked"), icon: "clock", keywords: ["timeline", "history", "highlights", "errors", "loop", "overview", "map", "time"] });
         command("prompts-viewer", promptsShown ? t("Hide the prompts list") : t("Show the prompts list"), () => setPromptsShown(!promptsShown), { hint: t("prompt by prompt, newest first: what each took, wrote and changed"), icon: "list", keywords: ["prompts", "timeline", "history", "turns", "messages", "tokens"] });
       }
 
-      const screens = wall.view === "screen";
-      const onTheWall = (change: Partial<WallPrefs>) => () => {
-        setWall({ ...wall, ...change });
-        actions.setMode("wall");
-      };
-      command("ribbon", ribbonShown ? t("Hide the activity ribbon") : t("Show the activity ribbon"), () => setRibbonShown(!ribbonShown), { hint: t("the last 30 minutes of each agent's work, coloured by what it did, on the Wall and over the chat"), icon: "layers", keywords: ["ribbon", "activity", "herd", "last 30 minutes", "what it did", "tools", "quiet"] });
-      command("wall-needs", wall.needsMe ? t("Wall: every agent") : t("Wall: only the agents that need me"), onTheWall({ needsMe: !wall.needsMe }), { hint: wall.needsMe ? t("the filter off") : t("a question open, a watchdog note, a finish not looked at"), icon: "layers", keywords: ["wall", "needs", "attention", "waiting", "blocked", "filter"] });
-      command("wall-idle", wall.hideIdle ? t("Wall: show the idle agents") : t("Wall: hide the idle agents"), onTheWall({ hideIdle: !wall.hideIdle }), { hint: t("idle for over {n} min", { n: radar.freshMinutes }), icon: "layers", keywords: ["wall", "idle", "hide", "filter"] });
-      if (focus) command("wall-unfocus", t("Wall: back to the grid"), () => {
-        setFocus("");
-        actions.setMode("wall");
-      }, { hint: t("every tile its own size again"), icon: "minimize", keywords: ["wall", "focus", "grid", "leave"] });
-      if (current && current.pane.agent && tileKey(current.machine.id, current.pane.id) !== focus)
-        command("wall-focus", t("Focus {agent} on the Wall", { agent: paneTitle(current.pane, current.tab, current.session.name, radar, share.sessionHidden(current.machine.id, current.session)) }), () => {
-          setFocus(tileKey(current.machine.id, current.pane.id));
-          actions.setMode("wall");
-        }, { hint: t("this agent takes the wall, the others wait in a strip"), icon: "maximize", keywords: ["wall", "focus", "big", "zoom"] });
-      command("wall-office", office ? t("Wall: leave office mode") : t("Office mode on the Wall"), () => {
-        setOffice(!office);
-        if (office) leaveFull();
-        else {
-          actions.setMode("wall");
-          enterFull();
-        }
-      }, { hint: office ? t("the grid back, the full screen left") : t("one agent large for a second screen — whoever needs you, else each in turn — the rest as cards; full screen"), icon: "monitor", keywords: ["wall", "office", "tv", "screen", "kiosk", "show", "featured", "big"] });
-      command("wall-view", screens ? t("Wall of chats") : t("Wall of screens"), onTheWall({ view: screens ? "chat" : "screen" }), { hint: screens ? t("each tile the last turns of its conversation") : t("each tile its terminal as it is, scaled to fit"), icon: "layers", keywords: ["wall", "terminal", "screen", "chat", "view", "tiles"] });
-      const zoo = wall.view === "zoo";
-      command("wall-zoo", zoo ? t("Wall: leave the zoo") : t("Zoo on the Wall"), onTheWall({ view: zoo ? "chat" : "zoo" }), { hint: zoo ? t("each tile the last turns of its conversation") : t("each agent as a little creature whose pose says what it does, for a screen across the room"), icon: "layers", keywords: ["wall", "zoo", "creatures", "animals", "pets", "fun", "tv", "office", "view"] });
+      command("ribbon", ribbonShown ? t("Hide the activity ribbon") : t("Show the activity ribbon"), () => setRibbonShown(!ribbonShown), { hint: t("the last 30 minutes of the agent's work, coloured by what it did"), icon: "layers", keywords: ["ribbon", "activity", "herd", "last 30 minutes", "what it did", "tools", "quiet"] });
       if (current && !viewer && mode === "herdr") command("full", full ? t("Leave full screen") : t("Full screen"), full ? leaveFull : enterFull, { hint: full ? t("the header and the sidebar back") : t("the lens takes the whole screen; Esc leaves"), icon: full ? "minimize" : "maximize", keywords: ["fullscreen", "zen", "focus", "maximize", "screen"] });
       command("rail", footprint ? t("Hide the files rail") : t("Show the files rail"), actions.toggleFootprint, { hint: t("the files the agent touched, beside the lenses"), icon: "folder", keywords: ["footprint", "files"] });
       command("panels", t("Reset the panels' widths"), resetPanels, { hint: t("the sidebar, the files rail, the review queue and a task's detail back to their usual widths"), icon: "layers", keywords: ["resize", "width", "sidebar", "panel", "rail", "columns"] });
@@ -257,20 +221,6 @@ function useCommands(): (query: string) => Entry[] {
       };
       command("usage", t("Usage report"), usageOn("spend"), { hint: t("what the agents cost, by day, project and session"), icon: "chart", keywords: ["cost", "tokens", "context", "money"] });
       command("scorecard", t("Models scorecard"), usageOn("models"), { hint: t("which model does your work best: finished runs, first-time approvals, merged pull requests, arenas kept, cost and time"), icon: "chart", keywords: ["model", "models", "compare", "best", "score", "quality", "approve", "merge", "opus", "sonnet", "fable", "gpt", "codex"] });
-      command("standup", t("Standup: what every agent did today"), () => actions.openPanel("standup"), { hint: t("one report over every machine, ready to paste as Markdown"), icon: "sun", keywords: ["standup", "report", "today", "summary", "recap", "daily", "digest", "morning"] });
-      // the voice is primed and the lock screen held here, inside the pick, the gesture a phone waits for before it speaks
-      if (speechSupported())
-        command(
-          "listen-day",
-          t("Listen to the day"),
-          () => {
-            primeSpeech();
-            holdLockScreen();
-            actions.listenToDay();
-          },
-          { hint: t("the standup read aloud: who did what, who waits for you, what it cost"), icon: "headphones", keywords: ["listen", "read aloud", "speak", "voice", "podcast", "audio", "standup", "day", "morning", "summary"] },
-        );
-      command("concierge", t("Ask the concierge…"), () => actions.openPanel("concierge"), { hint: t("what the agents are doing, in plain words; it can file a task for you"), icon: "concierge", keywords: ["concierge", "ask", "question", "who", "what", "status", "assistant", "help", "chat", "консьерж"] });
       command("arena-new", t("Arena: one prompt to several agents…"), () => actions.openDialog({ kind: "arena", at: current ? { machineId: current.machine.id, workspaceId: current.session.id } : undefined }), { hint: t("each in a worktree of its own, their work side by side, the best kept"), icon: "columns", keywords: ["arena", "compare", "best", "race", "parallel", "agents", "worktree", "versus"] });
       command("arenas", t("Arenas"), () => actions.openPanel("arena"), { hint: t("the lanes of every arena: how each agent stands, its changes, keep the best"), icon: "columns", keywords: ["arena", "compare", "lanes", "keep"] });
       command("open-lens-terminal", t("Notifications open: the terminal"), () => writePref(OPEN_LENS_KEY, "terminal"), { hint: `${openLens === "terminal" ? t("now · ") : ""}${t("a tapped notification, the Mac app's menu, an Activity row or Alt+N shows the pane's terminal")}`, icon: "terminal", keywords: ["notification", "alert", "open", "terminal", "lens"] });
@@ -316,6 +266,6 @@ function useCommands(): (query: string) => Entry[] {
       const shown = share.on ? commands.map((entry) => ({ ...entry, title: share.redact(entry.title), hint: entry.hint && share.redact(entry.hint) })) : commands;
       return [...panes, ...(viewOnly ? shown.filter((entry) => viewerCommand(entry.id)) : shown)];
     },
-    [machines, viewOnly, jiraSite, server, scenes, mode, lens, viewer, chatSession, chatLive, footprint, split, full, float, themePref, openLens, darkFlavor, lightFlavor, textSize, current, radar, wall, setWall, focus, setFocus, office, setOffice, timelineShown, setTimelineShown, promptsShown, setPromptsShown, ribbonShown, setRibbonShown, step, now, goNext, share],
+    [machines, viewOnly, jiraSite, server, scenes, mode, lens, viewer, chatSession, chatLive, footprint, split, full, float, themePref, openLens, darkFlavor, lightFlavor, textSize, current, radar, timelineShown, setTimelineShown, promptsShown, setPromptsShown, ribbonShown, setRibbonShown, step, now, goNext, share],
   );
 }

@@ -1,6 +1,6 @@
 // The files rail's Agent tab: every file the agent edited or read this session, from its own tool calls, the newest
 // touch first. A click opens the file with its changes; the code button opens it in the Code mode on that machine. It
-// polls the transcript itself, at a wall tile's pace, only while on screen, and says what it counts for the rail's head.
+// polls the transcript itself, at a slow pace, only while on screen, and says what it counts for the rail's head.
 
 import { useEffect, useMemo, useState } from "react";
 import type { OpenFile } from "@/features/files/target";

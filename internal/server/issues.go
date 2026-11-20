@@ -53,7 +53,7 @@ func (s *Server) handleIssueRepos(w http.ResponseWriter, r *http.Request) {
 	if snap, _ := s.Watch.Snapshot(mc.ID()); snap != nil {
 		for i := range snap.Workspaces {
 			ws := &snap.Workspaces[i]
-			if (s.Scratch != nil && s.Scratch.Is(mc.ID(), ws.WorkspaceID)) || (s.Concierge != nil && s.Concierge.Is(mc.ID(), ws.WorkspaceID)) {
+			if s.ownWorkspace(mc.ID(), ws.WorkspaceID) {
 				continue
 			}
 			if d := snap.WorkspaceDir(ws); d != "" && !containsString(dirs, d) {

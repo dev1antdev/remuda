@@ -1,4 +1,4 @@
-// The pull request's menu, shared by a wall tile's chips and the workspace's ⋯ menu: Open, then the hand-offs its state
+// The pull request's menu, shared by the sidebar card's badge and the workspace's ⋯ menu: Open, then the hand-offs its state
 // allows — the failed checks' log, the reviewers' comments — each a message the server composes with gh (glab for a
 // GitLab merge request) on the machine
 // and sends to the pane's agent, a toast when it went, the server's word when it could not; and, for a merged worktree,
@@ -37,7 +37,7 @@ export function prPanelRow(machineId: string, paneId: string, pr: PullRequest, d
   return [{ label: t("Pull request panel"), icon: "git-pull-request", hint: t("comments, checks, files, merge"), onSelect: () => actions.openPRPanel({ machineId, dir, paneId, url: pr.url }) }];
 }
 
-// prMenuItems are the rows behind a tile's chips: Open with the state as its hint, then the pull request panel and the
+// prMenuItems are the rows behind a card's badge: Open with the state as its hint, then the pull request panel and the
 // hand-offs the state allows (a viewer's menu ends before them).
 export function prMenuItems(machineId: string, paneId: string, pr: PullRequest, dir = ""): MenuItem[] {
   const items: MenuItem[] = [{ label: t("Open {pr}", { pr: pr.label }), icon: "external-link", hint: pr.status ? prWords(pr.status) : undefined, onSelect: () => openUrl(pr.url) }];
