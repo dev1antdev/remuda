@@ -33,10 +33,14 @@ func (s *Snapshot) WorkspaceLabel(workspaceID string) string {
 	return ""
 }
 
-// WorkspaceDir is the folder a workspace lives in: its git checkout when herdr knows one, else the cwd of its first pane.
+// WorkspaceDir is the folder a workspace lives in: its git checkout when herdr knows one, else the folder it was placed
+// on, else the cwd of its first pane.
 func (s *Snapshot) WorkspaceDir(ws *WorkspaceInfo) string {
 	if ws.Worktree != nil && ws.Worktree.CheckoutPath != "" {
 		return ws.Worktree.CheckoutPath
+	}
+	if ws.Folder != "" {
+		return ws.Folder
 	}
 	for i := range s.Panes {
 		if s.Panes[i].WorkspaceID == ws.WorkspaceID {
