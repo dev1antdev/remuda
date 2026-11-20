@@ -82,7 +82,7 @@ func TestOutputRowsKeepTheirStandingAndTheirDropsAreLoggedOnce(t *testing.T) {
 	log.SetOutput(&said)
 	t.Cleanup(func() { log.SetOutput(before) })
 	stream := outputStream(t, func(core peer) {
-		for _, row := range []string{`"line":"a FAIL","lost":7,"fresh":true`, `"line":"b FAIL","lost":2`, `"line":"c FAIL"`} {
+		for _, row := range []string{`"line":"a FAIL","lost":7,"fresh":true`, `"line":"b FAIL","lost":2,"fresh":false`, `"line":"c FAIL"`} {
 			core.write(4, frameData, []byte(`{"jsonrpc":"2.0","method":"event","params":{"seq":2,"type":"output","data":{"watch":"0",`+row+`}}}`+"\n"))
 		}
 	})
@@ -93,10 +93,14 @@ func TestOutputRowsKeepTheirStandingAndTheirDropsAreLoggedOnce(t *testing.T) {
 			t.Fatalf("the stream ended after %v: %v", rows, err)
 		}
 		if ev.Kind == herdr.EventOutputMatched {
-			rows = append(rows, ev.MatchedLine+map[bool]string{true: " standing"}[ev.Standing])
+			told := ""
+			if ev.Standing != nil {
+				told = map[bool]string{true: " standing", false: " live"}[*ev.Standing]
+			}
+			rows = append(rows, ev.MatchedLine+told)
 		}
 	}
-	if strings.Join(rows, ",") != "a FAIL standing,b FAIL,c FAIL" {
+	if strings.Join(rows, ",") != "a FAIL standing,b FAIL live,c FAIL" {
 		t.Fatalf("rows %v", rows)
 	}
 	if n := strings.Count(said.String(), "dropped"); n != 1 {

@@ -151,7 +151,7 @@ func (s *eventStream) readOutput() {
 			Watch string `json:"watch"`
 			Line  string `json:"line"`
 			Lost  int    `json:"lost"`
-			Fresh bool   `json:"fresh"`
+			Fresh *bool  `json:"fresh"`
 		}
 		if json.Unmarshal(notice.Event.Data, &row) != nil {
 			continue

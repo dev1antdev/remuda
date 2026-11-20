@@ -42,7 +42,7 @@ type Event struct {
 	AgentStatus string // pane.agent_status_changed
 	MatchedLine string // pane.output_matched: the first row that matched
 	Text        string // pane.output_matched: the rows herdr read
-	Standing    bool   // pane.output_matched: the row stood before the watch began, as remuda-core says (herdr never does)
+	Standing    *bool  // pane.output_matched: whether the row stood before the watch began, as remuda-core says; nil from herdr
 }
 
 // Event kinds remuda tells apart.

@@ -3634,10 +3634,11 @@ components and icons as rules for whoever changes it: @docs/design.md
   An output match goes on the bus as `events.OutputMatched` for every
   watch whose pattern the row matches (herdr names no subscription), with
   `Fresh` (within `freshFor` 2 s of its stream's start: herdr tells a match
-  already standing on the screen when a watch begins; or whenever told, a
-  row remuda-core says stood, `herdr.Event.Standing` from its `fresh`, since
-  a core tells at most 256 rows a look and a broad rule's may come later,
-  `standing_test.go`) and `Carried` (the
+  already standing on the screen when a watch begins — the clock alone for
+  herdr; remuda-core says it of every row, `herdr.Event.Standing` from its
+  `fresh`, and its word stands either way: a row it told late, a core telling
+  at most 256 rows a look, still stood, and one printed live as the stream
+  opened is news, `standing_test.go`) and `Carried` (the
   stream before held that watch too, looking for the same thing: a rule
   edited is a new watch), the row read again in herdr's dialect
   (`herdr.CompileRegex`). Handlers read its cache
@@ -3662,7 +3663,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   standing); on a remuda-core machine the adapter hands the same watches
   to core's `events.subscribe {output}` (see `internal/core`), which tells
   every matching row as it comes into the last rows, not only the first
-  while one stands — the quiet spells below keep that to one push; `Service.Watches` is the set for a machine's snapshot — the
+  while one stands, and again every one standing when a stream begins — so
+  `OnMatch` remembers each row a watch matched lately (`maxStanding` 64), not
+  only the last, and a row told again as a stream opened is no news while one
+  that came in the gap is; `Service.Watches` is the set for a machine's snapshot — the
   person's rules where they look, then two built-in ones on every pane, at
   most `MaxWatches` 200 a machine (the rest left out, logged once an
   hour). **Built in**: `ServePattern`, a dev server announcing its address
@@ -3707,8 +3711,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   (`Service.Muted` = `push.Service.Muted`) a push is silenced as any push
   is and no row goes into the activity, while a task still moves (the
   person's rule is work; its comment on the task says so). **What is news** (`OnMatch`):
-  the same row again a moment after a stream opened, or through two
-  streams at once (`dupWindow` 3 s), is that row again; a row standing
+  a row the watch matched lately (any of its last `maxStanding` 64) told
+  again as a stream opened, or through two streams at once (`dupWindow`
+  3 s), is that row again; a row standing
   when a watch began on a pane that was there before (`Fresh` and not
   `Carried`, the pane first seen in a machine's first snapshot or more
   than `newFor` a minute ago) is where things stood — a pane born while

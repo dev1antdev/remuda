@@ -255,13 +255,17 @@ func (w *Watcher) heard(machineID string, st *machineState, ls *liveStream, even
 	switch event.Kind {
 	case herdr.EventOutputMatched:
 		now := time.Now()
+		fresh := now.Sub(ls.started) < freshFor
+		if event.Standing != nil {
+			fresh = *event.Standing // the server knows, where herdr's clock only guesses
+		}
 		for _, o := range ls.set.outputs[event.PaneID] {
 			if !w.matches(o.Match, event.MatchedLine) {
 				continue
 			}
 			events.Publish(w.bus, events.OutputMatched{
 				Pane: events.PaneRef{Machine: machineID, Pane: event.PaneID}, Watch: o.Key, Line: event.MatchedLine, Text: event.Text,
-				Fresh: event.Standing || now.Sub(ls.started) < freshFor, Carried: ls.carried[carryKey(event.PaneID, o)], At: now,
+				Fresh: fresh, Carried: ls.carried[carryKey(event.PaneID, o)], At: now,
 			})
 		}
 	case lazyKind, "pane_updated":
