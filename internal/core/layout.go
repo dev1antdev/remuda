@@ -8,7 +8,6 @@ import (
 	"log"
 	"maps"
 	"slices"
-	"strings"
 
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/state"
@@ -67,9 +66,9 @@ func (a *Adapter) LayoutApply(workspaceID, tabID, tabLabel string, root herdr.La
 	if len(panes) == 0 {
 		return nil, &herdr.Error{Code: "invalid_request", Message: "a layout holds at least one pane"}
 	}
-	for _, pane := range panes {
+	for i, pane := range panes {
 		if len(pane.Command) > 0 {
-			return nil, &herdr.Error{Code: "invalid_request", Message: fmt.Sprintf("a pane's own command (%s) is not laid out on remuda-core yet: the core would read its program as a template of that name (task Core 34)", strings.Join(pane.Command, " "))}
+			return nil, &herdr.Error{Code: "invalid_request", Message: fmt.Sprintf("pane %d of the layout runs a command of its own, which is not laid out on remuda-core yet: the core would read its program as a template of that name (task Core 34)", i+1)}
 		}
 	}
 	space, inPlace := workspaceID, tabID != ""

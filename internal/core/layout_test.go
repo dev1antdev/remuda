@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/dev1antdev/remuda/internal/core"
@@ -168,13 +169,17 @@ func TestALayoutTheCoreCannotLayOutIsRefused(t *testing.T) {
 	}{
 		{"a split of nothing", made.Workspace.WorkspaceID, "", herdr.LayoutNode{Type: "split", Direction: "right"}, "invalid_request"},
 		{"a pane with a command of its own", made.Workspace.WorkspaceID, "", herdr.LayoutNode{Type: "split", Direction: "right", First: &pane,
-			Second: &herdr.LayoutNode{Type: "pane", Command: []string{"npm", "run", "dev"}}}, "invalid_request"},
+			Second: &herdr.LayoutNode{Type: "pane", Command: []string{"npm", "run", "dev", "--token=s3cret-sentinel"}}}, "invalid_request"},
 		{"a workspace only labelled, not in the document", "ws-labelled", "", pane, "workspace_not_found"},
 		{"no such workspace", "ws-none", "", pane, "workspace_not_found"},
 		{"no such tab", "", "tab-none", pane, "tab_not_found"},
 	} {
-		if _, err := adapter.LayoutApply(c.space, c.tab, "", c.tree); !herdr.IsCode(err, c.code) {
+		_, err := adapter.LayoutApply(c.space, c.tab, "", c.tree)
+		if !herdr.IsCode(err, c.code) {
 			t.Errorf("%s: %v, want %s", c.name, err, c.code)
+		}
+		if err != nil && strings.Contains(err.Error(), "s3cret-sentinel") {
+			t.Errorf("%s: the refusal repeats a pane's arguments: %v", c.name, err)
 		}
 	}
 	if _, err := adapter.LayoutExport("tab-none"); !herdr.IsCode(err, "tab_not_found") {
