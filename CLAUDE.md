@@ -5108,7 +5108,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   slow start, Run now beside a tick) is skipped as `SkipRunning`, any
   kind. A schedule of the standup's `digest` kind, gone with it, is
   dropped as the store is read (one log line, the file written once without
-  it — never a file that read only in part), and `Put` refuses one. An
+  it), and `Put` refuses one. A `schedules.json` that does not read runs
+  nothing and is never written over: every save says to fix it first
+  (`Store.unreadable`). An
   **agent** schedule (`agent.go`,
   tested) starts a fresh agent in a folder with a prompt — the "scout"
   that looks around a project every few hours and makes tasks: `Agent`,

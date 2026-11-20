@@ -84,6 +84,8 @@ type Store struct {
 	Agents Agents // the app's way to start, close and read an agent schedule's agent; set after New
 	Scenes Scenes // the app's way to a scene schedule's scene; set after New
 	now    func() time.Time
+	// unreadable is why schedules.json could not be read: until it is fixed nothing runs and nothing is written over it
+	unreadable error
 
 	mu       sync.Mutex
 	items    map[string]*Schedule
@@ -95,9 +97,10 @@ type Store struct {
 func New(dir string, submit Submit, notify func(push.Payload)) *Store {
 	st := &Store{dir: dir, submit: submit, notify: notify, now: time.Now, items: map[string]*Schedule{}, firing: map[string]time.Time{}, running: map[string]bool{}}
 	var list []*Schedule
-	readErr := state.LoadJSON(dir, file, &list)
-	if readErr != nil {
-		log.Printf("%s is unreadable (%v): no schedules until it is fixed", file, readErr)
+	if err := state.LoadJSON(dir, file, &list); err != nil {
+		log.Printf("%s is unreadable (%v): no schedules until it is fixed", file, err)
+		st.unreadable = err
+		return st
 	}
 	dropped := 0
 	for _, s := range list {
@@ -112,9 +115,6 @@ func New(dir string, submit Submit, notify func(push.Payload)) *Store {
 	}
 	if dropped > 0 {
 		log.Printf("schedules: %d standup digests dropped: the standup is gone", dropped)
-		if readErr != nil {
-			return st // a file read only in part is never written back over
-		}
 		if err := st.saveLocked(); err != nil {
 			log.Printf("schedules: %v", err)
 		}
@@ -123,6 +123,9 @@ func New(dir string, submit Submit, notify func(push.Payload)) *Store {
 }
 
 func (st *Store) saveLocked() error {
+	if st.unreadable != nil {
+		return fmt.Errorf("%s is unreadable (%v): fix it or move it aside first", file, st.unreadable)
+	}
 	return state.SaveJSON(st.dir, file, st.listLocked())
 }
 

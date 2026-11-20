@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -202,15 +203,25 @@ func TestKindDefaultsToPromptOnLoadAndAStandupDigestIsDropped(t *testing.T) {
 	}
 }
 
-func TestAFileReadInPartIsNotRewrittenForADigest(t *testing.T) {
+func TestAnUnreadableFileRunsNothingAndIsNeverWrittenOver(t *testing.T) {
 	dir := t.TempDir()
-	body := []byte(`[{"id":"d","kind":"digest","cron":"0 9 * * *","enabled":true},{"id":"p","machine":"local","dir":"/tmp/x","cron":"0 9 * * *","prompt":"hi","enabled":"true"}]`)
+	body := []byte(`[{"id":"d","kind":"digest","cron":"0 9 * * *","enabled":true},{"id":"p","machine":"local","dir":"/tmp/x","cron":"* * * * *","prompt":"hi","enabled":true},{"id":"q","machine":"local","dir":"/tmp/y","cron":"0 9 * * *","prompt":"hi","enabled":"true"}]`)
 	if err := os.WriteFile(filepath.Join(dir, file), body, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	New(dir, nil, nil)
-	if got, _ := os.ReadFile(filepath.Join(dir, file)); string(got) != string(body) {
-		t.Fatalf("a damaged schedules.json was written over: %s", got)
+	fired := 0
+	st := New(dir, func(string, string, string) (string, error) { fired++; return "p", nil }, nil)
+	st.now = func() time.Time { return at("2026-10-07 09:00") }
+	if list := st.List(); len(list) != 0 {
+		t.Fatalf("a file read only in part still runs %d schedules", len(list))
+	}
+	st.Tick()
+	st.Wait()
+	if _, err := st.Put(Schedule{Machine: "local", Dir: "/tmp/z", Cron: "0 9 * * *", Prompt: "new"}); err == nil || !strings.Contains(err.Error(), "unreadable") {
+		t.Fatalf("a save over an unreadable file: %v", err)
+	}
+	if got, _ := os.ReadFile(filepath.Join(dir, file)); string(got) != string(body) || fired != 0 {
+		t.Fatalf("fired %d, the file now %s", fired, got)
 	}
 }
 
