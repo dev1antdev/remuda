@@ -170,7 +170,7 @@ func (mc *Machine) connect() {
 			bail(err)
 			return
 		}
-		mc.connected(conn, found, link.adapter, noAttach(), link)
+		mc.connected(conn, found, link.adapter, link.terminals, link)
 		return
 	}
 	bin := mc.Cfg.HerdrBin

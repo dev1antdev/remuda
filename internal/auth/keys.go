@@ -35,12 +35,13 @@ var readRoutes = map[string]bool{"/api/roster": true, "/api/recap": true}
 
 // viewerRoutes is what a viewer may GET: the roster, the conversations, the screens, their timelapses and the search
 // over them, the project tree and the files under the workspaces, the reports and the event stream the page draws
-// from, a checkout's history in the Git lens, and the folders' icons (viewerPrefixes); the pane's terminal socket,
-// every submit and key, the tasks, the timelapses' switch and every change — git's writes among them — stay out.
+// from, a checkout's history in the Git lens, the folders' icons (viewerPrefixes), and the pane's terminal socket, which
+// watches without typing on a machine on remuda-core and is refused on herdr (internal/server/terminal.go); every
+// submit and key, the tasks, the timelapses' switch and every change — git's writes among them — stay out.
 var viewerRoutes = map[string]bool{
 	"/api/roster": true, "/api/chat": true, "/api/screen": true, "/api/scrollback": true, "/api/recap": true,
 	"/api/feed": true, "/api/fs/file": true, "/api/fs/stat": true, "/api/fs/tree": true, "/api/health": true, "/api/push": true, "/api/question": true,
-	"/api/usage": true, "/api/scorecard": true, "/ws/events": true, "/api/timelapse/recordings": true, "/api/timelapse/search": true,
+	"/api/usage": true, "/api/scorecard": true, "/ws/events": true, "/ws/pane": true, "/api/timelapse/recordings": true, "/api/timelapse/search": true,
 	"/api/git/log": true, "/api/git/state": true, "/api/git/commit": true, "/api/git/diff": true, // the Git lens's graph, read-only
 }
 

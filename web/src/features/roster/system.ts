@@ -1,13 +1,17 @@
-// What a machine's system means for the page: a Windows PC's panes have no live terminal (herdr has no terminal
-// attach there, so the lens is the screen terminal) and no code-server, so no Code mode and no "Open in the editor". Pure.
+// What a machine's system means for the page: a Windows PC's panes on herdr have no live terminal (herdr has no terminal
+// attach there, so the lens is the screen terminal; remuda-core attaches everywhere) and a Windows PC has no
+// code-server, so no Code mode and no "Open in the editor". Pure.
 
 import { t } from "@/lib/i18n";
 import type { Option } from "@/ui/Select";
 
-type Located = { os?: string; host?: string } | null | undefined;
+type Located = { os?: string; host?: string; core?: boolean } | null | undefined;
 
 // onWindows says the machine is a Windows PC, by the roster's os
 export const onWindows = (machine: Located): boolean => machine?.os === "windows";
+
+// screenOnly says the machine's panes get the screen terminal rather than a live one: a Windows PC on herdr
+export const screenOnly = (machine: Located): boolean => onWindows(machine) && !machine?.core;
 
 // systemWords names the system as a person reads it; "" while the roster does not know it
 export function systemWords(os: string | undefined): string {

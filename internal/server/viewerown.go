@@ -32,10 +32,14 @@ func (s *Server) viewerOwnGuard(next http.Handler) http.Handler {
 func conversationRoute(path string) bool { return path == "/api/chat" || path == "/api/recap" }
 
 func (s *Server) viewerBarred(r *http.Request) bool {
+	q := r.URL.Query()
+	if r.URL.Path == "/ws/pane" { // the live terminal names its pane as id
+		mc, err := s.machineFor(r, "")
+		return err == nil && !s.viewerSeesPane(mc.ID(), q.Get("id"))
+	}
 	if !strings.HasPrefix(r.URL.Path, "/api/") {
 		return false // the page's own address names a pane too, and one gone since must still load it
 	}
-	q := r.URL.Query()
 	pane, dir, session := q.Get("pane"), q.Get("dir"), q.Get("session")
 	if pane == "" && dir == "" {
 		return false

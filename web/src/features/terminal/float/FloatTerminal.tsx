@@ -16,7 +16,7 @@ import { Icon, Notice, PANELS, Resizer, Select, Tip } from "@/ui";
 import type { TermApi } from "../engine/types";
 import TerminalView from "../Terminal";
 import { ScreenTerminal } from "../screen/ScreenTerminal";
-import { onWindows } from "@/features/roster/system";
+import { screenOnly } from "@/features/roster/system";
 import { closeScratch, openScratch } from "./api";
 import { keyWords, shellView } from "./float";
 import { t, tn } from "@/lib/i18n";
@@ -48,7 +48,7 @@ function Drawer({ machineId, open }: { machineId: string; open: boolean }) {
   const machine = named.find((m) => m.id === machineId)?.label ?? machineId;
   const connected = machines.some((m) => m.id === machineId && m.state === "connected");
   const here = machines.find((m) => m.id === machineId);
-  const windows = onWindows(here); // no terminal attach there: the drawer's shell is the screen terminal
+  const windows = screenOnly(here); // a Windows PC on herdr has no terminal attach: the drawer's shell is the screen terminal
   const section = useRef<HTMLElement>(null);
   const back = useRef<Element | null>(null); // what had the focus before the drawer took it, given back when it hides
   const key = keyWords(isMac);
