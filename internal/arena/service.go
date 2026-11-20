@@ -189,9 +189,10 @@ func (s *Service) deliver(mc *machines.Machine, client herdr.API, a Arena, laneI
 	deadline := s.now().Add(DeliverTimeout)
 	nudged, trusted := false, false
 	var last error
+	delivery := s.Input.Deliver(client, events.PaneRef{Machine: mc.ID(), Pane: pane}, a.Prompt)
 	for s.now().Before(deadline) {
 		time.Sleep(DeliverRetry)
-		err := s.Input.Prompt(client, events.PaneRef{Machine: mc.ID(), Pane: pane}, a.Prompt)
+		err := delivery.Try()
 		switch {
 		case err == nil:
 			s.settle(a.ID, laneID, LaneRunning, "")

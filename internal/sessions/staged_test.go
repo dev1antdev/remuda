@@ -38,17 +38,26 @@ func (l *ledger) PaneSendKeys(_ string, keys []string) error {
 	return nil
 }
 
-// holder stages its prompts as remuda-core does: the look answers at once, the send waits.
+// holder stages its prompts as remuda-core does: the look answers at once with the pid in front, the send waits.
 type holder struct {
 	ledger
 	sendErr error
+	pid     int
+	asked   []bool // asMessage, look after look
 }
 
-func newHolder() *holder { return &holder{ledger: ledger{sends: make(chan struct{}, 4)}} }
+func newHolder() *holder { return &holder{ledger: ledger{sends: make(chan struct{}, 4)}, pid: 100} }
 
-func (h *holder) StagePrompt(_, text string) (func() error, error) {
+func (h *holder) StagePrompt(_, text string, front int, asMessage bool) (int, func() error, error) {
 	h.note("look:" + text)
-	return func() error {
+	h.mu.Lock()
+	h.asked = append(h.asked, asMessage)
+	pid := h.pid
+	h.mu.Unlock()
+	if front != 0 && front != pid {
+		return 0, nil, &herdr.Error{Code: "agent_left", Message: "another agent in front"}
+	}
+	return pid, func() error {
 		<-h.sends
 		h.note("sent:" + text)
 		return h.sendErr
@@ -56,7 +65,7 @@ func (h *holder) StagePrompt(_, text string) (func() error, error) {
 }
 
 func (h *holder) AgentPrompt(pane, text string) error {
-	send, err := h.StagePrompt(pane, text)
+	_, send, err := h.StagePrompt(pane, text, 0, false)
 	if err != nil {
 		return err
 	}
@@ -221,5 +230,37 @@ func TestAFirstPromptIsNotTriedAgainOnceItsAgentLeft(t *testing.T) {
 	}
 	if got := h.seen(); !slices.Equal(got, []string{"look:the task", "sent:the task"}) {
 		t.Fatalf("tried again: %v", got)
+	}
+}
+
+// A delivery tried again is bound to the agent its first look saw: once another agent leads the pane, it stops there,
+// and a refusal it may try again after (the agent asking first) never sends the prompt to what replaced the agent.
+func TestADeliveryTriedAgainNeverReachesAReplacement(t *testing.T) {
+	h, in := newHolder(), NewInput(nil, nil)
+	h.sendErr = &herdr.Error{Code: "agent_blocked", Message: "asks first"}
+	h.sends <- struct{}{}
+	d := in.Deliver(h, onePane, "the task")
+	if err := d.Try(); !herdr.IsCode(err, "agent_blocked") {
+		t.Fatalf("first try %v", err)
+	}
+	h.pid, h.sendErr = 200, nil
+	if err := d.Try(); !herdr.IsCode(err, "agent_left") {
+		t.Fatalf("a try with another agent in front: %v", err)
+	}
+	if got := h.seen(); !slices.Equal(got, []string{"look:the task", "sent:the task", "look:the task"}) {
+		t.Fatalf("calls %v", got)
+	}
+}
+
+// Only the person's own message may go to a turn started meanwhile; every other prompt is for an agent at rest.
+func TestOnlyThePersonsMessageGoesToATurn(t *testing.T) {
+	h, in := newHolder(), NewInput(nil, nil)
+	h.sends <- struct{}{}
+	h.sends <- struct{}{}
+	if err := errors.Join(in.Submit(h, onePane, "mine"), in.SubmitToAgent(h, onePane, "a schedule's")); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(h.asked, []bool{true, false}) {
+		t.Fatalf("as a message: %v", h.asked)
 	}
 }

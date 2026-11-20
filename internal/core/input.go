@@ -122,10 +122,10 @@ func readyForPrompt(t *Terminal) bool {
 // for an agent never reaches a shell. The core's own view of the terminal is read right before, so an agent that left
 // since the mirror's last news is not taken for there; an agent whose status is cleared (Claude Code reports
 // state=clear on its way out) gets nothing, and a send to an idle agent names that status (`if`), so one that clears
-// it as the prompt goes has it refused too (status_mismatch) — while one a person's own draft set working takes it as
-// a message, and one gone from the front is agent_left, never tried again (turnStarted).
+// it as the prompt goes has it refused too (status_mismatch). It goes to an agent at rest alone (a restart's exit, a
+// sleep's): see sendTo for the person's own message.
 func (a *Adapter) AgentPrompt(target, text string) error {
-	send, err := a.StagePrompt(target, text)
+	_, send, err := a.StagePrompt(target, text, 0, false)
 	if err != nil {
 		return err
 	}
@@ -134,85 +134,96 @@ func (a *Adapter) AgentPrompt(target, text string) error {
 
 // StagePrompt is AgentPrompt in two steps: the look at the agent now, and the send it answers, which the core may hold
 // a minute while a person finishes a draft. sessions holds the pane's lock for the look alone, so the person's keys and
-// answers pass a prompt the core holds; the core itself types nothing else between the paste and its Enter.
-func (a *Adapter) StagePrompt(target, text string) (func() error, error) {
+// answers pass a prompt the core holds; the core itself types nothing else between the paste and its Enter. It answers
+// the pid of the agent it saw, which a delivery tried again names as front: any other agent in front is agent_left,
+// so a prompt never reaches what replaced the one it was for. asMessage is the person's own message, which a turn
+// started meanwhile takes as a message.
+func (a *Adapter) StagePrompt(target, text string, front int, asMessage bool) (int, func() error, error) {
 	t, err := a.terminal(target)
 	if err != nil {
-		return nil, err
+		return 0, nil, err
 	}
 	agent, err := agentIn(&t, target)
 	if err != nil {
-		return nil, err
+		return 0, nil, err
 	}
 	if !readyForPrompt(&t) {
-		return nil, &herdr.Error{Code: "agent_not_ready", Message: "the agent in " + target + " has reported no status yet (one that never does takes no prompt on remuda-core)"}
+		return 0, nil, &herdr.Error{Code: "agent_not_ready", Message: "the agent in " + target + " has reported no status yet (one that never does takes no prompt on remuda-core)"}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), callWithin)
 	defer cancel()
 	cn, err := a.client.connection(ctx)
 	if err != nil {
-		return nil, a.refusal(err, "agent_not_found")
+		return 0, nil, a.refusal(err, "agent_not_found")
 	}
 	if promptsNeed != "" && !cn.hello.Has(promptsNeed) {
-		return nil, &herdr.Error{Code: "invalid_request", Message: "a prompt to an agent waits for a remuda-core that checks, as it types, that the agent is still in front (Core 33)"}
+		return 0, nil, &herdr.Error{Code: "invalid_request", Message: "a prompt to an agent waits for a remuda-core that checks, as it types, that the agent is still in front (Core 33)"}
 	}
 	var now Terminal
 	if err := cn.call(ctx, "terminal.get", map[string]any{"terminal": target}, &now, nil); err != nil {
-		return nil, a.refusal(err, "agent_not_found")
+		return 0, nil, a.refusal(err, "agent_not_found")
 	}
 	if agentOf(&now) != agent {
-		return nil, &herdr.Error{Code: "agent_not_found", Message: "the agent in " + target + " has left"}
+		return 0, nil, &herdr.Error{Code: "agent_not_found", Message: "the agent in " + target + " has left"}
 	}
 	if now.Status == nil {
-		return nil, &herdr.Error{Code: "agent_not_ready", Message: "the agent in " + target + " cleared its status, as one leaving does: nothing was sent"}
+		return 0, nil, &herdr.Error{Code: "agent_not_ready", Message: "the agent in " + target + " cleared its status, as one leaving does: nothing was sent"}
 	}
 	if now.Foreground == nil {
-		return nil, &herdr.Error{Code: "agent_not_ready", Message: "remuda-core has not seen what runs in front of " + target + " yet"}
+		return 0, nil, &herdr.Error{Code: "agent_not_ready", Message: "remuda-core has not seen what runs in front of " + target + " yet"}
 	}
-	return func() error {
-		err := sendPrompt(cn, target, text, &now)
-		if !IsKind(err, "status_mismatch") {
-			return a.inputRefusal(err, "agent_not_ready", "agent_blocked")
-		}
-		working, left := a.turnStarted(cn, target, agent, &now)
+	if front != 0 && now.Foreground.Pid != front {
+		return 0, nil, agentLeft(target)
+	}
+	call := func(ctx context.Context, method string, params, result any) error {
+		return cn.call(ctx, method, params, result, nil)
+	}
+	return now.Foreground.Pid, func() error { return a.sendTo(call, target, text, agent, now, asMessage) }, nil
+}
+
+// caller is one call to the core, the connection the look was made on.
+type caller func(ctx context.Context, method string, params, result any) error
+
+// sendTo is the send a look answers. One the core refused untyped (status_mismatch: the status the send named moved,
+// or another program took the front) is read again: the same agent, in front under the same pid with a status, gets
+// one more send as it stands now — idle again after a short turn, or, asMessage, a turn the person's own draft
+// started, which takes it as a message; anything else is agent_left. A turn started meanwhile refuses everyone else's.
+func (a *Adapter) sendTo(call caller, target, text, agent string, now Terminal, asMessage bool) error {
+	err := sendPrompt(call, target, text, &now)
+	if IsKind(err, "status_mismatch") {
+		again, left := a.stillThere(call, target, agent, now.Foreground.Pid)
 		if left != nil {
 			return left
 		}
-		if err = sendPrompt(cn, target, text, &working); IsKind(err, "status_mismatch") {
-			return agentLeft(target)
+		if asMessage || statusOf(&again) == herdr.StatusIdle {
+			err = sendPrompt(call, target, text, &again)
 		}
-		return a.inputRefusal(err, "agent_not_ready", "agent_blocked")
-	}, nil
+	}
+	return a.inputRefusal(err, "agent_not_ready", "agent_blocked")
 }
 
 // sendPrompt is terminal.send to the agent in front under its pid, naming its status when idle, so one that clears it
 // as the prompt goes is refused untyped (status_mismatch); so is one a person's own draft set working meanwhile.
-func sendPrompt(cn *conn, target, text string, now *Terminal) error {
+func sendPrompt(call caller, target, text string, now *Terminal) error {
 	params := map[string]any{"terminal": target, "text": text, "foreground": now.Foreground.Pid}
 	if statusOf(now) == herdr.StatusIdle {
 		params["if"] = herdr.StatusIdle // not working: a turn ending as the prompt goes would refuse it
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), sendWithin)
 	defer cancel()
-	return cn.call(ctx, "terminal.send", params, nil, nil)
+	return call(ctx, "terminal.send", params, nil)
 }
 
-// turnStarted reads the terminal again after a send the core refused untyped (status_mismatch), and answers it when
-// the refusal was only the agent's status: the send named idle, and the same agent, in front under the same pid, now
-// works — a turn the person's own draft started, which takes the prompt as a message. Every other such refusal is the
-// core's look at the foreground, the agent gone from the front: agent_left, which no delivery tries again, so a
-// prompt never reaches what replaced it. The core's own view of the foreground may lag its look, so a status still
-// idle counts as the foreground's refusal.
-func (a *Adapter) turnStarted(cn *conn, target, agent string, sent *Terminal) (Terminal, error) {
+// stillThere is the terminal read again after a send the core refused untyped: agent_left unless the same agent leads
+// it under the same pid with a status.
+func (a *Adapter) stillThere(call caller, target, agent string, pid int) (Terminal, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), callWithin)
 	defer cancel()
 	var now Terminal
-	if err := cn.call(ctx, "terminal.get", map[string]any{"terminal": target}, &now, nil); err != nil {
+	if err := call(ctx, "terminal.get", map[string]any{"terminal": target}, &now); err != nil {
 		return now, a.refusal(err, "agent_not_found")
 	}
-	named := statusOf(sent) == herdr.StatusIdle
-	same := agentOf(&now) == agent && now.Foreground != nil && now.Foreground.Pid == sent.Foreground.Pid
-	if !named || !same || now.Status == nil || statusOf(&now) == herdr.StatusIdle {
+	if agentOf(&now) != agent || now.Foreground == nil || now.Foreground.Pid != pid || now.Status == nil {
 		return now, agentLeft(target)
 	}
 	return now, nil

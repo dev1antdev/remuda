@@ -1,7 +1,9 @@
 package core
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -151,5 +153,71 @@ func TestAPromptLeftUnsubmittedIsToldApart(t *testing.T) {
 	older := a.inputRefusal(&Error{Kind: "needs_update", Message: "t1 runs in an older rc's holder", Hint: "nothing was typed; a terminal started since rc was updated takes it"}, "agent_not_ready", "agent_blocked")
 	if !herdr.IsCode(older, "invalid_request") || !strings.Contains(older.Error(), "older") || !strings.Contains(older.Error(), "a terminal started since") {
 		t.Fatalf("an older holder: %v", older)
+	}
+}
+
+// scripted is a core answering terminal.send and terminal.get in turn, noting each send.
+type scripted struct {
+	sends []error
+	gets  []Terminal
+	sent  []map[string]any
+}
+
+func (s *scripted) call(_ context.Context, method string, params, result any) error {
+	switch method {
+	case "terminal.send":
+		s.sent = append(s.sent, params.(map[string]any))
+		err := s.sends[0]
+		s.sends = s.sends[1:]
+		return err
+	case "terminal.get":
+		*result.(*Terminal) = s.gets[0]
+		s.gets = s.gets[1:]
+		return nil
+	}
+	return fmt.Errorf("unexpected %s", method)
+}
+
+// claudeAt is Claude Code in front under pid, its status state ("" for none reported).
+func claudeAt(pid int, state string) Terminal {
+	t := Terminal{Foreground: &Foreground{Pid: pid, Name: "claude", Argv: []string{"claude"}}}
+	if state != "" {
+		t.Status = &Status{State: state, App: "claude-code"}
+	}
+	return t
+}
+
+var untyped = &Error{Kind: "status_mismatch", Message: "t1 moved", Hint: "nothing was typed"}
+
+// A send the core refused untyped goes once more to the same agent as it stands: idle again after a short turn, or at
+// work for the person's own message alone; another agent, or one leaving, is agent_left.
+func TestASendRefusedUntypedIsReadAgain(t *testing.T) {
+	a := &Adapter{}
+	for _, c := range []struct {
+		name      string
+		asMessage bool
+		again     Terminal
+		second    bool
+		want      string
+		secondIf  bool
+	}{
+		{"a short turn", false, claudeAt(5, "idle"), true, "", true},
+		{"a turn, the person's message", true, claudeAt(5, "working"), true, "", false},
+		{"a turn, anyone else's", false, claudeAt(5, "working"), false, "agent_not_ready", false},
+		{"another agent in front", true, claudeAt(9, "working"), false, "agent_left", false},
+		{"the agent leaving", true, claudeAt(5, ""), false, "agent_left", false},
+	} {
+		core := &scripted{sends: []error{untyped, nil}, gets: []Terminal{c.again}}
+		err := a.sendTo(core.call, "t1", "hello", "claude", claudeAt(5, "idle"), c.asMessage)
+		if c.want == "" && err != nil || c.want != "" && !herdr.IsCode(err, c.want) {
+			t.Errorf("%s: %v, want %q", c.name, err, c.want)
+		}
+		if got := len(core.sent) == 2; got != c.second {
+			t.Errorf("%s: sent again %v", c.name, got)
+			continue
+		}
+		if _, named := core.sent[len(core.sent)-1]["if"]; c.second && named != c.secondIf {
+			t.Errorf("%s: the second send names idle: %v", c.name, named)
+		}
 	}
 }

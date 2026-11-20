@@ -123,8 +123,8 @@ func TestAPromptWaitingForADraftGoesWhenThePersonSendsIt(t *testing.T) {
 	}
 }
 
-// A prompt whose agent leaves the terminal while it waits for the person's draft is agent_left, which no delivery
-// tries again, and nothing of it reaches the shell that took the terminal.
+// A prompt whose agent leaves the terminal while it waits for the person's draft sends nothing, and the same delivery
+// tried again never reaches the agent started in its place, nor the shell between them.
 func TestAPromptNeverReachesWhatReplacedItsAgent(t *testing.T) {
 	core.LiftPromptGate(t)
 	client, adapter, pane := idleAgent(t)
@@ -132,18 +132,67 @@ func TestAPromptNeverReachesWhatReplacedItsAgent(t *testing.T) {
 		t.Skip("this remuda-core does not check the agent as it types (send_foreground), and would type the prompt into the shell")
 	}
 	person := typing(t, client, pane, "draft")
-	in, ref := sessions.NewInput(nil, nil), events.PaneRef{Machine: "local", Pane: pane}
+	delivery := sessions.NewInput(nil, nil).Deliver(adapter, events.PaneRef{Machine: "local", Pane: pane}, "echo typed-past-its-agent")
 	sent := make(chan error, 1)
-	go func() { sent <- in.Prompt(adapter, ref, "echo typed-into-the-shell") }()
+	go func() { sent <- delivery.Try() }()
 	time.Sleep(time.Second)
 	if _, err := person.Write([]byte("\x03")); err != nil { // Ctrl-C: the agent goes, its shell takes the terminal
 		t.Fatal(err)
 	}
-	if err := waitFor(t, sent); !herdr.IsCode(err, "agent_left") {
+	if err := waitFor(t, sent); !herdr.IsCode(err, "agent_left") && !herdr.IsCode(err, "agent_not_ready") {
 		t.Fatalf("a prompt whose agent left as it waited: %v", err)
 	}
+	startStandIn(t, adapter, pane)
+	if err := delivery.Try(); !herdr.IsCode(err, "agent_left") {
+		t.Fatalf("the delivery tried again on the agent started in its place: %v", err)
+	}
 	time.Sleep(500 * time.Millisecond)
-	if screen, _ := adapter.PaneRead(pane); strings.Contains(screen, "typed-into-the-shell") {
-		t.Fatalf("the prompt reached the shell:\n%s", screen)
+	if screen, _ := adapter.PaneRead(pane); strings.Contains(screen, "typed-past-its-agent") {
+		t.Fatalf("the prompt reached the shell or the new agent:\n%s", screen)
+	}
+}
+
+// A first prompt the agent refused while it asked something, tried again once another agent took the pane, is
+// agent_left: the task never reaches the agent started in its place.
+func TestADeliveryAfterAQuestionNeverReachesAReplacement(t *testing.T) {
+	core.LiftPromptGate(t)
+	client, adapter, pane := idleAgent(t)
+	person := typing(t, client, pane, "ask\r")
+	eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Pane(pane).AgentStatus == herdr.StatusBlocked })
+	delivery := sessions.NewInput(nil, nil).Deliver(adapter, events.PaneRef{Machine: "local", Pane: pane}, "the old task")
+	if err := delivery.Try(); !herdr.IsCode(err, "agent_blocked") {
+		t.Fatalf("a prompt to an agent asking something: %v", err)
+	}
+	if _, err := person.Write([]byte("\x03")); err != nil {
+		t.Fatal(err)
+	}
+	startStandIn(t, adapter, pane)
+	if err := delivery.Try(); !herdr.IsCode(err, "agent_left") {
+		t.Fatalf("the first prompt tried again on the agent started in its place: %v", err)
+	}
+	time.Sleep(500 * time.Millisecond)
+	if screen, _ := adapter.PaneRead(pane); strings.Contains(screen, "got: the old task") {
+		t.Fatalf("the new agent got the old task:\n%s", screen)
+	}
+}
+
+// A prompt for an agent at rest (a restart's exit, a sleep's) is refused untyped when the person's own draft starts a
+// turn while it waits: only the person's message goes to a turn.
+func TestARestartsExitNeverGoesToATurnThePersonStarted(t *testing.T) {
+	core.LiftPromptGate(t)
+	client, adapter, pane := idleAgent(t)
+	person := typing(t, client, pane, "slow")
+	sent := make(chan error, 1)
+	go func() { sent <- adapter.AgentPrompt(pane, "exit-while-it-works") }()
+	time.Sleep(time.Second)
+	if _, err := person.Write([]byte("\r")); err != nil {
+		t.Fatal(err)
+	}
+	if err := waitFor(t, sent); !herdr.IsCode(err, "agent_not_ready") {
+		t.Fatalf("a prompt for an agent at rest, behind a turn the person started: %v", err)
+	}
+	eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Pane(pane).AgentStatus == herdr.StatusIdle })
+	if screen, _ := adapter.PaneRead(pane); strings.Contains(screen, "exit-while-it-works") {
+		t.Fatalf("the prompt went to the turn:\n%s", screen)
 	}
 }

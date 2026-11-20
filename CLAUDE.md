@@ -524,13 +524,17 @@ components and icons as rules for whoever changes it: @docs/design.md
   still show that agent with a status — a cleared one, as an agent leaving
   reports, gets nothing — and a send to an idle agent names that status
   (`if`, never for a working one, whose turn may end as it goes;
-  a `status_mismatch` — nothing typed — is read again, `turnStarted`:
-  the agent the person's own draft set working meanwhile takes the
-  prompt as a message, sent once more without `if`, and any other is
-  the core's look at the foreground, the agent gone from the front,
-  `agent_left`, which no delivery tries again — the first prompts' loops
-  fail on it and `sessions` says `ErrNoAgent` — so a prompt never
-  reaches what replaced the agent); `PaneSendKeys` is
+  a `status_mismatch` — nothing typed — is read again, `sendTo`: the
+  same agent in front under the same pid with a status gets one more
+  send as it stands, idle again after a short turn, or — the person's own
+  message alone, `Submit` — at work in a turn their draft started, which
+  takes it as a message; a restart's exit, a sleep's, a schedule's or a
+  first prompt never goes to a turn; anything else is `agent_left`,
+  `sessions` saying `ErrNoAgent`; and a delivery tried again
+  (`sessions.Delivery`: `FirstPrompt`, a task's and an arena lane's) is
+  bound by its first look to that agent's pid, every later look
+  refusing another as `agent_left` and every send naming it to the
+  core's guard, so a prompt never reaches what replaced the agent); `PaneSendKeys` is
   `terminal.keys` with `now` (keys the person pressed); `PaneSendText` types
   bytes as they are into a terminal its shell holds — a command line remuda
   types into a shell it opened — through a `keep_size` attach of its own,
@@ -7274,7 +7278,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   person finishes a draft in the terminal and checks the agent as it types —
   holds it for the look alone, the pane's prompts one after another by a
   lock of their own, so keys, typing and an answer pass the wait; `Prompt`
-  is that door, which the arena's and a task's first prompts take too;
+  is that door, once, and `Deliver` a prompt tried again, bound to the
+  agent its first look saw, which the arena's and a task's first prompts
+  and `FirstPrompt` take;
   `Hold` takes both, the prompts' lock first, for a restart or a sleep),
   `Submit` (`agent.prompt`: what is
   written for an agent is never typed into a pane without one, whose shell

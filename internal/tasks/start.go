@@ -152,9 +152,10 @@ func (l *Launcher) deliver(mc *machines.Machine, client herdr.API, run Run, task
 	deadline := time.Now().Add(5 * time.Minute)
 	nudged, trusted := false, false
 	var last error
+	delivery := l.Input.Deliver(client, events.PaneRef{Machine: mc.ID(), Pane: run.Pane}, prompt)
 	for time.Now().Before(deadline) {
 		time.Sleep(2 * time.Second)
-		err := l.Input.Prompt(client, events.PaneRef{Machine: mc.ID(), Pane: run.Pane}, prompt)
+		err := delivery.Try()
 		switch {
 		case err == nil:
 			_ = l.Store.SetRun(run.ID, RunRunning, "")
