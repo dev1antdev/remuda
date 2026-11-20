@@ -64,7 +64,7 @@ func (req *StartRequest) Normalize() error {
 
 // Start makes the worktree and starts the agent, records the run and hands the prompt over in the background; the task comes back as it stands.
 // Bad input is ErrInvalid, herdr's refusal of the worktree is herdr's error, an agent that did not start is ErrAgentStart.
-func (l *Launcher) Start(mc *machines.Machine, client *herdr.Client, task Task, req StartRequest) (Task, error) {
+func (l *Launcher) Start(mc *machines.Machine, client herdr.API, task Task, req StartRequest) (Task, error) {
 	if err := req.Normalize(); err != nil {
 		return Task{}, err
 	}
@@ -108,7 +108,7 @@ func (l *Launcher) Start(mc *machines.Machine, client *herdr.Client, task Task, 
 // StartStage starts a pipeline's next stage: its agent in a new tab of the previous stage's worktree — nobody watching,
 // so denying what would wait on a permission prompt when the project's switch says so — the run recorded and the card
 // moved to the stage's column, the prompt handed over in the background as a start's is.
-func (l *Launcher) StartStage(mc *machines.Machine, client *herdr.Client, prev Run, index int, stage Stage, prompt string) (Run, error) {
+func (l *Launcher) StartStage(mc *machines.Machine, client herdr.API, prev Run, index int, stage Stage, prompt string) (Run, error) {
 	task, err := l.Store.Get(prev.TaskID)
 	if err != nil {
 		return Run{}, err
@@ -146,7 +146,7 @@ func includeNote(included worktrees.Included, err error) string {
 
 // deliver waits for the fresh agent and hands it the task; Claude Code's "trust this folder"
 // question for the new worktree is answered yes, any other question is pushed to the person and waited for.
-func (l *Launcher) deliver(mc *machines.Machine, client *herdr.Client, run Run, task Task, prompt string) {
+func (l *Launcher) deliver(mc *machines.Machine, client herdr.API, run Run, task Task, prompt string) {
 	lock := l.Input.Lock(mc.ID(), run.Pane)
 	deadline := time.Now().Add(5 * time.Minute)
 	nudged, trusted := false, false

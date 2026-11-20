@@ -220,7 +220,10 @@ not style.
   service and writes the answer; the use case lives in its context
   package (`sessions`, `chat`, `review`, `updates`, `tasks`, …). A package
   that only runs scripts on a machine takes a `shell.Host`, never a
-  `*machines.Machine`, and builds its scripts with `internal/script`.
+  `*machines.Machine`, and builds its scripts with `internal/script`. A
+  package that asks a machine's herdr takes the `herdr.API` and
+  `herdr.Terminals` that `Machine.Ready()` hands out; only `internal/herdr`
+  and `internal/machines` name `*herdr.Client` or `*herdr.AttachManager`.
   Packages hear each other through `internal/events`; the subscriptions
   are listed once, in `internal/app`. `docs/architecture.md` draws the
   map; a new feature is a package with its use cases, a file in

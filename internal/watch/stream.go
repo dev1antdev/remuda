@@ -27,7 +27,7 @@ var (
 
 // liveStream is one open stream and what it holds.
 type liveStream struct {
-	stream  *herdr.Stream
+	stream  herdr.EventStream
 	set     *streamSet
 	started time.Time
 	carried map[string]bool // "pane|key" of the output watches the stream before it held too

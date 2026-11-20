@@ -26,7 +26,7 @@ const (
 type termStream struct {
 	id       string
 	termID   string
-	attach   *herdr.AttachManager
+	attach   herdr.Terminals
 	ch       chan []byte
 	cancel   func()
 	readMu   sync.Mutex // one long-poll at a time; never held by anyone else
