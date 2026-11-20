@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"maps"
 	"slices"
 	"sync"
 	"time"
@@ -55,12 +56,16 @@ func (a *Adapter) runShell(ctx context.Context, space, tab, cwd string, env map[
 	return a.runIn(ctx, space, tab, RunParams{Cwd: cwd, Env: env})
 }
 
-// runIn starts what p says (the machine's shell when it names nothing) in a new terminal of a workspace's tab and
-// waits for the core's own news of it, so the pane it answers is in the snapshot the caller reads next. The mirror
-// alone puts terminals in it: a reply to the start never does, which could bring back a shell that ended meanwhile.
-// One that ends first fails the start.
+// runIn starts what p says (the machine's shell when it names nothing) in a new terminal of a workspace's tab, its
+// labels beside the tab's, and waits for the core's own news of it, so the pane it answers is in the snapshot the
+// caller reads next. The mirror alone puts terminals in it: a reply to the start never does, which could bring back a
+// shell that ended meanwhile. One that ends first fails the start.
 func (a *Adapter) runIn(ctx context.Context, space, tab string, p RunParams) (Terminal, error) {
-	p.Labels, p.Rm = map[string]string{LabelSpace: space, LabelTab: tab}, true
+	p.Labels = maps.Clone(p.Labels)
+	if p.Labels == nil {
+		p.Labels = map[string]string{}
+	}
+	p.Labels[LabelSpace], p.Labels[LabelTab], p.Rm = space, tab, true
 	cwd := p.Cwd
 	t, err := a.client.Run(ctx, p)
 	if err != nil {

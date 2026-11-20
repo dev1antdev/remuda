@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/dev1antdev/remuda/internal/core"
@@ -228,4 +229,79 @@ func panesOfTab(snap *herdr.Snapshot, tab string) []string {
 		}
 	}
 	return out
+}
+
+func TestALayoutWhoseWorkspaceClosedWhileItStartedDoesNotBringItBack(t *testing.T) {
+	client := coretest.Server(t).Client(t)
+	adapter := adapterOf(t, client, core.AdapterHooks{})
+	made, err := adapter.WorkspaceCreate(t.TempDir(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	space := made.Workspace.WorkspaceID
+	core.BeforeLayoutWrite(t, func() {
+		if err := adapter.WorkspaceClose(space); err != nil {
+			t.Error(err)
+		}
+	})
+	if _, err := adapter.LayoutApply(space, "", "", threePanes("")); err == nil {
+		t.Fatal("a layout of a workspace closed meanwhile was laid out")
+	}
+	eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Workspace(space) == nil && len(s.Panes) == 0 })
+	if left, err := client.List(t.Context(), false, map[string]string{core.LabelSpace: space}); err != nil || len(left) > 0 {
+		t.Fatalf("terminals of the closed workspace still run: %+v, %v", left, err)
+	}
+}
+
+func TestALayoutLaidInPlaceOfATabClosedMeanwhileFails(t *testing.T) {
+	client := coretest.Server(t).Client(t)
+	adapter := adapterOf(t, client, core.AdapterHooks{})
+	made, err := adapter.WorkspaceCreate(t.TempDir(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := adapter.TabCreate(made.Workspace.WorkspaceID, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	core.BeforeLayoutWrite(t, func() {
+		if err := adapter.TabClose(other.Tab.TabID); err != nil {
+			t.Error(err)
+		}
+	})
+	if _, err := adapter.LayoutApply("", other.Tab.TabID, "", threePanes("")); err == nil {
+		t.Fatal("a tab closed meanwhile was laid out again")
+	}
+	eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Tab(other.Tab.TabID) == nil && len(s.Panes) == 1 })
+}
+
+func TestAPaneWhoseProgramIsACoreTemplateIsRefused(t *testing.T) {
+	server := coretest.Server(t)
+	client := server.Client(t)
+	adapter := adapterOf(t, client, core.AdapterHooks{})
+	config := ""
+	for _, kv := range server.Env {
+		if value, ok := strings.CutPrefix(kv, "XDG_CONFIG_HOME="); ok {
+			config = value
+		}
+	}
+	templates := filepath.Join(config, "remuda-core", "templates")
+	if err := os.MkdirAll(templates, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	template := "---\ndescription: a stand-in\ncommand: sleep 300\n---\n"
+	if err := os.WriteFile(filepath.Join(templates, "sleeper.md"), []byte(template), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	made, err := adapter.WorkspaceCreate(t.TempDir(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tree := herdr.LayoutNode{Type: "pane", Command: []string{"sleeper", "run", "dev"}}
+	if _, err := adapter.LayoutApply(made.Workspace.WorkspaceID, "", "", tree); !herdr.IsCode(err, "invalid_request") || !strings.Contains(err.Error(), "sleeper") {
+		t.Fatalf("a template's name as a pane's program: %v", err)
+	}
+	if snap, _ := adapter.SessionSnapshot(); len(snap.Panes) != 1 {
+		t.Fatalf("the refused layout started terminals: %+v", snap.Panes)
+	}
 }
