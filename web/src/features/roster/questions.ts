@@ -13,7 +13,7 @@ export const MAX_ASKING = 8;
 export type Asker = { key: string; machine: string; pane: string };
 
 // ASK_MAX is how much of a question its line holds
-export const ASK_MAX = 90;
+const ASK_MAX = 90;
 
 // questionLine is what an asking agent asks, in a line: the dialog's head and the first line of its detail ("Bash
 // command · rm -rf build"), else the line that asks

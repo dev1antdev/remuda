@@ -15,19 +15,16 @@ export function useFollowBottom(logRef: RefObject<HTMLDivElement | null>, { acti
   const pinning = useRef(false); // toBottom's frames are running and see every growth themselves
 
   // back on screen, the place is put back; this runs before a jump's own scroll, so a search hit wins
-  // the log's own window, whose frames and selection it watches
-  const windowOf = (log: HTMLElement) => log.ownerDocument.defaultView ?? window;
 
   // toBottom scrolls to the end and keeps doing so, a frame at a time, until the end holds still: the turns near it are
   // skipped until they are on screen (content-visibility), so each scroll lays out a few more at their real heights and
   // moves the end; a dozen frames bound it, and an upward wheel meanwhile lets go through letGo as always
   const toBottom = (log: HTMLElement) => {
-    const win = windowOf(log);
     ownScroll.current = true;
     pinning.current = true;
     const pin = (left: number) => {
       log.scrollTop = log.scrollHeight;
-      win.requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
         const away = log.scrollHeight - log.scrollTop - log.clientHeight;
         if (stick.current && away > 1 && left > 0) return pin(left - 1);
         ownScroll.current = false;
@@ -46,12 +43,12 @@ export function useFollowBottom(logRef: RefObject<HTMLDivElement | null>, { acti
     }
     ownScroll.current = true;
     log.scrollTop = savedTop.current ?? log.scrollTop;
-    windowOf(log).requestAnimationFrame(() => (ownScroll.current = false));
+    requestAnimationFrame(() => (ownScroll.current = false));
   }, [active, logRef]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const follows = (log: HTMLElement) => {
     if (!stick.current || dragging.current) return false;
-    const sel = windowOf(log).getSelection();
+    const sel = window.getSelection();
     return !(sel && !sel.isCollapsed && sel.anchorNode && log.contains(sel.anchorNode));
   };
 
@@ -66,15 +63,14 @@ export function useFollowBottom(logRef: RefObject<HTMLDivElement | null>, { acti
   activeRef.current = active;
   useEffect(() => {
     const log = logRef.current;
-    const win = log && windowOf(log);
-    if (!log || !win?.ResizeObserver || !win.MutationObserver) return;
-    const resized = new win.ResizeObserver(() => {
+    if (!log || !window.ResizeObserver || !window.MutationObserver) return;
+    const resized = new ResizeObserver(() => {
       if (activeRef.current && !pinning.current && follows(log)) toBottom(log);
     });
     const watchTurns = () => {
       for (const turn of log.children) resized.observe(turn);
     };
-    const added = new win.MutationObserver(watchTurns);
+    const added = new MutationObserver(watchTurns);
     watchTurns();
     added.observe(log, { childList: true });
     return () => {

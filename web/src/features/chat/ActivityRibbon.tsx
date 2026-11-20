@@ -25,19 +25,18 @@ const saysItself = (s: Stretch) => !!s.call && (s.tone === "read" || s.tone === 
 
 const liveOf = (status: string): Live => (status === "run" ? "run" : status === "input" ? "input" : null);
 
-export const Ribbon = memo(function Ribbon({ turns, status, dir, cut, unread, onJump, className = "" }: {
+export const Ribbon = memo(function Ribbon({ turns, status, dir, unread, onJump, className = "" }: {
   turns: Turn[];
   status: string; // the pane's: run, input, done, idle
   dir: string; // a file is named from here
-  cut: boolean; // the turns read may start after the window does
-  unread: string; // what the time before them is, in words
+  unread: string; // what the time before a compaction's file is, in words
   onJump?: (turn: string) => void; // the lens: the stretch held opens its turn
   className?: string;
 }) {
   const [on] = useRibbonShown();
   const now = useNow(5000);
   const live = liveOf(status);
-  const model = useMemo(() => ribbon(turns, { now, live, cut }), [turns, now, live, cut]);
+  const model = useMemo(() => ribbon(turns, { now, live }), [turns, now, live]);
   const [hover, setHover] = useState<string | null>(null);
   const [held, setHeld] = useState<string | null>(null);
   const svg = useRef<SVGSVGElement>(null);
