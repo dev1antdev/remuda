@@ -34,6 +34,8 @@ export type EngineProps = Geometry & {
   onReady: (api: TermApi | null) => void;
   onOpenFile: OpenFile;
   onCopied: (chars: number) => void;
+  core?: boolean; // the machine is on remuda-core: whether this viewer keeps the size is its attach's, so a mode change attaches again
+  readOnly?: boolean; // a viewer link: watches, never types or sizes the terminal (read once, at the start)
 };
 
 export type Engine = {
@@ -50,7 +52,9 @@ export function createEngine(mount: HTMLElement, machineId: string, paneId: stri
     scrollback: 2000,
     allowProposedApi: true,
     theme: terminalTheme(props().flavor),
+    disableStdin: props().readOnly,
   });
+  const readOnly = !!props().readOnly;
   let flavorNow = props().flavor;
   let fontNow = props().fontFamily;
   const fit = new FitAddon();
@@ -64,12 +68,15 @@ export function createEngine(mount: HTMLElement, machineId: string, paneId: stri
   const note = (text: string) => term.write(`\r\n\x1b[2m[remuda] ${text}\x1b[0m\r\n`);
   // sendResize sends the grid to the shared PTY only when it changed since the connect request carried it.
   const sendResize = () => {
+    if (readOnly) return;
     const size = `${term.cols}x${term.rows}`;
     if (size === lastSize) return;
     lastSize = size;
     transport?.resize(term.cols, term.rows);
   };
-  const sendInput = (data: string) => transport?.input(data);
+  const sendInput = (data: string) => {
+    if (!readOnly) transport?.input(data);
+  };
   const input = (seq: string) => {
     const m = props().modifier;
     const out = applyModifier(m, seq);
@@ -87,6 +94,7 @@ export function createEngine(mount: HTMLElement, machineId: string, paneId: stri
       term.options.fontFamily = fontNow;
     }
     if (applyGeometry(term, fit, mount, props())) sendResize();
+    if (props().core && transport && keeps() !== keptAt) reattach();
   };
   apply();
 
@@ -140,14 +148,26 @@ export function createEngine(mount: HTMLElement, machineId: string, paneId: stri
   });
   resizes.observe(mount);
 
-  transport = connect({
-    query: `machine=${encodeURIComponent(machineId)}&id=${encodeURIComponent(paneId)}`,
+  // keeps says this viewer leaves the size to the others, which the connect request carries: on remuda-core it is the
+  // attach's own (keep_size), so a viewer that changes its mind attaches again; herdr reads nothing of it
+  const keeps = () => props().mode === "keep";
+  let keptAt = keeps();
+  const stream = {
+    get query() {
+      return `machine=${encodeURIComponent(machineId)}&id=${encodeURIComponent(paneId)}${keeps() ? "&keep=1" : ""}`;
+    },
     size: () => ({ cols: term.cols, rows: term.rows }),
     onOpen,
     onBytes: paint,
     note,
     inputLost: () => actions.notify(t("What you typed may not have gone through. It will not be sent again."), { error: true }),
-  });
+  };
+  const reattach = () => {
+    keptAt = keeps();
+    transport?.close();
+    transport = connect(stream);
+  };
+  transport = connect(stream);
   props().onReady({ input, appCursor: () => term.modes.applicationCursorKeysMode, focus: () => term.focus(), search });
 
   return {

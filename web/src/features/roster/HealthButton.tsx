@@ -17,7 +17,7 @@ import { concerns, updateLabel } from "./concerns";
 import { loginWords } from "./signin";
 import { BodyRows } from "./BodyRows";
 import { Sparkline } from "./Sparkline";
-import { onWindows, systemWords } from "./system";
+import { onWindows, screenOnly, systemWords } from "./system";
 import { DISK_THRESHOLDS, loadThresholds, rangeOf, sparkTitle, spanWords } from "./spark";
 import { t, tn } from "@/lib/i18n";
 
@@ -109,7 +109,7 @@ export function HealthButton({ machine: m, latest, serverVersion, viewOnly = fal
                 <dt>{t("System")}</dt>
                 <dd>
                   {systemWords(m.os)}
-                  <span className="dim"> · {t("the terminal is the pane's screen, no Code mode")}</span>
+                  <span className="dim"> · {screenOnly(m) ? t("the terminal is the pane's screen, no Code mode") : t("no Code mode")}</span>
                 </dd>
               </>
             )}
