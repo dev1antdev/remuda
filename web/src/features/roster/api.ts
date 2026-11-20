@@ -185,6 +185,7 @@ export type Health = {
   plugins?: { id: string; source: string }[]; // herdr plugins installed from GitHub, the ones `herdr plugin update` refreshes
   error?: string;
   code_server?: string; // the release linked under ~/.local/opt/code-server
+  remuda_core?: string; // ~/.local/bin/remuda-core's version
   statusline?: boolean; // remuda's wrapper stands before Claude Code's status line there, keeping its plan limits
   claude_login?: Login; // when Claude Code's stored sign-in there ends, as `claude auth status` last said
   claude_model?: string; // the default model Claude Code's user settings keep there

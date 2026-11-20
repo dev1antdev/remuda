@@ -44,7 +44,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   `bridge` (hidden: `bridge.go`, stdin to the herdr server on this machine
   and its answers to stdout — a Windows machine's herdr is a named pipe the
   cockpit reaches only this way, see "A Windows PC of the fleet"), and
-  `setup`, `uninstall` and `code` (see "Installing and uninstalling"
+  `setup`, `uninstall`, `code` and `core` (see "Installing and uninstalling"
   below), `mcp` and `tasks` (the agents' door to the task list, see
   `internal/mcp`); `remuda -h` lists them (`help` in main.go). On Windows
   `remuda` with no subcommand exits with one sentence (`windowsServes`):
@@ -1053,8 +1053,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   → `features/updates/EverywhereDialog.tsx`, `everywhere.ts` tested):
   `GET /api/updates/everywhere` is `EverywherePlan`, every connected
   machine's pending updates as `Step{machine, label, what, title,
-  command}` — herdr, hooks, the agents, code-server, a newer remuda
-  release, only where something newer is known (`pendingUpdate`), in that
+  command}` — herdr, hooks, the agents, code-server, remuda-core (where
+  none is or an older one), a newer remuda release, only where something
+  newer is known (`pendingUpdate`), in that
   order on each machine, the remotes first and the page's own host last,
   since its remuda restarts once its job ends; each command shown before
   Run; `POST /api/updates/everywhere {steps}` checks every step against
@@ -1287,7 +1288,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   machine. `Build(machines, at)` is the `Table`: `Column`s, `Section`s
   agents (`agent.version`, `agent.via` per agent), herdr (`herdr.version`,
   `herdr.server`, `herdr.hooks` per agent installed, `herdr.plugin` per
-  plugin seen), remuda (`remuda.version`, `code.version`, `mcp` per
+  plugin seen), remuda (`remuda.version`, `code.version`, `core.version`, `mcp` per
   agent installed, `statusline`), claude (`claude.model`, `claude.fast`),
   instructions, and a `repo` section per repository on two machines or
   more (`repoKey`: `teleport.RemoteKey` of the origin, else `root:<first
@@ -1306,7 +1307,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   when it offers it (`agent.version` → the agent, `herdr.version` →
   herdr, `herdr.server` → restart-herdr, outdated hooks → hooks, missing
   → integrations, `remuda.version` → remuda-release else remuda,
-  `code.version` → code, `mcp` → mcp, `statusline` → statusline); the
+  `code.version` → code, `core.version` → core, `mcp` → mcp, `statusline` → statusline); the
   machines below the best with no such update, and every other marked
   cell not at the best value (each of them in a row that ranks nothing:
   a hash, a model, a branch), are the row's `hand`, the page's to say by
@@ -1470,7 +1471,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   throwaway on the person's `HOME` resumed a live Claude Code session in a
   hidden pane and wrote its probe workspace into their session file (it
   happened, 2026-11-12). `internal/herdr/herdrtest.Server` sets both.
-- **Installing and uninstalling need no checkout** (`internal/setup`: six
+- **Installing and uninstalling need no checkout** (`internal/setup`: seven
   embedded POSIX scripts, and `setup_test.go` drives them in a temp HOME
   with stand-ins for launchctl, systemctl, herdr, brew and ssh first on
   PATH — never against the real machine; a Windows PC's way through
@@ -1499,12 +1500,20 @@ components and icons as rules for whoever changes it: @docs/design.md
   `/api/health` and opens the page on a Mac at the desk, the address
   handed to `osascript` on stdin (`openPage` in local.go: the token never
   goes on a command line; on Linux the link is only printed). `remuda
-  uninstall [-host H] [-data] [-code] [-herdr] [-all] [-yes] [-n]` is
+  uninstall [-host H] [-data] [-code] [-core] [-herdr] [-all] [-yes] [-n]` is
   `uninstall.sh` behind `setup.Removal`: `plan` prints what would go and
   what stays (exit 10 when nothing would), the person is asked
   (`confirm`: no terminal means no), `run` removes — the service, the
-  binary, the log and the ssh masters always; the state dir, code-server
-  and herdr (its hooks first, then its server stopped, the binary through
+  binary, the log and the ssh masters always; the state dir, code-server,
+  remuda-core (the core of every session under its state folder stopped
+  first, `RC_SESSION=<s> remuda-core server stop`, every terminal in them
+  ending, hidden ones too — nothing of it goes while any remuda-core of the
+  account still runs afterwards (`core_running`: `pgrep -x`, `tasklist` on
+  Windows; a session on a socket of its own), when that check itself
+  fails, or with no binary to stop them — then the binary, its `rc` link (relative, or into the
+  bundle), ConPTY on Windows, the app bundles under
+  `~/.local/share/remuda-core`, its state and config folders; linger is
+  said to stay on) and herdr (its hooks first, then its server stopped, the binary through
   brew or from under HOME, its folders) only by their flags. A folder is
   deleted as the state dir only when remuda's files are in it.
   `Removal.Remove` starts the local script in a session of its own
@@ -1515,7 +1524,37 @@ components and icons as rules for whoever changes it: @docs/design.md
   service's pid) is only pointed out — and stopped when herdr goes,
   because its `EnsureServer` would start the server again. `remuda
   code [-host H] [-port N] [install|uninstall|status]` is
-  `install-code.sh` (`setup.Code`).
+  `install-code.sh` (`setup.Code`). **remuda-core** (`remuda core [-host H]
+  [install|status]`, `install-core.sh`, `setup.Core`, tested in
+  `core_test.go` on stand-ins for uname, curl, loginctl, cygpath and
+  Windows' own `tar.exe`): the terminal runtime the machines move to from
+  herdr (dev1antdev/remuda-core), `setup.CoreVersion` pinned with the five
+  builds' sha256 in the script (another version needs `CORE_SHA256`), into
+  `~/.local/bin` — `remuda-core` with an `rc` link when no `rc` is on PATH;
+  on Windows `remuda-core.exe` and `conpty/` beside `remuda.exe`, ConPTY
+  (`conpty.dll` and `x64/OpenConsole.exe`) staged as `conpty.new` and
+  swapped in before the exe, and counted as part of it (an install missing it is
+  not current, for the installer or the vitals, and a run puts it back), the zip
+  opened by `%SYSTEMROOT%\System32\tar.exe`; on a Mac `remuda core.app` by
+  its own `--rc-install-bundle` — the download held in
+  `~/.local/remuda-core.XXXXXX` (a noexec `/tmp` could not run the check)
+  and removed; one install at a time (`~/.local/bin/.remuda-core-install`,
+  a folder holding its pid, let go by the exit trap on any end but a kill
+  -9 and never taken over: a second install names it and stops); one installed already is swapped by its own `update --from`
+  (its terminals keep running), one as new or newer left alone, a fresh
+  one starts nothing; on Linux `loginctl enable-linger`, said when refused.
+  `remuda setup` installs it after herdr (never under `-server`; a failure
+  is said and setup goes on — CI's Windows job checks it really lands
+  there, `live_windows_test.go`); the
+  vitals read `remuda_core`; Updates offers `what = core` ("Install
+  remuda-core" / "Update remuda-core") on every machine with remuda where
+  it is missing or older and a build exists (a Mac or Linux
+  on either CPU, Windows on x86-64: `AssetName` less Windows on arm),
+  whatever the backend, so Update
+  everywhere puts it everywhere before the move — on a remote after its
+  remuda release (`remoteOrder`), since its command first checks the
+  machine's remuda knows `remuda core` (`-h`: an older one would start a
+  server on an unknown word), on the page's own host before it.
 - **herdr is remuda's to run.** `herdr.EnsureServer(bin, socket)` pings
   and, when nothing answers, starts `herdr server` (the headless server)
   detached, at most once per two minutes — at startup and whenever the
