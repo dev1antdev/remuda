@@ -39,8 +39,10 @@ type Machine struct {
 	attach herdr.Terminals // herdr's attaches, or none yet on remuda-core
 	home   string
 
-	speaksCore bool      // reached through remuda-core instead of herdr (-core, NewCoreManager)
-	link       *coreLink // the remuda-core it follows, while connected
+	speaksCore bool       // reached through remuda-core instead of herdr (-core, NewCoreManager)
+	link       *coreLink  // the remuda-core it follows, while connected
+	noCore     error      // why a remote connected on remuda-core follows no core: none installed there, or none answering
+	coreMu     sync.Mutex // one look for that core at a time (RetryCore)
 
 	fwds  map[forwardTo]*tcpForward // ports forwarded over the master, once asked for (code-server, a peer remuda, a preview)
 	fwdMu sync.Mutex                // one forward made at a time, so asks of a port at once make one, not one each
@@ -112,7 +114,7 @@ func (mc *Machine) fail(err error) {
 	mc.state = StateError
 	mc.errMsg = err.Error()
 	conn, link := mc.conn, mc.link
-	mc.conn, mc.client, mc.attach, mc.link = nil, nil, nil, nil
+	mc.conn, mc.client, mc.attach, mc.link, mc.noCore = nil, nil, nil, nil, nil
 	hook := mc.onState
 	mc.mu.Unlock()
 	if link != nil {
@@ -166,11 +168,11 @@ func (mc *Machine) connect() {
 	}
 	if mc.speaksCore {
 		link, err := mc.reachCore(conn, found)
-		if err != nil {
-			bail(err)
+		if err != nil { // the master stays, so the vitals and Updates' Install remuda-core reach the machine
+			mc.connected(conn, found, nil, nil, nil, err)
 			return
 		}
-		mc.connected(conn, found, link.adapter, link.terminals, link)
+		mc.connected(conn, found, link.adapter, link.terminals, link, nil)
 		return
 	}
 	bin := mc.Cfg.HerdrBin
@@ -225,12 +227,12 @@ func (mc *Machine) connect() {
 	mc.mu.Lock()
 	mc.herdrBin, mc.socket = bin, sock
 	mc.mu.Unlock()
-	mc.connected(conn, found, client, attach, nil)
+	mc.connected(conn, found, client, attach, nil, nil)
 }
 
 // connected makes the connection the machine's and tells whoever listens, unless the machine was removed while it
-// was made; then opens the door there.
-func (mc *Machine) connected(conn *sshx.Conn, found probe, client herdr.API, attach herdr.Terminals, link *coreLink) {
+// was made; then opens the door there. noCore is why a machine on remuda-core follows none over it.
+func (mc *Machine) connected(conn *sshx.Conn, found probe, client herdr.API, attach herdr.Terminals, link *coreLink, noCore error) {
 	mc.mu.Lock()
 	if mc.removed { // removed while this connect was in flight
 		mc.mu.Unlock()
@@ -241,7 +243,7 @@ func (mc *Machine) connected(conn *sshx.Conn, found probe, client herdr.API, att
 		return
 	}
 	mc.conn = conn
-	mc.client, mc.attach, mc.link = client, attach, link
+	mc.client, mc.attach, mc.link, mc.noCore = client, attach, link, noCore
 	mc.home = found.home
 	mc.stateDir = found.state
 	mc.os = found.os
@@ -270,7 +272,8 @@ func (mc *Machine) transportError(err error) {
 	}
 }
 
-// Ready hands out the machine's client and attach manager, reconnecting a failed remote at most every 15s.
+// Ready hands out the machine's client and attach manager, reconnecting a failed remote at most every 15s; a remote
+// connected without its remuda-core says why, and is looked at for one again as often.
 func (mc *Machine) Ready() (herdr.API, herdr.Terminals, error) {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
@@ -285,6 +288,13 @@ func (mc *Machine) Ready() (herdr.API, herdr.Terminals, error) {
 	}
 	switch mc.state {
 	case StateConnected:
+		if mc.noCore != nil {
+			if time.Since(mc.lastAttempt) > 15*time.Second {
+				mc.lastAttempt = time.Now()
+				go mc.RetryCore()
+			}
+			return nil, nil, mc.noCore
+		}
 		return mc.client, mc.attach, nil
 	case StateConnecting:
 		return nil, nil, fmt.Errorf("machine %s is connecting", mc.ID())

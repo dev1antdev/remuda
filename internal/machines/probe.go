@@ -121,7 +121,7 @@ func errNoRemuda(host string) error {
 
 // errNoCore is the connection's word for a machine without remuda-core, to a remuda that speaks it (-core).
 func errNoCore(host string) error {
-	return fmt.Errorf("remuda-core is not on %s. Run `remuda core -host %s install` from here", host, host)
+	return fmt.Errorf("remuda-core is not installed on %s: Install remuda-core in its Updates, or run `remuda core -host %s install` from here", host, host)
 }
 
 // windowsSocket is herdr's default socket on a Windows machine: %APPDATA%\herdr\herdr.sock, a named pipe of that name.

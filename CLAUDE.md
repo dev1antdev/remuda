@@ -783,8 +783,21 @@ components and icons as rules for whoever changes it: @docs/design.md
   master's places for RPC) once the probe found the binary (`coreLookup`
   over `script.CoreBin`, the lookup the vitals share: `~/.local/bin/
   remuda-core`, or `remuda-core.exe` with its ConPTY beside it; none is
-  `errNoCore`, naming `remuda core -host H install`) and it answered a
-  hello; `rc connect` starts a core where none runs. A Windows PC is
+  `errNoCore`, naming Updates' Install remuda-core and `remuda core -host H
+  install`) and it answered a hello; `rc connect` starts a core where none
+  runs. **A remote whose core is missing or not answering stays connected**
+  (`noCore`, tested over an `ssh` stand-in and a throwaway core in
+  `core_missing_test.go`): the master is kept, so its scripts, the vitals
+  and Updates' Install remuda-core reach it and every check of
+  `StateConnected` counts it, while `Ready` answers that reason with no
+  client — the watcher's snapshot error, so the roster shows the machine
+  in error with those words and no workspace — and `RetryCore` looks for
+  the core again over the same master (one look at a time, `coreMu`):
+  from `Ready` every 15 s and at once on every `events.JobDone` of the
+  machine (`internal/app`), a lookup that fails asking `transportError`
+  whether the master is gone. A remote's ⓘ says "remuda-core is not
+  installed" first, bad, with Install opening that Updates row
+  (`concerns.ts`, while the vitals read no `remuda_core`). A Windows PC is
   reached the same way, which no test proves yet (the check on the real PC
   is Core 19's). The machine's `herdr.API` is then the core
   adapter (`coreLink`: the client and `core.NewAdapter`, lent the machine

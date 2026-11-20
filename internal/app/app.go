@@ -622,6 +622,7 @@ func Run(ctx context.Context, o Options) error {
 	events.Subscribe(bus, func(e events.PaneStatus) { hub.PaneChanged(e.Pane.Machine, e.Pane.Pane) })
 	events.Subscribe(bus, func(e events.JobDone) {
 		if mc, err := fleet.Get(e.Machine); err == nil {
+			mc.RetryCore() // the job may have installed the remuda-core a machine was connected without
 			vitals.Refresh(mc)
 		}
 		hub.RosterChanged()
