@@ -215,6 +215,29 @@ func TestAShellTheCoreGaveANewOneIsRestoredUntilAnAgentTakesIt(t *testing.T) {
 	}
 }
 
+// The session lookup tells one process from a later one under the same pid: the moment its agent took the terminal,
+// or, for an agent the mirror found running, the fill that found it, which every fill moves.
+func TestAnAgentFoundByEachFillIsAnotherProcessForItsSession(t *testing.T) {
+	a := &Adapter{answered: make(chan struct{}), streams: map[*eventStream]struct{}{}, state: mirror{terminals: map[string]*Terminal{}}}
+	running := []Terminal{{Address: "t1", State: "live", Pid: 100, Cwd: "/work/api", Foreground: &Foreground{Pid: 300, Name: "claude", Cwd: "/work/api"}}}
+	var asked []AgentProcess
+	lookup := func(p AgentProcess) *herdr.AgentSession { asked = append(asked, p); return nil }
+	a.fill(slices.Clone(running), Document{}, "0.2.1")
+	a.state.snapshot(lookup)
+	time.Sleep(2 * time.Millisecond)
+	a.fill(slices.Clone(running), Document{}, "0.2.1")
+	a.state.snapshot(lookup)
+	if len(asked) != 2 || asked[0].PID != 300 || asked[0].Terminal != "t1" || asked[0].Since.IsZero() || !asked[1].Since.After(asked[0].Since) {
+		t.Fatalf("two fills asked %+v", asked)
+	}
+	a.state.apply(coreEvent("foreground", "t1", Foreground{Pid: 100, Name: "zsh", Cwd: "/work/api"}))
+	a.state.apply(coreEvent("foreground", "t1", Foreground{Pid: 300, Name: "claude", Cwd: "/work/api"}))
+	a.state.snapshot(lookup)
+	if len(asked) != 3 || !asked[2].Since.After(asked[1].Since) {
+		t.Fatalf("an agent that took the terminal after the fill: %+v", asked)
+	}
+}
+
 // One older pane the core refuses to keep (busy a moment) holds no other back, and is asked again until it is kept,
 // on the same subscription; a terminal that is not remuda's, or kept already, is never asked about.
 func TestOlderPanesAreKeptOneByOneAndARefusedOneAgain(t *testing.T) {

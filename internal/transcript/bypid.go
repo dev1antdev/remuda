@@ -37,7 +37,8 @@ func (r *Reader) SessionsOf(procs []Running) (map[int]string, error) {
 //   - its start as Claude Code records it: `ps -o lstart` in UTC, "" for a live process ps does not tell of,
 //     "ft:<FILETIME>" from PowerShell's Get-Process for a native Windows process (asked on Git Bash alone), "-" for
 //     one gone;
-//   - the folder the process stands in now, where /proc or lsof tells it (never a native Windows process's);
+//   - the folder the process stands in now, where /proc or lsof tells it (never a native Windows process's; lsof
+//     in a UTF-8 locale, since in C's it writes a byte past ASCII as \xNN);
 //   - for Claude Code, every candidate sessions/<pid>.json, each ended by GS: under the CLAUDE_CONFIG_DIR its
 //     environment names (macOS's `ps -E` runs the entries together, so each reading is a candidate; a relative one
 //     from the process's folder), then the default ~/.claude;
@@ -70,7 +71,7 @@ s() {
     if [ -d "/proc/$1" ]; then
       cwd=$(readlink "/proc/$1/cwd" 2>/dev/null)
     else
-      cwd=$(lsof -a -nP -p "$1" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -n 1)
+      cwd=$(LC_ALL=en_US.UTF-8 lsof -a -nP -p "$1" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -n 1)
     fi ;;
   esac
   printf '%s\037%s\037%s\037%s\037' "$1" "$2" "$start" "$cwd"
@@ -101,7 +102,7 @@ s() {
       if [ -d "/proc/$p/fd" ]; then
         for fd in /proc/$p/fd/*; do readlink "$fd" 2>/dev/null; done
       else
-        lsof -nP -p "$p" -Fn 2>/dev/null | sed -n 's/^n//p'
+        LC_ALL=en_US.UTF-8 lsof -nP -p "$p" -Fn 2>/dev/null | sed -n 's/^n//p'
       fi | grep '/rollout-[^/]*\.jsonl$' | sort -u | while IFS= read -r f; do
         [ -f "$f" ] || continue
         printf '%s\035%s\035' "$p" "$f"
@@ -164,8 +165,9 @@ func parseSessionsByPID(out string, procs []Running, style rpath.Style) map[int]
 }
 
 // claudeSession is the session of a candidate file that is this very process's, its pid's: one whose procStart is
-// the process's start when both sides know it; for a native Windows process one whose procStartFt is its creation,
-// to the millisecond; else one of its folder that, while the process's start is known, began no earlier. A file left
+// the process's start when both sides know it; for a native Windows process, whose folder the script cannot read, one
+// of its folder whose procStartFt is its creation, to the millisecond; else one of its folder that, while the
+// process's start is known, began no earlier. A file left
 // by an ended process whose pid was given to another is not.
 func claudeSession(payload string, pid int, start, cwd string, style rpath.Style) string {
 	began, known := startedMS(start)
@@ -185,7 +187,7 @@ func claudeSession(payload string, pid int, start, cwd string, style rpath.Style
 				return file.SessionID
 			}
 		case native && ft:
-			if max(created-recorded, recorded-created) < filetimeMS {
+			if max(created-recorded, recorded-created) < filetimeMS && inFolder {
 				return file.SessionID
 			}
 		case known && file.StartedAt > 0:

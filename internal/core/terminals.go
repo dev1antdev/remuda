@@ -39,6 +39,8 @@ type Terminal struct {
 	agentAt, statusAt time.Time
 	// restored: its shell was lost (a kept terminal) and the core gives it a new one; no agent took it since.
 	restored bool
+	// seenAt is when the mirror took this record in: a fill, or the news of a terminal made or given a new shell.
+	seenAt time.Time
 }
 
 // Status is a program's own word: idle, working, done, blocked or error, with what it said beside it.

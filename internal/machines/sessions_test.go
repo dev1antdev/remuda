@@ -227,22 +227,35 @@ func TestTheProcessBeforeAPidsLaterOneIsNeverReadAgain(t *testing.T) {
 	}
 }
 
-// After the mirror fills again it knows no agent's moment: the process it finds is the one asked about last.
+// Each fill of the mirror finds the agents running anew: one found by the next fill under the same terminal and pid
+// may be another process, so it is read at once and never answers the session found before.
 func TestAMirrorFilledAgainReadsTheProcessItFinds(t *testing.T) {
 	reads := &sessionReads{answers: map[int]string{100: "sid-a"}}
 	s := newProcessSessions("gog", reads.read)
 	s.fresh = time.Hour
-	sessionAfter(t, s, "claude", 100, "sid-a")
+	firstFill := core.AgentProcess{Agent: "claude", PID: 100, Cwd: "/work/api", Terminal: "t100", Since: agentsTook}
+	for start := time.Now(); ; time.Sleep(5 * time.Millisecond) {
+		if got := s.of(firstFill); got != nil && got.Value == "sid-a" {
+			break
+		}
+		if time.Since(start) > 5*time.Second {
+			t.Fatal("the process the first fill found was never read")
+		}
+	}
 	reads.mu.Lock()
 	reads.answers[100] = "sid-b"
 	reads.mu.Unlock()
-	found := core.AgentProcess{Agent: "claude", PID: 100, Cwd: "/work/api", Terminal: "t100"}
+	nextFill := firstFill
+	nextFill.Since = agentsTook.Add(time.Minute)
+	if got := s.of(nextFill); got != nil {
+		t.Fatalf("the next fill's process answered the session found before: %+v", got)
+	}
 	for start := time.Now(); ; time.Sleep(5 * time.Millisecond) {
-		if got := s.of(found); got != nil && got.Value == "sid-b" {
-			return
+		if got := s.of(nextFill); got != nil && got.Value == "sid-b" {
+			break
 		}
 		if time.Since(start) > 5*time.Second {
-			t.Fatal("the process found after a fill was never read")
+			t.Fatal("the next fill's process was never read")
 		}
 	}
 }

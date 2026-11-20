@@ -54,7 +54,8 @@ type AdapterHooks struct {
 type SessionLookup func(AgentProcess) *herdr.AgentSession
 
 // AgentProcess is an agent's process as the mirror sees it: its kind, pid and folder, and the terminal it holds with
-// the moment the agent took it, which tell it from a later process given the same pid.
+// the moment the agent took it — or, for one already running there, the mirror found it, which every fill does again —
+// which tell it from a later process given the same pid.
 type AgentProcess struct {
 	Agent, Cwd string
 	PID        int
@@ -311,12 +312,14 @@ func (a *Adapter) fill(terminals []Terminal, doc Document, version string) (unke
 	defer a.mu.Unlock()
 	before := a.state.terminals
 	a.state = mirror{terminals: make(map[string]*Terminal, len(terminals)), doc: doc, version: version, gone: map[string]bool{}}
+	now := time.Now()
 	for i := range terminals {
 		t := &terminals[i]
 		if t.State != "live" || !local(t.Address) {
 			continue
 		}
 		followShell(t)
+		t.seenAt = now
 		was := before[t.Address]
 		t.restored = agentOf(t) == "" && (t.Reason != "" || was != nil && (was.restored || was.Pid != t.Pid))
 		a.state.terminals[t.Address] = t
@@ -516,6 +519,7 @@ func (m *mirror) went(address string) {
 // add puts a live terminal in the mirror, its folder its shell's, and answers it as herdr's news of a pane made.
 func (m *mirror) add(record Terminal) herdr.Event {
 	followShell(&record)
+	record.seenAt = time.Now()
 	m.terminals[record.Address] = &record
 	return herdr.Event{Kind: "pane.created", PaneID: record.Address}
 }

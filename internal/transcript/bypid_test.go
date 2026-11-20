@@ -136,6 +136,27 @@ func TestClaudeSessionComesFromItsConfigDirAndItsStart(t *testing.T) {
 	}
 }
 
+// A folder whose name is past ASCII is the same folder to the lookup as to the core, whatever the machine's locale:
+// in C's, lsof would write é as \xc3\xa9.
+func TestAnAgentInAFolderNamedPastASCIIIsFound(t *testing.T) {
+	home := realDir(t)
+	t.Setenv("HOME", home)
+	t.Setenv("LC_ALL", "C")
+	work := filepath.Join(home, "café")
+	if err := os.MkdirAll(work, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	pid := holder(t, work, nil, nil, false, "")
+	writeSessionFile(t, filepath.Join(home, ".claude", "sessions"), pid, "4c9d6f0e-1111-4222-8333-944455556666", work, procStart(t, pid))
+	got, err := NewReader(remoteHere(home)).SessionsOf([]Running{{PID: pid, Agent: "claude", CWD: work}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got[pid] != "4c9d6f0e-1111-4222-8333-944455556666" {
+		t.Fatalf("session = %q in a folder named café", got[pid])
+	}
+}
+
 func TestClaudeSessionLeftByAnEndedProcessIsNotTaken(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -352,6 +373,7 @@ func TestParseSessionsByPID(t *testing.T) {
 		{"a native process, a file from before it", record(7, "claude", "ft:116444736050000000", `{"pid":7,"sessionId":"id-1","cwd":"C:\\a","startedAt":1000}`), []Running{{7, "claude", `C:\a`}}, windows, ""},
 		{"a native process, a file half a second before it", record(7, "claude", "ft:116444736100000000", `{"pid":7,"sessionId":"id-1","cwd":"C:\\a","startedAt":9500}`), []Running{{7, "claude", `C:\a`}}, windows, ""},
 		{"a native process, its creation recorded", record(7, "claude", "ft:116444736050000000", `{"pid":7,"sessionId":"id-1","cwd":"C:\\a","startedAt":1000,"procStartFt":"116444736050000016"}`), []Running{{7, "claude", `C:\a`}}, windows, "id-1"},
+		{"a native process, its creation recorded by an agent of another folder", record(7, "claude", "ft:116444736050000000", `{"pid":7,"sessionId":"id-1","cwd":"C:\\b","startedAt":1000,"procStartFt":"116444736050000016"}`), []Running{{7, "claude", `C:\a`}}, windows, ""},
 		{"a native process, another's creation though begun since", record(7, "claude", "ft:116444736050000000", `{"pid":7,"sessionId":"id-1","cwd":"C:\\a","startedAt":9000,"procStartFt":"116444736040000000"}`), []Running{{7, "claude", `C:\a`}}, windows, ""},
 		{"a native process, a creation in another unit: when it began decides", record(7, "claude", "ft:116444736050000000", `{"pid":7,"sessionId":"id-1","cwd":"C:\\a","startedAt":5200,"procStartFt":"1795048570000000000"}`), []Running{{7, "claude", `C:\a`}}, windows, "id-1"},
 		{"no procStart, begun before the process", record(7, "claude", "Thu Nov 19 00:36:10 2026", `{"pid":7,"sessionId":"id-1","cwd":"/a","startedAt":1795048569000}`), []Running{{7, "claude", "/a"}}, rpath.Style{}, ""},
