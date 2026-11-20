@@ -152,8 +152,14 @@ func tabMissing(tab string) error {
 	return &herdr.Error{Code: "tab_not_found", Message: "no tab " + tab}
 }
 
-// WorkspaceCreate opens a workspace on a folder (the core's own when none): a shell in a tab of its own.
+// WorkspaceCreate opens a workspace on a folder (the core's own when none): a shell in a tab of its own, and the git
+// checkout the folder is, read once.
 func (a *Adapter) WorkspaceCreate(cwd, label string) (*herdr.WorkspaceCreateResult, error) {
+	return a.workspaceOn(cwd, label, nil)
+}
+
+// workspaceOn is WorkspaceCreate with the checkout known already (a worktree just made); nil reads it.
+func (a *Adapter) workspaceOn(cwd, label string, tree *herdr.WorktreeInfo) (*herdr.WorkspaceCreateResult, error) {
 	if _, err := a.SessionSnapshot(); err != nil {
 		return nil, err
 	}
@@ -166,8 +172,11 @@ func (a *Adapter) WorkspaceCreate(cwd, label string) (*herdr.WorkspaceCreateResu
 	}
 	folder := cmp.Or(cwd, t.Cwd)
 	label = cmp.Or(label, folderName(&Terminal{Cwd: folder, Name: t.Name}))
+	if tree == nil {
+		tree = a.checkoutOf(folder)
+	}
 	err = a.editDoc(ctx, func(doc *Document) error {
-		doc.Workspaces = append(doc.Workspaces, DocWorkspace{ID: space, Label: label, Folder: folder, ActiveTab: tab, Tabs: []DocTab{{ID: tab, Layout: leaf(t.Address)}}})
+		doc.Workspaces = append(doc.Workspaces, DocWorkspace{ID: space, Label: label, Folder: folder, ActiveTab: tab, Tabs: []DocTab{{ID: tab, Layout: leaf(t.Address)}}, Worktree: tree})
 		return nil
 	})
 	if err != nil {
@@ -175,7 +184,7 @@ func (a *Adapter) WorkspaceCreate(cwd, label string) (*herdr.WorkspaceCreateResu
 		return nil, err
 	}
 	return &herdr.WorkspaceCreateResult{
-		Workspace: herdr.WorkspaceInfo{WorkspaceID: space, Label: label, Folder: folder, ActiveTabID: tab},
+		Workspace: herdr.WorkspaceInfo{WorkspaceID: space, Label: label, Folder: folder, ActiveTabID: tab, Worktree: tree},
 		RootPane:  paneOf(&t, tab, space, nil),
 	}, nil
 }

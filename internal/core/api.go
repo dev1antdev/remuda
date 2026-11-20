@@ -296,15 +296,6 @@ func agentIn(t *Terminal, target string) (string, error) {
 func (a *Adapter) WorkspaceReportMetadata(m herdr.WorkspaceMetadata) error {
 	return notOnCore("workspace.report_metadata")
 }
-func (a *Adapter) WorktreeCreate(workspaceID, branch, base, label string) (*herdr.WorktreeCreateResult, error) {
-	return nil, notOnCore("worktree.create")
-}
-func (a *Adapter) WorktreeCreateAt(workspaceID, branch, base, label, path string) (*herdr.WorktreeCreateResult, error) {
-	return nil, notOnCore("worktree.create")
-}
-func (a *Adapter) WorktreeOpen(workspaceID, path, label string) (*herdr.WorktreeCreateResult, error) {
-	return nil, notOnCore("worktree.open")
-}
 func (a *Adapter) PaneScroll(paneID string, offset int) (herdr.Scroll, error) {
 	return herdr.Scroll{}, notOnCore("pane.scroll")
 }

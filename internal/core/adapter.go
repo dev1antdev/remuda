@@ -12,12 +12,14 @@ import (
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/shell"
 )
 
 // Adapter is a machine's remuda-core as herdr.API: a mirror of its live terminals and the `remuda` document, kept
 // from one event subscription, so a snapshot is read from memory and every change reaches the watcher as it happens.
 type Adapter struct {
 	client *Client
+	shell  shell.Shell // the machine's: the git its worktrees are made and read with, the core knowing none
 	hooks  AdapterHooks
 	stop   context.CancelFunc
 	done   chan struct{}
@@ -30,7 +32,8 @@ type Adapter struct {
 	streams  map[*eventStream]struct{}
 	badDoc   bool // a document that is no document was logged already
 
-	docMu sync.Mutex // one write of the document at a time from this remuda (editDoc)
+	docMu   sync.Mutex // one write of the document at a time from this remuda (editDoc)
+	opening sync.Mutex // one WorktreeOpen at a time, so a second open of a checkout finds the first one's workspace
 }
 
 // AdapterHooks are what the machine hears from its adapter and lends it.
@@ -56,11 +59,12 @@ const foregroundLag = 3 * time.Second
 // mean it stopped answering while its connection stays open. A test shortens it.
 var quietFor = 45 * time.Second
 
-// NewAdapter starts following the core client reaches; Close stops it.
-func NewAdapter(client *Client, hooks AdapterHooks) *Adapter {
+// NewAdapter starts following the core client reaches; Close stops it. sh is the machine's shell, which its worktrees
+// need (nil only in a test that makes none: they are refused).
+func NewAdapter(client *Client, sh shell.Shell, hooks AdapterHooks) *Adapter {
 	ctx, stop := context.WithCancel(context.Background())
 	a := &Adapter{
-		client: client, hooks: hooks, stop: stop, done: make(chan struct{}),
+		client: client, shell: sh, hooks: hooks, stop: stop, done: make(chan struct{}),
 		state: mirror{terminals: map[string]*Terminal{}}, answered: make(chan struct{}), streams: map[*eventStream]struct{}{},
 	}
 	go a.run(ctx)

@@ -155,7 +155,7 @@ func (s *Service) startLane(a Arena, lane Lane) error {
 		return err
 	}
 	label := fmt.Sprintf("arena %d · %s", a.ID, lane.Agent)
-	res, err := client.WorktreeCreate(lane.Workspace, BranchOf(a.ID, lane.ID), "", label)
+	res, err := client.WorktreeCreate(lane.Workspace, BranchOf(a.ID, lane.ID), "HEAD", label) // with a base remuda-core refuses a branch of that name already there: never taken over, then deleted
 	if err != nil {
 		return fmt.Errorf("the worktree was not made: %w", err)
 	}

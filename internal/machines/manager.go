@@ -199,7 +199,7 @@ func NewCoreManager(dir, herdrBin string, door *Door, server bool) *Manager {
 	local := localMachine(dir)
 	local.speaksCore = true
 	if !server {
-		local.link = newCoreLink(core.New(dialLocalCore), nil)
+		local.link = newCoreLink(local, core.New(dialLocalCore), nil)
 		local.client, local.attach = local.link.adapter, noAttach()
 	}
 	m := newManager(dir, herdrBin, door, local, true)

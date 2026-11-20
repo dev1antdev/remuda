@@ -123,3 +123,51 @@ func TestTheLocalMachineOnCoreSaysHowToInstallIt(t *testing.T) {
 		t.Fatal("a missing core is no refusal of herdr's")
 	}
 }
+
+// A machine reached through remuda-core makes a worktree through its own shell: the adapter it is given was lent it.
+func TestTheLocalMachineOnCoreMakesAWorktreeWithItsShell(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("no git")
+	}
+	c := coretest.Server(t)
+	for _, kv := range c.Env {
+		key, value, _ := strings.Cut(kv, "=")
+		t.Setenv(key, value)
+	}
+	t.Setenv("PATH", filepath.Dir(c.Bin)+string(os.PathListSeparator)+os.Getenv("PATH"))
+	home, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOME", home)
+	t.Setenv("GIT_CONFIG_GLOBAL", filepath.Join(home, "no-config"))
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	repo := filepath.Join(home, "app")
+	for _, args := range [][]string{{"init", "-q", "-b", "main", repo}, {"-C", repo, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "init"}} {
+		if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v %s", args, err, out)
+		}
+	}
+
+	m := NewCoreManager(t.TempDir(), "", nil, false)
+	defer m.Close()
+	mc, err := m.Get(LocalID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	api, _, err := mc.Ready()
+	if err != nil {
+		t.Fatal(err)
+	}
+	made, err := api.WorkspaceCreate(repo, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	created, err := api.WorktreeCreate(made.Workspace.WorkspaceID, "feat", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join(home, ".herdr", "worktrees", "app", "feat"); created.Worktree.Path != want || created.Workspace.Worktree == nil || !created.Workspace.Worktree.IsLinkedWorktree {
+		t.Fatalf("the worktree is %+v in %+v, want it at %s", created.Worktree, created.Workspace.Worktree, want)
+	}
+}

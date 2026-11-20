@@ -9,6 +9,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/repos"
 	"github.com/dev1antdev/remuda/internal/shell"
+	"github.com/dev1antdev/remuda/internal/text"
 )
 
 var source = repos.Source{
@@ -35,11 +36,11 @@ func TestAPlanSaysWhatCreateWillDo(t *testing.T) {
 			Plan{Action: "remote", Branch: "dev/feat/198", From: "origin/dev/feat/198", Track: true, Fetch: "+refs/heads/dev/feat/198:refs/remotes/origin/dev/feat/198", IssueRef: "acme/storefront#198", PRRef: "acme/storefront#212"}},
 		{"a pull request's head", "cart", "", Pick{Kind: "pr", Number: 212, Head: "cart"},
 			Plan{Action: "remote", Branch: "cart", From: "origin/cart", Track: true, Fetch: "+refs/heads/cart:refs/remotes/origin/cart", PRRef: "acme/storefront#212"}},
-		{"a fork's pull request", "cart", "", Pick{Kind: "pr", Number: 212, Head: "cart", CrossRepo: true}, Plan{Action: "local", Branch: "cart", Fetch: "+refs/pull/212/head:refs/heads/cart", PRRef: "acme/storefront#212"}},
+		{"a fork's pull request", "cart", "", Pick{Kind: "pr", Number: 212, Head: "cart", CrossRepo: true}, Plan{Action: "local", Branch: "cart", Fetch: "refs/pull/212/head", Claim: true, PRRef: "acme/storefront#212"}},
 		{"a fork's pull request from its main, under a name of this repository's", "pr-207-main", "", Pick{Kind: "pr", Number: 207, Head: "main", CrossRepo: true},
-			Plan{Action: "local", Branch: "pr-207-main", Fetch: "+refs/pull/207/head:refs/heads/pr-207-main", PRRef: "acme/storefront#207"}},
+			Plan{Action: "local", Branch: "pr-207-main", Fetch: "refs/pull/207/head", Claim: true, PRRef: "acme/storefront#207"}},
 		{"an issue a fork's pull request works on", "pr-207-checkout", "", Pick{Kind: "issue", Number: 203, PR: 207, Head: "checkout", CrossRepo: true},
-			Plan{Action: "local", Branch: "pr-207-checkout", Fetch: "+refs/pull/207/head:refs/heads/pr-207-checkout", IssueRef: "acme/storefront#203", PRRef: "acme/storefront#207"}},
+			Plan{Action: "local", Branch: "pr-207-checkout", Fetch: "refs/pull/207/head", Claim: true, IssueRef: "acme/storefront#203", PRRef: "acme/storefront#207"}},
 		{"a pull request's head renamed", "cart-2", "", Pick{Kind: "pr", Number: 212, Head: "cart"}, Plan{Action: "new", Branch: "cart-2", From: "origin/cart", Untrack: true, Fetch: "+refs/heads/cart:refs/remotes/origin/cart"}},
 	}
 	for _, c := range cases {
@@ -62,7 +63,7 @@ func TestAPlanSaysWhatCreateWillDo(t *testing.T) {
 func TestTheFolderIsNamedAsHerdrNamesIt(t *testing.T) {
 	// as a throwaway herdr 0.9.5 named them: dev/feat/198 → dev-feat-198, Weird.Name_x+y → weird-name-x-y
 	for branch, want := range map[string]string{"dev/feat/198": "dev-feat-198", "Weird.Name_x+y": "weird-name-x-y", "feature": "feature"} {
-		if got := Slug(branch); got != want {
+		if got := text.Slug(branch); got != want {
 			t.Errorf("%q: got %q, want %q", branch, got, want)
 		}
 	}
@@ -87,7 +88,7 @@ type gitMaker struct {
 
 func (g gitMaker) WorktreeCreateAt(_, branch, base, label, path string) (*herdr.WorktreeCreateResult, error) {
 	if path == "" {
-		path = filepath.Join(Root(g.home), "app", Slug(branch))
+		path = filepath.Join(Root(g.home), "app", text.Slug(branch))
 	}
 	args := []string{"worktree", "add", "-q", path, branch}
 	if base != "" {
@@ -180,6 +181,19 @@ func TestAForksPullRequestIsFetchedAsABranchOfItsOwn(t *testing.T) {
 	}
 	if got := gitOut(t, main, "rev-parse", "main"); got != before {
 		t.Errorf("this repository's main moved to %q", got)
+	}
+
+	// a branch of that name made after the plan was read is neither moved forward nor taken: the create fails
+	plan, _ = MakePlan(src, "late", "", Pick{Kind: "pr", Number: 8, Head: "late", CrossRepo: true})
+	gitIn(t, main, "branch", "late", before)
+	if _, err := Create(host, gitMaker{t: t, root: main, home: host.home}, main, "w1", plan, "", ""); err == nil {
+		t.Error("a fork's head took a branch made meanwhile")
+	}
+	if got := gitOut(t, main, "rev-parse", "late"); got != before {
+		t.Errorf("the branch made meanwhile moved to %q", got)
+	}
+	if refs := gitOut(t, main, "for-each-ref", "refs/remuda"); refs != "" {
+		t.Errorf("the fetched head's ref of the request's stays: %s", refs)
 	}
 }
 
