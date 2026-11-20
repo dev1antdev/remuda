@@ -19,6 +19,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/dev1antdev/remuda/internal/core"
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/state"
 	"github.com/dev1antdev/remuda/internal/transcript"
@@ -60,6 +61,7 @@ type Manager struct {
 	saveMu   sync.Mutex                            // writes of machines.json, one at a time
 	onState  func(id, label, state, reason string) // hears every remote's connection move, set by OnState
 	server   bool                                  // the host serves the page only: no machine of the fleet (SetServer)
+	core     bool                                  // every machine is reached through remuda-core (NewCoreManager)
 	// herdr's machines, never saved, were read once since the start, or there is no herdr: the fleet is whole (Gone)
 	herdrRead bool
 	removed   map[string]bool // removed.json
@@ -183,18 +185,42 @@ func localLabel(goos, host string) string {
 // NewManager builds the registry: the local machine plus what machines.json lists; herdr's own come through SyncHerdr.
 // Every remote gets the door given once it connects (nil: none).
 func NewManager(dir, localSocket, localHerdrBin string, door *Door) *Manager {
+	local := localMachine(dir)
+	local.herdrBin, local.socket = localHerdrBin, localSocket
+	local.client = herdr.NewClient(localSocket)
+	local.attach = herdr.NewAttachManager(herdr.LocalAttachCommand(localHerdrBin, localSocket))
+	return newManager(dir, localHerdrBin, door, local, false)
+}
+
+// NewCoreManager is NewManager for a remuda that reaches every machine through remuda-core instead of herdr (-core),
+// while the move off herdr is built. herdrBin, when herdr is still here, only reads herdr's list of machines. A host
+// serving the page only (server) reaches no core of its own: none is started there.
+func NewCoreManager(dir, herdrBin string, door *Door, server bool) *Manager {
+	local := localMachine(dir)
+	local.speaksCore = true
+	if !server {
+		local.link = newCoreLink(local, core.New(dialLocalCore), nil)
+		local.client, local.attach = local.link.adapter, noAttach()
+	}
+	m := newManager(dir, herdrBin, door, local, true)
+	m.SetServer(server)
+	return m
+}
+
+// localMachine is this host as a machine of the fleet, before its herdr or core is given.
+func localMachine(dir string) *Machine {
 	host, _ := os.Hostname()
 	local := &Machine{
 		Cfg:      Config{ID: LocalID, Label: localLabel(runtime.GOOS, host)},
 		local:    true,
 		stateDir: dir,
 		state:    StateConnected,
-		herdrBin: localHerdrBin,
-		socket:   localSocket,
-		client:   herdr.NewClient(localSocket),
-		attach:   herdr.NewAttachManager(herdr.LocalAttachCommand(localHerdrBin, localSocket)),
 	}
 	local.Transcripts = transcript.NewReader(local)
+	return local
+}
+
+func newManager(dir, localHerdrBin string, door *Door, local *Machine, speaksCore bool) *Manager {
 	m := &Manager{
 		machines: map[string]*Machine{LocalID: local},
 		order:    []string{LocalID},
@@ -203,6 +229,7 @@ func NewManager(dir, localSocket, localHerdrBin string, door *Door) *Manager {
 		names:    map[string]string{},
 		herdrBin: localHerdrBin,
 		door:     door,
+		core:     speaksCore,
 	}
 	_ = state.LoadJSON(m.dir, labelsFile, &m.names)
 	if m.names == nil {
@@ -256,6 +283,7 @@ func (m *Manager) add(cfg Config) *Machine {
 	mc := newRemote(cfg)
 	mc.door = m.door
 	mc.onState = m.stateMoved
+	mc.speaksCore = m.core
 	m.mu.Lock()
 	mc.setLabel(m.names[cfg.ID])
 	m.machines[cfg.ID] = mc
@@ -490,8 +518,11 @@ func (m *Manager) All() []*Machine {
 func (m *Manager) Close() {
 	for _, mc := range m.All() {
 		mc.mu.Lock()
-		conn := mc.conn
+		conn, link := mc.conn, mc.link
 		mc.mu.Unlock()
+		if link != nil {
+			link.close()
+		}
 		if conn != nil {
 			conn.Close()
 		}

@@ -15,6 +15,9 @@ type mirror struct {
 	terminals map[string]*Terminal
 	doc       Document
 	version   string
+	// gone are the terminals the core said went since the mirror was filled, so a reply to their start that comes
+	// after the news puts none of them back.
+	gone map[string]bool
 }
 
 // placedTab and placedSpace are a tab and a workspace as the snapshot shows them, their terminals found.

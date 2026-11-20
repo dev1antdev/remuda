@@ -21,6 +21,8 @@ const (
 	frameClose  = 2
 	frameResize = 3
 	frameFocus  = 4
+	// frameAutomatic is input the terminal's viewer answers by itself, not a person's typing.
+	frameAutomatic = 6
 
 	headerSize = 9
 	maxPayload = 16 << 20

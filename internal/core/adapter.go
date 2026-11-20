@@ -229,7 +229,7 @@ func (a *Adapter) readDoc(ctx context.Context, cn *conn) (Document, error) {
 func (a *Adapter) fill(terminals []Terminal, doc Document, version string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	a.state = mirror{terminals: make(map[string]*Terminal, len(terminals)), doc: doc, version: version}
+	a.state = mirror{terminals: make(map[string]*Terminal, len(terminals)), doc: doc, version: version, gone: map[string]bool{}}
 	for i := range terminals {
 		if terminals[i].State == "live" && local(terminals[i].Address) {
 			followShell(&terminals[i])
@@ -323,15 +323,15 @@ func (m *mirror) apply(ev Event) (herdr.Event, bool) {
 			return told, false
 		}
 		if record.State != "live" {
-			delete(m.terminals, record.Address)
+			m.went(record.Address)
 			return herdr.Event{Kind: "pane.closed", PaneID: record.Address}, t != nil
 		}
 		return m.add(record), true
 	case "removed", "finished":
+		m.went(ev.Terminal)
 		if t == nil {
 			return told, false
 		}
-		delete(m.terminals, ev.Terminal)
 		told.Kind = "pane.closed"
 		return told, true
 	}
@@ -412,6 +412,15 @@ func (m *mirror) apply(ev Event) (herdr.Event, bool) {
 		}
 	}
 	return told, true
+}
+
+// went takes a terminal out of the mirror and remembers it went.
+func (m *mirror) went(address string) {
+	delete(m.terminals, address)
+	if m.gone == nil {
+		m.gone = map[string]bool{}
+	}
+	m.gone[address] = true
 }
 
 // add puts a live terminal in the mirror, its folder its shell's, and answers it as herdr's news of a pane made.
