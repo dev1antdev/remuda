@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ansiPalette } from "@/lib/theme";
+import coreScreen from "../../../../internal/core/testdata/screen-vt.txt?raw";
+import herdrScreen from "../../../../internal/core/testdata/screen-herdr.txt?raw";
 import { DEFAULT_BG, DEFAULT_FG, parseAnsi } from "./ansi";
 
 describe("parseAnsi", () => {
@@ -67,5 +69,13 @@ describe("parseAnsi with a theme's palette", () => {
     expect(parseAnsi("\x1b[7mx", latte)).toEqual([[{ text: "x", fg: latte.bg, bg: latte.fg }]]);
     expect(parseAnsi("\x1b[36mcyan", ansiPalette("frappe"))).toEqual([[{ text: "cyan", fg: "#81c8be" }]]);
     expect(parseAnsi("\x1b[36mcyan", ansiPalette("mocha"))).toEqual([[{ text: "cyan", fg: "#94e2d5" }]]);
+  });
+});
+
+describe("parseAnsi on a remuda-core screen", () => {
+  it("draws terminal.read's vt rows as herdr's ansi rows of the same output, once the blank rows under them go", () => {
+    const core = parseAnsi(coreScreen);
+    while (core.length > 0 && core[core.length - 1]!.length === 0) core.pop(); // core.ScreenText's cut
+    expect(core).toEqual(parseAnsi(herdrScreen));
   });
 });

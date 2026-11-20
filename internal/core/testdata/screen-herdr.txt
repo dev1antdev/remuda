@@ -1,0 +1,4 @@
+[0m[1m[38;5;1mred[0m plain [0m[38;5;208morange[0m [0m[38;2;1;2;3mrgb[0m
+[0m[2mdim[0m [0m[3mit[0m [0m[4mul[0m [0m[7minv[0m [0m[9mstrike[0m [0m[8minvis[0m [0m[38;5;11mbright[0m [0m[48;5;4m bg [0m
+
+  [0m[38;5;2mafter a gap[0m
