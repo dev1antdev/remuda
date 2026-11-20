@@ -20,7 +20,8 @@ type Running struct {
 }
 
 // SessionsOf finds the session each running agent is in, by its process, in one script on the machine:
-// Claude Code's id from <config dir>/sessions/<pid>.json (CLAUDE_CONFIG_DIR read off the process's environment),
+// Claude Code's id from <config dir>/sessions/<pid>.json (CLAUDE_CONFIG_DIR read off the process's environment;
+// macOS's `ps -E` runs the entries together, so its text gives candidates and the one holding the file wins),
 // Codex's thread id from the rollout of the person's thread the process (else a child of it) holds open, none
 // when two are open. An agent whose session is not found is left out; a session changes under the same pid
 // (/clear, /resume), so the caller asks again as it sees fit.
@@ -58,9 +59,19 @@ s() {
     if [ -r "/proc/$1/environ" ]; then
       cfg=$(tr '\0' '\n' < "/proc/$1/environ" | sed -n 's/^CLAUDE_CONFIG_DIR=//p' | head -n 1)
     else
-      cfg=$(ps -E -ww -o command= -p "$1" 2>/dev/null | sed -n 's/.* CLAUDE_CONFIG_DIR=//p' | sed 's/ [A-Za-z_][A-Za-z0-9_]*=.*//' | head -n 1)
+      cfg=$(ps -E -ww -o command= -p "$1" 2>/dev/null | awk '
+        { key = " CLAUDE_CONFIG_DIR="; p = 0; t = $0
+          while ((j = index(t, key)) > 0) { p += j; t = substr(t, j + 1) }
+          if (!p) next
+          v = substr($0, p + length(key)); seen = ""
+          while (match(v, / [A-Za-z_][A-Za-z0-9_]*=/)) {
+            print seen substr(v, 1, RSTART - 1)
+            seen = seen substr(v, 1, RSTART + RLENGTH - 1); v = substr(v, RSTART + RLENGTH)
+          }
+          print seen v }' | while IFS= read -r c; do [ -f "$c/sessions/$1.json" ] && { printf '%s' "$c"; break; }; done)
     fi
-    head -c 65536 "${cfg:-$HOME/.claude}/sessions/$1.json" 2>/dev/null
+    f="${cfg:-$HOME/.claude}/sessions/$1.json"
+    [ -f "$f" ] && head -c 65536 "$f"
   else
     for p in $1 $(pgrep -P "$1" 2>/dev/null); do
       if [ -d "/proc/$p/fd" ]; then
@@ -68,6 +79,7 @@ s() {
       else
         lsof -p "$p" -Fn 2>/dev/null | sed -n 's/^n//p'
       fi | grep '/rollout-[^/]*\.jsonl$' | sort -u | while IFS= read -r f; do
+        [ -f "$f" ] || continue
         head=$(head -n 1 "$f" 2>/dev/null | head -c 65536)
         case "$head" in
           *'"source":{"subagent"'*) own=0 ;;

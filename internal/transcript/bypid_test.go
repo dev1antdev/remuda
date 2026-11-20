@@ -27,7 +27,7 @@ func TestHelperHoldsFile(t *testing.T) {
 		return
 	}
 	for _, path := range filepath.SplitList(os.Getenv("REMUDA_TEST_HOLD")) {
-		f, err := os.Open(path)
+		f, err := os.OpenFile(path, os.O_RDWR, 0) // read-write: a FIFO opens without waiting for a writer
 		if err != nil {
 			os.Exit(2)
 		}
@@ -102,7 +102,7 @@ func writeSessionFile(t *testing.T, dir string, pid int, id, cwd, start string) 
 func TestClaudeSessionComesFromItsConfigDirAndItsStart(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	config := filepath.Join(home, "Application Support", "Claude")
+	config := filepath.Join(home, "Application Support", "Claude PROFILE=work")
 	pid := holder(t, nil, []string{"CLAUDE_CONFIG_DIR=" + config, "AFTER_IT=1"}, false, "")
 	start := procStart(t, pid)
 	writeSessionFile(t, filepath.Join(config, "sessions"), pid, "4c9d6f0e-1111-4222-8333-944455556666", "/work/api", start)
@@ -189,6 +189,31 @@ func TestCodexSessionIsThePersonsRolloutItsProcessHoldsOpen(t *testing.T) {
 				t.Fatalf("session = %q, want %q", got[pid], c.want)
 			}
 		})
+	}
+}
+
+func TestAPipeNamedLikeARolloutHoldsNothingUp(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("no FIFOs")
+	}
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	rollout := writeRollout(t, home, rolloutID, false)
+	pipe := filepath.Join(filepath.Dir(rollout), "rollout-2026-11-20T02-28-49-01a1f692-0000-70f0-b846-42b3f2f3c1db.jsonl")
+	if err := exec.Command("mkfifo", pipe).Run(); err != nil {
+		t.Fatal(err)
+	}
+	codex := holder(t, []string{pipe, rollout}, nil, false, "")
+	claude := holder(t, nil, nil, false, "")
+	writeSessionFile(t, filepath.Join(home, ".claude", "sessions"), claude, "4c9d6f0e-1111-4222-8333-944455556666", "/work/api", procStart(t, claude))
+
+	began := time.Now()
+	got, err := NewReader(remoteHere(home)).SessionsOf([]Running{{PID: codex, Agent: "codex", CWD: home}, {PID: claude, Agent: "claude", CWD: "/work/api"}})
+	if err != nil {
+		t.Fatalf("after %s: %v", time.Since(began), err)
+	}
+	if got[codex] != rolloutID || got[claude] != "4c9d6f0e-1111-4222-8333-944455556666" {
+		t.Fatalf("got %v", got)
 	}
 }
 
