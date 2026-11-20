@@ -461,7 +461,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   `startSeen` 10 s on; the name is herdr's alone. **`AgentPrompt` goes
   only through a core that checks, as it types, that the agent is still
   in front** (`promptsNeed`: the hello feature `send_foreground`, Core 33;
-  the agent's pid sent as `foreground`, which today's cores ignore): every
+  the agent's pid sent as `foreground`, which today's cores ignore; the
+  look and the send both on the very connection that said so, a connection
+  lost meanwhile failing the prompt rather than dialling a core that may
+  not check): every
   other core refuses it as `invalid_request` "a prompt to an agent waits
   for a remuda-core that checks…" — an agent that left a moment before
   would have the prompt typed into its shell, which would run it — so no

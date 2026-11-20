@@ -116,7 +116,8 @@ func readyForPrompt(t *Terminal) bool {
 }
 
 // AgentPrompt hands the agent in the pane a message, only through a core that checks the agent is still in front as it
-// types (promptsNeed, the agent's pid named as `foreground`): the core pastes it and presses Enter, and refuses while
+// types (promptsNeed, the agent's pid named as `foreground`), on the very connection that said so — a connection lost
+// meanwhile fails the prompt rather than dial a core that may not check: the core pastes it and presses Enter, and refuses while
 // the agent asks something (agent_blocked). A pane whose agent has not come up, or that has none, gets nothing: what is written
 // for an agent never reaches a shell. The core's own view of the terminal is read right before, so an agent that left
 // since the mirror's last news is not taken for there; an agent whose status is cleared (Claude Code reports
@@ -143,8 +144,8 @@ func (a *Adapter) AgentPrompt(target, text string) error {
 	if promptsNeed != "" && !cn.hello.Has(promptsNeed) {
 		return &herdr.Error{Code: "invalid_request", Message: "a prompt to an agent waits for a remuda-core that checks, as it types, that the agent is still in front (Core 33)"}
 	}
-	now, err := a.client.Get(ctx, target)
-	if err != nil {
+	var now Terminal
+	if err := cn.call(ctx, "terminal.get", map[string]any{"terminal": target}, &now, nil); err != nil {
 		return a.refusal(err, "agent_not_found")
 	}
 	if agentOf(&now) != agent {
@@ -160,7 +161,7 @@ func (a *Adapter) AgentPrompt(target, text string) error {
 	if statusOf(&now) == herdr.StatusIdle {
 		params["if"] = herdr.StatusIdle // not working: a turn ending as the prompt goes would refuse it
 	}
-	err = a.client.Call(ctx, "terminal.send", params, nil)
+	err = cn.call(ctx, "terminal.send", params, nil, nil)
 	return a.inputRefusal(err, "agent_not_ready", "agent_blocked")
 }
 
