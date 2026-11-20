@@ -247,7 +247,7 @@ func TestTheBridgeHoldsOneStreamAtATime(t *testing.T) {
 	watching(t, f, func(w *Watcher) {
 		mc, _ := w.machines.Get(machines.LocalID)
 		client, _, _ := mc.Ready()
-		client.Dial = func(timeout time.Duration) (net.Conn, error) { return net.DialTimeout("unix", f.sock, timeout) }
+		client.(*herdr.Client).Dial = func(timeout time.Duration) (net.Conn, error) { return net.DialTimeout("unix", f.sock, timeout) }
 	})
 	f.subscribed(t)
 	waitFor(t, "the stream", func() bool { return f.open() == 1 })

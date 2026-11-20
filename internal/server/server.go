@@ -335,7 +335,7 @@ func (s *Server) machineFor(r *http.Request, bodyID string) (*machines.Machine, 
 }
 
 // ready resolves the machine and its live client, answering 404/502 itself.
-func (s *Server) ready(w http.ResponseWriter, r *http.Request, bodyID string) (*machines.Machine, *herdr.Client, *herdr.AttachManager, bool) {
+func (s *Server) ready(w http.ResponseWriter, r *http.Request, bodyID string) (*machines.Machine, herdr.API, herdr.Terminals, bool) {
 	mc, err := s.machineFor(r, bodyID)
 	if err != nil {
 		httpErr(w, 404, err)

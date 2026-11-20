@@ -242,7 +242,7 @@ func (mc *Machine) transportError(err error) {
 }
 
 // Ready hands out the machine's client and attach manager, reconnecting a failed remote at most every 15s.
-func (mc *Machine) Ready() (*herdr.Client, *herdr.AttachManager, error) {
+func (mc *Machine) Ready() (herdr.API, herdr.Terminals, error) {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
 	if mc.local && mc.serverHost {

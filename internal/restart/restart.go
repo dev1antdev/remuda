@@ -340,7 +340,7 @@ func (r *Restarter) one(mc *machines.Machine, paneID, kind, session string, say 
 
 // swap is the restart itself: the agent's own in-place restart when it has one, else — or when it has no such
 // command here — its own exit, a wait for the shell under it, and the start with the session resumed.
-func (r *Restarter) swap(key string, client *herdr.Client, p herdr.PaneInfo, a agent, session string, say func(string)) error {
+func (r *Restarter) swap(key string, client herdr.API, p herdr.PaneInfo, a agent, session string, say func(string)) error {
 	paneID, title := p.PaneID, p.DisplayTitle()
 	r.mu.Lock()
 	r.last[key] = time.Now()
@@ -375,12 +375,12 @@ func (r *Restarter) swap(key string, client *herdr.Client, p herdr.PaneInfo, a a
 	return nil
 }
 
-func pane(client *herdr.Client, paneID string) (herdr.PaneInfo, bool) {
+func pane(client herdr.API, paneID string) (herdr.PaneInfo, bool) {
 	p, found, _ := look(client, paneID)
 	return p, found
 }
 
-func look(client *herdr.Client, paneID string) (herdr.PaneInfo, bool, error) {
+func look(client herdr.API, paneID string) (herdr.PaneInfo, bool, error) {
 	snap, err := client.SessionSnapshot()
 	if err != nil {
 		return herdr.PaneInfo{}, false, err
