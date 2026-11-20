@@ -41,7 +41,7 @@ export function HealthButton({ machine: m, latest, serverVersion, viewOnly = fal
   const l = fresh?.latest ?? latest;
   // while sharing, a stopped chat goes by its pane rather than its title, and the rest by the neutral names
   const stopped = share.on ? m.stopped?.map((chat) => ({ ...chat, title: "" })) : m.stopped;
-  const list = concerns(h, l, serverVersion, m.id !== "local", stopped, viewOnly, { machine: name, retiring: m.retiring, retirements }).map((c) => ({ ...c, text: share.redact(c.text) }));
+  const list = concerns(h, l, serverVersion, m.id !== "local", stopped, viewOnly, { machine: name, retiring: m.retiring, retirements, core: m.core }).map((c) => ({ ...c, text: share.redact(c.text) }));
   const worst = list.some((c) => c.bad) ? "bad" : list.length ? "warn" : "";
   if (!h && m.state !== "connected") return null;
   const refresh = async () => {
