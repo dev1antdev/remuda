@@ -10,7 +10,7 @@ import type { IBufferLine, Terminal as XTerm } from "@xterm/xterm";
 import { findRanges } from "@/features/chat/find";
 import { swatches, type Flavor, type Swatches } from "@/lib/theme";
 import { nearest } from "../scrollback";
-import type { SearchApi } from "./types";
+import type { Found, SearchApi } from "./types";
 
 // SETTLE_MS is how long the screen gets to repaint after a scroll before the match is looked for, a few frames at a time.
 const SETTLE_MS = 1500;
@@ -85,13 +85,18 @@ export function cellSpan(line: IBufferLine | undefined, from: number, length: nu
 // is not the person's — else it would carry the mark to wherever that text seems to have moved after a repaint.
 export function installSearch(term: XTerm, flavor: () => Flavor, forgetSelection: () => void): SearchApi & { refresh: () => void; dispose: () => void } {
   let addon = new SearchAddon();
+  // heard is the core find's ear: every count the addon gives, its own find's and each it redoes as output arrives
+  let heard: ((found: Found) => void) | null = null;
+  const listen = () => addon.onDidChangeResults((r) => heard?.({ total: Math.max(0, r.resultCount), at: Math.max(0, r.resultIndex) }));
   term.loadAddon(addon);
+  listen();
   // fresh replaces the addon before a find: its cache of the rows cannot know that herdr rewrote them in place (the
   // cursor ends where it began, so xterm reports no move), and a stale cache finds the screen as it was
   const fresh = () => {
     addon.dispose();
     addon = new SearchAddon();
     term.loadAddon(addon);
+    listen();
   };
   let query = "";
   let pending: ReturnType<typeof setTimeout> | null = null;
@@ -117,6 +122,7 @@ export function installSearch(term: XTerm, flavor: () => Flavor, forgetSelection
   };
   const clear = () => {
     stop();
+    heard = null;
     query = "";
     addon.clearDecorations();
     term.clearSelection();
@@ -146,19 +152,17 @@ export function installSearch(term: XTerm, flavor: () => Flavor, forgetSelection
       };
       attempt();
     },
-    find(next, step) {
+    find(next, step, hear) {
       stop();
+      heard = hear;
       if (step === 0 || next !== query) {
         fresh();
         term.clearSelection();
       }
       query = next;
-      let found = { total: 0, at: 0 };
-      const results = addon.onDidChangeResults((r) => (found = { total: Math.max(0, r.resultCount), at: Math.max(0, r.resultIndex) }));
       const hit = step < 0 ? addon.findPrevious(query, options()) : addon.findNext(query, options());
-      results.dispose();
       forgetSelection();
-      return hit ? found : { total: 0, at: 0 };
+      if (!hit) hear({ total: 0, at: 0 });
     },
     clear,
     refresh() {

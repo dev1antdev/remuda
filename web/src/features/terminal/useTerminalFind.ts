@@ -28,14 +28,14 @@ export function useTerminalFind(api: TermApi | null, active: boolean, machineId:
   const at = app.use((s) => s.find?.at ?? 0);
   const on = active && open && api !== null;
   const run = useRef(0);
-  const toldOlder = useRef("");
+  const askedOlder = useRef("");
 
-  // older says, once a query, that its matches are only in rows the terminal no longer holds for the screen
+  // older asks once a query whether its matches are only in rows the terminal no longer holds for the screen, and says so
   const older = async (q: string, id: number) => {
-    if (toldOlder.current === q) return;
+    if (askedOlder.current === q) return;
+    askedOlder.current = q;
     const found = await findScrollback(machineId, paneId, q, SCROLLBACK_ROWS);
     if (id !== run.current || !found.matches.length) return;
-    toldOlder.current = q;
     const n = found.matches.length;
     actions.notify(tn(n, "{n} match is only in older rows, which this terminal no longer shows", "{n} matches are only in older rows, which this terminal no longer shows"));
   };
@@ -46,9 +46,11 @@ export function useTerminalFind(api: TermApi | null, active: boolean, machineId:
     const id = ++run.current;
     try {
       if (core && api.search.find) {
-        const { total, at: shown } = api.search.find(q, step);
-        actions.foundMatches(total, shown);
-        if (!total) await older(q, id);
+        api.search.find(q, step, ({ total, at: shown }) => {
+          if (id !== run.current) return;
+          actions.foundMatches(total, shown);
+          if (!total) older(q, id).catch((e) => id === run.current && actions.notify(errMsg(e), { error: true }));
+        });
         return;
       }
       const found = await findScrollback(machineId, paneId, q, SCROLLBACK_ROWS);
@@ -108,6 +110,7 @@ export function useTerminalFind(api: TermApi | null, active: boolean, machineId:
     wasOn.current = on;
     if (on || !was || !api) return;
     run.current++;
+    askedOlder.current = "";
     api.search.clear();
     if (active && !open && !isTouch) api.focus();
   }, [on, api, active, open]);

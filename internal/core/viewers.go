@@ -18,10 +18,26 @@ const attachWithin = 15 * time.Second
 // viewerChunk is the most one read hands a viewer.
 const viewerChunk = 32 << 10
 
-// attachHistory is how many rows of history above the screen a viewer is painted first: as many as the page's xterm
+// attachHistory is the most rows of history above the screen a viewer is painted first: as many as the page's xterm
 // keeps (XTERM_SCROLLBACK in web/src/features/terminal/scrollback.ts, whose test reads this line), so its find reads
 // the terminal's own rows.
 const attachHistory = 2000
+
+// paintBudget is what a first paint may weigh: the core drops a paint past its 4 MiB stream queue whole, leaving the
+// viewer blank, and the screen and the program's state ride in it too.
+const paintBudget = 3 << 20
+
+// cellBytes is the most one cell costs in the core's paint: every attribute and three true colours as SGR come to some
+// 91 bytes a cell, measured on remuda-core 0.2.0.
+const cellBytes = 96
+
+// historyFor is the history a first paint at that grid carries without passing paintBudget, however coloured its rows.
+func historyFor(cols, rows int) int {
+	if cols <= 0 {
+		return 0
+	}
+	return max(0, min(attachHistory, paintBudget/(cols*cellBytes)-rows))
+}
 
 // Terminals opens a machine's terminals through its core client.
 type Terminals struct {
@@ -44,9 +60,13 @@ func (t *Terminals) Open(termID string, view herdr.View) (herdr.Viewer, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), attachWithin)
 	defer cancel()
 	v := &coreViewer{out: make(chan herdr.Out, 8), done: make(chan struct{})}
+	history := 0 // a terminal whose grid cannot be read is painted its screen alone
+	if term, err := t.client.Get(ctx, termID); err == nil {
+		history = historyFor(max(int(term.Cols), view.Cols), max(int(term.Rows), view.Rows)) // the paint is at the larger grid
+	}
 	params := AttachParams{
 		Terminal:            termID,
-		History:             attachHistory,
+		History:             history,
 		Observe:             view.Observe,
 		KeepSize:            view.Keep && !view.Observe,
 		ResizeNotifications: view.Keep || view.Observe,
