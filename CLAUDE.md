@@ -575,9 +575,12 @@ components and icons as rules for whoever changes it: @docs/design.md
   Code's from `<config dir>/sessions/<pid>.json` (`CLAUDE_CONFIG_DIR` read
   off the process's environment, `/proc/<pid>/environ` or `ps -E`; a file
   counts only when its `procStart` is the process's `LC_ALL=C TZ=UTC ps -o
-  lstart`, or, where either side lacks it — Windows — when its folder is the
-  pane's), Codex's thread id from the `rollout-*.jsonl` the process or a
-  child of it holds open (`/proc/<pid>/fd`, else `lsof`; none on Windows);
+  lstart`, or, where either side lacks it — Windows, not checked there yet —
+  when its folder is the pane's), Codex's thread id from the
+  `rollout-*.jsonl` the process or a child of it holds open
+  (`/proc/<pid>/fd`, else `lsof`; none on Windows); an id found under a
+  `CLAUDE_CONFIG_DIR` of the agent's own still names a file the readers,
+  which know the default roots alone, do not open yet;
   stateless, since `/clear` and `/resume` change the session under the same
   pid; nothing under `~/.claude` or `~/.codex` is written. `NewUsageScanner(path)` is the
   per-line usage reader of each format (the tracker keeps one per file
@@ -1445,7 +1448,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   Linux), herdr's update without `--handoff`. Not there: the Code mode
   (`code.NoCodeOnWindows`; `install-code.sh` refuses), previews
   (`preview.NotOnWindows`: Windows names no listening process's folder),
-  teleport (`teleport.NotWithWindows`, both ends). **CI's windows job**
+  teleport (`teleport.NotWithWindows`, both ends), Codex's session found by
+  its process (`Reader.SessionsOf`: Git Bash has no `lsof` or `/proc` for a
+  Windows process). **CI's windows job**
   (`.github/workflows/ci.yml`, `windows-latest`) is the proof: herdr for
   Windows installed, remuda.exe built into `~/.local/bin`, the runner's own
   OpenSSH server given Git Bash and a key, then every `TestOnWindows…`
