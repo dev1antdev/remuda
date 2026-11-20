@@ -406,8 +406,9 @@ var (
 )
 
 // FirstPrompt hands the text a person wrote for an agent they just started over once it is up: Prompt, tried again every
-// FirstPromptRetry while the agent is still coming up, until it takes the text or the timeout passes. A dialog on the agent's screen (Claude Code's trust question for the folder, which is the person's to answer) is waited
-// through, never answered; the error says why the text was not delivered.
+// FirstPromptRetry while the agent is still coming up, until it takes the text or the timeout passes. A dialog on the
+// agent's screen (Claude Code's trust question for the folder, which is the person's to answer) is waited through,
+// never answered; the error says why the text was not delivered.
 func (in *Input) FirstPrompt(client Prompter, ref events.PaneRef, text string, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 	var last error
