@@ -1528,8 +1528,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   again through `connect`). The smoke and the display checks read the
   roster's machine `core` and there leave out what a core has not: the
   screen terminal (a Windows PC's pane is attached there too), Inside
-  herdr, and the worktree flow (the close that takes a worktree, the
-  leftovers). CI's `e2e-core` job (on `release` and by hand) installs
+  herdr, and what a checkout's writes held back there (`holdCheckoutWrites`)
+  stop — the Changes lens's stage and commit, the new worktree's removal
+  and the worktree flow (the close that takes a worktree, the leftovers).
+  CI's `e2e-core` job (on `release` and by hand) installs
   remuda-core by its checksums, as the check job does, and runs it
   `continue-on-error`: a report of where the core falls short, not a gate. Pull
   requests target `release`; `main` is what is out (AGENTS.md, "Build and
