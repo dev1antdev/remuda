@@ -18,6 +18,7 @@ export type Stream = {
   note: (text: string) => void; // a line on the screen from remuda itself, while the stream is down
   inputLost: () => void; // typing did not surely go through, and will not be sent again
   wsOnly?: boolean; // a viewer link: the HTTP transport is not its to open, so a proxy that drops WebSockets is said instead
+  freshOnLoss?: boolean; // remuda-core: a read lost on the way is made good by a fresh stream and its first paint
 };
 
 // refusal is why the server would not open a stream, in its own words — another client holds the terminal — else the status
@@ -255,12 +256,16 @@ export function connect(stream: Stream): Transport {
             return;
           }
         } catch {
-          // a read that failed on the way may have taken bytes, the only repaint among them, that never reached the
-          // screen: a fresh stream starts it over with a fresh paint, rather than reading on past the gap
           if (stopped) return;
-          closeStream();
-          later(1000);
-          return;
+          // a read that failed on the way may have taken bytes, the only repaint among them, that never reached the
+          // screen: on remuda-core a fresh stream starts it over with the core's first paint; herdr has no such paint
+          // (a joiner gets a nudge to redraw, never the output above it), so its screen keeps what it has and reads on
+          if (stream.freshOnLoss) {
+            closeStream();
+            later(1000);
+            return;
+          }
+          await new Promise((r) => setTimeout(r, 1000));
         }
       }
     };

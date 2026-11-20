@@ -82,6 +82,7 @@ describe("the grid over HTTP", () => {
       onGrid: (cols, rows) => seen.push(`grid ${cols}x${rows}`),
       note: () => {},
       inputLost: () => {},
+      freshOnLoss: true,
     });
     try {
       await vi.waitFor(() => expect(seen).toContain("bytes after"), { timeout: 8000, interval: 20 });
@@ -95,7 +96,28 @@ describe("the grid over HTTP", () => {
 describe("a read lost on the way", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it("drops its stream for a fresh one, so an idle terminal is painted again", async () => {
+  it("on herdr reads on from the same stream, the screen and its scrollback kept", async () => {
+    const { fetch, asked } = server(
+      [{ status: 200, body: JSON.stringify({ sid: "s1" }) }, { status: 200, body: JSON.stringify({ sid: "s2" }) }],
+      [{ status: 502 }, { status: 200, body: "more" }],
+    );
+    vi.stubGlobal("WebSocket", DeadSocket);
+    vi.stubGlobal("location", { protocol: "http:", host: "remuda" });
+    vi.stubGlobal("fetch", fetch);
+    let opened = 0;
+    const painted: string[] = [];
+    const decoder = new TextDecoder();
+    const transport = connect({ query: "machine=local&id=w1:p1", size: () => ({ cols: 80, rows: 24 }), onOpen: () => opened++, onBytes: (buf) => painted.push(decoder.decode(buf)), note: () => {}, inputLost: () => {} });
+    try {
+      await vi.waitFor(() => expect(painted).toContain("more"), { timeout: 8000, interval: 20 });
+    } finally {
+      transport.close();
+    }
+    expect(opened).toBe(1);
+    expect(asked.filter((path) => path === "/api/term/open")).toHaveLength(1);
+  }, 10000);
+
+  it("on remuda-core drops its stream for a fresh one, so an idle terminal is painted again", async () => {
     const { fetch, asked } = server(
       [{ status: 200, body: JSON.stringify({ sid: "s1" }) }, { status: 200, body: JSON.stringify({ sid: "s2" }) }],
       [
@@ -109,7 +131,7 @@ describe("a read lost on the way", () => {
     let opened = 0;
     const painted: string[] = [];
     const decoder = new TextDecoder();
-    const transport = connect({ query: "machine=local&id=w1:p1", size: () => ({ cols: 80, rows: 24 }), onOpen: () => opened++, onBytes: (buf) => painted.push(decoder.decode(buf)), note: () => {}, inputLost: () => {} });
+    const transport = connect({ query: "machine=local&id=w1:p1", size: () => ({ cols: 80, rows: 24 }), onOpen: () => opened++, onBytes: (buf) => painted.push(decoder.decode(buf)), note: () => {}, inputLost: () => {}, freshOnLoss: true });
     try {
       await vi.waitFor(() => expect(painted).toContain("fresh paint"), { timeout: 8000, interval: 20 });
     } finally {

@@ -182,6 +182,7 @@ export function createEngine(mount: HTMLElement, machineId: string, paneId: stri
     note,
     inputLost: () => actions.notify(t("What you typed may not have gone through. It will not be sent again."), { error: true }),
     wsOnly: readOnly,
+    freshOnLoss: !!props().core,
   };
   const reattach = () => {
     keptAt = keeps();

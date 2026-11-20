@@ -452,8 +452,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   merged with bytes across it; every HTTP read carries the grid its bytes are
   drawn at, `X-Remuda-Grid: <cols>x<rows>`, a grid that comes after some
   bytes ending the read and opening the next, so a read lost on the way
-  loses no grid, and the page drops a stream whose read failed for a fresh
-  one (`transport.ts`), whose first paint draws an idle screen again; the engine sizes its grid by it, see the size modes);
+  loses no grid, and on remuda-core the page drops a stream whose read
+  failed for a fresh one (`transport.ts`, `freshOnLoss`), whose first paint
+  draws an idle screen again — herdr, with no such paint, reads on and keeps
+  its scrollback; the engine sizes its grid by it, see the size modes);
   a goroutine hands the stream's bytes to the viewer and reads no further
   while the viewer has not taken them, so the core's credit waits and it
   repaints a viewer gone 4 MB behind; the bytes close with the program,
