@@ -361,11 +361,17 @@ func TestAPipeNamedLikeARolloutHoldsNothingUp(t *testing.T) {
 	}
 }
 
+// The machine is asked its time in a call of its own, then once for every agent.
 func TestSessionsOfAsksTheMachineOnceForEveryAgent(t *testing.T) {
 	answer := "41\037claude\037Thu Nov 19 00:36:10 2026\037/w\037" +
 		`{"pid":41,"sessionId":"aaaa-1","cwd":"/w","procStart":"Thu Nov 19 00:36:10 2026"}` + "\037Thu Nov 19 00:36:10 2026\036\n" +
 		"52\037codex\037Thu Nov 19 00:40:00 2026\037\03752\035/home/me/.codex/sessions/2026/11/19/rollout-2026-11-19T00-40-01-" + rolloutID + ".jsonl\035" + sessionMeta(rolloutID, false) + "\034\037Thu Nov 19 00:40:00 2026\036\n"
-	host := &shell.Fake{Name: "gog", Remote: true, Dir: "/home/me", Answer: func(string) (string, error) { return answer, nil }}
+	host := &shell.Fake{Name: "gog", Remote: true, Dir: "/home/me", Answer: func(script string) (string, error) {
+		if script == "date +%s" {
+			return "1795048800\n", nil
+		}
+		return answer, nil
+	}}
 	got, err := NewReader(host).SessionsOf([]Running{{PID: 41, Agent: "claude", CWD: "/w"}, {PID: 52, Agent: "codex", CWD: "/w"}, {PID: 60, Agent: "gemini"}})
 	if err != nil {
 		t.Fatal(err)
@@ -374,7 +380,7 @@ func TestSessionsOfAsksTheMachineOnceForEveryAgent(t *testing.T) {
 		t.Fatalf("got %v", got)
 	}
 	scripts := host.Scripts()
-	if len(scripts) != 1 || !strings.Contains(scripts[0], "\ns 41 claude '/w'\n") || !strings.Contains(scripts[0], "\ns 52 codex '/w'\n") || strings.Contains(scripts[0], "gemini") {
+	if len(scripts) != 2 || scripts[0] != "date +%s" || !strings.Contains(scripts[1], "\ns 41 claude '/w'\n") || !strings.Contains(scripts[1], "\ns 52 codex '/w'\n") || strings.Contains(scripts[1], "gemini") {
 		t.Fatalf("scripts = %q", scripts)
 	}
 
@@ -385,7 +391,8 @@ func TestSessionsOfAsksTheMachineOnceForEveryAgent(t *testing.T) {
 }
 
 // The process holding a pid when it is read must have begun by the time the agent was seen running: a later one took
-// the pid after it. The machine's clock is read off the script, so a machine whose clock runs elsewhere is no matter.
+// the pid after it. The sighting goes onto the machine's clock by the time passed since it, so a machine whose clock
+// runs elsewhere is no matter; a machine that takes too long to tell its time is no reading at all.
 func TestAProcessBegunAfterTheAgentWasSeenHasNoSession(t *testing.T) {
 	const start = "Thu Nov 19 00:36:10 2026"
 	began := time.Date(2026, 11, 19, 0, 36, 10, 0, time.UTC)
@@ -394,30 +401,39 @@ func TestAProcessBegunAfterTheAgentWasSeenHasNoSession(t *testing.T) {
 	for _, c := range []struct {
 		name  string
 		ahead time.Duration // the machine's clock against this one's
-		seen  time.Time
+		after time.Duration // the sighting, on the machine's clock, after the process began
 		want  string
 	}{
-		{"seen running after it began", 0, began.Add(10 * time.Minute), "id-1"},
-		{"seen running the second it began", 0, began, "id-1"},
-		{"begun an hour after the agent was seen", 0, began.Add(-time.Hour), ""},
-		{"begun a minute after", 0, began.Add(-time.Minute), ""},
-		{"a machine an hour ahead, seen after it began", time.Hour, began.Add(10*time.Minute - time.Hour), "id-1"},
-		{"a machine an hour ahead, begun after the agent was seen", time.Hour, began.Add(-time.Minute - time.Hour), ""},
-		{"no sighting known", 0, time.Time{}, "id-1"},
+		{"seen running after it began", 0, 10 * time.Minute, "id-1"},
+		{"seen running the moment it began", 0, 0, "id-1"},
+		{"begun three seconds after the agent was seen", 0, -3 * time.Second, ""},
+		{"begun an hour after", 0, -time.Hour, ""},
+		{"a machine an hour ahead, seen after it began", time.Hour, 10 * time.Minute, "id-1"},
+		{"a machine an hour ahead, begun after the agent was seen", time.Hour, -3 * time.Second, ""},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			asked := began.Add(20*time.Minute - c.ahead)
-			machineNow := asked.Add(c.ahead + 200*time.Millisecond).Unix()
-			out := "now" + script.US + strconv.FormatInt(machineNow, 10) + script.RS + "\n" + record
-			clock := clockOf(out, asked, asked.Add(400*time.Millisecond))
-			got := parseSessionsByPID(out, []Running{{PID: 7, Agent: "claude", CWD: "/a", Seen: c.seen}}, rpath.Style{}, clock)
+			seen := began.Add(c.after - c.ahead)
+			asked := seen.Add(20 * time.Minute)
+			machineNow := asked.Add(c.ahead + 300*time.Millisecond)
+			clock := machineClock{asked: asked, latest: time.Unix(machineNow.Unix()+1, 0)}
+			got := parseSessionsByPID(record, []Running{{PID: 7, Agent: "claude", CWD: "/a", Seen: seen}}, rpath.Style{}, clock)
 			if got[7] != c.want {
 				t.Fatalf("got %v, want %q", got, c.want)
 			}
 		})
 	}
-	if clockOf("7"+script.US+"claude", time.Now(), time.Now()).read {
-		t.Fatal("an answer with no time of the machine read as one")
+	if got := parseSessionsByPID(record, []Running{{PID: 7, Agent: "claude", CWD: "/a"}}, rpath.Style{}, machineClock{asked: began, latest: began}); got[7] != "id-1" {
+		t.Fatalf("no sighting known: got %v", got)
+	}
+
+	maxClockSpan = 50 * time.Millisecond
+	t.Cleanup(func() { maxClockSpan = 2 * time.Second })
+	slow := &shell.Fake{Name: "gog", Remote: true, Answer: func(script string) (string, error) {
+		time.Sleep(100 * time.Millisecond)
+		return "1795048800\n", nil
+	}}
+	if got, err := NewReader(slow).SessionsOf([]Running{{PID: 7, Agent: "claude", CWD: "/a", Seen: time.Now()}}); err == nil || len(slow.Scripts()) != 1 {
+		t.Fatalf("a machine slow to tell its time: got %v, %v after %q", got, err, slow.Scripts())
 	}
 }
 

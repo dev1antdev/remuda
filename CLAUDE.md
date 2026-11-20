@@ -992,9 +992,11 @@ components and icons as rules for whoever changes it: @docs/design.md
   neither `ps` nor, on Git Bash, PowerShell tells, has no session, nothing
   telling it from another given its pid, nor does one that began after the
   agent was seen running (`Running.Seen`: a later process took the pid
-  before it was read), the machine's clock read off the script's first line
-  (`date +%s`, `clockOf`), the span of the call and a second of `ps`'s the
-  slack; every
+  before it was read), the sighting placed on the machine's clock by the
+  monotonic time since it, the clock read in a call of its own (`date +%s`,
+  `Reader.machineClock`) whose span bounds the doubt, a reading that took
+  over `maxClockSpan` 2 s refused as no reading, the read failing (the last
+  answers stand); every
   candidate's file is sent and Go weighs them; only
   regular files are read, a FIFO never holds the script; a process that
   stands in another folder than the pane was seen in now (`/proc/<pid>/cwd`,

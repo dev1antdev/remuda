@@ -2,6 +2,7 @@ package transcript
 
 import (
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -27,44 +28,56 @@ func (r *Reader) SessionsOf(procs []Running) (map[int]string, error) {
 	if lookup == "" {
 		return map[int]string{}, nil
 	}
-	asked := time.Now()
+	clock, err := r.machineClock()
+	if err != nil {
+		return nil, err
+	}
 	out, err := shell.Text(r.host, lookup, 15*time.Second)
 	if err != nil {
 		return nil, err
 	}
-	return parseSessionsByPID(out, procs, rpath.For(r.host.Home()), clockOf(out, asked, time.Now())), nil
+	return parseSessionsByPID(out, procs, rpath.For(r.host.Home()), clock), nil
 }
 
-// machineClock is how far the machine's clock runs ahead of this one's, and how much either way that reading may be
-// off; a zero value is no reading, and nothing is checked against it.
+// maxClockSpan is the longest a call reading the machine's clock may take: the moment it read is known only to within
+// the call, and a later process could hide in a wider span. A test shortens it.
+var maxClockSpan = 2 * time.Second
+
+// machineClock is the machine's clock read in a call of its own, as short as a call gets: asked here, and no later
+// than latest there. The zero value is no reading, and nothing is checked against it.
 type machineClock struct {
-	ahead, within time.Duration
-	read          bool
+	asked, latest time.Time
 }
 
-// clockOf reads the machine's time the script told first, between asked and answered here: to the second, wherever in
-// that span it was taken.
-func clockOf(out string, asked, answered time.Time) machineClock {
-	first, _, _ := strings.Cut(out, script.RS)
-	secs, err := strconv.ParseInt(strings.TrimSpace(strings.TrimPrefix(first, "now"+script.US)), 10, 64)
-	if err != nil || !strings.HasPrefix(first, "now"+script.US) {
-		return machineClock{}
+// machineClock reads the machine's clock, refusing a reading whose call took over maxClockSpan.
+func (r *Reader) machineClock() (machineClock, error) {
+	asked := time.Now()
+	out, err := shell.Text(r.host, "date +%s", 10*time.Second)
+	if err != nil {
+		return machineClock{}, err
 	}
-	half := answered.Sub(asked) / 2
-	return machineClock{ahead: time.Unix(secs, 0).Sub(asked.Add(half)), within: half + time.Second, read: true}
+	if took := time.Since(asked); took > maxClockSpan {
+		return machineClock{}, fmt.Errorf("the machine took %s to tell its time, too long to tell its processes apart", took.Round(time.Millisecond))
+	}
+	secs, err := strconv.ParseInt(strings.TrimSpace(out), 10, 64)
+	if err != nil {
+		return machineClock{}, fmt.Errorf("the machine tells its time as %q", strings.TrimSpace(out))
+	}
+	return machineClock{asked: asked, latest: time.Unix(secs+1, 0)}, nil
 }
 
 // begunBy says whether a process whose start the script told can be the one seen running here at seen: it began by
-// then, give or take the clocks' reading and a second of ps's; one whose start reads as no time cannot be told.
+// then. The sighting is placed on the machine's clock by the time passed since it here, monotonic, so a step of
+// either clock moves nothing; one whose start reads as no time cannot be told.
 func (c machineClock) begunBy(start string, seen time.Time) bool {
-	if !c.read || seen.IsZero() {
+	if c.asked.IsZero() || seen.IsZero() {
 		return true
 	}
 	began, known := startedMS(start)
-	return known && time.UnixMilli(began).Before(seen.Add(c.ahead+c.within+time.Second))
+	return known && !time.UnixMilli(began).After(c.latest.Add(-c.asked.Sub(seen)))
 }
 
-// sessionsByPIDScript prints the machine's time ("now", US, unix seconds), then a record per process, split by US:
+// sessionsByPIDScript prints a record per process, split by US:
 //   - its pid and agent;
 //   - its start as Claude Code records it: `ps -o lstart` in UTC, "ft:<FILETIME>" from PowerShell's Get-Process for
 //     a native Windows process ps does not see (asked on Git Bash alone), "-" for one gone or whose start nothing
@@ -89,7 +102,6 @@ func sessionsByPIDScript(procs []Running) string {
 		return ""
 	}
 	return script.PATH + `
-printf 'now\037%s\036\n' "$(date +%s)"
 case "$(uname -s 2>/dev/null)" in MINGW* | MSYS* | CYGWIN*) windows=1 ;; *) windows= ;; esac
 nl='
 '
