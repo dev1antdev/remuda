@@ -80,15 +80,6 @@ func writeSessionFile(t *testing.T, dir string, pid int, id, cwd, start string) 
 	}
 }
 
-// remoteReader reads through a machine whose scripts run in this machine's sh, as a remote's would over ssh.
-func remoteReader(t *testing.T) (*Reader, *shell.Fake) {
-	host := &shell.Fake{Name: "gog", Remote: true, Dir: os.Getenv("HOME"), Answer: func(line string) (string, error) {
-		out, err := exec.Command("sh", "-c", line).Output()
-		return string(out), err
-	}}
-	return NewReader(host), host
-}
-
 func TestClaudeSessionComesFromItsConfigDirAndItsStart(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -102,7 +93,7 @@ func TestClaudeSessionComesFromItsConfigDirAndItsStart(t *testing.T) {
 	writeSessionFile(t, filepath.Join(config, "sessions"), pid, "4c9d6f0e-1111-4222-8333-944455556666", "/work/api", start)
 	writeSessionFile(t, filepath.Join(home, ".claude", "sessions"), pid, "0000aaaa-default-dir-not-this-one", "/work/api", start)
 
-	reader, _ := remoteReader(t)
+	reader := NewReader(remoteHere(home))
 	got, err := reader.SessionsOf([]Running{{PID: pid, Agent: "claude", CWD: "/work/api"}})
 	if err != nil {
 		t.Fatal(err)
@@ -122,7 +113,7 @@ func TestClaudeSessionLeftByAnEndedProcessIsNotTaken(t *testing.T) {
 	pid := running(t, hold, nil, false)
 	writeSessionFile(t, filepath.Join(home, ".claude", "sessions"), pid, "4c9d6f0e-1111-4222-8333-944455556666", "/work/api", "Mon Jan  1 00:00:00 2024")
 
-	reader, _ := remoteReader(t)
+	reader := NewReader(remoteHere(home))
 	got, err := reader.SessionsOf([]Running{{PID: pid, Agent: "claude", CWD: "/work/api"}})
 	if err != nil {
 		t.Fatal(err)
@@ -147,7 +138,7 @@ func TestCodexSessionIsTheRolloutItsProcessHoldsOpen(t *testing.T) {
 			}
 			pid := running(t, rollout, nil, asChild)
 
-			reader, _ := remoteReader(t)
+			reader := NewReader(remoteHere(home))
 			var got map[int]string
 			for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
 				var err error
