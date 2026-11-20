@@ -471,7 +471,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   `startSeen` 10 s on; the name is herdr's alone. **`AgentPrompt` goes
   only through a core that checks, as it types, that the agent is still
   in front** (`promptsNeed`: the hello feature `send_foreground`, Core 33;
-  the agent's pid sent as `foreground`, which today's cores ignore; the
+  the agent's pid sent as `foreground`, checked by the core before the
+  paste and again before its Enter; the
   look and the send both on the very connection that said so, a connection
   lost meanwhile failing the prompt rather than dialling a core that may
   not check): every
@@ -481,8 +482,14 @@ components and icons as rules for whoever changes it: @docs/design.md
   prompt reaches a core machine's agent before Core 33 (the tests lift the
   gate, `LiftPromptGate`). Through such a core it is `terminal.send` (the
   person's draft in the terminal waited for, `sendWithin` 75 s — shorter
-  would cancel a prompt already typed — under the pane's lock, so keys and
-  answers through remuda wait behind it while a draft stands, #329):
+  would cancel a prompt already typed; `StagePrompt` is the look and the
+  send apart, so `sessions.Input` holds the pane's lock for the look alone
+  and keys and answers pass a prompt the core holds, #329; one the core
+  pasted and then left unsubmitted, the agent gone from the front before
+  its Enter, is `prompt_not_submitted` — the text may sit in the input line
+  of whatever runs there, `sessions.ErrNotSubmitted` says to look at the
+  terminal — and a terminal whose holder is older than the core
+  (`needs_update`) is told to be restarted, nothing sent):
   `agent_not_found` with no agent, `agent_not_ready` until it has reported
   a status since it took the terminal (`readyForPrompt`: the mirror stamps
   `agentAt` and `statusAt`, a report the foreground's next look comes
@@ -7115,10 +7122,17 @@ components and icons as rules for whoever changes it: @docs/design.md
   `ctrl`, `alt` and `shift`, each once, before a named key — enter, esc,
   tab, space, backspace, the arrows — or `ctrl` / `alt` before a letter or
   digit; a printable key alone is text), `RefOK` (a branch name git gets as an
-  argument), and `Input`: one lock per pane, `Submit` (`agent.prompt`: what is
+  argument), and `Input`: one lock per pane (a client that stages its
+  prompt, `StagedPrompter` — remuda-core, which holds a prompt while a
+  person finishes a draft in the terminal and checks the agent as it types —
+  holds it for the look alone, the pane's prompts one after another by a
+  lock of their own, so keys, typing and an answer pass the wait; `Prompt`
+  is that door, which the arena's and a task's first prompts take too),
+  `Submit` (`agent.prompt`: what is
   written for an agent is never typed into a pane without one, whose shell
   would run every line; `ErrNoAgent` when none is ready, `ErrAgentBusy`
-  while a menu is open, each a 409 that leaves the person's draft; **a message
+  while a menu is open, `ErrNotSubmitted` for a prompt remuda-core pasted
+  but left unsubmitted, each a 409 that leaves the person's draft; **a message
   that names a picture gets a second Enter** — `settle.go`,
   tested on a paper client: herdr 0.9.5 writes the paste and its Enter as
   one, Claude Code swallows an Enter that arrives while it takes a paste
@@ -7493,7 +7507,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   question came up and the agent still holds the terminal
   (`sessions/settle.go`). A pane with no agent ready gets nothing: a 409,
   never the text typed into its shell. Everything per-pane is
-  serialized by `sessions.Input`, one lock per pane. Never queue or auto-send user input.
+  serialized by `sessions.Input`, one lock per pane (on remuda-core a
+  prompt holds it for its look alone: the core orders what is typed and
+  checks the agent as it types). Never queue or auto-send user input.
   The first prompts remuda composes itself — a handover's, a second
   opinion's review request (`opinion.Prompt`) — go only
   to the agent it just started in a new tab, and only because the person

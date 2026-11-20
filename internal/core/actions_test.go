@@ -1,6 +1,7 @@
 package core_test
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"slices"
@@ -205,7 +206,19 @@ func TestAPromptWaitsForACoreThatChecksTheAgentAsItTypes(t *testing.T) {
 		t.Fatal(err)
 	}
 	eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Pane(pane).AgentStatus == herdr.StatusIdle })
-	if err := adapter.AgentPrompt(pane, "hello"); !herdr.IsCode(err, "invalid_request") || !strings.Contains(err.Error(), "Core 33") {
+	hello, err := client.Hello(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = adapter.AgentPrompt(pane, "hello")
+	if hello.Has("send_foreground") {
+		if err != nil {
+			t.Fatalf("a prompt through a core that checks the agent as it types: %v", err)
+		}
+		screenSays(t, adapter, pane, "got: hello")
+		return
+	}
+	if !herdr.IsCode(err, "invalid_request") || !strings.Contains(err.Error(), "Core 33") {
 		t.Fatalf("a prompt through a core that does not check the agent as it types: %v", err)
 	}
 	screen, _ := adapter.PaneRead(pane)
