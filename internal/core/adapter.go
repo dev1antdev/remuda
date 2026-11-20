@@ -124,17 +124,13 @@ func (a *Adapter) follow(ctx context.Context) (filled bool, err error) {
 	var sub *Subscription
 	var doc Document
 	err = bounded(ctx, callWithin, func() *conn { return cn }, func(ctx context.Context) (err error) {
-		if cn, err = a.client.connection(ctx); err != nil {
+		if cn, err = a.checked(ctx); err != nil {
 			return err
 		}
-		if !cn.hello.Has("output_watches") {
-			return &Error{Kind: "needs_update", Message: fmt.Sprintf("remuda-core %s is older than remuda needs: update it", cn.hello.Version)}
-		}
-		if sub, err = a.client.Subscribe(ctx, SubscribeParams{}); err != nil {
+		if sub, err = cn.subscribe(ctx, SubscribeParams{}); err != nil {
 			return err
 		}
-		cn = sub.conn
-		doc, err = a.readDoc(ctx)
+		doc, err = a.readDoc(ctx, cn)
 		return err
 	})
 	if sub != nil {
@@ -143,8 +139,8 @@ func (a *Adapter) follow(ctx context.Context) (filled bool, err error) {
 	if err != nil {
 		return false, err
 	}
-	version := sub.conn.hello.Version
-	onSub := func() *conn { return sub.conn }
+	version := cn.hello.Version
+	onSub := func() *conn { return cn }
 	a.fill(sub.Terminals, doc, version)
 	for {
 		var notice Notice
@@ -157,12 +153,12 @@ func (a *Adapter) follow(ctx context.Context) (filled bool, err error) {
 		}
 		switch notice.Kind {
 		case NoticeEvent:
-			if err := a.apply(ctx, onSub, notice.Event); err != nil {
+			if err := a.apply(ctx, cn, notice.Event); err != nil {
 				return true, err
 			}
 		case NoticeMissed:
 			err := bounded(ctx, callWithin, onSub, func(ctx context.Context) (err error) {
-				doc, err = a.readDoc(ctx)
+				doc, err = a.readDoc(ctx, cn)
 				return err
 			})
 			if err != nil {
@@ -189,9 +185,21 @@ func bounded(ctx context.Context, within time.Duration, on func() *conn, step fu
 	return err
 }
 
-func (a *Adapter) readDoc(ctx context.Context) (Document, error) {
-	raw, err := a.client.DocGet(ctx, DocName)
-	if err != nil {
+// checked is the client's connection when its core reads history without scrolling a program (a vt read, which
+// came before output watches in remuda-core); an older core is refused.
+func (a *Adapter) checked(ctx context.Context) (*conn, error) {
+	cn, err := a.client.connection(ctx)
+	if err == nil && !cn.hello.Has("output_watches") {
+		err = &Error{Kind: "needs_update", Message: fmt.Sprintf("remuda-core %s is older than remuda needs: update it", cn.hello.Version)}
+	}
+	return cn, err
+}
+
+// readDoc reads the document on the subscription's own connection, so a snapshot and its document come from one
+// core; a connection lost meanwhile fails the read and the subscription is made again whole.
+func (a *Adapter) readDoc(ctx context.Context, cn *conn) (Document, error) {
+	var raw Doc
+	if err := cn.call(ctx, "doc.get", map[string]any{"name": DocName}, &raw, nil); err != nil {
 		return Document{}, err
 	}
 	doc, err := parseDocument(raw.Value)
@@ -248,7 +256,7 @@ func (a *Adapter) drop(err error) {
 }
 
 // apply is one change of the core's: the document read again when it moved, a terminal's fact otherwise.
-func (a *Adapter) apply(ctx context.Context, on func() *conn, ev Event) error {
+func (a *Adapter) apply(ctx context.Context, cn *conn, ev Event) error {
 	if ev.Machine != "" || ev.Terminal != "" && !local(ev.Terminal) {
 		return nil
 	}
@@ -260,8 +268,8 @@ func (a *Adapter) apply(ctx context.Context, on func() *conn, ev Event) error {
 			return nil
 		}
 		var doc Document
-		err := bounded(ctx, callWithin, on, func(ctx context.Context) (err error) {
-			doc, err = a.readDoc(ctx)
+		err := bounded(ctx, callWithin, func() *conn { return cn }, func(ctx context.Context) (err error) {
+			doc, err = a.readDoc(ctx, cn)
 			return err
 		})
 		if err != nil {

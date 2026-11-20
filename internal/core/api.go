@@ -166,15 +166,24 @@ func (s *eventStream) readOutput() {
 // Bridged is false: a stream costs the machine nothing, the mirror's changes are fanned out here.
 func (a *Adapter) Bridged() bool { return false }
 
-// read reads a terminal the mirror holds — so only of a core that passed follow's check, whose vt read never scrolls
-// a program — and none it does not know.
+// read reads a terminal the mirror holds, on a connection whose core passed the check (`checked`) itself: one
+// dialled since, to a core rolled back, is refused before anything is sent.
 func (a *Adapter) read(paneID string, lines int, format string) (ReadResult, error) {
 	if _, err := a.terminal(paneID); err != nil {
 		return ReadResult{}, err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), callWithin)
 	defer cancel()
-	read, err := a.client.Read(ctx, paneID, lines, format)
+	cn, err := a.checked(ctx)
+	if err != nil {
+		return ReadResult{}, a.refusal(err, "pane_not_found")
+	}
+	params := map[string]any{"terminal": paneID, "lines": lines}
+	if format != "" {
+		params["format"] = format
+	}
+	var read ReadResult
+	err = cn.call(ctx, "terminal.read", params, &read, nil)
 	return read, a.refusal(err, "pane_not_found")
 }
 

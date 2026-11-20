@@ -108,3 +108,43 @@ func TestACoreOlderThanRemudaNeedsIsRefused(t *testing.T) {
 		t.Fatal("a read went to a core the adapter refused")
 	}
 }
+
+func TestAReadNeverReachesAnOlderCoreDialledSince(t *testing.T) {
+	var dials atomic.Int32
+	var reads atomic.Int32
+	current := fakeCore(`"output_watches"`, func(core peer, frame sent) {
+		switch frame.method {
+		case "events.subscribe":
+			core.reply(frame.id, `{"seq":1,"terminals":[{"address":"t1","state":"live"}],"channel":3}`)
+		case "doc.get":
+			core.reply(frame.id, `{"value":null,"version":0}`)
+		}
+	})
+	older := fakeCore(`"events"`, func(core peer, frame sent) {
+		if frame.method == "terminal.read" {
+			reads.Add(1)
+			core.reply(frame.id, `{"text":"","complete":true,"how":"history"}`)
+		}
+	})
+	client := New(func(ctx context.Context) (net.Conn, error) {
+		if dials.Add(1) == 1 {
+			return current(ctx)
+		}
+		return older(ctx)
+	})
+	defer client.Close()
+	adapter := NewAdapter(client, AdapterHooks{})
+	defer adapter.Close()
+	if _, err := adapter.SessionSnapshot(); err != nil {
+		t.Fatal(err)
+	}
+	client.mu.Lock()
+	client.live.fail(&TransportError{net.ErrClosed}) // the core is rolled back under the mirror
+	client.mu.Unlock()
+	if _, _, err := adapter.PaneRecent("t1", 100); err == nil {
+		t.Fatal("a read of a rolled-back core answered")
+	}
+	if reads.Load() != 0 {
+		t.Fatal("a read reached the older core")
+	}
+}

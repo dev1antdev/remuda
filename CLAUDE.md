@@ -366,7 +366,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   nothing has that very connection failed (never one dialled since), so the
   next attempt dials a new one and the stale mirror goes. A core without
   `output_watches` (older than remuda-v0.2.0, whose vt read came before it)
-  is refused, `needs_update`, and nothing is read of it. **The document** (`Document`): the
+  is refused, `needs_update`, and nothing is read of it: the subscription,
+  its document reads and every pane read go on a connection checked so
+  (`checked`) — the subscription's own for the documents, so a snapshot and
+  its document come from one core — never one the client dialled since. **The document** (`Document`): the
   workspaces in order, each `{id, label, folder, active_tab, tabs}`, a tab
   `{id, label, layout}`, its tree herdr's `LayoutNode` with a terminal's
   address as each pane's id; a terminal carries `remuda.space` /

@@ -87,6 +87,11 @@ func (c *Client) Subscribe(ctx context.Context, params SubscribeParams) (*Subscr
 	if err != nil {
 		return nil, err
 	}
+	return cn.subscribe(ctx, params)
+}
+
+// subscribe starts an event stream on this very connection.
+func (cn *conn) subscribe(ctx context.Context, params SubscribeParams) (*Subscription, error) {
 	if len(params.Output) > 0 && !cn.hello.Has("output_watches") {
 		return nil, &Error{Kind: "needs_update", Message: "this remuda-core has no output watches"}
 	}
