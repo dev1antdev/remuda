@@ -1,6 +1,7 @@
 package core_test
 
 import (
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -291,7 +292,7 @@ func TestASceneCommandIsLaidOutAsSavedThoughATemplateHasItsProgramsName(t *testi
 	}
 	server := laid.Root.Panes()[1].PaneID
 	screenSays(t, adapter, server, `<two words><$HOME><%PATH%><"quoted">`)
-	if ran, err := client.Get(t.Context(), server); err != nil || !slices.Equal(ran.Argv, command) || !ran.Literal {
+	if ran, err := client.Get(t.Context(), server); err != nil || !slices.Equal(ran.Argv, command) || ran.Literal == nil || !*ran.Literal {
 		t.Fatalf("the core runs %q (literal %v), the scene saved %q (%v)", ran.Argv, ran.Literal, command, err)
 	}
 	if exported, err := adapter.LayoutExport(laid.TabID); err != nil || !sameShape(&exported.Root, &tree) {
@@ -427,4 +428,40 @@ func TestAWorkspaceClosedWhileALayoutIsWrittenEndsTheLayoutsPanesToo(t *testing.
 		t.Fatalf("the layout's panes outlived the close: %+v, %v", left, err)
 	}
 	eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Workspace(space) == nil && len(s.Panes) == 0 })
+}
+
+// On a core whose record says nothing of literal (0.2.0, or one rolled back to while a scene's command runs), the
+// command is told by the label the layout gave it, never taken for an idle shell.
+func TestARunningSceneCommandIsNoIdleShellOnACoreWhoseRecordSaysNothingOfIt(t *testing.T) {
+	client := coretest.Server(t).Client(t)
+	hello, err := client.Hello(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hello.Has("literal_record") {
+		t.Skipf("remuda-core %s says literal on its record itself", hello.Version)
+	}
+	adapter := adapterOf(t, client, core.AdapterHooks{})
+	made, err := adapter.WorkspaceCreate(t.TempDir(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	place := func(more map[string]string) string {
+		labels := map[string]string{core.LabelSpace: made.Workspace.WorkspaceID, core.LabelTab: made.Workspace.ActiveTabID}
+		maps.Copy(labels, more)
+		run, err := client.Run(t.Context(), core.RunParams{Argv: []string{"sh", "-c", "while :; do sleep 1; done"}, Labels: labels, Rm: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return run.Address
+	}
+	command, unmarked := place(map[string]string{core.LabelCommand: "1"}), place(nil)
+	eventually(t, adapter, func(*herdr.Snapshot) bool {
+		ran, _ := client.Get(t.Context(), command)
+		at, _ := adapter.PaneAtPrompt(unmarked)
+		return at && ran.Foreground != nil && ran.Foreground.Pid == ran.Pid
+	})
+	if at, err := adapter.PaneAtPrompt(command); at || err != nil {
+		t.Fatalf("the scene's running sh -c reads as a shell at its prompt, which a tidy would close (%v)", err)
+	}
 }

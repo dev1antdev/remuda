@@ -420,9 +420,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   which `preview` asks too: the program or the script an interpreter runs,
   past its flags, a Windows path and `.exe` too), none while the terminal's
   own shell holds it (`atPrompt`: a shell's own process in front, never a
-  terminal whose record says `literal` — a scene pane's own command, whose
-  `sh -c '…'` keeps itself in front all along and is no shell at its prompt
-  that a tidy closes), else the app it reported through OSC 7501
+  terminal that `runsCommand` — its record's `literal`, or with none the
+  `remuda.command` label — a scene pane's own command, whose `sh -c '…'`
+  keeps itself in front all along and is no shell at its prompt that a tidy
+  closes), else the app it reported through OSC 7501
   (`claude-code` → claude, `codex`, `gemini-cli` → gemini, `kimi`, any other
   app by its own name);
   `statusOf` takes the program's own word, `error` read as done; the session
@@ -626,10 +627,15 @@ components and icons as rules for whoever changes it: @docs/design.md
   lists `run_literal` and `literal_record` (`runsLiteral`, Core 35): no
   template of the program's name takes its place, no first message is sent,
   and a missing program fails the layout (`spawn_failed`); its record says
-  `literal` (`Terminal.Literal`) while it runs that command, so it never reads
-  as a shell at its prompt, and the core sets it false when keep gives the
-  pane its shell after a reboot, which then reads as one, its argv the same or
-  not, to a remuda started afresh too. `Client.Run` sends `literal` only on a
+  `literal` (`Terminal.Literal`, a `*bool`: absent is not false) while it runs
+  that command, so it never reads as a shell at its prompt, and the core sets
+  it false when keep gives the pane its shell after a reboot, which then reads
+  as one, its argv the same or not, to a remuda started afresh too. The
+  layout also labels such a terminal `remuda.command` (`LabelCommand`), read
+  only when the record says nothing of `literal` (a core rolled back below
+  `literal_record` while the command runs): the command is then never an idle
+  shell, at worst the shell such a core gives the pane after a reboot stays
+  taken for it (`runsCommand`). `Client.Run` sends `literal` only on a
   connection whose hello lists both (`needs_update` otherwise), since an older
   core ignores the field and may start that template, and one without the
   record would leave the command reading as a shell; such a core is refused a

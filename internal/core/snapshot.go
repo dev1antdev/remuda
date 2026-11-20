@@ -205,10 +205,20 @@ func appAgent(app string) string {
 }
 
 // atPrompt says whether the terminal's own shell holds it: nothing started from it runs in its foreground, and it does
-// not run a scene pane's own command, whose `sh -c '…'` keeps itself in front all along (Literal).
+// not run a scene pane's own command, whose `sh -c '…'` keeps itself in front all along (runsCommand).
 func atPrompt(t *Terminal) bool {
 	fg := t.Foreground
-	return fg != nil && fg.Pid == t.Pid && shells[programName(fg.Name)] && !t.Literal
+	return fg != nil && fg.Pid == t.Pid && shells[programName(fg.Name)] && !runsCommand(t)
+}
+
+// runsCommand says whether the terminal runs a scene pane's own command: its record's word, else, from a core whose
+// record has none, the label remuda gave it, so a running command is never taken for an idle shell — at worst a shell
+// such a core gave the pane after a reboot is taken for the command.
+func runsCommand(t *Terminal) bool {
+	if t.Literal != nil {
+		return *t.Literal
+	}
+	return t.Labels[LabelCommand] != ""
 }
 
 // programName is a process's name without its folder or Windows' .exe.

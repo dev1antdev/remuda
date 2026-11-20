@@ -13,9 +13,9 @@ type Terminal struct {
 	Name    string            `json:"name"`
 	Labels  map[string]string `json:"labels"`
 	Argv    []string          `json:"argv"`
-	// Literal: it runs what a literal run started (a scene pane's own command), not a shell keep gave it since; read
-	// only from a core with runsLiteral.
-	Literal    bool   `json:"literal"`
+	// Literal: it runs what a literal run started (a scene pane's own command), not a shell keep gave it since; nil
+	// from a core whose record says nothing of it (one without literal_record, rolled back to, say).
+	Literal    *bool  `json:"literal"`
 	Cwd        string `json:"cwd"`
 	Keep       bool   `json:"keep"`
 	State      string `json:"state"`
