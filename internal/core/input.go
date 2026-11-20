@@ -152,6 +152,9 @@ func (a *Adapter) StagePrompt(target, text string, front int, asMessage bool) (i
 	if front != 0 && pid != 0 && pid != front {
 		return 0, nil, agentLeft(target)
 	}
+	if front == 0 {
+		front = pid // the agent this look first saw is the one it is for, to the end of the look
+	}
 	if !readyForPrompt(&t) {
 		return pid, nil, &herdr.Error{Code: "agent_not_ready", Message: "the agent in " + target + " has reported no status yet (one that never does takes no prompt on remuda-core)"}
 	}

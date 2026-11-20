@@ -244,15 +244,21 @@ func TestRecentRowsEndAtTheLastTextNotAColouredBlankRow(t *testing.T) {
 
 // stagedOn is an adapter over a core whose one terminal is the agent given, sends counted.
 func stagedOn(t *testing.T, terminal string, sends *atomic.Int32) *Adapter {
+	return seenThenGot(t, terminal, terminal, sends)
+}
+
+// seenThenGot is stagedOn whose mirror shows one terminal and whose terminal.get answers another, a look that raced a
+// change in front.
+func seenThenGot(t *testing.T, seen, got string, sends *atomic.Int32) *Adapter {
 	t.Helper()
 	client := New(fakeCore(`"output_watches","send_foreground"`, func(core peer, frame sent) {
 		switch frame.method {
 		case "events.subscribe":
-			core.reply(frame.id, `{"seq":1,"terminals":[`+terminal+`],"channel":3}`)
+			core.reply(frame.id, `{"seq":1,"terminals":[`+seen+`],"channel":3}`)
 		case "doc.get":
 			core.reply(frame.id, `{"value":null,"version":0}`)
 		case "terminal.get":
-			core.reply(frame.id, terminal)
+			core.reply(frame.id, got)
 		case "terminal.send":
 			sends.Add(1)
 			core.reply(frame.id, `{"status":"idle","turn":0}`)
@@ -279,6 +285,11 @@ func TestADeliveryIsBoundFromItsFirstSightOfTheAgent(t *testing.T) {
 	replaced := stagedOn(t, `{"address":"t1","state":"live","pid":10,"foreground":{"pid":12,"name":"claude","argv":["claude"]},"status":{"state":"idle","app":"claude-code"}}`, &sends)
 	if _, _, err := replaced.StagePrompt("t1", "the task", 11, false); !herdr.IsCode(err, "agent_left") {
 		t.Fatalf("another agent in front of a bound delivery: %v", err)
+	}
+	first := seenThenGot(t, `{"address":"t1","state":"live","pid":10,"foreground":{"pid":11,"name":"claude","argv":["claude"]},"status":{"state":"idle","app":"claude-code"}}`,
+		`{"address":"t1","state":"live","pid":10,"foreground":{"pid":12,"name":"claude","argv":["claude"]},"status":{"state":"idle","app":"claude-code"}}`, &sends)
+	if _, _, err := first.StagePrompt("t1", "the task", 0, false); !herdr.IsCode(err, "agent_left") {
+		t.Fatalf("a first look whose agent was replaced between the mirror and the core: %v", err)
 	}
 	if sends.Load() != 0 {
 		t.Fatal("a send reached the agent that replaced the one the delivery was for")
