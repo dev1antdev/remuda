@@ -1045,11 +1045,12 @@ components and icons as rules for whoever changes it: @docs/design.md
   creation the runtime told (`Running.Started`): on Linux its birth to the
   millisecond, read as remuda-core reads it (`/proc/<pid>/stat`'s ticks after
   the boot the script tells first: `/proc/stat`'s whole second with the real
-  clock less `/proc/uptime`, the real clock read before and after it so a slow
-  reading widens the window rather than moving it, `linuxBoot.mayBe`, within
-  `coreBootSlack` 10 ms of the core's own reading), so a later process given
-  the pid in the same second is another; a
-  FILETIME's millisecond on Windows; on macOS, where ps tells no millisecond,
+  clock less `/proc/uptime`, the real clock read before and after it, the
+  tightest of three tries, `linuxBoot.mayBe`, within `coreBootSlack` 10 ms of
+  the core's own reading), so a later process given the pid in the same second
+  is another; a reading wider than `maxBootSpan` 20 ms leaves the processes the
+  second compare cannot settle out of the answer, as a clock not read does
+  (below); a FILETIME's millisecond on Windows; on macOS, where ps tells no millisecond,
   `ps -o lstart`'s second alone (`sameCreation`; on Linux the second before
   too where no birth was read) — a later process given the pid within that
   very second passes there, until the core's next look (half a second) tells

@@ -51,7 +51,7 @@ func TestOnWindowsANativeClaudeIsFoundByItsCreationWhileItRuns(t *testing.T) {
 	found := func(what string) bool {
 		t.Helper()
 		out := wintest.Text(t, remote, lookup)
-		got := parseSessionsByPID(out, procs, rpath.For(home), machineClock{})
+		got, _ := parseSessionsByPID(out, procs, rpath.For(home), machineClock{})
 		if len(got) > 1 || len(got) == 1 && got[pid] != "4c9d6f0e-1111-4222-8333-944455556666" {
 			t.Fatalf("%s: got %v from %q", what, got, out)
 		}
@@ -84,7 +84,7 @@ func TestOnWindowsANativeClaudeIsFoundByItsCreationWhileItRuns(t *testing.T) {
 	_ = cmd.Wait()
 	write(time.Now(), creation)
 	out = wintest.Text(t, remote, lookup)
-	if got := parseSessionsByPID(out, procs, rpath.For(home), machineClock{}); len(got) != 0 || !strings.Contains(out, "\037-\037") {
+	if got, _ := parseSessionsByPID(out, procs, rpath.For(home), machineClock{}); len(got) != 0 || !strings.Contains(out, "\037-\037") {
 		t.Fatalf("a process gone: got %v from %q", got, out)
 	}
 }

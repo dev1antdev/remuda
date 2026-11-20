@@ -2,6 +2,7 @@ package transcript
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"slices"
@@ -33,19 +34,22 @@ func (r *Reader) SessionsOf(procs []Running) (map[int]string, error) {
 	if slices.ContainsFunc(procs, needsClock) {
 		clock, clockErr = r.machineClock()
 	}
-	found := map[int]string{}
+	found, unsure := map[int]string{}, map[int]bool{}
 	if lookup := sessionsByPIDScript(procs); lookup != "" {
 		out, err := shell.Text(r.host, lookup, 15*time.Second)
 		if err != nil {
 			return nil, err
 		}
-		found = parseSessionsByPID(out, procs, rpath.For(r.host.Home()), clock)
+		found, unsure = parseSessionsByPID(out, procs, rpath.For(r.host.Home()), clock)
 	}
 	answer := map[int]string{}
 	for _, p := range procs {
-		if clockErr == nil || !needsClock(p) {
+		if (clockErr == nil || !needsClock(p)) && !unsure[p.PID] {
 			answer[p.PID] = found[p.PID]
 		}
+	}
+	if len(unsure) > 0 {
+		return answer, errors.Join(clockErr, errors.New("the machine was too slow telling its boot to tell its processes apart"))
 	}
 	return answer, clockErr
 }
@@ -110,9 +114,16 @@ func sessionsByPIDScript(procs []Running) string {
 	}
 	return script.PATH + "\n" + script.CwdOf + `system=$(uname -s 2>/dev/null)
 if [ "$system" = Linux ]; then
-  before=$(date +%s%3N)
-  read -r up _ < /proc/uptime
-  after=$(date +%s%3N)
+  span=
+  for try in 1 2 3; do
+    early=$(date +%s%3N)
+    read -r uptime rest < /proc/uptime
+    late=$(date +%s%3N)
+    case "$early$late" in *[!0-9]*) break ;; esac
+    if [ -z "$span" ] || [ $((late - early)) -lt "$span" ]; then
+      span=$((late - early)) before=$early up=$uptime after=$late
+    fi
+  done
   printf 'system\037Linux\037%s\037%s\037%s\037%s\037%s\036\n' "$(sed -n 's/^btime //p' /proc/stat)" "$up" "$before" "$after" "$(getconf CLK_TCK)"
 else
   printf 'system\037%s\036\n' "$system"
@@ -188,13 +199,14 @@ type claudeSessionFile struct {
 	StartedAt   int64  `json:"startedAt"`   // unix ms, when Claude Code began: never before its process was created
 }
 
-// parseSessionsByPID reads sessionsByPIDScript's answer.
-func parseSessionsByPID(out string, procs []Running, style rpath.Style, clock machineClock) map[int]string {
+// parseSessionsByPID reads sessionsByPIDScript's answer, and names the processes it could not tell from a later one
+// given their pid: a reading of the boot too slow to place them.
+func parseSessionsByPID(out string, procs []Running, style rpath.Style, clock machineClock) (map[int]string, map[int]bool) {
 	cwds, seen, started := map[int]string{}, map[int]time.Time{}, map[int]int64{}
 	for _, p := range procs {
 		cwds[p.PID], seen[p.PID], started[p.PID] = p.CWD, p.Seen, p.Started
 	}
-	found, linux, boot := map[int]string{}, false, linuxBoot{}
+	found, unsure, linux, boot := map[int]string{}, map[int]bool{}, false, linuxBoot{}
 	for _, record := range script.Sections(out) {
 		if system, ok := strings.CutPrefix(strings.TrimSpace(record), "system"+script.US); ok {
 			linux, boot = strings.HasPrefix(system, "Linux"), bootOf(system)
@@ -225,9 +237,17 @@ func parseSessionsByPID(out string, procs []Running, style rpath.Style, clock ma
 		if len(fields) == 7 {
 			ticks = fields[6]
 		}
-		if told := started[pid]; told != 0 && !(sameCreation(start, told, linux) && boot.mayBe(ticks, told)) ||
-			told == 0 && !clock.begunBy(start, seen[pid]) {
-			continue // another process than the one seen: the pid changed hands before it was read
+		if told := started[pid]; told != 0 {
+			fits, sure := boot.mayBe(ticks, told)
+			if !sameCreation(start, told, linux) || sure && !fits {
+				continue // another process than the one seen: the pid changed hands before it was read
+			}
+			if !sure {
+				unsure[pid] = true
+				continue
+			}
+		} else if !clock.begunBy(start, seen[pid]) {
+			continue
 		}
 		var id string
 		switch fields[1] {
@@ -240,7 +260,7 @@ func parseSessionsByPID(out string, procs []Running, style rpath.Style, clock ma
 			found[pid] = id
 		}
 	}
-	return found
+	return found, unsure
 }
 
 // claudeSession is the session of the candidate file that is this very process's, none for one nothing ties to it.
@@ -290,11 +310,15 @@ func filetimeOf(s string) (int64, bool) {
 // millisecond and the 5 ms it keeps a reading across.
 const coreBootSlack = 10
 
+// maxBootSpan is the widest a Linux machine's reading of its boot may be and still tell two processes born in one
+// second apart: the real clock read this far apart around /proc/uptime, at the tightest of three tries.
+const maxBootSpan = 20
+
 // linuxBoot is what a Linux machine told of its boot: /proc/stat's whole second (ps's), the earliest and latest moment
-// it can have been in ms (the real clock read before and after /proc/uptime, which counts hundredths), and the clock
-// ticks a second.
+// it can have been in ms (the real clock read before and after /proc/uptime, which counts hundredths), how far apart
+// those readings were, and the clock ticks a second.
 type linuxBoot struct {
-	whole, earliest, latest, hz int64
+	whole, earliest, latest, span, hz int64
 }
 
 // bootOf reads the system line's boot facts: "Linux", btime, uptime, the real clock in ms before and after it, the
@@ -309,24 +333,24 @@ func bootOf(system string) linuxBoot {
 	before, errBefore := strconv.ParseInt(fields[3], 10, 64)
 	after, errAfter := strconv.ParseInt(fields[4], 10, 64)
 	hz, errHz := strconv.ParseInt(fields[5], 10, 64)
-	if errWhole != nil || errUp != nil || errBefore != nil || errAfter != nil || errHz != nil || hz <= 0 || after < before {
-		return linuxBoot{}
+	if errWhole != nil || errUp != nil || errBefore != nil || errAfter != nil || errHz != nil || hz <= 0 || after < before || before < whole*1000 {
+		return linuxBoot{} // a `date` telling no milliseconds reads as seconds, before the boot
 	}
 	upMS := int64(math.Round(up * 1000))
 	inSecond := func(ms int64) int64 { return min(max(ms, whole*1000), whole*1000+999) }
-	return linuxBoot{whole: whole, earliest: inSecond(before - upMS - 10), latest: inSecond(after + 1 - upMS), hz: hz}
+	return linuxBoot{whole: whole, earliest: inSecond(before - upMS - 10), latest: inSecond(after + 1 - upMS), span: after - before, hz: hz}
 }
 
-// mayBe says whether a Linux process started that many ticks after the boot can be the one remuda-core saw born at
-// told (unix ms), reckoned as the core reckons it: the boot held to ps's whole second, plus the ticks. A slow reading
-// of the boot widens the window rather than moving it; where no boot or start was told, anything may be.
-func (b linuxBoot) mayBe(ticks string, told int64) bool {
+// mayBe says whether a Linux process started that many ticks after the boot fits the one remuda-core saw born at told
+// (unix ms), reckoned as the core reckons it: the boot held to ps's whole second, plus the ticks — and whether the
+// reading of the boot was tight enough to tell. Where no boot or start was told, anything fits.
+func (b linuxBoot) mayBe(ticks string, told int64) (fits, sure bool) {
 	since, err := strconv.ParseInt(strings.TrimSpace(ticks), 10, 64)
 	if b.hz == 0 || err != nil {
-		return true
+		return true, true
 	}
 	offset := since * 1000 / b.hz
-	return told >= b.earliest+offset-coreBootSlack && told <= b.latest+offset+coreBootSlack
+	return told >= b.earliest+offset-coreBootSlack && told <= b.latest+offset+coreBootSlack, b.span <= maxBootSpan
 }
 
 // sameCreation says whether the script's start is the creation the runtime told (unix ms), reading no clock.

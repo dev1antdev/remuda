@@ -230,8 +230,8 @@ func TestAnAgentInAFolderEndingInALineBreakIsFound(t *testing.T) {
 }
 
 // On Linux the process's birth is read to the millisecond, as remuda-core reads it: a later process given the pid within
-// the same second is another, whatever its own records say, and a reading of the boot held up only widens the window;
-// no machine clock is read for it.
+// the same second is another, whatever its own records say, and a reading of the boot too slow to tell them apart
+// tells nothing; no machine clock is read for it.
 func TestALinuxProcessIsKnownByItsBirthToTheMillisecond(t *testing.T) {
 	const start = "Thu Nov 19 00:36:10 2026"
 	boot := time.Date(2026, 11, 19, 0, 0, 0, 708_000_000, time.UTC) // btime counts whole seconds: :00
@@ -243,6 +243,7 @@ func TestALinuxProcessIsKnownByItsBirthToTheMillisecond(t *testing.T) {
 			strconv.FormatInt(read.Add(after).UnixMilli(), 10) + script.US + "100" + script.RS + "\n"
 	}
 	record := func(ticks int64) string {
+		start := boot.Truncate(time.Second).Add(time.Duration(ticks) * 10 * time.Millisecond).Format(time.ANSIC) // as ps tells it
 		return "7" + script.US + "claude" + script.US + start + script.US + "/a" + script.US +
 			`{"pid":7,"sessionId":"id-1","cwd":"/a","procStart":"` + start + `","startedAt":1795048571000}` + script.US +
 			start + script.US + strconv.FormatInt(ticks, 10) + script.RS + "\n"
@@ -253,24 +254,38 @@ func TestALinuxProcessIsKnownByItsBirthToTheMillisecond(t *testing.T) {
 		before, after time.Duration // how long before and after the uptime read the real clock was read
 		ticks         int64         // the start since boot, hundredths
 		want          string
+		unsure        bool
 	}{
-		{"the very process", time.Millisecond, time.Millisecond, 216940, "id-1"},
-		{"the very process, the real clock read 100 ms late", time.Millisecond, 100 * time.Millisecond, 216940, "id-1"},
-		{"the very process, the real clock read 100 ms early", 100 * time.Millisecond, time.Millisecond, 216940, "id-1"},
-		{"another born 400 ms later in the same second", time.Millisecond, time.Millisecond, 216980, ""},
-		{"another born 60 ms later", time.Millisecond, time.Millisecond, 216946, ""},
+		{"the very process", time.Millisecond, time.Millisecond, 216940, "id-1", false},
+		{"the very process, the real clock read 15 ms late", time.Millisecond, 15 * time.Millisecond, 216940, "id-1", false},
+		{"the very process, the real clock read 15 ms early", 15 * time.Millisecond, time.Millisecond, 216940, "id-1", false},
+		{"another born 400 ms later in the same second", time.Millisecond, time.Millisecond, 216980, "", false},
+		{"another born 60 ms later", time.Millisecond, time.Millisecond, 216946, "", false},
+		{"another born 400 ms later, the boot read over 500 ms", 500 * time.Millisecond, time.Millisecond, 216980, "", true},
+		{"the very process, the boot read over 100 ms", time.Millisecond, 100 * time.Millisecond, 216940, "", true},
+		{"another born two seconds later, the boot read over 100 ms", time.Millisecond, 100 * time.Millisecond, 217140, "", false},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			procs := []Running{{PID: 7, Agent: "claude", CWD: "/a", Seen: seen, Started: seen.UnixMilli()}}
 			never := machineClock{asked: seen.Add(time.Hour), latest: seen.Add(-time.Hour)}
-			if got := parseSessionsByPID(system(c.before, c.after)+record(c.ticks), procs, rpath.Style{}, never); got[7] != c.want {
-				t.Fatalf("got %v, want %q", got, c.want)
+			got, unsure := parseSessionsByPID(system(c.before, c.after)+record(c.ticks), procs, rpath.Style{}, never)
+			if got[7] != c.want || unsure[7] != c.unsure {
+				t.Fatalf("got %v, unsure %v, want %q", got, unsure, c.want)
 			}
 		})
 	}
-	noMillis := "Linux" + script.US + "1795046400" + script.US + "12.34" + script.US + "%3N" + script.US + "%3N" + script.US + "100"
-	if b := bootOf(noMillis); b.hz != 0 {
-		t.Fatalf("a date without milliseconds read as a boot: %+v", b)
+	slow := &shell.Fake{Name: "gog", Remote: true, Answer: func(string) (string, error) {
+		return system(time.Millisecond, 100*time.Millisecond) + record(216940), nil
+	}}
+	got, err := NewReader(slow).SessionsOf([]Running{{PID: 7, Agent: "claude", CWD: "/a", Seen: seen, Started: seen.UnixMilli()}})
+	if _, told := got[7]; err == nil || told {
+		t.Fatalf("a boot read too slowly to tell: got %v, %v", got, err)
+	}
+	for _, date := range []string{"%3N", "1795048800"} {
+		noMillis := "Linux" + script.US + "1795046400" + script.US + "12.34" + script.US + date + script.US + date + script.US + "100"
+		if b := bootOf(noMillis); b.hz != 0 {
+			t.Fatalf("a date telling no milliseconds (%s) read as a boot: %+v", date, b)
+		}
 	}
 }
 
@@ -536,13 +551,13 @@ func TestAProcessBegunAfterTheAgentWasSeenHasNoSession(t *testing.T) {
 			asked := seen.Add(20 * time.Minute)
 			machineNow := asked.Add(c.ahead + 300*time.Millisecond)
 			clock := machineClock{asked: asked, latest: time.Unix(machineNow.Unix()+1, 0)}
-			got := parseSessionsByPID(record, []Running{{PID: 7, Agent: "claude", CWD: "/a", Seen: seen}}, rpath.Style{}, clock)
+			got, _ := parseSessionsByPID(record, []Running{{PID: 7, Agent: "claude", CWD: "/a", Seen: seen}}, rpath.Style{}, clock)
 			if got[7] != c.want {
 				t.Fatalf("got %v, want %q", got, c.want)
 			}
 		})
 	}
-	if got := parseSessionsByPID(record, []Running{{PID: 7, Agent: "claude", CWD: "/a"}}, rpath.Style{}, machineClock{asked: began, latest: began}); got[7] != "id-1" {
+	if got, _ := parseSessionsByPID(record, []Running{{PID: 7, Agent: "claude", CWD: "/a"}}, rpath.Style{}, machineClock{asked: began, latest: began}); got[7] != "id-1" {
 		t.Fatalf("no sighting known: got %v", got)
 	}
 
@@ -621,7 +636,7 @@ func TestTheCreationTheRuntimeToldDecides(t *testing.T) {
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			procs := []Running{{PID: 7, Agent: "claude", CWD: c.cwd, Seen: began.Add(time.Minute), Started: c.started.UnixMilli()}}
-			if got := parseSessionsByPID(c.out, procs, c.style, c.clock); got[7] != c.want {
+			if got, _ := parseSessionsByPID(c.out, procs, c.style, c.clock); got[7] != c.want {
 				t.Fatalf("got %v, want %q", got, c.want)
 			}
 		})
@@ -707,7 +722,7 @@ func TestParseSessionsByPID(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got := parseSessionsByPID(c.out, c.procs, c.style, machineClock{})
+			got, _ := parseSessionsByPID(c.out, c.procs, c.style, machineClock{})
 			if got[c.procs[0].PID] != c.want {
 				t.Fatalf("got %v, want %q", got, c.want)
 			}
