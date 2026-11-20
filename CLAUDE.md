@@ -816,8 +816,29 @@ components and icons as rules for whoever changes it: @docs/design.md
   master's places for RPC) once the probe found the binary (`coreLookup`
   over `script.CoreBin`, the lookup the vitals share: `~/.local/bin/
   remuda-core`, or `remuda-core.exe` with its ConPTY beside it; none is
-  `errNoCore`, naming `remuda core -host H install`) and it answered a
-  hello; `rc connect` starts a core where none runs. A Windows PC is
+  `errNoCore`, naming Updates' Install remuda-core and `remuda core -host H
+  install`) and it answered a hello; `rc connect` starts a core where none
+  runs. **A remote whose core is missing or not answering stays connected**
+  (`noCore`, tested over an `ssh` stand-in and a throwaway core in
+  `core_missing_test.go`): the master is kept, so its scripts, the vitals
+  and Updates' Install remuda-core reach it and every check of
+  `StateConnected` counts it, while `Ready` answers that reason with no
+  client (`NoCoreError`) — the watcher's snapshot error, so the roster shows the machine
+  in error with those words and no workspace, `reached` beside it (its
+  master is up: the page offers no Wake up, `wake.ts`), and the queue and
+  the placer start nothing there (`runsAgents` in `internal/app/queue.go`:
+  `Ready` without an error, tested) — and `RetryCore` looks for
+  the core again over the same master (of two looks at once, the second
+  to find it lets its link go): from `Ready` every 15 s and at once on
+  every `events.JobDone` of the
+  machine (`internal/app`), a lookup that fails asking `transportError`
+  whether the master is gone; once it follows the core it tells the
+  manager's `OnState` the machine is connected, and every such move —
+  a remote connected or back, or following a core installed there by hand
+  — has the app read its vitals again. A remote's ⓘ says "remuda-core is
+  not installed" first, bad, with Install opening that Updates row
+  (`concerns.ts`, while the vitals read no `remuda_core`; Updates says why
+  when the row is not offered). A Windows PC is
   reached the same way, which no test proves yet (the check on the real PC
   is Core 19's). The machine's `herdr.API` is then the core
   adapter (`coreLink`: the client and `core.NewAdapter`, lent the machine
@@ -1398,7 +1419,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   and `bodyConcerns` (under-voltage and heat from 85 °C bad, a capped
   clock, 75 °C and tight memory a look) join the ⓘ's concerns)
   from one POSIX script per machine through `shell.Text`, every 15
-  minutes and on demand (`POST /api/machines/{id}/health`, `Recheck`).
+  minutes, whenever a remote connects (`events.MachineState`) and on
+  demand (`POST /api/machines/{id}/health`, `Recheck`).
   **Claude Code's sign-in and settings** (`claude.go`, tested on a
   `claude` stand-in first on a bare PATH): `LoginScript` runs `claude
   auth status --json` (2.1.318's `loginExpiresAt`) in a call of its own
@@ -1966,14 +1988,21 @@ components and icons as rules for whoever changes it: @docs/design.md
   is said and setup goes on — CI's Windows job checks it really lands
   there, `live_windows_test.go`); the
   vitals read `remuda_core`; Updates offers `what = core` ("Install
-  remuda-core" / "Update remuda-core") on every machine with remuda where
-  it is missing or older and a build exists (a Mac or Linux
+  remuda-core" / "Update remuda-core") on every machine where it is
+  missing or older and a build exists (a Mac or Linux
   on either CPU, Windows on x86-64: `AssetName` less Windows on arm),
-  whatever the backend, so Update
+  whatever the backend, run as this remuda's own installer
+  (`setup.CoreInstaller`, the script `remuda core -host H install` runs)
+  over the machine's shell, so no remuda need be there — the command
+  shown names it, its version and the script's sha256 (`naming`: an
+  installer changed since it was shown makes it stale), the installer
+  itself the job's script
+  (`Update.script`, never sent back on Run: Update everywhere's request
+  for a fleet of installs stays under its 1 MB); Update
   everywhere puts it everywhere before the move — on a remote after its
-  remuda release (`remoteOrder`), since its command first checks the
-  machine's remuda knows `remuda core` (`-h`: an older one would start a
-  server on an unknown word), on the page's own host before it.
+  remuda release (`remoteOrder`), on the page's own host before it. An
+  agent's update on a machine connected without its core moves no chat
+  and stands done (`chatsMoved`: `Ready`'s `machines.NoCoreError`).
 - **herdr is remuda's to run.** `herdr.EnsureServer(bin, socket)` pings
   and, when nothing answers, starts `herdr server` (the headless server)
   detached, at most once per two minutes — at startup and whenever the

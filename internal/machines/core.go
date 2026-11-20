@@ -10,6 +10,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/core"
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/script"
+	"github.com/dev1antdev/remuda/internal/shell"
 	"github.com/dev1antdev/remuda/internal/sshx"
 )
 
@@ -88,6 +89,43 @@ func (mc *Machine) reachCore(conn *sshx.Conn, found probe) (*coreLink, error) {
 		return nil, fmt.Errorf("remuda-core on %s not answering: %v", mc.Cfg.Host, err)
 	}
 	return newCoreLink(mc, client, mc.transportError), nil
+}
+
+// RetryCore looks for remuda-core again on a remote connected without one, over the master it holds, and follows it
+// once it answers: a job there may have just installed it. A master gone meanwhile fails the machine, for Ready to dial
+// it again; of two looks at once the second to find the core lets its own go.
+func (mc *Machine) RetryCore() {
+	mc.mu.Lock()
+	conn, waiting := mc.conn, mc.noCore != nil
+	mc.mu.Unlock()
+	if !waiting {
+		return
+	}
+	out, err := shell.Text(conn, coreLookup, 10*time.Second)
+	if err != nil {
+		mc.transportError(err)
+		return
+	}
+	link, err := mc.reachCore(conn, parseProbe(out))
+	mc.mu.Lock()
+	switch {
+	case mc.conn != conn || mc.noCore == nil: // removed, failed, connected afresh, or the core found by another look
+		mc.mu.Unlock()
+		if link != nil {
+			link.close()
+		}
+		return
+	case err != nil:
+		mc.noCore = err
+		mc.mu.Unlock()
+		return
+	}
+	mc.client, mc.attach, mc.link, mc.noCore = link.adapter, link.terminals, link, nil
+	hook := mc.onState
+	mc.mu.Unlock()
+	if hook != nil {
+		hook(mc.ID(), mc.Label(), StateConnected, "") // connected with its core now: whoever hears it reads the machine again
+	}
 }
 
 // OnCore says whether the machine is reached through remuda-core rather than herdr.
