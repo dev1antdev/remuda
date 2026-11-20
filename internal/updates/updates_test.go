@@ -1,6 +1,8 @@
 package updates
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -272,6 +274,12 @@ func TestCoreIsOfferedWhereItIsMissingOrOlder(t *testing.T) {
 	}
 	if u := find(&health.Report{OS: "Linux 6.12", Arch: "amd64"}); u == nil || !strings.HasSuffix(u.run(), setup.CoreInstaller()) {
 		t.Fatalf("a Linux machine with neither remuda nor remuda-core is not offered this remuda's own installer: %+v", u)
+	}
+	if sum := sha256.Sum256([]byte(find(&mac).run())); !strings.Contains(find(&mac).Command, hex.EncodeToString(sum[:8])) {
+		t.Fatal("the command shown does not name the installer's digest")
+	}
+	if naming("# remuda-core 0.2.0", "one installer") == naming("# remuda-core 0.2.0", "another installer") {
+		t.Fatal("an installer changed under the same version leaves the command shown as it was: a stale Run would pass")
 	}
 	// Update everywhere sends every step's command back on Run, under the server's 1 MB a request: a fleet's worth of
 	// installs must fit, so the installer itself never travels in the command

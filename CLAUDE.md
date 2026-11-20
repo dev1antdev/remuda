@@ -1960,7 +1960,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   whatever the backend, run as this remuda's own installer
   (`setup.CoreInstaller`, the script `remuda core -host H install` runs)
   over the machine's shell, so no remuda need be there — the command
-  shown names it and its version, the installer itself the job's script
+  shown names it, its version and the script's sha256 (`naming`: an
+  installer changed since it was shown makes it stale), the installer
+  itself the job's script
   (`Update.script`, never sent back on Run: Update everywhere's request
   for a fleet of installs stays under its 1 MB); Update
   everywhere puts it everywhere before the move — on a remote after its

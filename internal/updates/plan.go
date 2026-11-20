@@ -5,6 +5,8 @@
 package updates
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"strings"
 
@@ -22,6 +24,13 @@ type Update struct {
 	Note    string `json:"note,omitempty"`
 
 	script string // what runs when the command shown only names it: a script this remuda carries, too long to travel back on every Run
+}
+
+// naming is a command shown in place of the script it names, the script's digest in it: one changed since it was
+// shown makes the command stale.
+func naming(words, script string) string {
+	sum := sha256.Sum256([]byte(script))
+	return words + "\n# the script's sha256: " + hex.EncodeToString(sum[:8])
 }
 
 // run is the script the update runs: its own, else the command shown.
@@ -161,8 +170,8 @@ func Plan(what string, r *health.Report) (Update, error) {
 		if r.RemudaCore != "" {
 			u.Title, u.Note = "Update remuda-core", r.RemudaCore+arrow(health.PinnedCore)+". Swapped by its own update: its terminals keep running."
 		}
-		u.Command = "# this remuda's own remuda-core installer, the one `remuda core -host H install` runs, over the SSH connection:\n# remuda-core " + health.PinnedCore + ", its checksum verified, into ~/.local/bin"
 		u.script = path + "\n" + setup.CoreInstaller()
+		u.Command = naming("# this remuda's own remuda-core installer, the one `remuda core -host H install` runs, over the SSH connection:\n# remuda-core "+health.PinnedCore+", its checksum verified, into ~/.local/bin", u.script)
 		return u, nil
 	case "mcp":
 		if r == nil || r.Remuda == "" {
