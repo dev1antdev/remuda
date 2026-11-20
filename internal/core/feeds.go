@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"strconv"
 	"sync"
 	"time"
 
@@ -18,7 +17,7 @@ import (
 // that stand, the new stream is not told every matching row still on a screen as if the core had just seen it, and a
 // watch that did not change keeps telling its rows as they appear. Only a new watch gets a feed of its own.
 type feed struct {
-	key   string
+	key   OutputWatch // the watch as subscribed: the adapter's feeds are kept by it
 	pane  string
 	match herdr.OutputMatch
 	sub   *Subscription
@@ -35,11 +34,6 @@ const opensAtOnce = 8
 // bounded: a core that answers keeps the join going however many rounds of opensAtOnce its watches take. A test
 // shortens it.
 var joinWithin = callWithin
-
-// feedKey names a watch by its pane and what it looks for.
-func feedKey(w OutputWatch) string {
-	return w.Terminal + "\x00" + w.Match.Type + "\x00" + w.Match.Value + "\x00" + strconv.Itoa(w.Lines)
-}
 
 // add joins the stream to a feed that still tells; false once the feed ended.
 func (f *feed) add(s *eventStream) bool {
@@ -92,7 +86,7 @@ func (a *Adapter) join(s *eventStream, watches []OutputWatch) error {
 	defer a.feedMu.Unlock()
 	var missing []OutputWatch
 	for _, w := range watches {
-		if f := a.feeds[feedKey(w)]; f != nil && f.add(s) {
+		if f := a.feeds[w]; f != nil && f.add(s) {
 			s.feeds = append(s.feeds, f)
 		} else {
 			missing = append(missing, w)
@@ -145,7 +139,7 @@ func (a *Adapter) join(s *eventStream, watches []OutputWatch) error {
 		return a.refusal(refused, "pane_not_found")
 	}
 	for i, w := range missing {
-		f := &feed{key: feedKey(w), pane: w.Terminal, match: herdr.OutputMatch{Type: w.Match.Type, Value: w.Match.Value}, sub: subs[i], streams: map[*eventStream]struct{}{s: {}}}
+		f := &feed{key: w, pane: w.Terminal, match: herdr.OutputMatch{Type: w.Match.Type, Value: w.Match.Value}, sub: subs[i], streams: map[*eventStream]struct{}{s: {}}}
 		a.feeds[f.key] = f
 		s.feeds = append(s.feeds, f)
 		go a.tell(f)

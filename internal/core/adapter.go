@@ -33,8 +33,8 @@ type Adapter struct {
 	streams  map[*eventStream]struct{}
 	badDoc   bool // a document that is no document was logged already
 
-	feedMu sync.Mutex       // join and leave one at a time; held over a feed's subscribe, never by a feed's teller
-	feeds  map[string]*feed // by feedKey: the output feeds that stand
+	feedMu sync.Mutex            // join and leave one at a time; held over a feed's subscribe, never by a feed's teller
+	feeds  map[OutputWatch]*feed // the output feeds that stand, by their watch
 
 	docMu   sync.Mutex // one write of the document at a time from this remuda (editDoc)
 	opening sync.Mutex // one WorktreeOpen at a time, so a second open of a checkout finds the first one's workspace
@@ -70,7 +70,7 @@ func NewAdapter(client *Client, sh shell.Shell, hooks AdapterHooks) *Adapter {
 	a := &Adapter{
 		client: client, shell: sh, hooks: hooks, life: ctx, stop: stop, done: make(chan struct{}),
 		state: mirror{terminals: map[string]*Terminal{}}, answered: make(chan struct{}), streams: map[*eventStream]struct{}{},
-		feeds: map[string]*feed{},
+		feeds: map[OutputWatch]*feed{},
 	}
 	go a.run(ctx)
 	return a
