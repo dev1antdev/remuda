@@ -41,10 +41,11 @@ func (r *Reader) SessionsOf(procs []Running) (map[int]string, error) {
 
 // sessionsByPIDScript prints a record per process: pid, agent, the process's start as Claude Code records it
 // (`ps -o lstart` in UTC; "" for a live process whose start ps does not tell; "ms:<unix ms>" for a native Windows
-// process Git Bash's own tools do not see, its creation through PowerShell's Get-Process; "-" for one gone), then for
+// process Git Bash's own tools do not see, its creation through PowerShell's Get-Process, asked on Git Bash alone;
+// "-" for one gone), then for
 // Claude
 // Code the text of every candidate session file (the environment's folders, a relative one from the process's
-// folder, then the default), each ended by GS, or, for Codex, a line per open rollout:
+// folder, then the default), each ended by GS, or, for Codex, a line per open rollout that has its session_meta yet:
 // the pid holding it, whether its session_meta is the person's thread (1) or a subagent's (0), the thread id that
 // session_meta names, its path.
 func sessionsByPIDScript(procs []Running) string {
@@ -59,12 +60,16 @@ func sessionsByPIDScript(procs []Running) string {
 		return ""
 	}
 	return `PATH="$PATH:/usr/sbin:/sbin"
+case "$(uname -s 2>/dev/null)" in MINGW* | MSYS* | CYGWIN*) windows=1 ;; *) windows= ;; esac
 s() {
   start=$(LC_ALL=C TZ=UTC ps -o lstart= -p "$1" 2>/dev/null)
-  [ -n "$start" ] || kill -0 "$1" 2>/dev/null || {
-    ms=$(powershell.exe -NoProfile -NonInteractive -Command "[DateTimeOffset]::new((Get-Process -Id $1 -ErrorAction Stop).StartTime).ToUnixTimeMilliseconds()" 2>/dev/null | tr -d '\r')
-    case "$ms" in [0-9]*) start="ms:$ms" ;; *) start=- ;; esac
-  }
+  if [ -z "$start" ] && ! kill -0 "$1" 2>/dev/null; then
+    start=-
+    if [ -n "$windows" ]; then
+      ms=$(powershell.exe -NoProfile -NonInteractive -Command "[DateTimeOffset]::new((Get-Process -Id $1 -ErrorAction Stop).StartTime).ToUnixTimeMilliseconds()" 2>/dev/null | tr -d '\r')
+      case "$ms" in [0-9]*) start="ms:$ms" ;; esac
+    fi
+  fi
   printf '%s\037%s\037%s\037' "$1" "$2" "$start"
   if [ "$2" = claude ]; then
     {
@@ -97,6 +102,7 @@ s() {
       fi | grep '/rollout-[^/]*\.jsonl$' | sort -u | while IFS= read -r f; do
         [ -f "$f" ] || continue
         head=$(head -n 1 "$f" 2>/dev/null | head -c 65536)
+        case "$head" in *'"type":"session_meta"'*) ;; *) continue ;; esac
         case "$head" in
           *'"source":{"subagent"'*) own=0 ;;
           *'"thread_source":"user"'*) own=1 ;;

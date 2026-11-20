@@ -184,6 +184,12 @@ func TestAClaudeThatEndedGivesNoSession(t *testing.T) {
 	}
 	gone := cmd.Process.Pid
 	writeSessionFile(t, filepath.Join(home, ".claude", "sessions"), gone, "4c9d6f0e-1111-4222-8333-944455556666", "/work/api", "")
+	// a Linux under WSL reaches Windows' powershell.exe, which knows other processes by the same numbers
+	stand := t.TempDir()
+	if err := os.WriteFile(filepath.Join(stand, "powershell.exe"), []byte("#!/bin/sh\necho 1000\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", stand+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	got, err := NewReader(remoteHere(home)).SessionsOf([]Running{{PID: gone, Agent: "claude", CWD: "/work/api"}})
 	if err != nil {
@@ -212,6 +218,13 @@ func TestCodexSessionIsThePersonsRolloutItsProcessHoldsOpen(t *testing.T) {
 		}, rolloutID},
 		{"its own over a child's", func(home string) ([]string, bool, string) {
 			return []string{writeRollout(t, home, other, false)}, true, writeRollout(t, home, rolloutID, false)
+		}, rolloutID},
+		{"beside a rollout still empty", func(home string) ([]string, bool, string) {
+			empty := filepath.Join(filepath.Dir(writeRollout(t, home, rolloutID, false)), "rollout-2026-11-20T02-29-00-01a1f692-0000-70f0-b846-42b3f2f3c1db.jsonl")
+			if err := os.WriteFile(empty, nil, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			return []string{filepath.Join(filepath.Dir(empty), "rollout-2026-11-20T02-28-48-"+rolloutID+".jsonl"), empty}, false, ""
 		}, rolloutID},
 		{"a revert's replacement file", func(home string) ([]string, bool, string) {
 			return []string{writeRolloutNamed(t, home, "rollout-2026-11-20T03-10-00-"+rolloutID+"_01a1f6a0-1111-7222-8333-944455556666.jsonl", rolloutID, false)}, false, ""
