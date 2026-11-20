@@ -46,6 +46,8 @@ export function rowLabel(row: FleetRow): string {
       return "remuda";
     case "code.version":
       return "code-server";
+    case "core.version":
+      return "remuda-core";
     case "mcp":
       return t("Tasks for {agent} (MCP)", { agent });
     case "statusline":
@@ -84,6 +86,8 @@ export function rowExplain(row: FleetRow): string {
       return t("The remuda on each machine: it keeps the agents' door to your tasks there and relays its terminals.");
     case "code.version":
       return t("The code-server the Code mode opens on each machine.");
+    case "core.version":
+      return t("The remuda-core on each machine: the terminal runtime remuda moves its machines to from herdr.");
     case "mcp":
       return t("Whether remuda's MCP server — your task list for the agents — is registered in {agent}'s own config there.", { agent });
     case "statusline":
@@ -221,6 +225,8 @@ export function handWords(row: FleetRow, hand: string[], others: string[], missi
       return t("Install the same remuda on {machines}: the installer's one line there, or Updates once a newer release is out.", { machines });
     case "code.version":
       return t("Run remuda code install on {machines}.", { machines });
+    case "core.version":
+      return t("Run remuda core install on {machines}.", { machines });
     case "mcp":
       return t("Run remuda mcp install on {machines}.", { machines });
     case "statusline":

@@ -134,6 +134,8 @@ func remudaSection(machines []Machine) Section {
 			}},
 		{id: "code.version", kind: "version", better: newer, cell: reported(func(r *health.Report) (string, bool) { return r.CodeServer, true }),
 			action: func(Machine, string) string { return "code" }},
+		{id: "core.version", kind: "version", better: newer, cell: reported(func(r *health.Report) (string, bool) { return r.RemudaCore, true }),
+			action: func(Machine, string) string { return "core" }},
 	}
 	for _, agent := range agents {
 		specs = append(specs, spec{id: "mcp", arg: agent, kind: "flag", better: yes,

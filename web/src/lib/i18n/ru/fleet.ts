@@ -50,6 +50,7 @@ export const fleet: Dictionary = {
   "The remuda on each machine: it keeps the agents' door to your tasks there and relays its terminals.":
     "remuda на каждой машине: она держит там дверь агентов к вашим задачам и передаёт её терминалы.",
   "The code-server the Code mode opens on each machine.": "code-server, который режим «Код» открывает на каждой машине.",
+  "The remuda-core on each machine: the terminal runtime remuda moves its machines to from herdr.": "remuda-core на каждой машине: среда терминалов, на которую remuda переводит машины с herdr.",
   "Whether remuda's MCP server — your task list for the agents — is registered in {agent}'s own config there.":
     "Зарегистрирован ли MCP-сервер remuda — ваш список задач для агентов — в собственной конфигурации {agent} там.",
   "Whether Claude Code's status line goes through remuda there, which keeps its plan limits for the meter.":
@@ -104,6 +105,7 @@ export const fleet: Dictionary = {
   "Install the same remuda on {machines}: the installer's one line there, or Updates once a newer release is out.":
     "Установите ту же remuda на {machines}: одной строкой установщика там или через «Обновления», когда выйдет новый релиз.",
   "Run remuda code install on {machines}.": "Запустите remuda code install на {machines}.",
+  "Run remuda core install on {machines}.": "Запустите remuda core install на {machines}.",
   "Run remuda mcp install on {machines}.": "Запустите remuda mcp install на {machines}.",
   "Run remuda statusline install on {machines}, or remuda statusline uninstall where it is not wanted.":
     "Запустите remuda statusline install на {machines} или remuda statusline uninstall там, где она не нужна.",

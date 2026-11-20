@@ -1,4 +1,4 @@
-// Package setup is `remuda setup`, `remuda uninstall` and `remuda code`:
+// Package setup is `remuda setup`, `remuda uninstall`, `remuda code` and `remuda core`:
 // embedded POSIX scripts run here or over ssh, so the binary alone is
 // enough and nothing needs a checkout.
 package setup
@@ -40,8 +40,14 @@ var codeScript string
 //go:embed scripts/install-mcp.sh
 var mcpScript string
 
+//go:embed scripts/install-core.sh
+var coreScript string
+
 // CodeVersion is the code-server release install-code.sh installs and the Updates row offers; the script's default must match.
 const CodeVersion = "4.140.0"
+
+// CoreVersion is the remuda-core release install-core.sh installs and the Updates row offers; the script's default must match.
+const CoreVersion = "0.2.0"
 
 // Options is what the scripts are told.
 type Options struct {
@@ -95,6 +101,10 @@ func Run(o Options, out io.Writer) error {
 		if err := run(o.Host, env, setupScript, nil, out); err != nil {
 			return fmt.Errorf("setup: %w", err)
 		}
+		fmt.Fprintf(out, "— remuda-core%s\n", where(o.Host))
+		if err := Core(o.Host, "install", out); err != nil {
+			fmt.Fprintf(out, "remuda-core was not installed (%v): the rest goes on, and the page's Updates offers it again\n", err)
+		}
 	}
 	if o.NoService {
 		return nil
@@ -140,12 +150,13 @@ type Removal struct {
 	Host  string // "" is this machine; else an ssh destination
 	Data  bool   // the state dir: token, tasks, schedules, push keys
 	Code  bool   // code-server, with the editor's settings and extensions
+	Core  bool   // remuda-core: its core and every terminal in it, the binary, its folders
 	Herdr bool   // herdr: its hooks, its server and the agents in it, the binary
 }
 
 func (r Removal) env() []string {
 	env := []string{}
-	for k, on := range map[string]bool{"REMUDA_RM_DATA": r.Data, "REMUDA_RM_CODE": r.Code, "REMUDA_RM_HERDR": r.Herdr} {
+	for k, on := range map[string]bool{"REMUDA_RM_DATA": r.Data, "REMUDA_RM_CODE": r.Code, "REMUDA_RM_CORE": r.Core, "REMUDA_RM_HERDR": r.Herdr} {
 		if on {
 			env = append(env, k+"=1")
 		}
@@ -183,6 +194,11 @@ func Code(host, action string, port int, out io.Writer) error {
 		env = append(env, "CODE_PORT="+strconv.Itoa(port))
 	}
 	return run(host, env, codeScript, []string{action}, out)
+}
+
+// Core runs remuda-core's installer (install or status) here or on a host.
+func Core(host, action string, out io.Writer) error {
+	return run(host, nil, coreScript, []string{action}, out)
 }
 
 // MCP registers `remuda mcp` with every coding agent on the machine (install), says which have it (status) or takes it out (uninstall), here or on a host.

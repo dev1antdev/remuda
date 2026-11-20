@@ -704,12 +704,15 @@ With the binary in hand, the pieces by name:
 
 ```bash
 remuda setup                      # herdr installed if missing, its server
-                                    # started, the agent hooks, this binary to
-                                    # ~/.local/bin and the service running it
+                                    # started, the agent hooks, remuda-core,
+                                    # this binary to ~/.local/bin and the
+                                    # service running it
 remuda setup -host studio.remote     # the same on a remote machine over ssh; one
                                     # without remuda fetches the release for
                                     # its own OS and CPU
 remuda code [-host studio.remote]    # code-server, for the Code mode
+remuda core [-host studio.remote]    # remuda-core, the terminal runtime remuda
+                                    # moves its machines to from herdr
 remuda uninstall                  # the way back (below)
 remuda -h                         # all of it, and the server's flags
 ```
@@ -718,14 +721,14 @@ remuda -h                         # all of it, and the server's flags
 
 ```bash
 remuda uninstall          # remuda: the service, the binary, the log
-remuda uninstall -all     # and your data, code-server and herdr: nothing left
+remuda uninstall -all     # and your data, code-server, remuda-core and herdr: nothing left
 ```
 
 It first lists what it found — what would go, and what stays unless you
 say so — and asks before removing anything (`-yes` skips the question,
 `-n` only shows the list, `-host` does it on a remote machine). remuda's
 own things always go: the launchd / systemd service, `~/.local/bin/remuda`,
-the log, the ssh connections it holds open. Three things are more than
+the log, the ssh connections it holds open. Four things are more than
 remuda's own and go only by their flags:
 
 - `-data` — the state folder: the token, your tasks, schedules, saved
@@ -733,13 +736,15 @@ remuda's own and go only by their flags:
   listed in your Tailscale admin console until you remove it there).
 - `-code` — code-server: its service, the release under `~/.local/opt`,
   and the editor's own settings and extensions.
+- `-core` — remuda-core: its core — **which ends every terminal running
+  in it** — the binary and its `rc` link, and its state and config folders.
 - `-herdr` — herdr: its hooks in your agents' settings, its server —
   **which ends every agent and shell running in it** — the binary (through
   Homebrew when that is where it came from) and `~/.config/herdr`. A
   remuda you started by hand is stopped with it, since it would start
   herdr's server again; without `-herdr` it is only pointed out.
 
-`-all` is the three together. What no command can reach is said at the
+`-all` is the four together. What no command can reach is said at the
 end: the page's sign-in and preferences in your browser, and the files
 you attached in chats (each project's `.remuda/uploads`).
 
