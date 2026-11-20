@@ -3,15 +3,11 @@ package core
 import (
 	"cmp"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"log"
 	"maps"
 	"slices"
-	"strconv"
-	"strings"
 
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/state"
@@ -55,25 +51,13 @@ func (a *Adapter) LayoutExport(tabID string) (*herdr.LayoutDescription, error) {
 // whose start never answered with its address too.
 const LabelLayout = "remuda.layout"
 
-// LabelCommand marks a terminal a layout started with a pane's own command, by commandMark: while that very process
-// runs it is never a shell at its prompt, which a tidy would close, though the command be a shell's. It goes on with the
-// start as the command's alone (pid 0) and is bound to the process right after, so the shell the core gives a kept
-// terminal in its place after a reboot, a new process, is a shell again, its argv the same or not.
-const LabelCommand = "remuda.command"
-
-// commandMark is what LabelCommand holds for a process started with argv.
-func commandMark(argv []string, pid int) string {
-	sum := sha256.Sum256([]byte(strconv.Itoa(pid) + "\x00" + strings.Join(argv, "\x00")))
-	return hex.EncodeToString(sum[:8])
-}
-
 // layoutBeforeWrite runs between a layout's last terminal and its document write: a test closes the workspace there.
 var layoutBeforeWrite = func() {}
 
 // LayoutApply lays a tree out as a tab, as herdr's layout.apply does: a new tab of the workspace, or, with a tab id, in
 // place of that tab, whose panes and what ran in them go once the new ones stand. Each pane is the machine's shell in
 // its folder (the workspace's when it names none), or its command started as it is (`literal`) by a core that says it
-// can (runLiteral), so no template of the program's name takes its place and a missing program fails the layout; an
+// can (runsLiteral), so no template of the program's name takes its place and a missing program fails the layout; an
 // older core is refused a layout with a command. The document keeps the tree with each pane's terminal and label. The
 // tab in front stays in front. The tree is taken as scenes checked it. Only a workspace or tab the document holds takes
 // a layout, and one closed while the panes started is not brought back: the layout fails and ends what it started.
@@ -89,7 +73,7 @@ func (a *Adapter) LayoutApply(workspaceID, tabID, tabLabel string, root herdr.La
 		if err != nil {
 			return nil, a.refusal(err, "workspace_not_found")
 		}
-		if !hello.Has(runLiteral) {
+		if !runsLiteral(hello) {
 			return nil, &herdr.Error{Code: "invalid_request", Message: fmt.Sprintf("pane %d of the layout runs a command of its own, which waits for a remuda-core that starts a program as it is, not as a template of that name: update it (Core 35)", i+1)}
 		}
 	}
@@ -126,15 +110,7 @@ func (a *Adapter) LayoutApply(workspaceID, tabID, tabLabel string, root herdr.La
 	}
 	for _, node := range tree.Panes() {
 		ctx, cancel := context.WithTimeout(context.Background(), callWithin)
-		labels := map[string]string{LabelLayout: mark}
-		if len(node.Command) > 0 {
-			labels[LabelCommand] = commandMark(node.Command, 0)
-		}
-		t, err := a.runIn(ctx, space, tabID, RunParams{Argv: node.Command, Literal: len(node.Command) > 0, Cwd: cmp.Or(node.CWD, folder), Env: node.Env, Labels: labels})
-		if err == nil && len(node.Command) > 0 {
-			_, err = a.client.Label(ctx, t.Address, map[string]string{LabelCommand: commandMark(t.Argv, t.Pid)})
-			err = a.refusal(err, "pane_not_found")
-		}
+		t, err := a.runIn(ctx, space, tabID, RunParams{Argv: node.Command, Literal: len(node.Command) > 0, Cwd: cmp.Or(node.CWD, folder), Env: node.Env, Labels: map[string]string{LabelLayout: mark}})
 		cancel()
 		if err != nil {
 			return fail(err)

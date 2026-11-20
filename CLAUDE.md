@@ -419,10 +419,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   `herdr.AgentProgram` names it (the one matcher, `internal/herdr/agents.go`,
   which `preview` asks too: the program or the script an interpreter runs,
   past its flags, a Windows path and `.exe` too), none while the terminal's
-  own shell holds it (`atPrompt`: a shell's own process in front, never the
-  process its `remuda.command` label names — a scene pane's own command,
-  whose `sh -c '…'` keeps itself in front all along and is no shell at its
-  prompt that a tidy closes), else the app it reported through OSC 7501
+  own shell holds it (`atPrompt`: a shell's own process in front, never a
+  terminal whose record says `literal` — a scene pane's own command, whose
+  `sh -c '…'` keeps itself in front all along and is no shell at its prompt
+  that a tidy closes), else the app it reported through OSC 7501
   (`claude-code` → claude, `codex`, `gemini-cli` → gemini, `kimi`, any other
   app by its own name);
   `statusOf` takes the program's own word, `error` read as done; the session
@@ -611,9 +611,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   drops nothing a newer one wrote there.
   **A scene's layout** (`layout.go`, tested on a throwaway core, a
   scene's capture laid out again in another folder too, and on a core with
-  `run_literal` a scene's pane command laid out as saved past a template of
-  its program's name, a missing program refusing it, the shell a core restart
-  gives it back at its prompt to a fresh adapter): `LayoutExport(tab)`
+  `run_literal` and `literal_record` a scene's pane command laid out as saved
+  past a template of its program's name, a missing program refusing it, the
+  shell a core restart gives it back at its prompt to a fresh adapter): `LayoutExport(tab)`
   is the document's tree of the tab — a pane whose terminal ended left out,
   one placed by its labels alone put to the right of the last — each pane's
   folder as the snapshot shows it now and its label; `LayoutApply` takes
@@ -623,17 +623,17 @@ components and icons as rules for whoever changes it: @docs/design.md
   tab, whose old terminals end once the new tree stands. **A pane with a
   command of its own** (a scene captured on herdr) starts its argv as it is,
   `terminal.run` with `literal` (`RunParams.Literal`), on a core whose hello
-  lists `run_literal` (Core 35): no template of the program's name takes its
-  place, no first message is sent, and a missing program fails the layout
-  (`spawn_failed`); its terminal is labelled `remuda.command`
-  (`LabelCommand`, `commandMark`: a digest of its argv with pid 0 as it
-  starts, bound to the pid it got by a `terminal.label` right after), so that
-  process never reads as a shell at its prompt, while the shell the core gives
-  a kept one after a restart — a new process, its argv the same or not — reads
-  as one again, to a remuda started afresh too. `Client.Run` sends `literal` only on a connection whose
-  hello lists it (`needs_update` otherwise), since an older core ignores the
-  field and may start that template; such a core is refused a layout with a
-  command before any pane starts (`invalid_request`): plain argv would run a
+  lists `run_literal` and `literal_record` (`runsLiteral`, Core 35): no
+  template of the program's name takes its place, no first message is sent,
+  and a missing program fails the layout (`spawn_failed`); its record says
+  `literal` (`Terminal.Literal`) while it runs that command, so it never reads
+  as a shell at its prompt, and the core sets it false when keep gives the
+  pane its shell after a reboot, which then reads as one, its argv the same or
+  not, to a remuda started afresh too. `Client.Run` sends `literal` only on a
+  connection whose hello lists both (`needs_update` otherwise), since an older
+  core ignores the field and may start that template, and one without the
+  record would leave the command reading as a shell; such a core is refused a
+  layout with a command before any pane starts (`invalid_request`): plain argv would run a
   template of that name, a `line` would let cmd expand `%VAR%`, a shell
   wrapper would hide a missing program. Every terminal of
   one apply carries the mark

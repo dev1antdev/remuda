@@ -261,8 +261,8 @@ func TestASceneCommandIsLaidOutAsSavedThoughATemplateHasItsProgramsName(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !hello.Has("run_literal") {
-		t.Skipf("remuda-core %s cannot start a program as it is (run_literal)", hello.Version)
+	if !hello.Has("run_literal") || !hello.Has("literal_record") {
+		t.Skipf("remuda-core %s cannot start a program as it is and say so (run_literal, literal_record)", hello.Version)
 	}
 	adapter := adapterOf(t, client, core.AdapterHooks{})
 	templateNamed(t, c, "sh")
@@ -291,8 +291,8 @@ func TestASceneCommandIsLaidOutAsSavedThoughATemplateHasItsProgramsName(t *testi
 	}
 	server := laid.Root.Panes()[1].PaneID
 	screenSays(t, adapter, server, `<two words><$HOME><%PATH%><"quoted">`)
-	if ran, err := client.Get(t.Context(), server); err != nil || !slices.Equal(ran.Argv, command) {
-		t.Fatalf("the core runs %q, the scene saved %q (%v)", ran.Argv, command, err)
+	if ran, err := client.Get(t.Context(), server); err != nil || !slices.Equal(ran.Argv, command) || !ran.Literal {
+		t.Fatalf("the core runs %q (literal %v), the scene saved %q (%v)", ran.Argv, ran.Literal, command, err)
 	}
 	if exported, err := adapter.LayoutExport(laid.TabID); err != nil || !sameShape(&exported.Root, &tree) {
 		t.Fatalf("exported %+v, laid out %+v (%v)", exported, tree, err)
@@ -322,8 +322,8 @@ func TestAScenePaneGivenItsShellBackAfterARestartIsAtItsPrompt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !hello.Has("run_literal") {
-		t.Skipf("remuda-core %s cannot start a program as it is (run_literal)", hello.Version)
+	if !hello.Has("run_literal") || !hello.Has("literal_record") {
+		t.Skipf("remuda-core %s cannot start a program as it is and say so (run_literal, literal_record)", hello.Version)
 	}
 	adapter := adapterOf(t, client, core.AdapterHooks{})
 	made, err := adapter.WorkspaceCreate(t.TempDir(), "")
