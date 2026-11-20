@@ -106,16 +106,23 @@ func (mc *Machine) RetryCore() {
 	}
 	link, err := mc.reachCore(conn, parseProbe(out))
 	mc.mu.Lock()
-	defer mc.mu.Unlock()
 	switch {
 	case mc.conn != conn || mc.noCore == nil: // removed, failed, connected afresh, or the core found by another look
+		mc.mu.Unlock()
 		if link != nil {
 			link.close()
 		}
+		return
 	case err != nil:
 		mc.noCore = err
-	default:
-		mc.client, mc.attach, mc.link, mc.noCore = link.adapter, link.terminals, link, nil
+		mc.mu.Unlock()
+		return
+	}
+	mc.client, mc.attach, mc.link, mc.noCore = link.adapter, link.terminals, link, nil
+	hook := mc.onState
+	mc.mu.Unlock()
+	if hook != nil {
+		hook(mc.ID(), mc.Label(), StateConnected, "") // connected with its core now: whoever hears it reads the machine again
 	}
 }
 

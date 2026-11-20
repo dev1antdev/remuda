@@ -288,21 +288,23 @@ func (mc *Machine) Ready() (herdr.API, herdr.Terminals, error) {
 	switch mc.state {
 	case StateConnected:
 		if mc.noCore != nil {
-			if time.Since(mc.lastAttempt) > 15*time.Second {
-				mc.lastAttempt = time.Now()
-				go mc.RetryCore()
-			}
+			mc.tryAgain(mc.RetryCore)
 			return nil, nil, mc.noCore
 		}
 		return mc.client, mc.attach, nil
 	case StateConnecting:
 		return nil, nil, fmt.Errorf("machine %s is connecting", mc.ID())
 	default:
-		if time.Since(mc.lastAttempt) > 15*time.Second {
-			mc.lastAttempt = time.Now()
-			go mc.connect()
-		}
+		mc.tryAgain(mc.connect)
 		return nil, nil, fmt.Errorf("machine %s: %s", mc.ID(), mc.errMsg)
+	}
+}
+
+// tryAgain starts try in the background once 15 s have passed since the last attempt; called under mu.
+func (mc *Machine) tryAgain(try func()) {
+	if time.Since(mc.lastAttempt) > 15*time.Second {
+		mc.lastAttempt = time.Now()
+		go try()
 	}
 }
 

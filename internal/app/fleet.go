@@ -38,7 +38,7 @@ func (f *fleetPlacer) Place(a tasks.Automation, agent string) placement.Result {
 		if f.fleet.Server() && mc.ID() == machines.LocalID {
 			continue // the page's host runs no agents
 		}
-		if state, _ := mc.State(); state != machines.StateConnected {
+		if !runsAgents(mc) {
 			continue
 		}
 		snap, _ := f.watcher.Snapshot(mc.ID())

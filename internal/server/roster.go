@@ -125,6 +125,7 @@ type rosterMachine struct {
 	Core     bool              `json:"core,omitempty"` // reached through remuda-core instead of herdr (-core)
 	State    string            `json:"state"`          // connected | connecting | error
 	Error    string            `json:"error,omitempty"`
+	Reached  bool              `json:"reached,omitempty"` // its ssh master is up, though its herdr or remuda-core may not answer: nothing to wake
 	Sessions []rosterSession   `json:"sessions"`
 	Health   *health.Report    `json:"health,omitempty"`
 	Awake    *awake.Status     `json:"awake,omitempty"`    // the keep-awake switch and whether the hold stands
@@ -361,7 +362,7 @@ func (s *Server) rosterFor(viewer bool) ([]byte, string) {
 		state, errMsg := mc.State()
 		entry := rosterMachine{
 			ID: mc.ID(), Label: mc.Label(), Host: mc.Cfg.Host, Source: mc.Cfg.Source, OS: mc.OS(), Core: mc.OnCore(),
-			State: state, Error: errMsg, Sessions: []rosterSession{},
+			State: state, Error: errMsg, Reached: state == machines.StateConnected, Sessions: []rosterSession{},
 		}
 		if state == machines.StateConnected {
 			snap, err := s.Watch.Snapshot(mc.ID())

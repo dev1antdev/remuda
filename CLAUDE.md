@@ -791,14 +791,21 @@ components and icons as rules for whoever changes it: @docs/design.md
   and Updates' Install remuda-core reach it and every check of
   `StateConnected` counts it, while `Ready` answers that reason with no
   client — the watcher's snapshot error, so the roster shows the machine
-  in error with those words and no workspace — and `RetryCore` looks for
+  in error with those words and no workspace, `reached` beside it (its
+  master is up: the page offers no Wake up, `wake.ts`), and the queue and
+  the placer start nothing there (`runsAgents` in `internal/app/queue.go`:
+  `Ready` without an error, tested) — and `RetryCore` looks for
   the core again over the same master (of two looks at once, the second
   to find it lets its link go): from `Ready` every 15 s and at once on
   every `events.JobDone` of the
   machine (`internal/app`), a lookup that fails asking `transportError`
-  whether the master is gone. A remote's ⓘ says "remuda-core is not
-  installed" first, bad, with Install opening that Updates row
-  (`concerns.ts`, while the vitals read no `remuda_core`). A Windows PC is
+  whether the master is gone; once it follows the core it tells the
+  manager's `OnState` the machine is connected, and every such move —
+  a remote connected or back, or following a core installed there by hand
+  — has the app read its vitals again. A remote's ⓘ says "remuda-core is
+  not installed" first, bad, with Install opening that Updates row
+  (`concerns.ts`, while the vitals read no `remuda_core`; Updates says why
+  when the row is not offered). A Windows PC is
   reached the same way, which no test proves yet (the check on the real PC
   is Core 19's). The machine's `herdr.API` is then the core
   adapter (`coreLink`: the client and `core.NewAdapter`, lent the machine
@@ -1378,7 +1385,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   and `bodyConcerns` (under-voltage and heat from 85 °C bad, a capped
   clock, 75 °C and tight memory a look) join the ⓘ's concerns)
   from one POSIX script per machine through `shell.Text`, every 15
-  minutes and on demand (`POST /api/machines/{id}/health`, `Recheck`).
+  minutes, whenever a remote connects (`events.MachineState`) and on
+  demand (`POST /api/machines/{id}/health`, `Recheck`).
   **Claude Code's sign-in and settings** (`claude.go`, tested on a
   `claude` stand-in first on a bare PATH): `LoginScript` runs `claude
   auth status --json` (2.1.318's `loginExpiresAt`) in a call of its own

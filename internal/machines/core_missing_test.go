@@ -63,17 +63,12 @@ func TestARemoteWithoutRemudaCoreStaysConnected(t *testing.T) {
 	}
 }
 
-// Once a job installed it, the core is followed at once over the same master.
+// Once a job or a hand installed it, the core is followed over the same master, and whoever hears the machine's moves
+// is told it is connected with its core.
 func TestARemoteFollowsRemudaCoreOnceItIsInstalled(t *testing.T) {
 	c := coretest.Server(t)
-	home := ""
-	for _, kv := range c.Env {
-		key, value, _ := strings.Cut(kv, "=")
-		t.Setenv(key, value)
-		if key == "HOME" {
-			home = value
-		}
-	}
+	c.Use(t)
+	home := os.Getenv("HOME")
 	mc := remoteOnCore(t)
 	if _, _, err := mc.Ready(); err == nil {
 		t.Fatal("a core was followed before one was installed")
@@ -89,7 +84,12 @@ func TestARemoteFollowsRemudaCoreOnceItIsInstalled(t *testing.T) {
 	if err := os.Symlink(c.Bin, filepath.Join(bin, "remuda-core")); err != nil {
 		t.Fatal(err)
 	}
+	var heard []string
+	mc.onState = func(_, _, state, _ string) { heard = append(heard, state) }
 	mc.RetryCore()
+	if len(heard) != 1 || heard[0] != StateConnected {
+		t.Fatalf("the manager heard %q once the core answered, want connected: the vitals are read again then", heard)
+	}
 	api, terminals, err := mc.Ready()
 	if err != nil || api == nil || terminals == nil {
 		t.Fatalf("Ready once the core is there = %v, %v, %v", api, terminals, err)
