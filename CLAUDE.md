@@ -512,11 +512,14 @@ components and icons as rules for whoever changes it: @docs/design.md
   folder as the snapshot shows it now and the label and command the layout
   that made it gave it; `LayoutApply` takes only a workspace or tab the
   document holds and starts every pane in its folder (else the
-  workspace's): the shell, or its command as a line the machine's shell
-  runs, quoted for it — cmd on a Windows folder, sh elsewhere (`startPane`:
-  never argv, whose program the core would read as a template of that name)
-  — waits `commandSettle` 0.5 s when a pane runs a command, so one that could
-  not start fails the layout, then writes the tree in one `doc.set` — a new
+  workspace's): the shell, or its command as the terminal's own argv, its
+  words exactly as saved (`startPane`) — a program the core cannot start
+  fails the layout (`spawn_failed`), one that starts and ends takes its pane
+  with it, as with herdr; a program named, case aside, as one of the core's
+  templates is refused beforehand (`refuseTemplates`, `templates.list`: the
+  core would run the template instead), and a start the core still turned
+  into a template (its answer's argv not the pane's) is ended and refused —
+  then writes the tree in one `doc.set` — a new
   tab, the one in front staying in front, or in place of a tab, whose old
   terminals end once the new tree stands. Every terminal of one apply
   carries the mark
@@ -526,8 +529,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   any other failed write is read back (`holdsTree`) — there, the layout
   stands; absent, it fails; unknown, its panes are left as they are and it
   says so. A workspace or tab closed while the panes started is not brought
-  back (the write checks the document as it reads then, and that every pane
-  still stands), and `WorkspaceClose` / `TabClose` end, after their own
+  back (the write finds the target in the document as it reads then, or
+  refuses), and `WorkspaceClose` / `TabClose` end, after their own
   write, every terminal still labelled for what they closed, so a layout or
   a tab made meanwhile goes with it. The document keeps no pane's
   environment; the tree is taken as scenes' `checkLayout` passed it, only one

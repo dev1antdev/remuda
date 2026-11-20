@@ -196,8 +196,8 @@ func TestALayoutWhosePaneCommandCannotStartFailsAndLeavesNothing(t *testing.T) {
 	space := made.Workspace.WorkspaceID
 	tree := herdr.LayoutNode{Type: "split", Direction: "right", Ratio: 0.5, First: &herdr.LayoutNode{Type: "pane"},
 		Second: &herdr.LayoutNode{Type: "pane", Command: []string{"no-such-program-anywhere", "--dev"}}}
-	if _, err := adapter.LayoutApply(space, "", "", tree); err == nil {
-		t.Fatal("a layout whose command is missing was laid out")
+	if _, err := adapter.LayoutApply(space, "", "", tree); !herdr.IsCode(err, "spawn_failed") {
+		t.Fatalf("a layout whose program is missing: %v", err)
 	}
 	eventually(t, adapter, func(s *herdr.Snapshot) bool { return len(s.Panes) == 1 && len(tabsOf(s, space)) == 1 })
 }
@@ -297,12 +297,7 @@ func TestALayoutLaidInPlaceOfATabClosedMeanwhileFails(t *testing.T) {
 	eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Tab(other.Tab.TabID) == nil && len(s.Panes) == 1 })
 }
 
-func TestAPaneWhoseProgramSharesATemplatesNameRunsTheProgram(t *testing.T) {
-	bin := t.TempDir()
-	if err := os.WriteFile(filepath.Join(bin, "sleeper"), []byte("#!/bin/sh\necho the program ran \"$@\"\nsleep 300\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+func TestAPaneWhoseProgramIsNamedAsACoreTemplateIsRefused(t *testing.T) {
 	server := coretest.Server(t)
 	client := server.Client(t)
 	adapter := adapterOf(t, client, core.AdapterHooks{})
@@ -317,18 +312,39 @@ func TestAPaneWhoseProgramSharesATemplatesNameRunsTheProgram(t *testing.T) {
 		t.Fatal(err)
 	}
 	template := "---\ndescription: a stand-in\ncommand: echo the template ran; sleep 300\n---\n"
-	if err := os.WriteFile(filepath.Join(templates, "sleeper.md"), []byte(template), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(templates, "Sleeper.md"), []byte(template), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	made, err := adapter.WorkspaceCreate(t.TempDir(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	laid, err := adapter.LayoutApply(made.Workspace.WorkspaceID, "", "", herdr.LayoutNode{Type: "pane", Command: []string{"sleeper", "run", "dev"}})
+	for _, program := range []string{"Sleeper", "sleeper"} {
+		tree := herdr.LayoutNode{Type: "pane", Command: []string{program, "run", "dev"}}
+		if _, err := adapter.LayoutApply(made.Workspace.WorkspaceID, "", "", tree); !herdr.IsCode(err, "invalid_request") || !strings.Contains(err.Error(), program) {
+			t.Fatalf("%s, named as the template Sleeper: %v", program, err)
+		}
+	}
+	if snap, _ := adapter.SessionSnapshot(); len(snap.Panes) != 1 {
+		t.Fatalf("a refused layout started terminals: %+v", snap.Panes)
+	}
+}
+
+func TestAPaneCommandThatEndsAtOnceStillLaysTheLayoutOut(t *testing.T) {
+	client := coretest.Server(t).Client(t)
+	adapter := adapterOf(t, client, core.AdapterHooks{})
+	made, err := adapter.WorkspaceCreate(t.TempDir(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	screenSays(t, adapter, laid.Root.PaneID, "the program ran run dev")
+	tree := herdr.LayoutNode{Type: "split", Direction: "right", Ratio: 0.5, First: &herdr.LayoutNode{Type: "pane"},
+		Second: &herdr.LayoutNode{Type: "pane", Command: []string{"true"}}}
+	laid, err := adapter.LayoutApply(made.Workspace.WorkspaceID, "", "Setup", tree)
+	if err != nil {
+		t.Fatal(err)
+	}
+	shell := laid.Root.Panes()[0].PaneID
+	eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Pane(shell) != nil && len(panesOfTab(s, laid.TabID)) == 1 })
 }
 
 func TestAWorkspaceClosedWhileALayoutIsWrittenEndsTheLayoutsPanesToo(t *testing.T) {

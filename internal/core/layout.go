@@ -8,10 +8,9 @@ import (
 	"log"
 	"maps"
 	"slices"
-	"time"
+	"strings"
 
 	"github.com/dev1antdev/remuda/internal/herdr"
-	"github.com/dev1antdev/remuda/internal/rpath"
 	"github.com/dev1antdev/remuda/internal/state"
 )
 
@@ -53,10 +52,6 @@ func (a *Adapter) LayoutExport(tabID string) (*herdr.LayoutDescription, error) {
 // whose start never answered with its address too.
 const LabelLayout = "remuda.layout"
 
-// commandSettle is how long a layout whose panes run commands waits before it is written, so a command that could not
-// start (a program missing on this machine) has ended and fails the layout instead of leaving its pane to vanish.
-const commandSettle = 500 * time.Millisecond
-
 // layoutBeforeWrite runs between a layout's last terminal and its document write: a test closes the workspace there.
 var layoutBeforeWrite = func() {}
 
@@ -94,8 +89,10 @@ func (a *Adapter) LayoutApply(workspaceID, tabID, tabLabel string, root herdr.La
 	}
 
 	tree, mark := clone(&root), state.NewID()
+	if err := a.refuseTemplates(tree); err != nil {
+		return nil, err
+	}
 	var started []string
-	commands := false
 	fail := func(err error) (*herdr.LayoutDescription, error) {
 		if swept := a.endLabelled(map[string]string{LabelLayout: mark}); swept != nil {
 			return nil, fmt.Errorf("%w; its panes may still run, as a tab of their own: %v", err, swept)
@@ -108,20 +105,13 @@ func (a *Adapter) LayoutApply(workspaceID, tabID, tabLabel string, root herdr.La
 			return fail(err)
 		}
 		started = append(started, t.Address)
-		commands = commands || len(node.Command) > 0
 		node.PaneID, node.CWD, node.Env = t.Address, cmp.Or(node.CWD, t.Cwd), nil
-	}
-	if commands {
-		time.Sleep(commandSettle)
 	}
 	layoutBeforeWrite()
 
 	ctx, cancel := context.WithTimeout(context.Background(), callWithin)
 	defer cancel()
 	err = a.editDoc(ctx, func(doc *Document) error {
-		if ended := a.endedOf(started); ended != "" {
-			return &herdr.Error{Code: "pane_not_found", Message: "pane " + ended + " of the layout ended before it was laid out"}
-		}
 		i := slices.IndexFunc(doc.Workspaces, func(ws DocWorkspace) bool { return ws.ID == space })
 		if i < 0 {
 			return spaceMissing(space)
@@ -160,33 +150,62 @@ func (a *Adapter) LayoutApply(workspaceID, tabID, tabLabel string, root herdr.La
 	return &herdr.LayoutDescription{WorkspaceID: space, TabID: tabID, FocusedPaneID: started[0], Root: *tree}, nil
 }
 
-// startPane starts one pane of a layout, carrying the layout's mark: the machine's shell, or the pane's command as a
-// line that shell runs, quoted for the machine's (cmd on Windows, told by the folder's spelling, sh elsewhere). A line,
-// never argv: the core reads an argv's program named as one of its templates as that template.
+// startPane starts one pane of a layout, carrying the layout's mark: the machine's shell, or the pane's command as the
+// terminal's own argv, its words exactly as saved. The core refuses a program it cannot start (spawn_failed); one that
+// starts and ends is the pane's business, as with herdr, whose pane goes with it. A start the core turned into one of
+// its templates (one named after the program since refuseTemplates looked) is ended and refused.
 func (a *Adapter) startPane(space, tab, mark, cwd string, env map[string]string, command []string) (Terminal, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), callWithin)
 	defer cancel()
-	p := RunParams{Cwd: cwd, Env: env, Labels: map[string]string{LabelLayout: mark}}
-	if len(command) > 0 {
-		shell := "sh"
-		if rpath.For(cwd).Windows {
-			shell = "cmd"
-		}
-		p.Line = commandLine(shell, command)
+	if len(command) == 0 {
+		return a.runIn(ctx, space, tab, RunParams{Cwd: cwd, Env: env, Labels: map[string]string{LabelLayout: mark}})
 	}
-	return a.runIn(ctx, space, tab, p)
+	labels := map[string]string{LabelSpace: space, LabelTab: tab, LabelLayout: mark}
+	t, err := a.client.Run(ctx, RunParams{Argv: command, Cwd: cwd, Env: env, Labels: labels, Rm: true})
+	if err != nil {
+		return Terminal{}, a.refusal(err, "workspace_not_found")
+	}
+	if !slices.Equal(t.Argv, command) {
+		a.kill(t.Address)
+		return Terminal{}, templateRefusal(command[0])
+	}
+	return t, nil
 }
 
-// endedOf is a terminal of the ones given that the mirror no longer holds, "" while all stand.
-func (a *Adapter) endedOf(addresses []string) string {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	for _, address := range addresses {
-		if a.state.terminals[address] == nil {
-			return address
+// refuseTemplates refuses a pane whose program the core would read as one of its templates — by its name, case aside,
+// as a file system that ignores case finds it — since it would run the template's command instead.
+func (a *Adapter) refuseTemplates(tree *herdr.LayoutNode) error {
+	var programs []string
+	for _, node := range tree.Panes() {
+		if len(node.Command) > 0 {
+			programs = append(programs, node.Command[0])
 		}
 	}
-	return ""
+	if len(programs) == 0 {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), callWithin)
+	defer cancel()
+	var listed struct {
+		Templates []struct {
+			Name string `json:"name"`
+		} `json:"templates"`
+	}
+	if err := a.client.Call(ctx, "templates.list", map[string]any{}, &listed); err != nil {
+		return a.refusal(err, "invalid_request")
+	}
+	for _, template := range listed.Templates {
+		for _, program := range programs {
+			if strings.EqualFold(program, template.Name) {
+				return templateRefusal(program)
+			}
+		}
+	}
+	return nil
+}
+
+func templateRefusal(program string) error {
+	return &herdr.Error{Code: "invalid_request", Message: fmt.Sprintf("a pane runs %q, which remuda-core on this machine reads as its template of that name: name the program by its path", program)}
 }
 
 // What the core's document says of a layout's write whose answer never came.
