@@ -15,8 +15,7 @@ import type { FoundCount, SearchApi } from "./types";
 // SETTLE_MS is how long the screen gets to repaint after a scroll before the match is looked for, a few frames at a time.
 const SETTLE_MS = 1500;
 const TICK_MS = 60;
-// RECOUNT_MS is how long output rests before the core find counts its query again: under the addon's own 200 ms
-// recount, whose addon it replaces first, so a count from rows read before the write never stands
+// RECOUNT_MS is how long output rests before the core find counts its query again.
 const RECOUNT_MS = 100;
 
 // samePlace says two selections start at one cell
@@ -88,22 +87,27 @@ export function cellSpan(line: IBufferLine | undefined, from: number, length: nu
 
 // installSearch loads the addon into the terminal; refresh paints the current find again (a flavour change). A match
 // is selected the way the addon does it, and forgetSelection tells the engine's own selection tracker that this one
-// is not the person's — else it would carry the mark to wherever that text seems to have moved after a repaint.
-export function installSearch(term: XTerm, flavor: () => Flavor, forgetSelection: () => void): SearchApi & { refresh: () => void; onPainted: () => void; dispose: () => void } {
+// is not the person's — else it would carry the mark to wherever that text seems to have moved after a repaint;
+// selectionHeld says the person holds a selection of their own, which a recount never replaces.
+export function installSearch(term: XTerm, flavor: () => Flavor, forgetSelection: () => void, selectionHeld: () => boolean = () => false): SearchApi & { refresh: () => void; onPainted: () => void; dispose: () => void } {
   let addon = new SearchAddon();
-  // heard is the core find's ear: every count the addon gives, its own find's and each it redoes as output arrives
+  // heard is the core find's ear: every count the addon gives, its own finds' and onPainted's recounts
   let heard: ((found: FoundCount) => void) | null = null;
-  const listen = () => addon.onDidChangeResults((r) => heard?.({ total: Math.max(0, r.resultCount), at: Math.max(0, r.resultIndex) }));
-  term.loadAddon(addon);
-  listen();
+  // unheard is the terminal as a core find's addon sees it: deaf to writes, so the addon never counts again on its own
+  // from rows it cached before the write, nor replaces a selection the person holds; onPainted recounts instead
+  const unheard = new Proxy(term, { get: (target, key, receiver) => (key === "onWriteParsed" ? () => ({ dispose() {} }) : Reflect.get(target, key, receiver)) });
+  const load = () => {
+    addon.activate(heard ? unheard : term);
+    addon.onDidChangeResults((r) => heard?.({ total: Math.max(0, r.resultCount), at: Math.max(0, r.resultIndex) }));
+  };
+  load();
   // fresh replaces the addon before a find: its cache of the rows cannot know that a row was rewritten in place (herdr's
   // repaint, or a program on remuda-core redrawing a line and putting the cursor back: xterm reports no move), and a
   // stale cache finds the screen as it was
   const fresh = () => {
     addon.dispose();
     addon = new SearchAddon();
-    term.loadAddon(addon);
-    listen();
+    load();
   };
   let query = "";
   let pending: ReturnType<typeof setTimeout> | null = null;
@@ -206,7 +210,7 @@ export function installSearch(term: XTerm, flavor: () => Flavor, forgetSelection
       if (recount) clearTimeout(recount);
       recount = setTimeout(() => {
         recount = null;
-        if (!heard || !query) return;
+        if (!heard || !query || selectionHeld()) return;
         const top = term.buffer.active.viewportY;
         if (!again(0)) heard({ total: 0, at: 0 });
         term.scrollToLine(top);

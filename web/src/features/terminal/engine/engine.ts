@@ -64,7 +64,8 @@ export function createEngine(mount: HTMLElement, machineId: string, paneId: stri
   term.loadAddon(fit);
   term.open(mount);
   let forgetSelection = () => {};
-  const search = installSearch(term, () => flavorNow, () => forgetSelection());
+  let selectionHeld = () => false;
+  const search = installSearch(term, () => flavorNow, () => forgetSelection(), () => selectionHeld());
 
   let lastSize = "";
   // On remuda-core a viewer that keeps the size, or only watches, is told the terminal's grid in order with the bytes
@@ -123,6 +124,7 @@ export function createEngine(mount: HTMLElement, machineId: string, paneId: stri
   const reporter = createReporter(term, modes, sendInput);
   const selection = trackSelection(term, reporter, modes);
   forgetSelection = () => selection.forget();
+  selectionHeld = () => selection.active();
   const layer = createLayer(term);
   const flags: Flags = { linkUsed: false };
   const follow = keepFollower(mount);
