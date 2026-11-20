@@ -28,6 +28,7 @@ type placedTab struct {
 
 type placedSpace struct {
 	id, label, folder, active string
+	worktree                  *herdr.WorktreeInfo
 	tabs                      []placedTab
 }
 
@@ -47,7 +48,7 @@ func (m *mirror) snapshot(sessionOf func(agent string, pid int) *herdr.AgentSess
 	}
 	var spaces []placedSpace
 	for _, ws := range m.doc.Workspaces {
-		space := placedSpace{id: ws.ID, label: ws.Label, folder: ws.Folder, active: ws.ActiveTab}
+		space := placedSpace{id: ws.ID, label: ws.Label, folder: ws.Folder, active: ws.ActiveTab, worktree: ws.Worktree}
 		for _, tab := range ws.Tabs {
 			shown := placedTab{id: tab.ID, label: tab.Label}
 			for _, leaf := range tab.Layout.Panes() {
@@ -106,7 +107,7 @@ func (m *mirror) snapshot(sessionOf func(agent string, pid int) *herdr.AgentSess
 		if len(tabs) == 0 {
 			continue
 		}
-		ws := herdr.WorkspaceInfo{WorkspaceID: space.id, Label: space.label, Folder: space.folder, ActiveTabID: tabs[0].TabID}
+		ws := herdr.WorkspaceInfo{WorkspaceID: space.id, Label: space.label, Folder: space.folder, ActiveTabID: tabs[0].TabID, Worktree: space.worktree}
 		for _, tab := range tabs {
 			ws.AgentStatus = graver(ws.AgentStatus, tab.AgentStatus)
 			if tab.TabID == space.active {

@@ -361,7 +361,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   `/api/screen` and the timelapse recorder get on a core machine.
   **The adapter** (`adapter.go`, `api.go`, `snapshot.go`, `doc.go`, tested on
   paper in `snapshot_test.go` and on a throwaway core in `adapter_test.go`):
-  `core.NewAdapter(client, AdapterHooks{TransportError, SessionOf})` is a
+  `core.NewAdapter(client, shell, AdapterHooks{TransportError, SessionOf})` is a
   machine's core as `herdr.API`, so the packages that read a machine keep
   herdr's model. One unfiltered subscription keeps **a mirror in memory** —
   the live terminals of this machine (not a `machine/t7` of one the core
@@ -402,7 +402,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   foreground process's; a workspace carries the document's folder as
   `WorkspaceInfo.Folder` (never from herdr), which `Snapshot.WorkspaceDir`
   reads before the panes; a tab's and workspace's status is its most
-  pressing pane's. **Left empty** for now: `Worktree` (Core 20), `Focused`,
+  pressing pane's; its `Worktree` is the document's (below). **Left empty**
+  for now: `Focused`,
   `FocusedPaneID` / `FocusedTabID`, `Tokens` / `StateLabels` (herdr's own
   UI), `Scroll` (Core 25), `Label` of a pane; what reads them takes
   herdr's plain-folder, no-focus path.
@@ -508,8 +509,43 @@ components and icons as rules for whoever changes it: @docs/design.md
   pageup, pagedown and delete (herdr 0.9.5 names none) go as the core's
   named keys, encoded for the program's keyboard modes (`keyBytes`);
   `PaneSendInput` refuses a paste of several lines (typed raw, each would
-  run). Still answering `invalid_request` "… is not on remuda-core yet":
-  worktrees (Core 20), `LayoutExport` / `LayoutApply` (Core 22),
+  run). **Worktrees** (Core 20, `worktree.go`, tested on coretest with
+  `shell.Local` in a HOME of the test's own and on paper,
+  `worktree_parse_test.go`): the core knows no git, so the adapter runs it
+  through the machine's shell (`NewAdapter`'s required `shell`, the machine
+  itself; nil only in a test that makes no worktree). `WorktreeCreateAt` is
+  `addScript` in the source workspace's folder, as herdr's worktree.create
+  — without a base a branch that exists checked out, else a new one from
+  that folder's HEAD — but with a base the branch is new from it and git's
+  `-b` refuses one that is there already (no branch of the person's taken
+  over: an arena's lanes pass `HEAD`), in the path given or herdr's place,
+  `~/.herdr/worktrees/<main folder's name>/<text.Slug of the branch>` (the
+  root `worktrees.Root` names, so those made before and after the move lie
+  together and Tidy, Leftovers and the remove dialog stand), git's last line
+  when it refuses (`text.LastLine`, 10 min at most), then a workspace on it
+  labelled after its folder unless named. Nothing made is ever taken down
+  again — whose a checkout is a moment later cannot be told: a worktree
+  whose workspace did not open is named in the error (the New worktree
+  dialog then finds it checked out and opens it), and after a refused add a
+  checkout standing at the place that was free (a hook of the repository's
+  failed after it, or another request made it meanwhile) is named as left; `WorktreeOpen` opens a workspace on
+  a checkout, refusing a folder outside git, and answers one open on it
+  already as herdr's `already_open` (`AlreadyOpen`, its pane in front,
+  `frontPane`) from the mirror — the route's own look reads the watcher's
+  snapshot, which may lag — one open at a time (`opening`), so two opens at
+  once make one workspace. **The checkout a workspace is** — herdr's
+  `WorktreeInfo`: top, `git-common-dir` as `RepoKey`, the repository's main
+  folder (`script.MainFolder`, the sweep's own rule) as `RepoRoot` and its
+  name, linked when the git dir is not the common one (`probeFunc`,
+  `script.ReadGit`, `--path-format=absolute`: git 2.31 and up;
+  `parseCheckout`, spelt by `rpath`) — is read once when the workspace is
+  made (`workspaceOn`, `checkoutOf`, 20 s; outside git or failed: none, the
+  workspace made all the same) and kept in the document's workspace as
+  `worktree`, so no snapshot asks git. A field of the document this build
+  does not know — at its top, a workspace's or a tab's — is kept as read
+  and written back (`kept`, `keep`, `put`), so an older remuda's rewrite
+  drops nothing a newer one wrote there. Still answering `invalid_request`
+  "… is not on remuda-core yet": `LayoutExport` / `LayoutApply` (Core 22),
   `PaneScroll` (Core 25), and the writes into herdr's own UI
   (`*ReportMetadata`, `NotificationShow`). `Bridged` is false: a stream costs the core nothing. The
   watcher still paces the snapshots an event asks for (`internal/watch`,
@@ -687,7 +723,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   hello; `rc connect` starts a core where none runs. A Windows PC is
   reached the same way, which no test proves yet (the check on the real PC
   is Core 19's). The machine's `herdr.API` is then the core
-  adapter (`coreLink`: the client and `core.NewAdapter`, its transport
+  adapter (`coreLink`: the client and `core.NewAdapter`, lent the machine
+  as its shell for git, its transport
   errors heard by `transportError`, closed off the adapter's goroutine by
   `fail` and `Close`), its terminals are `core.Terminals` (every viewer
   an attach of its own, see `internal/core`), and it has no peer
@@ -701,9 +738,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   there — the Git and Changes lenses, a pull, an undo, a worktree removed
   (`holdCheckoutWrites` in `internal/app/core.go`), no leftover worktree
   is listed or removed there (`heldOnCore`, a 409), no work is moved
-  onto such a machine (a 400 before the move writes a checkout) and no new
-  worktree is made (a 400 before a pull request's head is fetched), all by
-  the fleet's own `Manager.Core`, whichever machine a request names — and a page-only host
+  onto such a machine (a 400 before the move writes a checkout), all by
+  the fleet's own `Manager.Core`, whichever machine a request names; a new
+  worktree is made there by the core adapter (Core 20) beside herdr's agents,
+  as herdr's worktree.create made one — and a page-only host
   (`-server -core`) starts no core of its own. An exec connection keeps
   its stdin and asks for no terminal whatever the host's ssh config says
   (`DialExec` is a script's session). `OnCore` is the
@@ -1393,7 +1431,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   and push at the person's press** (tested on temp repositories with a bare
   remote made in the test, a HOME and no system config of their own, and on
   `shell.Fake`), after gitgraph's Manygit. **The reads**: `ReadScript` is one
-  script per machine — the main folder (`review.MainFolderScript`, only for a
+  script per machine — the main folder (`script.MainFolder`, only for a
   folder in git: alone it answers a plain folder itself) of every folder
   `Service.Folders` names (each workspace's folder as the sidebar groups it,
   `server.FolderOf`: herdr's repo_root, else `review.Store.Root`, else the
@@ -1529,7 +1567,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   `herdr plugin list` (a GitHub plugin by `github:owner/repo`, a local
   one by its kind alone, its path being the machine's own); and for the
   watcher's workspace folders the main checkout of each
-  (`review.MainFolderScript`, the folder `pwd -P`'d so a worktree and its
+  (`script.MainFolder`, the folder `pwd -P`'d so a worktree and its
   repository count once): the origin without a user or token in it
   (`sed` strips `scheme://user:token@`), the root commit when there is no
   origin, the branch, the upstream and `rev-list --left-right --count
@@ -4928,15 +4966,20 @@ components and icons as rules for whoever changes it: @docs/design.md
   (herdr's `worktree.create` from `origin/<b>`, then `git branch
   --set-upstream-to`), a pull request's head not fetched yet fetched first
   (`+refs/heads/<h>:refs/remotes/origin/<h>`; a fork's as
-  `+refs/pull/N/head:refs/heads/<b>`, a local branch tracking nothing,
+  `refs/remuda/fetch/<the script's pid>`, a ref of that request's own, the
+  branch then made from it by `git branch`, which refuses one of that name
+  made since the plan was read rather than move it (`Plan.Claim`,
+  `fetchScript`), the ref dropped whatever happened; a local branch tracking nothing,
   under any name the person gives a fork's pull request and by default
   `pr-<N>-<head>` — `ForkBranch`, the page's `forkBranch`: a fork's head
   named `main` is not this repository's main, which a bare head opened),
   anything else `new` from the picked branch or the base (`--unset-upstream`
   when that is origin's, so its first push makes its own, as Orca's
   `--no-track`); `BadBranch` refuses what check-ref-format would. herdr's
-  `WorktreeCreateAt` makes the checkout, in the project's location
-  (`FolderFor`: `<location>/<Slug>`, herdr's own naming: lower case, a dash
+  `WorktreeCreateAt` makes the checkout (on a remuda-core machine the core
+  adapter's own git script, `internal/core/worktree.go`, the same way), in
+  the project's location
+  (`FolderFor`: `<location>/<text.Slug>`, herdr's own naming: lower case, a dash
   for every other run, `worktree` for a branch with no a-z or 0-9 — a
   Cyrillic one — never the location itself, which then held the worktree
   and every later one inside it) or herdr's root; the issue and pull request it was
@@ -6128,7 +6171,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   agent, a model the kind takes no flag for); `arenas.json` in the
   state dir, the newest `Keep` 30. `Service.Start` answers at once with
   every lane starting and makes them one after another in the
-  background: herdr's `worktree.create` off the lane's workspace on
+  background: herdr's `worktree.create` (on a remuda-core machine the core
+  adapter's git script, `internal/core/worktree.go`, which with the lane's
+  base `HEAD` refuses a branch of that name already there rather than take
+  it over and delete it on Keep) off the lane's workspace on
   branch `arena-<arena>-<lane>`, the commit it stands on noted as the
   lane's `Base`, the agent through `sessions.StartAgentWith` with the
   model, a task's run through `tasks.StartRun` when it is a task's
@@ -7504,7 +7550,13 @@ components and icons as rules for whoever changes it: @docs/design.md
   `--force-with-lease` on a push, never `git clean -fdx` past the one path
   the person picked; git's own last lines shown when it fails; a secret
   check (`review.ScanWork`) stands before a commit and a push as it does
-  before Approve & commit.
+  before Approve & commit. **A new worktree and its branch** are herdr's
+  to make on a herdr machine; on a remuda-core machine (and in teleport)
+  remuda makes them itself with git where herdr did (`internal/core`'s
+  `addScript`: `git worktree add`, a new branch from its base), for the
+  same callers — New worktree, a task's start, an arena's lane — and only
+  where a herdr machine would make one; never forced, never over a folder
+  that is there.
 - **remuda writes on GitHub only at the person's press** (the person's
   decision of 2026-11-13, `internal/ghpr`): a comment, a reply, a thread
   resolved or reopened, a review asked for again, a merge (naming the
