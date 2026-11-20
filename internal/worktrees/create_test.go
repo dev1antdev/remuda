@@ -9,6 +9,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/repos"
 	"github.com/dev1antdev/remuda/internal/shell"
+	"github.com/dev1antdev/remuda/internal/text"
 )
 
 var source = repos.Source{
@@ -62,7 +63,7 @@ func TestAPlanSaysWhatCreateWillDo(t *testing.T) {
 func TestTheFolderIsNamedAsHerdrNamesIt(t *testing.T) {
 	// as a throwaway herdr 0.9.5 named them: dev/feat/198 → dev-feat-198, Weird.Name_x+y → weird-name-x-y
 	for branch, want := range map[string]string{"dev/feat/198": "dev-feat-198", "Weird.Name_x+y": "weird-name-x-y", "feature": "feature"} {
-		if got := Slug(branch); got != want {
+		if got := text.Slug(branch); got != want {
 			t.Errorf("%q: got %q, want %q", branch, got, want)
 		}
 	}
@@ -87,7 +88,7 @@ type gitMaker struct {
 
 func (g gitMaker) WorktreeCreateAt(_, branch, base, label, path string) (*herdr.WorktreeCreateResult, error) {
 	if path == "" {
-		path = filepath.Join(Root(g.home), "app", Slug(branch))
+		path = filepath.Join(Root(g.home), "app", text.Slug(branch))
 	}
 	args := []string{"worktree", "add", "-q", path, branch}
 	if base != "" {

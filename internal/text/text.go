@@ -11,3 +11,25 @@ func FirstLine(s string, max int) string {
 	}
 	return line
 }
+
+// Slug is a branch as herdr names its worktree's folder: lower case, a dash for every other run of characters, and
+// "worktree" for a branch with no a-z or 0-9 in it (a Cyrillic one), never the folder it goes in itself.
+func Slug(branch string) string {
+	var b strings.Builder
+	dash := false
+	for _, r := range strings.ToLower(branch) {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			if dash && b.Len() > 0 {
+				b.WriteByte('-')
+			}
+			dash = false
+			b.WriteRune(r)
+			continue
+		}
+		dash = true
+	}
+	if b.Len() == 0 {
+		return "worktree"
+	}
+	return b.String()
+}

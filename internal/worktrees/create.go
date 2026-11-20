@@ -18,6 +18,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/rpath"
 	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/shell"
+	"github.com/dev1antdev/remuda/internal/text"
 )
 
 // FetchTimeout is how long a fetch of a branch before a create may take: a big repository's first fetch takes minutes.
@@ -147,34 +148,12 @@ func hasBranch(list []repos.Branch, name string) bool {
 	return false
 }
 
-// Slug is a branch as herdr names its worktree's folder: lower case, a dash for every other run of characters, and
-// "worktree" for a branch with no a-z or 0-9 in it (a Cyrillic one), never the folder it goes in itself.
-func Slug(branch string) string {
-	var b strings.Builder
-	dash := false
-	for _, r := range strings.ToLower(branch) {
-		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
-			if dash && b.Len() > 0 {
-				b.WriteByte('-')
-			}
-			dash = false
-			b.WriteRune(r)
-			continue
-		}
-		dash = true
-	}
-	if b.Len() == 0 {
-		return "worktree"
-	}
-	return b.String()
-}
-
 // FolderFor is where a new worktree of the branch goes: in the project's own location, else "" for herdr's root.
 func FolderFor(location, branch string) string {
 	if location == "" {
 		return ""
 	}
-	return rpath.For(location).Join(location, Slug(branch))
+	return rpath.For(location).Join(location, text.Slug(branch))
 }
 
 // Maker is what a create needs of herdr.

@@ -20,13 +20,15 @@ type Document struct {
 	Workspaces []DocWorkspace `json:"workspaces"`
 }
 
-// DocWorkspace is one workspace: its folder, the tab in front and its tabs.
+// DocWorkspace is one workspace: its folder, the tab in front, its tabs and the checkout it is.
 type DocWorkspace struct {
 	ID        string   `json:"id"`
 	Label     string   `json:"label"`
 	Folder    string   `json:"folder"`
 	ActiveTab string   `json:"active_tab,omitempty"`
 	Tabs      []DocTab `json:"tabs"`
+	// Worktree is the git checkout the folder is, as read once when the workspace was made; nil outside git.
+	Worktree *herdr.WorktreeInfo `json:"worktree,omitempty"`
 }
 
 // DocTab is one tab and its pane tree, herdr's layout shape with a terminal's address as each pane's id.

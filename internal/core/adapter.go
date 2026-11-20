@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/shell"
 )
 
 // Adapter is a machine's remuda-core as herdr.API: a mirror of its live terminals and the `remuda` document, kept
@@ -39,6 +40,8 @@ type AdapterHooks struct {
 	TransportError func(error)
 	// SessionOf names an agent's conversation by its process. It answers from memory, never waiting; nil for none.
 	SessionOf func(agent string, pid int) *herdr.AgentSession
+	// Shell runs scripts on the machine: the git a worktree is made and read with. nil: no worktrees here.
+	Shell shell.Shell
 }
 
 // How long a snapshot asked for before the first fill waits for it, and how the subscription is tried again.
