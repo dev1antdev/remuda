@@ -24,7 +24,7 @@ export default function PinsDialog({ machineId, paneId, dir, shown, title, onClo
   const clear = () => actions.ask(t("Remove all {n} pins of {title}? The turns themselves stay.", { n: pins.length, title }), t("Remove all"), () => setPins([]));
   return (
     <Dialog title={t("Pins")} icon="pin" size="md" onClose={onClose}>
-      <h3 className="standup-title">{title}</h3>
+      <h3 className="dialog-title">{title}</h3>
       {pins.length === 0 ? (
         <Notice tone="hint">{t("Nothing pinned here yet. The pin beside a turn's link keeps that turn in this list.")}</Notice>
       ) : (

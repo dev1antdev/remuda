@@ -5,7 +5,6 @@
 
 import { Popover as Pop } from "radix-ui";
 import type { ReactNode } from "react";
-import { usePortalHost } from "./portal";
 import Tip from "./Tip";
 
 // focusPanel puts the focus on the panel itself, not on its first button, whose tooltip would open with it
@@ -25,12 +24,11 @@ export default function Popover({ trigger, tip, open, onOpenChange, label, class
   align?: "start" | "center" | "end";
   side?: "top" | "bottom" | "left" | "right";
 }) {
-  const host = usePortalHost();
   const opener = <Pop.Trigger asChild>{trigger}</Pop.Trigger>;
   return (
     <Pop.Root open={open} onOpenChange={onOpenChange}>
       {tip ? <Tip text={tip}>{opener}</Tip> : opener}
-      <Pop.Portal container={host}>
+      <Pop.Portal>
         <Pop.Content className={`popover${className ? ` ${className}` : ""}`} align={align} side={side} sideOffset={6} collisionPadding={8} hideWhenDetached aria-label={label} onClick={(e) => e.stopPropagation()} onOpenAutoFocus={focusPanel}>
           {children}
         </Pop.Content>

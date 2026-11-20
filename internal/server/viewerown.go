@@ -7,18 +7,16 @@ import (
 	"strings"
 
 	"github.com/dev1antdev/remuda/internal/auth"
-	"github.com/dev1antdev/remuda/internal/concierge"
 	"github.com/dev1antdev/remuda/internal/feed"
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/machines"
-	"github.com/dev1antdev/remuda/internal/schedule"
 	"github.com/dev1antdev/remuda/internal/scratch"
 	"github.com/dev1antdev/remuda/internal/timelapse"
 	"github.com/dev1antdev/remuda/internal/usage"
 )
 
-// The workspaces remuda keeps for itself — the floating terminal's shell, where a token may stand on the screen, and
-// the concierge — are the person's alone: to a viewer they do not exist.
+// The workspace remuda keeps for itself — the floating terminal's shell, where a token may stand on the screen — is the
+// person's alone: to a viewer it does not exist.
 
 // viewerOwnGuard answers a viewer who names a pane or a folder of those workspaces as it answers an unknown one.
 func (s *Server) viewerOwnGuard(next http.Handler) http.Handler {
@@ -149,7 +147,7 @@ func (s *Server) ownRecording(m timelapse.Meta) bool {
 	if m.Own != nil {
 		return *m.Own
 	}
-	if m.Workspace == scratch.Label || m.Workspace == concierge.Label || s.ownPane(m.Machine, m.Pane) {
+	if m.Workspace == scratch.Label || s.ownPane(m.Machine, m.Pane) {
 		return true
 	}
 	mc, err := s.Machines.Get(m.Machine)
@@ -161,7 +159,7 @@ func (s *Server) ownRecording(m timelapse.Meta) bool {
 func (s *Server) viewerFeed(entries []feed.Entry) []feed.Entry {
 	return slices.DeleteFunc(entries, func(e feed.Entry) bool {
 		switch {
-		case e.Kind == schedule.KindDigest: // it quotes the agents' answers, and says not whose
+		case e.Kind == "digest": // a standup digest kept from before they went: it quotes the agents' answers, and says not whose
 			return true
 		case e.Pane == "":
 			return false

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { agentSchedule, agentWords, deniedWords, SCOUT_PROMPT, watchedWords } from "./agent";
-import { kindOf } from "./digest";
+import { kindOf } from "./kind";
 
 describe("agent schedules", () => {
   it("are of kind agent and close their tab unless told otherwise", () => {

@@ -1,5 +1,5 @@
 // useQuote watches the chat log's selection: text selected inside one agent turn gets a Quote button beside it, and Q
-// quotes it too; the composer takes the quote. Nothing in a tile or the viewer: only a lens with a composer quotes.
+// quotes it too; the composer takes the quote. Nothing in the viewer: only a lens with a composer quotes.
 
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { quoteKeyAsked } from "./quote";

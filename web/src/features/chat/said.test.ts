@@ -1,22 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Turn } from "./api";
-import { SAID_MAX, firstLine, said } from "./said";
-
-const user: Turn = { role: "user", parts: [{ type: "text", text: "go" }] };
-const assistant = (...parts: Turn["parts"]): Turn => ({ role: "assistant", parts });
-
-describe("said", () => {
-  it("is the first line of the text the last turn ended with", () => {
-    expect(said([user, assistant({ type: "thinking", text: "hmm" }, { type: "text", text: "## Done\n\nAdded tests." })])).toBe("Done");
-    expect(said([user, assistant({ type: "text", text: "Looking." }, { type: "tool", tool_name: "Bash", input: {}, output: "ok" }, { type: "text", text: "All green." })])).toBe("All green.");
-  });
-
-  it("is nothing after a tool call, after the person, or with no turn", () => {
-    expect(said([user, assistant({ type: "text", text: "Running." }, { type: "tool", tool_name: "Bash", input: {}, output: "" })])).toBe("");
-    expect(said([assistant({ type: "text", text: "Done." }), user])).toBe("");
-    expect(said([])).toBe("");
-  });
-});
+import { SAID_MAX, firstLine } from "./said";
 
 describe("firstLine", () => {
   it("reads a table row as its cells, past the table's rule", () => {

@@ -10,7 +10,7 @@ export function namedAfter(branch: string, number: number): boolean {
   return new RegExp(`(?:^|/)(?:issue-|gh-)?${number}(?:$|[-/])`).test(branch);
 }
 
-const inRepo = (session: Session, repo: Repo) => !!session.dir && repo.dirs.includes(session.dir) && !session.scratch && !session.concierge;
+const inRepo = (session: Session, repo: Repo) => !!session.dir && repo.dirs.includes(session.dir) && !session.scratch;
 
 // openWorkspace is the workspace working on the issue: a linked branch first, then one named after it
 export function openWorkspace(machine: Machine | undefined, repo: Repo | undefined, number: number): Session | null {

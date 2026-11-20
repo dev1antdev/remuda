@@ -1,6 +1,6 @@
 // The look the page wears: a theme pref (system, dark, light) resolved against the system's choice, the dark theme and
 // the light theme it picks between (any of the ten each, Frappé and Latte unless set) and the accent pref, set as
-// data-theme, data-flavor and data-accent on the root of this document — and of the pop-out's — with the browser's chrome
+// data-theme, data-flavor and data-accent on the root of the document with the browser's chrome
 // told through theme-color; and beside the colours the text size, the density and the monospace font (lib/look.ts) as
 // data-text, data-density and --mono on the same root. Started once from main.tsx before the first render; the hooks
 // follow every change of a pref or of the system.
@@ -53,9 +53,6 @@ function resolved(): Dress {
 
 const store = createStore<Dress>(resolved());
 
-// the other documents of ours that wear the page's look: the pop-out's
-const others = new Set<Document>();
-
 // startTheme dresses the document now and again whenever a pref or the system changes
 export function startTheme(): void {
   apply();
@@ -63,20 +60,10 @@ export function startTheme(): void {
   for (const key of [THEME_PREF_KEY, DARK_FLAVOR_KEY, LIGHT_FLAVOR_KEY, ACCENT_KEY, TEXT_SIZE_KEY, DENSITY_KEY, MONO_KEY]) watchPref(key, apply);
 }
 
-// dressAlso dresses another document of ours now and on every change after, until the return lets it go
-export function dressAlso(doc: Document): () => void {
-  others.add(doc);
-  dress(doc, store.get());
-  return () => {
-    others.delete(doc);
-  };
-}
-
 function apply() {
   const look = resolved();
   store.set(look);
   dress(document, look);
-  for (const doc of others) dress(doc, look);
 }
 
 function dress(doc: Document, look: Dress) {

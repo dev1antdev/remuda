@@ -125,7 +125,7 @@ export type Repository = { root: string; name: string; workspace: string; repoNa
 export function repositoriesOf(machine: Machine, first: string): Repository[] {
   const byRoot = new Map<string, Session[]>();
   for (const s of machine.sessions) {
-    if (s.scratch || s.concierge || !(s.worktree || s.branch)) continue;
+    if (s.scratch || !(s.worktree || s.branch)) continue;
     const root = s.folder || s.dir;
     if (!root) continue;
     byRoot.set(root, [...(byRoot.get(root) ?? []), s]);

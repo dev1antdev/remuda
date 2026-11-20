@@ -1,6 +1,6 @@
 // CollisionMark is the quiet mark a workspace wears while another checkout of its repository changes the same files:
 // a bolt and the other's name, amber when the lines themselves touch, the whole story in its tooltip. The sidebar
-// card, the wall tile and the review queue wear it; usePeerName names the other the way the screen-sharing mode allows.
+// card and the review queue wear it; usePeerName names the other the way the screen-sharing mode allows.
 
 import { useRoster } from "./useRoster";
 import { useSharing } from "./useSharing";

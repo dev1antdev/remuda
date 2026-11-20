@@ -1,4 +1,4 @@
-// The agent's plan as the page reads it: how far along it is, what it is on, the "3/7" for a tile's state line, and
+// The agent's plan as the page reads it: how far along it is, what it is on, the "3/7" over the chat, and
 // the one line a TodoWrite / TaskCreate / TaskUpdate call makes in the turn view. Pure; tested beside.
 
 import type { Part, PlanItem } from "./api";
@@ -22,7 +22,7 @@ export function current(plan: PlanItem[]): PlanItem | null {
 // currentWords is how the agent says what it is on: its active form, else the item itself
 export const currentWords = (item: PlanItem): string => item.active || item.text;
 
-// progressWords is the tile's "3/7"; "" without a plan
+// progressWords is the plan bar's "3/7"; "" without a plan
 export function progressWords(plan: PlanItem[]): string {
   const { done, total } = counts(plan);
   return total ? `${done}/${total}` : "";

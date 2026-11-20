@@ -99,7 +99,6 @@
   --row-h: 30px;
   --row-pad-y: 3px;
   --tab-h: 30px;
-  --tile-pad-y: 4px;
   --task-row-h: 36px;
   --task-row-pad-y: 5px;
   --gap-row: 12px;
@@ -1253,7 +1252,7 @@ button {
   color: var(--accent);
 }
 
-/* a quiet button toggled on (the Wall's views, sizes and filters, a picked choice): the accent fill, kept under the pointer */
+/* a quiet button toggled on (a filter, a picked choice): the accent fill, kept under the pointer */
 .btn.on:where(:not(.primary, .danger, .ghost)),
 .btn.on:where(:not(.primary, .danger, .ghost)):hover:not(:disabled) {
   border-color: var(--accent-ring);
@@ -1591,7 +1590,6 @@ input[type="checkbox"]:hover:not(:checked) {
   color: var(--accent);
   box-shadow: none;
 }
-
 
 /* menus: a floating list */
 .row-menu,
@@ -3668,7 +3666,6 @@ body.is-resizing iframe {
   margin-right: 6px;
 }
 
-.tile-where .folder-icon,
 .palette-hint .folder-icon {
   margin-right: 4px;
 }
@@ -4984,10 +4981,6 @@ div.turn-note,
   text-align: left;
 }
 
-.tile .question-detail {
-  display: none;
-}
-
 /* the composer is one box on the conversation's column: the attachments, the field across its whole width, then a row
    of its tools with Stop and Send at the end; the focus ring is the box's */
 .composer {
@@ -5026,10 +5019,6 @@ div.turn-note,
 @media (pointer: fine) {
   .composer-box textarea {
     font-size: var(--fs-13-5);
-  }
-
-  .composer.compact .composer-box textarea {
-    font-size: var(--fs-13);
   }
 }
 
@@ -5098,30 +5087,6 @@ div.turn-note,
 
 .composer-stop {
   margin-right: 6px;
-}
-
-/* a tile's composer is one line: the field, then Stop and Send in it */
-.composer.compact .composer-box {
-  flex-direction: row;
-  align-items: flex-end;
-  border-radius: var(--r-lg);
-  box-shadow: none;
-}
-
-.composer.compact .composer-box textarea {
-  flex: 1;
-  min-width: 0;
-  min-height: 34px;
-  padding: 7px 10px;
-  border-radius: var(--r-lg);
-}
-
-.composer.compact .composer-tools {
-  padding: 3px;
-}
-
-.composer.compact .composer-gap {
-  display: none;
 }
 
 /* ---- attachments ---- */
@@ -5510,7 +5475,6 @@ ul.pick-list {
 .alerts-sounds .btn {
   gap: 6px;
 }
-
 
 .alerts-quiet input[type="time"] {
   width: 7.5em;
@@ -6396,7 +6360,6 @@ ul.pick-list {
   text-align: left;
   font-size: var(--fs-13);
 }
-
 
 /* ---- review: changes since you looked ---- */
 .badge,
@@ -8171,15 +8134,6 @@ button.usage-row:hover {
   flex-shrink: 0;
 }
 
-.tile-ribbon {
-  padding: 1px 12px 3px;
-  border-bottom: 1px solid var(--line);
-}
-
-.tile-state:has(+ .tile-ribbon) {
-  border-bottom: 0;
-}
-
 .chat-ribbon {
   padding: 8px var(--chat-inset, 20px) 0;
 }
@@ -8606,14 +8560,10 @@ rect.ribbon-s.is-shown {
   animation: pulse 1.4s ease-in-out infinite;
 }
 
-
-
-
 .quick-label {
   flex: 1;
   min-width: 0;
 }
-
 
 .quick-menu .notice {
   padding: 6px 9px;
@@ -8708,7 +8658,6 @@ rect.ribbon-s.is-shown {
   color: var(--fg-faint);
   white-space: nowrap;
 }
-
 
 .code-bar .sel {
   height: var(--ctl-sm);
@@ -10833,140 +10782,8 @@ body:has(.status-bar) .toasts {
   color: var(--red);
 }
 
-/* ---- the Wall: every agent on one screen, a tile each ---- */
-.wall {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 0;
-}
+/* every remote machine has a hue of its own (features/roster/hue.ts): a sidebar block's left edge, a dot in the palette */
 
-.wall-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--line);
-  background: var(--bg-raised);
-  flex-shrink: 0;
-}
-
-.wall-count {
-  font-size: var(--fs-12);
-  color: var(--fg-dim);
-  margin-right: 4px;
-  white-space: nowrap;
-}
-
-.wall-spacer {
-  flex: 1;
-}
-
-/* the view and the size are each a pick of one: a well with one raised segment, like the lens switch */
-.wall-sizes,
-.wall-views {
-  display: inline-flex;
-  gap: 2px;
-  padding: 3px;
-  border-radius: var(--r-md);
-  background: var(--bg-quiet);
-}
-
-.wall-sizes .btn,
-.wall-views .btn {
-  height: 24px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: var(--r-sm);
-  background: transparent;
-  color: var(--fg-dim);
-}
-
-.wall-sizes .btn:hover:not(:disabled),
-.wall-views .btn:hover:not(:disabled) {
-  background: transparent;
-  color: var(--fg);
-}
-
-.wall-sizes .btn.on,
-.wall-views .btn.on,
-.wall-sizes .btn.on:hover:not(:disabled),
-.wall-views .btn.on:hover:not(:disabled) {
-  background: var(--bg-active);
-  color: var(--fg);
-  box-shadow: var(--shadow-sm);
-}
-
-.wall-grid {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(var(--tile-min, 460px), 100%), 1fr));
-  grid-auto-rows: minmax(320px, 1fr);
-  gap: 10px;
-  padding: 10px 12px;
-}
-
-/* one tile given the whole wall, the rest in a strip under it: their heads and state lines only */
-.wall-focus {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  padding: 10px 12px 0;
-}
-
-.wall-focus .tile {
-  flex: 1;
-}
-
-.wall-strip {
-  display: flex;
-  gap: 8px;
-  padding: 8px 12px 10px;
-  overflow-x: auto;
-  flex-shrink: 0;
-}
-
-.wall-strip .tile {
-  width: 300px;
-  flex-shrink: 0;
-}
-
-.tile.brief .tile-state {
-  border-bottom: 0;
-}
-
-.tile.brief .tile-where {
-  display: none; /* the strip is narrow: the label and the state line say enough, the tooltip the rest */
-}
-
-.tile {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 0;
-  border: 1px solid var(--line);
-  border-radius: var(--r-lg);
-  background: var(--bg-raised);
-  box-shadow: var(--shadow-sm);
-  overflow: hidden;
-}
-
-/* every remote machine has a hue of its own (features/roster/hue.ts): a tile's left edge, a sidebar block's, a dot in the palette */
-.tile.has-hue::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-  background: hsl(var(--machine-hue) 55% 58%);
-  pointer-events: none;
-}
 .machine.has-hue {
   box-shadow: inset 2px 0 0 hsl(var(--machine-hue) 55% 58% / 0.75);
 }
@@ -10979,187 +10796,8 @@ body:has(.status-bar) .toasts {
   vertical-align: 0;
 }
 
-/* a tile that needs the person wears a pulsing ring: red for a question, amber for a watchdog note; a finish not looked at, a green edge */
-.tile.is-blocked,
-.tile.is-alert {
-  animation: ring 1.6s ease-in-out infinite;
-}
-
-/* one ring, breathing: the tile's own edge in the state's colour and a hair of the same around it */
-.tile.is-blocked {
-  border-color: var(--red-ring);
-  box-shadow: 0 0 0 1px var(--red-ring);
-}
-
-.tile.is-alert {
-  border-color: var(--amber-ring);
-  box-shadow: 0 0 0 1px var(--amber-ring);
-}
-
-.tile.is-done {
-  border-color: var(--green-ring);
-}
-
-@keyframes ring {
-  50% {
-    box-shadow: 0 0 0 1px transparent;
-  }
-}
-
-/* the head, the state line and the ribbon are one block: no rule between them, one under the last */
-.tile-head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: calc(var(--tile-pad-y) + 2px) 6px var(--tile-pad-y) 8px;
-  flex-shrink: 0;
-}
-
-.tile-open {
-  flex: 1;
-  min-width: 0;
-  gap: 6px;
-  padding: 4px 4px;
-  font-size: var(--fs-13);
-  color: var(--fg);
-  text-align: left;
-}
-
-.tile-label {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-weight: 500;
-}
-
-.tile-where {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: var(--fg-faint);
-  font-weight: 400;
-  font-size: var(--fs-12);
-}
-
-.tile.is-blocked .radar-mark,
-.tile.is-blocked .tile-label {
-  color: var(--red);
-}
-
-.tile.is-done .radar-mark,
-.tile.is-done .tile-label {
-  color: var(--green);
-}
-
-.tile.is-idle_fresh .radar-mark {
-  color: var(--green-dim);
-}
-
-.tile.is-unknown .radar-mark {
-  color: var(--violet);
-}
-
-.tile.is-idle_stale .tile-head {
-  opacity: 0.6;
-}
-
-.tile.is-alert .radar-mark {
-  color: var(--amber);
-  font-weight: 700;
-  animation: pulse 1.6s ease-in-out infinite;
-}
-
-.tile-usage {
-  margin-left: 0;
-}
-
-.tile-pr {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  flex-shrink: 0;
-  font-size: var(--fs-12);
-  color: var(--fg-dim);
-  white-space: nowrap;
-}
-
-.tile-pr:hover {
-  color: var(--accent);
-}
-
-/* the state line under the head: the state and how long, and what the agent runs this second; always there, so nothing moves */
-.tile-state {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  padding: 3px 12px 4px;
-  border-bottom: 1px solid var(--line);
-  font-size: var(--fs-12);
-  color: var(--fg-dim);
-  white-space: nowrap;
-  overflow: hidden;
-  flex-shrink: 0;
-}
-
-.tile-words {
-  flex-shrink: 0;
-}
-
-.tile-said {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: var(--fg-faint);
-}
-
-.tile-doing {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-family: var(--mono);
-  font-size: var(--fs-11);
-  color: var(--fg);
-}
-
-.tile-doing-name {
-  color: var(--fg-faint);
-}
-
-.tile-running {
-  color: var(--fg-faint);
-}
-
-.tile-running.is-long {
-  color: var(--amber);
-}
-
-.tile.is-blocked .tile-words {
-  color: var(--red);
-}
-
-.tile.is-alert .tile-words {
-  color: var(--amber);
-}
-
-.tile .chat-log {
-  padding: 10px 12px;
-  gap: 10px;
-}
-
-.tile .turn {
-  max-width: none;
-}
-
-.tile .turn-bubble {
-  max-width: 85%;
-}
-
-.tile .chat-notice {
-  margin: 0 8px 6px;
-}
-
-/* the screen view: the pane's rows with their colours at the size that fits the tile's width, the bottom rows kept
-   when the height runs out (the prompt and the status live there); the background is the terminal lens's */
+/* the screen view: the pane's rows with their colours at the size that fits the width, the bottom rows kept when the
+   height runs out (the prompt and the status live there); the background is the terminal lens's */
 .screen {
   flex: 1;
   min-height: 0;
@@ -11172,7 +10810,6 @@ body:has(.status-bar) .toasts {
   color: var(--fg);
   font-family: var(--mono);
   line-height: 1.25;
-  cursor: pointer;
 }
 
 .screen-line {
@@ -11387,20 +11024,6 @@ body:has(.status-bar) .toasts {
   align-self: flex-start;
   margin: 0 10px;
   font-size: var(--fs-12);
-}
-
-.composer.compact {
-  padding: 6px 8px;
-}
-
-.composer.compact .composer-send,
-.composer.compact .composer-stop {
-  height: var(--ctl-sm);
-  padding: 0 9px;
-}
-
-.composer.compact .composer-stop {
-  margin-right: 3px;
 }
 
 /* ---- the Review mode: the queue of workspaces with changes, and the Changes lens of the picked one ---- */
@@ -11626,27 +11249,6 @@ body:has(.status-bar) .toasts {
 
 .activity-foot {
   justify-content: flex-start;
-}
-
-/* ---- the pop-out: a tile alone in the small window above every other app ---- */
-body.popout {
-  overflow: hidden;
-}
-
-.popout-body {
-  height: 100dvh;
-  display: flex;
-  flex-direction: column;
-}
-
-.popout-body .tile {
-  flex: 1;
-  border: 0;
-  border-radius: 0;
-}
-
-.popout-body .placeholder {
-  margin: auto;
 }
 
 /* ---- the files rail: what the agent touched this session, beside the lenses ---- */
@@ -12177,96 +11779,35 @@ body.popout {
   }
 }
 
-/* ---- standup: what every agent did today, and one conversation's recap ---- */
+/* ---- one conversation's recap (features/recap); .dialog-title is a dialog's subject over its body ---- */
 
-.standup-item {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  margin-bottom: 8px;
-  padding: 8px 10px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-md);
-  background: var(--bg-raised);
-}
-
-.standup-open {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  text-align: left;
-  font-size: var(--fs-13-5);
-  font-weight: 600;
-}
-
-.standup-open .radar-logo {
-  flex-shrink: 0;
-}
-
-.standup-where {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.standup-machine {
-  color: var(--fg-dim);
-  font-weight: 400;
-}
-
-.standup-state {
-  flex-shrink: 0;
-  font-size: var(--fs-12);
-  font-weight: 500;
-  color: var(--fg-dim);
-}
-
-.standup-state.is-blocked,
-.standup-line.is-blocked {
+.recap-line.is-blocked {
   color: var(--red);
 }
 
-.standup-state.is-done {
-  color: var(--green);
-}
-
-.standup-state.is-working {
-  color: var(--fg);
-}
-
-.standup-cost {
-  flex-shrink: 0;
-  font-size: var(--fs-12);
-  color: var(--fg-dim);
-  font-variant-numeric: tabular-nums;
-}
-
-.standup-line {
+.recap-line {
   font-size: var(--fs-12);
   color: var(--fg);
 }
 
-.standup-line.quiet,
-.standup-files {
+.recap-line.quiet,
+.recap-files {
   font-size: var(--fs-12);
   color: var(--fg-dim);
 }
 
-.standup-files {
+.recap-files {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.standup-label {
+.recap-label {
   margin-right: 5px;
   color: var(--fg-faint);
 }
 
-.standup-said {
+.recap-said {
   font-size: var(--fs-13);
   color: var(--fg-dim);
   font-style: italic;
@@ -12275,177 +11816,13 @@ body.popout {
   white-space: nowrap;
 }
 
-.standup-quiet {
-  margin: 6px 0;
-  font-size: var(--fs-12);
-  color: var(--fg-dim);
-}
-
-.standup-quiet summary {
-  cursor: pointer;
-}
-
-.standup-quiet ul {
-  margin: 4px 0 0;
-  padding-left: 18px;
-}
-
-.standup-title {
+.dialog-title {
   margin: 0 0 8px;
   font-size: var(--fs-15);
   font-weight: 600;
 }
 
-.standup-item.is-reading {
-  border-color: var(--accent-ring);
-  box-shadow: 0 0 0 1px var(--accent-ring);
-}
-
-/* reading aloud: the bar over the report while the voice reads, the sentence being said under its part */
-.listen-bar {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 4px 10px;
-  margin-bottom: 10px;
-  padding: 8px 10px;
-  border: 1px solid var(--accent-ring);
-  border-radius: var(--r-md);
-  background: var(--accent-soft);
-}
-
-.listen-controls {
-  display: flex;
-  gap: 2px;
-}
-
-.listen-now {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.listen-where {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--fg-dim);
-  font-size: var(--fs-11);
-  line-height: 1.35;
-}
-
-.listen-count {
-  font-variant-numeric: tabular-nums;
-}
-
-.listen-sentence {
-  color: var(--fg);
-  font-size: var(--fs-13-5);
-  line-height: 1.4;
-  overflow-wrap: anywhere;
-}
-
-.listen-bar.is-done .listen-sentence {
-  color: var(--fg-dim);
-}
-
-.listen-note {
-  grid-column: 1 / -1;
-}
-
-.listen-note.quiet {
-  color: var(--fg-dim);
-  font-size: var(--fs-11);
-}
-
-/* ---- the concierge (app/Concierge.tsx): the machine, New conversation, and its conversation filling the panel ---- */
-.modal.concierge {
-  height: min(84dvh, 780px);
-  overflow: hidden;
-}
-
-.concierge-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-
-.concierge-machine .sel {
-  min-width: 150px;
-}
-
-.concierge-about {
-  flex: 1 1 200px;
-  min-width: 0;
-  font-size: var(--fs-12);
-  color: var(--fg-dim);
-}
-
-.modal.concierge > .concierge-chat,
-.modal.concierge > .concierge-waiting {
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
-.concierge-chat {
-  border: 1px solid var(--line);
-  border-radius: var(--r-lg);
-  overflow: hidden;
-  background: var(--bg);
-}
-
-.concierge-chat .composer {
-  padding-bottom: 10px;
-}
-
-.concierge-hints {
-  margin: auto;
-  max-width: 520px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  text-align: center;
-  color: var(--fg-dim);
-}
-
-.concierge-hints p {
-  margin: 0;
-}
-
-.concierge-hint-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.btn.concierge-hint {
-  height: auto;
-  min-height: var(--ctl);
-  padding: 6px 12px;
-  justify-content: flex-start;
-  text-align: left;
-  white-space: normal;
-}
-
-.concierge-waiting {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  color: var(--fg-dim);
-  text-align: center;
-}
-
-.concierge-coming {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-/* ---- the agent's plan: the bar over the chat, a plan tool's call in a turn, the count on a tile ---- */
+/* ---- the agent's plan: the bar over the chat, a plan tool's call in a turn ---- */
 .plan-bar {
   flex-shrink: 0;
   margin: 0 var(--chat-inset, 14px);
@@ -12550,14 +11927,7 @@ body.popout {
   text-overflow: ellipsis;
 }
 
-.tile-plan {
-  flex-shrink: 0;
-  font-family: var(--mono);
-  font-size: var(--fs-11);
-  color: var(--fg-faint);
-}
-
-/* ---- subagents: a row per agent a turn spawned, under the call; the tile's count of them ---- */
+/* ---- subagents: a row per agent a turn spawned, under the call ---- */
 .subagent-row {
   display: flex;
   align-items: center;
@@ -12606,11 +11976,6 @@ body.popout {
 .subagent-open {
   flex-shrink: 0;
   white-space: nowrap;
-}
-
-.tile-subs {
-  flex-shrink: 0;
-  color: var(--fg-faint);
 }
 
 /* ---- the rail (app/Rail.tsx): the page's places, an icon with its name each; along the bottom on a phone ---- */
@@ -13325,7 +12690,7 @@ body.popout {
   overflow-wrap: anywhere;
 }
 
-/* ---- schedules: what runs (a prompt, or the standup as a digest) ---- */
+/* ---- schedules: what runs (a prompt, an agent, a scene) ---- */
 .schedule-kind {
   display: flex;
   align-items: center;
@@ -13373,20 +12738,13 @@ body.popout {
   color: var(--red);
 }
 
-.schedule-label .schedule-digest-mark {
+.schedule-label .schedule-kind-mark {
   margin-right: 5px;
   vertical-align: -1px;
   color: var(--amber);
 }
 
-/* ---- the pull request's state beside its link in a tile's head: a chip with the checks, one with the review (prStatus.ts) ---- */
-.tile-pr-group {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-  min-width: 0;
-}
+/* ---- the pull request's state as chips: one with the checks, one with the review (prStatus.ts) ---- */
 
 .pr-state {
   display: inline-flex;
@@ -13430,39 +12788,11 @@ body.popout {
   color: var(--fg-faint);
 }
 
-/* a narrow tile keeps the checks and lets the review chip go, so the title keeps its room */
-.tile {
-  container-type: inline-size;
-}
+/* a narrow place keeps the checks and lets the review chip go */
 
 @container (max-width: 560px) {
-  .pr-state.pr-review,
-  .tile-jira .jira-status {
+  .pr-state.pr-review {
     display: none;
-  }
-}
-
-/* a head with a Jira chip, a collision or a PR, in a tile too narrow for them beside the title: the title and the tile's buttons keep
-   the first line, the chip, the PR and the usage go to a line of their own */
-@container (max-width: 800px) {
-  .tile-head:has(> .tile-jira, > .tile-pr-group, > .tile-collide) {
-    flex-wrap: wrap;
-    row-gap: 0;
-  }
-
-  .tile-head:has(> .tile-jira, > .tile-pr-group, > .tile-collide)::before {
-    content: "";
-    order: 2;
-    flex-basis: 100%;
-  }
-
-  .tile-head:has(> .tile-jira, > .tile-pr-group, > .tile-collide) > :is(.tile-jira, .tile-pr-group, .tile-collide, .tile-usage) {
-    order: 3;
-    margin: 0 0 4px;
-  }
-
-  .tile-head > .tile-jira {
-    max-width: 60%;
   }
 }
 
@@ -13839,7 +13169,7 @@ body.popout {
 
 /* ---- text size and density (lib/look.ts; app/theme.ts puts data-text and data-density on the root): the type scale's
    --text-scale and the controls' --ctl-scale follow the text size; compact density tightens the rows, the tabs, the
-   tile heads and the gap between turns — with a mouse on a wide screen only, a phone keeps its own sizes ---- */
+   task rows and the gap between turns — with a mouse on a wide screen only, a phone keeps its own sizes ---- */
 :root[data-text="small"] {
   --text-scale: 0.92;
   --ctl-scale: 0.97;
@@ -13861,7 +13191,6 @@ body.popout {
     --row-h: 24px;
     --row-pad-y: 1px;
     --tab-h: 26px;
-    --tile-pad-y: 2px;
     --task-row-h: 30px;
     --task-row-pad-y: 2px;
     --gap-row: 8px;
@@ -14005,71 +13334,6 @@ body.popout {
   .schedule-kind button {
     flex: 1 1 auto;
     justify-content: center;
-  }
-}
-
-/* #14 Office mode: one agent large for a second screen, the rest as cards in a column beside it; a pinned card wears the accent ring */
-.wall-office {
-  flex: 1;
-  min-height: 0;
-  display: grid;
-  grid-template-columns: 2fr 1fr;
-  gap: 10px;
-  padding: 10px 12px;
-}
-
-.wall-office-main {
-  min-width: 0;
-  min-height: 0;
-  display: flex;
-}
-
-.wall-office-main .tile {
-  flex: 1;
-  min-width: 0;
-}
-
-.wall-office-cards {
-  min-width: 0;
-  min-height: 0;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.wall-office-cards .tile {
-  flex-shrink: 0;
-}
-
-.wall-office-cards .tile-open {
-  cursor: pointer;
-}
-
-.tile.is-pinned {
-  border-color: var(--accent-ring);
-  box-shadow: 0 0 0 2px var(--accent-ring);
-}
-
-@media (max-width: 920px) {
-  .wall-office-btn {
-    display: none; /* the wall is one column there already */
-  }
-
-  .wall-office {
-    grid-template-columns: 1fr;
-    grid-template-rows: 1fr auto;
-  }
-
-  .wall-office-cards {
-    flex-direction: row;
-    overflow-x: auto;
-    overflow-y: hidden;
-    max-height: 40%;
-  }
-
-  .wall-office-cards .tile {
-    width: 300px;
   }
 }
 
@@ -14774,7 +14038,7 @@ body.popout {
   white-space: nowrap;
 }
 
-/* ---- #10 Standup strip: when an agent worked, waited and sat idle over the period ---- */
+/* ---- the recap's day strip: when the agent worked, waited and sat idle over the period ---- */
 
 .strip {
   margin: 2px 0 4px;
@@ -15026,29 +14290,6 @@ body.popout {
 .health-rows dd.health-awake-bad,
 .health-rows dd.health-body-warn {
   color: var(--amber);
-}
-
-/* ---- the pull request's chips as the trigger of its menu: Open, the failed checks or the review handed to the agent (features/roster/prMenu.tsx) ---- */
-.pr-chips {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0;
-  border: 0;
-  border-radius: var(--r-sm);
-  background: none;
-  color: inherit;
-  cursor: pointer;
-}
-
-.pr-chips:hover .pr-state,
-.pr-chips[aria-expanded="true"] .pr-state {
-  filter: brightness(1.15);
-}
-
-.pr-chips:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
 }
 
 /* ---- the pull request panel: Branch and Repo, one pull request in full (features/pr/) ---- */
@@ -15886,9 +15127,8 @@ button.pr-line:hover {
   background: var(--amber-soft);
 }
 
-/* ---- muted workspaces: the bell-off a silenced workspace wears in the sidebar and on a wall tile's head ---- */
-.radar-muted,
-.tile-muted {
+/* ---- muted workspaces: the bell-off a silenced workspace wears in the sidebar ---- */
+.radar-muted {
   display: inline-flex;
   align-items: center;
   flex: none;
@@ -15901,10 +15141,6 @@ button.pr-line:hover {
 
 .ws-line .radar-muted {
   vertical-align: -1px;
-}
-
-.tile-muted {
-  margin-left: 6px;
 }
 
 /* ---- activity: what a device sent through remuda is a quiet row — no news, the quiet colour ---- */
@@ -16366,7 +15602,7 @@ textarea.screen-term-field {
   padding-top: 4px;
 }
 
-/* ---- screen-sharing mode: the header's chip, the veil over a hidden folder's pane, a hidden tile's cover ---- */
+/* ---- screen-sharing mode: the header's chip, the veil over a hidden folder's pane ---- */
 .sharing-chip.btn {
   flex-shrink: 0;
   gap: 5px;
@@ -16407,17 +15643,6 @@ textarea.screen-term-field {
   margin: 0;
   color: var(--fg-dim);
   font-size: var(--fs-15);
-}
-
-.sharing-cover {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 80px;
-  color: var(--fg-faint);
-  font-size: var(--fs-13);
 }
 
 /* ---- Jira: an issue the workspace is about as a chip (features/roster/IssueChip.tsx), its site in Settings ---- */
@@ -16469,13 +15694,6 @@ textarea.screen-term-field {
   content: "·";
   margin-right: 6px;
   color: var(--fg-faint);
-}
-
-.tile-jira {
-  flex-shrink: 1;
-  max-width: 40%;
-  overflow: hidden; /* a crowded head clips the chip rather than letting its key run over the PR beside it */
-  font-size: var(--fs-12);
 }
 
 .jira-hint {
@@ -16562,1470 +15780,6 @@ textarea.screen-term-field {
 .mirror-outcomes {
   margin: 0;
   padding-left: 18px;
-}
-
-/* ---- the zoo: every agent on the Wall as a little creature (app/zoo). Its palette is mixed from the vendor's hue
-   (--zoo-skin, set per creature) and the flavour's tokens; its state reads from the pose and the sign; it stands in a
-   pen per machine under the sky of the viewer's hour ---- */
-.zoo {
-  position: relative;
-  flex: 1;
-  min-height: 0;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  isolation: isolate;
-}
-
-.zoo > :not(.zoo-sky, .zoo-fireworks) {
-  position: relative;
-  z-index: 1;
-}
-
-.zoo-creature {
-  --zoo-light: var(--ctp-text);
-  --zoo-dark: var(--ctp-crust);
-  --zoo-skin-dark: color-mix(in oklab, var(--zoo-skin) 72%, var(--zoo-dark));
-  --zoo-belly: color-mix(in oklab, var(--zoo-skin) 55%, var(--zoo-light));
-  --zoo-cheek: color-mix(in oklab, var(--ctp-pink) 75%, transparent);
-  --zoo-shadow: color-mix(in oklab, var(--ctp-crust) 55%, transparent);
-  --zoo-metal: var(--ctp-overlay1);
-  margin: 0;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  text-align: center;
-}
-
-:root[data-theme="light"] .zoo-creature {
-  --zoo-light: var(--ctp-base);
-  --zoo-dark: var(--ctp-text);
-  --zoo-shadow: color-mix(in oklab, var(--ctp-overlay0) 45%, transparent);
-}
-
-/* the pens: one per machine, side by side as the width allows, each as wide as its creatures want */
-/* the pens stand under a strip of sky, where the sun or the moon and the stars are */
-.zoo-pens {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  display: flex;
-  flex-wrap: wrap;
-  align-content: flex-start;
-  gap: 14px;
-  padding: 44px 16px 18px;
-}
-
-.zoo-office {
-  padding-top: 44px;
-}
-
-.zoo-pen {
-  position: relative;
-  flex: 1 1 calc(var(--zoo-cell, 228px) * var(--pen-n, 1) + 40px);
-  min-width: min(calc(var(--zoo-cell, 228px) + 24px), 100%);
-  max-width: 100%;
-  padding: 10px 10px 26px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-xl);
-  background: color-mix(in oklab, var(--bg-raised) 72%, transparent);
-}
-
-/* the fence along the pen's foot: two rails and the pickets between them */
-.zoo-pen::after {
-  content: "";
-  position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: 7px;
-  height: 12px;
-  background:
-    linear-gradient(var(--line-strong), var(--line-strong)) 0 2px / 100% 2px no-repeat,
-    linear-gradient(var(--line-strong), var(--line-strong)) 0 8px / 100% 2px no-repeat,
-    repeating-linear-gradient(90deg, var(--line-strong) 0 3px, transparent 3px 15px);
-  border-radius: var(--r-xs);
-  opacity: 0.7;
-  pointer-events: none;
-}
-
-.zoo-pen.is-warm {
-  background: color-mix(in oklab, var(--ctp-peach) 6%, var(--bg-raised));
-}
-
-.zoo-pen.is-hot {
-  border-color: color-mix(in oklab, var(--red) 40%, var(--line));
-  background: color-mix(in oklab, var(--ctp-red) 9%, var(--bg-raised));
-}
-
-.zoo-pen.is-dust {
-  background-image: radial-gradient(color-mix(in oklab, var(--fg-faint) 35%, transparent) 1px, transparent 1.5px);
-  background-size: 22px 22px;
-}
-
-/* a storm: the pen flickers now and then, softly */
-.zoo-pen.is-storm::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: var(--amber);
-  opacity: 0;
-  pointer-events: none;
-  animation: zoo-flash 7s linear infinite;
-}
-
-.zoo-pen-sign {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  max-width: 100%;
-  margin: 0 0 6px;
-  padding: 2px 10px;
-  border: 1px solid var(--line-strong);
-  border-left: 3px solid hsl(var(--machine-hue) 55% 58%);
-  border-radius: var(--r-md);
-  background: var(--bg-raised);
-  color: var(--fg-dim);
-  font-size: var(--fs-12);
-  white-space: nowrap;
-}
-
-.zoo-pen-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: var(--fg);
-  font-weight: 600;
-}
-
-.zoo-pen-words {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-variant-numeric: tabular-nums;
-}
-
-.zoo-pen-marks {
-  display: inline-flex;
-  gap: 3px;
-}
-
-.zoo-mark.is-warm,
-.zoo-mark.is-storm,
-.zoo-mark.is-lamp {
-  color: var(--amber);
-}
-
-.zoo-mark.is-hot {
-  color: var(--red);
-}
-
-.zoo-mark.is-boxes {
-  color: var(--ctp-peach);
-}
-
-.zoo-pen.is-lamp .zoo-mark.is-lamp {
-  filter: drop-shadow(0 0 3px color-mix(in oklab, var(--amber) 70%, transparent));
-}
-
-.zoo-boxes {
-  position: absolute;
-  right: 18px;
-  bottom: 18px;
-  width: 54px;
-  pointer-events: none;
-  fill: color-mix(in oklab, var(--ctp-peach) 30%, var(--bg-raised));
-  stroke: var(--line-strong);
-  stroke-width: 1.2;
-}
-
-.zoo-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(var(--zoo-cell, 228px), 100%), 1fr));
-  align-content: start;
-  gap: 18px 12px;
-}
-
-.zoo-open.linkish {
-  position: relative;
-  display: block;
-  width: var(--zoo-size, 156px);
-  max-width: 100%;
-  padding: 0;
-  border-radius: var(--r-xl);
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.zoo-open:focus-visible {
-  outline: 2px solid var(--accent-ring);
-  outline-offset: 2px;
-}
-
-.creature {
-  display: block;
-  width: 100%;
-  height: auto;
-  overflow: visible;
-}
-
-.creature * {
-  transform-box: view-box;
-}
-
-.cr-shadow {
-  fill: var(--zoo-shadow);
-}
-
-.cr-skin,
-.cr-tip,
-.cr-hand,
-.cr-ear {
-  fill: var(--zoo-skin);
-}
-
-.cr-foot {
-  fill: var(--zoo-skin-dark);
-}
-
-.cr-antenna,
-.cr-arm {
-  fill: none;
-  stroke: var(--zoo-skin-dark);
-  stroke-linecap: round;
-}
-
-.cr-antenna {
-  stroke-width: 3.5;
-}
-
-.cr-arm {
-  stroke-width: 8;
-}
-
-.cr-belly,
-.cr-sparkle {
-  fill: var(--zoo-belly);
-}
-
-.cr-ear-in {
-  fill: var(--zoo-cheek);
-}
-
-.cr-moon,
-.cr-spots,
-.cr-freckles {
-  fill: var(--zoo-skin-dark);
-}
-
-.cr-spots {
-  opacity: 0.55;
-}
-
-.cr-led {
-  fill: var(--ctp-green);
-}
-
-.cr-led-2 {
-  fill: var(--ctp-yellow);
-}
-
-.cr-led-3 {
-  fill: var(--ctp-sky);
-}
-
-.cr-white,
-.cr-glint {
-  fill: var(--zoo-light);
-}
-
-.cr-pupil,
-.cr-mouth,
-.cr-mustache {
-  fill: var(--zoo-dark);
-}
-
-.cr-line {
-  fill: none;
-  stroke: var(--zoo-dark);
-  stroke-width: 3.2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.cr-cheek {
-  fill: var(--zoo-cheek);
-}
-
-.cr-screen {
-  fill: var(--zoo-dark);
-}
-
-.cr-base {
-  fill: var(--zoo-metal);
-}
-
-.cr-code {
-  fill: var(--zoo-skin);
-}
-
-/* the context's girth: the skin and the belly widen with it, slim again after a compaction */
-.cr-fat {
-  transform-origin: 60px 112px;
-  transform: scale(calc(1 + 0.22 * var(--zoo-girth, 0)), calc(1 + 0.04 * var(--zoo-girth, 0)));
-  transition: transform 1.4s var(--ease);
-}
-
-.cr-strap {
-  fill: color-mix(in oklab, var(--zoo-skin-dark) 50%, var(--zoo-dark));
-}
-
-.cr-buckle {
-  fill: none;
-  stroke: var(--ctp-yellow);
-  stroke-width: 1.8;
-}
-
-/* the eyes: a blink now and then, the pupils after the pointer (--gx, --gy from useGaze) */
-.cr-eye {
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: zoo-blink 5s ease-in-out infinite;
-  animation-delay: var(--zoo-blink, 0s);
-}
-
-.cr-gaze {
-  translate: calc(var(--gx, 0) * 1px) calc(var(--gy, 0) * 1px);
-  transition: translate 0.15s linear;
-}
-
-/* a model's little one stands a size smaller */
-.creature.is-small .cr-frame {
-  transform-origin: 60px 118px;
-  scale: 0.86;
-}
-
-.cr-hat.is-tophat .cr-hat-main {
-  fill: color-mix(in oklab, var(--zoo-dark) 82%, var(--zoo-skin));
-  stroke: var(--zoo-light);
-  stroke-width: 0.8;
-  stroke-opacity: 0.35;
-}
-
-.cr-hat.is-tophat .cr-hat-band {
-  fill: var(--zoo-skin);
-}
-
-.cr-hat.is-wizard .cr-hat-main {
-  fill: var(--ctp-mauve);
-}
-
-.cr-hat-star {
-  fill: var(--ctp-yellow);
-}
-
-.cr-hat.is-beret .cr-hat-main {
-  fill: var(--ctp-red);
-}
-
-.cr-hat-stalk {
-  fill: none;
-  stroke: var(--ctp-red);
-  stroke-width: 2.4;
-  stroke-linecap: round;
-}
-
-.cr-hat.is-sprout .cr-hat-main,
-.cr-hat.is-laurel .cr-hat-main {
-  fill: var(--ctp-green);
-}
-
-.cr-hat.is-sprout .cr-hat-stalk,
-.cr-hat.is-laurel .cr-hat-stalk {
-  stroke: color-mix(in oklab, var(--ctp-green) 65%, var(--zoo-dark));
-}
-
-.cr-hat.is-cap .cr-hat-main {
-  fill: var(--ctp-blue);
-}
-
-.cr-hat-visor {
-  fill: color-mix(in oklab, var(--ctp-blue) 65%, var(--zoo-dark));
-}
-
-.cr-hat.is-cap .cr-hat-band {
-  fill: var(--zoo-light);
-}
-
-.cr-hat.is-crown .cr-hat-main {
-  fill: var(--ctp-yellow);
-  stroke: color-mix(in oklab, var(--ctp-yellow) 55%, var(--zoo-dark));
-  stroke-width: 1;
-}
-
-.cr-gem {
-  fill: var(--ctp-red);
-}
-
-.cr-gem.is-side {
-  fill: var(--ctp-sky);
-}
-
-.cr-glasses circle {
-  fill: color-mix(in oklab, var(--zoo-light) 16%, transparent);
-  stroke: var(--zoo-dark);
-  stroke-width: 2.2;
-}
-
-.cr-glasses path {
-  fill: none;
-  stroke: var(--zoo-dark);
-  stroke-width: 2.2;
-  stroke-linecap: round;
-}
-
-.cr-bow {
-  fill: var(--ctp-pink);
-}
-
-.cr-scarf {
-  fill: var(--ctp-teal);
-}
-
-.cr-bowtie {
-  fill: var(--ctp-mauve);
-}
-
-.cr-coin {
-  fill: var(--ctp-yellow);
-}
-
-.cr-coin-edge {
-  fill: color-mix(in oklab, var(--ctp-yellow) 55%, var(--zoo-dark));
-}
-
-.cr-coins.is-amber .cr-coin {
-  fill: var(--ctp-peach);
-}
-
-.cr-coins.is-amber .cr-coin-edge {
-  fill: color-mix(in oklab, var(--ctp-peach) 55%, var(--zoo-dark));
-}
-
-.cr-coins.is-red .cr-coin {
-  fill: var(--ctp-red);
-}
-
-.cr-coins.is-red .cr-coin-edge {
-  fill: color-mix(in oklab, var(--ctp-red) 55%, var(--zoo-dark));
-}
-
-.cr-pole {
-  stroke: var(--zoo-metal);
-  stroke-width: 2.2;
-  stroke-linecap: round;
-}
-
-.cr-cloth {
-  fill: var(--accent);
-}
-
-.cr-flag.is-pass .cr-cloth {
-  fill: var(--green);
-}
-
-.cr-flag.is-fail .cr-cloth {
-  fill: var(--red);
-}
-
-.cr-flag.is-pending .cr-cloth {
-  fill: var(--amber);
-}
-
-.cr-flag.is-draft .cr-cloth {
-  fill: var(--fg-faint);
-}
-
-.cr-mug {
-  fill: var(--zoo-light);
-  stroke: var(--zoo-dark);
-  stroke-width: 1.2;
-}
-
-.cr-mug-handle {
-  fill: none;
-  stroke: var(--zoo-dark);
-  stroke-width: 2.4;
-}
-
-.cr-steam {
-  fill: none;
-  stroke: var(--fg-faint);
-  stroke-width: 1.6;
-  stroke-linecap: round;
-}
-
-.cr-sweat path {
-  fill: var(--ctp-sky);
-}
-
-.cr-puff circle {
-  fill: var(--zoo-light);
-  opacity: 0;
-}
-
-.cr-blanket-cloth {
-  fill: color-mix(in oklab, var(--ctp-blue) 55%, var(--zoo-dark));
-}
-
-.cr-blanket-hem {
-  fill: none;
-  stroke: var(--ctp-lavender);
-  stroke-width: 2;
-  stroke-dasharray: 3 3;
-}
-
-.cr-babies-more {
-  fill: var(--fg-dim);
-}
-
-.cr-bit.is-yellow {
-  fill: var(--ctp-yellow);
-}
-
-.cr-bit.is-pink {
-  fill: var(--ctp-pink);
-}
-
-.cr-bit.is-sky {
-  fill: var(--ctp-sky);
-}
-
-.cr-bit.is-green {
-  fill: var(--ctp-green);
-}
-
-.cr-bit.is-mauve {
-  fill: var(--ctp-mauve);
-}
-
-/* the signs' sizes are the SVG's own attributes (viewBox units), not the page's type scale */
-.creature text {
-  font-family: var(--mono);
-  font-weight: 700;
-  text-anchor: middle;
-}
-
-.cr-sign.is-ask {
-  fill: var(--red);
-}
-
-.cr-board {
-  fill: var(--amber);
-}
-
-.cr-board-mark {
-  fill: var(--zoo-dark);
-}
-
-.cr-sign.is-puzzled {
-  fill: var(--violet);
-}
-
-.cr-battery {
-  fill: none;
-  stroke: var(--fg-dim);
-  stroke-width: 2;
-}
-
-.cr-battery-tip {
-  fill: var(--fg-dim);
-}
-
-.cr-battery-left {
-  fill: var(--red);
-}
-
-.cr-z {
-  fill: var(--fg-faint);
-}
-
-/* the logo badge on the creature's side */
-.zoo-badge {
-  position: absolute;
-  left: 71%;
-  top: 56%;
-  display: grid;
-  place-items: center;
-  width: 20%;
-  aspect-ratio: 1;
-  border-radius: 99px;
-  background: var(--zoo-light);
-  box-shadow: 0 0 0 2px var(--zoo-skin-dark);
-  pointer-events: none;
-}
-
-.zoo-badge .radar-logo {
-  width: 62%;
-  height: 62%;
-  color: var(--zoo-dark); /* a mark that signs in ink (Codex's) draws in the badge's ink, not the page's */
-}
-
-.zoo-creature figcaption {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1px;
-  max-width: 100%;
-  min-width: 0;
-}
-
-.zoo-name-row {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  max-width: 100%;
-  min-width: 0;
-}
-
-/* Tell me: a creature says what its agent did today; revealed under the pointer, always there on a touch screen */
-.zoo-tell {
-  flex-shrink: 0;
-  opacity: 0;
-  transition: opacity var(--fast) var(--ease);
-}
-
-.zoo-creature:hover .zoo-tell,
-.zoo-creature:focus-within .zoo-tell,
-.zoo-tell.on {
-  opacity: 1;
-}
-
-@media (pointer: coarse) {
-  .zoo-tell {
-    opacity: 1;
-  }
-}
-
-.zoo-name {
-  min-width: 0;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--fg);
-  font-size: var(--fs-13);
-  font-weight: 600;
-}
-
-.zoo-where {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  max-width: 100%;
-  color: var(--fg-dim);
-  font-size: var(--fs-12);
-}
-
-.zoo-where > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.zoo-how {
-  color: var(--fg-faint);
-  font-size: var(--fs-11);
-}
-
-.zoo-creature.is-asking .zoo-how {
-  color: var(--red);
-}
-
-.zoo-creature.is-worried .zoo-how,
-.zoo-creature.is-drained .zoo-how {
-  color: var(--amber);
-}
-
-.zoo-creature.is-dancing .zoo-how {
-  color: var(--green);
-}
-
-/* the speech bubble: a slot of its own in the grid, so creatures with and without one stand in a line */
-.zoo-bubble-slot {
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  width: 100%;
-  min-height: calc(3 * 1.35em + 16px);
-  font-size: var(--fs-12);
-}
-
-.zoo-bubble {
-  --zoo-bubble-line: var(--line-strong);
-  --zoo-bubble-fill: var(--bg-raised);
-  position: relative;
-  max-width: 100%;
-  padding: 6px 10px;
-  border: 1px solid var(--zoo-bubble-line);
-  border-radius: var(--r-lg);
-  background: var(--zoo-bubble-fill);
-  color: var(--fg);
-  line-height: 1.35;
-  text-align: left;
-}
-
-/* what an asking creature holds up: the question, in the colour of a question */
-.zoo-bubble.is-question {
-  --zoo-bubble-line: color-mix(in oklab, var(--red) 55%, var(--line-strong));
-  --zoo-bubble-fill: color-mix(in oklab, var(--red) 9%, var(--bg-raised));
-}
-
-/* what a creature says of its day while it says it, in the accent */
-.zoo-bubble.is-telling {
-  --zoo-bubble-line: color-mix(in oklab, var(--accent) 55%, var(--line-strong));
-  --zoo-bubble-fill: color-mix(in oklab, var(--accent) 10%, var(--bg-raised));
-}
-
-.zoo-bubble > span {
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.zoo-bubble::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  bottom: -6px;
-  width: 10px;
-  height: 10px;
-  border-right: 1px solid var(--zoo-bubble-line);
-  border-bottom: 1px solid var(--zoo-bubble-line);
-  background: var(--zoo-bubble-fill);
-  translate: -50% 0;
-  rotate: 45deg;
-}
-
-.zoo-creature.dim .zoo-open,
-.zoo-creature.dim .zoo-bubble {
-  opacity: 0.45;
-}
-
-.zoo-creature.is-pinned .zoo-open {
-  box-shadow: 0 0 0 2px var(--accent-ring);
-}
-
-/* office mode: one creature large, the rest small beside their captions */
-.zoo-office {
-  flex: 1;
-  min-height: 0;
-}
-
-.zoo-featured {
-  align-items: center;
-  justify-content: center;
-}
-
-.zoo-as-big {
-  flex: 1;
-  justify-content: center;
-}
-
-.zoo-as-big .zoo-open.linkish {
-  width: min(52vh, 72%);
-}
-
-.zoo-as-big .zoo-name {
-  font-size: var(--fs-20);
-}
-
-.zoo-as-big .zoo-where,
-.zoo-as-big .zoo-bubble-slot {
-  font-size: var(--fs-15);
-}
-
-.zoo-as-big .zoo-how {
-  font-size: var(--fs-13);
-}
-
-.zoo-as-big .zoo-bubble {
-  max-width: min(640px, 90%);
-}
-
-.zoo-cards {
-  gap: 6px;
-}
-
-.zoo-as-small {
-  flex-direction: row;
-  flex-shrink: 0;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 10px 6px 6px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-lg);
-  background: var(--bg-raised);
-  text-align: left;
-}
-
-.zoo-as-small .zoo-open.linkish {
-  width: 64px;
-  flex-shrink: 0;
-}
-
-.zoo-as-small figcaption {
-  align-items: flex-start;
-  flex: 1;
-}
-
-.zoo-as-small.is-pinned {
-  box-shadow: 0 0 0 2px var(--accent-ring);
-}
-
-.zoo-as-small.is-pinned .zoo-open {
-  box-shadow: none;
-}
-
-.zoo-popout {
-  flex: 1;
-  display: flex;
-  min-height: 0;
-  padding: 10px;
-}
-
-/* the sky behind the zoo, of the viewer's hour: faint, so the creatures and their words stay first */
-.zoo-sky {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  overflow: hidden;
-  pointer-events: none;
-  background: linear-gradient(to bottom, color-mix(in oklab, var(--ctp-sky) 10%, var(--bg)), var(--bg) 60%);
-}
-
-.zoo-sky.is-dawn {
-  background: linear-gradient(to bottom, color-mix(in oklab, var(--ctp-peach) 12%, var(--bg)), var(--bg) 60%);
-}
-
-.zoo-sky.is-dusk {
-  background: linear-gradient(to bottom, color-mix(in oklab, var(--ctp-mauve) 12%, var(--bg)), var(--bg) 60%);
-}
-
-.zoo-sky.is-night {
-  background: linear-gradient(to bottom, color-mix(in oklab, var(--ctp-blue) 9%, var(--ctp-crust)), var(--bg) 70%);
-}
-
-.zoo-sun {
-  position: absolute;
-  top: 8px;
-  right: 6%;
-  width: 26px;
-  aspect-ratio: 1;
-  border-radius: 50%;
-  background: var(--ctp-yellow);
-  box-shadow: 0 0 18px 6px color-mix(in oklab, var(--ctp-yellow) 40%, transparent);
-  opacity: 0.75;
-}
-
-/* at dawn and dusk the sun sits low on the strip's horizon, half set */
-.zoo-sky.is-dawn .zoo-sun,
-.zoo-sky.is-dusk .zoo-sun {
-  top: 24px;
-  width: 34px;
-  background: var(--ctp-peach);
-  box-shadow: 0 0 22px 8px color-mix(in oklab, var(--ctp-peach) 40%, transparent);
-}
-
-.zoo-moon {
-  position: absolute;
-  top: 7px;
-  right: 6%;
-  width: 24px;
-  aspect-ratio: 1;
-  border-radius: 50%;
-  box-shadow: -7px 4px 0 0 var(--ctp-yellow);
-  opacity: 0.8;
-}
-
-.zoo-star {
-  position: absolute;
-  width: 3px;
-  height: 3px;
-  border-radius: 50%;
-  background: var(--ctp-text);
-  opacity: 0.45;
-  animation: zoo-twinkle 2.8s ease-in-out infinite;
-}
-
-/* the fireworks of a merge, over every pen */
-.zoo-fireworks {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.zoo-burst {
-  position: absolute;
-  width: 130px;
-  aspect-ratio: 1;
-  translate: -50% -50%;
-  opacity: 0;
-  fill: none;
-  stroke-width: 3.2;
-  stroke-linecap: round;
-  animation: zoo-burst 1.7s ease-out 2 both;
-}
-
-.zoo-burst.is-0 {
-  stroke: var(--ctp-yellow);
-}
-
-.zoo-burst.is-1 {
-  stroke: var(--ctp-pink);
-}
-
-.zoo-burst.is-2 {
-  stroke: var(--ctp-sky);
-}
-
-.zoo-burst.is-3 {
-  stroke: var(--ctp-green);
-}
-
-/* the foot: the day in a line, running along when it is longer than the screen, and the voices' switch */
-.zoo-foot {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  padding: 5px 8px 5px 14px;
-  border-top: 1px solid var(--line);
-  background: var(--bg-raised);
-  flex-shrink: 0;
-}
-
-.zoo-ticker {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  color: var(--fg-dim);
-  font-size: var(--fs-12);
-  font-variant-numeric: tabular-nums;
-}
-
-.zoo-ticker.is-quiet {
-  color: var(--fg-faint);
-}
-
-.zoo-ticker-track {
-  display: inline-flex;
-}
-
-.zoo-ticker.is-moving {
-  mask-image: linear-gradient(to right, transparent, black 24px, black calc(100% - 24px), transparent);
-}
-
-.zoo-ticker.is-moving .zoo-ticker-track {
-  animation-name: zoo-ticker;
-  animation-timing-function: linear;
-  animation-iteration-count: infinite;
-}
-
-.zoo-ticker.is-moving .zoo-ticker-copy {
-  padding-right: 4em;
-}
-
-/* a phone: the wall's bar wraps rather than push the page wider than the screen, and the zoo stands two abreast */
-@media (max-width: 920px) {
-  .wall-bar {
-    flex-wrap: wrap;
-    row-gap: 6px;
-  }
-}
-
-@media (max-width: 600px) {
-  .zoo-pens {
-    gap: 10px;
-    padding: 34px 8px 14px;
-  }
-
-  .zoo-pen {
-    flex-basis: 100%;
-    padding: 8px 6px 24px;
-  }
-
-  .zoo-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 14px 6px;
-  }
-
-}
-
-/* the motion: each pose's own, at the radar spinner's rhythm where it works */
-.zoo-creature.is-busy .cr-body {
-  animation: zoo-bounce 0.6s ease-in-out infinite;
-}
-
-.zoo-creature.is-busy .cr-arm-l {
-  animation: zoo-type 0.3s steps(2, jump-none) infinite;
-}
-
-.zoo-creature.is-busy .cr-arm-r {
-  animation: zoo-type 0.3s steps(2, jump-none) 0.15s infinite;
-}
-
-.zoo-creature.is-busy .cr-code {
-  animation: zoo-code 1.2s steps(8, jump-none) infinite;
-}
-
-.zoo-creature.is-busy .cr-code-2 {
-  animation-delay: 0.6s;
-}
-
-.zoo-creature.is-busy .cr-led {
-  animation: zoo-code 0.8s steps(2, jump-none) infinite;
-}
-
-.zoo-creature.is-busy .cr-led-2 {
-  animation-delay: 0.27s;
-}
-
-.zoo-creature.is-busy .cr-led-3 {
-  animation-delay: 0.53s;
-}
-
-.zoo-creature.is-asking .cr-arm-r {
-  transform-origin: 90px 74px;
-  animation: zoo-wave 0.75s ease-in-out infinite alternate;
-}
-
-.zoo-creature.is-asking .cr-sign,
-.zoo-creature.is-worried .cr-sign {
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: zoo-pulse 1.5s ease-in-out infinite;
-}
-
-.zoo-creature.is-worried .cr-body {
-  animation: zoo-shiver 0.4s linear infinite;
-}
-
-.zoo-creature.is-dancing .cr-body {
-  transform-origin: 60px 116px;
-  animation: zoo-dance 0.9s ease-in-out infinite;
-}
-
-.zoo-creature.is-dancing .cr-bit {
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: zoo-twinkle 1.2s ease-in-out infinite;
-}
-
-.zoo-creature.is-dancing .cr-bit:nth-child(2n) {
-  animation-delay: 0.4s;
-}
-
-.zoo-creature.is-dancing .cr-bit:nth-child(3n) {
-  animation-delay: 0.8s;
-}
-
-.zoo-creature.is-asleep .cr-body {
-  transform-origin: 60px 116px;
-  animation: zoo-breathe 3.2s ease-in-out infinite;
-}
-
-.zoo-creature.is-asleep .cr-z {
-  animation: zoo-float 2.4s ease-in infinite;
-}
-
-.zoo-creature.is-asleep .cr-z:nth-child(2) {
-  animation-delay: 0.8s;
-}
-
-.zoo-creature.is-asleep .cr-z:nth-child(3) {
-  animation-delay: 1.6s;
-}
-
-.zoo-creature.is-asleep.dim .cr-body {
-  animation-duration: 5s;
-}
-
-.zoo-creature.is-asleep.dim .cr-z {
-  animation-duration: 4s;
-}
-
-.zoo-creature.is-puzzled .cr-body {
-  transform-origin: 60px 116px;
-  animation: zoo-tilt 3s ease-in-out infinite;
-}
-
-/* drained: slumped where it sat, the battery's last bar blinking */
-.zoo-creature.is-drained .cr-body {
-  transform-origin: 60px 116px;
-  transform: translateY(3px) scale(1.03, 0.95);
-}
-
-.zoo-creature.is-drained .cr-battery-left {
-  animation: zoo-code 1.4s steps(2, jump-none) infinite;
-}
-
-/* the applause for another's finish: up from the rest, hands meeting */
-.zoo-creature.is-cheering .cr-body {
-  transform-origin: 60px 116px;
-  animation: zoo-bounce 0.34s ease-in-out infinite;
-}
-
-.zoo-creature.is-cheering .cr-hand-l {
-  animation: zoo-clap-l 0.17s ease-in-out infinite alternate;
-}
-
-.zoo-creature.is-cheering .cr-hand-r {
-  animation: zoo-clap-r 0.17s ease-in-out infinite alternate;
-}
-
-.cr-sparkle {
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: zoo-twinkle 2.6s ease-in-out infinite;
-}
-
-.cr-sparkle-2 {
-  animation-delay: 1.3s;
-}
-
-.cr-steam {
-  animation: zoo-steam 2s ease-in infinite;
-}
-
-.cr-steam-2 {
-  animation-delay: 1s;
-}
-
-.cr-sweat path {
-  animation: zoo-drop 1.6s ease-in infinite;
-}
-
-.cr-sweat .cr-drop-2 {
-  animation-delay: 0.8s;
-}
-
-.cr-puff circle {
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: zoo-puff 1.6s ease-out both;
-}
-
-.cr-puff circle:nth-child(2n) {
-  animation-delay: 0.2s;
-}
-
-.cr-flag.is-pending .cr-cloth,
-.cr-flag.is-fail .cr-cloth {
-  transform-origin: 8px 58px;
-  animation: zoo-flutter 0.9s ease-in-out infinite alternate;
-}
-
-.cr-baby {
-  transform-box: fill-box;
-  transform-origin: center bottom;
-  animation: zoo-hop 0.5s ease-in-out infinite alternate;
-}
-
-.cr-babies > g:nth-child(2) .cr-baby {
-  animation-delay: 0.17s;
-}
-
-.cr-babies > g:nth-child(3) .cr-baby {
-  animation-delay: 0.34s;
-}
-
-@keyframes zoo-bounce {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-2.5px);
-  }
-}
-
-@keyframes zoo-type {
-  from {
-    transform: translateY(0);
-  }
-  to {
-    transform: translateY(-2.5px);
-  }
-}
-
-@keyframes zoo-code {
-  from {
-    opacity: 1;
-  }
-  to {
-    opacity: 0.25;
-  }
-}
-
-@keyframes zoo-wave {
-  from {
-    transform: rotate(-8deg);
-  }
-  to {
-    transform: rotate(12deg);
-  }
-}
-
-@keyframes zoo-pulse {
-  0%,
-  100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.35;
-    transform: scale(0.82);
-  }
-}
-
-@keyframes zoo-shiver {
-  0%,
-  100% {
-    transform: translateX(0);
-  }
-  25% {
-    transform: translateX(-0.8px);
-  }
-  75% {
-    transform: translateX(0.8px);
-  }
-}
-
-@keyframes zoo-dance {
-  0%,
-  100% {
-    transform: rotate(-7deg) translateY(0);
-  }
-  25% {
-    transform: rotate(0deg) translateY(-6px);
-  }
-  50% {
-    transform: rotate(7deg) translateY(0);
-  }
-  75% {
-    transform: rotate(0deg) translateY(-6px);
-  }
-}
-
-@keyframes zoo-twinkle {
-  0%,
-  100% {
-    opacity: 1;
-    transform: scale(1) rotate(0deg);
-  }
-  50% {
-    opacity: 0.2;
-    transform: scale(0.6) rotate(45deg);
-  }
-}
-
-@keyframes zoo-breathe {
-  0%,
-  100% {
-    transform: scale(1, 1);
-  }
-  50% {
-    transform: scale(1.025, 0.975);
-  }
-}
-
-@keyframes zoo-float {
-  0% {
-    opacity: 0;
-    transform: translate(0, 4px);
-  }
-  30% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-    transform: translate(5px, -7px);
-  }
-}
-
-@keyframes zoo-tilt {
-  0%,
-  100% {
-    transform: rotate(-7deg);
-  }
-  50% {
-    transform: rotate(-2deg);
-  }
-}
-
-@keyframes zoo-blink {
-  0%,
-  94%,
-  100% {
-    transform: scaleY(1);
-  }
-  96.5% {
-    transform: scaleY(0.12);
-  }
-}
-
-@keyframes zoo-clap-l {
-  from {
-    transform: translateX(-2px);
-  }
-  to {
-    transform: translateX(4px);
-  }
-}
-
-@keyframes zoo-clap-r {
-  from {
-    transform: translateX(2px);
-  }
-  to {
-    transform: translateX(-4px);
-  }
-}
-
-@keyframes zoo-steam {
-  0% {
-    opacity: 0;
-    transform: translateY(3px);
-  }
-  40% {
-    opacity: 0.9;
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(-5px);
-  }
-}
-
-@keyframes zoo-drop {
-  0% {
-    opacity: 0;
-    transform: translateY(-2px);
-  }
-  25% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(9px);
-  }
-}
-
-@keyframes zoo-puff {
-  0% {
-    opacity: 0;
-    transform: scale(0.3);
-  }
-  30% {
-    opacity: 0.85;
-  }
-  100% {
-    opacity: 0;
-    transform: scale(1.8);
-  }
-}
-
-@keyframes zoo-flutter {
-  from {
-    transform: skewY(-6deg) scaleX(0.92);
-  }
-  to {
-    transform: skewY(5deg) scaleX(1);
-  }
-}
-
-@keyframes zoo-hop {
-  from {
-    transform: translateY(0);
-  }
-  to {
-    transform: translateY(-14px);
-  }
-}
-
-@keyframes zoo-burst {
-  0% {
-    opacity: 0;
-    transform: scale(0.2);
-  }
-  15% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-    transform: scale(1.25);
-  }
-}
-
-@keyframes zoo-flash {
-  0%,
-  90%,
-  93%,
-  96%,
-  100% {
-    opacity: 0;
-  }
-  91.5%,
-  94.5% {
-    opacity: 0.09;
-  }
-}
-
-@keyframes zoo-ticker {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(-50%);
-  }
-}
-
-/* reduced motion: every creature holds its pose, the sky stands still, no fireworks, and the day's line is cut rather
-   than run; the sign and the pose still say the state */
-@media (prefers-reduced-motion: reduce) {
-  .zoo,
-  .zoo *,
-  .zoo *::before,
-  .zoo *::after,
-  .zoo-creature,
-  .zoo-creature * {
-    animation: none !important;
-    transition: none !important;
-  }
-
-  .zoo-fireworks {
-    display: none;
-  }
-
-  .zoo-ticker.is-moving {
-    mask-image: none;
-    text-overflow: ellipsis;
-  }
-
-  .zoo-ticker.is-moving .zoo-ticker-track {
-    display: block;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .zoo-ticker.is-moving .zoo-ticker-copy + .zoo-ticker-copy {
-    display: none;
-  }
 }
 
 /* ---- the secret check: the verdict dialog's findings, the diff rows they mark, the settings files' notes in the lens head ---- */
@@ -18237,7 +15991,7 @@ textarea.screen-term-field {
 }
 
 /* ---- the collision radar: another checkout of the repository changing the same files (features/roster/CollisionMark.tsx,
-   the lens's CollisionNotice.tsx, the zoo's Bolts.tsx) and the review queue's risk chip (features/review/risk.ts) ---- */
+   the lens's CollisionNotice.tsx) and the review queue's risk chip (features/review/risk.ts) ---- */
 .collide-mark {
   display: inline-flex;
   align-items: center;
@@ -18261,10 +16015,6 @@ textarea.screen-term-field {
 
 .collide-mark.is-lines {
   color: var(--amber);
-}
-
-.tile-collide {
-  font-size: var(--fs-12);
 }
 
 .queue-item:has(.queue-collide) .queue-name {
@@ -18314,62 +16064,6 @@ textarea.screen-term-field {
   padding-left: 18px;
   font-family: var(--mono);
   font-size: var(--fs-12);
-}
-
-.zoo-grid {
-  position: relative;
-  isolation: isolate; /* the lightning goes behind the creatures and their captions, not over them */
-}
-
-.zoo-bolts {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  overflow: visible;
-  pointer-events: none;
-  z-index: -1;
-}
-
-.zoo-bolts path {
-  fill: none;
-  stroke: var(--amber);
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  opacity: 0.55;
-  animation: zoo-flicker 1.8s steps(2) infinite;
-}
-
-.zoo-bolts path.is-lines {
-  stroke-width: 3;
-  opacity: 0.95;
-}
-
-@keyframes zoo-flicker {
-  50% {
-    opacity: 0.35;
-  }
-}
-
-.zoo-bolt {
-  position: absolute;
-  left: 6%;
-  top: 6%;
-  display: grid;
-  place-items: center;
-  width: 20%;
-  aspect-ratio: 1;
-  border-radius: 99px;
-  background: var(--bg-raised);
-  box-shadow: 0 0 0 2px var(--line-strong);
-  color: var(--fg-dim);
-  pointer-events: none;
-}
-
-.zoo-bolt.is-lines {
-  box-shadow: 0 0 0 2px var(--amber);
-  color: var(--amber);
 }
 
 /* ---- the Changes lens as a client of the repository (features/review/ChangeGroups, CommitBox, OutgoingCommits,
@@ -18967,12 +16661,6 @@ textarea.screen-term-field {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.tile-tokens {
-  flex-shrink: 0;
-  color: var(--fg-faint);
-  font-variant-numeric: tabular-nums;
 }
 
 /* the switch of the prompts list at the timeline bar's end */

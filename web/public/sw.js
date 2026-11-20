@@ -176,7 +176,7 @@ self.addEventListener("notificationclick", (event) => {
         } catch {
           /* iOS may refuse; the message still lands */
         }
-        // a digest names a panel of the page (the standup) instead of a pane
+        // a push may name a panel of the page (the usage) instead of a pane
         win.postMessage(panel ? { type: "open-panel", panel } : { type: "select-pane", machine, pane });
         return;
       }

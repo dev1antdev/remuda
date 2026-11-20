@@ -25,7 +25,7 @@ export default function StatusBar() {
   const current = useCurrent();
   const { machines, viewOnly } = useRoster();
   const { machineLabel } = useSharing();
-  if (!prefs.on || !desk || (full && (mode === "herdr" || mode === "wall"))) return null;
+  if (!prefs.on || !desk || (full && mode === "herdr")) return null;
   const machine = current?.machine ?? machines.find((m) => m.state === "connected") ?? machines[0];
   const windows = machine?.os === "windows";
   return (

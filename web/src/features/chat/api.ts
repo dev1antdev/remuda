@@ -62,7 +62,7 @@ export type ChatResponse = { session_id?: string; subagent?: string; sessions: S
 
 // chatQuery is a read's query. The server counts a pane's read as the person's look — its finish's notification taken
 // back, or never sent — so a page whose own document is hidden says it is none (look=0): the Mac app polls on with its
-// window closed, for its menu bar, and a tab behind a pop-out window polls for that window.
+// window closed, for its menu bar.
 export function chatQuery(read: { machineId: string; paneId: string; sessionId: string | null; dir?: string; last?: number; subagent?: string; hidden: boolean }): URLSearchParams {
   const q = new URLSearchParams({ machine: read.machineId });
   if (read.paneId) q.set("pane", read.paneId);
@@ -81,7 +81,7 @@ export async function fetchChat(
   sessionId: string | null,
   etag: string | null,
   dir?: string,
-  last?: number, // only the last N turns: a wall tile
+  last?: number, // only the last N turns: Code's follow
   subagent?: string, // one subagent's own conversation, read-only
 ): Promise<{ body: ChatResponse; etag: string | null } | null> {
   const q = chatQuery({ machineId, paneId, sessionId, dir, last, subagent, hidden: typeof document !== "undefined" && document.visibilityState !== "visible" });

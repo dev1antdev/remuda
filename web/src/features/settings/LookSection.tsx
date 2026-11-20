@@ -142,7 +142,7 @@ export default function LookSection() {
       <label className="settings-row">
         <span>
           {t("Sync these settings between devices")}
-          <small>{t("The theme, the density, the code font, the sidebar, the status bar, the wall, the review and the panels travel through this remuda; alerts, the text sizes and the prompt history stay on the device")}</small>
+          <small>{t("The theme, the density, the code font, the sidebar, the status bar, the review and the panels travel through this remuda; alerts, the text sizes and the prompt history stay on the device")}</small>
         </span>
         <input type="checkbox" checked={sync} onChange={(e) => setSync(e.target.checked)} />
       </label>

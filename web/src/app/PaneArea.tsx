@@ -240,7 +240,7 @@ export default function PaneArea({ current }: { current: Located | null }) {
         {split && <Resizer spec={PANELS.split} edge="right" label={tr("Chat width in the split")} />}
         {seen("terminal") && viewOnly && (
           <div className={`lens-pane screen-lens${split ? " split-terminal" : ""}`} hidden={!shown("terminal")} onFocusCapture={() => focusSide("terminal")} onPointerDownCapture={() => focusSide("terminal")}>
-            <Screen key={`${machine.id}|${pane.id}`} machineId={machine.id} paneId={pane.id} cols={pane.cols} busy={pane.status === "run" || pane.status === "input"} active={shown("terminal")} onOpen={() => {}} />
+            <Screen key={`${machine.id}|${pane.id}`} machineId={machine.id} paneId={pane.id} cols={pane.cols} busy={pane.status === "run" || pane.status === "input"} active={shown("terminal")} />
           </div>
         )}
         {seen("terminal") && !viewOnly && (

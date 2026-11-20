@@ -26,7 +26,7 @@ export type CallsProps = {
   onOpenFile: OpenFile;
   subagents?: Subagent[];
   onOpenSubagent?: (s: Subagent) => void;
-  diffs?: boolean; // an Edit's change under its line: the lens, not a tile
+  diffs?: boolean; // an Edit's change under its line
   live?: boolean; // the turn under way: a call without its result is running
   shells?: Shell[]; // the conversation's background shells: the call that started one says how it stands
 };

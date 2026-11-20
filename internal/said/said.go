@@ -1,5 +1,5 @@
 // Package said keeps the first line of every finished agent's last answer, and the pull request it named, for the
-// roster: read once per finish, off the request path, so a wall tile and a sidebar row can say what the agent answered.
+// roster: read once per finish, off the request path, so a sidebar row can say what the agent answered.
 package said
 
 import (

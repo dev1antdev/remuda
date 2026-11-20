@@ -61,7 +61,7 @@ type Subscription struct {
 // queue is how many events a slow page may fall behind before frames are dropped (its polls catch it up).
 const queue = 64
 
-// MaxWatched caps the panes one page may watch: a wall shows tens, never thousands.
+// MaxWatched caps the panes one page may watch: a page shows a few, never thousands.
 const MaxWatched = 200
 
 func New(in Inputs) *Hub {

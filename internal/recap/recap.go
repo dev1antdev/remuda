@@ -1,6 +1,6 @@
 // Package recap sums up what an agent did in a conversation: the prompts and answers, the time and the
 // tokens, the tools it called and which failed, the files it touched, the commands it ran — one Recap per
-// conversation, and a standup report over every agent on every machine. Read from the transcript, never written.
+// conversation. Read from the transcript, never written.
 package recap
 
 import (

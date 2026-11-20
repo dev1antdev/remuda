@@ -272,7 +272,7 @@ function plain(text: string, links: Links | null, key: string): ReactNode[] {
 
 // ---- blocks → React ----
 
-// diagrams draws a mermaid fence as its diagram (the chat lens, the viewer, a task's comments); a wall tile leaves it code
+// diagrams draws a mermaid fence as its diagram (the chat lens, the viewer, a task's comments); elsewhere it stays code
 export function Markdown({ text, onOpenFile, diagrams = false }: { text: string; onOpenFile: OpenFile; diagrams?: boolean }) {
   const blocks = useMemo(() => parseBlocks(text), [text]);
   const windows = useContext(WindowsPaths);

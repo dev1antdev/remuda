@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"slices"
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/auth"
@@ -12,11 +11,10 @@ import (
 	"github.com/dev1antdev/remuda/internal/recap"
 )
 
-// What a conversation came to, and the standup over every agent: read from the transcripts on demand.
+// What a conversation came to: read from the transcript on demand.
 
 func (s *Server) recapRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/recap", s.handleRecap)
-	api.HandleFunc("GET /api/standup", s.handleStandup)
 }
 
 // handleRecap is GET /api/recap?machine&pane[&session] or ?machine&dir&session [&since=RFC3339]: one conversation's recap, and the report as Markdown.
@@ -55,32 +53,6 @@ func (s *Server) handleRecap(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, map[string]any{"since": sinceText(since), "recap": summary, "markdown": recap.Conversation(summary, since.In(time.Local), time.Now())})
-}
-
-// handleStandup is GET /api/standup?tz=<IANA>[&since=RFC3339]: every agent on every connected machine with its recap since local midnight, and the report as Markdown.
-func (s *Server) handleStandup(w http.ResponseWriter, r *http.Request) {
-	loc := time.Local
-	if tz := r.URL.Query().Get("tz"); tz != "" {
-		if l, err := time.LoadLocation(tz); err == nil {
-			loc = l
-		}
-	}
-	since, ok := sinceParam(w, r)
-	if !ok {
-		return
-	}
-	now := time.Now().In(loc)
-	if since.IsZero() {
-		since = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
-	}
-	var items []recap.Item
-	if auth.IsViewer(r.Context()) {
-		items = slices.DeleteFunc(s.Recap.StandupOwn(since), func(i recap.Item) bool { return !s.viewerSeesPane(i.Machine, i.Pane) })
-	} else {
-		items = s.Recap.Standup(since)
-	}
-	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, map[string]any{"since": sinceText(since), "items": items, "markdown": recap.Markdown(items, since.In(loc), now)})
 }
 
 // sinceParam reads since=<RFC3339>; zero when absent, a 400 when it does not parse.

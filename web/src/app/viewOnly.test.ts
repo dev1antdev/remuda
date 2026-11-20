@@ -1,27 +1,27 @@
 import { describe, expect, it } from "vitest";
 import { viewerCommand, viewerMenu, viewerPlaces, viewerToasts } from "./viewOnly";
 
-const modes = [{ mode: "herdr" }, { mode: "wall" }, { mode: "tasks" }, { mode: "code" }, { mode: "review" }];
-const panels = [{ panel: "concierge" }, { panel: "standup" }, { panel: "usage" }, { panel: "schedules" }, { panel: "activity" }, { panel: "server" }];
+const modes = [{ mode: "herdr" }, { mode: "tasks" }, { mode: "code" }, { mode: "review" }];
+const panels = [{ panel: "usage" }, { panel: "schedules" }, { panel: "activity" }, { panel: "server" }];
 
 describe("viewerPlaces", () => {
   it("keeps every place for the full page", () => {
     expect(viewerPlaces(modes, false)).toEqual(modes);
     expect(viewerPlaces(panels, false)).toEqual(panels);
   });
-  it("keeps the agents, the Wall and the reports for a viewer", () => {
-    expect(viewerPlaces(modes, true).map((p) => p.mode)).toEqual(["herdr", "wall"]);
-    expect(viewerPlaces(panels, true).map((p) => p.panel)).toEqual(["standup", "usage", "activity", "server"]);
+  it("keeps the agents and the reports for a viewer", () => {
+    expect(viewerPlaces(modes, true).map((p) => p.mode)).toEqual(["herdr"]);
+    expect(viewerPlaces(panels, true).map((p) => p.panel)).toEqual(["usage", "activity", "server"]);
     expect(viewerCommand("server"), "the palette's Server row, which the rail must match").toBe(true);
   });
 });
 
 describe("viewerCommand", () => {
   it("keeps moving about, what a lens shows, the reports and the look", () => {
-    for (const id of ["next-needs", "mode:wall", "lens:chat", "lens:git", "find", "recap", "export", "timelapse", "wall-office", "full", "standup", "listen-day", "keys", "theme-dark", "theme-dark-nord", "theme-light-solarized-light", "text-large", "lang-ru", "open-lens-chat"]) expect(viewerCommand(id), id).toBe(true);
+    for (const id of ["next-needs", "mode:herdr", "lens:chat", "lens:git", "find", "recap", "export", "timelapse", "full", "keys", "theme-dark", "theme-dark-nord", "theme-light-solarized-light", "text-large", "lang-ru", "open-lens-chat"]) expect(viewerCommand(id), id).toBe(true);
   });
   it("drops every command that types, starts, closes, renames or saves on the server", () => {
-    for (const id of ["workspace:local", "tab", "worktree", "rename-workspace", "rename-tab", "restart-pane", "close-workspace", "handover", "model", "broadcast", "alerts", "start-recipe", "recipes", "schedules", "settings", "machine", "import-issue", "search", "mode:tasks", "mode:code", "mode:review", "lens:changes", "concierge"]) expect(viewerCommand(id), id).toBe(false);
+    for (const id of ["workspace:local", "tab", "worktree", "rename-workspace", "rename-tab", "restart-pane", "close-workspace", "handover", "model", "broadcast", "alerts", "start-recipe", "recipes", "schedules", "settings", "machine", "import-issue", "search", "mode:tasks", "mode:code", "mode:review", "lens:changes"]) expect(viewerCommand(id), id).toBe(false);
   });
 });
 
@@ -33,11 +33,10 @@ describe("viewerToasts", () => {
       { id: "plan-offer-a1b2", action: "Run on Codex" },
       { id: "release", action: "Download & install" },
       { id: "recover-gog", action: "Resume" },
-      { id: "away", action: "Standup" },
       { id: "tailscale", action: "Log in" },
       { id: "stale", action: "Reload" },
     ];
-    expect(viewerToasts(toasts)).toEqual([{ id: "offline" }, { id: "release", action: undefined }, { id: "recover-gog", action: undefined }, { id: "away", action: "Standup" }, { id: "stale", action: "Reload" }]);
+    expect(viewerToasts(toasts)).toEqual([{ id: "offline" }, { id: "release", action: undefined }, { id: "recover-gog", action: undefined }, { id: "stale", action: "Reload" }]);
   });
 });
 

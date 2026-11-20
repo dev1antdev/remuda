@@ -1,6 +1,6 @@
 // Where a pane opens when something other than a click on it brings the person there: a notification's tap, the Mac
 // app's menu, an Activity row, Alt+N. The pref `open.lens` names the lens — the terminal unless chosen otherwise — or
-// keeps whichever lens the page was on. The sidebar, the tabs and the Wall keep their own ways.
+// keeps whichever lens the page was on. The sidebar and the tabs keep their own ways.
 
 export type OpenLens = "terminal" | "chat" | "keep";
 export type PaneLens = "terminal" | "chat" | "changes" | "git";

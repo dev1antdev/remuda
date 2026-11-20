@@ -1,6 +1,6 @@
-// Screen is a pane's terminal as it is — the visible rows with their colours, read from herdr at the tiles' pace —
-// drawn at the size that fits the width it is given, the bottom rows kept when the height runs out (the prompt and
-// the status live there). The wall's screen view; a click opens the pane's terminal in Agents.
+// Screen is a pane's terminal as it is — the visible rows with their colours, read from herdr every few seconds — drawn
+// at the size that fits the width it is given, the bottom rows kept when the height runs out (the prompt and the
+// status live there). A viewer link's terminal lens: no attach, nothing typed.
 
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { useFlavor } from "@/app/theme";
@@ -14,13 +14,12 @@ import { t } from "@/lib/i18n";
 
 const BASE_FONT = 13;
 
-export const Screen = memo(function Screen({ machineId, paneId, cols, busy, active, onOpen }: {
+export const Screen = memo(function Screen({ machineId, paneId, cols, busy, active }: {
   machineId: string;
   paneId: string;
   cols: number; // the pane's own grid, 0 when unknown
   busy: boolean; // the agent works or asks: the faster pace
   active: boolean; // on screen: a hidden screen keeps its rows and waits
-  onOpen: () => void;
 }) {
   const etag = useRef<string | null>(null);
   useEffect(() => {
@@ -44,7 +43,7 @@ export const Screen = memo(function Screen({ machineId, paneId, cols, busy, acti
   const box = useRef<HTMLDivElement>(null);
   const fontSize = useFitFont(box, width);
   return (
-    <div className="screen" ref={box} style={{ fontSize }} onClick={onOpen} title={t("Open the terminal in Agents")}>
+    <div className="screen" ref={box} style={{ fontSize }}>
       {text === null && !error && <div className="empty chat-empty">{t("Loading…")}</div>}
       {error && (
         <Notice tone="error" className="chat-notice">
@@ -81,8 +80,8 @@ export const widthOf = (cols: number, lines: Line[]) => Math.max(cols, 1, ...lin
 // FitRule is the font size for cols columns in avail pixels, given a cell's width at the base size
 export type FitRule = (avail: number, cols: number, cellWidth: number, baseSize: number) => number;
 
-// useFitFont is the font size at which cols columns fill the box's width, measured in the box's own document (the
-// pop-out has one of its own) and followed as the box resizes; the screen terminal fits by a rule of its own
+// useFitFont is the font size at which cols columns fill the box's width, measured in the box's own document and
+// followed as the box resizes; the screen terminal fits by a rule of its own
 export function useFitFont(box: RefObject<HTMLDivElement | null>, cols: number, fit: FitRule = thumbFont): number {
   const [avail, setAvail] = useState(0);
   const [cell, setCell] = useState(0);

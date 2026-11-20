@@ -1,4 +1,4 @@
-// The standup and the recaps: what every agent did over a period, what one conversation came to.
+// One conversation's recap: what it came to, and when the agent worked, waited and sat idle.
 
 import { getJSON } from "@/lib/http";
 
@@ -27,27 +27,6 @@ export type Recap = {
   last?: string;
   said?: string; // the first line of the last answer
   spans?: Span[]; // when it worked, waited and sat idle over the period
-};
-
-export type Item = {
-  machine: string;
-  label: string;
-  workspace: string;
-  pane: string;
-  dir: string;
-  agent: string;
-  state: "working" | "blocked" | "done" | "idle" | "unknown";
-  alert?: string;
-  recap: Recap;
-  error?: string;
-};
-
-export type Standup = { since: string; items: Item[]; markdown: string };
-
-export const fetchStandup = (since: string | undefined, tz: string): Promise<Standup> => {
-  const p = new URLSearchParams({ tz });
-  if (since) p.set("since", since);
-  return getJSON(`/api/standup?${p}`);
 };
 
 // fetchRecap is one conversation's recap: a pane's (its live session, or one of its folder by id), or a transcript on its

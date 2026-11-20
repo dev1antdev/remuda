@@ -1,29 +1,15 @@
 package recap
 
 import (
-	"sync"
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/chat"
-	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/machines"
-	"github.com/dev1antdev/remuda/internal/radar"
-	"github.com/dev1antdev/remuda/internal/watch"
 )
 
-// Service reads the conversations the recaps are made of: a pane's through the chat service, every agent's from the watcher's snapshots.
+// Service reads the conversations the recaps are made of, through the chat service.
 type Service struct {
-	Machines *machines.Manager
-	Watch    *watch.Watcher
-	Chat     *chat.Service
-	Radar    *radar.Tracker
-	// Skip names a workspace remuda keeps for itself (the concierge's), whose agent's talk is no work to report.
-	Skip func(machineID, workspaceID string) bool
-}
-
-// reports says whether the standup reports on the pane: an agent's, outside remuda's own workspaces.
-func (s *Service) reports(machineID string, pane *herdr.PaneInfo) bool {
-	return pane.Agent != "" && (s.Skip == nil || !s.Skip(machineID, pane.WorkspaceID))
+	Chat *chat.Service
 }
 
 // Conversation is the recap of one conversation: a pane's live one, a session of its folder, or a transcript on its own.
@@ -53,50 +39,4 @@ func (s *Service) recapOf(open opener, mc *machines.Machine, paneID, sessionID, 
 	r := Of(turns, since)
 	r.Spans = Spans(turns, since, time.Now())
 	return r, nil
-}
-
-// Standup is one item per agent pane on every connected machine, the machines read side by side, in the roster's order.
-func (s *Service) Standup(since time.Time) []Item { return s.standup(s.Chat.Open, since) }
-
-// StandupOwn is Standup with each pane's recap by chat.Service.OpenOwn.
-func (s *Service) StandupOwn(since time.Time) []Item { return s.standup(s.Chat.OpenOwn, since) }
-
-func (s *Service) standup(open opener, since time.Time) []Item {
-	list := s.Machines.List()
-	perMachine := make([][]Item, len(list))
-	var wg sync.WaitGroup
-	for i, mc := range list {
-		if state, _ := mc.State(); state != machines.StateConnected {
-			continue
-		}
-		snap, _ := s.Watch.Snapshot(mc.ID())
-		if snap == nil {
-			continue
-		}
-		wg.Add(1)
-		go func(i int, mc *machines.Machine) {
-			defer wg.Done()
-			for j := range snap.Panes {
-				pane := &snap.Panes[j]
-				if !s.reports(mc.ID(), pane) {
-					continue
-				}
-				item := Item{Machine: mc.ID(), Label: mc.Label(), Workspace: snap.WorkspaceLabel(pane.WorkspaceID), Pane: pane.PaneID, Dir: pane.Dir(), Agent: pane.AgentName()}
-				display := s.Radar.Display(mc.ID(), pane)
-				item.State, item.Alert = display.State, display.Alert
-				recap, err := s.recapOf(open, mc, pane.PaneID, "", "", since)
-				if err != nil {
-					item.Error = err.Error()
-				}
-				item.Recap = recap
-				perMachine[i] = append(perMachine[i], item)
-			}
-		}(i, mc)
-	}
-	wg.Wait()
-	items := []Item{}
-	for _, part := range perMachine {
-		items = append(items, part...)
-	}
-	return items
 }

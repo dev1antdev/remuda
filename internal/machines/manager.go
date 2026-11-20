@@ -69,7 +69,7 @@ type Manager struct {
 var ErrServerHost = errors.New("this remuda runs as a server: the machine it runs on has no workspaces of its own; pick one of its machines")
 
 // SetServer makes the host no machine of the fleet: List leaves it out, so the roster, the watcher, the search, the
-// usage and the standups never see it, and its herdr is never asked; its vitals are still read (All).
+// usage never sees it, and its herdr is never asked; its vitals are still read (All).
 func (m *Manager) SetServer(on bool) {
 	m.mu.Lock()
 	m.server = on

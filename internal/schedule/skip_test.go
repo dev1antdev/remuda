@@ -13,7 +13,7 @@ import (
 func TestAPromptRunSkipsAnAgentAtWorkOrAsking(t *testing.T) {
 	var pushed []push.Payload
 	var answer error
-	st := New(t.TempDir(), func(string, string, string) (string, error) { return "api · w3:p1", answer }, func(p push.Payload) { pushed = append(pushed, p) }, nil)
+	st := New(t.TempDir(), func(string, string, string) (string, error) { return "api · w3:p1", answer }, func(p push.Payload) { pushed = append(pushed, p) })
 	s, _ := st.Put(Schedule{Machine: "local", Dir: "/tmp/x", Cron: "*/10 9-16 * * 1-5", Prompt: "status", Enabled: true})
 
 	answer = sessions.ErrAgentWorking
@@ -45,7 +45,7 @@ func TestARunWhileTheLastIsStillOnItsWayIsSkipped(t *testing.T) {
 		started <- struct{}{}
 		<-release
 		return "pane", nil
-	}, nil, nil)
+	}, nil)
 	now := at("2026-10-07 09:00")
 	st.now = func() time.Time { return now }
 	s, _ := st.Put(Schedule{Machine: "local", Dir: "/tmp/x", Cron: "* * * * *", Prompt: "status", Enabled: true})
@@ -151,7 +151,7 @@ func TestAgentScheduleTakesAnAnswerForAFinish(t *testing.T) {
 }
 
 func TestUpcomingRunsOfAWorkdayWindow(t *testing.T) {
-	st := New(t.TempDir(), nil, nil, nil)
+	st := New(t.TempDir(), nil, nil)
 	st.now = func() time.Time { return at("2026-11-13 16:35") } // a Friday
 	next, err := st.Upcoming("*/10 9-16 * * 1-5", 3)
 	if err != nil {

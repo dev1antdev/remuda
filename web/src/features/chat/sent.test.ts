@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { setLang } from "@/lib/i18n";
 import type { Turn } from "./api";
-import { doing } from "./doing";
 import { conversationMarkdown } from "./export";
 
 setLang("en");
@@ -27,7 +26,4 @@ describe("a message sent while the agent worked", () => {
     expect(md.indexOf("also the README")).toBeGreaterThan(md.indexOf("grep -rn fast"));
   });
 
-  it("leaves the agent taking it in, not writing", () => {
-    expect(doing(turns)).toEqual({ what: "thinking" });
-  });
 });

@@ -15,8 +15,8 @@ function fakeDocument(): { doc: Document; root: Root } {
   return { doc: doc as unknown as Document, root };
 }
 
-describe("the look on another document", () => {
-  it("dresses the pop-out's document at once and follows every change after, until it is let go", async () => {
+describe("the look on the document", () => {
+  it("dresses the document at once and follows every change after", async () => {
     const stored = new Map<string, string>();
     const g = globalThis as unknown as { localStorage?: unknown; document?: unknown };
     g.localStorage = { getItem: (k: string) => stored.get(k) ?? null, setItem: (k: string, v: string) => void stored.set(k, v), removeItem: (k: string) => void stored.delete(k) };
@@ -24,31 +24,23 @@ describe("the look on another document", () => {
     g.document = main.doc;
     try {
       stored.set("remuda.theme.light", JSON.stringify("sepia"));
-      const { startTheme, dressAlso, setThemePref, setDarkFlavorPref, setLightFlavorPref, setTextSizePref } = await import("./theme");
+      const { startTheme, setThemePref, setDarkFlavorPref, setLightFlavorPref, setTextSizePref } = await import("./theme");
       startTheme();
-      const popped = fakeDocument();
-      const undress = dressAlso(popped.doc);
-      expect(popped.root.dataset).toMatchObject({ theme: "dark", flavor: "frappe", accent: "peach" });
+      expect(main.root.dataset).toMatchObject({ theme: "dark", flavor: "frappe", accent: "peach" });
 
       setThemePref("light");
-      expect(main.root.dataset.flavor).toBe("latte");
-      expect(popped.root.dataset).toMatchObject({ theme: "light", flavor: "latte" });
+      expect(main.root.dataset).toMatchObject({ theme: "light", flavor: "latte" });
       setLightFlavorPref("solarized-light");
-      expect(popped.root.dataset).toMatchObject({ theme: "light", flavor: "solarized-light" });
+      expect(main.root.dataset).toMatchObject({ theme: "light", flavor: "solarized-light" });
       setThemePref("dark");
       setDarkFlavorPref("nord");
-      expect(popped.root.dataset).toMatchObject({ theme: "dark", flavor: "nord" });
+      expect(main.root.dataset).toMatchObject({ theme: "dark", flavor: "nord" });
       setDarkFlavorPref("mocha");
-      expect(popped.root.dataset.flavor).toBe("mocha");
+      expect(main.root.dataset.flavor).toBe("mocha");
       const { legibleFor } = await import("@/lib/legible");
-      expect(popped.root.sheets.map((sheet) => sheet.textContent)).toEqual([legibleFor("mocha")]); // one sheet, the theme's own lifted rows
+      expect(main.root.sheets.map((sheet) => sheet.textContent)).toEqual([legibleFor("mocha")]); // one sheet, the theme's own lifted rows
       setTextSizePref("large");
-      expect(popped.root.dataset.text).toBe("large");
-
-      undress();
-      setDarkFlavorPref("macchiato");
-      expect(main.root.dataset.flavor).toBe("macchiato");
-      expect(popped.root.dataset.flavor).toBe("mocha");
+      expect(main.root.dataset.text).toBe("large");
     } finally {
       delete g.localStorage;
       delete g.document;
