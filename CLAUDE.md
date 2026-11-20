@@ -633,7 +633,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   as one, its argv the same or not, to a remuda started afresh too. The
   layout also labels such a terminal `remuda.command` (`LabelCommand`), read
   only when the record says nothing of `literal` (a core rolled back below
-  `literal_record` while the command runs): the command is then never an idle
+  `literal_record` while the command runs, or one updated again after it,
+  which keeps such a record without the field): the command is then never an idle
   shell, at worst the shell such a core gives the pane after a reboot stays
   taken for it (`runsCommand`). `Client.Run` sends `literal` only on a
   connection whose hello lists both (`needs_update` otherwise), since an older
