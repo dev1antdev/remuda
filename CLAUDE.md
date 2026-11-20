@@ -417,7 +417,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   (`claude-code` → claude, `codex`, `gemini-cli` → gemini, `kimi`, any other
   app by its own name);
   `statusOf` takes the program's own word, `error` read as done; the session
-  comes through `SessionOf` (Core 16 wires it; nil, none). Output watches go
+  comes through `SessionOf` (nil, none, until Core 21 hands it
+  `transcript.Reader.SessionsOf` by the foreground's pid). Output watches go
   in **feeds** (`feeds.go`, tested on a fake: shared, closed with the last
   stream, opened again after, a rule edited leaving the other watches'
   feeds standing, and 120 feeds' 4,800 standing rows told as they open, all
