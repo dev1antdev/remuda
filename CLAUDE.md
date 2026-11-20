@@ -347,8 +347,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   where herdr's are `\r\n` — so `ScreenText` only leaves out the blank rows
   under the last one that shows anything, as herdr does (a row of coloured
   spaces shows); the page's `parseAnsi` draws both the same span for span
-  (`ansi.test.ts` reads the pair), and `timelapse.Plain` reads either. A core
-  machine's `PaneScreen` is to be `ScreenText` of a vt `Read` (Core 15).
+  (`ansi.test.ts` reads the pair), and `timelapse.Plain` reads either. The
+  core adapter's `PaneScreen` (Core 12) is `ScreenText` of a vt `Read`: what
+  `/api/screen` and the timelapse recorder get on a core machine.
 - `internal/sshx/` — one OpenSSH `ControlMaster` per host (BatchMode: fail,
   never prompt; sshd's MaxSessions is 10 by default, so every session takes
   one of 9 places first (`Conn.enter`, `sessionCount`), waiting within its

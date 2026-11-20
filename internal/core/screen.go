@@ -2,10 +2,7 @@ package core
 
 import "strings"
 
-// ScreenText is a `terminal.read {format: "vt"}` answer read as herdr's `pane.read` (format ansi) gives a screen: the
-// same rows of text and SGR, less the blank rows under the last one that shows anything, which herdr leaves out. The
-// screen views keep a screen's bottom rows when room runs out, and the question, mode and progress readers look at its
-// last rows: blank rows under the text would push it out of both. A finished terminal's plain text passes the same way.
+// ScreenText is a vt read as herdr's ansi screen, for /api/screen and the timelapse: without the blank rows under the text.
 func ScreenText(vt string) string {
 	rows := strings.Split(vt, "\n")
 	end := len(rows)
