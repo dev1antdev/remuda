@@ -346,3 +346,44 @@ func TestASlowCoreThatKeepsAnsweringOpensEveryWatch(t *testing.T) {
 		t.Fatalf("the join took %s: the test meant it to outlast joinWithin %s several times", took, joinWithin)
 	}
 }
+
+// A regex the core refuses loses the join at once: the watcher asks again without the person's watches rather than
+// waiting for the rest, which the core is slow to answer.
+func TestARefusedRegexEndsTheJoinWithoutWaitingForTheRest(t *testing.T) {
+	var closes sync.WaitGroup
+	client := New(fakeCore(`"output_watches"`, func(c peer, frame sent) {
+		switch {
+		case frame.method == "events.subscribe" && bytes.Contains(frame.payload, []byte(`"value":"(`)):
+			c.write(0, frameData, fmt.Appendf(nil, `{"jsonrpc":"2.0","id":%d,"error":{"code":-32000,"message":"watch \"0\": unclosed group","data":{"kind":"invalid_regex"}}}`, frame.id))
+		case frame.method == "events.subscribe" && bytes.Contains(frame.payload, []byte(outputOnly)):
+			closes.Add(1)
+			go func() {
+				defer closes.Done()
+				time.Sleep(time.Second) // a far core, slow to answer the rest
+				c.reply(frame.id, `{"seq":1,"terminals":[],"channel":40}`)
+			}()
+		case frame.method == "events.subscribe":
+			c.reply(frame.id, `{"seq":1,"terminals":[{"address":"t1","state":"live"}],"channel":3}`)
+		case frame.method == "doc.get":
+			c.reply(frame.id, `{"value":null,"version":0}`)
+		}
+	}))
+	t.Cleanup(func() { closes.Wait(); client.Close() })
+	adapter := NewAdapter(client, AdapterHooks{})
+	t.Cleanup(func() { adapter.Close() })
+	if _, err := adapter.SessionSnapshot(); err != nil {
+		t.Fatal(err)
+	}
+	subs := []herdr.Subscription{{Type: herdr.EventOutputMatched, PaneID: "t1", Match: &herdr.OutputMatch{Type: "regex", Value: "("}}}
+	for i := 1; i < opensAtOnce; i++ { // one round: the refusal and seven slow ones subscribed side by side
+		subs = append(subs, herdr.Subscription{Type: herdr.EventOutputMatched, PaneID: "t1", Match: &herdr.OutputMatch{Type: "substring", Value: fmt.Sprint("FAIL ", i)}})
+	}
+	start := time.Now()
+	_, err := adapter.Subscribe(subs)
+	if !herdr.IsCode(err, "invalid_regex") {
+		t.Fatalf("the join ended with %v, want invalid_regex", err)
+	}
+	if took := time.Since(start); took > 500*time.Millisecond {
+		t.Fatalf("the refusal was told %s later, after the slow answers", took)
+	}
+}

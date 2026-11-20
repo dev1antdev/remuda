@@ -425,7 +425,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   the new watches, side by side (`opensAtOnce` 8), for as long as answers
   keep coming no more than `joinWithin` (a request's 10 s) apart — a far
   core's two hundred watches take many rounds — the adapter's Close cutting
-  it short, a refusal or the silence closing what did open, so the core never tells a
+  it short; the first refusal ends the join at once (an `invalid_regex`
+  told before any other, so the watcher asks again without the person's
+  watches), a refusal or the silence closing what did open, so the core never tells a
   kept watch's rows still on the screen as if new, nor misses one printed
   while the streams swap; a new watch's rows that stood are where things
   stood — its rows go out as

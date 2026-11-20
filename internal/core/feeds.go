@@ -3,6 +3,8 @@ package core
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"log"
 	"strconv"
 	"sync"
@@ -96,15 +98,15 @@ func (a *Adapter) join(s *eventStream, watches []OutputWatch) error {
 			missing = append(missing, w)
 		}
 	}
-	ctx, cancel := context.WithCancel(a.life) // cut short by Close, or by joinWithin with no answer
+	ctx, cancel := context.WithCancel(a.life) // cut short by Close, a refusal, or joinWithin with no answer
 	defer cancel()
 	subs := make([]*Subscription, len(missing))
 	errs := make([]error, len(missing))
-	answered := make(chan struct{}, len(missing))
+	answered := make(chan int, len(missing))
 	slots := make(chan struct{}, opensAtOnce)
 	for i, w := range missing {
 		go func() {
-			defer func() { answered <- struct{}{} }()
+			defer func() { answered <- i }()
 			select {
 			case slots <- struct{}{}:
 			case <-ctx.Done():
@@ -115,21 +117,22 @@ func (a *Adapter) join(s *eventStream, watches []OutputWatch) error {
 			subs[i], errs[i] = a.client.Subscribe(ctx, SubscribeParams{Labels: map[string]string{outputOnly: "1"}, Output: []OutputWatch{w}})
 		}()
 	}
+	var refused error
 	idle := time.NewTimer(joinWithin)
 	defer idle.Stop()
 	for range missing {
+		var i int
 		select {
-		case <-answered:
+		case i = <-answered:
 			idle.Reset(joinWithin)
 		case <-idle.C:
-			cancel() // nothing answered for joinWithin: the rest end at once
-			<-answered
+			refused = firstRefusal(refused, fmt.Errorf("remuda-core went %s without answering an output watch", joinWithin))
+			cancel()
+			i = <-answered
 		}
-	}
-	var refused error
-	for _, err := range errs {
-		if err != nil && (refused == nil || IsKind(err, "invalid_regex") && !IsKind(refused, "invalid_regex")) {
-			refused = err
+		if errs[i] != nil {
+			refused = firstRefusal(refused, errs[i])
+			cancel() // the join is lost: the rest end at once
 		}
 	}
 	if refused != nil {
@@ -148,6 +151,25 @@ func (a *Adapter) join(s *eventStream, watches []OutputWatch) error {
 		go a.tell(f)
 	}
 	return nil
+}
+
+// firstRefusal is the refusal a join tells: a regex the core refused before any other, our own cut short last.
+func firstRefusal(told, err error) error {
+	rank := func(err error) int {
+		switch {
+		case err == nil:
+			return -1
+		case IsKind(err, "invalid_regex"):
+			return 2
+		case errors.Is(err, context.Canceled):
+			return 0
+		}
+		return 1
+	}
+	if rank(err) > rank(told) {
+		return err
+	}
+	return told
 }
 
 // leave takes the stream out of its feeds, closing a feed no stream is left on.
