@@ -22,6 +22,15 @@ export function FindTool({ what = t("in this conversation"), shortcut = SHORTCUT
     field.current?.focus();
     field.current?.select();
   }, [find?.opened]); // eslint-disable-line react-hooks/exhaustive-deps
+  const label = t("Find {what} ({shortcut})", { what, shortcut });
+  const tip = note ? (
+    <>
+      <span className="tip-line">{label}</span>
+      <span className="tip-line">{note}</span>
+    </>
+  ) : (
+    label
+  );
   const onKey = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       e.preventDefault();
@@ -70,14 +79,7 @@ export function FindTool({ what = t("in this conversation"), shortcut = SHORTCUT
           </Tip>
         </span>
       )}
-      <Tip
-        text={
-          <>
-            <span className="tip-line">{t("Find {what} ({shortcut})", { what, shortcut })}</span>
-            {note && <span className="tip-line">{note}</span>}
-          </>
-        }
-      >
+      <Tip text={tip}>
         <button type="button" className={`icon-btn sm find-toggle${find ? " on" : ""}`} aria-label={t("Find {what}", { what })} aria-pressed={!!find} onClick={() => (find ? actions.closeFind() : actions.openFind())}>
           <Icon name="search" size={14} />
         </button>
