@@ -20,7 +20,8 @@ type Running struct {
 }
 
 // SessionsOf finds the session each running agent is in, by its process, in one script on the machine:
-// Claude Code's id from <config dir>/sessions/<pid>.json (CLAUDE_CONFIG_DIR read off the process's environment;
+// Claude Code's id from <config dir>/sessions/<pid>.json (CLAUDE_CONFIG_DIR read off the process's environment —
+// never a native Windows process's, whose environment nothing Git Bash or PowerShell reaches shows: ~\.claude there;
 // macOS's `ps -E` runs the entries together, so its text gives candidates, and the first one whose file is this
 // process's wins),
 // Codex's thread id from the rollout of the person's thread the process (else a child of it) holds open, none
@@ -39,8 +40,9 @@ func (r *Reader) SessionsOf(procs []Running) (map[int]string, error) {
 }
 
 // sessionsByPIDScript prints a record per process: pid, agent, the process's start as Claude Code records it
-// (`ps -o lstart` in UTC; "" for a live process whose start ps does not tell — `kill -0`, or Windows' `tasklist`
-// for a native process Git Bash's own tools do not see — "-" for one gone), then for Claude
+// (`ps -o lstart` in UTC; "" for a live process whose start ps does not tell; "ms:<unix ms>" for a native Windows
+// process Git Bash's own tools do not see, its creation through PowerShell's Get-Process; "-" for one gone), then for
+// Claude
 // Code the text of every candidate session file (the environment's folders, a relative one from the process's
 // folder, then the default), each ended by GS, or, for Codex, a line per open rollout:
 // the pid holding it, whether its session_meta is the person's thread (1) or a subagent's (0), the thread id that
@@ -59,7 +61,10 @@ func sessionsByPIDScript(procs []Running) string {
 	return `PATH="$PATH:/usr/sbin:/sbin"
 s() {
   start=$(LC_ALL=C TZ=UTC ps -o lstart= -p "$1" 2>/dev/null)
-  [ -n "$start" ] || kill -0 "$1" 2>/dev/null || tasklist //FI "PID eq $1" //NH //FO CSV 2>/dev/null | grep -q ",\"$1\"," || start=-
+  [ -n "$start" ] || kill -0 "$1" 2>/dev/null || {
+    ms=$(powershell.exe -NoProfile -NonInteractive -Command "[DateTimeOffset]::new((Get-Process -Id $1 -ErrorAction Stop).StartTime).ToUnixTimeMilliseconds()" 2>/dev/null | tr -d '\r')
+    case "$ms" in [0-9]*) start="ms:$ms" ;; *) start=- ;; esac
+  }
   printf '%s\037%s\037%s\037' "$1" "$2" "$start"
   if [ "$2" = claude ]; then
     {
@@ -114,7 +119,11 @@ type claudeSessionFile struct {
 	SessionID string `json:"sessionId"`
 	CWD       string `json:"cwd"`
 	ProcStart string `json:"procStart"`
+	StartedAt int64  `json:"startedAt"` // unix ms, when Claude Code began: never before its process was created
 }
+
+// startSlack is how far a session file's startedAt may read before its process's creation and still be its own.
+const startSlack = 1000
 
 // parseSessionsByPID reads sessionsByPIDScript's answer.
 func parseSessionsByPID(out string, procs []Running, style rpath.Style) map[int]string {
@@ -154,9 +163,9 @@ func parseSessionsByPID(out string, procs []Running, style rpath.Style) map[int]
 	return found
 }
 
-// claudeSession is the session of a candidate file that is this very process's: its pid and its start time, else,
-// where a side does not know the start, its pid and its folder. A file left by an ended process whose pid was given
-// to another is not.
+// claudeSession is the session of a candidate file that is this very process's: its pid and its start time; for a
+// native Windows process its pid, its folder and a startedAt no older than the process; else, where a side does not
+// know the start, its pid and its folder. A file left by an ended process whose pid was given to another is not.
 func claudeSession(payload string, pid int, start, cwd string, style rpath.Style) string {
 	var byFolder string
 	for _, doc := range strings.Split(payload, script.GS) {
@@ -164,11 +173,17 @@ func claudeSession(payload string, pid int, start, cwd string, style rpath.Style
 		if json.Unmarshal([]byte(doc), &file) != nil || file.PID != pid {
 			continue
 		}
-		if file.ProcStart != "" && start != "" {
+		inFolder := cwd == "" || file.CWD == "" || style.Equal(file.CWD, cwd)
+		if created, native := strings.CutPrefix(start, "ms:"); native {
+			began, err := strconv.ParseInt(created, 10, 64)
+			if err == nil && file.StartedAt >= began-startSlack && inFolder {
+				return file.SessionID
+			}
+		} else if file.ProcStart != "" && start != "" {
 			if strings.TrimSpace(file.ProcStart) == start {
 				return file.SessionID
 			}
-		} else if byFolder == "" && (cwd == "" || file.CWD == "" || style.Equal(file.CWD, cwd)) {
+		} else if byFolder == "" && inFolder {
 			byFolder = file.SessionID
 		}
 	}

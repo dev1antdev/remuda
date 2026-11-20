@@ -587,9 +587,12 @@ components and icons as rules for whoever changes it: @docs/design.md
   one matched by its folder alone; only
   regular files are read, a FIFO never holds the script; a file
   counts only when its `procStart` is the process's `LC_ALL=C TZ=UTC ps -o
-  lstart`, or, where either side lacks it — Windows, where `tasklist` says a
-  native process lives (CI's Windows job proves it) —
-  when its folder is the pane's), Codex's thread id from the
+  lstart`; for a native Windows process, which Git Bash's own tools do not
+  see, when its folder is the pane's and its `startedAt` is no older than the
+  process's creation as PowerShell's `Get-Process` tells it (CI's Windows job
+  proves it; a native process's `CLAUDE_CONFIG_DIR` is out of reach there, so
+  `~\.claude` alone is read); else, where either side lacks the start, when
+  its folder is the pane's), Codex's thread id from the
   `rollout-*.jsonl` of the person's thread (its `session_meta` names no
   subagent) the process, else a child of it, holds open (`/proc/<pid>/fd`,
   else `lsof`; none on Windows), none when two are, the id the one its
