@@ -92,9 +92,6 @@ func (a *Adapter) checkoutOf(folder string) *herdr.WorktreeInfo {
 	return tree
 }
 
-// errNoShell is why a machine whose adapter was lent no shell makes no worktree.
-var errNoShell = &herdr.Error{Code: "invalid_request", Message: "no shell to run git on this remuda-core machine"}
-
 // WorktreeCreate makes a worktree of the workspace's repository in herdr's place and opens it as a workspace.
 func (a *Adapter) WorktreeCreate(workspaceID, branch, base, label string) (*herdr.WorktreeCreateResult, error) {
 	return a.WorktreeCreateAt(workspaceID, branch, base, label, "")
@@ -150,7 +147,7 @@ func (a *Adapter) WorktreeOpen(workspaceID, path, label string) (*herdr.Worktree
 // sourceDir is the folder of the workspace a worktree is made from.
 func (a *Adapter) sourceDir(workspaceID string) (string, error) {
 	if a.hooks.Shell == nil {
-		return "", errNoShell
+		return "", &herdr.Error{Code: "invalid_request", Message: "no shell to run git on this remuda-core machine"}
 	}
 	snap, err := a.SessionSnapshot()
 	if err != nil {
@@ -160,9 +157,5 @@ func (a *Adapter) sourceDir(workspaceID string) (string, error) {
 	if ws == nil {
 		return "", spaceMissing(workspaceID)
 	}
-	dir := snap.WorkspaceDir(ws)
-	if dir == "" {
-		return "", &herdr.Error{Code: "invalid_request", Message: "the workspace has no folder"}
-	}
-	return dir, nil
+	return snap.WorkspaceDir(ws), nil
 }
