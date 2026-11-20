@@ -1,6 +1,7 @@
 package sleep
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -107,7 +108,10 @@ func (s *Service) wakeOne(client Client, machineID, workspaceID string, a Agent,
 		say(fmt.Sprintf("· %s (%s): its shell is in %s now, not %s", title, a.Pane, p.Dir(), a.Dir))
 		return keep("its shell is in another folder now", a)
 	}
-	if err := checks(a); err != nil {
+	if err := checks(a); errors.Is(err, restart.ErrUnasked) {
+		say(fmt.Sprintf("· %s (%s): %v", title, a.Pane, err))
+		return keep(err.Error(), a)
+	} else if err != nil {
 		say(fmt.Sprintf("· %s (%s): %v", title, a.Pane, err))
 		return outcome{why: err.Error()}
 	}

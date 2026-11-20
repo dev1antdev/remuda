@@ -15,8 +15,10 @@ package restart
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"log"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -94,6 +96,10 @@ type Memory struct {
 	OnStopped func(machineID string)
 	// Core says the fleet is reached through remuda-core: a chat remembered in herdr is then one to carry on there.
 	Core func() bool
+	// Sleepers is, by pane, the agents of the machine's workspaces put to sleep in herdr (sleep.Store.SleptInHerdr),
+	// listed from herdr with the rest once the fleet is on the core; Woken takes one off there once it is dealt with.
+	Sleepers func(machineID string) map[string]Chat
+	Woken    func(machineID, paneID string)
 
 	mu      sync.Mutex
 	chats   map[string]Chat      // machine|pane
@@ -225,6 +231,20 @@ func (m *Memory) observe(e events.Snapshot) bool {
 		delete(m.shells, key)
 		changed = true
 	}
+	if onCore && m.Sleepers != nil {
+		listed := map[string]bool{}
+		for _, s := range stopped {
+			listed[s.Pane] = true
+		}
+		for paneID, c := range m.Sleepers(e.Machine) {
+			switch {
+			case running[c.Session]: // carried on already, by hand
+				m.wokenLocked(e.Machine, paneID)
+			case !listed[paneID]:
+				stopped = append(stopped, herdrStopped(paneID, c))
+			}
+		}
+	}
 	for key := range m.faces {
 		if strings.HasPrefix(key, prefix) && !seen[key] {
 			delete(m.faces, key)
@@ -261,30 +281,18 @@ func gained(old, now []Stopped) bool {
 	return false
 }
 
+// wokenLocked tells the sleep a pane from herdr is dealt with: back, or never coming back.
+func (m *Memory) wokenLocked(machineID, paneID string) {
+	if m.Woken != nil {
+		m.Woken(machineID, paneID)
+	}
+}
+
 // herdrStopped is the roster's entry for an agent that ran in herdr's pane before the move to remuda-core.
 func herdrStopped(paneID string, c Chat) Stopped {
 	s := stoppedOf(paneID, c, c.Title)
 	s.From = FromHerdr
 	return s
-}
-
-// Adopt takes in, by pane, the agents of a workspace that slept in herdr before the move to remuda-core: herdr's
-// agents like any other it remembered, offered at once in Resume after restart.
-func (m *Memory) Adopt(machineID string, chats map[string]Chat) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	listed := map[string]bool{}
-	for _, s := range m.stopped[machineID] {
-		listed[s.Pane] = true
-	}
-	for paneID, c := range chats {
-		m.chats[machineID+"|"+paneID] = c
-		if !listed[paneID] {
-			m.stopped[machineID] = append(m.stopped[machineID], herdrStopped(paneID, c))
-		}
-	}
-	sort.Slice(m.stopped[machineID], func(i, j int) bool { return m.stopped[machineID][i].Pane < m.stopped[machineID][j].Pane })
-	m.saveLocked()
 }
 
 // paneDir is the folder a chat lives in: the pane's own, else its workspace's.
@@ -377,6 +385,7 @@ func (m *Memory) settle(machineID, paneID string, back bool) {
 			kept = append(kept, s)
 		} else if s.From == FromHerdr {
 			forget = true
+			m.wokenLocked(machineID, paneID)
 		}
 	}
 	if len(kept) == 0 {
@@ -490,8 +499,8 @@ func (r *Restarter) recover(mc *machines.Machine, panes []string, auto bool, say
 		}
 		r.Memory.Note(mc.ID(), title, strings.Join(lines, "\n"))
 	}
-	if failed := out.failed(); len(failed) > 0 {
-		return fmt.Errorf("%s not back: %s", chatsWord(len(failed)), strings.Join(failed, ", "))
+	if missing := out.notBack(); len(missing) > 0 {
+		return fmt.Errorf("%s not back: %s", chatsWord(len(missing)), strings.Join(missing, ", "))
 	}
 	return nil
 }
@@ -557,28 +566,51 @@ func (r *Restarter) releaseRecovery(machineID string) {
 	delete(r.recovering, machineID)
 }
 
+// ErrUnasked marks a check the machine could not answer — a dropped connection, a script that failed: nothing is known
+// gone, so nothing is forgotten for it.
+var ErrUnasked = errors.New("the machine could not be asked")
+
 // CanResume says why a conversation cannot come back on the machine, nil when it can: its folder must still be there,
-// and a Claude Code session's file too.
+// and a Claude Code session's file too; a look the machine could not answer wraps ErrUnasked.
 func CanResume(mc *machines.Machine, kind, session, dir string) error {
-	if info, err := mc.ResolvePath("", dir); err != nil || info.Kind != "dir" {
+	info, err := mc.Stat(dir)
+	switch {
+	case err != nil && !errors.Is(err, os.ErrNotExist):
+		return fmt.Errorf("%w: %v", ErrUnasked, err)
+	case err != nil || info.Kind != "dir":
 		return fmt.Errorf("its folder %s is gone — nothing to resume into", dir)
 	}
-	if kind == "claude" && !sessionFileExists(mc, Chat{Kind: kind, Session: session, Dir: dir}) {
-		return fmt.Errorf("its session file is gone — nothing to resume")
+	if kind != "claude" {
+		return nil
+	}
+	switch found, err := sessionFileExists(mc, Chat{Kind: kind, Session: session, Dir: dir}); {
+	case err != nil:
+		return fmt.Errorf("%w: %v", ErrUnasked, err)
+	case !found:
+		return errors.New("its session file is gone — nothing to resume")
 	}
 	return nil
 }
 
 // sessionFileExists looks for the Claude Code session file where the agent writes it — a fresh stat of the folder's
 // own file, then the reader's lookup across project folders (which remembers a miss for half a minute, so a file
-// written after an early look still counts).
-func sessionFileExists(mc *machines.Machine, c Chat) bool {
+// written after an early look still counts); an error when the machine could not be asked.
+func sessionFileExists(mc *machines.Machine, c Chat) (bool, error) {
 	own := mc.Home() + "/.claude/projects/" + transcript.EncodePath(c.Dir) + "/" + c.Session + ".jsonl"
-	if info, err := mc.ResolvePath("", own); err == nil && info.Kind != "missing" && info.Kind != "dir" {
-		return true
+	switch info, err := mc.Stat(own); {
+	case err == nil && info.Kind != "dir":
+		return true, nil
+	case err != nil && !errors.Is(err, os.ErrNotExist):
+		return false, err
 	}
-	_, err := mc.Transcripts.ResolveSession(c.Kind, c.Dir, "id", c.Session)
-	return err == nil
+	switch _, err := mc.Transcripts.ResolveSession(c.Kind, c.Dir, "id", c.Session); {
+	case err == nil:
+		return true, nil
+	case errors.Is(err, os.ErrNotExist):
+		return false, nil
+	default:
+		return false, err
+	}
 }
 
 // starter is what resuming a chat needs of herdr's client.
@@ -609,6 +641,16 @@ func (os outcomes) back() (list []string) {
 func (os outcomes) failed() (list []string) {
 	for _, o := range os {
 		if o.failed {
+			list = append(list, o.title)
+		}
+	}
+	return
+}
+
+// notBack is every chat that did not come back: a start that failed, still listed, or one forgotten since it cannot.
+func (os outcomes) notBack() (list []string) {
+	for _, o := range os {
+		if !o.back {
 			list = append(list, o.title)
 		}
 	}
@@ -648,7 +690,9 @@ func (r *Restarter) resumeOne(client starter, machineID string, s Stopped, check
 	case !s.chat.in(p.Dir()):
 		return settle(false, fmt.Sprintf("· %s (%s): the shell is in %s now, not %s — left as it is", s.Title, s.Pane, p.Dir(), s.chat.Dir))
 	}
-	if err := checks(s, p.Dir()); err != nil {
+	if err := checks(s, p.Dir()); errors.Is(err, ErrUnasked) {
+		return notStarted(s, fmt.Sprintf("· %s (%s): %v — still listed", s.Title, s.Pane, err), say)
+	} else if err != nil {
 		return settle(false, fmt.Sprintf("· %s (%s): %v", s.Title, s.Pane, err))
 	}
 	args := a.resume(s.chat.Session)
@@ -677,7 +721,9 @@ func (r *Restarter) carryOneOn(client placer, machineID string, s Stopped, check
 		return r.done(machineID, s, true, fmt.Sprintf("· %s (%s, from herdr): %s is on its session already", s.Title, s.Pane, a.Title), say)
 	}
 	dir := cmp.Or(s.chat.Ran, s.chat.Dir) // where the agent itself ran: its session is that folder's
-	if err := checks(s, dir); err != nil {
+	if err := checks(s, dir); errors.Is(err, ErrUnasked) {
+		return notStarted(s, fmt.Sprintf("· %s (%s, from herdr): %v — still listed", s.Title, s.Pane, err), say)
+	} else if err != nil {
 		return r.done(machineID, s, false, fmt.Sprintf("· %s (%s, from herdr): %v", s.Title, s.Pane, err), say)
 	}
 	say(fmt.Sprintf("· %s (%s, from herdr): %s in %s", s.Title, s.Pane, Resume(a.Kind, s.chat.Session), dir))

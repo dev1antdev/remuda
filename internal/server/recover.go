@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/restart"
 )
 
@@ -66,7 +67,15 @@ func (s *Server) handleHerdrStop(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 409, fmt.Errorf("%s is reached through herdr: its server runs the agents remuda sees there", mc.Label()))
 		return
 	}
-	if err := herdr.StopServing(mc, mc.Cfg.HerdrBin, mc.Cfg.RemoteSocket); err != nil {
+	if _, _, err := mc.Ready(); errors.Is(err, machines.ErrServerHost) { // the page's own host under -server is none of the fleet's
+		httpErr(w, 409, err)
+		return
+	} else if err != nil {
+		httpErr(w, 502, err)
+		return
+	}
+	bin, socket := mc.MovedHerdr()
+	if err := herdr.StopServing(mc, bin, socket); err != nil {
 		httpErr(w, 502, err)
 		return
 	}

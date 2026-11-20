@@ -17,7 +17,7 @@ import (
 
 // sleeper is the workspaces put to sleep and woken: its record is the restart memory's word that a sleeping pane is
 // neither stopped by a reboot nor closed, the chats a reboot stopped are resumed by themselves when the person said
-// so, a workspace that slept in herdr hands its agents to the memory once the fleet is on remuda-core, and a closed
+// so, a workspace that slept in herdr offers its agents to the memory once the fleet is on remuda-core, and a closed
 // workspace or a removed machine takes its record with it.
 func sleeper(dir string, bus *events.Bus, fleet *machines.Manager, watcher *watch.Watcher, runner *jobs.Runner, input *sessions.Input, restarter *restart.Restarter, updater *updates.Service, activity *feed.Service, changed func()) *sleep.Service {
 	store := sleep.Open(dir)
@@ -33,7 +33,8 @@ func sleeper(dir string, bus *events.Bus, fleet *machines.Manager, watcher *watc
 	}
 	restarter.Memory.Asleep = store.Holds
 	// a workspace that slept in herdr has its agents carried on through Resume after restart once the fleet is on remuda-core
-	store.Core, store.FromHerdr = fleet.Core, restarter.Memory.Adopt
+	store.Core = fleet.Core
+	restarter.Memory.Sleepers, restarter.Memory.Woken = store.SleptInHerdr, store.Woke
 	restarter.Memory.OnStopped = func(machineID string) {
 		if !store.Settings().ResumeAutomatically {
 			return

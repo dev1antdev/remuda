@@ -88,6 +88,12 @@ func (mc *Machine) ResolvePath(cwd, raw string) (FileInfo, error) {
 	return FileInfo{Path: p, Kind: "missing"}, nil
 }
 
+// Stat is what the path is on the machine, ~ read as its home: os.ErrNotExist when nothing is there, any other error
+// when the machine could not be asked — a dropped connection never reads as a folder gone.
+func (mc *Machine) Stat(p string) (FileInfo, error) {
+	return mc.stat(mc.EffectivePath("", p))
+}
+
 // LookAt is what the path, taken exactly as given, is: nothing cleaned, nothing searched.
 func (mc *Machine) LookAt(p string) FileInfo {
 	if info, err := mc.stat(p); err == nil {

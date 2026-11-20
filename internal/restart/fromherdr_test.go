@@ -3,6 +3,8 @@ package restart
 import (
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -81,20 +83,55 @@ func TestOnHerdrTheMemoryIsAsItWas(t *testing.T) {
 	}
 }
 
-// TestAdoptListsHerdrsSleepersAtOnce: a workspace that slept in herdr hands its agents over; they are listed from
-// herdr before the next snapshot, once however often they are handed over.
-func TestAdoptListsHerdrsSleepersAtOnce(t *testing.T) {
-	m := onCore(OpenMemory(""))
-	sleepers := map[string]Chat{"w4:p1": {Kind: "claude", Session: sid, Dir: "/work/web", Title: "web"}}
-	m.Adopt("gog", sleepers)
-	m.Adopt("gog", sleepers)
-	stopped := m.Stopped("gog")
-	if len(stopped) != 1 || stopped[0].From != FromHerdr || stopped[0].Title != "web" || stopped[0].Dir != "/work/web" {
-		t.Fatalf("adopted: %+v", stopped)
+// remembered puts chats remembered in herdr into the memory of a fleet now on the core, and lets a core snapshot list
+// them from herdr.
+func remembered(m *Memory, machine string, chats map[string]Chat) {
+	m.mu.Lock()
+	for pane, c := range chats {
+		m.chats[machine+"|"+pane] = c
 	}
+	m.mu.Unlock()
+	observe(m, machine, false)
+}
+
+// TestHerdrsSleepersWaitWithTheRest: once on the core, a workspace that slept in herdr offers its agents from herdr,
+// listed once by pane however many snapshots come; one carried on by hand is woken in the sleep, and one dealt with by
+// Resume too. Before the move they are the sleep's alone.
+func TestHerdrsSleepersWaitWithTheRest(t *testing.T) {
+	sleepers := map[string]Chat{
+		"w4:p1": {Kind: "claude", Session: sid, Dir: "/work/web", Title: "web"},
+		"w4:p2": {Kind: "codex", Session: otherSid, Dir: "/work/web", Title: "web"},
+	}
+	var woken []string
+	hooked := func(m *Memory) *Memory {
+		m.Sleepers = func(string) map[string]Chat { return sleepers }
+		m.Woken = func(machine, pane string) { woken = append(woken, machine+"|"+pane); delete(sleepers, pane) }
+		return m
+	}
+	before := hooked(OpenMemory(""))
+	observe(before, "gog", false, shellPane("w9:p1", "/home/me"))
+	if len(before.Stopped("gog")) != 0 {
+		t.Fatalf("on herdr a sleeper is the sleep's: %+v", before.Stopped("gog"))
+	}
+
+	m := onCore(hooked(OpenMemory("")))
 	observe(m, "gog", false, shellPane("t1", "/home/me"))
-	if n := len(m.Stopped("gog")); n != 1 {
-		t.Fatalf("still once after a snapshot: %d", n)
+	observe(m, "gog", false, shellPane("t1", "/home/me"))
+	stopped := m.Stopped("gog")
+	if len(stopped) != 2 || stopped[0].Pane != "w4:p1" || stopped[0].From != FromHerdr || stopped[1].Title != "web" || stopped[1].Command != "codex resume "+otherSid {
+		t.Fatalf("herdr's sleepers: %+v", stopped)
+	}
+	codex := agentPane("t2", "codex", "/work/web")
+	codex.AgentSession = &herdr.AgentSession{Kind: "id", Value: otherSid}
+	observe(m, "gog", false, shellPane("t1", "/home/me"), codex)
+	if stopped := m.Stopped("gog"); len(stopped) != 1 || len(woken) != 1 || woken[0] != "gog|w4:p2" {
+		t.Fatalf("one on its session in the core again: %+v, woken %v", stopped, woken)
+	}
+	r := New(nil)
+	r.Memory = m
+	r.carryOn(&fakeCore{snap: &herdr.Snapshot{}}, "gog", m.Stopped("gog"), func(Stopped, string) error { return nil }, func(string) {})
+	if len(m.Stopped("gog")) != 0 || len(woken) != 2 || woken[1] != "gog|w4:p1" {
+		t.Fatalf("carried on by Resume, the sleep is told: %+v, woken %v", m.Stopped("gog"), woken)
 	}
 }
 
@@ -103,7 +140,15 @@ type fakeCore struct {
 	snap    *herdr.Snapshot
 	refuse  error
 	started []string
-	named   []string // the workspaces made, by name
+	named   []string     // the workspaces made, by name
+	reread  func() error // what reading the agents' sessions again does, nil for nothing
+}
+
+func (f *fakeCore) RereadSessions() error {
+	if f.reread == nil {
+		return nil
+	}
+	return f.reread()
 }
 
 func (f *fakeCore) SessionSnapshot() (*herdr.Snapshot, error) { return f.snap, nil }
@@ -145,7 +190,7 @@ func TestCarryOnMakesHerdrsWorkspaceAgainWithItsAgentsAsTabs(t *testing.T) {
 	r := New(nil)
 	r.Memory = m
 	const third, fourth = "2b3c4d5e-6f70-4b8c-9d0e-1f2a3b4c5d6e", "3c4d5e6f-7081-4c9d-8e0f-2a3b4c5d6e7f"
-	m.Adopt("gog", map[string]Chat{
+	remembered(m, "gog", map[string]Chat{
 		"w1:p1": {Kind: "claude", Session: sid, Dir: "/work/api", Title: "api"},
 		"w1:p2": {Kind: "codex", Session: otherSid, Dir: "/work/api", Title: "api"},
 		"w1:p3": {Kind: "claude", Session: sid, Dir: "/work/api", Title: "api"}, // the same conversation twice
@@ -180,7 +225,7 @@ func TestCarryOnMakesHerdrsWorkspaceAgainWithItsAgentsAsTabs(t *testing.T) {
 		t.Fatalf("every herdr chat dealt with is forgotten: %+v %+v", m.Stopped("gog"), m.chats)
 	}
 
-	m.Adopt("gog", map[string]Chat{"w5:p1": {Kind: "claude", Session: sid, Dir: "/work/api", Title: "api"}})
+	remembered(m, "gog", map[string]Chat{"w5:p1": {Kind: "claude", Session: sid, Dir: "/work/api", Title: "api"}})
 	refusing := &fakeCore{snap: &herdr.Snapshot{}, refuse: &herdr.Error{Code: "agent_start_failed", Message: "no such binary"}}
 	if out := r.carryOn(refusing, "gog", m.Stopped("gog"), checks, func(string) {}); len(out.failed()) != 1 || len(m.Stopped("gog")) != 1 {
 		t.Fatalf("a refused start stays listed: %+v %+v", out, m.Stopped("gog"))
@@ -190,7 +235,7 @@ func TestCarryOnMakesHerdrsWorkspaceAgainWithItsAgentsAsTabs(t *testing.T) {
 // TestHerdrsAgentsWaitForItsServer: while herdr's server answers, Resume of its agents is refused before anything
 // starts; the chats a reboot stopped are not held by it, and never resume herdr's by themselves.
 func TestHerdrsAgentsWaitForItsServer(t *testing.T) {
-	fleet := machines.NewCoreManager(t.TempDir(), "", nil, true)
+	fleet := machines.NewCoreManager(t.TempDir(), "", "", nil, true)
 	t.Cleanup(fleet.Close)
 	mc, err := fleet.Get(machines.LocalID)
 	if err != nil {
@@ -226,11 +271,69 @@ func TestCarryOnStartsWhereTheAgentRan(t *testing.T) {
 	m := onCore(OpenMemory(""))
 	r := New(nil)
 	r.Memory = m
-	m.Adopt("gog", map[string]Chat{"w1:p1": {Kind: "claude", Session: sid, Dir: "/work/api", Ran: "/work/api/cli", Title: "api"}})
+	remembered(m, "gog", map[string]Chat{"w1:p1": {Kind: "claude", Session: sid, Dir: "/work/api", Ran: "/work/api/cli", Title: "api"}})
 	client := &fakeCore{snap: &herdr.Snapshot{}}
 	checked := ""
 	r.carryOn(client, "gog", m.Stopped("gog"), func(_ Stopped, dir string) error { checked = dir; return nil }, func(string) {})
 	if checked != "/work/api/cli" || len(client.snap.Workspaces) != 1 || client.snap.Workspaces[0].Folder != "/work/api/cli" {
 		t.Fatalf("checked %q, made %+v", checked, client.snap.Workspaces)
+	}
+}
+
+// TestCarryOnForgetsNothingTheMachineCouldNotSay: a check the machine could not answer, or sessions it could not read
+// again, keep the agent listed and the run failed, nothing started; a /resume that moved an agent of the core onto the
+// session, seen once the sessions are read again, counts as back.
+func TestCarryOnForgetsNothingTheMachineCouldNotSay(t *testing.T) {
+	m := onCore(OpenMemory(""))
+	r := New(nil)
+	r.Memory = m
+	remembered(m, "gog", map[string]Chat{"w1:p1": {Kind: "claude", Session: sid, Dir: "/work/api", Title: "api"}})
+	unasked := func(Stopped, string) error { return fmt.Errorf("%w: ssh: the master is gone", ErrUnasked) }
+	client := &fakeCore{snap: &herdr.Snapshot{}}
+	if out := r.carryOn(client, "gog", m.Stopped("gog"), unasked, func(string) {}); len(out.failed()) != 1 || len(out.notBack()) != 1 || len(m.Stopped("gog")) != 1 || len(client.started) != 0 {
+		t.Fatalf("a check unanswered: %+v %+v %v", out, m.Stopped("gog"), client.started)
+	}
+	fine := func(Stopped, string) error { return nil }
+	client.reread = func() error { return errors.New("the process table could not be read") }
+	if out := r.carryOn(client, "gog", m.Stopped("gog"), fine, func(string) {}); len(out.failed()) != 1 || len(m.Stopped("gog")) != 1 || len(client.started) != 0 {
+		t.Fatalf("sessions unread: %+v %+v %v", out, m.Stopped("gog"), client.started)
+	}
+	resumed := agentPane("t7", "claude", "/work/api")
+	client.reread = func() error {
+		resumed.AgentSession = &herdr.AgentSession{Kind: "id", Value: sid}
+		client.snap.Panes = []herdr.PaneInfo{resumed}
+		return nil
+	}
+	if out := r.carryOn(client, "gog", m.Stopped("gog"), fine, func(string) {}); len(out.back()) != 1 || len(client.started) != 0 || len(m.Stopped("gog")) != 0 {
+		t.Fatalf("on its session after a /resume: %+v %v", out, client.started)
+	}
+}
+
+// TestCanResumeTellsAFolderGoneFromOneNotAsked: a folder that is not there forgets its chat, one the machine would not
+// show wraps ErrUnasked, so the chat stays.
+func TestCanResumeTellsAFolderGoneFromOneNotAsked(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root reads a folder whatever its mode")
+	}
+	fleet := machines.NewCoreManager(t.TempDir(), "", "", nil, true)
+	t.Cleanup(fleet.Close)
+	mc, _ := fleet.Get(machines.LocalID)
+	here := t.TempDir()
+	locked := filepath.Join(here, "locked")
+	if err := os.MkdirAll(filepath.Join(locked, "api"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(locked, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(locked, 0o700) })
+	if err := CanResume(mc, "codex", sid, here); err != nil {
+		t.Fatalf("a folder that is there: %v", err)
+	}
+	if err := CanResume(mc, "codex", sid, filepath.Join(here, "gone")); err == nil || errors.Is(err, ErrUnasked) || !strings.Contains(err.Error(), "is gone") {
+		t.Fatalf("a folder gone: %v", err)
+	}
+	if err := CanResume(mc, "codex", sid, filepath.Join(locked, "api")); !errors.Is(err, ErrUnasked) {
+		t.Fatalf("a folder nobody could look at: %v", err)
 	}
 }

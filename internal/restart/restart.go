@@ -178,7 +178,8 @@ func (r *Restarter) typed(key, paneID, text string) {
 
 func New(m *machines.Manager) *Restarter {
 	serving := func(mc *machines.Machine) (bool, error) {
-		return herdr.Serving(mc, mc.Cfg.HerdrBin, mc.Cfg.RemoteSocket)
+		bin, socket := mc.MovedHerdr()
+		return herdr.Serving(mc, bin, socket)
 	}
 	return &Restarter{machines: m, Serving: serving, pending: map[string]*booking{}, last: map[string]time.Time{}}
 }

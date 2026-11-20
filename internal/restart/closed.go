@@ -6,7 +6,6 @@ package restart
 
 import (
 	"errors"
-	"fmt"
 	"log"
 	"sort"
 	"strconv"
@@ -147,11 +146,8 @@ func (r *Restarter) Reopen(mc *machines.Machine, id string) (sessions.Place, err
 	if !ok {
 		return sessions.Place{}, ErrNoSuchClosed
 	}
-	if info, err := mc.ResolvePath("", c.Dir); err != nil || info.Kind != "dir" {
-		return sessions.Place{}, fmt.Errorf("its folder %s is gone — nothing to reopen into", c.Dir)
-	}
-	if c.Agent == "claude" && !sessionFileExists(mc, Chat{Kind: c.Agent, Session: c.Session, Dir: c.Dir}) {
-		return sessions.Place{}, errors.New("its session file is gone — nothing to resume")
+	if err := CanResume(mc, c.Agent, c.Session, c.Dir); err != nil {
+		return sessions.Place{}, err
 	}
 	client, _, err := mc.Ready()
 	if err != nil {
@@ -207,8 +203,12 @@ func (r *Restarter) reopenWith(client placer, machineID string, c Closed) (sessi
 }
 
 // startOnSession starts the agent on its session in a tab of the folder's workspace, else a new workspace named
-// workspace, unless a pane runs that session already: that pane comes back instead, and nothing starts.
+// workspace, unless a pane runs that session already — the agents' sessions read again first (Reread), since a
+// /resume moves one under the same process — that pane comes back instead, and nothing starts.
 func startOnSession(client placer, dir, workspace, tab, kind, session string) (sessions.Place, *herdr.PaneInfo, error) {
+	if err := Reread(client); err != nil {
+		return sessions.Place{}, nil, err
+	}
 	snap, err := client.SessionSnapshot()
 	if err != nil {
 		return sessions.Place{}, nil, err

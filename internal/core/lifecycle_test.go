@@ -35,7 +35,7 @@ func claudeOnCore(t *testing.T) (*machines.Manager, *machines.Machine, string, s
 	core.LiftPromptGate(t)
 	coretest.StandInClaude(t, lifeSession)
 	coretest.Server(t).Use(t)
-	fleet := machines.NewCoreManager(t.TempDir(), "", nil, false)
+	fleet := machines.NewCoreManager(t.TempDir(), "", "", nil, false)
 	t.Cleanup(fleet.Close)
 	mc, err := fleet.Get(machines.LocalID)
 	if err != nil {
@@ -169,13 +169,13 @@ func TestAChatOnACoreRestartsOntoAnUpdateOnItsSession(t *testing.T) {
 	}
 }
 
-// Agents that ran in herdr before the move carry on on a throwaway core: a workspace on their folder named as herdr's
-// was, each agent of it a tab there, on its own session.
+// Agents that slept in herdr before the move carry on on a throwaway core: a workspace on their folder named as
+// herdr's was, each agent of it a tab there, on its own session, and the sleep told each is back.
 func TestHerdrsAgentsCarryOnOnACore(t *testing.T) {
 	const second = "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d"
 	coretest.StandInClaude(t, lifeSession)
 	coretest.Server(t).Use(t)
-	fleet := machines.NewCoreManager(t.TempDir(), "", nil, false)
+	fleet := machines.NewCoreManager(t.TempDir(), "", "", nil, false)
 	t.Cleanup(fleet.Close)
 	mc, err := fleet.Get(machines.LocalID)
 	if err != nil {
@@ -202,10 +202,18 @@ func TestHerdrsAgentsCarryOnOnACore(t *testing.T) {
 	r.Serving = func(*machines.Machine) (bool, error) { return false, nil }
 	r.Memory = restart.OpenMemory("")
 	r.Memory.Core = func() bool { return true }
-	r.Memory.Adopt(mc.ID(), map[string]restart.Chat{
+	slept := map[string]restart.Chat{
 		"w1:p1": {Kind: "claude", Session: lifeSession, Dir: folder, Title: "api"},
 		"w1:p2": {Kind: "claude", Session: second, Dir: folder, Title: "api"},
-	})
+	}
+	var woken []string
+	r.Memory.Sleepers = func(string) map[string]restart.Chat { return slept }
+	r.Memory.Woken = func(_, pane string) { woken = append(woken, pane) }
+	before, err := client.SessionSnapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.Memory.Observe(events.Snapshot{Machine: mc.ID(), Snap: before, At: time.Now()})
 	var log []string
 	if err := r.Recover(mc, nil, func(line string) { log = append(log, line) }); err != nil {
 		t.Fatalf("recover: %v\n%s", err, strings.Join(log, "\n"))
@@ -229,7 +237,7 @@ func TestHerdrsAgentsCarryOnOnACore(t *testing.T) {
 			}
 		}
 	}
-	if len(r.Memory.Stopped(mc.ID())) != 0 {
-		t.Fatalf("still listed: %+v", r.Memory.Stopped(mc.ID()))
+	if len(r.Memory.Stopped(mc.ID())) != 0 || len(woken) != 2 {
+		t.Fatalf("still listed: %+v, the sleep told of %v", r.Memory.Stopped(mc.ID()), woken)
 	}
 }

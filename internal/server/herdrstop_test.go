@@ -10,7 +10,8 @@ import (
 )
 
 // TestHerdrsServerIsStoppedOnlyWhereTheFleetLeftIt: the stop is refused before any script runs on a scratch instance,
-// on a machine still reached through herdr, and for a machine the fleet does not have. Nothing here reaches a herdr.
+// on a machine still reached through herdr, for a machine the fleet does not have, and on the page's own host under
+// -server. Nothing here reaches a herdr.
 func TestHerdrsServerIsStoppedOnlyWhereTheFleetLeftIt(t *testing.T) {
 	stop := func(s *Server, machine string) (int, string) {
 		mux := http.NewServeMux()
@@ -29,5 +30,10 @@ func TestHerdrsServerIsStoppedOnlyWhereTheFleetLeftIt(t *testing.T) {
 	}
 	if code, body := stop(&Server{Machines: onHerdr, HerdrStops: true}, "nowhere"); code != 404 {
 		t.Fatalf("a machine the fleet lacks: %d %s", code, body)
+	}
+	pageOnly := machines.NewCoreManager(t.TempDir(), "", "", nil, true)
+	t.Cleanup(pageOnly.Close)
+	if code, body := stop(&Server{Machines: pageOnly, HerdrStops: true}, "local"); code != 409 || !strings.Contains(body, "runs as a server") {
+		t.Fatalf("the page's own host under -server: %d %s", code, body)
 	}
 }

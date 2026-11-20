@@ -146,7 +146,7 @@ func Run(ctx context.Context, o Options) error {
 	}
 	var fleet *machines.Manager
 	if o.Core {
-		fleet = machines.NewCoreManager(o.Dir, bin, door, o.Server)
+		fleet = machines.NewCoreManager(o.Dir, o.Socket, bin, door, o.Server)
 	} else {
 		fleet = machines.NewManager(o.Dir, o.Socket, bin, door)
 	}

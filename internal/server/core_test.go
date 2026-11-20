@@ -14,7 +14,7 @@ import (
 // before any script reaches the machine: herdr's agents there, which it does not see, may hold the checkouts. A new
 // worktree is the core adapter's to make (Core 20), as herdr's worktree.create made one beside herdr's agents.
 func TestNoCheckoutIsTakenDownOrWrittenOnAMachineReachedThroughCore(t *testing.T) {
-	fleet := machines.NewCoreManager(t.TempDir(), "", nil, true) // a page-only host: no core of its own is started
+	fleet := machines.NewCoreManager(t.TempDir(), "", "", nil, true) // a page-only host: no core of its own is started
 	defer fleet.Close()
 	s := &Server{Machines: fleet, Updates: &updates.Service{Jobs: jobs.New(events.NewBus())}}
 	mux := http.NewServeMux()

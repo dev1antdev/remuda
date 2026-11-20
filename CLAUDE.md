@@ -2173,27 +2173,46 @@ components and icons as rules for whoever changes it: @docs/design.md
   agent of the core is on its session (then forgotten); `gained` leaves it
   out, so neither `OnStopped` nor "Resume automatically next time" ever
   starts one (`Rebooted`, which `AutoRecoverChats` and `AutoRecover` keep
-  to). A workspace that slept in herdr hands its agents over first
-  (`sleep.Store.FromHerdr` → `Memory.Adopt`, listed at once). Resume of
-  one is refused while herdr's server answers on the machine
+  to). A workspace that slept in herdr stays in asleep.json — so a remuda
+  put back on herdr finds it asleep — and its agents are listed the same
+  way (`Memory.Sleepers` = `sleep.Store.SleptInHerdr`, the records without
+  the sleep's own `core` mark), each taken off there once dealt with or
+  found on its session in the core (`Memory.Woken` = `sleep.Store.Woke`).
+  Resume of one is refused while herdr's server answers on the machine
   (`Restarter.MayCarryOn` → `*HerdrRunning`, a 409 `{herdr: true}` from
   `POST /api/panes/recover`, asked again inside the job; `Restarter.Serving`
-  is `herdr.Serving`, the status script over the machine's shell through
-  its own `herdr_bin` and `remote_socket`, else herdr found as the probe
-  finds it (`script.HerdrBin`) on its own socket,
-  `internal/herdr/serving.go`); else `carryOn`: a session this run started
-  already counts as back, then `CanResume`, then `startOnSession` (which
-  the reopen of a closed agent shares: a fresh snapshot, a pane already on
-  the session answered as back, else `sessions.StartIn` with the kind's
-  resume arguments), a tab of the workspace on the folder, else a new
-  workspace named as herdr's was, so the agents of one herdr workspace
-  in one folder become tabs of one; the record is forgotten once dealt with, a start
-  that failed keeps it listed. `POST /api/machines/{id}/herdr/stop`
-  (`internal/server/recover.go`, the person's only — a viewer link and an
-  agent key get a 403, `internal/auth/herdrstop_test.go`; refused on a
-  scratch instance, `app.Options.HerdrStops`, and on a machine still on
-  herdr) is `herdr.StopServing`: herdr's own `server stop` on that same
-  herdr, waited for, herdr left installed. The page: the ⓘ and the toast
+  is `herdr.Serving` over the machine's shell, through the herdr remuda
+  reached there, `Machine.MovedHerdr` — this machine's `-herdr-bin` and
+  `-socket`, which `NewCoreManager` keeps, a remote's `herdr_bin` and
+  `remote_socket` — else herdr found as the probe finds it
+  (`script.HerdrBin`) on its own socket, `internal/herdr/serving.go`,
+  tested on `shell.Fake` and in sh on a stand-in at an explicit path:
+  only herdr's own "status: running" or "status: not running" counts, a
+  binary that would not run or any other answer being an error, never a
+  server stopped); else `carryOn`: a session this run started already
+  counts as back, then `CanResume` in the folder the agent ran in
+  (`Ran`, else its pane's), then `startOnSession` (which the reopen of a
+  closed agent shares: the agents' sessions read again, `Reread`, a fresh
+  snapshot, a pane already on the session answered as back, else
+  `sessions.StartIn` with the kind's resume arguments), a tab of the
+  workspace on the folder, else a new workspace named as herdr's was, so
+  the agents of one herdr workspace in one folder become tabs of one; the
+  record is forgotten once dealt with, a start that failed — or sessions
+  that could not be read again — keeps it listed. **What the machine could
+  not say forgets nothing**: `CanResume` (`Machine.Stat`, which keeps
+  `os.ErrNotExist` apart from a machine that could not be asked, and
+  `sessionFileExists`) wraps `ErrUnasked` for a look that failed, and the
+  reboot's resume, the carry-on and the wake keep that chat listed or
+  asleep instead of forgetting it; every chat a run did not bring back —
+  failed or forgotten — is named in the job's error (`notBack`).
+  `POST /api/machines/{id}/herdr/stop` (`internal/server/recover.go`, the
+  person's only — a viewer link and an agent key get a 403,
+  `internal/auth/herdrstop_test.go`; refused on a scratch instance,
+  `app.Options.HerdrStops`, on a machine still on herdr, and on the page's
+  own host under `-server`, whose `Ready` says so) is `herdr.StopServing`:
+  herdr's own `server stop` on that same herdr, then herdr's word that it
+  is down waited for — anything short of it an error — herdr left
+  installed. The page: the ⓘ and the toast
   say "2 agents from herdr on GOG can carry on" (`herdrWords`,
   `concernWords`, `countWords` — the palette row's hint too — and
   `toastWords` in `features/roster/stopped.ts`, tested; the job's title
@@ -2290,10 +2309,12 @@ components and icons as rules for whoever changes it: @docs/design.md
   workspace a watched snapshot no longer shows (never on a machine's
   first), `Forget` a removed machine's; on a fleet moved to remuda-core
   (`Store.Core`) a workspace that slept in herdr — a record without the
-  `core` mark a sleep on the core gives — has its agents handed to
-  `FromHerdr` (`restart.Memory.Adopt`, for Resume after restart) and is
-  then forgotten, on any snapshot, the first too, the hand-over outside
-  the store's lock. **The switches**
+  `core` mark a sleep on the core gives — is no core snapshot's to forget:
+  `SleptInHerdr` offers its agents to Resume after restart
+  (`restart.Memory.Sleepers`) and `Woke` takes each off once it is back or
+  can never come back, the workspace waking with its last (tested in
+  `store_test.go`); a look the machine could not answer in a wake
+  (`restart.ErrUnasked`) keeps the agent asleep. **The switches**
   (`sleep-settings.json`, `Settings{wake_on_open, resume_automatically}`,
   both off): routes `GET/PUT /api/sleep/settings`; `POST
   /api/sessions/{id}/sleep {machine, anyway}` and `…/wake {machine}`

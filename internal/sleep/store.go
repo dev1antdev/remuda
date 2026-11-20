@@ -58,11 +58,9 @@ type Settings struct {
 // Store keeps the workspaces asleep, by machine and workspace id, and the settings.
 type Store struct {
 	dir string
-	// Core says the fleet is reached through remuda-core: a workspace asleep in herdr is then handed to FromHerdr.
+	// Core says the fleet is reached through remuda-core: a workspace asleep in herdr is then kept for Resume after
+	// restart to carry its agents on (SleptInHerdr, Woke), whatever the core's snapshot shows.
 	Core func() bool
-	// FromHerdr takes the agents of a workspace that slept in herdr, by pane, for Resume after restart to carry on
-	// (restart.Memory.Adopt).
-	FromHerdr func(machineID string, chats map[string]restart.Chat)
 
 	mu       sync.Mutex
 	asleep   map[string]map[string]Workspace
@@ -170,6 +168,10 @@ func (s *Store) keep(machineID, workspaceID string, agents []Agent) {
 func (s *Store) awake(machineID, workspaceID string, panes map[string]bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.awakeLocked(machineID, workspaceID, panes)
+}
+
+func (s *Store) awakeLocked(machineID, workspaceID string, panes map[string]bool) {
 	w, ok := s.asleep[machineID][workspaceID]
 	if !ok {
 		return
@@ -198,20 +200,17 @@ func (s *Store) dropLocked(machineID, workspaceID string) {
 
 // Observe forgets a workspace asleep that a watched snapshot no longer shows: it was closed. A machine's first
 // snapshot after it was away decides nothing, since herdr may still be restoring what it had. On a fleet moved to
-// remuda-core a workspace that slept in herdr is handed over (handOver) before anything is forgotten.
+// remuda-core a workspace that slept in herdr is no snapshot's to forget: its agents wait in Resume after restart.
 func (s *Store) Observe(e events.Snapshot) bool {
-	if e.Snap == nil {
+	if e.Snap == nil || e.First {
 		return false
 	}
-	moved := s.handOver(e.Machine)
-	if e.First {
-		return moved
-	}
+	onCore := s.Core != nil && s.Core()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	changed := false
-	for workspaceID := range s.asleep[e.Machine] {
-		if e.Snap.Workspace(workspaceID) == nil {
+	for workspaceID, w := range s.asleep[e.Machine] {
+		if e.Snap.Workspace(workspaceID) == nil && (w.Core || !onCore) {
 			s.dropLocked(e.Machine, workspaceID)
 			changed = true
 		}
@@ -219,39 +218,39 @@ func (s *Store) Observe(e events.Snapshot) bool {
 	if changed {
 		s.saveLocked()
 	}
-	return changed || moved
+	return changed
 }
 
-// handOver gives FromHerdr the agents of the machine's workspaces that slept in herdr, on a fleet moved to remuda-core,
-// and forgets those workspaces once their agents are given: outside the store's lock, since the memory's is taken there.
-func (s *Store) handOver(machineID string) bool {
-	if s.Core == nil || !s.Core() || s.FromHerdr == nil {
-		return false
-	}
+// SleptInHerdr is, by pane, the agents of the machine's workspaces put to sleep in herdr — the records without the
+// core mark — for Resume after restart to carry on once the fleet is on remuda-core (restart.Memory.Sleepers).
+func (s *Store) SleptInHerdr(machineID string) map[string]restart.Chat {
 	s.mu.Lock()
-	var slept []string
+	defer s.mu.Unlock()
 	chats := map[string]restart.Chat{}
-	for workspaceID, w := range s.asleep[machineID] {
+	for _, w := range s.asleep[machineID] {
 		if w.Core {
 			continue
 		}
-		slept = append(slept, workspaceID)
 		for _, a := range w.Agents {
 			chats[a.Pane] = restart.Chat{Kind: a.Kind, Session: a.Session, Dir: a.Dir, Title: cmp.Or(w.Name, a.Title)}
 		}
 	}
-	s.mu.Unlock()
-	if len(slept) == 0 {
-		return false
-	}
-	s.FromHerdr(machineID, chats)
+	return chats
+}
+
+// Woke takes a pane off the machine's records once its agent is back, or can never come back; its workspace wakes with
+// its last agent (restart.Memory.Woken).
+func (s *Store) Woke(machineID, paneID string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for _, workspaceID := range slept {
-		s.dropLocked(machineID, workspaceID)
+	for workspaceID, w := range s.asleep[machineID] {
+		for _, a := range w.Agents {
+			if a.Pane == paneID {
+				s.awakeLocked(machineID, workspaceID, map[string]bool{paneID: true})
+				return
+			}
+		}
 	}
-	s.saveLocked()
-	return true
 }
 
 // Forget drops a machine's workspaces asleep (it left the registry).

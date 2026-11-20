@@ -8,7 +8,6 @@ import (
 
 	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/herdr"
-	"github.com/dev1antdev/remuda/internal/restart"
 )
 
 func TestTheRecordOutlivesARestartAndMergesASecondSleep(t *testing.T) {
@@ -76,41 +75,39 @@ func TestTheSwitchesStartOffAndAreKept(t *testing.T) {
 	}
 }
 
-// TestAWorkspaceThatSleptInHerdrIsHandedToTheCoresResume: once the fleet is on remuda-core, a workspace asleep in herdr
-// gives its agents to Resume after restart before any snapshot forgets it — the first one too — and a workspace put
-// to sleep on the core stays the sleep's.
-func TestAWorkspaceThatSleptInHerdrIsHandedToTheCoresResume(t *testing.T) {
+// TestAWorkspaceThatSleptInHerdrWaitsForTheCoresResume: once the fleet is on remuda-core, a workspace asleep in herdr
+// is kept whatever the core's snapshots show, its agents offered by pane to Resume after restart, each taken off as it
+// is dealt with; a workspace put to sleep on the core stays the sleep's as before. The records are kept on disk, so a
+// remuda put back on herdr finds its workspaces asleep.
+func TestAWorkspaceThatSleptInHerdrWaitsForTheCoresResume(t *testing.T) {
 	dir := t.TempDir()
 	inHerdr := Open(dir)
 	inHerdr.put("gog", "w1", Workspace{Name: "api", Dir: "/work/api", Agents: []Agent{sleeper("w1:p1", "w1:t1", "claude", sidA), sleeper("w1:p2", "w1:t1", "codex", sidB)}})
 
 	store := Open(dir)
 	store.Core = func() bool { return true }
-	handed := map[string]restart.Chat{}
-	store.FromHerdr = func(machineID string, chats map[string]restart.Chat) {
-		if machineID != "gog" {
-			t.Errorf("handed over for %s", machineID)
-		}
-		for pane, c := range chats {
-			handed[pane] = c
-		}
-	}
 	store.put("gog", "ws-1", asleep(sleeper("t1", "tab-1", "claude", sidB)))
-	coreSnap := &herdr.Snapshot{Workspaces: []herdr.WorkspaceInfo{{WorkspaceID: "ws-1"}}}
-	if !store.Observe(events.Snapshot{Machine: "gog", Snap: coreSnap, First: true}) {
-		t.Fatal("handed over on the core's first snapshot")
+	coreSnap := &herdr.Snapshot{Workspaces: []herdr.WorkspaceInfo{{WorkspaceID: "ws-9"}}}
+	if !store.Observe(events.Snapshot{Machine: "gog", Snap: coreSnap}) {
+		t.Fatal("the core's own workspace, closed, is not forgotten")
 	}
-	if c := handed["w1:p2"]; len(handed) != 2 || c.Kind != "codex" || c.Session != sidB || c.Dir != "/work/api" || c.Title != "api" || c.Core {
-		t.Fatalf("handed: %+v", handed)
+	if _, ok := store.Of("gog", "w1"); !ok {
+		t.Fatal("herdr's workspace is no core snapshot's to forget")
 	}
-	if _, ok := store.Of("gog", "w1"); ok {
-		t.Fatal("herdr's workspace is forgotten once handed over")
+	if _, ok := store.Of("gog", "ws-1"); ok {
+		t.Fatal("a workspace put to sleep on the core and closed since is forgotten as ever")
 	}
-	if _, ok := Open(dir).Of("gog", "ws-1"); !ok || store.Status("gog", "ws-1") == nil {
-		t.Fatal("a workspace asleep on the core stays the sleep's")
+	slept := store.SleptInHerdr("gog")
+	if c := slept["w1:p2"]; len(slept) != 2 || c.Kind != "codex" || c.Session != sidB || c.Dir != "/work/api" || c.Title != "api" || c.Core {
+		t.Fatalf("herdr's sleepers: %+v", slept)
 	}
-	handed = map[string]restart.Chat{}
-	if store.Observe(events.Snapshot{Machine: "gog", Snap: coreSnap}) || len(handed) != 0 {
-		t.Fatalf("handed over once: %+v", handed)
+	store.Woke("gog", "w1:p1")
+	if w, ok := Open(dir).Of("gog", "w1"); !ok || len(w.Agents) != 1 || w.Agents[0].Pane != "w1:p2" {
+		t.Fatalf("one dealt with, the other still asleep on disk: %+v", w)
+	}
+	store.Woke("gog", "w1:p2")
+	store.Woke("gog", "w9:p9")
+	if _, ok := store.Of("gog", "w1"); ok || len(store.SleptInHerdr("gog")) != 0 {
+		t.Fatal("its last agent dealt with, herdr's workspace wakes")
 	}
 }

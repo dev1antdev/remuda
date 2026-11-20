@@ -18,6 +18,17 @@ func (mc *Machine) HerdrBin() string {
 	return mc.herdrBin
 }
 
+// MovedHerdr is the herdr remuda reached on this machine before the move to remuda-core: this one's -herdr-bin and
+// -socket, a remote's herdr_bin and remote_socket; "" where it had none, for herdr's own lookup and socket.
+func (mc *Machine) MovedHerdr() (bin, socket string) {
+	if !mc.local {
+		return mc.Cfg.HerdrBin, mc.Cfg.RemoteSocket
+	}
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+	return mc.herdrBin, mc.socket
+}
+
 // ServerVersions reads the installed herdr's version and the running server's ("" when none runs), freshly.
 func (mc *Machine) ServerVersions() (installed, running string, err error) {
 	bin, sock := mc.herdrPaths()

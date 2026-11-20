@@ -324,7 +324,7 @@ func TestAChatIsStoppedWhereItsAgentRanThoughItsShellStoodElsewhere(t *testing.T
 // CanResume, the recovery's check, judges the folder it is handed — the one the restored shell stands in — so a chat
 // whose pane's own folder went resumes where its agent ran.
 func TestTheResumeCheckJudgesTheFolderTheShellStandsIn(t *testing.T) {
-	fleet := machines.NewCoreManager(t.TempDir(), "", nil, true) // a page-only host: no core is started
+	fleet := machines.NewCoreManager(t.TempDir(), "", "", nil, true) // a page-only host: no core is started
 	defer fleet.Close()
 	mc, err := fleet.Get(machines.LocalID)
 	if err != nil {

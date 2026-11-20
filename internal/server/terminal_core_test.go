@@ -40,7 +40,7 @@ func coreTerminalServer(t *testing.T, ctx context.Context, argv []string) (srv *
 	}
 	t.Setenv("PATH", filepath.Dir(c.Bin)+string(os.PathListSeparator)+os.Getenv("PATH"))
 	state := t.TempDir()
-	fleet := machines.NewCoreManager(state, "", nil, false)
+	fleet := machines.NewCoreManager(state, "", "", nil, false)
 	t.Cleanup(fleet.Close)
 	mc, err := fleet.Get(machines.LocalID)
 	if err != nil {

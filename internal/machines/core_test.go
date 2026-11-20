@@ -47,7 +47,7 @@ func TestTheProbeFindsRemudaCoreWhereItsInstallerPutsIt(t *testing.T) {
 // The local machine of a -core remuda reaches the core `remuda-core connect` finds under its environment: here a
 // throwaway one, as a scratch instance beside the real cockpit would.
 func TestAPageOnlyHostOnCoreStartsNoCoreOfItsOwn(t *testing.T) {
-	m := NewCoreManager(t.TempDir(), "", nil, true)
+	m := NewCoreManager(t.TempDir(), "", "", nil, true)
 	defer m.Close()
 	mc, err := m.Get(LocalID)
 	if err != nil {
@@ -65,7 +65,7 @@ func TestTheLocalMachineOnCoreShowsTheCoresTerminals(t *testing.T) {
 	c := coretest.Server(t)
 	c.Use(t)
 
-	m := NewCoreManager(t.TempDir(), "", nil, false)
+	m := NewCoreManager(t.TempDir(), "", "", nil, false)
 	defer m.Close()
 	mc, err := m.Get(LocalID)
 	if err != nil {
@@ -158,7 +158,7 @@ func TestTheLocalMachineOnCoreMakesAWorktreeWithItsShell(t *testing.T) {
 		}
 	}
 
-	m := NewCoreManager(t.TempDir(), "", nil, false)
+	m := NewCoreManager(t.TempDir(), "", "", nil, false)
 	defer m.Close()
 	mc, err := m.Get(LocalID)
 	if err != nil {
@@ -178,5 +178,18 @@ func TestTheLocalMachineOnCoreMakesAWorktreeWithItsShell(t *testing.T) {
 	}
 	if want := filepath.Join(home, ".herdr", "worktrees", "app", "feat"); created.Worktree.Path != want || created.Workspace.Worktree == nil || !created.Workspace.Worktree.IsLinkedWorktree {
 		t.Fatalf("the worktree is %+v in %+v, want it at %s", created.Worktree, created.Workspace.Worktree, want)
+	}
+}
+
+func TestTheHerdrBeforeTheMoveIsTheOneRemudaReached(t *testing.T) {
+	m := NewCoreManager(t.TempDir(), "/run/me/herdr.sock", "/opt/herdr/bin/herdr", nil, true)
+	t.Cleanup(m.Close)
+	local, _ := m.Get(LocalID)
+	if bin, socket := local.MovedHerdr(); bin != "/opt/herdr/bin/herdr" || socket != "/run/me/herdr.sock" {
+		t.Fatalf("this machine's: %q %q", bin, socket)
+	}
+	remote := &Machine{Cfg: Config{ID: "gog", HerdrBin: "/usr/local/bin/herdr", RemoteSocket: "/home/me/h.sock"}}
+	if bin, socket := remote.MovedHerdr(); bin != "/usr/local/bin/herdr" || socket != "/home/me/h.sock" {
+		t.Fatalf("a remote's: %q %q", bin, socket)
 	}
 }
