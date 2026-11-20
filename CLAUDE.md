@@ -1568,7 +1568,30 @@ components and icons as rules for whoever changes it: @docs/design.md
   the run. The e2e remuda gets `-code-port` 7439, so the Code mode
   never reaches the person's own code-server; `E2E_SMOKE_ONLY` runs the
   smoke alone. The temp folder stays on a failure, with the screenshots
-  (an artifact in CI, kept after a green run too). Pull
+  (an artifact in CI, kept after a green run too). **`E2E_BACKEND=core`**
+  (herdr unless it says so) runs the same on a throwaway remuda-core in
+  herdr's place (`E2E_CORE`, else `remuda-core` on PATH, linked as
+  `remuda-core` first on the run's PATH, so the core served, remuda's
+  `connect` and the stop are one binary): `serve` started
+  as the script's own child under the environment `coretest.Server` gives
+  one — `RC_SESSION`, `RC_SOCKET` (`<tmp>/rc.sock`), the XDG state, config
+  and runtime folders and `RC_LAUNCHD_DIRECT` naming the script's shell
+  exported for the whole run, `HOME` the run's own set on every core and
+  remuda command as for herdr (coretest's `SHELL=/bin/sh` and
+  `RC_HEARTBEAT_MS` left out: the terminals get the shell herdr's would) —
+  so remuda's own `remuda-core connect` reaches it and no command reaches
+  the person's core; remuda started with `-core`; at the end remuda is
+  stopped and waited for first,
+  then `remuda-core server stop` (a remuda still up would start a core
+  again through `connect`). The smoke and the display checks read the
+  roster's machine `core` and there leave out what a core has not: the
+  screen terminal (a Windows PC's pane is attached there too), Inside
+  herdr, and what a checkout's writes held back there (`holdCheckoutWrites`)
+  stop — the Changes lens's stage and commit, the new worktree's removal
+  and the worktree flow (the close that takes a worktree, the leftovers).
+  CI's `e2e-core` job (on `release` and by hand) installs
+  remuda-core by its checksums, as the check job does, and runs it
+  `continue-on-error`: a report of where the core falls short, not a gate. Pull
   requests target `release`; `main` is what is out (AGENTS.md, "Build and
   check").
   The roster carries `health` per machine and `latest`; the sidebar's ⓘ
