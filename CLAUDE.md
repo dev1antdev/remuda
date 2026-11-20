@@ -470,9 +470,21 @@ components and icons as rules for whoever changes it: @docs/design.md
   pageup, pagedown and delete (herdr 0.9.5 names none) go as the core's
   named keys, encoded for the program's keyboard modes (`keyBytes`);
   `PaneSendInput` refuses a paste of several lines (typed raw, each would
-  run). Still answering `invalid_request` "… is not on remuda-core yet":
-  worktrees (Core 20), `LayoutExport` / `LayoutApply` (Core 22),
-  `PaneScroll` (Core 25), and the writes into herdr's own UI
+  run). **A scene's layout** (`layout.go`, tested on a throwaway core, a
+  scene's capture laid out again in another folder too): `LayoutExport(tab)`
+  is the document's tree of the tab — a pane whose terminal ended left out,
+  one placed by its labels alone put to the right of the last — each pane's
+  folder as the snapshot shows it now and the label and command the layout
+  that made it gave it; `LayoutApply` runs every pane's command (else the
+  shell) in its folder (else the workspace's), then writes the tree in one
+  `doc.set` — a new tab, the one in front staying in front, or in place of a
+  tab, whose old terminals end once the new tree stands — a terminal started
+  for a tree that could not be written ended again; the document keeps no
+  pane's environment; a tree that is neither pane nor split, a split missing
+  a side, going neither right nor down or with a share past 0–1 is
+  `invalid_request`. Still answering `invalid_request` "… is not on
+  remuda-core yet": worktrees (Core 20), `PaneScroll` (Core 25), and the
+  writes into herdr's own UI
   (`*ReportMetadata`, `NotificationShow`). `Bridged` is false: a stream costs the core nothing. The
   watcher still paces the snapshots an event asks for (`internal/watch`,
   150 ms debounce, 500 ms / 1 s apart): the mirror makes each one free, not

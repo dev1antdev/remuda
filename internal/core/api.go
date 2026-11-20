@@ -305,12 +305,6 @@ func (a *Adapter) WorktreeCreateAt(workspaceID, branch, base, label, path string
 func (a *Adapter) WorktreeOpen(workspaceID, path, label string) (*herdr.WorktreeCreateResult, error) {
 	return nil, notOnCore("worktree.open")
 }
-func (a *Adapter) LayoutExport(tabID string) (*herdr.LayoutDescription, error) {
-	return nil, notOnCore("layout.export")
-}
-func (a *Adapter) LayoutApply(workspaceID, tabID, tabLabel string, root herdr.LayoutNode) (*herdr.LayoutDescription, error) {
-	return nil, notOnCore("layout.apply")
-}
 func (a *Adapter) PaneScroll(paneID string, offset int) (herdr.Scroll, error) {
 	return herdr.Scroll{}, notOnCore("pane.scroll")
 }

@@ -50,10 +50,17 @@ func (a *Adapter) editDoc(ctx context.Context, change func(*Document) error) err
 	}
 }
 
-// runShell starts the machine's shell in a new terminal of a workspace's tab and puts it in the mirror at once, so the
-// pane it answers is there for the caller's next request; the core's own news of it finds it there.
+// runShell starts the machine's shell in a new terminal of a workspace's tab.
 func (a *Adapter) runShell(ctx context.Context, space, tab, cwd string, env map[string]string) (Terminal, error) {
-	t, err := a.client.Run(ctx, RunParams{Cwd: cwd, Env: env, Labels: map[string]string{LabelSpace: space, LabelTab: tab}, Rm: true})
+	return a.runIn(ctx, space, tab, RunParams{Cwd: cwd, Env: env})
+}
+
+// runIn starts what p says (the machine's shell when it names nothing) in a new terminal of a workspace's tab and puts
+// it in the mirror at once, so the pane it answers is there for the caller's next request; the core's own news of it
+// finds it there.
+func (a *Adapter) runIn(ctx context.Context, space, tab string, p RunParams) (Terminal, error) {
+	p.Labels, p.Rm = map[string]string{LabelSpace: space, LabelTab: tab}, true
+	t, err := a.client.Run(ctx, p)
 	if err != nil {
 		return Terminal{}, a.refusal(err, "workspace_not_found")
 	}
