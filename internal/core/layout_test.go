@@ -4,7 +4,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 	"testing"
 
 	"github.com/dev1antdev/remuda/internal/core"
@@ -13,13 +12,13 @@ import (
 	"github.com/dev1antdev/remuda/internal/scenes"
 )
 
-// threePanes is a scene's kind of tree: an editor on the left, a shell and a running command stacked on the right.
+// threePanes is a scene's kind of tree: an editor on the left, two shells stacked on the right.
 func threePanes(sub string) herdr.LayoutNode {
 	return herdr.LayoutNode{Type: "split", Direction: "right", Ratio: 0.6,
 		First: &herdr.LayoutNode{Type: "pane", CWD: sub, Label: "editor"},
 		Second: &herdr.LayoutNode{Type: "split", Direction: "down", Ratio: 0.5,
 			First:  &herdr.LayoutNode{Type: "pane"},
-			Second: &herdr.LayoutNode{Type: "pane", Command: []string{"sh", "-c", "echo laid; sleep 300"}},
+			Second: &herdr.LayoutNode{Type: "pane", Label: "server"},
 		},
 	}
 }
@@ -77,7 +76,6 @@ func TestALayoutIsLaidOutAsANewTabAndExportedAsItWasGiven(t *testing.T) {
 	if ws := snap.Workspace(space); ws.ActiveTabID != first {
 		t.Fatalf("the laid-out tab took the front: %+v", ws)
 	}
-	screenSays(t, adapter, panes[2].PaneID, "laid")
 
 	exported, err := adapter.LayoutExport(laid.TabID)
 	if err != nil {
@@ -169,6 +167,8 @@ func TestALayoutTheCoreCannotLayOutIsRefused(t *testing.T) {
 		code             string
 	}{
 		{"a split of nothing", made.Workspace.WorkspaceID, "", herdr.LayoutNode{Type: "split", Direction: "right"}, "invalid_request"},
+		{"a pane with a command of its own", made.Workspace.WorkspaceID, "", herdr.LayoutNode{Type: "split", Direction: "right", First: &pane,
+			Second: &herdr.LayoutNode{Type: "pane", Command: []string{"npm", "run", "dev"}}}, "invalid_request"},
 		{"a workspace only labelled, not in the document", "ws-labelled", "", pane, "workspace_not_found"},
 		{"no such workspace", "ws-none", "", pane, "workspace_not_found"},
 		{"no such tab", "", "tab-none", pane, "tab_not_found"},
@@ -184,22 +184,6 @@ func TestALayoutTheCoreCannotLayOutIsRefused(t *testing.T) {
 	if len(snap.Panes) != 2 || snap.Pane(stray.Address) == nil {
 		t.Fatalf("a refused layout left terminals behind: %+v", snap.Panes)
 	}
-}
-
-func TestALayoutWhosePaneCommandCannotStartFailsAndLeavesNothing(t *testing.T) {
-	client := coretest.Server(t).Client(t)
-	adapter := adapterOf(t, client, core.AdapterHooks{})
-	made, err := adapter.WorkspaceCreate(t.TempDir(), "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	space := made.Workspace.WorkspaceID
-	tree := herdr.LayoutNode{Type: "split", Direction: "right", Ratio: 0.5, First: &herdr.LayoutNode{Type: "pane"},
-		Second: &herdr.LayoutNode{Type: "pane", Command: []string{"no-such-program-anywhere", "--dev"}}}
-	if _, err := adapter.LayoutApply(space, "", "", tree); !herdr.IsCode(err, "spawn_failed") {
-		t.Fatalf("a layout whose program is missing: %v", err)
-	}
-	eventually(t, adapter, func(s *herdr.Snapshot) bool { return len(s.Panes) == 1 && len(tabsOf(s, space)) == 1 })
 }
 
 func TestASceneCapturedOnACoreLaysItsLayoutOutInAnotherFolder(t *testing.T) {
@@ -295,56 +279,6 @@ func TestALayoutLaidInPlaceOfATabClosedMeanwhileFails(t *testing.T) {
 		t.Fatal("a tab closed meanwhile was laid out again")
 	}
 	eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Tab(other.Tab.TabID) == nil && len(s.Panes) == 1 })
-}
-
-func TestAPaneWhoseProgramIsNamedAsACoreTemplateIsRefused(t *testing.T) {
-	server := coretest.Server(t)
-	client := server.Client(t)
-	adapter := adapterOf(t, client, core.AdapterHooks{})
-	config := ""
-	for _, kv := range server.Env {
-		if value, ok := strings.CutPrefix(kv, "XDG_CONFIG_HOME="); ok {
-			config = value
-		}
-	}
-	templates := filepath.Join(config, "remuda-core", "templates")
-	if err := os.MkdirAll(templates, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	template := "---\ndescription: a stand-in\ncommand: echo the template ran; sleep 300\n---\n"
-	if err := os.WriteFile(filepath.Join(templates, "Sleeper.md"), []byte(template), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	made, err := adapter.WorkspaceCreate(t.TempDir(), "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, program := range []string{"Sleeper", "sleeper"} {
-		tree := herdr.LayoutNode{Type: "pane", Command: []string{program, "run", "dev"}}
-		if _, err := adapter.LayoutApply(made.Workspace.WorkspaceID, "", "", tree); !herdr.IsCode(err, "invalid_request") || !strings.Contains(err.Error(), program) {
-			t.Fatalf("%s, named as the template Sleeper: %v", program, err)
-		}
-	}
-	if snap, _ := adapter.SessionSnapshot(); len(snap.Panes) != 1 {
-		t.Fatalf("a refused layout started terminals: %+v", snap.Panes)
-	}
-}
-
-func TestAPaneCommandThatEndsAtOnceStillLaysTheLayoutOut(t *testing.T) {
-	client := coretest.Server(t).Client(t)
-	adapter := adapterOf(t, client, core.AdapterHooks{})
-	made, err := adapter.WorkspaceCreate(t.TempDir(), "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	tree := herdr.LayoutNode{Type: "split", Direction: "right", Ratio: 0.5, First: &herdr.LayoutNode{Type: "pane"},
-		Second: &herdr.LayoutNode{Type: "pane", Command: []string{"true"}}}
-	laid, err := adapter.LayoutApply(made.Workspace.WorkspaceID, "", "Setup", tree)
-	if err != nil {
-		t.Fatal(err)
-	}
-	shell := laid.Root.Panes()[0].PaneID
-	eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Pane(shell) != nil && len(panesOfTab(s, laid.TabID)) == 1 })
 }
 
 func TestAWorkspaceClosedWhileALayoutIsWrittenEndsTheLayoutsPanesToo(t *testing.T) {

@@ -56,14 +56,21 @@ const LabelLayout = "remuda.layout"
 var layoutBeforeWrite = func() {}
 
 // LayoutApply lays a tree out as a tab, as herdr's layout.apply does: a new tab of the workspace, or, with a tab id, in
-// place of that tab, whose panes and what ran in them go once the new ones stand. Each pane runs its command, else the
-// machine's shell, in its folder (the workspace's when it names none); the document keeps the tree with each pane's
-// terminal, label and command. The tab in front stays in front. The tree is taken as scenes checked it. Only a
-// workspace or tab the document holds takes a layout, and one closed while the panes started is not brought back: the
-// layout fails and ends what it started.
+// place of that tab, whose panes and what ran in them go once the new ones stand. Each pane is the machine's shell in
+// its folder (the workspace's when it names none); a pane with a command of its own is refused until the core can
+// start a program without reading its name as a template (Core 34). The document keeps the tree with each pane's
+// terminal and label. The tab in front stays in front. The tree is taken as scenes checked it. Only a workspace or
+// tab the document holds takes a layout, and one closed while the panes started is not brought back: the layout fails
+// and ends what it started.
 func (a *Adapter) LayoutApply(workspaceID, tabID, tabLabel string, root herdr.LayoutNode) (*herdr.LayoutDescription, error) {
-	if len(root.Panes()) == 0 {
+	panes := root.Panes()
+	if len(panes) == 0 {
 		return nil, &herdr.Error{Code: "invalid_request", Message: "a layout holds at least one pane"}
+	}
+	for _, pane := range panes {
+		if len(pane.Command) > 0 {
+			return nil, &herdr.Error{Code: "invalid_request", Message: fmt.Sprintf("a pane's own command (%s) is not laid out on remuda-core yet: the core would read its program as a template of that name (task Core 34)", strings.Join(pane.Command, " "))}
+		}
 	}
 	space, inPlace := workspaceID, tabID != ""
 	if inPlace {
@@ -89,9 +96,6 @@ func (a *Adapter) LayoutApply(workspaceID, tabID, tabLabel string, root herdr.La
 	}
 
 	tree, mark := clone(&root), state.NewID()
-	if err := a.refuseTemplates(tree); err != nil {
-		return nil, err
-	}
 	var started []string
 	fail := func(err error) (*herdr.LayoutDescription, error) {
 		if swept := a.endLabelled(map[string]string{LabelLayout: mark}); swept != nil {
@@ -100,7 +104,9 @@ func (a *Adapter) LayoutApply(workspaceID, tabID, tabLabel string, root herdr.La
 		return nil, err
 	}
 	for _, node := range tree.Panes() {
-		t, err := a.startPane(space, tabID, mark, cmp.Or(node.CWD, folder), node.Env, node.Command)
+		ctx, cancel := context.WithTimeout(context.Background(), callWithin)
+		t, err := a.runIn(ctx, space, tabID, RunParams{Cwd: cmp.Or(node.CWD, folder), Env: node.Env, Labels: map[string]string{LabelLayout: mark}})
+		cancel()
 		if err != nil {
 			return fail(err)
 		}
@@ -148,64 +154,6 @@ func (a *Adapter) LayoutApply(workspaceID, tabID, tabLabel string, root herdr.La
 		log.Printf("remuda-core: tab %s is laid out anew, but not all its old panes ended: %v", tabID, err)
 	}
 	return &herdr.LayoutDescription{WorkspaceID: space, TabID: tabID, FocusedPaneID: started[0], Root: *tree}, nil
-}
-
-// startPane starts one pane of a layout, carrying the layout's mark: the machine's shell, or the pane's command as the
-// terminal's own argv, its words exactly as saved. The core refuses a program it cannot start (spawn_failed); one that
-// starts and ends is the pane's business, as with herdr, whose pane goes with it. A start the core turned into one of
-// its templates (one named after the program since refuseTemplates looked) is ended and refused.
-func (a *Adapter) startPane(space, tab, mark, cwd string, env map[string]string, command []string) (Terminal, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), callWithin)
-	defer cancel()
-	if len(command) == 0 {
-		return a.runIn(ctx, space, tab, RunParams{Cwd: cwd, Env: env, Labels: map[string]string{LabelLayout: mark}})
-	}
-	labels := map[string]string{LabelSpace: space, LabelTab: tab, LabelLayout: mark}
-	t, err := a.client.Run(ctx, RunParams{Argv: command, Cwd: cwd, Env: env, Labels: labels, Rm: true})
-	if err != nil {
-		return Terminal{}, a.refusal(err, "workspace_not_found")
-	}
-	if !slices.Equal(t.Argv, command) {
-		a.kill(t.Address)
-		return Terminal{}, templateRefusal(command[0])
-	}
-	return t, nil
-}
-
-// refuseTemplates refuses a pane whose program the core would read as one of its templates — by its name, case aside,
-// as a file system that ignores case finds it — since it would run the template's command instead.
-func (a *Adapter) refuseTemplates(tree *herdr.LayoutNode) error {
-	var programs []string
-	for _, node := range tree.Panes() {
-		if len(node.Command) > 0 {
-			programs = append(programs, node.Command[0])
-		}
-	}
-	if len(programs) == 0 {
-		return nil
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), callWithin)
-	defer cancel()
-	var listed struct {
-		Templates []struct {
-			Name string `json:"name"`
-		} `json:"templates"`
-	}
-	if err := a.client.Call(ctx, "templates.list", map[string]any{}, &listed); err != nil {
-		return a.refusal(err, "invalid_request")
-	}
-	for _, template := range listed.Templates {
-		for _, program := range programs {
-			if strings.EqualFold(program, template.Name) {
-				return templateRefusal(program)
-			}
-		}
-	}
-	return nil
-}
-
-func templateRefusal(program string) error {
-	return &herdr.Error{Code: "invalid_request", Message: fmt.Sprintf("a pane runs %q, which remuda-core on this machine reads as its template of that name: name the program by its path", program)}
 }
 
 // What the core's document says of a layout's write whose answer never came.
