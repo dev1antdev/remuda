@@ -159,6 +159,9 @@ func paneOf(t *Terminal, tab, space string, sessionOf SessionLookup) herdr.PaneI
 		}
 		if t.Foreground != nil {
 			asked.PID, asked.Started = t.Foreground.Pid, t.Foreground.StartedMS
+			if since := t.Foreground.SinceBoot; since != nil {
+				asked.SinceBoot = *since
+			}
 		}
 		pane.AgentSession = sessionOf(asked)
 	}

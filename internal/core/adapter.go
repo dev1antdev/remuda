@@ -62,6 +62,7 @@ type AgentProcess struct {
 	Held       uint64
 	Seen       time.Time
 	Started    int64
+	SinceBoot  SinceBoot
 }
 
 // handedOver counts a moment the terminal's foreground changed hands, or the mirror took it in.

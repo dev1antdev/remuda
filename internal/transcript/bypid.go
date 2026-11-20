@@ -18,11 +18,36 @@ import (
 
 // Running is an agent process whose session is looked up, with what tells it from a later process given its pid.
 type Running struct {
-	PID     int
-	Agent   string
-	CWD     string
-	Seen    time.Time
-	Started int64
+	PID       int
+	Agent     string
+	CWD       string
+	Seen      time.Time
+	Started   int64
+	SinceBoot SinceBoot
+}
+
+// SinceBoot is a Linux process's start as its boot counts it, as the runtime told it: that boot, the time namespace it
+// was read in and the clock ticks from the boot to the start; zero, untold.
+type SinceBoot struct {
+	BootID, TimeNS string
+	Ticks          uint64
+}
+
+// same says whether the process the machine tells by its boot, the lookup's time namespace and its start in ticks is
+// the one told, and whether that can be known: not untold, nor read in another time namespace, whose boot-time offset
+// shifts the ticks, or in one either side could not name.
+func (s SinceBoot) same(bootID, timeNS, ticks string) (same, known bool) {
+	if s.BootID == "" || bootID == "" {
+		return false, false
+	}
+	if bootID != s.BootID {
+		return false, true
+	}
+	read, err := strconv.ParseUint(strings.TrimSpace(ticks), 10, 64)
+	if s.TimeNS == "" || timeNS != s.TimeNS || err != nil {
+		return false, false
+	}
+	return read == s.Ticks, true
 }
 
 // SessionsOf answers, pid by pid, the session each running Claude Code or Codex is in, read off its process ("" for
@@ -126,6 +151,7 @@ if [ "$system" = Linux ]; then
     fi
   done
   printf 'system\037Linux\037%s\037%s\037%s\037%s\037%s\036\n' "$(sed -n 's/^btime //p' /proc/stat)" "$up" "$before" "$after" "$(getconf CLK_TCK)"
+  printf 'since\037%s\037%s\036\n' "$(cat /proc/sys/kernel/random/boot_id 2>/dev/null)" "$(readlink /proc/self/ns/time 2>/dev/null)"
 else
   printf 'system\037%s\036\n' "$system"
 fi
@@ -203,14 +229,19 @@ type claudeSessionFile struct {
 // parseSessionsByPID reads sessionsByPIDScript's answer, and names the processes it could not tell from a later one
 // given their pid: a reading of the boot too slow to place them.
 func parseSessionsByPID(out string, procs []Running, style rpath.Style, clock machineClock) (map[int]string, map[int]bool) {
-	cwds, seen, started := map[int]string{}, map[int]time.Time{}, map[int]int64{}
+	cwds, seen, started, sinceBoot := map[int]string{}, map[int]time.Time{}, map[int]int64{}, map[int]SinceBoot{}
 	for _, p := range procs {
-		cwds[p.PID], seen[p.PID], started[p.PID] = p.CWD, p.Seen, p.Started
+		cwds[p.PID], seen[p.PID], started[p.PID], sinceBoot[p.PID] = p.CWD, p.Seen, p.Started, p.SinceBoot
 	}
 	found, unsure, linux, boot := map[int]string{}, map[int]bool{}, false, linuxBoot{}
+	var bootID, timeNS string // the machine's boot and the lookup's time namespace, on Linux
 	for _, record := range script.Sections(out) {
 		if system, ok := strings.CutPrefix(strings.TrimSpace(record), "system"+script.US); ok {
 			linux, boot = strings.HasPrefix(system, "Linux"), bootOf(system)
+			continue
+		}
+		if since, ok := strings.CutPrefix(strings.TrimSpace(record), "since"+script.US); ok {
+			bootID, timeNS, _ = strings.Cut(since, script.US)
 			continue
 		}
 		fields := strings.SplitN(record, script.US, 7)
@@ -238,7 +269,11 @@ func parseSessionsByPID(out string, procs []Running, style rpath.Style, clock ma
 		if len(fields) == 7 {
 			ticks = fields[6]
 		}
-		if told := started[pid]; told != 0 {
+		if same, known := sinceBoot[pid].same(bootID, timeNS, ticks); known {
+			if !same {
+				continue // another process than the one seen, whatever the clocks say
+			}
+		} else if told := started[pid]; told != 0 {
 			fits, sure := boot.mayBe(ticks, told)
 			if !sameCreation(start, told, linux) || sure && !fits {
 				continue // another process than the one seen: the pid changed hands before it was read

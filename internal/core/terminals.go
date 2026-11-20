@@ -67,6 +67,17 @@ type Foreground struct {
 	// StartedMS is when that process was created, unix ms, as the OS records it: a core advertising
 	// `foreground_started` tells it, 0 from one that does not.
 	StartedMS int64 `json:"started_ms"`
+	// SinceBoot is that process's start as its boot counts it, on Linux from a core advertising
+	// `foreground_since_boot`, which no step of the wall clock moves; nil otherwise.
+	SinceBoot *SinceBoot `json:"started_since_boot"`
+}
+
+// SinceBoot is a Linux process's start as its boot counts it: that boot, the time namespace the core read it in (its
+// ticks shifted by that namespace's boot-time offset) and the clock ticks from the boot to the start.
+type SinceBoot struct {
+	BootID string `json:"boot_id"`
+	TimeNS string `json:"time_ns"`
+	Ticks  uint64 `json:"ticks"`
 }
 
 // literalRuns are the hello features of a remuda-core that starts argv as it is (`literal`, Core 35) and says so on the

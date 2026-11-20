@@ -292,6 +292,52 @@ func TestALinuxProcessIsKnownByItsBirthToTheMillisecond(t *testing.T) {
 	}
 }
 
+// A runtime that tells a Linux process's start since boot decides outright: the same boot, time namespace and ticks is
+// that process whatever the clocks say, other ticks or another boot another process; only a lookup in another time
+// namespace, which reads the ticks shifted by its boot-time offset, or a machine that told no boot, goes by the clocks.
+func TestTheStartSinceBootDecides(t *testing.T) {
+	const start = "Thu Nov 19 00:36:09 2026" // ps's, a second behind the runtime's on Linux
+	const boot, ns = "6f1c0d2e-4b7a-4c1e-9a1b-2f3e4d5c6b7a", "time:[4026531834]"
+	began := time.Date(2026, 11, 19, 0, 36, 10, 108_000_000, time.UTC)
+	// the real clock read after it was read before, so no boot to place a creation by: the clocks cannot settle it
+	stepped := "system" + script.US + "Linux" + script.US + "1795046400" + script.US + "2170.40" + script.US +
+		strconv.FormatInt(began.UnixMilli()+50, 10) + script.US + strconv.FormatInt(began.UnixMilli(), 10) + script.US + "100" + script.RS + "\n"
+	since := func(bootID, timeNS string) string {
+		return "since" + script.US + bootID + script.US + timeNS + script.RS + "\n"
+	}
+	record := func(ticks string) string {
+		return "7" + script.US + "claude" + script.US + start + script.US + "/a" + script.US +
+			`{"pid":7,"sessionId":"id-1","cwd":"/a","procStart":"` + start + `","startedAt":` + strconv.FormatInt(began.Add(time.Second).UnixMilli(), 10) + `}` +
+			script.US + start + script.US + ticks + script.RS + "\n"
+	}
+	told := SinceBoot{BootID: boot, TimeNS: ns, Ticks: 216940}
+	if _, known := (SinceBoot{BootID: boot, Ticks: 216940}).same(boot, "", "216940"); known {
+		t.Fatal("two namespaces neither side could name taken for one")
+	}
+	for _, c := range []struct {
+		name   string
+		out    string
+		want   string
+		unsure bool
+	}{
+		{"the very process, the clocks no help", since(boot, ns) + record("216940"), "id-1", false},
+		{"another born in the same second", since(boot, ns) + record("216980"), "", false},
+		{"a process of another boot", since("0e2d8c1f-0000-4000-8000-000000000000", ns) + record("216940"), "", false},
+		{"a lookup in another time namespace: the clocks decide, and cannot", since(boot, "time:[4026532001]") + record("216940"), "", true},
+		{"a lookup that could not name its time namespace: the clocks decide", since(boot, "") + record("216940"), "", true},
+		{"a machine that told no boot: the clocks decide, and cannot", record("216940"), "", true},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			procs := []Running{{PID: 7, Agent: "claude", CWD: "/a", Seen: began, Started: began.UnixMilli(), SinceBoot: told}}
+			never := machineClock{asked: began.Add(time.Hour), latest: began.Add(-time.Hour)}
+			got, unsure := parseSessionsByPID(stepped+c.out, procs, rpath.Style{}, never)
+			if got[7] != c.want || unsure[7] != c.unsure {
+				t.Fatalf("got %v, unsure %v, want %q", got, unsure, c.want)
+			}
+		})
+	}
+}
+
 // End to end on a real process, as remuda-core tells its creation: the one told is found whatever its sighting says,
 // and a creation a second off is another process's.
 func TestARealProcessIsKnownByTheCreationTheRuntimeTold(t *testing.T) {
@@ -325,6 +371,39 @@ func TestARealProcessIsKnownByTheCreationTheRuntimeTold(t *testing.T) {
 	if err != nil || len(named(got)) != 0 {
 		t.Fatalf("a creation a second off: got %v, %v", got, err)
 	}
+
+	if runtime.GOOS != "linux" {
+		return
+	}
+	// on Linux the start since boot decides alone: a creation the clocks place a second off is no matter beside it
+	since := sinceBootOf(t, pid)
+	got, err = reader.SessionsOf([]Running{{PID: pid, Agent: "claude", CWD: home, Seen: time.Now(), Started: creationOf(t, pid, began) - 1000, SinceBoot: since}})
+	if err != nil || got[pid] != "4c9d6f0e-1111-4222-8333-944455556666" {
+		t.Fatalf("the start since boot told: got %v, %v", got, err)
+	}
+	since.Ticks++
+	got, err = reader.SessionsOf([]Running{{PID: pid, Agent: "claude", CWD: home, Seen: time.Now(), Started: creationOf(t, pid, began), SinceBoot: since}})
+	if err != nil || len(named(got)) != 0 {
+		t.Fatalf("a start since boot a tick off: got %v, %v", got, err)
+	}
+}
+
+// sinceBootOf is a Linux process's start since boot as remuda-core tells it: this boot, this process's time namespace
+// (the lookup's, its child) and the process's starttime ticks.
+func sinceBootOf(t *testing.T, pid int) SinceBoot {
+	t.Helper()
+	boot, errBoot := os.ReadFile("/proc/sys/kernel/random/boot_id")
+	ns, _ := os.Readlink("/proc/self/ns/time")
+	stat, errStat := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/stat")
+	if errBoot != nil || errStat != nil {
+		t.Fatalf("this process's start since boot: %v, %v", errBoot, errStat)
+	}
+	after := string(stat[strings.LastIndex(string(stat), ")")+2:])
+	ticks, err := strconv.ParseUint(strings.Fields(after)[19], 10, 64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return SinceBoot{BootID: strings.TrimSpace(string(boot)), TimeNS: ns, Ticks: ticks}
 }
 
 func TestClaudeSessionLeftByAnEndedProcessIsNotTaken(t *testing.T) {

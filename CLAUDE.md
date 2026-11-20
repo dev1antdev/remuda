@@ -435,8 +435,11 @@ components and icons as rules for whoever changes it: @docs/design.md
   `heldAt`, when that was here, which the process holding the pid when it is
   read must have begun by, and `Started`, the process's creation as a core
   advertising `foreground_started` tells it (`Foreground.StartedMS`, unix ms),
-  which that process must have — remuda-core 0.2.2 (#12), so the binding takes
-  effect once the pin moves to it; until then every machine reads with the
+  which that process must have — remuda-core 0.2.2 (#12) — and `SinceBoot`,
+  its start since boot on Linux as one advertising `foreground_since_boot`
+  tells it (`Foreground.SinceBoot`: boot id, time namespace, ticks), which no
+  step of the clock moves — remuda-core 0.2.3 (#359) — so the binding takes
+  effect once the pin moves to them; until then every machine reads with the
   sighting bound, which a step of the machine's clock on macOS or Windows can
   fool; nil,
   none), which a machine gives as its `processSessions`
@@ -1042,33 +1045,44 @@ components and icons as rules for whoever changes it: @docs/design.md
   agent's folder, then the default one; a process gone, or one whose start
   neither `ps` nor, on Git Bash, PowerShell tells, has no session, nothing
   telling it from another given its pid, nor does one whose start is not the
-  creation the runtime told (`Running.Started`): on Linux its birth to the
-  millisecond, read as remuda-core reads it (`/proc/<pid>/stat`'s ticks after
-  the boot the script tells first: `/proc/stat`'s whole second with the real
-  clock less `/proc/uptime`, the real clock read before and after it, the
-  tightest of three tries with the clock not stepped back between, its ps
-  second the core's or the one before (`sameCreation`: ps counts the boot in
-  whole seconds), `linuxBoot.mayBe`, within `coreBootSlack` 10 ms of the
-  core's own reading), so a later process given the pid in the same second is
-  another — unless the machine's clock stepped between the core's look and
-  the lookup: remuda-core's `started_ms` moves with a step, as ps's start does,
-  so a process born as much later as the clock went back carries the very
-  value the one before had, which neither the core nor this lookup can tell
-  apart (task #359: the core's start since boot, which no step moves); a
-  reading wider than `maxBootSpan` 20 ms, or none (a `date`
-  telling no milliseconds), leaves the processes the second cannot settle out
-  of the answer, as a clock not read does (below); a FILETIME's millisecond
-  on Windows; on macOS, where ps tells no millisecond, `ps -o lstart`'s second
-  alone — a later process given the pid within that
+  creation the runtime told: on Linux first its start since boot
+  (`Running.SinceBoot`, remuda-core 0.2.3's `started_since_boot`: the boot id,
+  the core's time namespace and `/proc/<pid>/stat`'s starttime ticks), which
+  the script reads too (`since`: the machine's boot id and its own
+  `/proc/self/ns/time`, then each process's ticks) and `SinceBoot.same`
+  compares whole — the same boot, namespace and ticks is that very process
+  whatever the clocks say, another boot or other ticks another process, no
+  clock read; only a lookup in another time namespace (whose boot-time offset
+  shifts the ticks) or in one either side could not name, a core older than
+  0.2.3 or one off Linux falls back on
+  `Running.Started`: on Linux its birth to the millisecond, read as
+  remuda-core reads it (`/proc/<pid>/stat`'s ticks after the boot the script
+  tells first: `/proc/stat`'s whole second with the real clock less
+  `/proc/uptime`, the real clock read before and after it, the tightest of
+  three tries with the clock not stepped back between, its ps second the
+  core's or the one before (`sameCreation`: ps counts the boot in whole
+  seconds), `linuxBoot.mayBe`, within `coreBootSlack` 10 ms of the core's own
+  reading), so a later process given the pid in the same second is another —
+  unless the machine's clock stepped between the core's look and the lookup:
+  `started_ms` moves with a step, as ps's start does, so a process born as
+  much later as the clock went back carries the very value the one before had
+  (what `started_since_boot` closes); a reading wider than `maxBootSpan`
+  20 ms, or none (a `date` telling no milliseconds), leaves the processes the
+  second cannot settle out of the answer, as a clock not read does (below); a
+  FILETIME's millisecond on Windows; on macOS, where ps tells no millisecond,
+  `ps -o lstart`'s second alone — a later process given the pid within that
   very second passes there, until the core's next look (half a second) tells
-  the foreground's new creation; no clock of remuda's read for any of it, so a
-  step of the machine's clock lets a later process in only as said above, and
-  hides the one seen only until the core's next look tells the creation as
-  the step moved it, a new `Started` read at once),
-  and a Claude Code file then counts only with a
-  `startedAt` no earlier than that creation (a second alone does not tell two
-  processes given the pid within it apart; a step of the clock on Linux makes
-  it no match),
+  the foreground's new creation; on macOS and Windows the creation is the one
+  the OS stored, which no later step moves, but a step back between two births
+  gives both one `started_ms`, and nothing there tells them apart (a known
+  limit, said in remuda-core's `schema/README.md`), and a Claude Code file then
+  counts only with a `startedAt` no earlier than that creation and a
+  `procStart` that is ps's start (a second alone does not tell two processes
+  given the pid within it apart; after a step of a Linux machine's clock
+  either way, the file keeps the times before it while ps's start and
+  `started_ms` moved, so a live Claude Code's file no longer matches and its
+  session goes unnamed until it starts again, a known limit: the start since
+  boot tells the process, not that the file is its own),
   nor, from a core that tells none (0.2.1 and before: the pin today), one that
   began after the agent was seen running (`Running.Seen`: a later process
   took the pid before it was read), the sighting placed on the machine's

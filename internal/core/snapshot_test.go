@@ -242,7 +242,8 @@ func TestAShellTheCoreGaveANewOneIsRestoredUntilAnAgentTakesIt(t *testing.T) {
 // the replacement's agentAt borrows a status the one before reported a moment ago.
 func TestEachProcessSeenTakingATerminalIsAnotherForItsSession(t *testing.T) {
 	a := &Adapter{answered: make(chan struct{}), streams: map[*eventStream]struct{}{}, state: mirror{terminals: map[string]*Terminal{}}}
-	running := []Terminal{{Address: "t1", State: "live", Pid: 100, Cwd: "/work/api", Foreground: &Foreground{Pid: 300, Name: "claude", Cwd: "/work/api", StartedMS: 1795048570123}}}
+	since := SinceBoot{BootID: "6f1c0d2e-4b7a-4c1e-9a1b-2f3e4d5c6b7a", TimeNS: "time:[4026531834]", Ticks: 216940}
+	running := []Terminal{{Address: "t1", State: "live", Pid: 100, Cwd: "/work/api", Foreground: &Foreground{Pid: 300, Name: "claude", Cwd: "/work/api", StartedMS: 1795048570123, SinceBoot: &since}}}
 	var asked []AgentProcess
 	lookup := func(p AgentProcess) *herdr.AgentSession { asked = append(asked, p); return nil }
 	later := func(what string) {
@@ -254,7 +255,7 @@ func TestEachProcessSeenTakingATerminalIsAnotherForItsSession(t *testing.T) {
 	}
 	a.fill(slices.Clone(running), Document{}, "0.2.1")
 	a.state.snapshot(lookup)
-	if asked[0].Started != 1795048570123 {
+	if asked[0].Started != 1795048570123 || asked[0].SinceBoot != since {
 		t.Fatalf("the creation the core told was not passed on: %+v", asked[0])
 	}
 	a.fill(slices.Clone(running), Document{}, "0.2.1")
