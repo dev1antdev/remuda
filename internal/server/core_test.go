@@ -11,7 +11,8 @@ import (
 )
 
 // A remuda on remuda-core (-core) neither lists nor removes leftover worktrees, nor moves work onto a core machine,
-// before any script reaches the machine: herdr's agents there, which it does not see, may hold the checkouts.
+// before any script reaches the machine: herdr's agents there, which it does not see, may hold the checkouts. A new
+// worktree is the core adapter's to make (Core 20), as herdr's worktree.create made one beside herdr's agents.
 func TestNoCheckoutIsTakenDownOrWrittenOnAMachineReachedThroughCore(t *testing.T) {
 	fleet := machines.NewCoreManager(t.TempDir(), "", nil, true) // a page-only host: no core of its own is started
 	defer fleet.Close()
@@ -32,9 +33,5 @@ func TestNoCheckoutIsTakenDownOrWrittenOnAMachineReachedThroughCore(t *testing.T
 	move := `{"machine":"local","pane":"w1:p1","target":"local","folder":"/w/app","agent":"claude"}`
 	if code, out := taskCall(mux, "POST", "/api/teleport", "", move); code != http.StatusBadRequest {
 		t.Errorf("a move onto remuda-core: %d %v", code, out)
-	}
-	fork := `{"machine":"local","workspace":"w1","pick":{"kind":"pr","pr":12,"head":"fix","cross_repo":true}}`
-	if code, out := taskCall(mux, "POST", "/api/worktrees", "", fork); code != http.StatusBadRequest {
-		t.Errorf("a new worktree from a fork's pull request on remuda-core: %d %v", code, out)
 	}
 }

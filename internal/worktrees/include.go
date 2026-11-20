@@ -9,6 +9,7 @@ import (
 
 	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/shell"
+	"github.com/dev1antdev/remuda/internal/text"
 )
 
 // IncludeFile is the file in a repository's main checkout that names the ignored files every new worktree gets: the
@@ -103,7 +104,7 @@ func ParseIncluded(out string) Included {
 func Include(host shell.Shell, worktree string) (Included, error) {
 	out, err := shell.Text(host, IncludeScript(worktree), IncludeTimeout)
 	if err != nil {
-		return ParseIncluded(out), errors.New(lastLine(out, err.Error()))
+		return ParseIncluded(out), errors.New(text.LastLine(out, err.Error()))
 	}
 	return ParseIncluded(out), nil
 }

@@ -451,17 +451,10 @@ func (store *Store) RefreshBadges(host shell.Host, dirs []string) {
 }
 
 // branchScript prints four lines: the branch checked out, or the short hash of a detached HEAD; the repository's main
-// folder (MainFolderScript) — a submodule's git dir sits under its parent's .git/modules, never beside it; the
+// folder (script.MainFolder) — a submodule's git dir sits under its parent's .git/modules, never beside it; the
 // address of its origin (remoteScript), "" for none; and the branch against its upstream (syncScript), "" for none.
 const branchScript = `b=$({ git symbolic-ref --short -q HEAD || git rev-parse --short HEAD; } 2>/dev/null); printf '%s\n' "$b"; ` +
-	`r=$(` + MainFolderScript + `); printf '%s\n' "$r"; ` + remoteScript + `; ` + syncScript
-
-// MainFolderScript prints, run inside a checkout, the repository's main folder: for a linked worktree the parent of the
-// common git dir it shares with its repository, else the checkout's own top folder.
-const MainFolderScript = `gd=$(cd "$(git rev-parse --git-dir 2>/dev/null)" 2>/dev/null && pwd -P); ` +
-	`common=$(cd "$(git rev-parse --git-common-dir 2>/dev/null)" 2>/dev/null && pwd -P); ` +
-	`if [ -n "$gd" ] && [ "$gd" = "$common" ]; then (cd "./$(git rev-parse --show-cdup 2>/dev/null)" 2>/dev/null && pwd); ` +
-	`elif [ -n "$common" ]; then (cd "$common/.." 2>/dev/null && pwd); fi`
+	`r=$(` + script.MainFolder + `); printf '%s\n' "$r"; ` + remoteScript + `; ` + syncScript
 
 // Badges refreshes the roster's counts and branches for many folders of one machine in a single round trip: per
 // folder, the folder, its branch, main folder and remote, the uncommitted blobs, git's line counts and the untracked

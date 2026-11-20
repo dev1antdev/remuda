@@ -48,16 +48,6 @@ func TestRemoveNeverForcesAndDeletesTheBranchOnlyAsAsked(t *testing.T) {
 	}
 }
 
-func TestGitsComplaintIsTheRefusalNotItsHint(t *testing.T) {
-	got := lastLine("error: the branch 'x' is not fully merged\nhint: If you are sure, run 'git branch -D x'\nhint: Disable this message\n", "none")
-	if got != "error: the branch 'x' is not fully merged" {
-		t.Errorf("got %q", got)
-	}
-	if got := lastLine(" \n", "none"); got != "none" {
-		t.Errorf("nothing said reads %q", got)
-	}
-}
-
 func TestDiscardForcesOnlyItsOwnScript(t *testing.T) {
 	info := Info{Path: "/repo/.worktrees/arena-3-2", Branch: "arena-3-2", Repo: "/repo"}
 	s := DiscardScript(info)

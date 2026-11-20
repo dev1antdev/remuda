@@ -11,7 +11,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dev1antdev/remuda/internal/review"
 	"github.com/dev1antdev/remuda/internal/rpath"
 	"github.com/dev1antdev/remuda/internal/script"
 )
@@ -34,7 +33,7 @@ func Script(dirs []string) string {
 	}
 	folders := ""
 	if len(quoted) > 0 {
-		folders = `for d in ` + strings.Join(quoted, " ") + `; do ( cd "$d" 2>/dev/null && git rev-parse --show-toplevel >/dev/null 2>&1 || exit 0; ` + review.MainFolderScript + ` ); done | while IFS= read -r root; do [ -n "$root" ] && ( cd "$root" 2>/dev/null && pwd -P ); done | sort -u | while IFS= read -r root; do ( cd "$root" 2>/dev/null && repo "$root" ); done
+		folders = `for d in ` + strings.Join(quoted, " ") + `; do ( cd "$d" 2>/dev/null && git rev-parse --show-toplevel >/dev/null 2>&1 || exit 0; ` + script.MainFolder + ` ); done | while IFS= read -r root; do [ -n "$root" ] && ( cd "$root" 2>/dev/null && pwd -P ); done | sort -u | while IFS= read -r root; do ( cd "$root" 2>/dev/null && repo "$root" ); done
 `
 	}
 	return script.PATH + `
