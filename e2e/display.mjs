@@ -2942,7 +2942,7 @@ async function runPass() {
       await palette("schedules");
       await tap(".modal.schedules .modal-head-controls .btn");
       if (!(await until(() => present(".schedule-editor .schedule-kind button"), 4))) throw new Error("the schedule editor did not open");
-      await evaluate(`[...document.querySelectorAll('.schedule-editor .schedule-kind button')][2]?.click()`);
+      await evaluate(`[...document.querySelectorAll('.schedule-editor .schedule-kind button')][1]?.click()`); // a prompt, an agent, a scene
       await sleep(200);
       await evaluate(`document.querySelector('.schedule-editor .deny-switch')?.scrollIntoView({ block: "center" })`);
     },
