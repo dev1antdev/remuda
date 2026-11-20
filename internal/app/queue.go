@@ -28,8 +28,7 @@ func taskQueue(store *tasks.Store, fleet *machines.Manager, watcher *watch.Watch
 			if err != nil {
 				return id, false
 			}
-			state, _ := mc.State()
-			return mc.Label(), state == machines.StateConnected
+			return mc.Label(), runsAgents(mc)
 		},
 		Unusable: func(id string) string {
 			if fleet.Server() && (id == machines.LocalID || id == "") {
@@ -75,6 +74,12 @@ func taskQueue(store *tasks.Store, fleet *machines.Manager, watcher *watch.Watch
 		},
 		Notify: notify,
 	}
+}
+
+// runsAgents says an agent can start on the machine now: it is connected and, on remuda-core, follows its core.
+func runsAgents(mc *machines.Machine) bool {
+	_, _, err := mc.Ready()
+	return err == nil
 }
 
 // crossedBudget is the budget over the machine and folder that is spent, in words, or "".

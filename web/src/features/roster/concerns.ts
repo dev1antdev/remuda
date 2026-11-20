@@ -39,6 +39,7 @@ function found(h: Health | undefined, latest: Latest | undefined, serverVersion:
   if (signin) out.push({ key: "signin", ...signin, update: "signin" });
   out.push(...retiringConcerns(more.retiring, more.retirements ?? [], now));
   if (!h) return out;
+  if (remote && more.core && !h.remuda_core && !h.error) out.push({ key: "core", text: t("remuda-core is not installed"), bad: true, update: "core" });
   if (more.core && h.claude && newer(h.claude, CORE_STATUS_CLAUDE)) out.push({ key: "claude", text: t("Claude Code {have} tells remuda-core no status: its agents show none until it is {version} or later", { have: h.claude, version: CORE_STATUS_CLAUDE }), update: "claude" });
   else if (h.claude && latest?.claude && newer(h.claude, latest.claude)) out.push({ key: "claude", text: isOut("Claude Code", latest.claude, h.claude), update: "claude" });
   if (h.codex && latest?.codex && newer(h.codex, latest.codex)) out.push({ key: "codex", text: isOut("Codex", latest.codex, h.codex), update: "codex" });
@@ -84,4 +85,4 @@ function hookNames(hooks: { agent: string }[]): string {
 
 // updateLabel is the button's word for what an update does
 export const updateLabel = (what: string) =>
-  what === "remuda" ? t("Deploy") : what === "remuda-release" ? t("Download & install") : what === "recover" ? t("Resume…") : what === "signin" ? t("Open a shell there") : what.startsWith("restart-") ? t("Restart") : t("Update");
+  what === "remuda" ? t("Deploy") : what === "core" ? t("Install") : what === "remuda-release" ? t("Download & install") : what === "recover" ? t("Resume…") : what === "signin" ? t("Open a shell there") : what.startsWith("restart-") ? t("Restart") : t("Update");

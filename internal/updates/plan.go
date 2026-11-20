@@ -5,12 +5,15 @@
 package updates
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"strings"
 
 	"github.com/dev1antdev/remuda/internal/health"
 	"github.com/dev1antdev/remuda/internal/restart"
 	"github.com/dev1antdev/remuda/internal/script"
+	"github.com/dev1antdev/remuda/internal/setup"
 )
 
 // Update is a command the page may run on a machine, shown to the person before they say yes.
@@ -19,6 +22,23 @@ type Update struct {
 	Title   string `json:"title"`
 	Command string `json:"command"`
 	Note    string `json:"note,omitempty"`
+
+	script string // what runs when the command shown only names it: a script this remuda carries, too long to travel back on every Run
+}
+
+// naming is a command shown in place of the script it names, the script's digest in it: one changed since it was
+// shown makes the command stale.
+func naming(words, script string) string {
+	sum := sha256.Sum256([]byte(script))
+	return words + "\n# the script's sha256: " + hex.EncodeToString(sum[:8])
+}
+
+// run is the script the update runs: its own, else the command shown.
+func (u Update) run() string {
+	if u.script != "" {
+		return u.script
+	}
+	return u.Command
 }
 
 // brewUpdate goes before every `brew upgrade`: Homebrew's own auto-update runs
@@ -140,20 +160,18 @@ func Plan(what string, r *health.Report) (Update, error) {
 		}
 		return Update{What: what, Title: "Update code-server", Command: path + remudaThere + `"$r" code install && readlink "$HOME/.local/opt/code-server"`, Note: "remuda's own installer: the pinned release, its checksum verified, the service restarted; an editor open on it reconnects (Reload the editor if it does not)."}, nil
 	case "core":
-		if r == nil || r.Remuda == "" {
-			return Update{}, fmt.Errorf("remuda is not installed there to run remuda-core's installer")
-		}
-		if AssetName(r.OS, r.Arch) == "" || windowsReport(r) && r.Arch == "arm64" { // remuda's own builds, less Windows on arm
-			return Update{}, fmt.Errorf("remuda-core has no build for %s %s", r.OS, r.Arch)
+		if r == nil || AssetName(r.OS, r.Arch) == "" || windowsReport(r) && r.Arch == "arm64" { // remuda's own builds, less Windows on arm
+			return Update{}, fmt.Errorf("remuda-core has no build for this machine, or its vitals are not read yet")
 		}
 		if r.RemudaCore != "" && !health.Newer(r.RemudaCore, health.PinnedCore) {
 			return Update{}, fmt.Errorf("remuda-core %s is there already", r.RemudaCore)
 		}
-		u := Update{What: what, Title: "Install remuda-core", Note: "The terminal runtime remuda's machines move to, the pinned release with its checksum verified, put in ~/.local/bin. Nothing starts until remuda connects to it; herdr and its agents carry on as they are."}
+		u := Update{What: what, Title: "Install remuda-core", Note: "The terminal runtime remuda's machines move to, the pinned release with its checksum verified, put in ~/.local/bin by this remuda's own installer over your SSH connection, so no remuda need run there. Nothing starts until remuda connects to it; herdr and its agents carry on as they are."}
 		if r.RemudaCore != "" {
 			u.Title, u.Note = "Update remuda-core", r.RemudaCore+arrow(health.PinnedCore)+". Swapped by its own update: its terminals keep running."
 		}
-		u.Command = path + remudaThere + `"$r" -h 2>&1 | grep -q 'remuda core ' || { echo "the remuda here is older than remuda-core's installer: update remuda here first"; exit 1; }; "$r" core install`
+		u.script = path + "\n" + setup.CoreInstaller()
+		u.Command = naming("# this remuda's own remuda-core installer, the one `remuda core -host H install` runs, over the SSH connection:\n# remuda-core "+health.PinnedCore+", its checksum verified, into ~/.local/bin", u.script)
 		return u, nil
 	case "mcp":
 		if r == nil || r.Remuda == "" {
