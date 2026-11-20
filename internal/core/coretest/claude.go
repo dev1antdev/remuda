@@ -19,7 +19,8 @@ func StandInClaude(t testing.TB, session string) {
 keep() {
   mkdir -p "$HOME/.claude/sessions"
   start=$(LC_ALL=C TZ=UTC ps -o lstart= -p $$ | sed 's/ *$//')
-  printf '{"pid":%s,"sessionId":"%s","cwd":"%s","procStart":"%s"}' $$ "$1" "$(pwd -P)" "$start" > "$HOME/.claude/sessions/$$.json"
+  began=$(( $(date +%s) + 1 ))000 # Claude Code's Date.now() as it begins: never before its process, to the ms
+  printf '{"pid":%s,"sessionId":"%s","cwd":"%s","procStart":"%s","startedAt":%s}' $$ "$1" "$(pwd -P)" "$start" "$began" > "$HOME/.claude/sessions/$$.json"
 }
 [ -n "SESSION" ] && keep SESSION
 printf 'args: %s\n' "$*"

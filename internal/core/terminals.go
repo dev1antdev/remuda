@@ -61,6 +61,9 @@ type Foreground struct {
 	Name string   `json:"name"`
 	Argv []string `json:"argv"`
 	Cwd  string   `json:"cwd"`
+	// StartedMS is when that process was created, unix ms, as the OS records it: a core advertising
+	// `foreground_started` tells it, 0 from one that does not.
+	StartedMS int64 `json:"started_ms"`
 }
 
 // RunParams starts a program in a new terminal: Argv, or Line through the machine's shell, or neither for the shell.

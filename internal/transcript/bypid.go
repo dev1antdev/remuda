@@ -3,6 +3,7 @@ package transcript
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -13,13 +14,16 @@ import (
 	"github.com/dev1antdev/remuda/internal/text"
 )
 
-// Running is an agent process whose session is looked up: its pid, its kind (claude, codex) and its folder, and when
-// it was seen running here (zero: not known), which the process holding the pid now must have begun by.
+// Running is an agent process whose session is looked up: its pid, its kind (claude, codex) and its folder, and what
+// tells it from a later process given that pid: its creation as the runtime told it (Started, unix ms), which the
+// process holding the pid now must have, else when it was seen running here (Seen), which that process must have begun
+// by; zero for not known.
 type Running struct {
-	PID   int
-	Agent string
-	CWD   string
-	Seen  time.Time
+	PID     int
+	Agent   string
+	CWD     string
+	Seen    time.Time
+	Started int64
 }
 
 // SessionsOf answers, pid by pid, the session each running Claude Code or Codex is in, read off its process.
@@ -28,9 +32,13 @@ func (r *Reader) SessionsOf(procs []Running) (map[int]string, error) {
 	if lookup == "" {
 		return map[int]string{}, nil
 	}
-	clock, err := r.machineClock()
-	if err != nil {
-		return nil, err
+	var clock machineClock
+	if slices.ContainsFunc(procs, func(p Running) bool { return p.Started == 0 && !p.Seen.IsZero() }) {
+		read, err := r.machineClock()
+		if err != nil {
+			return nil, err
+		}
+		clock = read
 	}
 	out, err := shell.Text(r.host, lookup, 15*time.Second)
 	if err != nil {
@@ -183,9 +191,9 @@ type claudeSessionFile struct {
 
 // parseSessionsByPID reads sessionsByPIDScript's answer.
 func parseSessionsByPID(out string, procs []Running, style rpath.Style, clock machineClock) map[int]string {
-	cwds, seen := map[int]string{}, map[int]time.Time{}
+	cwds, seen, started := map[int]string{}, map[int]time.Time{}, map[int]int64{}
 	for _, p := range procs {
-		cwds[p.PID], seen[p.PID] = p.CWD, p.Seen
+		cwds[p.PID], seen[p.PID], started[p.PID] = p.CWD, p.Seen, p.Started
 	}
 	found := map[int]string{}
 	for _, record := range script.Sections(out) {
@@ -210,13 +218,13 @@ func parseSessionsByPID(out string, procs []Running, style rpath.Style, clock ma
 		case !strings.HasPrefix(start, "ft:") && after != start:
 			continue // another process took the pid while it was read, or it ended
 		}
-		if !clock.begunBy(start, seen[pid]) {
-			continue // a process that began after the one seen: the pid changed hands before it was read
+		if told := started[pid]; told != 0 && !sameCreation(start, told) || told == 0 && !clock.begunBy(start, seen[pid]) {
+			continue // another process than the one seen: the pid changed hands before it was read
 		}
 		var id string
 		switch fields[1] {
 		case "claude":
-			id = claudeSession(payload, pid, start, cwd, style)
+			id = claudeSession(payload, pid, start, cwd, style, started[pid])
 		case "codex":
 			id = heldThread(payload, pid)
 		}
@@ -231,14 +239,15 @@ func parseSessionsByPID(out string, procs []Running, style rpath.Style, clock ma
 // the process's start when both sides know it; for a native Windows process, whose folder the script cannot read, one
 // of its folder whose procStartFt is its creation, to the millisecond; else one of its folder that began no earlier
 // than the process. A file left by an ended process whose pid was given to another is not, nor one nothing ties to
-// the process.
-func claudeSession(payload string, pid int, start, cwd string, style rpath.Style) string {
+// the process; and where the runtime told the creation (told, unix ms), only one whose startedAt is no earlier: a
+// second alone does not tell two processes given the pid within it apart.
+func claudeSession(payload string, pid int, start, cwd string, style rpath.Style, told int64) string {
 	began, known := startedMS(start)
 	creation, native := strings.CutPrefix(start, "ft:")
 	created, _ := filetimeOf(creation)
 	for _, doc := range strings.Split(payload, script.GS) {
 		var file claudeSessionFile
-		if json.Unmarshal([]byte(doc), &file) != nil || file.PID != pid {
+		if json.Unmarshal([]byte(doc), &file) != nil || file.PID != pid || told != 0 && file.StartedAt < told {
 			continue
 		}
 		inFolder := cwd == "" || file.CWD == "" || style.Equal(file.CWD, cwd)
@@ -272,6 +281,18 @@ const (
 func filetimeOf(s string) (int64, bool) {
 	v, err := strconv.ParseInt(strings.TrimSpace(s), 10, 64)
 	return v, err == nil && v > filetimeEpoch && v < 3e17
+}
+
+// sameCreation says whether the start the script read is the creation the runtime told (unix ms): from a FILETIME
+// its millisecond; from `ps -o lstart` its second, or the one before on Linux, where ps counts the boot time in whole
+// seconds and remuda-core does not. No clock is read for it.
+func sameCreation(start string, told int64) bool {
+	read, known := startedMS(start)
+	if strings.HasPrefix(start, "ft:") {
+		return known && read == told
+	}
+	second := told - told%1000
+	return known && (read == second || read == second-1000)
 }
 
 // startedMS is the process's creation the script told, in unix ms: PowerShell's FILETIME for a native Windows

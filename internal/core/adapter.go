@@ -56,13 +56,15 @@ type SessionLookup func(AgentProcess) *herdr.AgentSession
 
 // AgentProcess is an agent's process as the mirror sees it: its kind, pid and folder, and the terminal it holds with
 // the count of the moment it was seen take it (Terminal.held) and when that was, here, which tell it from a later
-// process given the same pid: one seen by then had begun by then.
+// process given the same pid: one seen by then had begun by then. Started is its creation as the core tells it
+// (Foreground.StartedMS), which tells it outright; 0 from a core that does not.
 type AgentProcess struct {
 	Agent, Cwd string
 	PID        int
 	Terminal   string
 	Held       uint64
 	Seen       time.Time
+	Started    int64
 }
 
 // handovers counts every moment a terminal's foreground changed hands or a terminal was taken in, across every mirror

@@ -198,6 +198,41 @@ func TestAnAgentInAFolderEndingInALineBreakIsFound(t *testing.T) {
 	}
 }
 
+// End to end on a real process, as remuda-core tells its creation: the one told is found whatever its sighting says,
+// and a creation a second off is another process's.
+func TestARealProcessIsKnownByTheCreationTheRuntimeTold(t *testing.T) {
+	home := realDir(t)
+	t.Setenv("HOME", home)
+	pid := holder(t, home, nil, nil, false, "")
+	start := procStart(t, pid)
+	body := fmt.Sprintf(`{"pid":%d,"sessionId":"4c9d6f0e-1111-4222-8333-944455556666","cwd":%q,"startedAt":%d,"procStart":%q}`, pid, home, time.Now().UnixMilli(), start)
+	if err := os.MkdirAll(filepath.Join(home, ".claude", "sessions"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, ".claude", "sessions", strconv.Itoa(pid)+".json"), []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	began, err := time.Parse(time.ANSIC, start)
+	if err != nil {
+		t.Fatal(err)
+	}
+	host := remoteHere(home)
+	reader := NewReader(host)
+	got, err := reader.SessionsOf([]Running{{PID: pid, Agent: "claude", CWD: home, Seen: time.Now().Add(-time.Hour), Started: began.UnixMilli()}})
+	if err != nil || got[pid] != "4c9d6f0e-1111-4222-8333-944455556666" {
+		t.Fatalf("the creation told: got %v, %v", got, err)
+	}
+	for _, script := range host.Scripts() {
+		if script == "date +%s" {
+			t.Fatal("the machine's clock was read though the runtime told the creation")
+		}
+	}
+	got, err = reader.SessionsOf([]Running{{PID: pid, Agent: "claude", CWD: home, Seen: time.Now(), Started: began.UnixMilli() - 1000}})
+	if err != nil || len(got) != 0 {
+		t.Fatalf("a creation a second off: got %v, %v", got, err)
+	}
+}
+
 func TestClaudeSessionLeftByAnEndedProcessIsNotTaken(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -361,10 +396,11 @@ func TestAPipeNamedLikeARolloutHoldsNothingUp(t *testing.T) {
 	}
 }
 
-// The machine is asked its time in a call of its own, then once for every agent.
+// The machine is asked its time in a call of its own, only while an agent's creation is not told by the runtime, then
+// once for every agent.
 func TestSessionsOfAsksTheMachineOnceForEveryAgent(t *testing.T) {
 	answer := "41\037claude\037Thu Nov 19 00:36:10 2026\037/w\037" +
-		`{"pid":41,"sessionId":"aaaa-1","cwd":"/w","procStart":"Thu Nov 19 00:36:10 2026"}` + "\037Thu Nov 19 00:36:10 2026\036\n" +
+		`{"pid":41,"sessionId":"aaaa-1","cwd":"/w","procStart":"Thu Nov 19 00:36:10 2026","startedAt":1795048571200}` + "\037Thu Nov 19 00:36:10 2026\036\n" +
 		"52\037codex\037Thu Nov 19 00:40:00 2026\037\03752\035/home/me/.codex/sessions/2026/11/19/rollout-2026-11-19T00-40-01-" + rolloutID + ".jsonl\035" + sessionMeta(rolloutID, false) + "\034\037Thu Nov 19 00:40:00 2026\036\n"
 	host := &shell.Fake{Name: "gog", Remote: true, Dir: "/home/me", Answer: func(script string) (string, error) {
 		if script == "date +%s" {
@@ -372,7 +408,9 @@ func TestSessionsOfAsksTheMachineOnceForEveryAgent(t *testing.T) {
 		}
 		return answer, nil
 	}}
-	got, err := NewReader(host).SessionsOf([]Running{{PID: 41, Agent: "claude", CWD: "/w"}, {PID: 52, Agent: "codex", CWD: "/w"}, {PID: 60, Agent: "gemini"}})
+	codexBegan := time.Date(2026, 11, 19, 0, 40, 0, 0, time.UTC).UnixMilli() + 250
+	procs := []Running{{PID: 41, Agent: "claude", CWD: "/w", Seen: time.Now()}, {PID: 52, Agent: "codex", CWD: "/w", Started: codexBegan}, {PID: 60, Agent: "gemini"}}
+	got, err := NewReader(host).SessionsOf(procs)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -382,6 +420,12 @@ func TestSessionsOfAsksTheMachineOnceForEveryAgent(t *testing.T) {
 	scripts := host.Scripts()
 	if len(scripts) != 2 || scripts[0] != "date +%s" || !strings.Contains(scripts[1], "\ns 41 claude '/w'\n") || !strings.Contains(scripts[1], "\ns 52 codex '/w'\n") || strings.Contains(scripts[1], "gemini") {
 		t.Fatalf("scripts = %q", scripts)
+	}
+
+	told := &shell.Fake{Name: "gog", Remote: true, Dir: "/home/me", Answer: func(string) (string, error) { return answer, nil }}
+	procs[0].Started = time.Date(2026, 11, 19, 0, 36, 10, 900_000_000, time.UTC).UnixMilli()
+	if got, err := NewReader(told).SessionsOf(procs); err != nil || len(got) != 2 || len(told.Scripts()) != 1 {
+		t.Fatalf("every creation told by the runtime: got %v, %v, scripts %d, want no clock asked", got, err, len(told.Scripts()))
 	}
 
 	host = &shell.Fake{Name: "gog", Remote: true}
@@ -434,6 +478,54 @@ func TestAProcessBegunAfterTheAgentWasSeenHasNoSession(t *testing.T) {
 	}}
 	if got, err := NewReader(slow).SessionsOf([]Running{{PID: 7, Agent: "claude", CWD: "/a", Seen: time.Now()}}); err == nil || len(slow.Scripts()) != 1 {
 		t.Fatalf("a machine slow to tell its time: got %v, %v after %q", got, err, slow.Scripts())
+	}
+}
+
+// A runtime that tells the process's creation tells it outright: the process holding the pid when it is read must be
+// that very one, to ps's second or a FILETIME's millisecond, and no clock is read for it, so a machine whose clock
+// stepped back passes neither a later process nor loses the one seen.
+func TestTheCreationTheRuntimeToldDecides(t *testing.T) {
+	const start = "Thu Nov 19 00:36:10 2026"
+	began := time.Date(2026, 11, 19, 0, 36, 10, 0, time.UTC)
+	claudeBegan := began.Add(time.Second).UnixMilli() // Claude Code's own startedAt, after its process was created
+	recordAt := func(start string, startedAt int64) string {
+		return "7" + script.US + "claude" + script.US + start + script.US + "/a" + script.US +
+			`{"pid":7,"sessionId":"id-1","cwd":"/a","procStart":"` + start + `","startedAt":` + strconv.FormatInt(startedAt, 10) + `}` + script.US + start + script.RS + "\n"
+	}
+	record := func(start string) string { return recordAt(start, claudeBegan) }
+	native := func(ft int64) string {
+		return "7" + script.US + "claude" + script.US + "ft:" + strconv.FormatInt(ft, 10) + script.US + script.US +
+			`{"pid":7,"sessionId":"id-1","cwd":"C:\\a","startedAt":` + strconv.FormatInt(claudeBegan, 10) + `,"procStartFt":"` + strconv.FormatInt(ft, 10) + `"}` + script.US + script.RS + "\n"
+	}
+	ft := func(at time.Time) int64 { return at.UnixMilli()*10_000 + filetimeEpoch }
+	// a clock reading that would refuse anything, and one that would take anything: neither counts once the runtime told
+	never := machineClock{asked: began.Add(time.Hour), latest: began.Add(-time.Hour)}
+	always := machineClock{asked: began, latest: began.Add(time.Hour)}
+	for _, c := range []struct {
+		name    string
+		out     string
+		started time.Time
+		clock   machineClock
+		style   rpath.Style
+		cwd     string
+		want    string
+	}{
+		{"the very process, its clock stepped back since", record(start), began.Add(420 * time.Millisecond), never, rpath.Style{}, "/a", "id-1"},
+		{"another process under the pid, begun a second later", record("Thu Nov 19 00:36:11 2026"), began.Add(420 * time.Millisecond), always, rpath.Style{}, "/a", ""},
+		{"another process that reads as begun earlier: the clock stepped back", record("Thu Nov 19 00:30:00 2026"), began.Add(420 * time.Millisecond), always, rpath.Style{}, "/a", ""},
+		{"Linux's ps a second behind: it counts the boot time in whole seconds", record("Thu Nov 19 00:36:09 2026"), began.Add(420 * time.Millisecond), never, rpath.Style{}, "/a", "id-1"},
+		{"ps two seconds behind", record("Thu Nov 19 00:36:08 2026"), began.Add(420 * time.Millisecond), always, rpath.Style{}, "/a", ""},
+		{"a stale file of a process before it, the same second", recordAt(start, began.Add(300*time.Millisecond).UnixMilli()), began.Add(420 * time.Millisecond), always, rpath.Style{}, "/a", ""},
+		{"a file saying nothing of when its Claude Code began", recordAt(start, 0), began.Add(420 * time.Millisecond), always, rpath.Style{}, "/a", ""},
+		{"a native process, the very one", native(ft(began.Add(420 * time.Millisecond))), began.Add(420 * time.Millisecond), never, rpath.For(`C:\Users\me`), `C:\a`, "id-1"},
+		{"a native process, another a millisecond apart", native(ft(began.Add(421 * time.Millisecond))), began.Add(420 * time.Millisecond), always, rpath.For(`C:\Users\me`), `C:\a`, ""},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			procs := []Running{{PID: 7, Agent: "claude", CWD: c.cwd, Seen: began.Add(time.Minute), Started: c.started.UnixMilli()}}
+			if got := parseSessionsByPID(c.out, procs, c.style, c.clock); got[7] != c.want {
+				t.Fatalf("got %v, want %q", got, c.want)
+			}
+		})
 	}
 }
 

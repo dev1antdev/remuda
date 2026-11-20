@@ -429,7 +429,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   or the mirror took it in (a fill, a terminal made or given a new shell), one
   counter for every mirror, so a later process always counts higher, and
   `heldAt`, when that was here, which the process holding the pid when it is
-  read must have begun by; nil,
+  read must have begun by, and `Started`, the process's creation as a core
+  advertising `foreground_started` tells it (`Foreground.StartedMS`, unix ms),
+  which that process must have; nil,
   none), which a machine gives as its `processSessions`
   (`internal/machines/sessions.go`, tested on paper and on a throwaway core
   with a stand-in Claude Code keeping its session file in a temp HOME):
@@ -990,7 +992,16 @@ components and icons as rules for whoever changes it: @docs/design.md
   run-together text gives candidate folders, a relative one taken from the
   agent's folder, then the default one; a process gone, or one whose start
   neither `ps` nor, on Git Bash, PowerShell tells, has no session, nothing
-  telling it from another given its pid, nor does one that began after the
+  telling it from another given its pid, nor does one whose start is not the
+  creation the runtime told (`Running.Started`, `sameCreation`: lstart's
+  second, or the one before on Linux, where ps counts the boot time in whole
+  seconds and remuda-core does not; a FILETIME's millisecond; no clock read
+  for it, so a step of the machine's clock neither lets a later process in
+  nor hides the one seen), and a Claude Code file then counts only with a
+  `startedAt` no earlier than that creation (a second alone does not tell two
+  processes given the pid within it apart; a step of the clock on Linux makes
+  it no match),
+  nor, from a core that tells none, one that began after the
   agent was seen running (`Running.Seen`: a later process took the pid
   before it was read), the sighting placed on the machine's clock by the
   monotonic time since it, the clock read in a call of its own (`date +%s`,
