@@ -35,7 +35,7 @@ type Service struct {
 
 	mu       sync.Mutex
 	machines map[string]map[string]*paneView // machine → pane
-	standing map[string]standing             // "machine|pane|watch" → the row last matched
+	standing map[string]map[string]time.Time // "machine|pane|watch" → each row it matched lately, when last
 	acted    map[string]time.Time            // "machine|pane|watch" → the last action, for the quiet spells
 	offers   map[string]Offer                // "machine|pane"
 	refused  map[string]string               // machine → why herdr refused the person's watches
@@ -49,10 +49,9 @@ type paneView struct {
 	status    string
 }
 
-type standing struct {
-	line string
-	at   time.Time
-}
+// maxStanding is how many rows a watch remembers: remuda-core tells every matching row of its last 40 again when a
+// stream begins, herdr the first.
+const maxStanding = 64
 
 // Offer is a dev server a pane announced, found listening: the page offers it as a preview once.
 type Offer struct {
@@ -65,7 +64,7 @@ type Offer struct {
 
 // New is the service over the person's rules in dir.
 func New(dir string) *Service {
-	return &Service{Rules: Open(dir), machines: map[string]map[string]*paneView{}, standing: map[string]standing{},
+	return &Service{Rules: Open(dir), machines: map[string]map[string]*paneView{}, standing: map[string]map[string]time.Time{},
 		acted: map[string]time.Time{}, offers: map[string]Offer{}, refused: map[string]string{}}
 }
 
@@ -128,17 +127,26 @@ func (s *Service) Forget(machine string) {
 }
 
 // OnMatch hears a match. herdr says a match once as it appears, and again for one standing on the screen whenever a
-// stream begins: the same row a moment after a stream opened, or through two streams at once, is that row again; a
+// stream begins — remuda-core for every one standing: a row matched lately again as a stream opened, or through two
+// streams at once, is that row again; a
 // row standing when a watch began on a pane that was there before is where things stood, not news — only a pane born
 // while watched prints its first rows as news.
 func (s *Service) OnMatch(e events.OutputMatched) {
 	k := key(e.Pane.Machine, e.Pane.Pane) + "|" + e.Watch
 	s.mu.Lock()
-	prev, had := s.standing[k]
-	s.standing[k] = standing{line: e.Line, at: e.At}
+	rows := s.standing[k]
+	if rows == nil {
+		rows = map[string]time.Time{}
+		s.standing[k] = rows
+	}
+	prev, had := rows[e.Line]
+	rows[e.Line] = e.At
+	if len(rows) > maxStanding {
+		delete(rows, oldest(rows))
+	}
 	view := s.machines[e.Pane.Machine][e.Pane.Pane]
 	s.mu.Unlock()
-	if had && prev.line == e.Line && (e.Fresh || e.At.Sub(prev.at) < dupWindow) {
+	if had && (e.Fresh || e.At.Sub(prev) < dupWindow) {
 		return
 	}
 	if view == nil {
@@ -149,6 +157,17 @@ func (s *Service) OnMatch(e events.OutputMatched) {
 	}
 	pane := *view
 	go s.act(e, pane)
+}
+
+// oldest is the row matched longest ago.
+func oldest(rows map[string]time.Time) string {
+	var first string
+	for line, at := range rows {
+		if first == "" || at.Before(rows[first]) {
+			first = line
+		}
+	}
+	return first
 }
 
 // act does what a match means; off the stream's goroutine, since an offer runs a script on the machine.

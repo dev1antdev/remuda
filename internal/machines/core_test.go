@@ -63,11 +63,7 @@ func TestAPageOnlyHostOnCoreStartsNoCoreOfItsOwn(t *testing.T) {
 
 func TestTheLocalMachineOnCoreShowsTheCoresTerminals(t *testing.T) {
 	c := coretest.Server(t)
-	for _, kv := range c.Env {
-		key, value, _ := strings.Cut(kv, "=")
-		t.Setenv(key, value)
-	}
-	t.Setenv("PATH", filepath.Dir(c.Bin)+string(os.PathListSeparator)+os.Getenv("PATH"))
+	c.Use(t)
 
 	m := NewCoreManager(t.TempDir(), "", nil, false)
 	defer m.Close()
