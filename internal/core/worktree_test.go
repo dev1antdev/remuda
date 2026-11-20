@@ -103,12 +103,6 @@ func TestWorktreesAreMadeAndOpenedOnACoreMachineWhereHerdrPutsThem(t *testing.T)
 		t.Errorf("a branch checked out elsewhere was not refused in git's words: %v", err)
 	}
 
-	git(t, repo, "worktree", "add", "-q", "-b", "half", filepath.Join(home, ".herdr", "worktrees", "app", "half"))
-	again2, err := adapter.WorktreeCreate(source, "half", "main", "")
-	if err != nil || again2.Worktree.Path != filepath.Join(home, ".herdr", "worktrees", "app", "half") {
-		t.Errorf("an earlier attempt's checkout at the very place was not taken as it is: %+v %v", again2, err)
-	}
-
 	byHand := filepath.Join(home, "by-hand")
 	git(t, repo, "worktree", "add", "-q", "-b", "by-hand", byHand)
 	open, err := adapter.WorktreeOpen(source, byHand, "")

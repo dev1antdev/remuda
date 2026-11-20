@@ -520,10 +520,11 @@ components and icons as rules for whoever changes it: @docs/design.md
   root `worktrees.Root` names, so those made before and after the move lie
   together and Tidy, Leftovers and the remove dialog stand), git's last line
   when it refuses (`text.LastLine`, 10 min at most), then a workspace on it
-  labelled after its folder unless named; a checkout of this repository
-  already on the branch at that very place — an earlier attempt whose
-  workspace did not open, which the error names — is taken as it is, so
-  making it again opens it; `WorktreeOpen` opens a workspace on
+  labelled after its folder unless named; a worktree whose workspace did
+  not open is taken down again (`undoScript`: the checkout, never forced,
+  and the branch only when it made it — `made <commit>` — and only while it
+  is still there, `update-ref -d` against that commit), so making it again
+  starts clean, a failure of that naming the checkout left; `WorktreeOpen` opens a workspace on
   a checkout, refusing a folder outside git, and answers one open on it
   already as herdr's `already_open` (`AlreadyOpen`, its pane in front,
   `frontPane`) from the mirror — the route's own look reads the watcher's
@@ -4917,8 +4918,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   (herdr's `worktree.create` from `origin/<b>`, then `git branch
   --set-upstream-to`), a pull request's head not fetched yet fetched first
   (`+refs/heads/<h>:refs/remotes/origin/<h>`; a fork's as
-  `refs/pull/N/head:refs/heads/<b>`, never forced, so a branch of that name
-  made meanwhile is not overwritten, a local branch tracking nothing,
+  `refs/remuda/pull/N`, a ref of remuda's own, the branch then made from it
+  by `git branch`, which refuses one of that name made since the plan was
+  read rather than move it (`Plan.Claim`, `fetchScript`), the ref dropped
+  after; a local branch tracking nothing,
   under any name the person gives a fork's pull request and by default
   `pr-<N>-<head>` — `ForkBranch`, the page's `forkBranch`: a fork's head
   named `main` is not this repository's main, which a bare head opened),
