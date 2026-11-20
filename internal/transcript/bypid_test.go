@@ -136,24 +136,29 @@ func TestClaudeSessionComesFromItsConfigDirAndItsStart(t *testing.T) {
 	}
 }
 
-// A folder whose name is past ASCII is the same folder to the lookup as to the core, whatever the machine's locale:
-// in C's, lsof would write é as \xc3\xa9.
+// A folder named past ASCII, or with a backslash in its name, is the same folder to the lookup as to the core,
+// whatever the machine's locale — lsof writes é as \xc3\xa9 in C's, and a backslash doubled in any — for Claude Code's
+// folder and for the rollout Codex holds open under a home so named alike.
 func TestAnAgentInAFolderNamedPastASCIIIsFound(t *testing.T) {
-	home := realDir(t)
-	t.Setenv("HOME", home)
-	t.Setenv("LC_ALL", "C")
-	work := filepath.Join(home, "café")
-	if err := os.MkdirAll(work, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	pid := holder(t, work, nil, nil, false, "")
-	writeSessionFile(t, filepath.Join(home, ".claude", "sessions"), pid, "4c9d6f0e-1111-4222-8333-944455556666", work, procStart(t, pid))
-	got, err := NewReader(remoteHere(home)).SessionsOf([]Running{{PID: pid, Agent: "claude", CWD: work}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got[pid] != "4c9d6f0e-1111-4222-8333-944455556666" {
-		t.Fatalf("session = %q in a folder named café", got[pid])
+	for _, name := range []string{"café", `back\slash`} {
+		t.Run(name, func(t *testing.T) {
+			home := filepath.Join(realDir(t), name)
+			if err := os.MkdirAll(home, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("HOME", home)
+			t.Setenv("LC_ALL", "C")
+			claude := holder(t, home, nil, nil, false, "")
+			writeSessionFile(t, filepath.Join(home, ".claude", "sessions"), claude, "4c9d6f0e-1111-4222-8333-944455556666", home, procStart(t, claude))
+			codex := holder(t, home, []string{writeRollout(t, home, rolloutID, false)}, nil, false, "")
+			got, err := NewReader(remoteHere(home)).SessionsOf([]Running{{PID: claude, Agent: "claude", CWD: home}, {PID: codex, Agent: "codex", CWD: home}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got[claude] != "4c9d6f0e-1111-4222-8333-944455556666" || got[codex] != rolloutID {
+				t.Fatalf("got %v in a folder named %s", got, name)
+			}
+		})
 	}
 }
 

@@ -38,7 +38,7 @@ func (r *Reader) SessionsOf(procs []Running) (map[int]string, error) {
 //     "ft:<FILETIME>" from PowerShell's Get-Process for a native Windows process (asked on Git Bash alone), "-" for
 //     one gone;
 //   - the folder the process stands in now, where /proc or lsof tells it (never a native Windows process's; lsof
-//     in a UTF-8 locale, since in C's it writes a byte past ASCII as \xNN);
+//     in a UTF-8 locale, since in C's it writes a byte past ASCII as \xNN, and its \\ and \t read back by printf);
 //   - for Claude Code, every candidate sessions/<pid>.json, each ended by GS: under the CLAUDE_CONFIG_DIR its
 //     environment names (macOS's `ps -E` runs the entries together, so each reading is a candidate; a relative one
 //     from the process's folder), then the default ~/.claude;
@@ -71,7 +71,7 @@ s() {
     if [ -d "/proc/$1" ]; then
       cwd=$(readlink "/proc/$1/cwd" 2>/dev/null)
     else
-      cwd=$(LC_ALL=en_US.UTF-8 lsof -a -nP -p "$1" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -n 1)
+      cwd=$(printf '%b' "$(LC_ALL=en_US.UTF-8 lsof -a -nP -p "$1" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -n 1)")
     fi ;;
   esac
   printf '%s\037%s\037%s\037%s\037' "$1" "$2" "$start" "$cwd"
@@ -102,7 +102,7 @@ s() {
       if [ -d "/proc/$p/fd" ]; then
         for fd in /proc/$p/fd/*; do readlink "$fd" 2>/dev/null; done
       else
-        LC_ALL=en_US.UTF-8 lsof -nP -p "$p" -Fn 2>/dev/null | sed -n 's/^n//p'
+        LC_ALL=en_US.UTF-8 lsof -nP -p "$p" -Fn 2>/dev/null | sed -n 's/^n//p' | while IFS= read -r n; do printf '%b\n' "$n"; done
       fi | grep '/rollout-[^/]*\.jsonl$' | sort -u | while IFS= read -r f; do
         [ -f "$f" ] || continue
         printf '%s\035%s\035' "$p" "$f"

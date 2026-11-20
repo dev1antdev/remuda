@@ -424,18 +424,19 @@ components and icons as rules for whoever changes it: @docs/design.md
   app by its own name);
   `statusOf` takes the program's own word, `error` read as done; the session
   comes through `SessionOf` (a `SessionLookup` of an `AgentProcess`: kind,
-  the foreground's pid, its folder, and the terminal with the moment its
-  agent took it, `agentAt`, or for an agent already running there the moment
-  the mirror took the terminal in, `seenAt`, which every fill moves; nil,
+  the foreground's pid, its folder, and the terminal with `held`, the count
+  of the moment its foreground last changed hands — back to the shell too —
+  or the mirror took it in (a fill, a terminal made or given a new shell), one
+  counter for every mirror, so a later process always counts higher; nil,
   none), which a machine gives as its `processSessions`
   (`internal/machines/sessions.go`, tested on paper and on a throwaway core
   with a stand-in Claude Code keeping its session file in a temp HOME):
   `transcript.Reader.SessionsOf` for every Claude Code and Codex process the
   snapshots asked about, kept by the process, not its pid (`processKey`: the
-  terminal, that moment, the pid — a pid given out again, in another
+  terminal, `held`, the pid — a pid given out again, in another
   terminal, to the agent that took the terminal next or found by another
   fill, never answers the session of the process before it; a pid is read
-  only for its holder, the process of the later moment, and an answer is
+  only for its holder, the process counted later, and an answer is
   dropped when another took the pid while it was read), one script for all of them, a process new to it read
   at once and every answer again once `sessionsFresh` 30 s old (a `/clear` or
   `/resume` changes the session under the same pid), a failed read keeping
@@ -991,7 +992,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   regular files are read, a FIFO never holds the script; a process that
   stands in another folder than the pane was seen in now (`/proc/<pid>/cwd`,
   else `lsof -d cwd` in a UTF-8 locale, since in C's lsof writes a byte past
-  ASCII as `\xNN`, as it does the rollouts' paths; not read for a native
+  ASCII as `\xNN`, its `\\` and `\t` read back by `printf %b`, as the
+  rollouts' paths are; not read for a native
   Windows process) has no session,
   whatever else matches, since the pid went to another process; a file
   counts only when its `procStart` is the process's `LC_ALL=C TZ=UTC ps -o

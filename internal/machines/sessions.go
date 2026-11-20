@@ -32,11 +32,11 @@ type processSessions struct {
 	complained time.Time
 }
 
-// processKey is one process however its pid is given out again: the terminal it holds and when its agent took it, or
-// the mirror found it running (unix ms).
+// processKey is one process however its pid is given out again: the terminal it holds and the count of the moment it
+// was seen take it.
 type processKey struct {
 	terminal string
-	since    int64
+	held     uint64
 	pid      int
 }
 
@@ -57,7 +57,7 @@ func newProcessSessions(name string, read func([]transcript.Running) (map[int]st
 func (s *processSessions) of(asked core.AgentProcess) *herdr.AgentSession {
 	now := time.Now()
 	running := transcript.Running{PID: asked.PID, Agent: asked.Agent, CWD: asked.Cwd}
-	key := processKey{terminal: asked.Terminal, since: asked.Since.UnixMilli(), pid: asked.PID}
+	key := processKey{terminal: asked.Terminal, held: asked.Held, pid: asked.PID}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	p := s.procs[key]
@@ -77,9 +77,9 @@ func (s *processSessions) of(asked core.AgentProcess) *herdr.AgentSession {
 	return &herdr.AgentSession{Kind: "id", Value: p.session}
 }
 
-// holders is, pid by pid, the process that holds it now: of two asked about under one pid, the one whose agent took
-// its terminal later, or the mirror found later (a pid never goes back to an earlier process), else the one asked
-// about last. The other gave the pid up and is never read again, since a look at the pid sees the one holding it.
+// holders is, pid by pid, the process that holds it now: of two asked about under one pid, the one seen take its
+// terminal later (a pid never goes back to an earlier process). The other gave the pid up and is never read again,
+// since a look at the pid sees the one holding it.
 func (s *processSessions) holders() map[int]*process {
 	held := map[int]processKey{}
 	for key := range s.procs {
@@ -96,8 +96,8 @@ func (s *processSessions) holders() map[int]*process {
 
 // tookLater says whether the process under key took its pid after the one under other.
 func (s *processSessions) tookLater(key, other processKey) bool {
-	if key.since != other.since {
-		return key.since > other.since
+	if key.held != other.held {
+		return key.held > other.held
 	}
 	return s.procs[key].asked.After(s.procs[other].asked)
 }

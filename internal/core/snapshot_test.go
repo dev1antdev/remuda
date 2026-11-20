@@ -215,26 +215,44 @@ func TestAShellTheCoreGaveANewOneIsRestoredUntilAnAgentTakesIt(t *testing.T) {
 	}
 }
 
-// The session lookup tells one process from a later one under the same pid: the moment its agent took the terminal,
-// or, for an agent the mirror found running, the fill that found it, which every fill moves.
-func TestAnAgentFoundByEachFillIsAnotherProcessForItsSession(t *testing.T) {
+// The session lookup tells one process from a later one under the same pid by when it was seen take its terminal:
+// every fill sees the agents it finds anew, and every handover of the foreground counts, back to the shell too — though
+// the replacement's agentAt borrows a status the one before reported a moment ago.
+func TestEachProcessSeenTakingATerminalIsAnotherForItsSession(t *testing.T) {
 	a := &Adapter{answered: make(chan struct{}), streams: map[*eventStream]struct{}{}, state: mirror{terminals: map[string]*Terminal{}}}
 	running := []Terminal{{Address: "t1", State: "live", Pid: 100, Cwd: "/work/api", Foreground: &Foreground{Pid: 300, Name: "claude", Cwd: "/work/api"}}}
 	var asked []AgentProcess
 	lookup := func(p AgentProcess) *herdr.AgentSession { asked = append(asked, p); return nil }
-	a.fill(slices.Clone(running), Document{}, "0.2.1")
-	a.state.snapshot(lookup)
-	time.Sleep(2 * time.Millisecond)
-	a.fill(slices.Clone(running), Document{}, "0.2.1")
-	a.state.snapshot(lookup)
-	if len(asked) != 2 || asked[0].PID != 300 || asked[0].Terminal != "t1" || asked[0].Since.IsZero() || !asked[1].Since.After(asked[0].Since) {
-		t.Fatalf("two fills asked %+v", asked)
+	later := func(what string) {
+		t.Helper()
+		a.state.snapshot(lookup)
+		if n := len(asked); n < 2 || asked[n-1].PID != 300 || asked[n-1].Terminal != "t1" || asked[n-1].Held <= asked[n-2].Held {
+			t.Fatalf("%s: asked %+v", what, asked)
+		}
 	}
-	a.state.apply(coreEvent("foreground", "t1", Foreground{Pid: 100, Name: "zsh", Cwd: "/work/api"}))
+	a.fill(slices.Clone(running), Document{}, "0.2.1")
+	a.state.snapshot(lookup)
+	a.fill(slices.Clone(running), Document{}, "0.2.1")
+	later("a second fill")
+
+	shell := Foreground{Pid: 100, Name: "zsh", Cwd: "/work/api"}
+	agent := Foreground{Pid: 300, Name: "claude", Cwd: "/work/api"}
+	a.state.apply(coreEvent("foreground", "t1", shell))
+	a.state.apply(coreEvent("status", "t1", map[string]any{"status": Status{State: "idle", App: "claude-code"}}))
+	a.state.apply(coreEvent("foreground", "t1", agent)) // its agentAt the status it reported a moment before
+	later("an agent that took the terminal from the shell")
+	took := a.state.terminals["t1"].agentAt
+	a.state.apply(coreEvent("foreground", "t1", shell))
+	a.state.apply(coreEvent("foreground", "t1", agent))
+	if a.state.terminals["t1"].agentAt != took {
+		t.Fatal("the replacement did not borrow the status: the case this guards is not made")
+	}
+	later("the next agent under the same pid, its agentAt the one before's")
+
 	a.state.apply(coreEvent("foreground", "t1", Foreground{Pid: 300, Name: "claude", Cwd: "/work/api"}))
 	a.state.snapshot(lookup)
-	if len(asked) != 3 || !asked[2].Since.After(asked[1].Since) {
-		t.Fatalf("an agent that took the terminal after the fill: %+v", asked)
+	if n := len(asked); asked[n-1].Held != asked[n-2].Held {
+		t.Fatalf("the same foreground told again counted as a handover: %+v", asked)
 	}
 }
 

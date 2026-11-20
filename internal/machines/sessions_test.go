@@ -41,12 +41,12 @@ func (r *sessionReads) reads() int {
 	return len(r.asked)
 }
 
-// ask is the lookup as a snapshot makes it: the agent's process in its terminal, which its agent took at the start.
+// ask is the lookup as a snapshot makes it: the agent's process in its terminal, as first seen there.
 func ask(s *processSessions, agent string, pid int) *herdr.AgentSession {
-	return s.of(core.AgentProcess{Agent: agent, PID: pid, Cwd: "/work/api", Terminal: "t" + strconv.Itoa(pid), Since: agentsTook})
+	return s.of(core.AgentProcess{Agent: agent, PID: pid, Cwd: "/work/api", Terminal: "t" + strconv.Itoa(pid), Held: firstHeld})
 }
 
-var agentsTook = time.Now()
+const firstHeld = 7
 
 // sessionAfter asks until the lookup answers want ("" for none), the reads it books running meanwhile.
 func sessionAfter(t *testing.T, s *processSessions, agent string, pid int, want string) {
@@ -158,8 +158,8 @@ func TestAPidGivenOutAgainIsNotTheProcessBeforeIt(t *testing.T) {
 	reads.mu.Unlock()
 
 	later := []core.AgentProcess{
-		{Agent: "claude", PID: 100, Cwd: "/work/api", Terminal: "t7", Since: agentsTook},
-		{Agent: "claude", PID: 100, Cwd: "/work/api", Terminal: "t100", Since: agentsTook.Add(time.Minute)},
+		{Agent: "claude", PID: 100, Cwd: "/work/api", Terminal: "t7", Held: firstHeld},
+		{Agent: "claude", PID: 100, Cwd: "/work/api", Terminal: "t100", Held: firstHeld + 1},
 	}
 	for _, process := range later {
 		if got := s.of(process); got != nil {
@@ -185,8 +185,8 @@ func TestTheProcessBeforeAPidsLaterOneIsNeverReadAgain(t *testing.T) {
 	reads := &sessionReads{answers: map[int]string{100: "sid-a"}}
 	s := newProcessSessions("gog", reads.read)
 	s.fresh = time.Hour
-	before := core.AgentProcess{Agent: "claude", PID: 100, Cwd: "/work/api", Terminal: "t1", Since: agentsTook}
-	after := core.AgentProcess{Agent: "claude", PID: 100, Cwd: "/work/api", Terminal: "t2", Since: agentsTook.Add(time.Minute)}
+	before := core.AgentProcess{Agent: "claude", PID: 100, Cwd: "/work/api", Terminal: "t1", Held: firstHeld}
+	after := core.AgentProcess{Agent: "claude", PID: 100, Cwd: "/work/api", Terminal: "t2", Held: firstHeld + 1}
 	for start := time.Now(); ; time.Sleep(5 * time.Millisecond) {
 		if got := s.of(before); got != nil && got.Value == "sid-a" {
 			break
@@ -208,7 +208,7 @@ func TestTheProcessBeforeAPidsLaterOneIsNeverReadAgain(t *testing.T) {
 	}
 
 	// the one before comes due while the later one is fresh, and a snapshot still naming it asks about it last
-	beforeKey := processKey{terminal: "t1", since: agentsTook.UnixMilli(), pid: 100}
+	beforeKey := processKey{terminal: "t1", held: firstHeld, pid: 100}
 	s.mu.Lock()
 	s.procs[beforeKey].triedAt = time.Now().Add(-2 * time.Hour)
 	s.procs[beforeKey].asked = time.Now().Add(time.Second)
@@ -233,7 +233,7 @@ func TestAMirrorFilledAgainReadsTheProcessItFinds(t *testing.T) {
 	reads := &sessionReads{answers: map[int]string{100: "sid-a"}}
 	s := newProcessSessions("gog", reads.read)
 	s.fresh = time.Hour
-	firstFill := core.AgentProcess{Agent: "claude", PID: 100, Cwd: "/work/api", Terminal: "t100", Since: agentsTook}
+	firstFill := core.AgentProcess{Agent: "claude", PID: 100, Cwd: "/work/api", Terminal: "t100", Held: firstHeld}
 	for start := time.Now(); ; time.Sleep(5 * time.Millisecond) {
 		if got := s.of(firstFill); got != nil && got.Value == "sid-a" {
 			break
@@ -246,7 +246,7 @@ func TestAMirrorFilledAgainReadsTheProcessItFinds(t *testing.T) {
 	reads.answers[100] = "sid-b"
 	reads.mu.Unlock()
 	nextFill := firstFill
-	nextFill.Since = agentsTook.Add(time.Minute)
+	nextFill.Held = firstHeld + 1
 	if got := s.of(nextFill); got != nil {
 		t.Fatalf("the next fill's process answered the session found before: %+v", got)
 	}
@@ -267,11 +267,11 @@ func TestProcessesNobodyAsksAboutAreForgotten(t *testing.T) {
 	sessionAfter(t, s, "claude", 100, "sid-a")
 	sessionAfter(t, s, "claude", 200, "sid-b")
 	s.mu.Lock()
-	s.procs[processKey{terminal: "t200", since: agentsTook.UnixMilli(), pid: 200}].asked = time.Now().Add(-sessionsForget - time.Minute)
+	s.procs[processKey{terminal: "t200", held: firstHeld, pid: 200}].asked = time.Now().Add(-sessionsForget - time.Minute)
 	s.mu.Unlock()
 	for start := time.Now(); ; time.Sleep(5 * time.Millisecond) {
 		s.mu.Lock()
-		_, kept := s.procs[processKey{terminal: "t200", since: agentsTook.UnixMilli(), pid: 200}]
+		_, kept := s.procs[processKey{terminal: "t200", held: firstHeld, pid: 200}]
 		s.mu.Unlock()
 		if !kept {
 			break
