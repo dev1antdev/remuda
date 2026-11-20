@@ -132,7 +132,7 @@ func TestEachEventMovesTheMirrorAndSaysWhatItWasInHerdrsWords(t *testing.T) {
 		t.Fatal("a finished terminal stays in the mirror")
 	}
 	pane := m.snapshot(nil).Panes[0]
-	if pane.TitleStripped != "Refactoring" || pane.CWD != "/home/me/web" || pane.Agent != "claude" {
+	if pane.TitleStripped != "Refactoring" || pane.CWD != "/home/me/api" || pane.ForegroundCWD != "/home/me/web" || pane.Agent != "claude" {
 		t.Fatalf("pane %+v", pane)
 	}
 	if _, ok := m.apply(coreEvent("title", "t9", map[string]string{"title": "x"})); ok {
@@ -158,5 +158,19 @@ func TestALabelTakenAwayLeavesTheTerminal(t *testing.T) {
 	}
 	if _, there := m.terminals["t1"].Labels[LabelTab]; there {
 		t.Fatalf("labels %v", m.terminals["t1"].Labels)
+	}
+}
+
+func TestAPanesFolderIsItsShellsAndAWorkspacesTheDocuments(t *testing.T) {
+	m := mirror{terminals: map[string]*Terminal{"t1": term("t1", 1, placedIn("w1", "a"))},
+		doc: Document{Workspaces: []DocWorkspace{{ID: "w1", Folder: "/home/me/repo", Tabs: []DocTab{{ID: "a"}}}}}}
+	m.apply(coreEvent("foreground", "t1", Foreground{Pid: 100, Name: "zsh", Cwd: "/home/me/repo/web"}))
+	m.apply(coreEvent("foreground", "t1", Foreground{Pid: 300, Name: "vim", Cwd: "/tmp"}))
+	snap := m.snapshot(nil)
+	if p := snap.Pane("t1"); p.CWD != "/home/me/repo/web" || p.ForegroundCWD != "/tmp" {
+		t.Fatalf("pane %+v", p)
+	}
+	if dir := snap.WorkspaceDir(&snap.Workspaces[0]); dir != "/home/me/repo" {
+		t.Fatalf("workspace dir %q", dir)
 	}
 }

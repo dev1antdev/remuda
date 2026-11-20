@@ -28,7 +28,7 @@ const outputOnly = "remuda.output-only"
 // output watches matched, through a core subscription of its own.
 type eventStream struct {
 	adapter *Adapter
-	wake    chan struct{}
+	wake    bell
 	output  *Subscription
 	panes   map[string]string // output watch id → pane
 
@@ -40,7 +40,7 @@ type eventStream struct {
 // Subscribe opens a stream: every change of the machine, whatever the subscriptions name, and the output matches they
 // ask for. A refusal of the watches is herdr's (invalid_regex, pane_not_found).
 func (a *Adapter) Subscribe(subs []herdr.Subscription) (herdr.EventStream, error) {
-	s := &eventStream{adapter: a, wake: make(chan struct{}, 1), panes: map[string]string{}}
+	s := &eventStream{adapter: a, wake: make(bell, 1), panes: map[string]string{}}
 	var watches []OutputWatch
 	for i, sub := range subs {
 		if sub.Type != herdr.EventOutputMatched || sub.Match == nil {
@@ -118,7 +118,7 @@ func (s *eventStream) push(ev herdr.Event) {
 		}
 	}
 	s.mu.Unlock()
-	s.ring()
+	s.wake.ring()
 }
 
 func (s *eventStream) end(err error) {
@@ -127,14 +127,7 @@ func (s *eventStream) end(err error) {
 		s.err = err
 	}
 	s.mu.Unlock()
-	s.ring()
-}
-
-func (s *eventStream) ring() {
-	select {
-	case s.wake <- struct{}{}:
-	default:
-	}
+	s.wake.ring()
 }
 
 // readOutput hands the stream every row its watches matched, as herdr's pane.output_matched.
@@ -212,8 +205,7 @@ func (a *Adapter) PaneAtPrompt(paneID string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	fg := t.Foreground
-	return fg != nil && fg.Pid == t.Pid && shells[programName(fg.Name)], nil
+	return atPrompt(&t), nil
 }
 
 // PaneShellPID is the process the terminal started, the root of what runs in it.

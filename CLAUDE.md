@@ -355,8 +355,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   `status` → `pane.agent_status_changed` with the status, `title`, `turn` and
   `foreground` → `pane.updated` — `pane.agent_detected` when the agent
   changed — `labels` → `pane.moved`, `size` and the document →
-  `layout.updated`, `created`, `finished`, `removed`, `lost` → `pane.created`
-  / `pane.closed` / `pane.exited`); a stream that falls `maxQueued` 4096
+  `layout.updated`, `created` and `restarted` → `pane.created`, `finished`
+  and `removed` → `pane.closed`, `lost` → `pane.exited`); a stream that falls `maxQueued` 4096
   behind ends with `events_lost`, as herdr's does, and every stream ends when
   the subscription is lost, which is tried again 250 ms → 5 s apart (the
   machine hears `TransportError`). **The document** (`Document`): the
@@ -369,11 +369,22 @@ components and icons as rules for whoever changes it: @docs/design.md
   unlabelled terminal in a workspace of its own (`core-<address>`, named
   after its folder); a tab with no live terminal and a workspace with no tab
   are left out; a pane's id is its terminal's address, its size the
-  terminal's grid, a tab's and workspace's status its most pressing pane's.
-  **The agent** (`agentOf`): the foreground process when it is one of
-  `agentNames` (its name or argv's first two, a Windows `.exe` too), none
-  while the terminal's own shell holds it, else the app it reported through
-  OSC 7501 (`claude-code` → claude, `codex`, `gemini-cli` → gemini, `kimi`);
+  terminal's grid, its `CWD` the shell's — the terminal's folder, moved
+  whenever its own shell holds it (`followShell`) — and `ForegroundCWD` the
+  foreground process's; a workspace carries the document's folder as
+  `WorkspaceInfo.Folder` (never from herdr), which `Snapshot.WorkspaceDir`
+  reads before the panes; a tab's and workspace's status is its most
+  pressing pane's. **Left empty** for now: `Worktree` (Core 20), `Focused`,
+  `FocusedPaneID` / `FocusedTabID`, `Tokens` / `StateLabels` (herdr's own
+  UI), `Scroll` (Core 25), `Label` of a pane; what reads them takes
+  herdr's plain-folder, no-focus path.
+  **The agent** (`agentOf`): the foreground process when
+  `herdr.AgentProgram` names it (the one matcher, `internal/herdr/agents.go`,
+  which `preview` asks too: the program or the script an interpreter runs,
+  past its flags, a Windows path and `.exe` too), none while the terminal's
+  own shell holds it (`atPrompt`), else the app it reported through OSC 7501
+  (`claude-code` → claude, `codex`, `gemini-cli` → gemini, `kimi`, any other
+  app by its own name);
   `statusOf` takes the program's own word, `error` read as done; the session
   comes through `SessionOf` (Core 16 wires it; nil, none). Output watches go
   in a core subscription of the stream's own, filtered by a label no
@@ -383,7 +394,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   Reads: `PaneRead`, `PaneScreen` (format vt), `PaneRecent`, `PaneAtPrompt`
   and `PaneShellPID` (off the mirror's `foreground` and `pid`), `AgentGet`;
   every write answers `invalid_request` "… is not on remuda-core yet"
-  (Core 15). `Bridged` is false: a stream costs the core nothing.
+  (Core 15). `Bridged` is false: a stream costs the core nothing. The
+  watcher still paces the snapshots an event asks for (`internal/watch`,
+  150 ms debounce, 500 ms / 1 s apart): the mirror makes each one free, not
+  sooner.
 - `internal/sshx/` — one OpenSSH `ControlMaster` per host (BatchMode: fail,
   never prompt; sshd's MaxSessions is 10 by default, so every session takes
   one of 9 places first (`Conn.enter`, `sessionCount`), waiting within its
@@ -3214,8 +3228,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   (the cockpit's own `-addr`, 7317, the door 7318 — on a port its sshd
   picked, the door goes by that process's name — code-server's), the
   processes remuda, herdr, ssh and Tailscale run, an agent's own
-  (`agentProgram`: claude, codex, gemini or kimi as the program or the
-  script node or python runs — Claude Code holds a loopback port in its
+  (`agentProgram`, through `herdr.AgentProgram`: claude, codex, gemini or
+  kimi as the program or the script node or python runs — Claude Code holds a loopback port in its
   workspace's folder, never a server to preview, count or stop), and any
   whose folder is `/` or unknown (a system daemon, another user's), names
   what it is from its arguments (`labelOf`: vite, next, http.server,

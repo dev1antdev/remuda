@@ -34,15 +34,6 @@ func eventually(t *testing.T, adapter *core.Adapter, want func(*herdr.Snapshot) 
 	return nil
 }
 
-func paneIn(snap *herdr.Snapshot, id string) *herdr.PaneInfo {
-	for i := range snap.Panes {
-		if snap.Panes[i].PaneID == id {
-			return &snap.Panes[i]
-		}
-	}
-	return nil
-}
-
 func TestTheAdapterShowsTheDocumentsWorkspacesAndEveryTerminal(t *testing.T) {
 	ctx := within(t, 30*time.Second)
 	client := coretest.Server(t).Client(t)
@@ -63,10 +54,10 @@ func TestTheAdapterShowsTheDocumentsWorkspacesAndEveryTerminal(t *testing.T) {
 	if ws := snap.Workspaces[0]; ws.WorkspaceID != "w1" || ws.Label != "api" || ws.ActiveTabID != "a" {
 		t.Fatalf("first workspace %+v", ws)
 	}
-	if p := paneIn(snap, agentTab.Address); p == nil || p.TabID != "a" || p.WorkspaceID != "w1" {
+	if p := snap.Pane(agentTab.Address); p == nil || p.TabID != "a" || p.WorkspaceID != "w1" {
 		t.Fatalf("the labelled terminal is %+v", p)
 	}
-	if p := paneIn(snap, loose.Address); p == nil || p.WorkspaceID == "w1" {
+	if p := snap.Pane(loose.Address); p == nil || p.WorkspaceID == "w1" {
 		t.Fatalf("the loose terminal is %+v", p)
 	}
 
@@ -78,7 +69,7 @@ func TestTheAdapterShowsTheDocumentsWorkspacesAndEveryTerminal(t *testing.T) {
 	if _, err := client.Kill(ctx, loose.Address); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, adapter, func(s *herdr.Snapshot) bool { return paneIn(s, loose.Address) == nil })
+	eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Pane(loose.Address) == nil })
 }
 
 func nextEvent(t *testing.T, stream herdr.EventStream, want func(herdr.Event) bool) herdr.Event {
@@ -124,7 +115,7 @@ func TestAStatusTheProgramReportsReachesTheStreamAndTheSnapshot(t *testing.T) {
 		t.Fatalf("told %+v", told)
 	}
 	snap := eventually(t, adapter, func(s *herdr.Snapshot) bool {
-		p := paneIn(s, agent.Address)
+		p := s.Pane(agent.Address)
 		return p != nil && p.Agent == "claude" && p.AgentStatus == herdr.StatusWorking
 	})
 	if got, err := adapter.AgentGet(agent.Address); err != nil || got.Agent != "claude" || got.Status != herdr.StatusWorking {
@@ -140,7 +131,7 @@ func TestAnOutputWatchComesAsHerdrsMatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, adapter, func(s *herdr.Snapshot) bool { return paneIn(s, builder.Address) != nil })
+	eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Pane(builder.Address) != nil })
 	stream, err := adapter.Subscribe([]herdr.Subscription{
 		{Type: herdr.EventAgentStatus, PaneID: builder.Address},
 		{Type: herdr.EventOutputMatched, PaneID: builder.Address, Source: "recent", Lines: 40, Match: &herdr.OutputMatch{Type: "regex", Value: `--- FAIL: \w+`}},
@@ -168,7 +159,7 @@ func TestReadsAnswerInHerdrsWords(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, adapter, func(s *herdr.Snapshot) bool { return paneIn(s, printer.Address) != nil })
+	eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Pane(printer.Address) != nil })
 	for start := time.Now(); ; time.Sleep(50 * time.Millisecond) {
 		recent, _, err := adapter.PaneRecent(printer.Address, 3)
 		if err == nil && recent == "49\n50\nred" {
@@ -243,7 +234,7 @@ func TestTheMirrorIsReadAgainAfterTheConnectionIsLost(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, adapter, func(s *herdr.Snapshot) bool { return paneIn(s, started.Address) != nil })
+	eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Pane(started.Address) != nil })
 	if lost.Load() == 0 {
 		t.Fatal("the machine never heard the connection was lost")
 	}

@@ -2,12 +2,12 @@ package core
 
 import (
 	"cmp"
-	"path"
 	"slices"
 	"strings"
 	"unicode"
 
 	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/rpath"
 )
 
 // mirror is what the adapter knows of a machine: its live terminals by address and the `remuda` document.
@@ -24,8 +24,8 @@ type placedTab struct {
 }
 
 type placedSpace struct {
-	id, label, active string
-	tabs              []placedTab
+	id, label, folder, active string
+	tabs                      []placedTab
 }
 
 // snapshot lays the mirror out as herdr's model. The document's workspaces and tabs come first in its order, each
@@ -44,7 +44,7 @@ func (m *mirror) snapshot(sessionOf func(agent string, pid int) *herdr.AgentSess
 	}
 	var spaces []placedSpace
 	for _, ws := range m.doc.Workspaces {
-		space := placedSpace{id: ws.ID, label: ws.Label, active: ws.ActiveTab}
+		space := placedSpace{id: ws.ID, label: ws.Label, folder: ws.Folder, active: ws.ActiveTab}
 		for _, tab := range ws.Tabs {
 			shown := placedTab{id: tab.ID, label: tab.Label}
 			for _, leaf := range tab.Layout.Panes() {
@@ -103,7 +103,7 @@ func (m *mirror) snapshot(sessionOf func(agent string, pid int) *herdr.AgentSess
 		if len(tabs) == 0 {
 			continue
 		}
-		ws := herdr.WorkspaceInfo{WorkspaceID: space.id, Label: space.label, ActiveTabID: tabs[0].TabID}
+		ws := herdr.WorkspaceInfo{WorkspaceID: space.id, Label: space.label, Folder: space.folder, ActiveTabID: tabs[0].TabID}
 		for _, tab := range tabs {
 			ws.AgentStatus = graver(ws.AgentStatus, tab.AgentStatus)
 			if tab.TabID == space.active {
@@ -146,8 +146,8 @@ func paneOf(t *Terminal, tab, space string, sessionOf func(agent string, pid int
 		Agent: agentOf(t), AgentStatus: statusOf(t), CWD: t.Cwd,
 		Title: t.Title, TitleStripped: strings.TrimLeftFunc(t.Title, notWordStart),
 	}
-	if fg := t.Foreground; fg != nil && fg.Cwd != "" {
-		pane.CWD, pane.ForegroundCWD = fg.Cwd, fg.Cwd
+	if t.Foreground != nil {
+		pane.ForegroundCWD = t.Foreground.Cwd
 	}
 	if pane.Agent != "" && sessionOf != nil {
 		pid := t.Pid
@@ -164,22 +164,10 @@ func notWordStart(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit
 
 // folderName names a workspace made for a terminal no document places: its folder's name.
 func folderName(t *Terminal) string {
-	dir := t.Cwd
-	if t.Foreground != nil && t.Foreground.Cwd != "" {
-		dir = t.Foreground.Cwd
-	}
-	if name := path.Base(strings.ReplaceAll(dir, `\`, "/")); name != "" && name != "." && name != "/" {
+	if name := rpath.For(t.Cwd).Base(t.Cwd); name != "" && name != "." && name != "/" && name != `\` {
 		return name
 	}
 	return t.Name
-}
-
-// agentNames are the agents herdr names, by the app a program reports through OSC 7501 or the process it runs as.
-var agentNames = map[string]string{
-	"claude": "claude", "claude-code": "claude",
-	"codex":  "codex",
-	"gemini": "gemini", "gemini-cli": "gemini",
-	"kimi": "kimi", "kimi-code": "kimi",
 }
 
 var shells = map[string]bool{
@@ -188,44 +176,34 @@ var shells = map[string]bool{
 }
 
 // agentOf is the agent a terminal runs: the process in its foreground when it is one, nothing when its shell holds
-// it, else the app it reported (an agent run through node or a wrapper).
+// it, else the app it reported through OSC 7501 (an agent run in a way its process does not say).
 func agentOf(t *Terminal) string {
 	if fg := t.Foreground; fg != nil {
-		if agent := processAgent(fg); agent != "" {
+		if agent := herdr.AgentProgram(append([]string{fg.Name}, fg.Argv...)); agent != "" {
 			return agent
 		}
-		if fg.Pid == t.Pid && shells[programName(fg.Name)] {
+		if atPrompt(t) {
 			return ""
 		}
 	}
 	if t.Status == nil || t.Status.App == "" {
 		return ""
 	}
-	if agent, ok := agentNames[strings.ToLower(t.Status.App)]; ok {
+	if agent := herdr.AgentProgram([]string{t.Status.App}); agent != "" {
 		return agent
 	}
 	return strings.ToLower(t.Status.App)
 }
 
-func processAgent(fg *Foreground) string {
-	names := []string{fg.Name}
-	if len(fg.Argv) > 0 {
-		names = append(names, fg.Argv[0])
-	}
-	if len(fg.Argv) > 1 {
-		names = append(names, fg.Argv[1])
-	}
-	for _, name := range names {
-		if agent, ok := agentNames[programName(name)]; ok {
-			return agent
-		}
-	}
-	return ""
+// atPrompt says whether the terminal's own shell holds it: nothing started from it runs in its foreground.
+func atPrompt(t *Terminal) bool {
+	fg := t.Foreground
+	return fg != nil && fg.Pid == t.Pid && shells[programName(fg.Name)]
 }
 
 // programName is a process's name without its folder or Windows' .exe.
 func programName(name string) string {
-	return strings.TrimSuffix(strings.ToLower(path.Base(strings.ReplaceAll(name, `\`, "/"))), ".exe")
+	return strings.TrimSuffix(strings.ToLower(rpath.Style{Windows: strings.Contains(name, `\`)}.Base(name)), ".exe")
 }
 
 // statusOf is the program's own OSC 7501 word in herdr's: an error ends a turn as done does.

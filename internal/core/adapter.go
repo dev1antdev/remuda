@@ -179,6 +179,7 @@ func (a *Adapter) fill(terminals []Terminal, doc Document, version string) {
 	a.state = mirror{terminals: make(map[string]*Terminal, len(terminals)), doc: doc, version: version}
 	for i := range terminals {
 		if terminals[i].State == "live" && !strings.Contains(terminals[i].Address, "/") {
+			followShell(&terminals[i])
 			a.state.terminals[terminals[i].Address] = &terminals[i]
 		}
 	}
@@ -256,6 +257,7 @@ func (m *mirror) apply(ev Event) (herdr.Event, bool) {
 			delete(m.terminals, record.Address)
 			return herdr.Event{Kind: "pane.closed", PaneID: record.Address}, t != nil
 		}
+		followShell(&record)
 		m.terminals[record.Address] = &record
 		told.Kind = "pane.created"
 		return told, true
@@ -313,6 +315,7 @@ func (m *mirror) apply(ev Event) (herdr.Event, bool) {
 			return told, false
 		}
 		t.Foreground = fg
+		followShell(t)
 	case "lost":
 		json.Unmarshal(ev.Data, &struct {
 			Reason   *string `json:"reason"`
@@ -333,6 +336,14 @@ func (m *mirror) apply(ev Event) (herdr.Event, bool) {
 		told.Kind = "pane.agent_detected"
 	}
 	return told, true
+}
+
+// followShell keeps a terminal's folder the shell's, as herdr's pane cwd is: where its shell stood when it last held
+// the terminal, not where a program it started went.
+func followShell(t *Terminal) {
+	if fg := t.Foreground; fg != nil && fg.Pid == t.Pid && fg.Cwd != "" {
+		t.Cwd = fg.Cwd
+	}
 }
 
 // notOnCore is herdr's refusal of a request remuda-core does not answer yet.
