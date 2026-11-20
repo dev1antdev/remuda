@@ -73,9 +73,6 @@ func TestTheLocalMachineOnCoreShowsTheCoresTerminals(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := terminals.Subscribe("t1", 80, 24); err == nil || !strings.Contains(err.Error(), NoAttachOnCore) {
-		t.Fatalf("attach on remuda-core = %v, want the refusal", err)
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	running, err := c.Client(t).Run(ctx, core.RunParams{Argv: []string{"sleep", "60"}})
@@ -85,11 +82,27 @@ func TestTheLocalMachineOnCoreShowsTheCoresTerminals(t *testing.T) {
 	for start := time.Now(); ; time.Sleep(50 * time.Millisecond) {
 		snap, err := api.SessionSnapshot()
 		if err == nil && snap.Pane(running.Address) != nil {
-			return
+			break
 		}
 		if time.Since(start) > 10*time.Second {
 			t.Fatalf("the snapshot never showed %s: %v %+v", running.Address, err, snap)
 		}
+	}
+	viewer, err := terminals.Open(running.Address, herdr.View{Cols: 80, Rows: 24})
+	if err != nil {
+		t.Fatalf("attach on remuda-core: %v", err)
+	}
+	defer viewer.Close()
+	if n := terminals.Viewers(running.Address); n != 1 {
+		t.Fatalf("viewers = %d, want 1", n)
+	}
+	select {
+	case first, ok := <-viewer.Bytes():
+		if !ok || len(first) == 0 {
+			t.Fatal("the core's first paint never came")
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("no first paint within 10 s")
 	}
 }
 

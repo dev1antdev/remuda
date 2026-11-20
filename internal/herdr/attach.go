@@ -211,6 +211,32 @@ func (m *AttachManager) Subscribe(termID string, cols, rows int) (ch chan []byte
 	return ch, cancel, nil
 }
 
+// Open is Subscribe as one viewer: its keys and sizes go to the attach every viewer of the terminal shares. herdr has
+// no viewer that only watches, so one asked for is refused.
+func (m *AttachManager) Open(termID string, view View) (Viewer, error) {
+	if view.Observe {
+		return nil, &RefusedError{Msg: "watching a terminal without typing needs remuda-core"}
+	}
+	ch, cancel, err := m.Subscribe(termID, view.Cols, view.Rows)
+	if err != nil {
+		return nil, err
+	}
+	return &sharedViewer{m: m, termID: termID, ch: ch, cancel: cancel}, nil
+}
+
+// sharedViewer is one viewer of an attach.
+type sharedViewer struct {
+	m      *AttachManager
+	termID string
+	ch     chan []byte
+	cancel func()
+}
+
+func (v *sharedViewer) Bytes() <-chan []byte        { return v.ch }
+func (v *sharedViewer) Write(data []byte) error     { return v.m.Write(v.termID, data) }
+func (v *sharedViewer) Resize(cols, rows int) error { return v.m.Resize(v.termID, cols, rows) }
+func (v *sharedViewer) Close()                      { v.cancel() }
+
 // repaint has the pane redraw for a joining viewer: a row smaller, then the size asked for.
 // Back to back, ssh and the app see only the final (unchanged) size and draw nothing.
 func (a *attach) repaint(cols, rows int) {

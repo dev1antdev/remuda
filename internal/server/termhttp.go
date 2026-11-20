@@ -25,10 +25,8 @@ const (
 
 type termStream struct {
 	id       string
-	termID   string
-	attach   herdr.Terminals
-	ch       chan []byte
-	cancel   func()
+	viewer   herdr.Viewer
+	ch       <-chan []byte
 	readMu   sync.Mutex // one long-poll at a time; never held by anyone else
 	lastRead atomic.Int64
 	mu       sync.Mutex
@@ -41,7 +39,7 @@ func (s *termStream) end() {
 	defer s.mu.Unlock()
 	if !s.closed {
 		s.closed = true
-		s.cancel()
+		s.viewer.Close()
 	}
 }
 
@@ -125,7 +123,7 @@ func (s *Server) handleTermOpen(w http.ResponseWriter, r *http.Request) {
 		open(pc)
 		return
 	}
-	ch, cancel, err := attach.Subscribe(pane.TerminalID, cols, rows)
+	viewer, err := attach.Open(pane.TerminalID, herdr.View{Cols: cols, Rows: rows, Keep: r.URL.Query().Get("keep") == "1"})
 	if err != nil {
 		if pc := s.peerAfterRefusal(mc, err); pc != nil {
 			open(pc)
@@ -134,7 +132,7 @@ func (s *Server) handleTermOpen(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 409, fmt.Errorf("%s", attachRefused(mc, err)))
 		return
 	}
-	st := &termStream{id: newStreamID(), termID: pane.TerminalID, attach: attach, ch: ch, cancel: cancel}
+	st := &termStream{id: newStreamID(), viewer: viewer, ch: viewer.Bytes()}
 	st.lastRead.Store(time.Now().UnixNano())
 	s.streams.add(st)
 	writeJSON(w, map[string]any{"sid": st.id})
@@ -211,7 +209,7 @@ func (s *Server) handleTermInput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(data) > 0 {
-		if err := st.attach.Write(st.termID, data); err != nil {
+		if err := st.viewer.Write(data); err != nil {
 			httpErr(w, 502, err)
 			return
 		}
@@ -231,7 +229,7 @@ func (s *Server) handleTermResize(w http.ResponseWriter, r *http.Request) {
 	}
 	cols, _ := strconv.Atoi(r.URL.Query().Get("cols"))
 	rows, _ := strconv.Atoi(r.URL.Query().Get("rows"))
-	st.attach.Resize(st.termID, cols, rows)
+	st.viewer.Resize(cols, rows)
 	w.WriteHeader(http.StatusNoContent)
 }
 

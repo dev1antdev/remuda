@@ -50,12 +50,26 @@ type EventStream interface {
 	Close() error
 }
 
-// Terminals is a machine's live terminals: a viewer joining one, typing into it, resizing it, and how many watch it.
+// Terminals is a machine's live terminals: a viewer opening one, and how many of this remuda's viewers watch it.
 type Terminals interface {
-	Subscribe(termID string, cols, rows int) (ch chan []byte, cancel func(), err error)
-	Write(termID string, data []byte) error
-	Resize(termID string, cols, rows int) error
+	Open(termID string, view View) (Viewer, error)
 	Viewers(termID string) int
+}
+
+// View is how one viewer opens a terminal: its grid, and whether it leaves the size to the others (Keep) or only
+// watches (Observe). herdr follows its smallest client whatever is asked, and watches nothing without typing.
+type View struct {
+	Cols, Rows int
+	Keep       bool
+	Observe    bool
+}
+
+// Viewer is one viewer's stream of a terminal: the program's bytes out, the keys and the size back.
+type Viewer interface {
+	Bytes() <-chan []byte // closed once the terminal is no longer attached
+	Write(data []byte) error
+	Resize(cols, rows int) error
+	Close()
 }
 
 var (

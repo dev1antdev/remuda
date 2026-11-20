@@ -3,12 +3,16 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"strconv"
 	"strings"
 
 	"github.com/coder/websocket"
+
+	"github.com/dev1antdev/remuda/internal/auth"
+	"github.com/dev1antdev/remuda/internal/herdr"
 )
 
 // The terminal lens: bytes over a WebSocket, or over plain HTTP for a viewer behind a proxy (termhttp.go),
@@ -41,24 +45,39 @@ func (s *Server) handlePaneWS(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 404, err)
 		return
 	}
+	// a viewer link only watches, which remuda-core alone lets a viewer do, and only a pane its roster shows
+	watching := auth.IsViewer(r.Context())
+	if watching && !s.viewerSeesPane(mc.ID(), pane.PaneID) {
+		httpErr(w, http.StatusNotFound, errors.New("not found"))
+		return
+	}
+	if watching && !mc.OnCore() {
+		httpErr(w, http.StatusForbidden, errors.New("this link is for viewing only"))
+		return
+	}
 	// the client's proxy probe is a plain GET of this URL and must cost no attach, here or on a peer
 	if !strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
 		http.Error(w, "upgrade required", http.StatusUpgradeRequired)
 		return
 	}
-	s.Radar.Seen(mc.ID(), pane.PaneID)
+	if !watching {
+		s.Radar.Seen(mc.ID(), pane.PaneID)
+	}
 	cols, _ := strconv.Atoi(r.URL.Query().Get("cols"))
 	rows, _ := strconv.Atoi(r.URL.Query().Get("rows"))
 
-	if pc, err := s.peerFor(mc); err != nil {
-		httpErr(w, 502, err)
-		return
-	} else if pc != nil {
-		s.relayPaneWS(w, r, pc, mc.ID(), pane.PaneID, cols, rows)
-		return
+	if !watching {
+		if pc, err := s.peerFor(mc); err != nil {
+			httpErr(w, 502, err)
+			return
+		} else if pc != nil {
+			s.relayPaneWS(w, r, pc, mc.ID(), pane.PaneID, cols, rows)
+			return
+		}
 	}
-	ch, cancel, err := attach.Subscribe(pane.TerminalID, cols, rows)
-	if err != nil {
+	view := herdr.View{Cols: cols, Rows: rows, Keep: r.URL.Query().Get("keep") == "1", Observe: watching}
+	viewer, err := attach.Open(pane.TerminalID, view)
+	if err != nil && !watching {
 		if pc := s.peerAfterRefusal(mc, err); pc != nil {
 			s.relayPaneWS(w, r, pc, mc.ID(), pane.PaneID, cols, rows)
 			return
@@ -68,7 +87,7 @@ func (s *Server) handlePaneWS(w http.ResponseWriter, r *http.Request) {
 	c, err2 := websocket.Accept(w, r, &websocket.AcceptOptions{CompressionMode: websocket.CompressionNoContextTakeover})
 	if err2 != nil {
 		if err == nil {
-			cancel()
+			viewer.Close()
 		}
 		return
 	}
@@ -79,7 +98,8 @@ func (s *Server) handlePaneWS(w http.ResponseWriter, r *http.Request) {
 		c.Close(websocket.StatusInternalError, attachRefused(mc, err))
 		return
 	}
-	defer cancel()
+	defer viewer.Close()
+	ch := viewer.Bytes()
 
 	// the writer is stopped by hand when the read loop ends: on a hijacked connection
 	// r.Context() lives until the handler returns, so the attach would linger until the pane's next byte
@@ -129,15 +149,18 @@ func (s *Server) handlePaneWS(w http.ResponseWriter, r *http.Request) {
 		if json.Unmarshal(data, &msg) != nil {
 			continue
 		}
+		if watching {
+			continue
+		}
 		switch msg.Type {
 		case "input":
 			if msg.Data != "" {
-				if err := attach.Write(pane.TerminalID, []byte(msg.Data)); err != nil {
+				if err := viewer.Write([]byte(msg.Data)); err != nil {
 					log.Printf("input %s/%s: %v", mc.ID(), paneID, err)
 				}
 			}
 		case "resize":
-			if err := attach.Resize(pane.TerminalID, msg.Cols, msg.Rows); err != nil {
+			if err := viewer.Resize(msg.Cols, msg.Rows); err != nil {
 				log.Printf("resize %s/%s: %v", mc.ID(), paneID, err)
 			}
 		}

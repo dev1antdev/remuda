@@ -17,9 +17,6 @@ import (
 // process of this remuda's, there an exec over the ssh master — which starts the core when none runs. The flag lives
 // while the move off herdr is built; the release that makes the move takes herdr away with it.
 
-// NoAttachOnCore is why a machine on remuda-core has no live terminal yet.
-const NoAttachOnCore = "the live terminal on remuda-core is not in this remuda yet"
-
 // coreDialWithin bounds a dial whose context sets no deadline.
 const coreDialWithin = 15 * time.Second
 
@@ -51,15 +48,20 @@ func remoteCoreDialer(conn *sshx.Conn, bin string) core.Dialer {
 	}
 }
 
-// coreLink is a machine's remuda-core: its client and the adapter that reads it as herdr.
+// coreLink is a machine's remuda-core: its client, the adapter that reads it as herdr, and its live terminals.
 type coreLink struct {
-	client  *core.Client
-	adapter *core.Adapter
+	client    *core.Client
+	adapter   *core.Adapter
+	terminals *core.Terminals
 }
 
 // newCoreLink follows the core the client reaches; a failure to reach it goes to transportError (nil: none hears it).
 func newCoreLink(client *core.Client, transportError func(error)) *coreLink {
-	return &coreLink{client: client, adapter: core.NewAdapter(client, core.AdapterHooks{TransportError: transportError})}
+	return &coreLink{
+		client:    client,
+		adapter:   core.NewAdapter(client, core.AdapterHooks{TransportError: transportError}),
+		terminals: core.NewTerminals(client),
+	}
 }
 
 // close stops following the core and ends the connection. The adapter tells its transport errors from its own
@@ -69,13 +71,6 @@ func (l *coreLink) close() {
 		l.adapter.Close()
 		l.client.Close()
 	}()
-}
-
-// noAttach is the terminals of a machine on remuda-core until its live terminal is built: every attach refused.
-func noAttach() herdr.Terminals {
-	attach := herdr.NewAttachManager(nil)
-	attach.Unavailable = NoAttachOnCore
-	return attach
 }
 
 // reachCore follows the core on the far side of the master, once the probe found its binary there and it answered a
