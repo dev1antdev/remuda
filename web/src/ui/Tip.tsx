@@ -25,3 +25,11 @@ export default function Tip({ text, side = "bottom", className, children }: { te
     </Tooltip.Root>
   );
 }
+
+// tipLines draws a tooltip of several lines, a line each
+export const tipLines = (text: string): ReactNode =>
+  text.split("\n").map((line, i) => (
+    <span key={i} className="tip-line">
+      {line}
+    </span>
+  ));

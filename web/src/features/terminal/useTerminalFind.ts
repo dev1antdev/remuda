@@ -41,12 +41,12 @@ export function useTerminalFind(api: TermApi | null, active: boolean, machineId:
   };
 
   // show finds the query in the pane's rows, counts for the bar, brings the match asked for on screen and marks it
-  const show = async (q: string, index: number) => {
+  const show = async (q: string, index: number, step: 0 | 1 | -1) => {
     if (!api) return;
     const id = ++run.current;
     try {
       if (core && api.search.find) {
-        const { total, at: shown } = api.search.find(q, index);
+        const { total, at: shown } = api.search.find(q, step);
         actions.foundMatches(total, shown);
         if (!total) await older(q, id);
         return;
@@ -88,7 +88,7 @@ export function useTerminalFind(api: TermApi | null, active: boolean, machineId:
       actions.foundMatches(0, 0);
       return;
     }
-    const timer = setTimeout(() => void show(query, 0), DEBOUNCE_MS);
+    const timer = setTimeout(() => void show(query, 0, 0), DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [on, api, query, machineId, paneId, core]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -98,7 +98,7 @@ export function useTerminalFind(api: TermApi | null, active: boolean, machineId:
     const was = stepped.current;
     stepped.current = steps;
     if (!on || steps === was || !query) return;
-    void show(query, at);
+    void show(query, at, app.get().find?.by ?? 1);
   }, [on, api, steps, at, query, machineId, paneId, core]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // the marks go when the bar closes or the lens leaves; closed on screen with a keyboard, the terminal takes the focus

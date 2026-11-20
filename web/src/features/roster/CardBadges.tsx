@@ -3,25 +3,17 @@
 // opens its menu with a mouse and the card's details on a touch screen. Nothing here moves when a value changes: the ✓
 // of a request ready to merge keeps its room.
 
-import { useRef, type MouseEvent, type PointerEvent, type ReactNode } from "react";
+import { useRef, type MouseEvent, type PointerEvent } from "react";
 import { actions } from "@/app/store";
 import { openUrl } from "@/lib/host";
 import { isMac } from "@/lib/prefs";
 import { t } from "@/lib/i18n";
-import { Icon, Menu, Tip, type MenuItem } from "@/ui";
+import { Icon, Menu, Tip, tipLines, type MenuItem } from "@/ui";
 import type { Machine, Session } from "./api";
 import { noteDir, noteTip, portsWords, type Details } from "./cardFacts";
 import { isLinkClick, moreTip, prLook, prNumber, prTip, type CardPR } from "./cardPR";
 import { canRemoveWorktree } from "./prActions";
 import { askRemoveWorktree, prMenuItems } from "./prMenu";
-
-// tipLines draws a tooltip of several lines, a line each
-export const tipLines = (text: string): ReactNode =>
-  text.split("\n").map((line, i) => (
-    <span key={i} className="tip-line">
-      {line}
-    </span>
-  ));
 
 export function CardBadges({ machine, session, name, details, editable, onDetails }: { machine: Machine; session: Session; name: string; details: Details; editable: boolean; onDetails: () => void }) {
   const { note, ports } = details;

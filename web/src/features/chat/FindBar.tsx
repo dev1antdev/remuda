@@ -6,7 +6,7 @@
 import { useEffect, useRef, type KeyboardEvent } from "react";
 import { actions, app } from "@/app/store";
 import { isMac } from "@/lib/prefs";
-import { Icon, Tip } from "@/ui";
+import { Icon, Tip, tipLines } from "@/ui";
 import { countWords } from "./find";
 import { t } from "@/lib/i18n";
 
@@ -22,15 +22,6 @@ export function FindTool({ what = t("in this conversation"), shortcut = SHORTCUT
     field.current?.focus();
     field.current?.select();
   }, [find?.opened]); // eslint-disable-line react-hooks/exhaustive-deps
-  const label = t("Find {what} ({shortcut})", { what, shortcut });
-  const tip = note ? (
-    <>
-      <span className="tip-line">{label}</span>
-      <span className="tip-line">{note}</span>
-    </>
-  ) : (
-    label
-  );
   const onKey = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       e.preventDefault();
@@ -79,7 +70,7 @@ export function FindTool({ what = t("in this conversation"), shortcut = SHORTCUT
           </Tip>
         </span>
       )}
-      <Tip text={tip}>
+      <Tip text={tipLines(t("Find {what} ({shortcut})", { what, shortcut }) + (note ? `\n${note}` : ""))}>
         <button type="button" className={`icon-btn sm find-toggle${find ? " on" : ""}`} aria-label={t("Find {what}", { what })} aria-pressed={!!find} onClick={() => (find ? actions.closeFind() : actions.openFind())}>
           <Icon name="search" size={14} />
         </button>

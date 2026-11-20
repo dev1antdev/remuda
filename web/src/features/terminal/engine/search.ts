@@ -2,14 +2,14 @@
 // rows in the page's amber and selects the current one. On herdr the rows are herdr's — the attach stream repaints
 // the screen, so xterm never holds a scrollback — and useTerminalFind reads them through the server and scrolls the
 // pane; what arrives here is which row of the screen to mark once the repaint has landed. On remuda-core xterm holds
-// the terminal's own rows (the attach paints the history first, the output after it is the program's), so find looks
-// through xterm's buffer itself and scrolls xterm, never the pane.
+// the terminal's own rows (the attach paints the history first, the output after it is the program's), so find lets
+// the addon look through xterm's buffer itself, count, step and scroll xterm, never the pane.
 
 import { SearchAddon, type ISearchDecorationOptions, type ISearchOptions } from "@xterm/addon-search";
 import type { IBufferLine, Terminal as XTerm } from "@xterm/xterm";
 import { findRanges } from "@/features/chat/find";
 import { swatches, type Flavor, type Swatches } from "@/lib/theme";
-import { clampAt, nearest } from "../scrollback";
+import { nearest } from "../scrollback";
 import type { SearchApi } from "./types";
 
 // SETTLE_MS is how long the screen gets to repaint after a scroll before the match is looked for, a few frames at a time.
@@ -62,13 +62,6 @@ export function pickNear(found: Pick<Occurrence, "row" | "col">[], expectedRow: 
   return best;
 }
 
-// scrollTarget is the buffer row to scroll to so a match's row shows a third of the screen above the bottom, or null
-// when it is on the screen already; never past the top of the buffer or below its last screen (baseY).
-export function scrollTarget(row: number, viewportY: number, rows: number, baseY: number): number | null {
-  if (row >= viewportY && row < viewportY + rows) return null;
-  return Math.min(baseY, Math.max(0, row - (rows - 1 - Math.floor(rows / 3))));
-}
-
 // cellSpan is a run of a row's text as cells — from and length in UTF-16 units of the row's text, as translateToString
 // gives it: a wide character fills two cells, a character of two units (an emoji, a surrogate pair) counts two units
 export function cellSpan(line: IBufferLine | undefined, from: number, length: number): { col: number; width: number } {
@@ -107,12 +100,6 @@ export function installSearch(term: XTerm, flavor: () => Flavor, forgetSelection
     const buffer = term.buffer.active;
     const out: string[] = [];
     for (let i = 0; i < term.rows; i++) out.push(buffer.getLine(buffer.viewportY + i)?.translateToString(true) ?? "");
-    return out;
-  };
-  const bufferLines = (): string[] => {
-    const buffer = term.buffer.active;
-    const out: string[] = [];
-    for (let i = 0; i < buffer.length; i++) out.push(buffer.getLine(i)?.translateToString(true) ?? "");
     return out;
   };
   // mark selects the occurrence at a row of the buffer and lets a fresh addon decorate every match, the selected one
@@ -159,22 +146,19 @@ export function installSearch(term: XTerm, flavor: () => Flavor, forgetSelection
       };
       attempt();
     },
-    find(next, index) {
+    find(next, step) {
       stop();
-      query = next;
-      const found = occurrences(bufferLines(), query);
-      if (!found.length) {
-        addon.clearDecorations();
+      if (step === 0 || next !== query) {
+        fresh();
         term.clearSelection();
-        return { total: 0, at: 0 };
       }
-      const at = clampAt(index, found.length);
-      const match = found[at]!;
-      const buffer = term.buffer.active;
-      const target = scrollTarget(match.row, buffer.viewportY, term.rows, buffer.baseY);
-      if (target !== null) term.scrollToLine(target);
-      mark(match.row, match.col, match.length);
-      return { total: found.length, at };
+      query = next;
+      let found = { total: 0, at: 0 };
+      const results = addon.onDidChangeResults((r) => (found = { total: Math.max(0, r.resultCount), at: Math.max(0, r.resultIndex) }));
+      const hit = step < 0 ? addon.findPrevious(query, options()) : addon.findNext(query, options());
+      results.dispose();
+      forgetSelection();
+      return hit ? found : { total: 0, at: 0 };
     },
     clear,
     refresh() {

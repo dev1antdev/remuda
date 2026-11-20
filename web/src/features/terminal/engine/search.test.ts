@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { FLAVORS } from "@/lib/theme";
-import { cellSpan, hexAlpha, occurrences, pickNear, scrollTarget, searchDecorations } from "./search";
+import { cellSpan, hexAlpha, occurrences, pickNear, searchDecorations } from "./search";
 
 const FRAPPE = FLAVORS.frappe;
 const LATTE = FLAVORS.latte;
@@ -79,19 +79,3 @@ describe("cellSpan", () => {
   });
 });
 
-describe("scrollTarget", () => {
-  it("leaves a match already on the screen where it is", () => {
-    expect(scrollTarget(110, 100, 24, 500)).toBeNull();
-    expect(scrollTarget(100, 100, 24, 500)).toBeNull();
-    expect(scrollTarget(123, 100, 24, 500)).toBeNull();
-  });
-  it("puts a match off the screen a third of the screen above its bottom", () => {
-    // 24 rows: the match on screen row 15, 8 rows above the bottom
-    expect(scrollTarget(40, 100, 24, 500)).toBe(40 - 15);
-    expect(scrollTarget(300, 100, 24, 500)).toBe(300 - 15);
-  });
-  it("stays inside the buffer: never above its top, never below its last screen", () => {
-    expect(scrollTarget(3, 100, 24, 500)).toBe(0);
-    expect(scrollTarget(520, 100, 24, 500)).toBe(500);
-  });
-});
