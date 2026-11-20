@@ -50,23 +50,31 @@ func (a *Adapter) editDoc(ctx context.Context, change func(*Document) error) err
 	}
 }
 
-// runShell starts the machine's shell in a new terminal of a workspace's tab and puts it in the mirror at once, so the
-// pane it answers is there for the caller's next request; the core's own news of it finds it there.
+// runShell starts the machine's shell in a new terminal of a workspace's tab and waits for the core's own news of it,
+// so the pane it answers is in the snapshot the caller reads next. The mirror alone puts terminals in it: a reply to
+// the start never does, which could bring back a shell that ended meanwhile. One that ends first fails the start.
 func (a *Adapter) runShell(ctx context.Context, space, tab, cwd string, env map[string]string) (Terminal, error) {
 	t, err := a.client.Run(ctx, RunParams{Cwd: cwd, Env: env, Labels: map[string]string{LabelSpace: space, LabelTab: tab}, Rm: true})
 	if err != nil {
 		return Terminal{}, a.refusal(err, "workspace_not_found")
 	}
-	a.mu.Lock()
-	ended := t.State != "live" || a.state.gone[t.Address]
-	if a.held && !ended && local(t.Address) && a.state.terminals[t.Address] == nil {
-		a.tellLocked(a.state.add(t))
+	for {
+		a.mu.Lock()
+		held, gone := a.state.terminals[t.Address] != nil, a.state.gone[t.Address]
+		a.mu.Unlock()
+		switch {
+		case held:
+			return t, nil
+		case gone || t.State != "live":
+			return Terminal{}, fmt.Errorf("the shell in %s ended as soon as it started", cmp.Or(cwd, "the core's folder"))
+		}
+		select {
+		case <-ctx.Done():
+			a.kill(t.Address)
+			return Terminal{}, fmt.Errorf("remuda-core never told of the shell it started in %s: %w", cmp.Or(cwd, "the core's folder"), ctx.Err())
+		case <-time.After(20 * time.Millisecond):
+		}
 	}
-	a.mu.Unlock()
-	if ended {
-		return Terminal{}, fmt.Errorf("the shell in %s ended as soon as it started", cmp.Or(cwd, "the core's folder"))
-	}
-	return t, nil
 }
 
 // holds says whether a live terminal the mirror holds now, other than the ones ending, is in a place the snapshot

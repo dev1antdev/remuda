@@ -220,26 +220,13 @@ func TestAnAgentStartsInTheShellAndTakesPromptsAndKeys(t *testing.T) {
 	}
 	screenSays(t, adapter, pane, "got: hello there")
 
-	if err := adapter.PaneSendText(pane, "typed"); err != nil {
+	if err := adapter.PaneSendKeys(pane, []string{"x", "enter"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := adapter.PaneSendKeys(pane, []string{"enter"}); err != nil {
-		t.Fatal(err)
+	screenSays(t, adapter, pane, "got: x")
+	if err := adapter.PaneSendText(pane, "typed raw"); !herdr.IsCode(err, "agent_pane_busy") {
+		t.Fatalf("raw typing into an agent's terminal: %v", err)
 	}
-	screenSays(t, adapter, pane, "got: typed")
-
-	// remuda's own typing is no person's draft: a prompt right after it is not held back for one
-	if err := adapter.PaneSendText(pane, "draft "); err != nil {
-		t.Fatal(err)
-	}
-	start := time.Now()
-	if err := adapter.AgentPrompt(pane, "at once"); err != nil {
-		t.Fatal(err)
-	}
-	if took := time.Since(start); took > 8*time.Second {
-		t.Fatalf("the prompt waited %s behind remuda's own typing", took)
-	}
-	screenSays(t, adapter, pane, "got: draft at once")
 
 	if err := adapter.AgentPrompt(pane, "ask"); err != nil {
 		t.Fatal(err)
@@ -257,6 +244,25 @@ func TestAnAgentStartsInTheShellAndTakesPromptsAndKeys(t *testing.T) {
 	if !slices.ContainsFunc(eventually(t, adapter, func(*herdr.Snapshot) bool { return true }).Panes, func(p herdr.PaneInfo) bool { return p.PaneID == pane }) {
 		t.Fatal("the pane is gone")
 	}
+}
+
+func TestRemudaTypesACommandLineIntoAShell(t *testing.T) {
+	client := coretest.Server(t).Client(t)
+	adapter := adapterOf(t, client, core.AdapterHooks{})
+	eventually(t, adapter, func(*herdr.Snapshot) bool { return true })
+	made, err := adapter.WorkspaceCreate(t.TempDir(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pane := made.RootPane.PaneID
+	eventually(t, adapter, func(*herdr.Snapshot) bool { at, _ := adapter.PaneAtPrompt(pane); return at })
+	if err := adapter.PaneSendText(pane, "echo typed-$((40+2))"); err != nil {
+		t.Fatal(err)
+	}
+	if err := adapter.PaneSendKeys(pane, []string{"enter"}); err != nil {
+		t.Fatal(err)
+	}
+	screenSays(t, adapter, pane, "typed-42")
 }
 
 func TestAnAgentThatCannotRunFailsItsStart(t *testing.T) {

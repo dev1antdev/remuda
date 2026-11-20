@@ -110,15 +110,18 @@ func readyForPrompt(t *Terminal) bool {
 	return !t.statusAt.IsZero() && !t.statusAt.Before(t.agentAt)
 }
 
-// AgentPrompt hands the agent in the pane a message: the core pastes it and presses Enter once the person is done
-// with a draft in the terminal, and refuses while the agent asks something (agent_blocked). A pane whose agent has not
-// come up, or that has none, gets nothing: what is written for an agent never reaches a shell.
+// AgentPrompt hands the agent in the pane a message: the core pastes it and presses Enter, and refuses while the agent
+// asks something (agent_blocked). A pane whose agent has not come up, or that has none, gets nothing: what is written
+// for an agent never reaches a shell. The core's own view of the terminal is read right before, so an agent that left
+// since the mirror's last news is not taken for there, and a send to an idle agent names that status (`if`): an agent
+// that cleared it on its way out (Claude Code reports state=clear) has the prompt refused (status_mismatch).
 func (a *Adapter) AgentPrompt(target, text string) error {
 	t, err := a.terminal(target)
 	if err != nil {
 		return err
 	}
-	if _, err := agentIn(&t, target); err != nil {
+	agent, err := agentIn(&t, target)
+	if err != nil {
 		return err
 	}
 	if !readyForPrompt(&t) {
@@ -126,7 +129,18 @@ func (a *Adapter) AgentPrompt(target, text string) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), sendWithin)
 	defer cancel()
-	_, err = a.client.Send(ctx, target, text)
+	now, err := a.client.Get(ctx, target)
+	if err != nil {
+		return a.refusal(err, "agent_not_found")
+	}
+	if agentOf(&now) != agent {
+		return &herdr.Error{Code: "agent_not_found", Message: "the agent in " + target + " has left"}
+	}
+	params := map[string]any{"terminal": target, "text": text}
+	if statusOf(&now) == herdr.StatusIdle {
+		params["if"] = herdr.StatusIdle // not working: a turn ending as the prompt goes would refuse it
+	}
+	err = a.client.Call(ctx, "terminal.send", params, nil)
 	return a.inputRefusal(err, "agent_not_ready", "agent_blocked")
 }
 
@@ -138,6 +152,8 @@ func (a *Adapter) inputRefusal(err error, notReady, blocked string) error {
 		return &herdr.Error{Code: notReady, Message: err.Error()}
 	case IsKind(err, "blocked"):
 		return &herdr.Error{Code: blocked, Message: err.Error()}
+	case IsKind(err, "status_mismatch"):
+		return &herdr.Error{Code: notReady, Message: "the agent moved as the prompt went, nothing was sent: " + err.Error()}
 	case IsKind(err, "finished"):
 		return &herdr.Error{Code: "pane_not_found", Message: err.Error()}
 	}
@@ -159,10 +175,11 @@ func (a *Adapter) PaneSendKeys(paneID string, keys []string) error {
 // for the program's keyboard modes.
 var keyBytes = map[string]string{"\x1bOH": "home", "\x1bOF": "end", "\x1b[5~": "pageup", "\x1b[6~": "pagedown", "\x1b[3~": "delete"}
 
-// PaneSendText types text as it is, byte for byte: through a viewer of the terminal's own that leaves its size alone,
-// since the core takes text only as a paste. It goes as the terminal's automatic input, never as a person's typing, so
-// it starts no draft that would make the core hold a prompt back: a prompt checked against the mirror is typed at
-// once, while the agent seen is still there.
+// PaneSendText types text as it is, byte for byte, into a terminal its shell holds — a command line remuda types into a
+// shell it just opened — through a viewer of the terminal's own that leaves its size alone, since the core takes text
+// only as a paste. It goes as the terminal's automatic input, starting no draft the core would hold a prompt back for.
+// Into a pane an agent holds it types nothing (agent_pane_busy): a person's typing there comes with the live terminal,
+// and remuda's own would be pasted ahead of the agent's next prompt.
 func (a *Adapter) PaneSendText(paneID, text string) error {
 	if key, ok := keyBytes[text]; ok {
 		return a.PaneSendKeys(paneID, []string{key})
@@ -170,6 +187,9 @@ func (a *Adapter) PaneSendText(paneID, text string) error {
 	t, err := a.terminal(paneID)
 	if err != nil {
 		return err
+	}
+	if agentOf(&t) != "" {
+		return &herdr.Error{Code: "agent_pane_busy", Message: "typing into an agent's terminal on remuda-core comes with its live terminal"}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), callWithin)
 	defer cancel()

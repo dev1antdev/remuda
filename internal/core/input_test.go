@@ -128,3 +128,13 @@ func TestATerminalTheCoreSaidWentIsNotPutBack(t *testing.T) {
 		t.Fatal("a removal of a terminal the mirror never held is forgotten")
 	}
 }
+
+func TestAPaneClosedOutOfATreeThatPlacesAnotherKeepsTheTab(t *testing.T) {
+	doc := Document{Workspaces: []DocWorkspace{{ID: "w1", Tabs: []DocTab{{ID: "a", Layout: splitBeside(nil, "t1", "t2", "right")}}}}}
+	if !dropPane(&doc, "a", "t1") || doc.Workspaces[0].Tabs[0].Layout.PaneID != "t2" {
+		t.Fatalf("the split written meanwhile is lost: %+v", doc.Workspaces[0].Tabs[0].Layout)
+	}
+	if dropPane(&doc, "a", "t2") {
+		t.Fatal("a tree with no pane left still places one")
+	}
+}

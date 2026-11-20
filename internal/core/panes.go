@@ -61,6 +61,19 @@ func splitBeside(tree *herdr.LayoutNode, beside, added, direction string) *herdr
 	return &herdr.LayoutNode{Type: "split", Direction: direction, Ratio: 0.5, First: tree, Second: leaf(added)}
 }
 
+// dropPane takes a pane out of its tab's tree in the document, saying whether the tree still places another pane.
+func dropPane(doc *Document, tab, pane string) (placesOthers bool) {
+	for i := range doc.Workspaces {
+		for j := range doc.Workspaces[i].Tabs {
+			if t := &doc.Workspaces[i].Tabs[j]; t.ID == tab {
+				t.Layout = withoutPane(t.Layout, pane)
+				placesOthers = t.Layout != nil
+			}
+		}
+	}
+	return placesOthers
+}
+
 // withoutPane is a tree with a pane taken out, its split given whole to the other side; nil once no pane is left.
 func withoutPane(tree *herdr.LayoutNode, pane string) *herdr.LayoutNode {
 	switch {
@@ -84,7 +97,8 @@ func withoutPane(tree *herdr.LayoutNode, pane string) *herdr.LayoutNode {
 }
 
 // PaneClose ends the pane's terminal and takes it out of its tab's tree; the tab goes with its last pane and the
-// workspace with its last tab, as herdr's do.
+// workspace with its last tab, as herdr's do. A tab the document still places another pane in — a split another
+// request wrote meanwhile — stays.
 func (a *Adapter) PaneClose(paneID string) error {
 	snap, err := a.SessionSnapshot()
 	if err != nil {
@@ -101,14 +115,7 @@ func (a *Adapter) PaneClose(paneID string) error {
 	defer cancel()
 	ending := []string{paneID}
 	return a.editDoc(ctx, func(doc *Document) error {
-		for i := range doc.Workspaces {
-			for j := range doc.Workspaces[i].Tabs {
-				if tab := &doc.Workspaces[i].Tabs[j]; tab.ID == pane.TabID {
-					tab.Layout = withoutPane(tab.Layout, paneID)
-				}
-			}
-		}
-		if !a.holds(func(p *herdr.PaneInfo) bool { return p.TabID == pane.TabID }, ending) {
+		if !dropPane(doc, pane.TabID, paneID) && !a.holds(func(p *herdr.PaneInfo) bool { return p.TabID == pane.TabID }, ending) {
 			a.dropTab(doc, pane.TabID, ending)
 		}
 		return nil

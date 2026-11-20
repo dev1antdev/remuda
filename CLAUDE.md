@@ -428,10 +428,11 @@ components and icons as rules for whoever changes it: @docs/design.md
   (`splitBeside`, half the room) and `PaneClose` (`withoutPane`; a tab goes
   with its last pane and a workspace with its last tab, as herdr's) — run
   the machine's shell in a new terminal with the place's labels and
-  `rm` (gone when its shell ends, as a herdr pane), put it in the mirror at
-  once (`runShell`, so the pane answered is there for the next request;
-  one the core said went already — `mirror.gone`, kept until the next fill
-  — fails the create rather than come back as a ghost),
+  `rm` (gone when its shell ends, as a herdr pane), and wait for the core's
+  own news of it (`runShell`: the mirror alone puts terminals in it, so the
+  pane answered is in the next snapshot and a reply never brings back a
+  shell that ended meanwhile — one the core said went, `mirror.gone`, fails
+  the start),
   and change the document through `editDoc`: read, change, write at the
   version read, made again on a `conflict` (another remuda's write) up to
   `docTries` 5, one at a time from this remuda (`docMu`), the mirror taking
@@ -444,7 +445,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   gone counting as gone), and a workspace leaves the document only when the
   document read at the write keeps no other tab of it and the mirror then
   holds no other terminal in it (`holds`), so a tab another request made
-  meanwhile keeps its workspace. `input.go` — `AgentStartWith` types the agent's
+  meanwhile keeps its workspace, and a pane closed keeps its tab while the
+  document's tree still places another pane (`dropPane`: a split another
+  request wrote meanwhile). `input.go` — `AgentStartWith` types the agent's
   command line into the pane's shell at its prompt, as herdr's agent.start
   runs it, the shell staying under the agent (`terminal.send`: pasted and
   Enter; quoted for the shell at the prompt, `commandLine`: POSIX, pwsh's
@@ -471,13 +474,23 @@ components and icons as rules for whoever changes it: @docs/design.md
   through OSC 7501 takes no prompt on a core machine** (Claude Code before
   2.1.325, and agents without it): the core reads no dialog off the screen,
   and an Enter typed into one could approve it — the core's `blocked` →
-  `agent_blocked`, `unavailable` → `agent_not_ready`; `PaneSendKeys` is
+  `agent_blocked`, `unavailable` → `agent_not_ready`; right before the send
+  the core's own view of the terminal is read (`terminal.get`) and must
+  still show that agent, and a send to an idle agent names that status
+  (`if`, never for a working one, whose turn may end as it goes), so an
+  agent that cleared its status leaving — Claude Code reports
+  `state=clear` — has the prompt refused (`status_mismatch` →
+  `agent_not_ready`); only a crash inside the core's foreground poll (about
+  half a second) is left to Core 33; `PaneSendKeys` is
   `terminal.keys` with `now` (keys the person pressed); `PaneSendText` types
-  bytes as they are through a `keep_size` attach of its own, since the core
-  takes text only as a paste, as the terminal's automatic input
-  (`Stream.WriteAutomatic`), never a person's typing, so it starts no draft
-  the core would hold a prompt back for — a prompt goes at once, to the
-  agent the mirror saw — but the bytes sessions sends for home, end,
+  bytes as they are into a terminal its shell holds — a command line remuda
+  types into a shell it opened — through a `keep_size` attach of its own,
+  since the core takes text only as a paste, as the terminal's automatic
+  input (`Stream.WriteAutomatic`), starting no draft the core would hold a
+  prompt back for; into a pane an agent holds it types nothing
+  (`agent_pane_busy`: a person's typing there comes with the live terminal,
+  and remuda's own would go ahead of the agent's next prompt); the bytes
+  sessions sends for home, end,
   pageup, pagedown and delete (herdr 0.9.5 names none) go as the core's
   named keys, encoded for the program's keyboard modes (`keyBytes`);
   `PaneSendInput` refuses a paste of several lines (typed raw, each would
