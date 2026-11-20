@@ -7429,7 +7429,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   repository's folder in the sidebar, by `session.folder`). Tabs render in the strip
   above the pane, never in the sidebar; only a workspace running several
   agents lists them, a small line each, under its card.
-- `xterm` keeps a small local scrollback but its viewport scrollbar is hidden
+- `xterm` keeps a small local scrollback (on remuda-core the terminal's own
+  `XTERM_SCROLLBACK` 2000 rows, painted on attach) but its viewport scrollbar is hidden
   in CSS: an overlay scrollbar paints over the last column. `color-scheme:
   dark` + thin custom scrollbars everywhere else.
 - Auth: every route except `/api/health` and `/api/login` requires the

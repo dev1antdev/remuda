@@ -5,6 +5,10 @@
 // SCROLLBACK_ROWS is how many rows one find reads: a build log's tail, not the whole history.
 export const SCROLLBACK_ROWS = 5000;
 
+// XTERM_SCROLLBACK is how many rows above the screen the page's xterm keeps; on remuda-core the attach paints as many
+// (attachHistory in internal/core/viewers.go), so the find reads the terminal's own rows.
+export const XTERM_SCROLLBACK = 2000;
+
 export type Scroll = { offset_from_bottom: number; max_offset_from_bottom: number; viewport_rows: number };
 export type ScrollbackMatch = { row: number; col: number; len: number };
 export type Found = { matches: ScrollbackMatch[]; rows: number; truncated: boolean; scroll: Scroll | null };

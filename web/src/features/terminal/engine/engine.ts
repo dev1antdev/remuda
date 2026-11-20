@@ -1,5 +1,6 @@
 // The terminal engine: one xterm on one herdr pane, outside React. Pane bytes arrive over the transport
-// and are painted; keystrokes go back; herdr keeps the real scrollback. The pieces — the modes intercepted,
+// and are painted; keystrokes go back; herdr keeps the real scrollback — on remuda-core xterm holds the terminal's
+// own XTERM_SCROLLBACK rows, painted on attach. The pieces — the modes intercepted,
 // the mouse reports, the selection that stays with the text, the selection layer, copy, links, paste — are
 // wired here and torn down together.
 
@@ -23,6 +24,7 @@ import { installPointer, type Flags } from "./pointer";
 import { trackSelection } from "./selection";
 import { connect, type Transport } from "./transport";
 import type { Modifier, TermApi } from "./types";
+import { XTERM_SCROLLBACK } from "../scrollback";
 import { terminalTheme, type Flavor } from "@/lib/theme";
 
 export type EngineProps = Geometry & {
@@ -49,7 +51,7 @@ export function createEngine(mount: HTMLElement, machineId: string, paneId: stri
   const term = new XTerm({
     fontFamily: props().fontFamily,
     fontSize: props().fontSize,
-    scrollback: 2000,
+    scrollback: XTERM_SCROLLBACK,
     allowProposedApi: true,
     theme: terminalTheme(props().flavor),
     disableStdin: props().readOnly,

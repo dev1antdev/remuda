@@ -20,7 +20,8 @@ const attachWithin = 15 * time.Second
 const viewerChunk = 32 << 10
 
 // attachHistory is how many rows of history above the screen a viewer is painted first: as many as the page's xterm
-// keeps (`scrollback` in features/terminal/engine/engine.ts), so its find reads the terminal's own rows.
+// keeps (XTERM_SCROLLBACK in web/src/features/terminal/scrollback.ts, whose test reads this line), so its find reads
+// the terminal's own rows.
 const attachHistory = 2000
 
 // Terminals opens a machine's terminals through its core client.

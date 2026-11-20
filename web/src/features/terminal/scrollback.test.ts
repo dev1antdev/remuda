@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { blankTail, clampAt, fromBottom, nearest, offsetFor, onScreen, viewportRow } from "./scrollback";
+import viewers from "../../../../internal/core/viewers.go?raw";
+import { blankTail, clampAt, fromBottom, nearest, offsetFor, onScreen, viewportRow, XTERM_SCROLLBACK } from "./scrollback";
 
 const scroll = (max: number, rows: number, offset = 0) => ({ offset_from_bottom: offset, max_offset_from_bottom: max, viewport_rows: rows });
 
@@ -51,5 +52,11 @@ describe("clampAt", () => {
     expect(clampAt(5, 3)).toBe(2);
     expect(clampAt(-1, 3)).toBe(0);
     expect(clampAt(1, 0)).toBe(0);
+  });
+});
+
+describe("XTERM_SCROLLBACK", () => {
+  it("is the history a viewer on remuda-core is painted on attach", () => {
+    expect(viewers).toMatch(new RegExp(`const attachHistory = ${XTERM_SCROLLBACK}\\b`));
   });
 });

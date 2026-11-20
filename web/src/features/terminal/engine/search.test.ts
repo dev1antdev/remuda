@@ -78,4 +78,3 @@ describe("cellSpan", () => {
     expect(cellSpan(undefined, 5, 2)).toEqual({ col: 5, width: 2 });
   });
 });
-
