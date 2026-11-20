@@ -40,9 +40,9 @@ func TestHelperHoldsFile(t *testing.T) {
 	os.Exit(0)
 }
 
-// holder starts the helper holding holds open, with env; under a shell (a wrapper such as npm's) holding shellHolds
-// open itself when asked. It answers the pid the lookup is asked about once every file is open.
-func holder(t *testing.T, holds []string, env []string, underShell bool, shellHolds string) int {
+// holder starts the helper in dir holding holds open, with env; under a shell (a wrapper such as npm's) holding
+// shellHolds open itself when asked. It answers the pid the lookup is asked about once every file is open.
+func holder(t *testing.T, dir string, holds []string, env []string, underShell bool, shellHolds string) int {
 	t.Helper()
 	if runtime.GOOS == "windows" {
 		t.Skip("the lookup reads ps, /proc and lsof")
@@ -57,6 +57,7 @@ func holder(t *testing.T, holds []string, env []string, underShell bool, shellHo
 		}
 		cmd = exec.Command("sh", "-c", line, os.Args[0], run, shellHolds)
 	}
+	cmd.Dir = dir
 	cmd.Env = append(append(os.Environ(), "REMUDA_TEST_HOLD="+strings.Join(holds, string(os.PathListSeparator)), "REMUDA_TEST_READY="+ready), env...)
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
@@ -74,6 +75,16 @@ func holder(t *testing.T, holds []string, env []string, underShell bool, shellHo
 			t.Fatal("the holder never opened its files")
 		}
 	}
+}
+
+// realDir is a folder of the test's own as a process standing in it is told: a Mac's temp folder is a link.
+func realDir(t *testing.T) string {
+	t.Helper()
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return dir
 }
 
 // procStart is the process's start the way Claude Code records it in its session file.
@@ -103,7 +114,8 @@ func TestClaudeSessionComesFromItsConfigDirAndItsStart(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	config := filepath.Join(home, "Application Support", "Claude PROFILE=work")
-	pid := holder(t, nil, []string{"CLAUDE_CONFIG_DIR=" + config, "AFTER_IT=1"}, false, "")
+	work := realDir(t)
+	pid := holder(t, work, nil, []string{"CLAUDE_CONFIG_DIR=" + config, "AFTER_IT=1"}, false, "")
 	start := procStart(t, pid)
 	writeSessionFile(t, filepath.Join(config, "sessions"), pid, "4c9d6f0e-1111-4222-8333-944455556666", "/work/api", start)
 	writeSessionFile(t, filepath.Join(home, ".claude", "sessions"), pid, "0000aaaa-default-dir-not-this-one", "/work/api", start)
@@ -111,23 +123,28 @@ func TestClaudeSessionComesFromItsConfigDirAndItsStart(t *testing.T) {
 	writeSessionFile(t, filepath.Join(home, "Application Support", "Claude", "sessions"), pid, "1111bbbb-stale-not-this-one", "/work/api", "")
 
 	reader := NewReader(remoteHere(home))
-	got, err := reader.SessionsOf([]Running{{PID: pid, Agent: "claude", CWD: "/work/api"}})
+	got, err := reader.SessionsOf([]Running{{PID: pid, Agent: "claude", CWD: work}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got[pid] != "4c9d6f0e-1111-4222-8333-944455556666" {
 		t.Fatalf("session = %q, want the one in CLAUDE_CONFIG_DIR", got[pid])
 	}
+	// the pane was seen in another folder: the pid went to this process since
+	if got, err := reader.SessionsOf([]Running{{PID: pid, Agent: "claude", CWD: filepath.Join(work, "elsewhere")}}); err != nil || len(got) != 0 {
+		t.Fatalf("a process standing in another folder than the pane's: got %v, %v", got, err)
+	}
 }
 
 func TestClaudeSessionLeftByAnEndedProcessIsNotTaken(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	pid := holder(t, nil, nil, false, "")
-	writeSessionFile(t, filepath.Join(home, ".claude", "sessions"), pid, "4c9d6f0e-1111-4222-8333-944455556666", "/work/api", "Mon Jan  1 00:00:00 2024")
+	work := realDir(t)
+	pid := holder(t, work, nil, nil, false, "")
+	writeSessionFile(t, filepath.Join(home, ".claude", "sessions"), pid, "4c9d6f0e-1111-4222-8333-944455556666", work, "Mon Jan  1 00:00:00 2024")
 
 	reader := NewReader(remoteHere(home))
-	got, err := reader.SessionsOf([]Running{{PID: pid, Agent: "claude", CWD: "/work/api"}})
+	got, err := reader.SessionsOf([]Running{{PID: pid, Agent: "claude", CWD: work}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,10 +181,13 @@ func writeRolloutNamed(t *testing.T, home, name, id string, subagent bool) strin
 }
 
 func TestClaudeSessionUnderARelativeConfigDirIsReadFromTheAgentsFolder(t *testing.T) {
-	home := t.TempDir()
+	home := realDir(t)
 	t.Setenv("HOME", home)
 	work := filepath.Join(home, "work", "app")
-	pid := holder(t, nil, []string{"CLAUDE_CONFIG_DIR=./.claude-profile"}, false, "")
+	if err := os.MkdirAll(work, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	pid := holder(t, work, nil, []string{"CLAUDE_CONFIG_DIR=./.claude-profile"}, false, "")
 	writeSessionFile(t, filepath.Join(work, ".claude-profile", "sessions"), pid, "4c9d6f0e-1111-4222-8333-944455556666", work, procStart(t, pid))
 
 	got, err := NewReader(remoteHere(home)).SessionsOf([]Running{{PID: pid, Agent: "claude", CWD: work}})
@@ -239,10 +259,10 @@ func TestCodexSessionIsThePersonsRolloutItsProcessHoldsOpen(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
+			home := realDir(t)
 			t.Setenv("HOME", home)
 			holds, underShell, shellHolds := c.holds(home)
-			pid := holder(t, holds, nil, underShell, shellHolds)
+			pid := holder(t, home, holds, nil, underShell, shellHolds)
 			got, err := NewReader(remoteHere(home)).SessionsOf([]Running{{PID: pid, Agent: "codex", CWD: home}})
 			if err != nil {
 				t.Fatal(err)
@@ -258,19 +278,19 @@ func TestAPipeNamedLikeARolloutHoldsNothingUp(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("no FIFOs")
 	}
-	home := t.TempDir()
+	home := realDir(t)
 	t.Setenv("HOME", home)
 	rollout := writeRollout(t, home, rolloutID, false)
 	pipe := filepath.Join(filepath.Dir(rollout), "rollout-2026-11-20T02-28-49-01a1f692-0000-70f0-b846-42b3f2f3c1db.jsonl")
 	if err := exec.Command("mkfifo", pipe).Run(); err != nil {
 		t.Fatal(err)
 	}
-	codex := holder(t, []string{pipe, rollout}, nil, false, "")
-	claude := holder(t, nil, nil, false, "")
+	codex := holder(t, home, []string{pipe, rollout}, nil, false, "")
+	claude := holder(t, home, nil, nil, false, "")
 	writeSessionFile(t, filepath.Join(home, ".claude", "sessions"), claude, "4c9d6f0e-1111-4222-8333-944455556666", "/work/api", procStart(t, claude))
 
 	began := time.Now()
-	got, err := NewReader(remoteHere(home)).SessionsOf([]Running{{PID: codex, Agent: "codex", CWD: home}, {PID: claude, Agent: "claude", CWD: "/work/api"}})
+	got, err := NewReader(remoteHere(home)).SessionsOf([]Running{{PID: codex, Agent: "codex", CWD: home}, {PID: claude, Agent: "claude", CWD: home}})
 	if err != nil {
 		t.Fatalf("after %s: %v", time.Since(began), err)
 	}
@@ -280,9 +300,9 @@ func TestAPipeNamedLikeARolloutHoldsNothingUp(t *testing.T) {
 }
 
 func TestSessionsOfAsksTheMachineOnceForEveryAgent(t *testing.T) {
-	answer := "41\037claude\037Thu Nov 19 00:36:10 2026\037" +
+	answer := "41\037claude\037Thu Nov 19 00:36:10 2026\037/w\037" +
 		`{"pid":41,"sessionId":"aaaa-1","cwd":"/w","procStart":"Thu Nov 19 00:36:10 2026"}` + "\036\n" +
-		"52\037codex\037Thu Nov 19 00:40:00 2026\03752\035/home/me/.codex/sessions/2026/11/19/rollout-2026-11-19T00-40-01-" + rolloutID + ".jsonl\035" + sessionMeta(rolloutID, false) + "\n\036\n"
+		"52\037codex\037Thu Nov 19 00:40:00 2026\037\03752\035/home/me/.codex/sessions/2026/11/19/rollout-2026-11-19T00-40-01-" + rolloutID + ".jsonl\035" + sessionMeta(rolloutID, false) + "\n\036\n"
 	host := &shell.Fake{Name: "gog", Remote: true, Dir: "/home/me", Answer: func(string) (string, error) { return answer, nil }}
 	got, err := NewReader(host).SessionsOf([]Running{{PID: 41, Agent: "claude", CWD: "/w"}, {PID: 52, Agent: "codex", CWD: "/w"}, {PID: 60, Agent: "gemini"}})
 	if err != nil {
@@ -303,9 +323,10 @@ func TestSessionsOfAsksTheMachineOnceForEveryAgent(t *testing.T) {
 }
 
 func TestParseSessionsByPID(t *testing.T) {
-	record := func(pid int, agent, start, payload string) string {
-		return strconv.Itoa(pid) + script.US + agent + script.US + start + script.US + payload + script.RS + "\n"
+	standing := func(pid int, agent, start, folder, payload string) string {
+		return strconv.Itoa(pid) + script.US + agent + script.US + start + script.US + folder + script.US + payload + script.RS + "\n"
 	}
+	record := func(pid int, agent, start, payload string) string { return standing(pid, agent, start, "", payload) }
 	claude := func(pid int, id, cwd, start string) string {
 		return fmt.Sprintf(`{"pid":%d,"sessionId":%q,"cwd":%q,"procStart":%q}`, pid, id, cwd, start)
 	}
@@ -318,7 +339,10 @@ func TestParseSessionsByPID(t *testing.T) {
 		want  string
 	}{
 		{"start matches", record(7, "claude", "S", claude(7, "id-1", "/a", "S")), []Running{{7, "claude", "/a"}}, rpath.Style{}, "id-1"},
-		{"start matches, in another folder: an agent elsewhere took the pid", record(7, "claude", "S", claude(7, "id-1", "/a", "S")), []Running{{7, "claude", "/b"}}, rpath.Style{}, ""},
+		{"start matches, the file of another folder", record(7, "claude", "S", claude(7, "id-1", "/a", "S")), []Running{{7, "claude", "/b"}}, rpath.Style{}, "id-1"},
+		{"the process stands in the pane's folder", standing(7, "claude", "S", "/b", claude(7, "id-1", "/a", "S")), []Running{{7, "claude", "/b"}}, rpath.Style{}, "id-1"},
+		{"the process stands elsewhere: the pid went to another", standing(7, "claude", "S", "/c", claude(7, "id-1", "/c", "S")), []Running{{7, "claude", "/b"}}, rpath.Style{}, ""},
+		{"a Windows process in its folder, spelt as Git Bash does", standing(7, "claude", "", "/c/Work/Api", claude(7, "id-1", `C:\Work\Api`, "S")), []Running{{7, "claude", `C:\Work\Api`}}, windows, "id-1"},
 		{"start differs", record(7, "claude", "S", claude(7, "id-1", "/a", "T")), []Running{{7, "claude", "/a"}}, rpath.Style{}, ""},
 		{"another pid's file", record(7, "claude", "S", claude(8, "id-1", "/a", "S")), []Running{{7, "claude", "/a"}}, rpath.Style{}, ""},
 		{"no start here, the folder decides", record(7, "claude", "", claude(7, "id-1", `C:\Work\Api`, "S")), []Running{{7, "claude", `c:/work/api`}}, windows, "id-1"},
@@ -336,8 +360,8 @@ func TestParseSessionsByPID(t *testing.T) {
 		{"a verified file over a folder-only one before it", record(7, "claude", "S", claude(7, "stale", "/a", "")+script.GS+claude(7, "live", "/a", "S")+script.GS), []Running{{7, "claude", "/a"}}, rpath.Style{}, "live"},
 		{"the session_meta's id over the file name", record(7, "codex", "S", "7"+script.GS+"/x/rollout-2026-11-20T03-10-00-"+rolloutID+"_01a1f6a0-1111-7222-8333-944455556666.jsonl"+script.GS+sessionMeta(rolloutID, false)+"\n"), []Running{{7, "codex", "/a"}}, rpath.Style{}, rolloutID},
 		{"the file name when the session_meta names no id", record(7, "codex", "S", "7"+script.GS+"/x/rollout-2026-11-20T02-28-48-"+rolloutID+".jsonl"+script.GS+`{"type":"session_meta","payload":{"source":"cli"}}`+"\n"), []Running{{7, "codex", "/a"}}, rpath.Style{}, rolloutID},
-		{"a thread of another folder", record(7, "codex", "S", "7"+script.GS+"/x/rollout-2026-11-20T02-28-48-"+rolloutID+".jsonl"+script.GS+`{"type":"session_meta","payload":{"id":"`+rolloutID+`","cwd":"/b","thread_source":"user"}}`+"\n"), []Running{{7, "codex", "/a"}}, rpath.Style{}, ""},
-		{"a thread of its folder", record(7, "codex", "S", "7"+script.GS+"/x/rollout-2026-11-20T02-28-48-"+rolloutID+".jsonl"+script.GS+`{"type":"session_meta","payload":{"id":"`+rolloutID+`","cwd":"/a","thread_source":"user"}}`+"\n"), []Running{{7, "codex", "/a"}}, rpath.Style{}, rolloutID},
+		{"a thread resumed in another folder than it began in", standing(7, "codex", "S", "/a", "7"+script.GS+"/x/rollout-2026-11-20T02-28-48-"+rolloutID+".jsonl"+script.GS+`{"type":"session_meta","payload":{"id":"`+rolloutID+`","cwd":"/b","thread_source":"user"}}`+"\n"), []Running{{7, "codex", "/a"}}, rpath.Style{}, rolloutID},
+		{"a thread held by a process standing elsewhere", standing(7, "codex", "S", "/b", "7"+script.GS+"/x/rollout-2026-11-20T02-28-48-"+rolloutID+".jsonl"+script.GS+sessionMeta(rolloutID, false)+"\n"), []Running{{7, "codex", "/a"}}, rpath.Style{}, ""},
 		{"a subagent's thread alone", record(7, "codex", "S", "7"+script.GS+"/x/rollout-2026-11-20T02-28-48-"+rolloutID+".jsonl"+script.GS+sessionMeta(rolloutID, true)+"\n"), []Running{{7, "codex", "/a"}}, rpath.Style{}, ""},
 		{"a rollout whose first line is no session_meta", record(7, "codex", "S", "7"+script.GS+"/x/rollout-2026-11-20T02-28-48-"+rolloutID+".jsonl"+script.GS+`{"type":"response_item","payload":{}}`+"\n"), []Running{{7, "codex", "/a"}}, rpath.Style{}, ""},
 		{"a rollout still empty", record(7, "codex", "S", "7"+script.GS+"/x/rollout-2026-11-20T02-28-48-"+rolloutID+".jsonl"+script.GS+"\n"), []Running{{7, "codex", "/a"}}, rpath.Style{}, ""},

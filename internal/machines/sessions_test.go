@@ -179,6 +179,74 @@ func TestAPidGivenOutAgainIsNotTheProcessBeforeIt(t *testing.T) {
 	}
 }
 
+// Once the process that took a pid later is known, the one before it is never read again, though a snapshot still
+// names it: a look at the pid would see the later one's session.
+func TestTheProcessBeforeAPidsLaterOneIsNeverReadAgain(t *testing.T) {
+	reads := &sessionReads{answers: map[int]string{100: "sid-a"}}
+	s := newProcessSessions("gog", reads.read)
+	s.fresh = time.Hour
+	before := core.AgentProcess{Agent: "claude", PID: 100, Cwd: "/work/api", Terminal: "t1", Since: agentsTook}
+	after := core.AgentProcess{Agent: "claude", PID: 100, Cwd: "/work/api", Terminal: "t2", Since: agentsTook.Add(time.Minute)}
+	for start := time.Now(); ; time.Sleep(5 * time.Millisecond) {
+		if got := s.of(before); got != nil && got.Value == "sid-a" {
+			break
+		}
+		if time.Since(start) > 5*time.Second {
+			t.Fatal("the first process was never read")
+		}
+	}
+	reads.mu.Lock()
+	reads.answers[100] = "sid-b"
+	reads.mu.Unlock()
+	for start := time.Now(); ; time.Sleep(5 * time.Millisecond) {
+		if got := s.of(after); got != nil && got.Value == "sid-b" {
+			break
+		}
+		if time.Since(start) > 5*time.Second {
+			t.Fatal("the later process was never read")
+		}
+	}
+
+	// the one before comes due while the later one is fresh, and a snapshot still naming it asks about it last
+	beforeKey := processKey{terminal: "t1", since: agentsTook.UnixMilli(), pid: 100}
+	s.mu.Lock()
+	s.procs[beforeKey].triedAt = time.Now().Add(-2 * time.Hour)
+	s.procs[beforeKey].asked = time.Now().Add(time.Second)
+	s.mu.Unlock()
+	reads.mu.Lock()
+	reads.answers[100] = "sid-c"
+	reads.mu.Unlock()
+	if err := s.readDue(time.Now().Add(-time.Hour), false); err != nil {
+		t.Fatal(err)
+	}
+	s.mu.Lock()
+	got := s.procs[beforeKey].session
+	s.mu.Unlock()
+	if got != "sid-a" {
+		t.Fatalf("the process before took a look at its pid's later holder: %q", got)
+	}
+}
+
+// After the mirror fills again it knows no agent's moment: the process it finds is the one asked about last.
+func TestAMirrorFilledAgainReadsTheProcessItFinds(t *testing.T) {
+	reads := &sessionReads{answers: map[int]string{100: "sid-a"}}
+	s := newProcessSessions("gog", reads.read)
+	s.fresh = time.Hour
+	sessionAfter(t, s, "claude", 100, "sid-a")
+	reads.mu.Lock()
+	reads.answers[100] = "sid-b"
+	reads.mu.Unlock()
+	found := core.AgentProcess{Agent: "claude", PID: 100, Cwd: "/work/api", Terminal: "t100"}
+	for start := time.Now(); ; time.Sleep(5 * time.Millisecond) {
+		if got := s.of(found); got != nil && got.Value == "sid-b" {
+			return
+		}
+		if time.Since(start) > 5*time.Second {
+			t.Fatal("the process found after a fill was never read")
+		}
+	}
+}
+
 func TestProcessesNobodyAsksAboutAreForgotten(t *testing.T) {
 	reads := &sessionReads{answers: map[int]string{100: "sid-a", 200: "sid-b"}}
 	s := newProcessSessions("gog", reads.read)

@@ -432,8 +432,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   snapshots asked about, kept by the process, not its pid (`processKey`: the
   terminal, `agentAt`, the pid — a pid given out again, in another terminal
   or to the agent that took the terminal next, never answers the session of
-  the process before it, and one pid is read once, for the process last asked
-  about), one script for all of them, a process new to it read
+  the process before it; a pid is read only for its holder, the process that
+  took it later by `agentAt`, else, where the mirror never saw that moment
+  (it filled again), the one asked about last, and an answer is dropped when
+  another took the pid while it was read), one script for all of them, a process new to it read
   at once and every answer again once `sessionsFresh` 30 s old (a `/clear` or
   `/resume` changes the session under the same pid), a failed read keeping
   the last answer (logged once an hour), a process nobody asked about for
@@ -985,23 +987,26 @@ components and icons as rules for whoever changes it: @docs/design.md
   agent's folder, then the default one; a process gone is no record; every
   candidate's file is sent and Go weighs them, a start-verified one before
   one matched by its folder alone; only
-  regular files are read, a FIFO never holds the script; a file of another
-  folder than the pane's never counts, whatever else matches, since the
-  pid may belong to an agent elsewhere by now; a file
+  regular files are read, a FIFO never holds the script; a process that
+  stands in another folder than the pane was seen in now (`/proc/<pid>/cwd`,
+  else `lsof -d cwd`; not read for a native Windows process) has no session,
+  whatever else matches, since the pid went to another process; a file
   counts only when its `procStart` is the process's `LC_ALL=C TZ=UTC ps -o
   lstart`; for a native Windows process, which Git Bash's own tools do not
   see, only when its `procStartFt` is the process's creation as
   PowerShell's `Get-Process` tells it, a FILETIME, within a millisecond
   (asked on Git Bash alone: a Linux under WSL reaches Windows' own by other
   numbers; a value from 3e17 up, which Claude Code itself reads as another
-  unit, falls to the next rule); else, while the process's start is known,
-  when its `startedAt` is no older than that start (CI's Windows job
+  unit, falls to the next rule); else when its folder is the pane's and,
+  while the process's start is known, its `startedAt` is no older than that
+  start (CI's Windows job
   proves it; a native process's `CLAUDE_CONFIG_DIR` is out of reach there, so
   `~\.claude` alone is read); else, where either side lacks the start, the
   first of its folder), Codex's thread id from the
   `rollout-*.jsonl` of the person's thread (its first line a `session_meta`
-  naming no subagent and no other folder than the pane's: a file still
-  empty is none) the process, else a child of it, holds open (`/proc/<pid>/fd`,
+  naming no subagent: a file still empty is none; its folder is where the
+  thread began, which a resume keeping the current folder leaves) the
+  process, else a child of it, holds open (`/proc/<pid>/fd`,
   else `lsof -nP`; none on Windows), none when two are, the id the one its
   `session_meta` names (a revert's replacement file,
   `rollout-<time>-<id>_<rollout id>.jsonl`, keeps the thread's); an id found under a

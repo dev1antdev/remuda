@@ -27,6 +27,7 @@ func TestOnWindowsANativeClaudeIsFoundByItsCreationWhileItRuns(t *testing.T) {
 	remote := wintest.Remote(t)
 	home, folder := t.TempDir(), t.TempDir()
 	cmd := exec.Command("ping", "-n", "120", "127.0.0.1")
+	cmd.Dir = folder
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
