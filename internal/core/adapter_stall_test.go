@@ -1,8 +1,11 @@
 package core
 
 import (
+	"bytes"
 	"context"
+	"log"
 	"net"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -58,31 +61,9 @@ func TestAColouredReadReadsAsText(t *testing.T) {
 }
 
 func TestOutputRowsTheCoreDroppedEndTheStreamAsHerdrsLostEvents(t *testing.T) {
-	var subscribes atomic.Int32
-	client := New(fakeCore(`"output_watches"`, func(core peer, frame sent) {
-		switch frame.method {
-		case "events.subscribe":
-			if subscribes.Add(1) == 1 {
-				core.reply(frame.id, `{"seq":1,"terminals":[{"address":"t1","state":"live"}],"channel":3}`)
-				return
-			}
-			core.reply(frame.id, `{"seq":1,"terminals":[],"channel":4}`)
-			go core.write(4, frameData, []byte(`{"jsonrpc":"2.0","method":"missed","params":{"seq":9,"terminals":[]}}`+"\n"))
-		case "doc.get":
-			core.reply(frame.id, `{"value":null,"version":0}`)
-		}
-	}))
-	defer client.Close()
-	adapter := NewAdapter(client, nil, AdapterHooks{})
-	defer adapter.Close()
-	if _, err := adapter.SessionSnapshot(); err != nil {
-		t.Fatal(err)
-	}
-	stream, err := adapter.Subscribe([]herdr.Subscription{{Type: herdr.EventOutputMatched, PaneID: "t1", Match: &herdr.OutputMatch{Type: "substring", Value: "FAIL"}}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer stream.Close()
+	stream := outputStream(t, func(core peer) {
+		core.write(4, frameData, []byte(`{"jsonrpc":"2.0","method":"missed","params":{"seq":9,"terminals":[]}}`+"\n"))
+	})
 	for {
 		_, err := stream.Next()
 		if err == nil {
@@ -93,6 +74,69 @@ func TestOutputRowsTheCoreDroppedEndTheStreamAsHerdrsLostEvents(t *testing.T) {
 		}
 		return
 	}
+}
+
+func TestOutputRowsKeepTheirStandingAndTheirDropsAreLoggedOnce(t *testing.T) {
+	var said bytes.Buffer
+	before := log.Writer()
+	log.SetOutput(&said)
+	t.Cleanup(func() { log.SetOutput(before) })
+	stream := outputStream(t, func(core peer) {
+		for _, row := range []string{`"line":"a FAIL","lost":7,"fresh":true`, `"line":"b FAIL","lost":2,"fresh":false`, `"line":"c FAIL"`} {
+			core.write(4, frameData, []byte(`{"jsonrpc":"2.0","method":"event","params":{"seq":2,"type":"output","data":{"watch":"0",`+row+`}}}`+"\n"))
+		}
+	})
+	var rows []string
+	for len(rows) < 3 {
+		ev, err := stream.Next()
+		if err != nil {
+			t.Fatalf("the stream ended after %v: %v", rows, err)
+		}
+		if ev.Kind == herdr.EventOutputMatched {
+			told := ""
+			if ev.Standing != nil {
+				told = map[bool]string{true: " standing", false: " live"}[*ev.Standing]
+			}
+			rows = append(rows, ev.MatchedLine+told)
+		}
+	}
+	if strings.Join(rows, ",") != "a FAIL standing,b FAIL live,c FAIL" {
+		t.Fatalf("rows %v", rows)
+	}
+	if n := strings.Count(said.String(), "dropped"); n != 1 {
+		t.Fatalf("the drops were logged %d times: %s", n, said.String())
+	}
+}
+
+// outputStream is an adapter's stream watching t1 for "FAIL" on a fake core; tell writes what the core sends on the
+// watches' channel, 4, once the stream's subscription is answered.
+func outputStream(t *testing.T, tell func(peer)) herdr.EventStream {
+	var subscribes atomic.Int32
+	client := New(fakeCore(`"output_watches"`, func(core peer, frame sent) {
+		switch frame.method {
+		case "events.subscribe":
+			if subscribes.Add(1) == 1 {
+				core.reply(frame.id, `{"seq":1,"terminals":[{"address":"t1","state":"live"}],"channel":3}`)
+				return
+			}
+			core.reply(frame.id, `{"seq":1,"terminals":[],"channel":4}`)
+			go tell(core)
+		case "doc.get":
+			core.reply(frame.id, `{"value":null,"version":0}`)
+		}
+	}))
+	t.Cleanup(func() { client.Close() })
+	adapter := NewAdapter(client, nil, AdapterHooks{})
+	t.Cleanup(func() { adapter.Close() })
+	if _, err := adapter.SessionSnapshot(); err != nil {
+		t.Fatal(err)
+	}
+	stream, err := adapter.Subscribe([]herdr.Subscription{{Type: herdr.EventOutputMatched, PaneID: "t1", Match: &herdr.OutputMatch{Type: "substring", Value: "FAIL"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { stream.Close() })
+	return stream
 }
 
 func TestACoreOlderThanRemudaNeedsIsRefused(t *testing.T) {
