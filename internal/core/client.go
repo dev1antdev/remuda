@@ -129,16 +129,6 @@ func (c *Client) Close() error {
 	return nil
 }
 
-// abandon ends the live connection: a core that stopped answering holds it open, and only a new one reaches it again.
-func (c *Client) abandon(cause error) {
-	c.mu.Lock()
-	live := c.live
-	c.mu.Unlock()
-	if live != nil {
-		live.fail(cause)
-	}
-}
-
 // connection is the live connection, or the one a dial under way gives; the dial is the client's, bound by
 // helloWithin, so a caller giving up leaves it to the others.
 func (c *Client) connection(ctx context.Context) (*conn, error) {

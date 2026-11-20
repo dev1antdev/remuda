@@ -94,3 +94,17 @@ func TestOutputRowsTheCoreDroppedEndTheStreamAsHerdrsLostEvents(t *testing.T) {
 		return
 	}
 }
+
+func TestACoreOlderThanRemudaNeedsIsRefused(t *testing.T) {
+	client := New(fakeCore(`"events","keep_size"`, func(peer, sent) {}))
+	defer client.Close()
+	adapter := NewAdapter(client, AdapterHooks{})
+	defer adapter.Close()
+	start := time.Now()
+	if _, err := adapter.SessionSnapshot(); !IsKind(err, "needs_update") || time.Since(start) > 5*time.Second {
+		t.Fatalf("a core without output watches: %v after %s", err, time.Since(start))
+	}
+	if _, _, err := adapter.PaneRecent("t1", 10); err == nil {
+		t.Fatal("a read went to a core the adapter refused")
+	}
+}

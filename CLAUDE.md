@@ -350,7 +350,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   added, its snapshot or its events, `local`) and the `remuda` document (`DocName`), read after subscribing, again
   on its `doc` event and after `missed` — so `SessionSnapshot` answers from
   memory, never a request (before the first fill it waits `firstFillWait`
-  10 s; once lost it answers why at once), and each event changes one
+  10 s for the core's first answer, a fill or a loss; once lost it answers
+  why at once), and each event changes one
   terminal and is told to every open stream in herdr's words (`mirror.apply`:
   `status` → `pane.agent_status_changed` with the status, `title`, `turn` and
   `foreground` → `pane.updated` — `pane.agent_detected` when the agent
@@ -362,8 +363,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   machine hears `TransportError`). Each step is bounded (`bounded`: the
   setup and a document read `callWithin` 10 s, the subscription `quietFor`
   45 s — three heartbeats): a core that holds its connection open saying
-  nothing has the connection abandoned (`Client.abandon`), so the next
-  attempt dials a new one and the stale mirror goes. **The document** (`Document`): the
+  nothing has that very connection failed (never one dialled since), so the
+  next attempt dials a new one and the stale mirror goes. A core without
+  `output_watches` (older than remuda-v0.2.0, whose vt read came before it)
+  is refused, `needs_update`, and nothing is read of it. **The document** (`Document`): the
   workspaces in order, each `{id, label, folder, active_tab, tabs}`, a tab
   `{id, label, layout}`, its tree herdr's `LayoutNode` with a terminal's
   address as each pane's id; a terminal carries `remuda.space` /
@@ -400,7 +403,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   Reads: `PaneRead`, `PaneScreen` (format vt), `PaneRecent` (format vt too,
   its colours stripped, `withoutSGR`: a plain read with history scrolls a
   full-screen program with the wheel under the person's hands, the vt one
-  never — such a program's history is its screen alone), `PaneAtPrompt`
+  never — such a program's history is its screen alone; at most 1000 rows,
+  `truncated` past them, until Core 25 searches xterm's own buffer), each
+  read only of a terminal the mirror holds, `PaneAtPrompt`
   and `PaneShellPID` (off the mirror's `foreground` and `pid`), `AgentGet`;
   every write answers `invalid_request` "… is not on remuda-core yet"
   (Core 15). `Bridged` is false: a stream costs the core nothing. The

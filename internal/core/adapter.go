@@ -22,13 +22,13 @@ type Adapter struct {
 	stop   context.CancelFunc
 	done   chan struct{}
 
-	mu      sync.Mutex
-	state   mirror
-	held    bool          // the mirror holds what the core said
-	filled  chan struct{} // closed at the first fill
-	lost    error         // why the mirror is not held, after it was
-	streams map[*eventStream]struct{}
-	badDoc  bool // a document that is no document was logged already
+	mu       sync.Mutex
+	state    mirror
+	held     bool          // the mirror holds what the core said
+	answered chan struct{} // closed at the first fill or the first loss, whichever comes first
+	lost     error         // why the mirror is not held, after it was
+	streams  map[*eventStream]struct{}
+	badDoc   bool // a document that is no document was logged already
 }
 
 // AdapterHooks are what the machine hears from its adapter and lends it.
@@ -55,7 +55,7 @@ func NewAdapter(client *Client, hooks AdapterHooks) *Adapter {
 	ctx, stop := context.WithCancel(context.Background())
 	a := &Adapter{
 		client: client, hooks: hooks, stop: stop, done: make(chan struct{}),
-		state: mirror{terminals: map[string]*Terminal{}}, filled: make(chan struct{}), streams: map[*eventStream]struct{}{},
+		state: mirror{terminals: map[string]*Terminal{}}, answered: make(chan struct{}), streams: map[*eventStream]struct{}{},
 	}
 	go a.run(ctx)
 	return a
@@ -70,16 +70,12 @@ func (a *Adapter) Close() error {
 
 var _ herdr.API = (*Adapter)(nil)
 
-// SessionSnapshot is the machine as the mirror holds it, without a request; before the first fill it waits for one.
+// SessionSnapshot is the machine as the mirror holds it, without a request; before the core first answered it waits
+// for that.
 func (a *Adapter) SessionSnapshot() (*herdr.Snapshot, error) {
-	a.mu.Lock()
-	filled, lost := a.filled, a.lost
-	a.mu.Unlock()
-	if lost == nil {
-		select {
-		case <-filled:
-		case <-time.After(firstFillWait):
-		}
+	select {
+	case <-a.answered:
+	case <-time.After(firstFillWait):
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -124,16 +120,20 @@ func (a *Adapter) run(ctx context.Context) {
 // follow subscribes, fills the mirror from the subscription's snapshot and the document read after it, and applies
 // the changes until the subscription ends; filled says whether it got that far.
 func (a *Adapter) follow(ctx context.Context) (filled bool, err error) {
+	var cn *conn
 	var sub *Subscription
-	var hello Hello
 	var doc Document
-	err = a.bounded(ctx, callWithin, func(ctx context.Context) (err error) {
+	err = bounded(ctx, callWithin, func() *conn { return cn }, func(ctx context.Context) (err error) {
+		if cn, err = a.client.connection(ctx); err != nil {
+			return err
+		}
+		if !cn.hello.Has("output_watches") {
+			return &Error{Kind: "needs_update", Message: fmt.Sprintf("remuda-core %s is older than remuda needs: update it", cn.hello.Version)}
+		}
 		if sub, err = a.client.Subscribe(ctx, SubscribeParams{}); err != nil {
 			return err
 		}
-		if hello, err = a.client.Hello(ctx); err != nil {
-			return err
-		}
+		cn = sub.conn
 		doc, err = a.readDoc(ctx)
 		return err
 	})
@@ -143,10 +143,12 @@ func (a *Adapter) follow(ctx context.Context) (filled bool, err error) {
 	if err != nil {
 		return false, err
 	}
-	a.fill(sub.Terminals, doc, hello.Version)
+	version := sub.conn.hello.Version
+	onSub := func() *conn { return sub.conn }
+	a.fill(sub.Terminals, doc, version)
 	for {
 		var notice Notice
-		err := a.bounded(ctx, quietFor, func(ctx context.Context) (err error) {
+		err := bounded(ctx, quietFor, onSub, func(ctx context.Context) (err error) {
 			notice, err = sub.Next(ctx)
 			return err
 		})
@@ -155,31 +157,33 @@ func (a *Adapter) follow(ctx context.Context) (filled bool, err error) {
 		}
 		switch notice.Kind {
 		case NoticeEvent:
-			if err := a.apply(ctx, notice.Event); err != nil {
+			if err := a.apply(ctx, onSub, notice.Event); err != nil {
 				return true, err
 			}
 		case NoticeMissed:
-			err := a.bounded(ctx, callWithin, func(ctx context.Context) (err error) {
+			err := bounded(ctx, callWithin, onSub, func(ctx context.Context) (err error) {
 				doc, err = a.readDoc(ctx)
 				return err
 			})
 			if err != nil {
 				return true, err
 			}
-			a.fill(notice.Terminals, doc, hello.Version)
+			a.fill(notice.Terminals, doc, version)
 		}
 	}
 }
 
-// bounded runs a step of the subscription within its time; a step the core lets run out abandons the connection,
-// which it holds open while saying nothing, so the next attempt dials a new one.
-func (a *Adapter) bounded(ctx context.Context, within time.Duration, step func(context.Context) error) error {
+// bounded runs a step of the subscription within its time. A step the core lets run out on a connection it holds
+// open saying nothing fails that very connection — never one dialled since — so the next attempt dials a new one.
+func bounded(ctx context.Context, within time.Duration, on func() *conn, step func(context.Context) error) error {
 	stepCtx, cancel := context.WithTimeout(ctx, within)
 	defer cancel()
 	err := step(stepCtx)
 	if err != nil && ctx.Err() == nil && errors.Is(err, context.DeadlineExceeded) {
 		stalled := &TransportError{fmt.Errorf("remuda-core said nothing for %s", within)}
-		a.client.abandon(stalled)
+		if cn := on(); cn != nil {
+			cn.fail(stalled)
+		}
 		return stalled
 	}
 	return err
@@ -215,12 +219,17 @@ func (a *Adapter) fill(terminals []Terminal, doc Document, version string) {
 		}
 	}
 	a.held, a.lost = true, nil
-	select {
-	case <-a.filled:
-	default:
-		close(a.filled)
-	}
+	a.answer()
 	a.tellLocked(herdr.Event{Kind: "layout.updated"})
+}
+
+// answer lets the snapshots waiting for the core's first answer go; the caller holds the lock.
+func (a *Adapter) answer() {
+	select {
+	case <-a.answered:
+	default:
+		close(a.answered)
+	}
 }
 
 // drop lets the mirror go when the subscription ended: snapshots answer why, and the streams end so their reader asks
@@ -228,6 +237,7 @@ func (a *Adapter) fill(terminals []Terminal, doc Document, version string) {
 func (a *Adapter) drop(err error) {
 	a.mu.Lock()
 	a.held, a.lost = false, err
+	a.answer()
 	streams := a.streams
 	a.streams = map[*eventStream]struct{}{}
 	a.mu.Unlock()
@@ -238,7 +248,7 @@ func (a *Adapter) drop(err error) {
 }
 
 // apply is one change of the core's: the document read again when it moved, a terminal's fact otherwise.
-func (a *Adapter) apply(ctx context.Context, ev Event) error {
+func (a *Adapter) apply(ctx context.Context, on func() *conn, ev Event) error {
 	if ev.Machine != "" || ev.Terminal != "" && !local(ev.Terminal) {
 		return nil
 	}
@@ -250,7 +260,7 @@ func (a *Adapter) apply(ctx context.Context, ev Event) error {
 			return nil
 		}
 		var doc Document
-		err := a.bounded(ctx, callWithin, func(ctx context.Context) (err error) {
+		err := bounded(ctx, callWithin, on, func(ctx context.Context) (err error) {
 			doc, err = a.readDoc(ctx)
 			return err
 		})

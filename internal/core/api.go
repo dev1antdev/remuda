@@ -166,7 +166,12 @@ func (s *eventStream) readOutput() {
 // Bridged is false: a stream costs the machine nothing, the mirror's changes are fanned out here.
 func (a *Adapter) Bridged() bool { return false }
 
+// read reads a terminal the mirror holds — so only of a core that passed follow's check, whose vt read never scrolls
+// a program — and none it does not know.
 func (a *Adapter) read(paneID string, lines int, format string) (ReadResult, error) {
+	if _, err := a.terminal(paneID); err != nil {
+		return ReadResult{}, err
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), callWithin)
 	defer cancel()
 	read, err := a.client.Read(ctx, paneID, lines, format)
