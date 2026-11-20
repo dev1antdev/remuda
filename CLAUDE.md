@@ -993,9 +993,11 @@ components and icons as rules for whoever changes it: @docs/design.md
   stands in another folder than the pane was seen in now (`/proc/<pid>/cwd`,
   else `lsof -d cwd` in a UTF-8 locale, since in C's lsof writes a byte past
   ASCII as `\xNN`, its `\\` and `\t` read back by `printf %b`, as the
-  rollouts' paths are; not read for a native
-  Windows process) has no session,
-  whatever else matches, since the pid went to another process; a file
+  rollouts' paths are, each one whole, a path may hold a line break; not read
+  for a native Windows process) has no session,
+  whatever else matches, since the pid went to another process, and neither
+  does one whose start, read again once its files were, is another (the pid
+  changed hands while it was read); a file
   counts only when its `procStart` is the process's `LC_ALL=C TZ=UTC ps -o
   lstart`; for a native Windows process, which Git Bash's own tools do not
   see, only when its folder is the pane's and its `procStartFt` is the process's creation as

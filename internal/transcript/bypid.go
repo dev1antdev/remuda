@@ -42,8 +42,9 @@ func (r *Reader) SessionsOf(procs []Running) (map[int]string, error) {
 //   - for Claude Code, every candidate sessions/<pid>.json, each ended by GS: under the CLAUDE_CONFIG_DIR its
 //     environment names (macOS's `ps -E` runs the entries together, so each reading is a candidate; a relative one
 //     from the process's folder), then the default ~/.claude;
-//   - for Codex, a line per rollout the process or a child holds open: the pid holding it, its path and its first
-//     line whole, split by GS.
+//   - for Codex, every rollout the process or a child holds open, each ended by FS (a path may hold a line break): the
+//     pid holding it, its path and its first line whole, split by GS;
+//   - its start again, once all that was read: another process may have taken the pid meanwhile.
 func sessionsByPIDScript(procs []Running) string {
 	var b strings.Builder
 	for _, p := range procs {
@@ -100,18 +101,22 @@ s() {
   else
     for p in $1 $(pgrep -P "$1" 2>/dev/null); do
       if [ -d "/proc/$p/fd" ]; then
-        for fd in /proc/$p/fd/*; do readlink "$fd" 2>/dev/null; done
+        for fd in /proc/$p/fd/*; do
+          f=$(readlink "$fd" 2>/dev/null) && case "${f##*/}" in rollout-*.jsonl) rollout "$p" "$f" ;; esac
+        done
       else
-        LC_ALL=en_US.UTF-8 lsof -nP -p "$p" -Fn 2>/dev/null | sed -n 's/^n//p' | while IFS= read -r n; do printf '%b\n' "$n"; done
-      fi | grep '/rollout-[^/]*\.jsonl$' | sort -u | while IFS= read -r f; do
-        [ -f "$f" ] || continue
-        printf '%s\035%s\035' "$p" "$f"
-        head -n 1 "$f" 2>/dev/null | tr -d '\n'
-        printf '\n'
-      done
+        LC_ALL=en_US.UTF-8 lsof -nP -p "$p" -Fn 2>/dev/null | sed -n 's/^n//p' | grep '/rollout-[^/]*\.jsonl$' | sort -u |
+          while IFS= read -r n; do rollout "$p" "$(printf '%b' "$n")"; done
+      fi
     done
   fi
-  printf '\036\n'
+  printf '\037%s\036\n' "$(LC_ALL=C TZ=UTC ps -o lstart= -p "$1" 2>/dev/null)"
+}
+rollout() {
+  [ -f "$2" ] || return 0
+  printf '%s\035%s\035' "$1" "$2"
+  head -n 1 "$2" 2>/dev/null | tr -d '\n'
+  printf '\034'
 }
 ` + b.String()
 }
@@ -134,8 +139,8 @@ func parseSessionsByPID(out string, procs []Running, style rpath.Style) map[int]
 	}
 	found := map[int]string{}
 	for _, record := range script.Sections(out) {
-		fields := strings.SplitN(record, script.US, 5)
-		if len(fields) < 5 {
+		fields := strings.SplitN(record, script.US, 6)
+		if len(fields) < 6 {
 			continue
 		}
 		pid, err := strconv.Atoi(strings.TrimSpace(fields[0]))
@@ -146,9 +151,14 @@ func parseSessionsByPID(out string, procs []Running, style rpath.Style) map[int]
 		if !asked {
 			continue
 		}
-		start, standing, payload := strings.TrimSpace(fields[2]), fields[3], strings.TrimSpace(fields[4])
-		if start == "-" || standing != "" && cwd != "" && !style.Equal(standing, cwd) {
-			continue // gone, or the pid went to a process elsewhere since the pane was seen
+		start, standing, payload, after := strings.TrimSpace(fields[2]), fields[3], strings.TrimSpace(fields[4]), strings.TrimSpace(fields[5])
+		switch {
+		case start == "-":
+			continue // gone
+		case standing != "" && cwd != "" && !style.Equal(standing, cwd):
+			continue // the pid went to a process elsewhere since the pane was seen
+		case start != "" && !strings.HasPrefix(start, "ft:") && after != start:
+			continue // another process took the pid while it was read, or it ended
 		}
 		var id string
 		switch fields[1] {
@@ -245,13 +255,16 @@ func personsThread(head string) (string, bool) {
 	return meta.ID, !subagent && (meta.ThreadSource == "" || meta.ThreadSource == "user")
 }
 
+// rolloutEnd ends each open rollout in the script's answer: a path may hold a line break.
+const rolloutEnd = "\x1c"
+
 // heldThread is the thread of the person's conversation among the rollouts a Codex process holds open: the
 // foreground process's own first, a child's only when it holds none; "" when none or more than one is there,
 // since enumeration order says nothing about which one is on screen.
 func heldThread(payload string, pid int) string {
 	own, children := map[string]bool{}, map[string]bool{}
-	for _, line := range script.Lines(payload) {
-		fields := strings.SplitN(line, script.GS, 3)
+	for _, entry := range strings.Split(payload, rolloutEnd) {
+		fields := strings.SplitN(entry, script.GS, 3)
 		if len(fields) < 3 {
 			continue
 		}
