@@ -21,8 +21,8 @@ type probe struct {
 	core    string // remuda-core's binary, asked for by a remuda speaking it (-core), "" when none was found
 }
 
-// coreLookup prints remuda-core's binary as `core=`: on PATH, else where `remuda core install` puts it.
-const coreLookup = `c=$(command -v remuda-core 2>/dev/null) || for p in "$HOME/.local/bin/remuda-core" "$HOME/.local/bin/remuda-core.exe"; do [ -x "$p" ] && { c=$p; break; }; done
+// coreLookup prints remuda-core's binary as `core=`, where the vitals and the Updates row look for it.
+var coreLookup = script.CoreBin("c") + `
 [ -n "$c" ] && printf 'core=%s\n' "$c"
 true
 `

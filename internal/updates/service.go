@@ -60,7 +60,24 @@ func (s *Service) Available(mc *machines.Machine) []Update {
 	if s.Machines != nil && s.Machines.Server() && mc.Local() {
 		return serverHostOnly(offered)
 	}
+	if mc.OnCore() {
+		return withoutHerdr(offered)
+	}
 	return offered
+}
+
+// withoutHerdr is what a machine reached through remuda-core is offered: nothing of herdr's — its update, its hooks,
+// integrations and plugins, a restart of its server (machines.ErrOnCore), whose agents this remuda does not see
+func withoutHerdr(offered []Update) []Update {
+	kept := []Update{}
+	for _, u := range offered {
+		switch u.What {
+		case "herdr", "hooks", "integrations", "plugins", "restart-herdr":
+		default:
+			kept = append(kept, u)
+		}
+	}
+	return kept
 }
 
 // serverHostOnly is what the host of a remuda serving the page only is offered: its own release alone — a herdr, its

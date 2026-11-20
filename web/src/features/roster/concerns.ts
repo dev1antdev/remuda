@@ -44,10 +44,11 @@ function found(h: Health | undefined, latest: Latest | undefined, serverVersion:
   if (h.codex && latest?.codex && newer(h.codex, latest.codex)) out.push({ key: "codex", text: isOut("Codex", latest.codex, h.codex), update: "codex" });
   if (h.gemini && latest?.gemini && newer(h.gemini, latest.gemini)) out.push({ key: "gemini", text: isOut("Gemini CLI", latest.gemini, h.gemini), update: "gemini" });
   if (h.kimi && latest?.kimi && newer(h.kimi, latest.kimi)) out.push({ key: "kimi", text: isOut("Kimi Code", latest.kimi, h.kimi), update: "kimi" });
-  if (h.herdr && latest?.herdr && newer(h.herdr, latest.herdr)) out.push({ key: "herdr", text: isOut("herdr", latest.herdr, h.herdr), update: "herdr" });
-  if (h.herdr && h.herdr_server && h.herdr_server !== h.herdr) out.push({ key: "herdr-server", text: t("herdr's server still runs {server}; {installed} is installed", { server: h.herdr_server, installed: h.herdr }), update: "restart-herdr" });
+  const herdrHere = !more.core; // a machine reached through remuda-core is offered nothing of herdr's
+  if (herdrHere && h.herdr && latest?.herdr && newer(h.herdr, latest.herdr)) out.push({ key: "herdr", text: isOut("herdr", latest.herdr, h.herdr), update: "herdr" });
+  if (herdrHere && h.herdr && h.herdr_server && h.herdr_server !== h.herdr) out.push({ key: "herdr-server", text: t("herdr's server still runs {server}; {installed} is installed", { server: h.herdr_server, installed: h.herdr }), update: "restart-herdr" });
   if (h.code_server && latest?.code && newer(h.code_server, latest.code)) out.push({ key: "code", text: t("code-server {version} is what remuda installs now ({have} here)", { version: latest.code, have: h.code_server }), update: "code" });
-  if (h.outdated_hooks?.length) out.push({ key: "hooks", text: t("herdr's hooks for {agents} are outdated", { agents: hookNames(h.outdated_hooks) }), update: "hooks" });
+  if (herdrHere && h.outdated_hooks?.length) out.push({ key: "hooks", text: t("herdr's hooks for {agents} are outdated", { agents: hookNames(h.outdated_hooks) }), update: "hooks" });
   if (remote && serverVersion && h.remuda && h.remuda !== serverVersion) out.push({ key: "ui", text: t("remuda there is {there}; this one is {here}", { there: h.remuda, here: serverVersion }), update: "remuda" });
   if (remote && serverVersion && !h.remuda) out.push({ key: "ui", text: t("no remuda deployed there — search and usage fall back to slower paths"), update: "remuda" });
   const have = remote ? h.remuda : serverVersion;

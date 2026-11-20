@@ -4,9 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/core"
@@ -33,26 +31,13 @@ func dialWithin(ctx context.Context) time.Duration {
 	return coreDialWithin
 }
 
-// localCoreBin is this machine's remuda-core: on PATH, else where `remuda core install` puts it.
-func localCoreBin() (string, error) {
-	if bin, err := exec.LookPath("remuda-core"); err == nil {
-		return bin, nil
-	}
-	if home, err := os.UserHomeDir(); err == nil {
-		bin := filepath.Join(home, ".local", "bin", "remuda-core")
-		if info, err := os.Stat(bin); err == nil && !info.IsDir() {
-			return bin, nil
-		}
-	}
-	return "", fmt.Errorf("remuda-core is not installed here. Run `remuda core install`")
-}
-
 // dialLocalCore reaches this machine's core through `remuda-core connect` under this remuda's own environment, so
-// RC_SESSION, RC_SOCKET and the XDG folders aim a scratch instance at a throwaway core.
+// RC_SESSION, RC_SOCKET and the XDG folders aim a scratch instance at a throwaway core; the binary is the one on PATH
+// first, so a scratch instance may run a build of its own.
 func dialLocalCore(ctx context.Context) (net.Conn, error) {
-	bin, err := localCoreBin()
+	bin, err := herdr.FindBinary("remuda-core")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%v. Run `remuda core install`", err)
 	}
 	return sshx.CommandConn(exec.Command(bin, "connect"), dialWithin(ctx))
 }
@@ -100,9 +85,7 @@ func (mc *Machine) reachCore(conn *sshx.Conn, found probe) (*coreLink, error) {
 		return nil, errNoCore(mc.Cfg.Host)
 	}
 	client := core.New(remoteCoreDialer(conn, found.core))
-	ctx, cancel := context.WithTimeout(context.Background(), coreDialWithin)
-	defer cancel()
-	if _, err := client.Hello(ctx); err != nil {
+	if _, err := client.Hello(context.Background()); err != nil { // the client bounds its own dial and hello
 		client.Close()
 		return nil, fmt.Errorf("remuda-core on %s not answering: %v", mc.Cfg.Host, err)
 	}

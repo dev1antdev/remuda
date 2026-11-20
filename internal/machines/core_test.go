@@ -63,6 +63,12 @@ func TestTheLocalMachineOnCoreShowsTheCoresTerminals(t *testing.T) {
 	if !mc.OnCore() || mc.Peer() != nil {
 		t.Fatal("the local machine of a -core remuda is on remuda-core, with no peer to relay through")
 	}
+	if _, err := mc.StopServer(); !errors.Is(err, ErrOnCore) {
+		t.Fatalf("herdr's server stop on remuda-core = %v, want ErrOnCore", err)
+	}
+	if err := mc.StartServer(); !errors.Is(err, ErrOnCore) {
+		t.Fatalf("herdr's server start on remuda-core = %v, want ErrOnCore", err)
+	}
 	api, terminals, err := mc.Ready()
 	if err != nil {
 		t.Fatal(err)
