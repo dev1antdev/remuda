@@ -195,12 +195,14 @@ func (a *Adapter) fill(terminals []Terminal, doc Document, version string) {
 // again once the core answers.
 func (a *Adapter) drop(err error) {
 	a.mu.Lock()
-	defer a.mu.Unlock()
 	a.held, a.lost = false, err
-	for s := range a.streams {
+	streams := a.streams
+	a.streams = map[*eventStream]struct{}{}
+	a.mu.Unlock()
+	for s := range streams {
 		s.end(err)
+		s.closeOutput()
 	}
-	clear(a.streams)
 }
 
 // apply is one change of the core's: the document read again when it moved, a terminal's fact otherwise.
@@ -291,9 +293,13 @@ func (m *mirror) apply(ev Event) (herdr.Event, bool) {
 			Title *string `json:"title"`
 		}{&t.Title})
 	case "labels":
-		json.Unmarshal(ev.Data, &struct {
-			Labels *map[string]string `json:"labels"`
-		}{&t.Labels})
+		var labels struct {
+			Labels map[string]string `json:"labels"`
+		}
+		if json.Unmarshal(ev.Data, &labels) != nil {
+			return told, false
+		}
+		t.Labels = labels.Labels
 		told.Kind = "pane.moved"
 	case "size":
 		json.Unmarshal(ev.Data, &struct {

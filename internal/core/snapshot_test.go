@@ -150,3 +150,13 @@ func TestADocumentThatIsNoDocumentReadsAsEmpty(t *testing.T) {
 		t.Error("an array reads as a document")
 	}
 }
+
+func TestALabelTakenAwayLeavesTheTerminal(t *testing.T) {
+	m := mirror{terminals: map[string]*Terminal{"t1": term("t1", 1, placedIn("w1", "a"))}}
+	if _, ok := m.apply(coreEvent("labels", "t1", map[string]any{"labels": map[string]string{LabelSpace: "w1"}})); !ok {
+		t.Fatal("not told")
+	}
+	if _, there := m.terminals["t1"].Labels[LabelTab]; there {
+		t.Fatalf("labels %v", m.terminals["t1"].Labels)
+	}
+}
