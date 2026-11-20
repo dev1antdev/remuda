@@ -131,3 +131,11 @@ func TestRemudaCoreFollowsARemotesReleaseAndPrecedesTheHosts(t *testing.T) {
 		t.Error("the host's remuda-core step comes after the release that restarts this very remuda")
 	}
 }
+
+func TestAMachineOnRemudaCoreIsOfferedNothingOfHerdrs(t *testing.T) {
+	offered := []Update{{What: "herdr"}, {What: "hooks"}, {What: "integrations"}, {What: "plugins"}, {What: "restart-herdr"}, {What: "claude"}, {What: "core"}}
+	kept := withoutHerdr(offered)
+	if len(kept) != 2 || kept[0].What != "claude" || kept[1].What != "core" {
+		t.Fatalf("a machine on remuda-core is offered %+v", kept)
+	}
+}

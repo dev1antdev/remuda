@@ -121,8 +121,9 @@ type rosterMachine struct {
 	Label    string            `json:"label"`
 	Host     string            `json:"host,omitempty"`
 	Source   string            `json:"source,omitempty"`
-	OS       string            `json:"os"`    // darwin | linux | windows as its connection read it, "" before a remote's first; a Windows machine has no live attach
-	State    string            `json:"state"` // connected | connecting | error
+	OS       string            `json:"os"`             // darwin | linux | windows as its connection read it, "" before a remote's first; a Windows machine has no live attach
+	Core     bool              `json:"core,omitempty"` // reached through remuda-core instead of herdr (-core)
+	State    string            `json:"state"`          // connected | connecting | error
 	Error    string            `json:"error,omitempty"`
 	Sessions []rosterSession   `json:"sessions"`
 	Health   *health.Report    `json:"health,omitempty"`
@@ -359,7 +360,7 @@ func (s *Server) rosterFor(viewer bool) ([]byte, string) {
 	for _, mc := range list {
 		state, errMsg := mc.State()
 		entry := rosterMachine{
-			ID: mc.ID(), Label: mc.Label(), Host: mc.Cfg.Host, Source: mc.Cfg.Source, OS: mc.OS(),
+			ID: mc.ID(), Label: mc.Label(), Host: mc.Cfg.Host, Source: mc.Cfg.Source, OS: mc.OS(), Core: mc.OnCore(),
 			State: state, Error: errMsg, Sessions: []rosterSession{},
 		}
 		if state == machines.StateConnected {

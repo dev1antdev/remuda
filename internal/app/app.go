@@ -93,16 +93,22 @@ type Options struct {
 	Server        bool   // serve the page only: the host is no machine of the fleet, its herdr neither needed nor kept
 	MirrorClosed  string // why this remuda writes nothing into herdr (a scratch instance beside the real one); "" writes
 	Record        bool   // record the agents' timelapses (off for a scratch instance: the real one records)
+	Core          bool   // reach every machine through remuda-core instead of herdr (-core), while the move off herdr is built
 }
 
 // Run builds remuda and serves until ctx ends.
 func Run(ctx context.Context, o Options) error {
 	bin, err := herdr.FindBinary(o.HerdrBin)
-	if err != nil && !o.Server {
+	if err != nil && !o.Server && !o.Core {
 		return fmt.Errorf("herdr: %w", err)
+	}
+	if o.Core && o.MirrorClosed == "" {
+		o.MirrorClosed = "this remuda speaks remuda-core (-core), which has no herdr sidebar to write into"
 	}
 	if o.Server {
 		log.Print("serving the page only (-server): this machine is none of the cockpit's; its herdr is neither asked nor kept")
+	} else if o.Core {
+		log.Print("speaking remuda-core on every machine (-core): herdr is neither asked nor kept, its list of machines aside")
 	} else if err := herdr.EnsureServer(bin, o.Socket); err != nil {
 		log.Printf("WARNING: herdr is not answering at %s (%v); remuda will keep trying", o.Socket, err)
 	} else if version, protocol, err := herdr.NewClient(o.Socket).Ping(); err == nil {
@@ -137,7 +143,12 @@ func Run(ctx context.Context, o Options) error {
 	} else {
 		log.Print("the agents' door stays closed: no agent-key / agent-url files are placed here or on a remote machine (-door opens it)")
 	}
-	fleet := machines.NewManager(o.Dir, o.Socket, bin, door)
+	var fleet *machines.Manager
+	if o.Core {
+		fleet = machines.NewCoreManager(o.Dir, bin, door)
+	} else {
+		fleet = machines.NewManager(o.Dir, o.Socket, bin, door)
+	}
 	fleet.SetServer(o.Server)
 	defer fleet.Close()
 	if local, err := fleet.Get(machines.LocalID); err == nil && o.Door && !o.Server {
@@ -615,7 +626,7 @@ func Run(ctx context.Context, o Options) error {
 		}
 		hub.RosterChanged()
 	})
-	if !o.Server {
+	if !o.Server && !o.Core {
 		events.Subscribe(bus, func(e events.LocalHerdrDown) { keeper.Revive(e.Err) })
 	}
 	events.Subscribe(bus, func(e events.Snapshot) { keepAwake.Observe(e.Machine, awake.Working(e.Snap)) })
