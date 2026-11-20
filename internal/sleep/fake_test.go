@@ -40,14 +40,16 @@ func shellPane(id, tab, dir string) herdr.PaneInfo {
 // fakeHerdr is herdr as a sleep and a wake see it: panes whose agents leave on their exit (or not), an Esc that brings
 // a busy one to rest, shells that are free or not, tabs made, agents started.
 type fakeHerdr struct {
-	mu        sync.Mutex
-	snap      herdr.Snapshot
-	stubborn  map[string]bool  // panes whose agent never leaves, Ctrl-C or not
-	busyShell map[string]bool  // panes whose shell runs something
-	refuse    map[string]error // panes where a start fails
-	typed     []string
-	started   []string
-	tabs      []string
+	mu          sync.Mutex
+	snap        herdr.Snapshot
+	stubborn    map[string]bool   // panes whose agent never leaves, Ctrl-C or not
+	busyShell   map[string]bool   // panes whose shell runs something
+	refuse      map[string]error  // panes where a start fails
+	moved       map[string]string // panes whose agent moved to another conversation the next fresh read finds
+	rereadFails error
+	typed       []string
+	started     []string
+	tabs        []string
 }
 
 func newFake(panes ...herdr.PaneInfo) *fakeHerdr {
@@ -142,4 +144,17 @@ func (f *fakeHerdr) TabCreate(workspaceID, label string) (*herdr.TabCreateResult
 
 func (f *fakeHerdr) WorkspaceCreate(cwd, label string) (*herdr.WorkspaceCreateResult, error) {
 	return nil, errors.New("no new workspace in these tests")
+}
+
+// RereadSessions is remuda-core's fresh read of the agents' sessions: the conversations moved to since the snapshot
+// last showed them come into it now.
+func (f *fakeHerdr) RereadSessions() error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for pane, session := range f.moved {
+		if p := f.pane(pane); p != nil {
+			p.AgentSession = &herdr.AgentSession{Kind: "id", Value: session}
+		}
+	}
+	return f.rereadFails
 }

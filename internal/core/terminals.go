@@ -37,6 +37,8 @@ type Terminal struct {
 	// agentAt is when the mirror saw an agent take the terminal's foreground, statusAt when it last heard the
 	// program's status (zero: before the mirror looked).
 	agentAt, statusAt time.Time
+	// restored: its shell was lost (a kept terminal) and the core gives it a new one; no agent took it since.
+	restored bool
 }
 
 // Status is a program's own word: idle, working, done, blocked or error, with what it said beside it.
@@ -168,6 +170,11 @@ func (c *Client) Get(ctx context.Context, terminal string) (Terminal, error) {
 func (c *Client) Kill(ctx context.Context, terminal string) (Terminal, error) {
 	var t Terminal
 	return t, c.Call(ctx, "terminal.kill", map[string]any{"terminal": terminal}, &t)
+}
+
+// Keep sets whether a lost program is replaced by the machine's shell in place (terminal.keep).
+func (c *Client) Keep(ctx context.Context, terminal string, keep bool) error {
+	return c.Call(ctx, "terminal.keep", map[string]any{"terminal": terminal, "keep": keep}, nil)
 }
 
 // Label sets labels; an empty value removes one.

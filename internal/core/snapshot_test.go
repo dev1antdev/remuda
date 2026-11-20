@@ -1,9 +1,13 @@
 package core
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"slices"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/dev1antdev/remuda/internal/herdr"
 )
@@ -183,5 +187,96 @@ func TestAPanesFolderIsItsShellsAndAWorkspacesTheDocuments(t *testing.T) {
 	}
 	if dir := snap.WorkspaceDir(&snap.Workspaces[0]); dir != "/home/me/repo" {
 		t.Fatalf("workspace dir %q", dir)
+	}
+}
+
+// A shell the core lost and gives a new one is marked restored, whether the mirror heard it happen or found it so when
+// it filled again, until an agent takes the terminal; a shell that only moved on is not.
+func TestAShellTheCoreGaveANewOneIsRestoredUntilAnAgentTakesIt(t *testing.T) {
+	restored := func(m *mirror, address string) bool { return m.terminals[address].restored }
+	m := mirror{terminals: map[string]*Terminal{"t1": term("t1", 1, nil)}}
+	m.terminals["t1"].Foreground = &Foreground{Pid: 200, Name: "claude"}
+	m.apply(coreEvent("status", "t1", map[string]any{"status": nil}))
+	m.apply(coreEvent("lost", "t1", map[string]any{"reason": "server_stop"}))
+	if !restored(&m, "t1") || m.snapshot(nil).Panes[0].Agent != "" || !m.snapshot(nil).Panes[0].Restored {
+		t.Fatalf("a lost shell: %+v", m.terminals["t1"])
+	}
+	m.apply(coreEvent("restarted", "t1", Terminal{Address: "t1", State: "live", Pid: 300, Foreground: &Foreground{Pid: 300, Name: "zsh"}}))
+	if !restored(&m, "t1") {
+		t.Fatal("the new shell is not marked restored")
+	}
+	m.apply(coreEvent("foreground", "t1", Foreground{Pid: 301, Name: "claude"}))
+	if restored(&m, "t1") {
+		t.Fatal("an agent took the terminal, and it still reads restored")
+	}
+
+	a := &Adapter{answered: make(chan struct{}), streams: map[*eventStream]struct{}{}, state: mirror{terminals: map[string]*Terminal{
+		"t1": {Address: "t1", State: "live", Pid: 100}, "t2": {Address: "t2", State: "live", Pid: 100}, "t3": {Address: "t3", State: "live", Pid: 100},
+	}}}
+	a.fill([]Terminal{
+		{Address: "t1", State: "live", Pid: 101},
+		{Address: "t2", State: "live", Pid: 100},
+		{Address: "t3", State: "live", Reason: "host_shutdown"},
+		{Address: "t4", State: "live", Pid: 100},
+	}, Document{}, "0.2.0")
+	for address, want := range map[string]bool{"t1": true, "t2": false, "t3": true, "t4": false} {
+		if got := restored(&a.state, address); got != want {
+			t.Errorf("%s restored %v after a fill, want %v", address, got, want)
+		}
+	}
+}
+
+// One older pane the core refuses to keep (busy a moment) holds no other back, and is asked again until it is kept,
+// on the same subscription; a terminal that is not remuda's, or kept already, is never asked about.
+func TestOlderPanesAreKeptOneByOneAndARefusedOneAgain(t *testing.T) {
+	var mu sync.Mutex
+	asked := map[string]int{}
+	client := New(fakeCore("", func(p peer, s sent) {
+		if s.method != "terminal.keep" {
+			return
+		}
+		var request struct {
+			Params struct {
+				Terminal string `json:"terminal"`
+			} `json:"params"`
+		}
+		json.Unmarshal(s.payload, &request)
+		mu.Lock()
+		asked[request.Params.Terminal]++
+		first := asked[request.Params.Terminal] == 1
+		mu.Unlock()
+		if request.Params.Terminal == "t1" && first {
+			p.write(0, frameData, fmt.Appendf(nil, `{"jsonrpc":"2.0","id":%d,"error":{"code":-32000,"message":"busy","data":{"kind":"unavailable"}}}`, s.id))
+			return
+		}
+		p.reply(s.id, `{}`)
+	}))
+	t.Cleanup(func() { client.Close() })
+	life, stop := context.WithCancel(context.Background())
+	t.Cleanup(stop)
+	labelled := map[string]string{LabelSpace: "w1", LabelTab: "a"}
+	a := &Adapter{client: client, life: life, state: mirror{terminals: map[string]*Terminal{
+		"t1": {Address: "t1", State: "live", Labels: labelled},
+		"t2": {Address: "t2", State: "live", Labels: labelled},
+		"t3": {Address: "t3", State: "live"},
+		"t4": {Address: "t4", State: "live", Labels: labelled, Keep: true},
+	}}}
+	a.keepOlder([]string{"t1", "t2", "t3", "t4"})
+	for start := time.Now(); ; time.Sleep(10 * time.Millisecond) {
+		mu.Lock()
+		done := asked["t1"] == 2 && asked["t2"] == 1
+		mu.Unlock()
+		if done {
+			break
+		}
+		if time.Since(start) > 5*time.Second {
+			t.Fatalf("asked %v", asked)
+		}
+	}
+	time.Sleep(3 * retryFrom)
+	mu.Lock()
+	defer mu.Unlock()
+	if asked["t2"] != 1 || asked["t3"] != 0 || asked["t4"] != 0 {
+		t.Fatalf("asked %v", asked)
 	}
 }
