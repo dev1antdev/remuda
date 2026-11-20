@@ -6,6 +6,7 @@ import (
 	"log"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/dev1antdev/remuda/internal/herdr"
 )
@@ -28,7 +29,8 @@ type feed struct {
 // opensAtOnce is how many feeds a stream subscribes side by side.
 const opensAtOnce = 8
 
-// joinWithin bounds a stream's subscribing of all its new watches together, as one request is bounded. A test
+// joinWithin is how long a stream's subscribing of its new watches may go without a single answer, as one request is
+// bounded: a core that answers keeps the join going however many rounds of opensAtOnce its watches take. A test
 // shortens it.
 var joinWithin = callWithin
 
@@ -94,16 +96,15 @@ func (a *Adapter) join(s *eventStream, watches []OutputWatch) error {
 			missing = append(missing, w)
 		}
 	}
-	ctx, cancel := context.WithTimeout(a.life, joinWithin) // one deadline for them all, cut short by Close
+	ctx, cancel := context.WithCancel(a.life) // cut short by Close, or by joinWithin with no answer
 	defer cancel()
 	subs := make([]*Subscription, len(missing))
 	errs := make([]error, len(missing))
-	var wg sync.WaitGroup
+	answered := make(chan struct{}, len(missing))
 	slots := make(chan struct{}, opensAtOnce)
 	for i, w := range missing {
-		wg.Add(1)
 		go func() {
-			defer wg.Done()
+			defer func() { answered <- struct{}{} }()
 			select {
 			case slots <- struct{}{}:
 			case <-ctx.Done():
@@ -114,7 +115,17 @@ func (a *Adapter) join(s *eventStream, watches []OutputWatch) error {
 			subs[i], errs[i] = a.client.Subscribe(ctx, SubscribeParams{Labels: map[string]string{outputOnly: "1"}, Output: []OutputWatch{w}})
 		}()
 	}
-	wg.Wait()
+	idle := time.NewTimer(joinWithin)
+	defer idle.Stop()
+	for range missing {
+		select {
+		case <-answered:
+			idle.Reset(joinWithin)
+		case <-idle.C:
+			cancel() // nothing answered for joinWithin: the rest end at once
+			<-answered
+		}
+	}
 	var refused error
 	for _, err := range errs {
 		if err != nil && (refused == nil || IsKind(err, "invalid_regex") && !IsKind(refused, "invalid_regex")) {

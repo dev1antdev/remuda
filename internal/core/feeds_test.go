@@ -245,9 +245,9 @@ func TestAnEditedRuleLeavesTheOtherWatchesFeedsStanding(t *testing.T) {
 	}
 }
 
-// A core that takes requests and answers none: a stream's watches subscribe within one deadline all together, and
-// the adapter's Close ends the wait at once.
-func TestWatchesTheCoreNeverAnswersEndByOneDeadlineOrTheAdaptersClose(t *testing.T) {
+// A core that takes requests and answers none: a stream's watches give up once nothing answered for joinWithin,
+// however many rounds they would take, and the adapter's Close ends the wait at once.
+func TestWatchesTheCoreNeverAnswersEndAfterOneSilenceOrTheAdaptersClose(t *testing.T) {
 	saved := joinWithin
 	t.Cleanup(func() { joinWithin = saved })
 	silent := func() *Adapter {
@@ -280,7 +280,7 @@ func TestWatchesTheCoreNeverAnswersEndByOneDeadlineOrTheAdaptersClose(t *testing
 		t.Fatal("watches the core never answered stand")
 	}
 	if took := time.Since(start); took > 2*joinWithin {
-		t.Fatalf("the watches took %s to give up, past one deadline of %s", took, joinWithin)
+		t.Fatalf("the watches took %s to give up, past one silence of %s", took, joinWithin)
 	}
 	adapter.Close()
 
@@ -304,5 +304,45 @@ func TestWatchesTheCoreNeverAnswersEndByOneDeadlineOrTheAdaptersClose(t *testing
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("Close did not end the wait")
+	}
+}
+
+// A core far away answers every subscribe, one at a time and slowly: the whole join takes much longer than
+// joinWithin, but no answer is ever that late, so the watches all stand.
+func TestASlowCoreThatKeepsAnsweringOpensEveryWatch(t *testing.T) {
+	saved := joinWithin
+	joinWithin = 300 * time.Millisecond
+	t.Cleanup(func() { joinWithin = saved })
+	opened := 0
+	client := New(fakeCore(`"output_watches"`, func(c peer, frame sent) {
+		switch {
+		case frame.method == "events.subscribe" && bytes.Contains(frame.payload, []byte(outputOnly)):
+			time.Sleep(100 * time.Millisecond) // one round trip at a time
+			opened++
+			c.reply(frame.id, fmt.Sprintf(`{"seq":1,"terminals":[],"channel":%d}`, 3+opened))
+		case frame.method == "events.subscribe":
+			c.reply(frame.id, `{"seq":1,"terminals":[{"address":"t1","state":"live"}],"channel":3}`)
+		case frame.method == "doc.get":
+			c.reply(frame.id, `{"value":null,"version":0}`)
+		}
+	}))
+	t.Cleanup(func() { client.Close() })
+	adapter := NewAdapter(client, AdapterHooks{})
+	t.Cleanup(func() { adapter.Close() })
+	if _, err := adapter.SessionSnapshot(); err != nil {
+		t.Fatal(err)
+	}
+	var subs []herdr.Subscription
+	for i := 0; i < 20; i++ {
+		subs = append(subs, herdr.Subscription{Type: herdr.EventOutputMatched, PaneID: "t1", Match: &herdr.OutputMatch{Type: "substring", Value: fmt.Sprint("FAIL ", i)}})
+	}
+	start := time.Now()
+	stream, err := adapter.Subscribe(subs)
+	if err != nil {
+		t.Fatalf("after %s: %v", time.Since(start), err)
+	}
+	stream.Close()
+	if took := time.Since(start); took < 4*joinWithin {
+		t.Fatalf("the join took %s: the test meant it to outlast joinWithin %s several times", took, joinWithin)
 	}
 }
