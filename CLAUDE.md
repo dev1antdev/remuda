@@ -1449,8 +1449,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   first, `RC_SESSION=<s> remuda-core server stop`, every terminal in them
   ending, hidden ones too — nothing of it goes while any remuda-core of the
   account still runs afterwards (`core_running`: `pgrep -x`, `tasklist` on
-  Windows; a session on a socket of its own) or with no binary to stop
-  them — then the binary, its `rc` link (relative, or into the
+  Windows; a session on a socket of its own), when that check itself
+  fails, or with no binary to stop them — then the binary, its `rc` link (relative, or into the
   bundle), ConPTY on Windows, the app bundles under
   `~/.local/share/remuda-core`, its state and config folders; linger is
   said to stay on) and herdr (its hooks first, then its server stopped, the binary through
@@ -1478,7 +1478,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   opened by `%SYSTEMROOT%\System32\tar.exe`; on a Mac `remuda core.app` by
   its own `--rc-install-bundle` — the download held in
   `~/.local/remuda-core.XXXXXX` (a noexec `/tmp` could not run the check)
-  and removed; one installed already is swapped by its own `update --from`
+  and removed; one install at a time (`~/.local/bin/.remuda-core-install`,
+  a folder holding its pid, taken over once that install is gone); one installed already is swapped by its own `update --from`
   (its terminals keep running), one as new or newer left alone, a fresh
   one starts nothing; on Linux `loginctl enable-linger`, said when refused.
   `remuda setup` installs it after herdr (never under `-server`; a failure

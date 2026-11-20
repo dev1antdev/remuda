@@ -268,11 +268,15 @@ code_part() {
 # while any remuda-core of this account still runs, one on a socket of its
 # own too — then the binary with its rc link, ConPTY on Windows, the app
 # bundles on a Mac, its state and config folders.
+# core_running prints the pids of this account's remuda-core processes, nothing for none; it fails when it cannot tell.
 core_running() {
     if [ "$OS" = Windows ]; then
-        tasklist //FI "IMAGENAME eq remuda-core.exe" //FO CSV //NH 2>/dev/null | sed -n 's/^"remuda-core.exe","\([0-9]*\)".*/\1/p' | tr '\n' ' ' | sed 's/ *$//'
+        rc_ps="$(tasklist //FI "IMAGENAME eq remuda-core.exe" //FO CSV //NH 2>/dev/null)" || return 1
+        printf '%s\n' "$rc_ps" | sed -n 's/^"remuda-core.exe","\([0-9]*\)".*/\1/p' | tr '\n' ' ' | sed 's/ *$//'
     else
-        pgrep -u "$UID_NUM" -x remuda-core 2>/dev/null | tr '\n' ' ' | sed 's/ *$//'
+        rc_ps="$(pgrep -u "$UID_NUM" -x remuda-core 2>/dev/null)"
+        [ "$?" -le 1 ] || return 1
+        printf '%s' "$rc_ps" | tr '\n' ' ' | sed 's/ *$//'
     fi
 }
 core_part() {
@@ -288,7 +292,7 @@ core_part() {
         return 0
     fi
     sessions=""
-    for d in "$rc_state"/*/ "$rc_state"/.[!.]*/; do
+    for d in "$rc_state"/*/ "$rc_state"/.[!.]*/ "$rc_state"/..?*/; do
         [ -d "$d" ] && sessions="${sessions:+$sessions, }$(basename "$d")"
     done
     what="remuda-core at $(tilde "$rc_bin"), its cores and the terminals in them, $(tilde "$rc_state"), $(tilde "$rc_config")"
@@ -307,18 +311,20 @@ core_part() {
         return 0
     fi
     up=0
-    for d in "$rc_state"/*/ "$rc_state"/.[!.]*/; do
+    for d in "$rc_state"/*/ "$rc_state"/.[!.]*/ "$rc_state"/..?*/; do
         [ -d "$d" ] || continue
         s="$(basename "$d")"
         RC_SESSION="$s" "$rc_bin" server stop >/dev/null 2>&1 || { up=1; fail "remuda-core's $s core did not stop: RC_SESSION=$s $rc_bin server stop"; }
     done
     i=0
-    while [ "$i" -lt 10 ] && [ -n "$(core_running)" ]; do
+    while [ "$i" -lt 10 ] && left="$(core_running)" && [ -n "$left" ]; do
         sleep 0.5
         i=$((i + 1))
     done
-    left="$(core_running)"
-    if [ -n "$left" ]; then
+    if ! left="$(core_running)"; then
+        up=1
+        fail "could not tell whether a remuda-core still runs"
+    elif [ -n "$left" ]; then
         up=1
         fail "a remuda-core still runs (pid $left), a session on a socket of its own perhaps: stop it, then remove remuda-core again"
     fi

@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -289,12 +290,14 @@ func TestRemovalOfCoreStopsEverySessionFirst(t *testing.T) {
 }
 
 func TestRemovalOfCoreStopsAHiddenSessionAndKeepsEverythingWhileACoreStillRuns(t *testing.T) {
-	dir, calls := coreMachine(t, ".work")
+	dir, calls := coreMachine(t, ".work", "..work")
 	write(t, filepath.Join(dir, ".local", "bin", "pgrep"), "#!/bin/sh\ncase \"$*\" in *remuda-core*) echo 4242 ;; *) exit 1 ;; esac\n", 0o755)
 	var out strings.Builder
 	err := (Removal{Core: true}).Remove(&out)
-	if !strings.Contains(calls(), "RC_SESSION=.work remuda-core server stop") {
-		t.Errorf("the hidden session's core was not stopped:\n%s", calls())
+	for _, s := range []string{".work", "..work"} {
+		if !strings.Contains(calls(), "RC_SESSION="+s+" remuda-core server stop") {
+			t.Errorf("the hidden session %s's core was not stopped:\n%s", s, calls())
+		}
 	}
 	if err == nil || !strings.Contains(out.String(), "a remuda-core still runs (pid 4242") {
 		t.Fatalf("a core still running went unsaid (err=%v):\n%s", err, out.String())
@@ -317,5 +320,43 @@ func TestRemovalOfCoreLeavesItsFilesWhileACoreRuns(t *testing.T) {
 		if !exists(filepath.Join(dir, ".local", f)) {
 			t.Errorf("~/.local/%s went while a core still ran\n%s", f, out.String())
 		}
+	}
+}
+
+func TestRemovalOfCoreKeepsEverythingWhenItCannotTellACoreRuns(t *testing.T) {
+	dir, _ := coreMachine(t)
+	write(t, filepath.Join(dir, ".local", "bin", "pgrep"), "#!/bin/sh\ncase \"$*\" in *remuda-core*) exit 3 ;; *) exit 1 ;; esac\n", 0o755)
+	var out strings.Builder
+	err := (Removal{Core: true}).Remove(&out)
+	if err == nil || !strings.Contains(out.String(), "could not tell whether a remuda-core still runs") {
+		t.Fatalf("a process check that failed went unsaid (err=%v):\n%s", err, out.String())
+	}
+	if !exists(filepath.Join(dir, ".local", "state", "remuda-core", "default")) {
+		t.Errorf("remuda-core's state went though nobody could tell its core had stopped\n%s", out.String())
+	}
+}
+
+func TestCoreInstallsOneAtATime(t *testing.T) {
+	dir, calls := coreHome(t, "Linux", "x86_64", coreRelease(t, "remuda-core", "0.2.0"))
+	lock := filepath.Join(dir, ".local", "bin", ".remuda-core-install")
+	write(t, filepath.Join(lock, "pid"), strconv.Itoa(os.Getpid()), 0o644)
+	out, err := installCore(t, "install")
+	if err == nil || !strings.Contains(out, "another remuda-core install runs here") || strings.Contains(calls(), "curl") {
+		t.Fatalf("an install went on beside another (err=%v):\n%s", err, out)
+	}
+	if !exists(lock) {
+		t.Fatal("the other install's lock was taken away")
+	}
+
+	dead := exec.Command("true")
+	if err := dead.Run(); err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(lock, "pid"), strconv.Itoa(dead.Process.Pid), 0o644)
+	if out, err := installCore(t, "install"); err != nil || !strings.Contains(out, "remuda-core 0.2.0 installed") {
+		t.Fatalf("the lock of an install that is gone held this one back (err=%v):\n%s", err, out)
+	}
+	if exists(lock) {
+		t.Error("the install left its lock behind")
 	}
 }

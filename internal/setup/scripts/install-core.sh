@@ -41,8 +41,12 @@ installed() { if [ -x "$CORE" ]; then "$CORE" --version 2>/dev/null | sed -n 's/
 # whole says whether what remuda-core needs beside its binary is there: ConPTY on Windows, put in place before the binary.
 whole() { case "$TARGET" in windows-*) [ -f "$BIN/conpty/conpty.dll" ] && [ -f "$BIN/conpty/x64/OpenConsole.exe" ] ;; *) true ;; esac; }
 
-# conpty puts the release's ConPTY in place whole: copied beside it first, then swapped in.
-conpty() { rm -rf "$BIN/conpty.new" && cp -R "$TMP/conpty" "$BIN/conpty.new" && rm -rf "$BIN/conpty" && mv "$BIN/conpty.new" "$BIN/conpty"; }
+# conpty puts the release's ConPTY in place whole: copied beside it first, checked, then swapped in.
+conpty() {
+    rm -rf "$BIN/conpty.new" && cp -R "$TMP/conpty" "$BIN/conpty.new" &&
+        [ -f "$BIN/conpty.new/conpty.dll" ] && [ -f "$BIN/conpty.new/x64/OpenConsole.exe" ] &&
+        rm -rf "$BIN/conpty" && mv "$BIN/conpty.new" "$BIN/conpty"
+}
 
 # older says whether version $1 is older than $2.
 older() {
@@ -51,9 +55,9 @@ older() {
         exit 1 }'
 }
 
-HAVE="$(installed)"
 case "$ACTION" in
 status)
+    HAVE="$(installed)"
     if [ -n "$HAVE" ]; then echo "remuda-core $HAVE at $CORE"; else echo "remuda-core is not installed here"; fi
     exit 0
     ;;
@@ -61,15 +65,31 @@ install) ;;
 *) echo "usage: install-core.sh [install|status]"; exit 2 ;;
 esac
 
+# one install at a time here, held from the look at what is installed to the end: a folder holding its pid, taken
+# over when that install is gone
+mkdir -p "$BIN"
+LOCK="$BIN/.remuda-core-install"
+if ! mkdir "$LOCK" 2>/dev/null; then
+    other="$(cat "$LOCK/pid" 2>/dev/null || true)"
+    if [ -n "$other" ] && kill -0 "$other" 2>/dev/null; then
+        echo "another remuda-core install runs here (pid $other): try again once it is done"
+        exit 1
+    fi
+    rm -rf "$LOCK"
+    mkdir "$LOCK" 2>/dev/null || { echo "another remuda-core install began here just now: try again once it is done"; exit 1; }
+fi
+echo $$ > "$LOCK/pid"
+TMP=""
+trap 'rm -rf "$LOCK" ${TMP:+"$TMP"}' EXIT
+
+HAVE="$(installed)"
 if [ -n "$HAVE" ] && ! older "$HAVE" "$VERSION" && whole; then
     echo "remuda-core $HAVE already at $CORE"
     exit 0
 fi
 [ -n "$SHA" ] || { echo "no known checksum for remuda-core $VERSION $TARGET — set CORE_SHA256"; exit 1; }
-mkdir -p "$BIN"
 # beside the target rather than in /tmp: a noexec temp mount could not run the check below
 TMP="$(mktemp -d "$HOME/.local/remuda-core.XXXXXX")"
-trap 'rm -rf "$TMP"' EXIT
 ARCHIVE="$TMP/core.$EXT"
 URL="https://github.com/dev1antdev/remuda-core/releases/download/remuda-v$VERSION/remuda-core-$TARGET.$EXT"
 echo "downloading $URL"
