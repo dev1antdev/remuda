@@ -11,6 +11,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/health"
 	"github.com/dev1antdev/remuda/internal/restart"
 	"github.com/dev1antdev/remuda/internal/script"
+	"github.com/dev1antdev/remuda/internal/setup"
 )
 
 // Update is a command the page may run on a machine, shown to the person before they say yes.
@@ -140,20 +141,17 @@ func Plan(what string, r *health.Report) (Update, error) {
 		}
 		return Update{What: what, Title: "Update code-server", Command: path + remudaThere + `"$r" code install && readlink "$HOME/.local/opt/code-server"`, Note: "remuda's own installer: the pinned release, its checksum verified, the service restarted; an editor open on it reconnects (Reload the editor if it does not)."}, nil
 	case "core":
-		if r == nil || r.Remuda == "" {
-			return Update{}, fmt.Errorf("remuda is not installed there to run remuda-core's installer")
-		}
-		if AssetName(r.OS, r.Arch) == "" || windowsReport(r) && r.Arch == "arm64" { // remuda's own builds, less Windows on arm
-			return Update{}, fmt.Errorf("remuda-core has no build for %s %s", r.OS, r.Arch)
+		if r == nil || AssetName(r.OS, r.Arch) == "" || windowsReport(r) && r.Arch == "arm64" { // remuda's own builds, less Windows on arm
+			return Update{}, fmt.Errorf("remuda-core has no build for this machine, or its vitals are not read yet")
 		}
 		if r.RemudaCore != "" && !health.Newer(r.RemudaCore, health.PinnedCore) {
 			return Update{}, fmt.Errorf("remuda-core %s is there already", r.RemudaCore)
 		}
-		u := Update{What: what, Title: "Install remuda-core", Note: "The terminal runtime remuda's machines move to, the pinned release with its checksum verified, put in ~/.local/bin. Nothing starts until remuda connects to it; herdr and its agents carry on as they are."}
+		u := Update{What: what, Title: "Install remuda-core", Note: "The terminal runtime remuda's machines move to, the pinned release with its checksum verified, put in ~/.local/bin by this remuda's own installer over your SSH connection, so no remuda need run there. Nothing starts until remuda connects to it; herdr and its agents carry on as they are."}
 		if r.RemudaCore != "" {
 			u.Title, u.Note = "Update remuda-core", r.RemudaCore+arrow(health.PinnedCore)+". Swapped by its own update: its terminals keep running."
 		}
-		u.Command = path + remudaThere + `"$r" -h 2>&1 | grep -q 'remuda core ' || { echo "the remuda here is older than remuda-core's installer: update remuda here first"; exit 1; }; "$r" core install`
+		u.Command = "# remuda-core's installer as this remuda carries it, the one `remuda core -host H install` runs\n" + path + "\n" + setup.CoreInstaller()
 		return u, nil
 	case "mcp":
 		if r == nil || r.Remuda == "" {

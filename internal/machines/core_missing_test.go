@@ -48,8 +48,9 @@ func TestARemoteWithoutRemudaCoreStaysConnected(t *testing.T) {
 	if err == nil || api != nil || terminals != nil {
 		t.Fatalf("Ready without a core = %v, %v, %v", api, terminals, err)
 	}
-	if !strings.Contains(err.Error(), "remuda-core is not installed on") || !strings.Contains(err.Error(), "Install remuda-core") {
-		t.Fatalf("Ready says %q", err)
+	var noCore *NoCoreError
+	if !errors.As(err, &noCore) || !strings.Contains(err.Error(), "remuda-core is not installed on") || !strings.Contains(err.Error(), "Install remuda-core") {
+		t.Fatalf("Ready says %q (%T)", err, err)
 	}
 	if out, err := mc.Run("echo vitals", 10*time.Second); err != nil || strings.TrimSpace(string(out)) != "vitals" {
 		t.Fatalf("a script over the master = %q, %v", out, err)

@@ -43,6 +43,10 @@ var mcpScript string
 //go:embed scripts/install-core.sh
 var coreScript string
 
+// CoreInstaller is remuda-core's installer as this binary carries it: what `remuda core [-host H] install` runs, and
+// the Updates row on a machine over its SSH connection.
+func CoreInstaller() string { return coreScript }
+
 // CodeVersion is the code-server release install-code.sh installs and the Updates row offers; the script's default must match.
 const CodeVersion = "4.140.0"
 

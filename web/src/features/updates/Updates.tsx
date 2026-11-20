@@ -27,7 +27,7 @@ function missingText(what: string): string {
     case "plugins":
       return tr("No herdr plugin from GitHub is installed there, or herdr there is older than 0.9.4.");
     case "core":
-      return tr("remuda-core cannot be installed from here: it is there already, it has no build for this machine, or no remuda there runs its installer (Deploy it first).");
+      return tr("remuda-core is there already, or it has no build for this machine.");
   }
   return tr("Nothing to update called “{what}” there any more.", { what });
 }

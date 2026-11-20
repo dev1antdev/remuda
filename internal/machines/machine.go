@@ -289,7 +289,7 @@ func (mc *Machine) Ready() (herdr.API, herdr.Terminals, error) {
 	case StateConnected:
 		if mc.noCore != nil {
 			mc.tryAgain(mc.RetryCore)
-			return nil, nil, mc.noCore
+			return nil, nil, &NoCoreError{Reason: mc.noCore}
 		}
 		return mc.client, mc.attach, nil
 	case StateConnecting:

@@ -137,8 +137,7 @@ export const agents: Dictionary = {
   "Claude Code {have} tells remuda-core no status: its agents show none until it is {version} or later": "Claude Code {have} не сообщает remuda-core своё состояние: его агенты будут без статуса, пока он не станет {version} или новее",
   "remuda-core is not installed": "remuda-core не установлен",
   Install: "Установить",
-  "remuda-core cannot be installed from here: it is there already, it has no build for this machine, or no remuda there runs its installer (Deploy it first).":
-    "remuda-core отсюда не установить: он там уже есть, для этой машины нет сборки, или там нет remuda, которая запускает его установщик (сначала разверните её).",
+  "remuda-core is there already, or it has no build for this machine.": "remuda-core там уже есть, или для этой машины нет его сборки.",
   idle: "простаивает",
   "idle for a long time": "давно простаивает",
   "idle, just stopped": "простаивает, только что закончил",

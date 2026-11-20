@@ -790,7 +790,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   `core_missing_test.go`): the master is kept, so its scripts, the vitals
   and Updates' Install remuda-core reach it and every check of
   `StateConnected` counts it, while `Ready` answers that reason with no
-  client — the watcher's snapshot error, so the roster shows the machine
+  client (`NoCoreError`) — the watcher's snapshot error, so the roster shows the machine
   in error with those words and no workspace, `reached` beside it (its
   master is up: the page offers no Wake up, `wake.ts`), and the queue and
   the placer start nothing there (`runsAgents` in `internal/app/queue.go`:
@@ -1954,14 +1954,16 @@ components and icons as rules for whoever changes it: @docs/design.md
   is said and setup goes on — CI's Windows job checks it really lands
   there, `live_windows_test.go`); the
   vitals read `remuda_core`; Updates offers `what = core` ("Install
-  remuda-core" / "Update remuda-core") on every machine with remuda where
-  it is missing or older and a build exists (a Mac or Linux
+  remuda-core" / "Update remuda-core") on every machine where it is
+  missing or older and a build exists (a Mac or Linux
   on either CPU, Windows on x86-64: `AssetName` less Windows on arm),
-  whatever the backend, so Update
+  whatever the backend, its command this remuda's own installer
+  (`setup.CoreInstaller`, the script `remuda core -host H install` runs)
+  over the machine's shell, so no remuda need be there; Update
   everywhere puts it everywhere before the move — on a remote after its
-  remuda release (`remoteOrder`), since its command first checks the
-  machine's remuda knows `remuda core` (`-h`: an older one would start a
-  server on an unknown word), on the page's own host before it.
+  remuda release (`remoteOrder`), on the page's own host before it. An
+  agent's update on a machine connected without its core moves no chat
+  and stands done (`chatsMoved`: `Ready`'s `machines.NoCoreError`).
 - **herdr is remuda's to run.** `herdr.EnsureServer(bin, socket)` pings
   and, when nothing answers, starts `herdr server` (the headless server)
   detached, at most once per two minutes — at startup and whenever the

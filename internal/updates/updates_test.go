@@ -1,10 +1,14 @@
 package updates
 
 import (
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/dev1antdev/remuda/internal/health"
+	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/setup"
 )
 
 func TestPlan(t *testing.T) {
@@ -262,8 +266,11 @@ func TestCoreIsOfferedWhereItIsMissingOrOlder(t *testing.T) {
 		return nil
 	}
 	mac := health.Report{Remuda: "v0.16.0", OS: "macOS 26.1", Arch: "arm64"}
-	if u := find(&mac); u == nil || u.Title != "Install remuda-core" || !strings.Contains(u.Command, `"$r" core install`) || !strings.Contains(u.Command, "older than remuda-core's installer") {
+	if u := find(&mac); u == nil || u.Title != "Install remuda-core" || !strings.HasSuffix(u.Command, "\n"+setup.CoreInstaller()) {
 		t.Fatalf("a Mac without remuda-core: %+v", u)
+	}
+	if u := find(&health.Report{OS: "Linux 6.12", Arch: "amd64"}); u == nil || !strings.HasSuffix(u.Command, setup.CoreInstaller()) {
+		t.Fatalf("a Linux machine with neither remuda nor remuda-core is not offered this remuda's own installer: %+v", u)
 	}
 	older := mac
 	older.RemudaCore = "0.1.9"
@@ -273,7 +280,6 @@ func TestCoreIsOfferedWhereItIsMissingOrOlder(t *testing.T) {
 	for name, r := range map[string]health.Report{
 		"current":         {Remuda: "v0.16.0", OS: "Linux 6.12", Arch: "arm64", RemudaCore: "0.2.0"},
 		"newer":           {Remuda: "v0.16.0", OS: "Linux 6.12", Arch: "amd64", RemudaCore: "0.3.0"},
-		"no remuda":       {OS: "Linux 6.12", Arch: "amd64"},
 		"Windows on arm":  {Remuda: "v0.16.0", OS: "Windows 11 Pro", Arch: "arm64"},
 		"a 32-bit Linux":  {Remuda: "v0.16.0", OS: "Linux 6.1", Arch: "armv7l"},
 		"vitals not read": {},
@@ -284,5 +290,22 @@ func TestCoreIsOfferedWhereItIsMissingOrOlder(t *testing.T) {
 	}
 	if u := find(&health.Report{Remuda: "v0.16.0", OS: "Windows 11 Pro", Arch: "amd64"}); u == nil {
 		t.Error("a Windows PC on x86-64 is not offered remuda-core")
+	}
+}
+
+// An agent updated on a machine connected without its remuda-core has no chat this remuda sees to move: the update
+// went through, and the job says so rather than failing on the chats.
+func TestAnAgentUpdateWithoutTheCoreMovesNoChatAndStandsDone(t *testing.T) {
+	var said []string
+	say := func(line string) { said = append(said, line) }
+	noCore := &machines.NoCoreError{Reason: errors.New("remuda-core is not installed on box")}
+	if err := chatsMoved(fmt.Errorf("restart: %w", noCore), say); err != nil {
+		t.Fatalf("the update failed on the missing core: %v", err)
+	}
+	if len(said) != 1 || !strings.Contains(said[0], "remuda-core is not installed on box") {
+		t.Fatalf("the log says %q", said)
+	}
+	if err := chatsMoved(errors.New("herdr refused"), say); err == nil {
+		t.Fatal("another failure of the chats passed as done")
 	}
 }
