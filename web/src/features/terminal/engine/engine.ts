@@ -12,6 +12,7 @@ import { uploadFiles } from "@/features/files/api";
 import type { OpenFile } from "@/features/files/target";
 import { installCopy } from "./copy";
 import { applyGeometry, keepFollower, type Geometry } from "./geometry";
+import { followGrid, WINDOW_OPTIONS } from "./grid";
 import { applyModifier } from "./keys";
 import { createLayer } from "./layer";
 import { provideLinks } from "./links";
@@ -53,6 +54,7 @@ export function createEngine(mount: HTMLElement, machineId: string, paneId: stri
     allowProposedApi: true,
     theme: terminalTheme(props().flavor),
     disableStdin: props().readOnly,
+    windowOptions: WINDOW_OPTIONS,
   });
   const readOnly = !!props().readOnly;
   let flavorNow = props().flavor;
@@ -101,15 +103,9 @@ export function createEngine(mount: HTMLElement, machineId: string, paneId: stri
   };
   apply();
 
-  const gridSet = term.parser.registerCsiHandler({ final: "t" }, (params) => {
-    if (params[0] !== 8 || !props().core || props().mode !== "keep") return false; // xterm's own: ignored
-    const rows = Number(params[1]);
-    const cols = Number(params[2]);
-    if (rows > 0 && cols > 0) {
-      grid = { cols, rows };
-      apply(); // now, while parsing, so the bytes after it are drawn at that grid
-    }
-    return true;
+  const gridSet = followGrid(term, () => !!props().core && props().mode === "keep", (cols, rows) => {
+    grid = { cols, rows };
+    apply(); // the font that fits it, once the lens is on screen
   });
   // On remuda-core the terminal takes the size of the viewer last active: a desk turned to claims it back.
   const claimSize = () => {

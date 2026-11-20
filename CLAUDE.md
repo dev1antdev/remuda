@@ -1002,7 +1002,13 @@ components and icons as rules for whoever changes it: @docs/design.md
   types but never sizes the terminal, so the engine attaches again when the
   mode changes there (`core` on the engine's props), and a keep viewer's
   grid is the one the core hands it in the stream (`CSI 8;rows;cols t`,
-  a parser hook in `engine.ts`) rather than the roster's; a viewer link is
+  `engine/grid.ts`: xterm calls a handler of it only with
+  `windowOptions.setWinSizeChars` on, `WINDOW_OPTIONS`, and the grid is set
+  right there while the bytes are parsed, a hidden lens's too; tested with
+  xterm itself; anywhere else the sequence is swallowed as before) rather
+  than the roster's; two fit viewers of different sizes share the
+  terminal's one grid, its last active viewer's, as herdr's one attach PTY
+  shared its last resize; a viewer link is
   keep and `wsOnly` (no HTTP fallback, a line saying the network drops
   WebSockets). herdr reads none of it. Agent status lines (ccstatusline etc.) only fit in keep mode on a
   phone. A grid wider than the screen (keep, or fit with a minimum width),
@@ -6873,8 +6879,12 @@ components and icons as rules for whoever changes it: @docs/design.md
   wears "Viewing only" and no search, Changes is shut, the Git lens draws
   its graph and opens no menu, the terminal lens on a machine on
   remuda-core is the live terminal only watched (`/ws/pane` is a viewer's
-  route; `handlePaneWS` opens it `Observe`, drops what the page sends, and
-  refuses a viewer on herdr with a 403 before any peer is asked; the page's
+  route; `handlePaneWS` opens it `Observe`, drops what the page sends,
+  refuses a viewer on herdr with a 403 before any peer is asked, and asks
+  again before every write and every `viewerRecheck` 5 s on a quiet terminal
+  whether the link still stands (`Guard.StillViewer`: its key, or the viewer
+  device it signed in, not revoked), closing with "this link was revoked"
+  — tested on a throwaway core; the page's
   `TerminalLens` `readOnly`: the pane's own grid, xterm's `disableStdin`, no
   key bar, nothing sent), else
   the pane's screen (`features/terminal/Screen.tsx` over `GET /api/screen`,

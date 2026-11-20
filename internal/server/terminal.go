@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/coder/websocket"
 
@@ -25,6 +26,14 @@ func (s *Server) terminalRoutes(api *http.ServeMux) {
 	api.HandleFunc("POST /api/term/input", s.handleTermInput)
 	api.HandleFunc("POST /api/term/resize", s.handleTermResize)
 	api.HandleFunc("DELETE /api/term/close", s.handleTermClose)
+}
+
+// viewerRecheck is how often a quiet socket asks again whether its viewer link still stands.
+const viewerRecheck = 5 * time.Second
+
+// viewerStands says the viewer link of a request is not revoked since it came in.
+func (s *Server) viewerStands(r *http.Request) bool {
+	return s.Guard != nil && s.Guard.StillViewer(r)
 }
 
 type wsClientMsg struct {
@@ -100,11 +109,30 @@ func (s *Server) handlePaneWS(w http.ResponseWriter, r *http.Request) {
 	// r.Context() lives until the handler returns, so the attach would linger until the pane's next byte
 	wctx, wcancel := context.WithCancel(ctx)
 	defer wcancel()
+	// a viewer link revoked while it watches sees nothing more: its key or device is asked again before every write,
+	// and every few seconds while the terminal is quiet
+	var recheck <-chan time.Time
+	if watching {
+		ticker := time.NewTicker(viewerRecheck)
+		defer ticker.Stop()
+		recheck = ticker.C
+	}
+	revoked := func() bool {
+		if watching && !s.viewerStands(r) {
+			c.Close(websocket.StatusPolicyViolation, "this link was revoked")
+			return true
+		}
+		return false
+	}
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
 		for {
 			select {
+			case <-recheck:
+				if revoked() {
+					return
+				}
 			case data, ok := <-ch:
 				if !ok {
 					c.Close(websocket.StatusNormalClosure, "terminal detached")
@@ -122,6 +150,9 @@ func (s *Server) handlePaneWS(w http.ResponseWriter, r *http.Request) {
 					default:
 						more = false
 					}
+				}
+				if revoked() {
+					return
 				}
 				if err := c.Write(wctx, websocket.MessageBinary, data); err != nil {
 					return
