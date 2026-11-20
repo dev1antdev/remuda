@@ -161,7 +161,7 @@ func (s *Subscription) Close() error {
 	s.mu.Unlock()
 	s.end(io.EOF)
 	if wasOpen {
-		return s.conn.write(s.channel, frameClose, nil)
+		return s.conn.write(context.Background(), s.channel, frameClose, nil)
 	}
 	return nil
 }
