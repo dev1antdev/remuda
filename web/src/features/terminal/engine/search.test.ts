@@ -126,6 +126,35 @@ describe("installSearch on remuda-core", () => {
     expect(found.total).toBe(0);
     search.dispose();
   });
+  it("leaves a selection the person holds where it is through a resize", async () => {
+    const term = headless();
+    const search = installSearch(term, () => "frappe", () => {}, () => true);
+    await written(term, "NEW row\r\nsecond\r\n");
+    search.find!("NEW", 0, () => {});
+    term.select(0, 1, 6);
+    term.resize(50, 5);
+    await rest(350);
+    expect(term.getSelectionPosition()).toEqual({ start: { x: 0, y: 1 }, end: { x: 6, y: 1 } });
+    search.dispose();
+  });
+  it("counts again once the person lets a held selection go", async () => {
+    const term = headless();
+    let held = true;
+    const search = installSearch(term, () => "frappe", () => {}, () => held);
+    await written(term, "OLD row\r\nsecond\r\n");
+    let found: FoundCount = { total: -1, at: -1 };
+    search.find!("NEW", 0, (f) => (found = f));
+    term.select(0, 1, 6);
+    await written(term, rewrite(1, "NEW"));
+    search.onPainted();
+    await rest(350);
+    expect(found.total).toBe(0);
+    held = false;
+    term.clearSelection();
+    await rest(350);
+    expect(found.total).toBe(1);
+    search.dispose();
+  });
   it("steps over a row rewritten in place since the last step", async () => {
     const term = headless();
     const search = installSearch(term, () => "frappe", () => {});

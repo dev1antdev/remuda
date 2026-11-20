@@ -93,9 +93,10 @@ export function installSearch(term: XTerm, flavor: () => Flavor, forgetSelection
   let addon = new SearchAddon();
   // heard is the core find's ear: every count the addon gives, its own finds' and onPainted's recounts
   let heard: ((found: FoundCount) => void) | null = null;
-  // unheard is the terminal as a core find's addon sees it: deaf to writes, so the addon never counts again on its own
-  // from rows it cached before the write, nor replaces a selection the person holds; onPainted recounts instead
-  const unheard = new Proxy(term, { get: (target, key, receiver) => (key === "onWriteParsed" ? () => ({ dispose() {} }) : Reflect.get(target, key, receiver)) });
+  // unheard is the terminal as a core find's addon sees it: deaf to writes and resizes, so the addon never counts again
+  // on its own from rows it cached before, nor replaces a selection the person holds; soon recounts instead
+  const deaf = new Set<PropertyKey>(["onWriteParsed", "onResize"]);
+  const unheard = new Proxy(term, { get: (target, key, receiver) => (deaf.has(key) ? () => ({ dispose() {} }) : Reflect.get(target, key, receiver)) });
   const load = () => {
     addon.activate(heard ? unheard : term);
     addon.onDidChangeResults((r) => heard?.({ total: Math.max(0, r.resultCount), at: Math.max(0, r.resultIndex) }));
@@ -153,6 +154,25 @@ export function installSearch(term: XTerm, flavor: () => Flavor, forgetSelection
     return seek(true);
   };
   let recount: ReturnType<typeof setTimeout> | null = null;
+  // soon counts the core find's query again once output or a resize rests, where the screen stands, the viewport kept;
+  // while the person holds a selection of their own the count waits for them to let it go
+  const soon = () => {
+    if (!heard || !query) return;
+    if (recount) clearTimeout(recount);
+    const count = () => {
+      recount = null;
+      if (!heard || !query) return;
+      if (selectionHeld()) {
+        recount = setTimeout(count, RECOUNT_MS);
+        return;
+      }
+      const top = term.buffer.active.viewportY;
+      if (!again(0)) heard({ total: 0, at: 0 });
+      term.scrollToLine(top);
+    };
+    recount = setTimeout(count, RECOUNT_MS);
+  };
+  const resized = term.onResize(soon);
   const stop = () => {
     if (pending) clearTimeout(pending);
     if (recount) clearTimeout(recount);
@@ -203,21 +223,11 @@ export function installSearch(term: XTerm, flavor: () => Flavor, forgetSelection
     refresh() {
       if (query) again(0);
     },
-    // onPainted hears a write landed: the core find counts its query again once output rests, where the screen stands,
-    // since a write may rewrite rows it read
-    onPainted() {
-      if (!heard || !query) return;
-      if (recount) clearTimeout(recount);
-      recount = setTimeout(() => {
-        recount = null;
-        if (!heard || !query || selectionHeld()) return;
-        const top = term.buffer.active.viewportY;
-        if (!again(0)) heard({ total: 0, at: 0 });
-        term.scrollToLine(top);
-      }, RECOUNT_MS);
-    },
+    // onPainted hears a write landed, which may rewrite rows the core find read
+    onPainted: soon,
     dispose() {
       stop();
+      resized.dispose();
       addon.dispose();
     },
   };
