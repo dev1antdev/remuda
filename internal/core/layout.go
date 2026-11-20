@@ -56,19 +56,25 @@ var layoutBeforeWrite = func() {}
 
 // LayoutApply lays a tree out as a tab, as herdr's layout.apply does: a new tab of the workspace, or, with a tab id, in
 // place of that tab, whose panes and what ran in them go once the new ones stand. Each pane is the machine's shell in
-// its folder (the workspace's when it names none); a pane with a command of its own is refused until the core can
-// start a program without reading its name as a template (Core 34). The document keeps the tree with each pane's
-// terminal and label. The tab in front stays in front. The tree is taken as scenes checked it. Only a workspace or
-// tab the document holds takes a layout, and one closed while the panes started is not brought back: the layout fails
-// and ends what it started.
+// its folder (the workspace's when it names none), or its command started as it is (`literal`) by a core that says it
+// can (runLiteral), so no template of the program's name takes its place and a missing program fails the layout; an
+// older core is refused a layout with a command. The document keeps the tree with each pane's terminal and label. The
+// tab in front stays in front. The tree is taken as scenes checked it. Only a workspace or tab the document holds takes
+// a layout, and one closed while the panes started is not brought back: the layout fails and ends what it started.
 func (a *Adapter) LayoutApply(workspaceID, tabID, tabLabel string, root herdr.LayoutNode) (*herdr.LayoutDescription, error) {
 	panes := root.Panes()
 	if len(panes) == 0 {
 		return nil, &herdr.Error{Code: "invalid_request", Message: "a layout holds at least one pane"}
 	}
-	for i, pane := range panes {
-		if len(pane.Command) > 0 {
-			return nil, &herdr.Error{Code: "invalid_request", Message: fmt.Sprintf("pane %d of the layout runs a command of its own, which is not laid out on remuda-core yet: the core would read its program as a template of that name (task Core 34)", i+1)}
+	if i := slices.IndexFunc(panes, func(p *herdr.LayoutNode) bool { return len(p.Command) > 0 }); i >= 0 {
+		ctx, cancel := context.WithTimeout(context.Background(), callWithin)
+		hello, err := a.client.Hello(ctx)
+		cancel()
+		if err != nil {
+			return nil, a.refusal(err, "workspace_not_found")
+		}
+		if !hello.Has(runLiteral) {
+			return nil, &herdr.Error{Code: "invalid_request", Message: fmt.Sprintf("pane %d of the layout runs a command of its own, which waits for a remuda-core that starts a program as it is, not as a template of that name: update it (Core 35)", i+1)}
 		}
 	}
 	space, inPlace := workspaceID, tabID != ""
@@ -104,7 +110,7 @@ func (a *Adapter) LayoutApply(workspaceID, tabID, tabLabel string, root herdr.La
 	}
 	for _, node := range tree.Panes() {
 		ctx, cancel := context.WithTimeout(context.Background(), callWithin)
-		t, err := a.runIn(ctx, space, tabID, RunParams{Cwd: cmp.Or(node.CWD, folder), Env: node.Env, Labels: map[string]string{LabelLayout: mark}})
+		t, err := a.runIn(ctx, space, tabID, RunParams{Argv: node.Command, Literal: len(node.Command) > 0, Cwd: cmp.Or(node.CWD, folder), Env: node.Env, Labels: map[string]string{LabelLayout: mark}})
 		cancel()
 		if err != nil {
 			return fail(err)

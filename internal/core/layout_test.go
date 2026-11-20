@@ -150,6 +150,7 @@ func TestAPaneTheTreeLacksIsExportedBesideItAndAnEndedOneIsLeftOut(t *testing.T)
 }
 
 func TestALayoutTheCoreCannotLayOutIsRefused(t *testing.T) {
+	core.HideRunLiteral(t)
 	client := coretest.Server(t).Client(t)
 	adapter := adapterOf(t, client, core.AdapterHooks{})
 	made, err := adapter.WorkspaceCreate(t.TempDir(), "")
@@ -168,7 +169,7 @@ func TestALayoutTheCoreCannotLayOutIsRefused(t *testing.T) {
 		code             string
 	}{
 		{"a split of nothing", made.Workspace.WorkspaceID, "", herdr.LayoutNode{Type: "split", Direction: "right"}, "invalid_request"},
-		{"a pane with a command of its own", made.Workspace.WorkspaceID, "", herdr.LayoutNode{Type: "split", Direction: "right", First: &pane,
+		{"a pane with a command, on a core that cannot start it as it is", made.Workspace.WorkspaceID, "", herdr.LayoutNode{Type: "split", Direction: "right", First: &pane,
 			Second: &herdr.LayoutNode{Type: "pane", Command: []string{"npm", "run", "dev", "--token=s3cret-sentinel"}}}, "invalid_request"},
 		{"a workspace only labelled, not in the document", "ws-labelled", "", pane, "workspace_not_found"},
 		{"no such workspace", "ws-none", "", pane, "workspace_not_found"},
@@ -184,6 +185,9 @@ func TestALayoutTheCoreCannotLayOutIsRefused(t *testing.T) {
 	}
 	if _, err := adapter.LayoutExport("tab-none"); !herdr.IsCode(err, "tab_not_found") {
 		t.Errorf("export of no tab: %v", err)
+	}
+	if _, err := client.Run(t.Context(), core.RunParams{Argv: []string{"sh"}, Literal: true}); !core.IsKind(err, "needs_update") {
+		t.Errorf("a literal run on a core that cannot: %v", err)
 	}
 	snap, _ := adapter.SessionSnapshot()
 	if len(snap.Panes) != 2 || snap.Pane(stray.Address) == nil {
@@ -230,6 +234,74 @@ func TestASceneCapturedOnACoreLaysItsLayoutOutInAnotherFolder(t *testing.T) {
 	if pane := snap.Pane(agent); pane.TabID != again.TabID || realPath(t, again.Root.Panes()[0].CWD) != filepath.Join(to, "sub") {
 		t.Fatalf("the agent's pane %+v, the tree %+v", pane, again.Root)
 	}
+}
+
+// templateNamed puts a template of that name in the core's config, its command saying so if it ever runs.
+func templateNamed(t *testing.T, c *coretest.Core, name string) {
+	t.Helper()
+	var config string
+	for _, kv := range c.Env {
+		if dir, ok := strings.CutPrefix(kv, "XDG_CONFIG_HOME="); ok {
+			config = dir
+		}
+	}
+	dir := filepath.Join(config, "remuda-core", "templates")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, name+".md"), []byte("---\ncommand: sh -c 'echo TEMPLATE-RAN; sleep 60'\n---\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestASceneCommandIsLaidOutAsSavedThoughATemplateHasItsProgramsName(t *testing.T) {
+	c := coretest.Server(t)
+	client := c.Client(t)
+	hello, err := client.Hello(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hello.Has("run_literal") {
+		t.Skipf("remuda-core %s cannot start a program as it is (run_literal)", hello.Version)
+	}
+	adapter := adapterOf(t, client, core.AdapterHooks{})
+	templateNamed(t, c, "sh")
+	templateNamed(t, c, "rc-no-such-program")
+	var known struct{ Templates []struct{ Name string } }
+	if err := client.Call(t.Context(), "templates.list", map[string]any{}, &known); err != nil || len(known.Templates) != 2 {
+		t.Fatalf("the core knows the templates %+v (%v)", known, err)
+	}
+	folder := realPath(t, t.TempDir())
+	made, err := adapter.WorkspaceCreate(folder, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	space := made.Workspace.WorkspaceID
+	sceneWith := func(command ...string) herdr.LayoutNode {
+		scene := scenes.Layout{Root: scenes.Node{Type: "split", Direction: "right", Ratio: 0.5,
+			First: &scenes.Node{Type: "pane"}, Second: &scenes.Node{Type: "pane", Label: "server", Command: command}}}
+		return scene.Tree(folder)
+	}
+
+	command := []string{"sh", "-c", `printf '<%s>' "$@"; sleep 60`, "remuda", "two words", "$HOME", "%PATH%", `"quoted"`}
+	tree := sceneWith(command...)
+	laid, err := adapter.LayoutApply(space, "", "Dev", tree)
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := laid.Root.Panes()[1].PaneID
+	screenSays(t, adapter, server, `<two words><$HOME><%PATH%><"quoted">`)
+	if ran, err := client.Get(t.Context(), server); err != nil || !slices.Equal(ran.Argv, command) {
+		t.Fatalf("the core runs %q, the scene saved %q (%v)", ran.Argv, command, err)
+	}
+	if exported, err := adapter.LayoutExport(laid.TabID); err != nil || !sameShape(&exported.Root, &tree) {
+		t.Fatalf("exported %+v, laid out %+v (%v)", exported, tree, err)
+	}
+
+	if _, err := adapter.LayoutApply(space, "", "", sceneWith("rc-no-such-program", "--flag")); !herdr.IsCode(err, "spawn_failed") {
+		t.Fatalf("a layout of a missing program: %v", err)
+	}
+	eventually(t, adapter, func(s *herdr.Snapshot) bool { return len(s.Panes) == 3 })
 }
 
 func panesOfTab(snap *herdr.Snapshot, tab string) []string {

@@ -9,6 +9,13 @@ func LiftPromptGate(t testing.TB) {
 	t.Cleanup(func() { promptsNeed = was })
 }
 
+// HideRunLiteral has a core that starts a program as it is taken for one that cannot, for one test.
+func HideRunLiteral(t testing.TB) {
+	was := runLiteral
+	runLiteral = "run_literal_hidden"
+	t.Cleanup(func() { runLiteral = was })
+}
+
 // BeforeLayoutWrite runs do between a layout's last terminal and its document write, for one test.
 func BeforeLayoutWrite(t testing.TB, do func()) {
 	was := layoutBeforeWrite
