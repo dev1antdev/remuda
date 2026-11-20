@@ -19,6 +19,7 @@ func TestNoCheckoutIsTakenDownOrWrittenOnAMachineReachedThroughCore(t *testing.T
 	mux := http.NewServeMux()
 	s.leftoverRoutes(mux)
 	s.teleportRoutes(mux)
+	s.sessionRoutes(mux)
 	if code, out := taskCall(mux, "GET", "/api/machines/local/leftovers", "", ""); code != http.StatusConflict {
 		t.Errorf("leftovers listed on remuda-core: %d %v", code, out)
 	}
@@ -31,5 +32,9 @@ func TestNoCheckoutIsTakenDownOrWrittenOnAMachineReachedThroughCore(t *testing.T
 	move := `{"machine":"local","pane":"w1:p1","target":"local","folder":"/w/app","agent":"claude"}`
 	if code, out := taskCall(mux, "POST", "/api/teleport", "", move); code != http.StatusBadRequest {
 		t.Errorf("a move onto remuda-core: %d %v", code, out)
+	}
+	fork := `{"machine":"local","workspace":"w1","pick":{"kind":"pr","pr":12,"head":"fix","cross_repo":true}}`
+	if code, out := taskCall(mux, "POST", "/api/worktrees", "", fork); code != http.StatusBadRequest {
+		t.Errorf("a new worktree from a fork's pull request on remuda-core: %d %v", code, out)
 	}
 }
