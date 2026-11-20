@@ -20,7 +20,7 @@ import (
 // so, and a closed workspace or a removed machine takes its record with it.
 func sleeper(dir string, bus *events.Bus, fleet *machines.Manager, watcher *watch.Watcher, runner *jobs.Runner, input *sessions.Input, restarter *restart.Restarter, updater *updates.Service, activity *feed.Service, changed func()) *sleep.Service {
 	store := sleep.Open(dir)
-	service := &sleep.Service{Store: store, Watch: watcher, Jobs: runner, Lock: input.Lock}
+	service := &sleep.Service{Store: store, Watch: watcher, Jobs: runner, Lock: input.Hold}
 	service.Typed = func(machineID, paneID, text string, keys bool) {
 		workspace := ""
 		if snap, _ := watcher.Snapshot(machineID); snap != nil {

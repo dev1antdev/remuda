@@ -3,7 +3,6 @@ package sessions
 import (
 	"errors"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -90,7 +89,7 @@ const (
 )
 
 func submit(p *paper, text string) error {
-	return (&Input{locks: map[events.PaneRef]*sync.Mutex{}}).Submit(p, events.PaneRef{Machine: "local", Pane: "w1:p1"}, text)
+	return NewInput(nil, nil).Submit(p, events.PaneRef{Machine: "local", Pane: "w1:p1"}, text)
 }
 
 // A message that names a picture goes by herdr's submit, and Enter again only once the footer no longer says Pasting.

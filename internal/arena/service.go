@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/push"
@@ -190,9 +191,7 @@ func (s *Service) deliver(mc *machines.Machine, client herdr.API, a Arena, laneI
 	var last error
 	for s.now().Before(deadline) {
 		time.Sleep(DeliverRetry)
-		lock.Lock()
-		err := client.AgentPrompt(pane, a.Prompt)
-		lock.Unlock()
+		err := s.Input.Prompt(client, events.PaneRef{Machine: mc.ID(), Pane: pane}, a.Prompt)
 		switch {
 		case err == nil:
 			s.settle(a.ID, laneID, LaneRunning, "")

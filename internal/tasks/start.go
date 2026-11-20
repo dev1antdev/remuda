@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/push"
@@ -153,9 +154,7 @@ func (l *Launcher) deliver(mc *machines.Machine, client herdr.API, run Run, task
 	var last error
 	for time.Now().Before(deadline) {
 		time.Sleep(2 * time.Second)
-		lock.Lock()
-		err := client.AgentPrompt(run.Pane, prompt)
-		lock.Unlock()
+		err := l.Input.Prompt(client, events.PaneRef{Machine: mc.ID(), Pane: run.Pane}, prompt)
 		switch {
 		case err == nil:
 			_ = l.Store.SetRun(run.ID, RunRunning, "")
