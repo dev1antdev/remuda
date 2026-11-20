@@ -420,9 +420,49 @@ components and icons as rules for whoever changes it: @docs/design.md
   never — such a program's history is its screen alone; at most 1000 rows,
   `truncated` past them, until Core 25 searches xterm's own buffer), each
   read only of a terminal the mirror holds, `PaneAtPrompt`
-  and `PaneShellPID` (off the mirror's `foreground` and `pid`), `AgentGet`;
-  every write answers `invalid_request` "… is not on remuda-core yet"
-  (Core 15). `Bridged` is false: a stream costs the core nothing. The
+  and `PaneShellPID` (off the mirror's `foreground` and `pid`), `AgentGet`.
+  **The actions** (Core 15, tested on coretest with a stand-in `claude`
+  that reports through OSC 7501, `actions_test.go`, `input_test.go`):
+  `places.go` — `WorkspaceCreate`, `TabCreate` / `TabCreateIn`, the
+  renames, `WorkspaceClose`, `TabClose` — and `panes.go` — `PaneSplit`
+  (`splitBeside`, half the room) and `PaneClose` (`withoutPane`; a tab goes
+  with its last pane and a workspace with its last tab, as herdr's) — run
+  the machine's shell in a new terminal with the place's labels and
+  `rm` (gone when its shell ends, as a herdr pane), put it in the mirror at
+  once (`runShell`, so the pane answered is there for the next request),
+  and change the document through `editDoc`: read, change, write at the
+  version read, made again on a `conflict` (another remuda's write) up to
+  `docTries` 5, one at a time from this remuda (`docMu`), the mirror taking
+  the written document at once; a document that is not remuda's is left as
+  it is, the action refused; the doc write failing ends the terminal just
+  made; a workspace or tab the snapshot shows that the document lacks (made
+  of labels alone) is adopted into it (`adopt`, `adoptTab`); ids are
+  `ws-` / `tab-` and eight hex digits (`newID`); closing ends the place's
+  terminals side by side (`kill`, `killWithin` 15 s each, one already
+  gone counting as gone). `input.go` — `AgentStartWith` types the agent's
+  command line into the pane's shell at its prompt, as herdr's agent.start
+  runs it, the shell staying under the agent (`terminal.send`: pasted and
+  Enter; quoted for the shell at the prompt, `commandLine`: POSIX,
+  PowerShell's `''`, cmd's `""`, a plain word left bare; the command is the
+  kind's name, `cursor-agent` for cursor); a shell not at its prompt is
+  `agent_pane_busy`, which `sessions.StartAgent` tries again; the start
+  counts once something else holds the terminal, and fails when the shell
+  is still at its prompt `startSeen` 10 s on; the name is herdr's alone.
+  `AgentPrompt` is `terminal.send` (the person's draft in the terminal
+  waited for, `sendWithin` 75 s): `agent_not_found` with no agent,
+  `agent_not_ready` until it has come up (`readyForPrompt`: a status
+  reported since it took the terminal — the mirror stamps `agentAt` and
+  `statusAt`, a report the foreground's next look comes after, within
+  `foregroundLag` 3 s, being its first — or `unreportedReady` 10 s for one
+  that reports none), the core's `blocked` → `agent_blocked`, `unavailable`
+  → `agent_not_ready`; `PaneSendKeys` is `terminal.keys` with `now` (keys
+  the person pressed); `PaneSendText` types bytes as they are through a
+  `keep_size` attach of its own, since the core takes text only as a paste;
+  `PaneSendInput` refuses a paste of several lines (typed raw, each would
+  run). Still answering `invalid_request` "… is not on remuda-core yet":
+  worktrees (Core 20), `LayoutExport` / `LayoutApply` (Core 22),
+  `PaneScroll` (Core 25), and the writes into herdr's own UI
+  (`*ReportMetadata`, `NotificationShow`). `Bridged` is false: a stream costs the core nothing. The
   watcher still paces the snapshots an event asks for (`internal/watch`,
   150 ms debounce, 500 ms / 1 s apart): the mirror makes each one free, not
   sooner.

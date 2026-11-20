@@ -105,10 +105,11 @@ func commandLine(shell string, words []string) string {
 
 var plainWord = regexp.MustCompile(`^[A-Za-z0-9_./:=+-]+$`)
 
-// readyForPrompt says an agent has come up for a prompt: it reported a status since it took the terminal, or it
-// reports none and has held the terminal unreportedReady.
+// readyForPrompt says an agent has come up for a prompt: it reported a status since it took the terminal (the report
+// that named it counts), or it reports none and has held the terminal unreportedReady.
 func readyForPrompt(t *Terminal, now time.Time) bool {
-	return t.agentAt.IsZero() || t.statusAt.After(t.agentAt) || now.Sub(t.agentAt) >= unreportedReady
+	reported := !t.statusAt.IsZero() && !t.statusAt.Before(t.agentAt)
+	return t.agentAt.IsZero() || reported || now.Sub(t.agentAt) >= unreportedReady
 }
 
 // AgentPrompt hands the agent in the pane a message: the core pastes it and presses Enter once the person is done

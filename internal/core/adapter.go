@@ -48,6 +48,10 @@ const (
 	retryUpTo     = 5 * time.Second
 )
 
+// foregroundLag is how long the core may take to look at a terminal's foreground again (about twice a second): a
+// status an agent reports in that time comes before the look that sees the agent.
+const foregroundLag = 3 * time.Second
+
 // quietFor is how long the subscription may say nothing: the core sends a heartbeat every 15 s, so three missed
 // mean it stopped answering while its connection stays open. A test shortens it.
 var quietFor = 45 * time.Second
@@ -302,6 +306,7 @@ func (a *Adapter) tellLocked(ev herdr.Event) {
 func (m *mirror) apply(ev Event) (herdr.Event, bool) {
 	told := herdr.Event{PaneID: ev.Terminal}
 	t := m.terminals[ev.Terminal]
+	now := time.Now()
 	switch ev.Type {
 	case "created", "restarted":
 		var record Terminal
@@ -340,7 +345,7 @@ func (m *mirror) apply(ev Event) (herdr.Event, bool) {
 			return told, false
 		}
 		t.Status, t.Records, t.Reported = status.Status, status.Records, status.Reported
-		t.statusAt = time.Now()
+		t.statusAt = now
 		told.Kind, told.AgentStatus = herdr.EventAgentStatus, statusOf(t)
 	case "turn":
 		json.Unmarshal(ev.Data, &struct {
@@ -388,9 +393,13 @@ func (m *mirror) apply(ev Event) (herdr.Event, bool) {
 	default:
 		return told, false
 	}
-	if now := agentOf(t); now != agent {
-		if now != "" {
-			t.agentAt = time.Now()
+	if became := agentOf(t); became != agent {
+		if became != "" {
+			t.agentAt = now
+			// a report naming this agent that came before the foreground's next look was the agent's own, its first
+			if t.Status != nil && appAgent(t.Status.App) == became && now.Sub(t.statusAt) <= foregroundLag {
+				t.agentAt = t.statusAt
+			}
 		}
 		if told.Kind == "pane.updated" {
 			told.Kind = "pane.agent_detected"

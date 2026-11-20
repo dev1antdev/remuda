@@ -186,13 +186,18 @@ func agentOf(t *Terminal) string {
 			return ""
 		}
 	}
-	if t.Status == nil || t.Status.App == "" {
+	if t.Status == nil {
 		return ""
 	}
-	if agent := herdr.AgentProgram([]string{t.Status.App}); agent != "" {
+	return appAgent(t.Status.App)
+}
+
+// appAgent is the agent an OSC 7501 report names as its app, "" for none.
+func appAgent(app string) string {
+	if agent := herdr.AgentProgram([]string{app}); agent != "" || app == "" {
 		return agent
 	}
-	return strings.ToLower(t.Status.App)
+	return strings.ToLower(app)
 }
 
 // atPrompt says whether the terminal's own shell holds it: nothing started from it runs in its foreground.
