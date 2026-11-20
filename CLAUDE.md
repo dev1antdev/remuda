@@ -180,8 +180,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   up now, the copies there; never for a viewer.
 - `internal/herdr/` — everything herdr. `api.go`: what remuda asks of a
   machine, as interfaces — `API` (the snapshot, the event stream as
-  `EventStream`, every request), `Terminals` (a viewer joining a live terminal, typing,
-  resizing, `Viewers`) — which `Machine.Ready()` hands out and every package
+  `EventStream`, every request), `Terminals` (`Open` a live terminal as one
+  `Viewer` — its bytes, its keys, its size, `Close` — with a `View` of its grid,
+  `Keep` and `Observe`; `Viewers`; herdr's `AttachManager.Open` is one viewer of
+  the attach every viewer shares, and refuses `Observe`) — which `Machine.Ready()` hands out and every package
   takes instead of `*Client` and `*AttachManager` (only `internal/herdr` and
   `internal/machines` name those), so remuda-core's adapter can stand in for
   herdr while the move to it is built; the model (`Snapshot`, `PaneInfo`,
@@ -432,6 +434,19 @@ components and icons as rules for whoever changes it: @docs/design.md
   watcher still paces the snapshots an event asks for (`internal/watch`,
   150 ms debounce, 500 ms / 1 s apart): the mirror makes each one free, not
   sooner.
+  **The live terminals** (`viewers.go`, tested on a throwaway core:
+  `viewers_test.go`): `core.NewTerminals(client)` is a core machine's
+  `herdr.Terminals`; `Open` attaches one viewer of its own (`AttachParams`:
+  the grid, `KeepSize` for a viewer in keep mode, `Observe` for a viewer
+  link, `ResizeNotifications` for either), so each gets the core's first
+  paint, any number share a terminal with no refusal and no repaint through
+  a resize, a phone keeping the size or a link watching never sizes the
+  desk's, and the core answers the terminal's queries itself (no
+  `queries.go`); a goroutine hands the stream's bytes to the viewer and
+  reads no further while the viewer has not taken them, so the core's
+  credit waits and it repaints a viewer gone 4 MB behind; the bytes close
+  with the program, the stream or the viewer; a viewer that watches is
+  refused its keys and sends no size; `Viewers` counts the open ones.
 - `internal/sshx/` — one OpenSSH `ControlMaster` per host (BatchMode: fail,
   never prompt; sshd's MaxSessions is 10 by default, so every session takes
   one of 9 places first (`Conn.enter`, `sessionCount`), waiting within its
@@ -578,8 +593,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   is Core 19's). The machine's `herdr.API` is then the core
   adapter (`coreLink`: the client and `core.NewAdapter`, its transport
   errors heard by `transportError`, closed off the adapter's goroutine by
-  `fail` and `Close`), its terminals refuse every attach
-  (`NoAttachOnCore`) until the live terminal is built, and it has no peer
+  `fail` and `Close`), its terminals are `core.Terminals` (every viewer
+  an attach of its own, see `internal/core`), and it has no peer
   to relay through (`Peer` nil) nor a bridge on Windows. Nothing of herdr's
   is offered there — its update, hooks, integrations, plugins and server
   restart (`updates.withoutHerdr`, the ⓘ's herdr concerns) — and
@@ -962,7 +977,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   would squeeze the desktop's view), **keep** attaches at the pane's own
   grid (`cols`/`rows` from the snapshot layouts, in the roster) and shrinks
   the font to fit the width, scrolling when it can't. Touch defaults to
-  keep. Agent status lines (ccstatusline etc.) only fit in keep mode on a
+  keep. The connect request says keep (`&keep=1`): on a machine on
+  remuda-core a keep viewer is a `keep_size` attach, which types but never
+  sizes the terminal, so the engine attaches again when the mode changes
+  there (`core` on the engine's props); herdr reads nothing of it. Agent status lines (ccstatusline etc.) only fit in keep mode on a
   phone. A grid wider than the screen (keep, or fit with a minimum width),
   or a keep-mode one taller than it, scrolls under the wheel and under a
   finger alike (`gridScrolls` / `panOf` in `engine/pointer.ts`, tested): a
@@ -3401,8 +3419,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   Drags never reach the app.
 - **The screen terminal** (`web/src/features/terminal/screen/`;
   `internal/server/screen.go`): herdr has **no `herdr terminal attach` on
-  Windows**, so a pane of a machine whose roster `os` is `windows`
-  (`onWindows` in `features/roster/system.ts`) never gets the live
+  Windows**, so a pane of a machine on herdr whose roster `os` is `windows`
+  (`screenOnly` in `features/roster/system.ts`: a Windows PC on remuda-core,
+  roster `core`, gets the live terminal like any other) never gets the live
   terminal: the terminal lens (`TerminalLens`'s `screen`), the split view's
   terminal side and the floating terminal's drawer show `ScreenTerminal`
   instead — never a WebSocket attach, never a resize of the pane.
@@ -6825,8 +6844,13 @@ components and icons as rules for whoever changes it: @docs/design.md
   keeps the rail to Agents, Usage, Activity and a server's
   Server place (its panel hides Read again and the updates), the header
   wears "Viewing only" and no search, Changes is shut, the Git lens draws
-  its graph and opens no menu, the terminal lens
-  is the pane's screen (`features/terminal/Screen.tsx` over `GET /api/screen`,
+  its graph and opens no menu, the terminal lens on a machine on
+  remuda-core is the live terminal only watched (`/ws/pane` is a viewer's
+  route; `handlePaneWS` opens it `Observe`, drops what the page sends, and
+  refuses a viewer on herdr with a 403 before any peer is asked; the page's
+  `TerminalLens` `readOnly`: the pane's own grid, xterm's `disableStdin`, no
+  key bar, nothing sent), else
+  the pane's screen (`features/terminal/Screen.tsx` over `GET /api/screen`,
   `internal/server/screen.go` → `herdr.Client.PaneScreen`, `pane.read` with
   `format: ansi`, every 3 s while its agent works, 15 s otherwise, an ETag
   over the text so an unchanged screen is a 304; no attach, so no slot is
