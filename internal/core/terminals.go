@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"encoding/json"
+	"time"
 )
 
 // Terminal is a terminal as the core tells it (schema `Terminal`): the facts remuda reads.
@@ -32,6 +33,10 @@ type Terminal struct {
 	Title      string      `json:"title"`
 	Parent     string      `json:"parent"`
 	Foreground *Foreground `json:"foreground"`
+
+	// agentAt is when the mirror saw an agent take the terminal's foreground, statusAt when it last heard the
+	// program's status (zero: before the mirror looked).
+	agentAt, statusAt time.Time
 }
 
 // Status is a program's own word: idle, working, done, blocked or error, with what it said beside it.
@@ -62,6 +67,8 @@ type RunParams struct {
 	Labels map[string]string `json:"labels,omitempty"`
 	Size   *Size             `json:"size,omitempty"`
 	Keep   bool              `json:"keep,omitempty"`
+	// Rm removes the terminal once its program exits, as herdr closes a pane whose shell ended.
+	Rm bool `json:"rm,omitempty"`
 }
 
 // Size is a grid in cells.

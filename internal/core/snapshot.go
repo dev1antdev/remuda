@@ -15,6 +15,9 @@ type mirror struct {
 	terminals map[string]*Terminal
 	doc       Document
 	version   string
+	// gone are the terminals the core said went since the mirror was filled, so a reply to their start that comes
+	// after the news puts none of them back.
+	gone map[string]bool
 }
 
 // placedTab and placedSpace are a tab and a workspace as the snapshot shows them, their terminals found.
@@ -186,13 +189,18 @@ func agentOf(t *Terminal) string {
 			return ""
 		}
 	}
-	if t.Status == nil || t.Status.App == "" {
+	if t.Status == nil {
 		return ""
 	}
-	if agent := herdr.AgentProgram([]string{t.Status.App}); agent != "" {
+	return appAgent(t.Status.App)
+}
+
+// appAgent is the agent an OSC 7501 report names as its app, "" for none.
+func appAgent(app string) string {
+	if agent := herdr.AgentProgram([]string{app}); agent != "" || app == "" {
 		return agent
 	}
-	return strings.ToLower(t.Status.App)
+	return strings.ToLower(app)
 }
 
 // atPrompt says whether the terminal's own shell holds it: nothing started from it runs in its foreground.
