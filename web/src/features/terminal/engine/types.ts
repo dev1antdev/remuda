@@ -1,5 +1,7 @@
 // What the terminal lens and its key bar agree on.
 
+import type { Find } from "@/app/store";
+
 export type Modifier = "ctrl" | "alt" | null;
 
 // SizeMode: fit resizes the shared pane to this screen, keep attaches at the pane's own grid.
@@ -11,10 +13,10 @@ export type SizeMode = "fit" | "keep";
 // find, where the terminal holds its own rows (a live terminal on remuda-core), looks through them itself: a new
 // query (step 0) from the top, then the next or previous match, scrolled into view and marked; hear is told which one
 // it is of how many, then again whenever output arriving changes the count, until the next find or the marks clear.
-export type Found = { total: number; at: number };
+export type FoundCount = Pick<Find, "total" | "at">;
 export type SearchApi = {
   show: (query: string, expectedRow: number, col: number) => void;
-  find?: (query: string, step: 0 | 1 | -1, hear: (found: Found) => void) => void;
+  find?: (query: string, step: 0 | 1 | -1, hear: (found: FoundCount) => void) => void;
   clear: () => void;
 };
 

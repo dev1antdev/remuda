@@ -10,7 +10,7 @@ import type { IBufferLine, Terminal as XTerm } from "@xterm/xterm";
 import { findRanges } from "@/features/chat/find";
 import { swatches, type Flavor, type Swatches } from "@/lib/theme";
 import { nearest } from "../scrollback";
-import type { Found, SearchApi } from "./types";
+import type { FoundCount, SearchApi } from "./types";
 
 // SETTLE_MS is how long the screen gets to repaint after a scroll before the match is looked for, a few frames at a time.
 const SETTLE_MS = 1500;
@@ -86,7 +86,7 @@ export function cellSpan(line: IBufferLine | undefined, from: number, length: nu
 export function installSearch(term: XTerm, flavor: () => Flavor, forgetSelection: () => void): SearchApi & { refresh: () => void; dispose: () => void } {
   let addon = new SearchAddon();
   // heard is the core find's ear: every count the addon gives, its own find's and each it redoes as output arrives
-  let heard: ((found: Found) => void) | null = null;
+  let heard: ((found: FoundCount) => void) | null = null;
   const listen = () => addon.onDidChangeResults((r) => heard?.({ total: Math.max(0, r.resultCount), at: Math.max(0, r.resultIndex) }));
   term.loadAddon(addon);
   listen();
@@ -115,6 +115,17 @@ export function installSearch(term: XTerm, flavor: () => Flavor, forgetSelection
     term.select(span.col, bufferRow, span.width);
     addon.findNext(query, options());
     forgetSelection();
+  };
+  // seek selects the next match, or the previous, and tells the engine the selection is not the person's
+  const seek = (back = false): boolean => {
+    const hit = back ? addon.findPrevious(query, options()) : addon.findNext(query, options());
+    forgetSelection();
+    return hit;
+  };
+  // restart starts the find over with a fresh addon from the top of the buffer
+  const restart = () => {
+    fresh();
+    term.clearSelection();
   };
   const stop = () => {
     if (pending) clearTimeout(pending);
@@ -145,31 +156,23 @@ export function installSearch(term: XTerm, flavor: () => Flavor, forgetSelection
           return;
         }
         // the screen never showed that row: what is on it is marked all the same, the first match current
-        fresh();
-        term.clearSelection();
-        addon.findNext(query, options());
-        forgetSelection();
+        restart();
+        seek();
       };
       attempt();
     },
     find(next, step, hear) {
       stop();
       heard = hear;
-      if (step === 0 || next !== query) {
-        fresh();
-        term.clearSelection();
-      }
+      if (step === 0 || next !== query) restart();
       query = next;
-      const hit = step < 0 ? addon.findPrevious(query, options()) : addon.findNext(query, options());
-      forgetSelection();
-      if (!hit) hear({ total: 0, at: 0 });
+      if (!seek(step < 0)) hear({ total: 0, at: 0 });
     },
     clear,
     refresh() {
       if (!query) return;
       fresh();
-      addon.findNext(query, options());
-      forgetSelection();
+      seek();
     },
     dispose() {
       stop();
