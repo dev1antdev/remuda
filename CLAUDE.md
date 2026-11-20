@@ -522,14 +522,19 @@ components and icons as rules for whoever changes it: @docs/design.md
   `agent_blocked`, `unavailable` → `agent_not_ready`; right before the send
   the core's own view of the terminal is read (`terminal.get`) and must
   still show that agent with a status — a cleared one, as an agent leaving
-  reports, gets nothing — and a send to an idle agent names that status
-  (`if`, never for a working one, whose turn may end as it goes;
+  reports, gets nothing, one asking something is `agent_blocked` at the
+  look, nothing sent — and a send names the status it saw (`if`, a core
+  whose `if` names idle and working alone refusing done or error before
+  it types: the person's message then goes without it and a prompt for
+  the agent at rest is refused; never for a working one, whose turn may
+  end as it goes;
   a `status_mismatch` — nothing typed — is read again, `sendTo`: the
   same agent in front under the same pid with a status gets one more
-  send as it stands, idle again after a short turn, or — the person's own
-  message alone, `Submit` — at work in a turn their draft started, which
-  takes it as a message; a restart's exit, a sleep's, a schedule's or a
-  first prompt never goes to a turn; anything else is `agent_left`,
+  send as it stands, at rest again after a short turn, or — the person's
+  own message alone, `Submit` — at work in a turn their draft started,
+  which takes it as a message; a restart's exit, a sleep's, a schedule's
+  or a first prompt, refused at the look by an agent at work, never goes
+  to a turn; anything else is `agent_left`,
   `sessions` saying `ErrNoAgent`; and a delivery tried again
   (`sessions.Delivery`: `FirstPrompt`, a task's and an arena lane's) is
   bound by its first look to that agent's pid, every later look
@@ -4991,7 +4996,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   from `said.Tracker.Link` — or `{url}`, a GitHub pull request the pull
   request panel names, the pane being the agent picked, and `{check}`,
   one failed check by name — compose on the pane's machine and send the
-  text through `sessions.Input.SubmitToAgent` — 409 for a pane whose
+  text through `sessions.Input.Submit`, the person's own message, which
+  on remuda-core a turn under way takes as a message — 409 for a pane whose
   agent left or is not up yet, an agent waiting on a question or nothing to send, 502 with gh's (or
   glab's) line, 400 for a link that is neither.
   **A merged worktree goes** through the remove dialog below: the
@@ -7314,8 +7320,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   keystroke, a paste through `send_input` with the keys after it, which
   herdr brackets while the app asked for it; tested on a throwaway herdr),
   `SubmitToAgent` (`agent.prompt` alone: a pane whose agent left is
-  `ErrNoAgent`, never typed into its shell — the schedules, the pull
-  requests' hand-offs and a booked continue), `SubmitToFolder` (the
+  `ErrNoAgent`, never typed into its shell — the schedules, a booked
+  continue, a tidy's `/compact`: on remuda-core never into a turn), `SubmitToFolder` (the
   scheduler's door, through it); `WorkspaceIn(snap, dir)` the first
   workspace on a folder; `StartIn(client, snap, dir,
   label, kind, start)` (place.go, tested) starts an agent in a folder —

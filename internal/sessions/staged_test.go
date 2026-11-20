@@ -43,6 +43,7 @@ type holder struct {
 	ledger
 	sendErr error
 	pid     int
+	asks    bool   // the agent in front asks something: the look refuses it
 	asked   []bool // asMessage, look after look
 }
 
@@ -52,10 +53,13 @@ func (h *holder) StagePrompt(_, text string, front int, asMessage bool) (int, fu
 	h.note("look:" + text)
 	h.mu.Lock()
 	h.asked = append(h.asked, asMessage)
-	pid := h.pid
+	pid, asks := h.pid, h.asks
 	h.mu.Unlock()
 	if front != 0 && front != pid {
 		return 0, nil, &herdr.Error{Code: "agent_left", Message: "another agent in front"}
+	}
+	if asks {
+		return pid, nil, &herdr.Error{Code: "agent_blocked", Message: "asks first"}
 	}
 	return pid, func() error {
 		<-h.sends
@@ -236,19 +240,28 @@ func TestAFirstPromptIsNotTriedAgainOnceItsAgentLeft(t *testing.T) {
 // A delivery tried again is bound to the agent its first look saw: once another agent leads the pane, it stops there,
 // and a refusal it may try again after (the agent asking first) never sends the prompt to what replaced the agent.
 func TestADeliveryTriedAgainNeverReachesAReplacement(t *testing.T) {
-	h, in := newHolder(), NewInput(nil, nil)
-	h.sendErr = &herdr.Error{Code: "agent_blocked", Message: "asks first"}
-	h.sends <- struct{}{}
-	d := in.Deliver(h, onePane, "the task")
-	if err := d.Try(); !herdr.IsCode(err, "agent_blocked") {
-		t.Fatalf("first try %v", err)
-	}
-	h.pid, h.sendErr = 200, nil
-	if err := d.Try(); !herdr.IsCode(err, "agent_left") {
-		t.Fatalf("a try with another agent in front: %v", err)
-	}
-	if got := h.seen(); !slices.Equal(got, []string{"look:the task", "sent:the task", "look:the task"}) {
-		t.Fatalf("calls %v", got)
+	for refused, want := range map[string][]string{
+		"at the look": {"look:the task", "look:the task"},
+		"at the send": {"look:the task", "sent:the task", "look:the task"},
+	} {
+		h, in := newHolder(), NewInput(nil, nil)
+		if refused == "at the look" {
+			h.asks = true
+		} else {
+			h.sendErr = &herdr.Error{Code: "agent_blocked", Message: "asks first"}
+			h.sends <- struct{}{}
+		}
+		d := in.Deliver(h, onePane, "the task")
+		if err := d.Try(); !herdr.IsCode(err, "agent_blocked") {
+			t.Fatalf("%s: first try %v", refused, err)
+		}
+		h.pid, h.asks, h.sendErr = 200, false, nil
+		if err := d.Try(); !herdr.IsCode(err, "agent_left") {
+			t.Fatalf("%s: a try with another agent in front: %v", refused, err)
+		}
+		if got := h.seen(); !slices.Equal(got, want) {
+			t.Fatalf("%s: calls %v", refused, got)
+		}
 	}
 }
 

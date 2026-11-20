@@ -189,35 +189,57 @@ func claudeAt(pid int, state string) Terminal {
 
 var untyped = &Error{Kind: "status_mismatch", Message: "t1 moved", Hint: "nothing was typed"}
 
-// A send the core refused untyped goes once more to the same agent as it stands: idle again after a short turn, or at
-// work for the person's own message alone; another agent, or one leaving, is agent_left.
+var unnamed = &Error{Kind: "invalid_params", Message: "unknown variant `done`, expected `idle` or `working`"}
+
+// A send names the status it saw unless the agent works; one the core refused untyped goes once more to the same
+// agent as it stands — at rest again after a short turn, or at work for the person's own message alone — and another
+// agent, or one leaving, is agent_left. A core that names idle and working alone takes the person's message to a done
+// agent without the word, and refuses anyone else's.
 func TestASendRefusedUntypedIsReadAgain(t *testing.T) {
 	a := &Adapter{}
 	for _, c := range []struct {
 		name      string
+		from      string
 		asMessage bool
+		sends     []error
 		again     Terminal
-		second    bool
 		want      string
-		secondIf  bool
+		named     []string // what each send named as `if`, "" for nothing
 	}{
-		{"a short turn", false, claudeAt(5, "idle"), true, "", true},
-		{"a turn, the person's message", true, claudeAt(5, "working"), true, "", false},
-		{"a turn, anyone else's", false, claudeAt(5, "working"), false, "agent_not_ready", false},
-		{"another agent in front", true, claudeAt(9, "working"), false, "agent_left", false},
-		{"the agent leaving", true, claudeAt(5, ""), false, "agent_left", false},
+		{"a short turn from idle", "idle", false, []error{untyped, nil}, claudeAt(5, "idle"), "", []string{"idle", "idle"}},
+		{"a short turn from done", "done", false, []error{untyped, nil}, claudeAt(5, "done"), "", []string{"done", "done"}},
+		{"a turn from done, anyone else's", "done", false, []error{untyped}, claudeAt(5, "working"), "agent_not_ready", []string{"done"}},
+		{"a turn from idle, anyone else's", "idle", false, []error{untyped}, claudeAt(5, "working"), "agent_not_ready", []string{"idle"}},
+		{"a turn from done, the person's message", "done", true, []error{untyped, nil}, claudeAt(5, "working"), "", []string{"done", ""}},
+		{"a turn from idle, the person's message", "idle", true, []error{untyped, nil}, claudeAt(5, "working"), "", []string{"idle", ""}},
+		{"another agent in front", "idle", true, []error{untyped}, claudeAt(9, "working"), "agent_left", []string{"idle"}},
+		{"the agent leaving", "done", false, []error{untyped}, claudeAt(5, ""), "agent_left", []string{"done"}},
+		{"done, a core naming idle alone, anyone else's", "done", false, []error{unnamed}, Terminal{}, "agent_not_ready", []string{"done"}},
+		{"done, a core naming idle alone, the person's message", "done", true, []error{unnamed, nil}, Terminal{}, "", []string{"done", ""}},
 	} {
-		core := &scripted{sends: []error{untyped, nil}, gets: []Terminal{c.again}}
-		err := a.sendTo(core.call, "t1", "hello", "claude", claudeAt(5, "idle"), c.asMessage)
+		core := &scripted{sends: c.sends, gets: []Terminal{c.again}}
+		err := a.sendTo(core.call, "t1", "hello", "claude", claudeAt(5, c.from), c.asMessage)
 		if c.want == "" && err != nil || c.want != "" && !herdr.IsCode(err, c.want) {
 			t.Errorf("%s: %v, want %q", c.name, err, c.want)
 		}
-		if got := len(core.sent) == 2; got != c.second {
-			t.Errorf("%s: sent again %v", c.name, got)
-			continue
+		var named []string
+		for _, params := range core.sent {
+			word, _ := params["if"].(string)
+			named = append(named, word)
 		}
-		if _, named := core.sent[len(core.sent)-1]["if"]; c.second && named != c.secondIf {
-			t.Errorf("%s: the second send names idle: %v", c.name, named)
+		if !slices.Equal(named, c.named) {
+			t.Errorf("%s: the sends named %q, want %q", c.name, named, c.named)
 		}
+	}
+}
+
+// A send to an agent at work names no status: the person's own message goes to the turn.
+func TestASendToAnAgentAtWorkNamesNoStatus(t *testing.T) {
+	core := &scripted{sends: []error{nil}}
+	if err := (&Adapter{}).sendTo(core.call, "t1", "hello", "claude", claudeAt(5, "working"), true); err != nil {
+		t.Fatal(err)
+	}
+	if _, named := core.sent[0]["if"]; named {
+		t.Fatalf("a send to a turn named a status: %v", core.sent[0])
 	}
 }

@@ -177,11 +177,26 @@ func TestADeliveryAfterAQuestionNeverReachesAReplacement(t *testing.T) {
 }
 
 // A prompt for an agent at rest (a restart's exit, a sleep's) is refused untyped when the person's own draft starts a
-// turn while it waits: only the person's message goes to a turn.
+// turn while it waits, the agent idle or done when it was looked at: only the person's message goes to a turn.
 func TestARestartsExitNeverGoesToATurnThePersonStarted(t *testing.T) {
+	for _, from := range []string{herdr.StatusIdle, herdr.StatusDone} {
+		t.Run(from, func(t *testing.T) { exitBehindATurn(t, from) })
+	}
+}
+
+func exitBehindATurn(t *testing.T, from string) {
 	core.LiftPromptGate(t)
 	client, adapter, pane := idleAgent(t)
-	person := typing(t, client, pane, "slow")
+	person := typing(t, client, pane, "")
+	if from == herdr.StatusDone {
+		if _, err := person.Write([]byte("finish\r")); err != nil {
+			t.Fatal(err)
+		}
+		eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Pane(pane).AgentStatus == herdr.StatusDone })
+	}
+	if _, err := person.Write([]byte("slow")); err != nil {
+		t.Fatal(err)
+	}
 	sent := make(chan error, 1)
 	go func() { sent <- adapter.AgentPrompt(pane, "exit-while-it-works") }()
 	time.Sleep(time.Second)
@@ -193,6 +208,21 @@ func TestARestartsExitNeverGoesToATurnThePersonStarted(t *testing.T) {
 	}
 	eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Pane(pane).AgentStatus == herdr.StatusIdle })
 	if screen, _ := adapter.PaneRead(pane); strings.Contains(screen, "exit-while-it-works") {
+		t.Fatalf("the prompt went to the turn:\n%s", screen)
+	}
+}
+
+// A prompt for an agent at rest finds the agent at work and sends nothing.
+func TestAPromptForAnAgentAtRestWaitsOutItsTurn(t *testing.T) {
+	core.LiftPromptGate(t)
+	client, adapter, pane := idleAgent(t)
+	typing(t, client, pane, "slow\r")
+	eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Pane(pane).AgentStatus == herdr.StatusWorking })
+	if err := adapter.AgentPrompt(pane, "exit-at-work"); !herdr.IsCode(err, "agent_not_ready") {
+		t.Fatalf("a prompt for an agent at rest, to one at work: %v", err)
+	}
+	eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Pane(pane).AgentStatus == herdr.StatusIdle })
+	if screen, _ := adapter.PaneRead(pane); strings.Contains(screen, "exit-at-work") {
 		t.Fatalf("the prompt went to the turn:\n%s", screen)
 	}
 }

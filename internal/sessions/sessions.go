@@ -282,7 +282,8 @@ var ErrAgentBusy = errors.New("the agent is waiting for an answer — answer its
 // StagedPrompter is a client whose prompt is looked at first and typed after, maybe a minute later: remuda-core holds a
 // prompt while a person finishes a draft in the terminal, and checks as it types that the agent is still in front and
 // that nothing else's input interleaves. The look needs the pane's lock; the wait does not, so the person's keys and
-// answers pass a prompt the core holds. The look answers the agent's pid, which a delivery tried again names as front:
+// answers pass a prompt the core holds. The look answers the agent's pid, with a refusal of that agent too (it asks
+// something, or works), which a delivery tried again names as front:
 // any other agent in front is refused (agent_left); asMessage, the person's own message, goes to a turn started
 // meanwhile, everyone else's to an agent at rest alone.
 type StagedPrompter interface {
@@ -383,10 +384,12 @@ func (d *Delivery) Try() error {
 	lock.Lock()
 	pid, send, err := staged.StagePrompt(d.ref.Pane, d.text, d.front, d.asMessage)
 	lock.Unlock()
+	if pid != 0 {
+		d.front = pid
+	}
 	if err != nil {
 		return err
 	}
-	d.front = pid
 	if err := send(); err != nil || d.then == nil {
 		return err
 	}
@@ -431,8 +434,8 @@ func refused(err error) error {
 	return err
 }
 
-// SubmitToAgent delivers text meant for an agent — a schedule's prompt, a pull request's failures, a booked "continue" —
-// through Prompt.
+// SubmitToAgent delivers text remuda has for an agent at rest — a schedule's prompt, a booked "continue", a tidy's
+// /compact — through Prompt: on remuda-core, never into a turn.
 func (in *Input) SubmitToAgent(client Prompter, ref events.PaneRef, text string) error {
 	return refused(in.Prompt(client, ref, text))
 }

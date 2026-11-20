@@ -28,6 +28,7 @@ while IFS= read -r line; do
   if [ "$line" = ask ]; then say blocked; continue; fi
   if [ "$line" = leaving ]; then say clear; continue; fi
   if [ "$line" = slow ]; then say working; sleep 3; say idle; continue; fi
+  if [ "$line" = finish ]; then say working; sleep 0.2; say done; continue; fi
   say working
   sleep 0.2
   say idle
@@ -289,6 +290,7 @@ func TestAnAgentStartsInTheShellAndTakesPromptsAndKeys(t *testing.T) {
 		t.Fatalf("raw typing into an agent's terminal: %v", err)
 	}
 
+	eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Pane(pane).AgentStatus == herdr.StatusIdle })
 	if err := adapter.AgentPrompt(pane, "ask"); err != nil {
 		t.Fatal(err)
 	}
