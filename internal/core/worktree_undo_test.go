@@ -56,7 +56,7 @@ func TestAWorktreeWhoseWorkspaceDidNotOpenIsTakenDownWithTheBranchItMade(t *test
 	}
 }
 
-func TestAWorktreeAFailingHookLeftIsReportedForTakingDownAndABranchInUseIsKept(t *testing.T) {
+func TestACheckoutAFailingHookLeftIsNamedAndLeftAsItIsAndABranchInUseIsKept(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("no git")
 	}
@@ -87,24 +87,29 @@ func TestAWorktreeAFailingHookLeftIsReportedForTakingDownAndABranchInUseIsKept(t
 	sh := shell.Local{Name: "local"}
 
 	out, err := shell.Text(sh, addScript(repo, "hooked", "main", ""), worktreeWithin)
-	path, _ := parseCheckout(out)
-	if err == nil || path == "" || fieldsOf(out)["made"] == "" || !strings.Contains(text.LastLine(out, ""), "the hook says no") {
-		t.Fatalf("a checkout a failing hook left is not reported for taking down: %v\n%s", err, out)
+	left := fieldsOf(out)["left"]
+	if err == nil || left == "" || fieldsOf(out)["made"] != "" || !strings.Contains(text.LastLine(out, ""), "the hook says no") {
+		t.Fatalf("a checkout a failing hook left is not named, or is offered for taking down: %v\n%s", err, out)
+	}
+	if _, err := os.Stat(left); err != nil {
+		t.Errorf("the checkout left was touched: %v", err)
 	}
 	if err := os.Remove(hook); err != nil {
 		t.Fatal(err)
 	}
 
+	out, err = shell.Text(sh, addScript(repo, "used", "main", ""), worktreeWithin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path, _ := parseCheckout(out)
 	git(path, "checkout", "-q", "--detach")
 	other := filepath.Join(home, "other")
-	git(repo, "worktree", "add", "-q", other, "hooked")
-	if out, err := shell.Text(sh, undoScript(repo, path, "hooked", fieldsOf(out)["made"]), checkoutWithin); err == nil || !strings.Contains(out, "kept") {
+	git(repo, "worktree", "add", "-q", other, "used")
+	if out, err := shell.Text(sh, undoScript(repo, path, "used", fieldsOf(out)["made"]), checkoutWithin); err == nil || !strings.Contains(out, "kept") {
 		t.Fatalf("a branch another worktree uses was not kept: %v %s", err, out)
 	}
-	if got := git(other, "symbolic-ref", "--short", "HEAD"); got != "hooked" {
+	if got := git(other, "symbolic-ref", "--short", "HEAD"); got != "used" {
 		t.Errorf("the other worktree's branch is %q", got)
-	}
-	if _, err := os.Stat(path); !os.IsNotExist(err) {
-		t.Errorf("the checkout stays at %s", path)
 	}
 }

@@ -520,13 +520,15 @@ components and icons as rules for whoever changes it: @docs/design.md
   root `worktrees.Root` names, so those made before and after the move lie
   together and Tidy, Leftovers and the remove dialog stand), git's last line
   when it refuses (`text.LastLine`, 10 min at most), then a workspace on it
-  labelled after its folder unless named; a worktree whose workspace did
-  not open, or that git made at a free place before a hook of the
-  repository's failed, is taken down again (`takeDown`, `undoScript`: the
-  checkout, never forced, and the branch only when it made it — `made
-  <commit>` — while it is still on that commit, `update-ref -d` against it,
-  and no worktree uses it, `script.BranchInUse`, else kept and said), so
-  making it again starts clean, a failure of that naming the checkout left; `WorktreeOpen` opens a workspace on
+  labelled after its folder unless named; a worktree whose add went
+  through but whose workspace did not open is taken down again (`takeDown`,
+  `undoScript`: the checkout, never forced, and the branch only when it made
+  it — `made <commit>` — while it is still on that commit, `update-ref -d`
+  against it, and no worktree uses it, `script.BranchInUse`, else kept and
+  said), so making it again starts clean; a refused add takes nothing down
+  — a checkout standing at the place that was free (a hook of the
+  repository's failed after it, or another request made it meanwhile) is
+  named as left, since whose it is cannot be told; `WorktreeOpen` opens a workspace on
   a checkout, refusing a folder outside git, and answers one open on it
   already as herdr's `already_open` (`AlreadyOpen`, its pane in front,
   `frontPane`) from the mirror — the route's own look reads the watcher's

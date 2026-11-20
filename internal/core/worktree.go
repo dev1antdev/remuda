@@ -43,8 +43,9 @@ func checkoutScript(folder string) string {
 // repository's main folder: with a base, the branch is new from it and git refuses one that is there already (so no
 // branch of the person's is taken over); without, a branch that exists is checked out, else it starts at dir's HEAD,
 // as herdr's worktree.create does. It prints "path <folder>", "made <commit>" for a branch it made, and the checkout as
-// probe reads it — after a refusal too when git made a checkout at a place that was free (a hook that failed after the
-// checkout) — then git's own words when it refused, last.
+// probe reads it. When git refuses it prints its words last, after "left <folder>" when a checkout stands at a place
+// that was free (a hook of the repository's failed after the checkout, or another request made it there meanwhile):
+// whose it is cannot be told, so nothing is taken down.
 func addScript(dir, branch, base, path string) string {
 	return script.PATH + "\n" + probeFunc +
 		"cd " + script.Quote(dir) + " 2>/dev/null || { echo 'the workspace folder is not there'; exit 3; }\n" +
@@ -52,17 +53,15 @@ func addScript(dir, branch, base, path string) string {
 		"b=" + script.Quote(branch) + "; base=" + script.Quote(base) + "; p=" + script.Quote(path) + "\n" +
 		`[ -n "$p" ] || p="$HOME/.herdr/worktrees/$(basename "$(` + script.MainFolder + `)")/"` + script.Quote(text.Slug(branch)) + "\n" +
 		`mkdir -p "$(dirname "$p")" || exit 4` + "\n" +
-		`common() { ` + script.ReadGit + ` -C "$1" rev-parse --path-format=absolute --git-common-dir 2>/dev/null; }` + "\n" +
 		`fresh=; [ -e "$p" ] || fresh=y; had=; git show-ref -q --verify "refs/heads/$b" && had=y` + "\n" +
 		`if [ -z "$base" ] && [ -n "$had" ]; then said=$(git worktree add -q "$p" "$b" 2>&1); rc=$?` + "\n" +
 		`else said=$(git worktree add -q -b "$b" "$p" "${base:-HEAD}" 2>&1); rc=$?; fi` + "\n" +
-		`if [ "$rc" = 0 ] || { [ -n "$fresh" ] && [ -e "$p" ] && [ "$(common "$p")" = "$(common .)" ]; }; then echo "path $p"` + "\n" +
-		`  [ -n "$had" ] || ! git show-ref -q --verify "refs/heads/$b" || echo "made $(git rev-parse "refs/heads/$b")"` + "\n" +
-		`  probe "$p"` + "\nfi\n" +
-		`[ "$rc" = 0 ] || { printf '%s\n' "$said"; exit 5; }` + "\n"
+		`if [ "$rc" = 0 ]; then echo "path $p"; [ -n "$had" ] || echo "made $(git rev-parse "refs/heads/$b")"; probe "$p"; exit 0; fi` + "\n" +
+		`[ -z "$fresh" ] || [ ! -e "$p" ] || echo "left $p"` + "\n" +
+		`printf '%s\n' "$said"; exit 5` + "\n"
 }
 
-// undoScript takes down a worktree addScript made that is of no use, so making it again starts clean: the checkout
+// undoScript takes down a worktree addScript made whose workspace did not open, so making it again starts clean: the checkout
 // (never forced: a file in it keeps it), then the branch only when addScript made it, it is still on the commit made,
 // and no worktree uses it (script.BranchInUse) — else it is kept, said.
 func undoScript(dir, path, branch, made string) string {
@@ -76,7 +75,7 @@ func undoScript(dir, path, branch, made string) string {
 	return s
 }
 
-// takeDown undoes a worktree made for nothing, and says so after why.
+// takeDown undoes a worktree addScript made (its add went through, so it is this request's), and says so after why.
 func (a *Adapter) takeDown(dir, folder, branch, made string, why error) error {
 	out, err := shell.Text(a.shell, undoScript(rpath.For(dir).Slash(dir), rpath.For(folder).Slash(folder), branch, made), checkoutWithin)
 	if err != nil {
@@ -150,11 +149,10 @@ func (a *Adapter) WorktreeCreateAt(workspaceID, branch, base, label, path string
 		folder = tree.CheckoutPath
 	}
 	if err != nil {
-		why := fmt.Errorf("git worktree add: %s", text.LastLine(out, err.Error()))
-		if made == "" {
-			return nil, why
+		if left := fieldsOf(out)["left"]; left != "" {
+			return nil, fmt.Errorf("git worktree add: %s; a checkout stands at %s, left as it is", text.LastLine(out, err.Error()), left)
 		}
-		return nil, a.takeDown(dir, folder, branch, fieldsOf(out)["made"], why)
+		return nil, fmt.Errorf("git worktree add: %s", text.LastLine(out, err.Error()))
 	}
 	res, err := a.workspaceOn(folder, cmp.Or(label, rpath.For(folder).Base(folder)), tree)
 	if err != nil {

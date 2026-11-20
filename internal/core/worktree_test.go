@@ -161,3 +161,33 @@ func TestAWorkspaceOutsideGitHasNoCheckoutAndOneWithoutAShellMakesNoWorktree(t *
 		t.Error("a worktree was made with no shell to run git")
 	}
 }
+
+func TestTwoCreatesOfOneBranchAtOnceLeaveTheWinnersWorktree(t *testing.T) {
+	home, repo := gitRepo(t)
+	client := coretest.Server(t).Client(t)
+	adapter := adapterWith(t, client, shell.Local{Name: "local"}, core.AdapterHooks{})
+	eventually(t, adapter, func(*herdr.Snapshot) bool { return true })
+	made, err := adapter.WorkspaceCreate(repo, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	type answer struct {
+		res *herdr.WorktreeCreateResult
+		err error
+	}
+	answers := make(chan answer, 2)
+	for range 2 {
+		go func() {
+			res, err := adapter.WorktreeCreate(made.Workspace.WorkspaceID, "race", "main", "")
+			answers <- answer{res, err}
+		}()
+	}
+	first, second := <-answers, <-answers
+	if (first.err == nil) == (second.err == nil) {
+		t.Fatalf("two creates of one branch answered %v and %v", first.err, second.err)
+	}
+	path := filepath.Join(home, ".herdr", "worktrees", "app", "race")
+	if got := git(t, path, "branch", "--show-current"); got != "race" {
+		t.Errorf("the winner's checkout is on %q", got)
+	}
+}
