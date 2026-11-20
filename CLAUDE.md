@@ -421,7 +421,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   (`claude-code` → claude, `codex`, `gemini-cli` → gemini, `kimi`, any other
   app by its own name);
   `statusOf` takes the program's own word, `error` read as done; the session
-  comes through `SessionOf` (Core 16 wires it; nil, none). Output watches go
+  comes through `SessionOf` (nil, none, until Core 21 hands it
+  `transcript.Reader.SessionsOf` by the foreground's pid). Output watches go
   in **feeds** (`feeds.go`, tested on a fake: shared, closed with the last
   stream, opened again after, a rule edited leaving the other watches'
   feeds standing, and 120 feeds' 4,800 standing rows told as they open, all
@@ -912,7 +913,36 @@ components and icons as rules for whoever changes it: @docs/design.md
   reordered), `$rewindTo`, `$set`; the legacy one-object `.json` too.
   `Reader.ResolveSession(agent, cwd, kind, value)` finds the file by the
   pane's agent (`""` tries every format, for a transcript opened by id),
-  locally and by `findScript` over ssh; `NewUsageScanner(path)` is the
+  locally and by `findScript` over ssh. **A session found by the agent's
+  process** (`bypid.go`, tested on real processes in a temp HOME and on
+  `shell.Fake`), for a machine whose runtime names no session (remuda-core,
+  Core 12): `Reader.SessionsOf([]Running{pid, agent, cwd})` is one script
+  on the machine, here or over ssh, answering pid → session id — Claude
+  Code's from `<config dir>/sessions/<pid>.json` (`CLAUDE_CONFIG_DIR` read
+  off the process's environment, `/proc/<pid>/environ` or `ps -E`, whose
+  run-together text gives candidate folders, a relative one taken from the
+  agent's folder, then the default one; a process gone is no record; every
+  candidate's file is sent and Go weighs them, a start-verified one before
+  one matched by its folder alone; only
+  regular files are read, a FIFO never holds the script; a file
+  counts only when its `procStart` is the process's `LC_ALL=C TZ=UTC ps -o
+  lstart`; else, while the process's start is known — to the second from
+  `ps`, to the millisecond for a native Windows process, which Git Bash's own
+  tools do not see, through PowerShell's `Get-Process`, asked on Git Bash
+  alone (a Linux under WSL reaches Windows' own by other numbers) — when its folder is
+  the pane's and its `startedAt` is no older than that start (CI's Windows job
+  proves it; a native process's `CLAUDE_CONFIG_DIR` is out of reach there, so
+  `~\.claude` alone is read); else, where either side lacks the start, when
+  its folder is the pane's), Codex's thread id from the
+  `rollout-*.jsonl` of the person's thread (its first line a `session_meta`
+  naming no subagent: a file still empty is none) the process, else a child of it, holds open (`/proc/<pid>/fd`,
+  else `lsof -nP`; none on Windows), none when two are, the id the one its
+  `session_meta` names (a revert's replacement file,
+  `rollout-<time>-<id>_<rollout id>.jsonl`, keeps the thread's); an id found under a
+  `CLAUDE_CONFIG_DIR` of the agent's own still names a file the readers,
+  which know the default roots alone, do not open yet;
+  stateless, since `/clear` and `/resume` change the session under the same
+  pid; nothing under `~/.claude` or `~/.codex` is written. `NewUsageScanner(path)` is the
   per-line usage reader of each format (the tracker keeps one per file
   across its delta reads); `InputField` is the input-key reader the recap
   and `ShellCommand` share.
@@ -1791,7 +1821,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   Linux), herdr's update without `--handoff`. Not there: the Code mode
   (`code.NoCodeOnWindows`; `install-code.sh` refuses), previews
   (`preview.NotOnWindows`: Windows names no listening process's folder),
-  teleport (`teleport.NotWithWindows`, both ends). **CI's windows job**
+  teleport (`teleport.NotWithWindows`, both ends), Codex's session found by
+  its process (`Reader.SessionsOf`: Git Bash has no `lsof` or `/proc` for a
+  Windows process). **CI's windows job**
   (`.github/workflows/ci.yml`, `windows-latest`) is the proof: herdr for
   Windows installed, remuda.exe built into `~/.local/bin`, the runner's own
   OpenSSH server given Git Bash and a key, then every `TestOnWindows…`
@@ -1804,7 +1836,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   stream through `remuda.exe bridge` over ssh, the door's files and its
   reverse forward, the vitals, keep-awake, the file viewer's scripts, the
   Changes lens with the secret check, a session found, read and searched
-  through remuda.exe, `remuda setup -host` and `mcp install -host` against
+  through remuda.exe, a Claude Code session found by its native process's
+  pid, `remuda setup -host` and `mcp install -host` against
   the runner, and a release's install beside a running remuda.exe. The
   check job vets and builds for `GOOS=windows`. What the runner cannot
   prove: a person's own PC, Windows on arm64, a cockpit's ControlMaster to
