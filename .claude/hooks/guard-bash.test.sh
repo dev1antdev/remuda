@@ -1,6 +1,6 @@
 #!/bin/sh
-# The Bash guard's cases: each line is what guard-bash.sh must do with the command after the tab. Run by CI's check job;
-# no command here runs, the hook only reads it.
+# The Bash guard's cases: each line is what guard-bash.sh must do with the command after the tab, a \n in it a line
+# break. Run by CI's check job; no command here runs, the hook only reads it.
 set -eu
 hook="$(dirname "$0")/guard-bash.sh"
 command -v jq >/dev/null 2>&1 || { echo "guard-bash.test: needs jq"; exit 1; }
@@ -8,7 +8,7 @@ bad=0
 while IFS='	' read -r want cmd; do
   [ -n "$want" ] || continue
   code=0
-  printf '%s' "$cmd" | jq -Rs '{tool_input: {command: .}}' | sh "$hook" >/dev/null 2>&1 || code=$?
+  printf '%s' "$cmd" | jq -Rs '{tool_input: {command: gsub("\\\\n"; "\n")}}' | sh "$hook" >/dev/null 2>&1 || code=$?
   case $code in 0) got=allow ;; 2) got=refuse ;; *) got="exit $code" ;; esac
   [ "$got" = "$want" ] || { echo "guard-bash.test: wanted $want, got $got: $cmd"; bad=1; }
 done <<'CASES'
@@ -16,6 +16,13 @@ refuse	herdr server stop
 refuse	HOME=/tmp/x herdr server stop
 allow	HERDR_SOCKET_PATH=/tmp/hs/herdr.sock herdr server stop
 refuse	herdr terminal attach w1:p1 --takeover
+refuse	herdr server \\n  stop
+refuse	remuda-core \\n  server stop
+refuse	remuda-core server \\n  stop
+refuse	rc \\n  serve
+refuse	ls\nrc server stop
+refuse	cd /tmp &&\nremuda-core serve
+allow	remuda-core \\n  server status
 refuse	remuda-core server stop
 refuse	rc server stop
 refuse	~/.local/bin/remuda-core server stop

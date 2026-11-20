@@ -8,6 +8,8 @@
 
 cmd=$(field .tool_input.command)
 [ -n "$cmd" ] || exit 0
+# the lines as the shell reads them: one ending in a backslash goes on with the next
+cmd=$(printf '%s\n' "$cmd" | awk '{ if (sub(/\\$/, "")) printf "%s", $0; else print }')
 
 has() { printf '%s' "$cmd" | grep -Eq -e "$1"; }
 refuse() {
