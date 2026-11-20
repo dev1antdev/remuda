@@ -12,10 +12,16 @@ import (
 	"github.com/dev1antdev/remuda/internal/core"
 	"github.com/dev1antdev/remuda/internal/core/coretest"
 	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/shell"
 )
 
 func adapterOf(t *testing.T, client *core.Client, hooks core.AdapterHooks) *core.Adapter {
-	adapter := core.NewAdapter(client, hooks)
+	return adapterWith(t, client, nil, hooks)
+}
+
+// adapterWith is adapterOf lent the machine's shell, which a worktree needs.
+func adapterWith(t *testing.T, client *core.Client, sh shell.Shell, hooks core.AdapterHooks) *core.Adapter {
+	adapter := core.NewAdapter(client, sh, hooks)
 	t.Cleanup(func() { adapter.Close() })
 	return adapter
 }

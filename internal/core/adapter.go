@@ -19,6 +19,7 @@ import (
 // from one event subscription, so a snapshot is read from memory and every change reaches the watcher as it happens.
 type Adapter struct {
 	client *Client
+	shell  shell.Shell // the machine's: the git its worktrees are made and read with, the core knowing none
 	hooks  AdapterHooks
 	stop   context.CancelFunc
 	done   chan struct{}
@@ -31,7 +32,8 @@ type Adapter struct {
 	streams  map[*eventStream]struct{}
 	badDoc   bool // a document that is no document was logged already
 
-	docMu sync.Mutex // one write of the document at a time from this remuda (editDoc)
+	docMu   sync.Mutex // one write of the document at a time from this remuda (editDoc)
+	opening sync.Mutex // one WorktreeOpen at a time, so a second open of a checkout finds the first one's workspace
 }
 
 // AdapterHooks are what the machine hears from its adapter and lends it.
@@ -40,8 +42,6 @@ type AdapterHooks struct {
 	TransportError func(error)
 	// SessionOf names an agent's conversation by its process. It answers from memory, never waiting; nil for none.
 	SessionOf func(agent string, pid int) *herdr.AgentSession
-	// Shell runs scripts on the machine: the git a worktree is made and read with. nil: no worktrees here.
-	Shell shell.Shell
 }
 
 // How long a snapshot asked for before the first fill waits for it, and how the subscription is tried again.
@@ -59,11 +59,12 @@ const foregroundLag = 3 * time.Second
 // mean it stopped answering while its connection stays open. A test shortens it.
 var quietFor = 45 * time.Second
 
-// NewAdapter starts following the core client reaches; Close stops it.
-func NewAdapter(client *Client, hooks AdapterHooks) *Adapter {
+// NewAdapter starts following the core client reaches; Close stops it. sh is the machine's shell, which its worktrees
+// need (nil only in a test that makes none: they are refused).
+func NewAdapter(client *Client, sh shell.Shell, hooks AdapterHooks) *Adapter {
 	ctx, stop := context.WithCancel(context.Background())
 	a := &Adapter{
-		client: client, hooks: hooks, stop: stop, done: make(chan struct{}),
+		client: client, shell: sh, hooks: hooks, stop: stop, done: make(chan struct{}),
 		state: mirror{terminals: map[string]*Terminal{}}, answered: make(chan struct{}), streams: map[*eventStream]struct{}{},
 	}
 	go a.run(ctx)

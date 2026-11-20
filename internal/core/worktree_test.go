@@ -53,7 +53,7 @@ func git(t *testing.T, dir string, args ...string) string {
 func TestWorktreesAreMadeAndOpenedOnACoreMachineWhereHerdrPutsThem(t *testing.T) {
 	home, repo := gitRepo(t)
 	client := coretest.Server(t).Client(t)
-	adapter := adapterOf(t, client, core.AdapterHooks{Shell: shell.Local{Name: "local"}})
+	adapter := adapterWith(t, client, shell.Local{Name: "local"}, core.AdapterHooks{})
 	eventually(t, adapter, func(*herdr.Snapshot) bool { return true })
 
 	made, err := adapter.WorkspaceCreate(repo, "")
@@ -109,6 +109,26 @@ func TestWorktreesAreMadeAndOpenedOnACoreMachineWhereHerdrPutsThem(t *testing.T)
 	if tree := open.Workspace.Worktree; tree == nil || !tree.IsLinkedWorktree || tree.CheckoutPath != byHand || open.Workspace.Label != "by-hand" {
 		t.Errorf("a checkout made outside remuda opened as %+v", open.Workspace)
 	}
+
+	twice := filepath.Join(home, "twice")
+	git(t, repo, "worktree", "add", "-q", "-b", "twice", twice)
+	answers := make(chan *herdr.WorktreeCreateResult, 2)
+	for range 2 {
+		go func() {
+			res, err := adapter.WorktreeOpen(source, twice, "")
+			if err != nil {
+				t.Error(err)
+			}
+			answers <- res
+		}()
+	}
+	first, second := <-answers, <-answers
+	if first == nil || second == nil || first.Workspace.WorkspaceID != second.Workspace.WorkspaceID || first.AlreadyOpen == second.AlreadyOpen {
+		t.Fatalf("two opens of one checkout at once answered %+v and %+v", first, second)
+	}
+	if opened := map[bool]*herdr.WorktreeCreateResult{first.AlreadyOpen: first, second.AlreadyOpen: second}[true]; opened.RootPane.PaneID == "" {
+		t.Errorf("the checkout open already is answered without its pane: %+v", opened.RootPane)
+	}
 	if _, err := adapter.WorktreeOpen(source, t.TempDir(), ""); err == nil {
 		t.Error("a folder outside git was opened as a checkout")
 	}
@@ -117,7 +137,7 @@ func TestWorktreesAreMadeAndOpenedOnACoreMachineWhereHerdrPutsThem(t *testing.T)
 func TestAWorkspaceOutsideGitHasNoCheckoutAndOneWithoutAShellMakesNoWorktree(t *testing.T) {
 	_, repo := gitRepo(t)
 	client := coretest.Server(t).Client(t)
-	withShell := adapterOf(t, client, core.AdapterHooks{Shell: shell.Local{Name: "local"}})
+	withShell := adapterWith(t, client, shell.Local{Name: "local"}, core.AdapterHooks{})
 	eventually(t, withShell, func(*herdr.Snapshot) bool { return true })
 
 	plain, err := withShell.WorkspaceCreate(t.TempDir(), "")
