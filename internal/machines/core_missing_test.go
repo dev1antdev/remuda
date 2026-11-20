@@ -29,7 +29,7 @@ eval "$line"
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
-	mc := newRemote(Config{ID: "gog", Label: "GOG", Host: "core-test-" + filepath.Base(dir)})
+	mc := newRemote(Config{ID: "studio", Label: "Studio", Host: "core-test-" + filepath.Base(dir)})
 	mc.speaksCore = true
 	mc.connect()
 	t.Cleanup(func() { mc.fail(errors.New("the test is over")) })
