@@ -141,6 +141,14 @@ func writeRollout(t *testing.T, home, id string, subagent bool) string {
 	return writeRolloutNamed(t, home, "rollout-2026-11-20T02-28-48-"+id+".jsonl", id, subagent)
 }
 
+// sessionMeta is a rollout's first line as Codex writes it, the person's thread's or a subagent's.
+func sessionMeta(id string, subagent bool) string {
+	if subagent {
+		return `{"timestamp":"2026-11-20T02:28:48.000Z","type":"session_meta","payload":{"session_id":"` + id + `","id":"` + id + `","source":{"subagent":{"thread_spawn":{}}},"thread_source":"subagent"}}`
+	}
+	return `{"timestamp":"2026-11-20T02:28:48.000Z","type":"session_meta","payload":{"session_id":"` + id + `","id":"` + id + `","source":"cli","thread_source":"user"}}`
+}
+
 // writeRolloutNamed is writeRollout under a name of its own, such as a revert's replacement file.
 func writeRolloutNamed(t *testing.T, home, name, id string, subagent bool) string {
 	t.Helper()
@@ -148,12 +156,8 @@ func writeRolloutNamed(t *testing.T, home, name, id string, subagent bool) strin
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	meta := `{"type":"session_meta","payload":{"id":"` + id + `","source":"cli","thread_source":"user"}}`
-	if subagent {
-		meta = `{"type":"session_meta","payload":{"id":"` + id + `","source":{"subagent":{"thread_spawn":{}}},"thread_source":"subagent"}}`
-	}
 	path := filepath.Join(dir, name)
-	if err := os.WriteFile(path, []byte(meta+"\n"), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(sessionMeta(id, subagent)+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	return path
@@ -278,7 +282,7 @@ func TestAPipeNamedLikeARolloutHoldsNothingUp(t *testing.T) {
 func TestSessionsOfAsksTheMachineOnceForEveryAgent(t *testing.T) {
 	answer := "41\037claude\037Thu Nov 19 00:36:10 2026\037" +
 		`{"pid":41,"sessionId":"aaaa-1","cwd":"/w","procStart":"Thu Nov 19 00:36:10 2026"}` + "\036\n" +
-		"52\037codex\037Thu Nov 19 00:40:00 2026\03752\0351\035\035/home/me/.codex/sessions/2026/11/19/rollout-2026-11-19T00-40-01-" + rolloutID + ".jsonl\n\036\n"
+		"52\037codex\037Thu Nov 19 00:40:00 2026\03752\035/home/me/.codex/sessions/2026/11/19/rollout-2026-11-19T00-40-01-" + rolloutID + ".jsonl\035" + sessionMeta(rolloutID, false) + "\n\036\n"
 	host := &shell.Fake{Name: "gog", Remote: true, Dir: "/home/me", Answer: func(string) (string, error) { return answer, nil }}
 	got, err := NewReader(host).SessionsOf([]Running{{PID: 41, Agent: "claude", CWD: "/w"}, {PID: 52, Agent: "codex", CWD: "/w"}, {PID: 60, Agent: "gemini"}})
 	if err != nil {
@@ -326,8 +330,11 @@ func TestParseSessionsByPID(t *testing.T) {
 		{"no procStart, begun since", record(7, "claude", "Thu Nov 19 00:36:10 2026", `{"pid":7,"sessionId":"id-1","cwd":"/a","startedAt":1795048570500}`), []Running{{7, "claude", "/a"}}, rpath.Style{}, "id-1"},
 		{"a process gone", record(7, "claude", "-", claude(7, "id-1", "/a", "")), []Running{{7, "claude", "/a"}}, rpath.Style{}, ""},
 		{"a verified file over a folder-only one before it", record(7, "claude", "S", claude(7, "stale", "/a", "")+script.GS+claude(7, "live", "/a", "S")+script.GS), []Running{{7, "claude", "/a"}}, rpath.Style{}, "live"},
-		{"the session_meta's id over the file name", record(7, "codex", "S", "7"+script.GS+"1"+script.GS+rolloutID+script.GS+"/x/rollout-2026-11-20T03-10-00-"+rolloutID+"_01a1f6a0-1111-7222-8333-944455556666.jsonl\n"), []Running{{7, "codex", "/a"}}, rpath.Style{}, rolloutID},
-		{"a subagent's thread alone", record(7, "codex", "S", "7"+script.GS+"0"+script.GS+rolloutID+script.GS+"/x/rollout-2026-11-20T02-28-48-"+rolloutID+".jsonl\n"), []Running{{7, "codex", "/a"}}, rpath.Style{}, ""},
+		{"the session_meta's id over the file name", record(7, "codex", "S", "7"+script.GS+"/x/rollout-2026-11-20T03-10-00-"+rolloutID+"_01a1f6a0-1111-7222-8333-944455556666.jsonl"+script.GS+sessionMeta(rolloutID, false)+"\n"), []Running{{7, "codex", "/a"}}, rpath.Style{}, rolloutID},
+		{"the file name when the session_meta names no id", record(7, "codex", "S", "7"+script.GS+"/x/rollout-2026-11-20T02-28-48-"+rolloutID+".jsonl"+script.GS+`{"type":"session_meta","payload":{"source":"cli"}}`+"\n"), []Running{{7, "codex", "/a"}}, rpath.Style{}, rolloutID},
+		{"a subagent's thread alone", record(7, "codex", "S", "7"+script.GS+"/x/rollout-2026-11-20T02-28-48-"+rolloutID+".jsonl"+script.GS+sessionMeta(rolloutID, true)+"\n"), []Running{{7, "codex", "/a"}}, rpath.Style{}, ""},
+		{"a rollout whose first line is no session_meta", record(7, "codex", "S", "7"+script.GS+"/x/rollout-2026-11-20T02-28-48-"+rolloutID+".jsonl"+script.GS+`{"type":"response_item","payload":{}}`+"\n"), []Running{{7, "codex", "/a"}}, rpath.Style{}, ""},
+		{"a rollout still empty", record(7, "codex", "S", "7"+script.GS+"/x/rollout-2026-11-20T02-28-48-"+rolloutID+".jsonl"+script.GS+"\n"), []Running{{7, "codex", "/a"}}, rpath.Style{}, ""},
 		{"an id that is not one", record(7, "claude", "S", claude(7, "--resume x", "/a", "S")), []Running{{7, "claude", "/a"}}, rpath.Style{}, ""},
 		{"no rollout open", record(7, "codex", "S", ""), []Running{{7, "codex", "/a"}}, rpath.Style{}, ""},
 		{"a pid not asked about", record(9, "codex", "S", "/x/rollout-2026-11-20T02-28-48-"+rolloutID+".jsonl"), []Running{{7, "codex", "/a"}}, rpath.Style{}, ""},

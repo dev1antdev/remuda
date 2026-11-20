@@ -19,14 +19,7 @@ type Running struct {
 	CWD   string
 }
 
-// SessionsOf finds the session each running agent is in, by its process, in one script on the machine:
-// Claude Code's id from <config dir>/sessions/<pid>.json (CLAUDE_CONFIG_DIR read off the process's environment —
-// never a native Windows process's, whose environment nothing Git Bash or PowerShell reaches shows: ~\.claude there;
-// macOS's `ps -E` runs the entries together, so its text gives candidates, and the first one whose file is this
-// process's wins),
-// Codex's thread id from the rollout of the person's thread the process (else a child of it) holds open, none
-// when two are open. An agent whose session is not found is left out; a session changes under the same pid
-// (/clear, /resume), so the caller asks again as it sees fit.
+// SessionsOf answers, pid by pid, the session each running Claude Code or Codex is in, read off its process.
 func (r *Reader) SessionsOf(procs []Running) (map[int]string, error) {
 	lookup := sessionsByPIDScript(procs)
 	if lookup == "" {
@@ -39,15 +32,16 @@ func (r *Reader) SessionsOf(procs []Running) (map[int]string, error) {
 	return parseSessionsByPID(out, procs, rpath.For(r.host.Home())), nil
 }
 
-// sessionsByPIDScript prints a record per process: pid, agent, the process's start as Claude Code records it
-// (`ps -o lstart` in UTC; "" for a live process whose start ps does not tell; "ms:<unix ms>" for a native Windows
-// process Git Bash's own tools do not see, its creation through PowerShell's Get-Process, asked on Git Bash alone;
-// "-" for one gone), then for
-// Claude
-// Code the text of every candidate session file (the environment's folders, a relative one from the process's
-// folder, then the default), each ended by GS, or, for Codex, a line per open rollout that has its session_meta yet:
-// the pid holding it, whether its session_meta is the person's thread (1) or a subagent's (0), the thread id that
-// session_meta names, its path.
+// sessionsByPIDScript prints a record per process, split by US:
+//   - its pid and agent;
+//   - its start as Claude Code records it: `ps -o lstart` in UTC, "" for a live process ps does not tell of,
+//     "ms:<unix ms>" from PowerShell's Get-Process for a native Windows process (asked on Git Bash alone), "-" for
+//     one gone;
+//   - for Claude Code, every candidate sessions/<pid>.json, each ended by GS: under the CLAUDE_CONFIG_DIR its
+//     environment names (macOS's `ps -E` runs the entries together, so each reading is a candidate; a relative one
+//     from the process's folder), then the default ~/.claude;
+//   - for Codex, a line per rollout the process or a child holds open: the pid holding it, its path and its first
+//     line whole, split by GS.
 func sessionsByPIDScript(procs []Running) string {
 	var b strings.Builder
 	for _, p := range procs {
@@ -59,7 +53,7 @@ func sessionsByPIDScript(procs []Running) string {
 	if b.Len() == 0 {
 		return ""
 	}
-	return `PATH="$PATH:/usr/sbin:/sbin"
+	return script.PATH + `
 case "$(uname -s 2>/dev/null)" in MINGW* | MSYS* | CYGWIN*) windows=1 ;; *) windows= ;; esac
 s() {
   start=$(LC_ALL=C TZ=UTC ps -o lstart= -p "$1" 2>/dev/null)
@@ -101,16 +95,9 @@ s() {
         lsof -nP -p "$p" -Fn 2>/dev/null | sed -n 's/^n//p'
       fi | grep '/rollout-[^/]*\.jsonl$' | sort -u | while IFS= read -r f; do
         [ -f "$f" ] || continue
-        head=$(head -n 1 "$f" 2>/dev/null | head -c 65536)
-        case "$head" in *'"type":"session_meta"'*) ;; *) continue ;; esac
-        case "$head" in
-          *'"source":{"subagent"'*) own=0 ;;
-          *'"thread_source":"user"'*) own=1 ;;
-          *'"thread_source":"'*) own=0 ;;
-          *) own=1 ;;
-        esac
-        id=$(printf '%s' "$head" | grep -o '"id":"[^"]*"' | head -n 1 | sed 's/^"id":"//; s/"$//')
-        printf '%s\035%s\035%s\035%s\n' "$p" "$own" "$id" "$f"
+        printf '%s\035%s\035' "$p" "$f"
+        head -n 1 "$f" 2>/dev/null | tr -d '\n'
+        printf '\n'
       done
     done
   fi
@@ -206,19 +193,41 @@ func startedMS(start string) (int64, bool) {
 	return at.UnixMilli(), err == nil
 }
 
+// personsThread reads a rollout's first line: whether it is the session_meta of the person's thread (no subagent's
+// source, a thread_source of "user" or none), and the thread id it names.
+func personsThread(head string) (string, bool) {
+	var record codexRecord
+	var meta struct {
+		ID           string          `json:"id"`
+		Source       json.RawMessage `json:"source"`
+		ThreadSource string          `json:"thread_source"`
+	}
+	if json.Unmarshal([]byte(head), &record) != nil || record.Type != "session_meta" || json.Unmarshal(record.Payload, &meta) != nil {
+		return "", false
+	}
+	var source struct {
+		Subagent json.RawMessage `json:"subagent"`
+	}
+	subagent := json.Unmarshal(meta.Source, &source) == nil && source.Subagent != nil
+	return meta.ID, !subagent && (meta.ThreadSource == "" || meta.ThreadSource == "user")
+}
+
 // heldThread is the thread of the person's conversation among the rollouts a Codex process holds open: the
 // foreground process's own first, a child's only when it holds none; "" when none or more than one is there,
 // since enumeration order says nothing about which one is on screen.
 func heldThread(payload string, pid int) string {
 	own, children := map[string]bool{}, map[string]bool{}
-	for _, line := range strings.Split(payload, "\n") {
-		fields := strings.SplitN(line, script.GS, 4)
-		if len(fields) < 4 || fields[1] != "1" {
+	for _, line := range script.Lines(payload) {
+		fields := strings.SplitN(line, script.GS, 3)
+		if len(fields) < 3 {
 			continue
 		}
-		id := fields[2] // session_meta's own: a revert's replacement file, <id>_<rollout id>.jsonl, keeps the thread's
-		if !text.SessionID(id) {
-			id = CodexSessionID(fields[3])
+		id, persons := personsThread(fields[2])
+		if !persons {
+			continue
+		}
+		if !text.SessionID(id) { // session_meta's own goes first: a revert's replacement file, <id>_<rollout id>.jsonl, keeps it
+			id = CodexSessionID(fields[1])
 		}
 		if id == "" {
 			continue
