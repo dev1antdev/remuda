@@ -107,6 +107,8 @@ func TestClaudeSessionComesFromItsConfigDirAndItsStart(t *testing.T) {
 	start := procStart(t, pid)
 	writeSessionFile(t, filepath.Join(config, "sessions"), pid, "4c9d6f0e-1111-4222-8333-944455556666", "/work/api", start)
 	writeSessionFile(t, filepath.Join(home, ".claude", "sessions"), pid, "0000aaaa-default-dir-not-this-one", "/work/api", start)
+	// a file an ended process left in the folder the value's first words name, under the same pid
+	writeSessionFile(t, filepath.Join(home, "Application Support", "Claude", "sessions"), pid, "1111bbbb-stale-not-this-one", "/work/api", "Mon Jan  1 00:00:00 2024")
 
 	reader := NewReader(remoteHere(home))
 	got, err := reader.SessionsOf([]Running{{PID: pid, Agent: "claude", CWD: "/work/api"}})
@@ -136,6 +138,11 @@ func TestClaudeSessionLeftByAnEndedProcessIsNotTaken(t *testing.T) {
 
 // writeRollout writes a rollout of thread id whose session_meta says whose thread it is.
 func writeRollout(t *testing.T, home, id string, subagent bool) string {
+	return writeRolloutNamed(t, home, "rollout-2026-11-20T02-28-48-"+id+".jsonl", id, subagent)
+}
+
+// writeRolloutNamed is writeRollout under a name of its own, such as a revert's replacement file.
+func writeRolloutNamed(t *testing.T, home, name, id string, subagent bool) string {
 	t.Helper()
 	dir := filepath.Join(home, ".codex", "sessions", "2026", "11", "20")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -145,7 +152,7 @@ func writeRollout(t *testing.T, home, id string, subagent bool) string {
 	if subagent {
 		meta = `{"type":"session_meta","payload":{"id":"` + id + `","source":{"subagent":{"thread_spawn":{}}},"thread_source":"subagent"}}`
 	}
-	path := filepath.Join(dir, "rollout-2026-11-20T02-28-48-"+id+".jsonl")
+	path := filepath.Join(dir, name)
 	if err := os.WriteFile(path, []byte(meta+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -170,6 +177,9 @@ func TestCodexSessionIsThePersonsRolloutItsProcessHoldsOpen(t *testing.T) {
 		}, rolloutID},
 		{"its own over a child's", func(home string) ([]string, bool, string) {
 			return []string{writeRollout(t, home, other, false)}, true, writeRollout(t, home, rolloutID, false)
+		}, rolloutID},
+		{"a revert's replacement file", func(home string) ([]string, bool, string) {
+			return []string{writeRolloutNamed(t, home, "rollout-2026-11-20T03-10-00-"+rolloutID+"_01a1f6a0-1111-7222-8333-944455556666.jsonl", rolloutID, false)}, false, ""
 		}, rolloutID},
 		{"two of the person's", func(home string) ([]string, bool, string) {
 			return []string{writeRollout(t, home, rolloutID, false), writeRollout(t, home, other, false)}, false, ""
@@ -214,6 +224,22 @@ func TestAPipeNamedLikeARolloutHoldsNothingUp(t *testing.T) {
 	}
 	if got[codex] != rolloutID || got[claude] != "4c9d6f0e-1111-4222-8333-944455556666" {
 		t.Fatalf("got %v", got)
+	}
+}
+
+func TestAThreadOpensTheFileARevertMovedItTo(t *testing.T) {
+	home := t.TempDir()
+	writeRollout(t, home, rolloutID, false)
+	replaced := writeRolloutNamed(t, home, "rollout-2026-11-20T03-10-00-"+rolloutID+"_01a1f6a0-1111-7222-8333-944455556666.jsonl", rolloutID, false)
+	if got, err := findCodexSession(home, rolloutID); err != nil || got != replaced {
+		t.Fatalf("here: %q, %v; want %s", got, err, replaced)
+	}
+	out, err := exec.Command("sh", "-c", codexFindScript(script.Quote(home), rolloutID)).Output()
+	if got := strings.TrimSpace(string(out)); err != nil || got != replaced {
+		t.Fatalf("by script: %q, %v; want %s", got, err, replaced)
+	}
+	if got := CodexSessionID(replaced); got != rolloutID {
+		t.Fatalf("CodexSessionID = %q", got)
 	}
 }
 

@@ -21,7 +21,8 @@ type Running struct {
 
 // SessionsOf finds the session each running agent is in, by its process, in one script on the machine:
 // Claude Code's id from <config dir>/sessions/<pid>.json (CLAUDE_CONFIG_DIR read off the process's environment;
-// macOS's `ps -E` runs the entries together, so its text gives candidates and the one holding the file wins),
+// macOS's `ps -E` runs the entries together, so its text gives candidates, and the first one whose file is this
+// process's wins),
 // Codex's thread id from the rollout of the person's thread the process (else a child of it) holds open, none
 // when two are open. An agent whose session is not found is left out; a session changes under the same pid
 // (/clear, /resume), so the caller asks again as it sees fit.
@@ -38,7 +39,8 @@ func (r *Reader) SessionsOf(procs []Running) (map[int]string, error) {
 }
 
 // sessionsByPIDScript prints a record per process: pid, agent, the process's start as Claude Code records it
-// (`ps -o lstart` in UTC), then the session file's text for Claude Code or, for Codex, a line per open rollout:
+// (`ps -o lstart` in UTC), then for Claude Code the text of every candidate session file (the environment's
+// folders, then the default), each ended by GS, or, for Codex, a line per open rollout:
 // the pid holding it, whether its session_meta is the person's thread (1) or a subagent's (0), its path.
 func sessionsByPIDScript(procs []Running) string {
 	var b strings.Builder
@@ -56,22 +58,26 @@ s() {
   start=$(LC_ALL=C TZ=UTC ps -o lstart= -p "$1" 2>/dev/null)
   printf '%s\037%s\037%s\037' "$1" "$2" "$start"
   if [ "$2" = claude ]; then
-    if [ -r "/proc/$1/environ" ]; then
-      cfg=$(tr '\0' '\n' < "/proc/$1/environ" | sed -n 's/^CLAUDE_CONFIG_DIR=//p' | head -n 1)
-    else
-      cfg=$(ps -E -ww -o command= -p "$1" 2>/dev/null | awk '
-        { key = " CLAUDE_CONFIG_DIR="; p = 0; t = $0
-          while ((j = index(t, key)) > 0) { p += j; t = substr(t, j + 1) }
-          if (!p) next
-          v = substr($0, p + length(key)); seen = ""
-          while (match(v, / [A-Za-z_][A-Za-z0-9_]*=/)) {
-            print seen substr(v, 1, RSTART - 1)
-            seen = seen substr(v, 1, RSTART + RLENGTH - 1); v = substr(v, RSTART + RLENGTH)
-          }
-          print seen v }' | while IFS= read -r c; do [ -f "$c/sessions/$1.json" ] && { printf '%s' "$c"; break; }; done)
-    fi
-    f="${cfg:-$HOME/.claude}/sessions/$1.json"
-    [ -f "$f" ] && head -c 65536 "$f"
+    {
+      if [ -r "/proc/$1/environ" ]; then
+        tr '\0' '\n' < "/proc/$1/environ" | sed -n 's/^CLAUDE_CONFIG_DIR=//p' | head -n 1
+      else
+        ps -E -ww -o command= -p "$1" 2>/dev/null | awk '
+          { key = " CLAUDE_CONFIG_DIR="; p = 0; t = $0
+            while ((j = index(t, key)) > 0) { p += j; t = substr(t, j + 1) }
+            if (!p) next
+            v = substr($0, p + length(key)); seen = ""
+            while (match(v, / [A-Za-z_][A-Za-z0-9_]*=/)) {
+              print seen substr(v, 1, RSTART - 1)
+              seen = seen substr(v, 1, RSTART + RLENGTH - 1); v = substr(v, RSTART + RLENGTH)
+            }
+            print seen v }'
+      fi
+      printf '%s\n' "$HOME/.claude"
+    } | while IFS= read -r c; do
+      f="$c/sessions/$1.json"
+      [ -n "$c" ] && [ -f "$f" ] && { head -c 65536 "$f"; printf '\035'; }
+    done
   else
     for p in $1 $(pgrep -P "$1" 2>/dev/null); do
       if [ -d "/proc/$p/fd" ]; then
@@ -104,9 +110,7 @@ type claudeSessionFile struct {
 	ProcStart string `json:"procStart"`
 }
 
-// parseSessionsByPID reads sessionsByPIDScript's answer. A Claude Code file counts only when it is this very
-// process's: its pid, and its start time when both sides know it, else its folder; a leftover of an ended
-// process whose pid was given to another is not.
+// parseSessionsByPID reads sessionsByPIDScript's answer.
 func parseSessionsByPID(out string, procs []Running, style rpath.Style) map[int]string {
 	cwds := map[int]string{}
 	for _, p := range procs {
@@ -130,18 +134,7 @@ func parseSessionsByPID(out string, procs []Running, style rpath.Style) map[int]
 		var id string
 		switch fields[1] {
 		case "claude":
-			var file claudeSessionFile
-			if json.Unmarshal([]byte(payload), &file) != nil || file.PID != pid {
-				continue
-			}
-			if file.ProcStart != "" && start != "" {
-				if strings.TrimSpace(file.ProcStart) != start {
-					continue
-				}
-			} else if cwd != "" && file.CWD != "" && !style.Equal(file.CWD, cwd) {
-				continue
-			}
-			id = file.SessionID
+			id = claudeSession(payload, pid, start, cwd, style)
 		case "codex":
 			id = heldThread(payload, pid)
 		}
@@ -150,6 +143,26 @@ func parseSessionsByPID(out string, procs []Running, style rpath.Style) map[int]
 		}
 	}
 	return found
+}
+
+// claudeSession is the session of the first candidate file that is this very process's: its pid, and its start time
+// when both sides know it, else its folder. A file left by an ended process whose pid was given to another is not.
+func claudeSession(payload string, pid int, start, cwd string, style rpath.Style) string {
+	for _, doc := range strings.Split(payload, script.GS) {
+		var file claudeSessionFile
+		if json.Unmarshal([]byte(doc), &file) != nil || file.PID != pid {
+			continue
+		}
+		if file.ProcStart != "" && start != "" {
+			if strings.TrimSpace(file.ProcStart) != start {
+				continue
+			}
+		} else if cwd != "" && file.CWD != "" && !style.Equal(file.CWD, cwd) {
+			continue
+		}
+		return file.SessionID
+	}
+	return ""
 }
 
 // heldThread is the thread of the person's conversation among the rollouts a Codex process holds open: the
