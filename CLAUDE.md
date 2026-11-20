@@ -521,10 +521,12 @@ components and icons as rules for whoever changes it: @docs/design.md
   together and Tidy, Leftovers and the remove dialog stand), git's last line
   when it refuses (`text.LastLine`, 10 min at most), then a workspace on it
   labelled after its folder unless named; a worktree whose workspace did
-  not open is taken down again (`undoScript`: the checkout, never forced,
-  and the branch only when it made it — `made <commit>` — and only while it
-  is still there, `update-ref -d` against that commit), so making it again
-  starts clean, a failure of that naming the checkout left; `WorktreeOpen` opens a workspace on
+  not open, or that git made at a free place before a hook of the
+  repository's failed, is taken down again (`takeDown`, `undoScript`: the
+  checkout, never forced, and the branch only when it made it — `made
+  <commit>` — while it is still on that commit, `update-ref -d` against it,
+  and no worktree uses it, `script.BranchInUse`, else kept and said), so
+  making it again starts clean, a failure of that naming the checkout left; `WorktreeOpen` opens a workspace on
   a checkout, refusing a folder outside git, and answers one open on it
   already as herdr's `already_open` (`AlreadyOpen`, its pane in front,
   `frontPane`) from the mirror — the route's own look reads the watcher's
@@ -4918,10 +4920,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   (herdr's `worktree.create` from `origin/<b>`, then `git branch
   --set-upstream-to`), a pull request's head not fetched yet fetched first
   (`+refs/heads/<h>:refs/remotes/origin/<h>`; a fork's as
-  `refs/remuda/pull/N`, a ref of remuda's own, the branch then made from it
-  by `git branch`, which refuses one of that name made since the plan was
-  read rather than move it (`Plan.Claim`, `fetchScript`), the ref dropped
-  after; a local branch tracking nothing,
+  `refs/remuda/fetch/<the script's pid>`, a ref of that request's own, the
+  branch then made from it by `git branch`, which refuses one of that name
+  made since the plan was read rather than move it (`Plan.Claim`,
+  `fetchScript`), the ref dropped whatever happened; a local branch tracking nothing,
   under any name the person gives a fork's pull request and by default
   `pr-<N>-<head>` — `ForkBranch`, the page's `forkBranch`: a fork's head
   named `main` is not this repository's main, which a bare head opened),

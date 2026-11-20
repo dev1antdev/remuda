@@ -36,11 +36,11 @@ func TestAPlanSaysWhatCreateWillDo(t *testing.T) {
 			Plan{Action: "remote", Branch: "dev/feat/198", From: "origin/dev/feat/198", Track: true, Fetch: "+refs/heads/dev/feat/198:refs/remotes/origin/dev/feat/198", IssueRef: "acme/storefront#198", PRRef: "acme/storefront#212"}},
 		{"a pull request's head", "cart", "", Pick{Kind: "pr", Number: 212, Head: "cart"},
 			Plan{Action: "remote", Branch: "cart", From: "origin/cart", Track: true, Fetch: "+refs/heads/cart:refs/remotes/origin/cart", PRRef: "acme/storefront#212"}},
-		{"a fork's pull request", "cart", "", Pick{Kind: "pr", Number: 212, Head: "cart", CrossRepo: true}, Plan{Action: "local", Branch: "cart", Fetch: "+refs/pull/212/head:refs/remuda/pull/212", Claim: "refs/remuda/pull/212", PRRef: "acme/storefront#212"}},
+		{"a fork's pull request", "cart", "", Pick{Kind: "pr", Number: 212, Head: "cart", CrossRepo: true}, Plan{Action: "local", Branch: "cart", Fetch: "refs/pull/212/head", Claim: true, PRRef: "acme/storefront#212"}},
 		{"a fork's pull request from its main, under a name of this repository's", "pr-207-main", "", Pick{Kind: "pr", Number: 207, Head: "main", CrossRepo: true},
-			Plan{Action: "local", Branch: "pr-207-main", Fetch: "+refs/pull/207/head:refs/remuda/pull/207", Claim: "refs/remuda/pull/207", PRRef: "acme/storefront#207"}},
+			Plan{Action: "local", Branch: "pr-207-main", Fetch: "refs/pull/207/head", Claim: true, PRRef: "acme/storefront#207"}},
 		{"an issue a fork's pull request works on", "pr-207-checkout", "", Pick{Kind: "issue", Number: 203, PR: 207, Head: "checkout", CrossRepo: true},
-			Plan{Action: "local", Branch: "pr-207-checkout", Fetch: "+refs/pull/207/head:refs/remuda/pull/207", Claim: "refs/remuda/pull/207", IssueRef: "acme/storefront#203", PRRef: "acme/storefront#207"}},
+			Plan{Action: "local", Branch: "pr-207-checkout", Fetch: "refs/pull/207/head", Claim: true, IssueRef: "acme/storefront#203", PRRef: "acme/storefront#207"}},
 		{"a pull request's head renamed", "cart-2", "", Pick{Kind: "pr", Number: 212, Head: "cart"}, Plan{Action: "new", Branch: "cart-2", From: "origin/cart", Untrack: true, Fetch: "+refs/heads/cart:refs/remotes/origin/cart"}},
 	}
 	for _, c := range cases {
@@ -192,8 +192,8 @@ func TestAForksPullRequestIsFetchedAsABranchOfItsOwn(t *testing.T) {
 	if got := gitOut(t, main, "rev-parse", "late"); got != before {
 		t.Errorf("the branch made meanwhile moved to %q", got)
 	}
-	if out, err := exec.Command("git", "-C", main, "show-ref", "--verify", "-q", "refs/remuda/pull/8").CombinedOutput(); err == nil {
-		t.Errorf("the fetched head's ref of remuda's stays: %s", out)
+	if refs := gitOut(t, main, "for-each-ref", "refs/remuda"); refs != "" {
+		t.Errorf("the fetched head's ref of the request's stays: %s", refs)
 	}
 }
 
