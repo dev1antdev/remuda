@@ -1,6 +1,8 @@
 package core_test
 
 import (
+	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -10,20 +12,30 @@ import (
 	"github.com/dev1antdev/remuda/internal/herdr"
 )
 
-// seen collects what a viewer is handed until it holds want.
-func seen(t *testing.T, viewer herdr.Viewer, want string) {
+// watched is what a viewer was handed: the program's text, and the grids it was told.
+type watched struct {
+	viewer herdr.Viewer
+	text   strings.Builder
+	grids  []string
+}
+
+// until takes what the viewer is handed until it holds want, as text or as a grid "<cols>x<rows>".
+func (w *watched) until(t *testing.T, want string) {
 	t.Helper()
-	var got strings.Builder
 	deadline := time.After(10 * time.Second)
-	for !strings.Contains(got.String(), want) {
+	for !strings.Contains(w.text.String(), want) && !slices.Contains(w.grids, want) {
 		select {
-		case chunk, ok := <-viewer.Bytes():
+		case out, ok := <-w.viewer.Out():
 			if !ok {
-				t.Fatalf("the viewer ended before %q; it had %q", want, got.String())
+				t.Fatalf("the viewer ended before %q; it had %q and the grids %v", want, w.text.String(), w.grids)
 			}
-			got.Write(chunk)
+			if out.Grid() {
+				w.grids = append(w.grids, fmt.Sprintf("%dx%d", out.Cols, out.Rows))
+			} else {
+				w.text.Write(out.Data)
+			}
 		case <-deadline:
-			t.Fatalf("no %q within 10 s; the viewer had %q", want, got.String())
+			t.Fatalf("no %q within 10 s; the viewer had %q and the grids %v", want, w.text.String(), w.grids)
 		}
 	}
 }
@@ -36,31 +48,33 @@ func TestTwoViewersShareATerminalWithoutTakingItsSize(t *testing.T) {
 		t.Fatal(err)
 	}
 	terminals := core.NewTerminals(client)
-	desk, err := terminals.Open(cat.Address, herdr.View{Cols: 100, Rows: 30})
+	deskViewer, err := terminals.Open(cat.Address, herdr.View{Cols: 100, Rows: 30})
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer desk.Close()
-	phone, err := terminals.Open(cat.Address, herdr.View{Cols: 40, Rows: 10, Keep: true})
+	defer deskViewer.Close()
+	phoneViewer, err := terminals.Open(cat.Address, herdr.View{Cols: 40, Rows: 10, Keep: true})
 	if err != nil {
 		t.Fatal(err)
 	}
+	desk, phone := &watched{viewer: deskViewer}, &watched{viewer: phoneViewer}
 	if n := terminals.Viewers(cat.Address); n != 2 {
 		t.Fatalf("viewers = %d, want 2", n)
 	}
-	seen(t, phone, "\x1b[8;30;100t") // a viewer that keeps the size is told the terminal's grid before its paint
-	if err := phone.Write([]byte("from the phone\r")); err != nil {
+	phone.until(t, "100x30") // a viewer that keeps the size is told the terminal's grid before its paint
+	// a program asking for another grid in its own output is only text: never a grid a viewer follows
+	if err := phoneViewer.Write([]byte("\x1b[8;5;20t from the phone\r")); err != nil {
 		t.Fatal(err)
 	}
-	seen(t, desk, "from the phone")
-	seen(t, phone, "from the phone")
-	if err := phone.Resize(40, 10); err != nil {
+	desk.until(t, "from the phone")
+	phone.until(t, "from the phone")
+	if err := phoneViewer.Resize(40, 10); err != nil {
 		t.Fatal(err)
 	}
 	if got, _ := client.Get(ctx, cat.Address); got.Cols != 100 || got.Rows != 30 {
 		t.Fatalf("the phone that keeps the size made it %dx%d", got.Cols, got.Rows)
 	}
-	if err := desk.Resize(90, 28); err != nil {
+	if err := deskViewer.Resize(90, 28); err != nil {
 		t.Fatal(err)
 	}
 	for start := time.Now(); ; time.Sleep(50 * time.Millisecond) {
@@ -71,8 +85,11 @@ func TestTwoViewersShareATerminalWithoutTakingItsSize(t *testing.T) {
 			t.Fatal("the desk's resize never reached the terminal")
 		}
 	}
-	seen(t, phone, "\x1b[8;28;90t")
-	phone.Close()
+	phone.until(t, "90x28")
+	if !slices.Equal(phone.grids, []string{"100x30", "90x28"}) {
+		t.Fatalf("the phone was told the grids %v, want the terminal's own alone", phone.grids)
+	}
+	phoneViewer.Close()
 	if n := terminals.Viewers(cat.Address); n != 1 {
 		t.Fatalf("viewers after the phone left = %d, want 1", n)
 	}
@@ -86,12 +103,13 @@ func TestAViewerThatOnlyWatchesCannotType(t *testing.T) {
 		t.Fatal(err)
 	}
 	terminals := core.NewTerminals(client)
-	link, err := terminals.Open(cat.Address, herdr.View{Cols: 80, Rows: 24, Observe: true})
+	linkViewer, err := terminals.Open(cat.Address, herdr.View{Cols: 80, Rows: 24, Observe: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer link.Close()
-	_ = link.Write([]byte("typed by a link\r"))
+	defer linkViewer.Close()
+	link := &watched{viewer: linkViewer}
+	_ = linkViewer.Write([]byte("typed by a link\r"))
 	desk, err := terminals.Open(cat.Address, herdr.View{Cols: 80, Rows: 24})
 	if err != nil {
 		t.Fatal(err)
@@ -103,7 +121,7 @@ func TestAViewerThatOnlyWatchesCannotType(t *testing.T) {
 	if err := desk.Write([]byte("typed at the desk\r")); err != nil {
 		t.Fatal(err)
 	}
-	seen(t, link, "typed at the desk")
+	link.until(t, "typed at the desk")
 	if got, _ := client.Read(ctx, cat.Address, 0, ""); strings.Contains(got.Text, "typed by a link") {
 		t.Fatalf("a viewer that only watches typed: %q", got.Text)
 	}
@@ -125,10 +143,10 @@ func TestAViewerEndsWithItsProgram(t *testing.T) {
 	if err := viewer.Write([]byte("now\r")); err != nil {
 		t.Fatal(err)
 	}
-	seen(t, viewer, "bye:now")
+	(&watched{viewer: viewer}).until(t, "bye:now")
 	for deadline := time.After(10 * time.Second); ; {
 		select {
-		case _, ok := <-viewer.Bytes():
+		case _, ok := <-viewer.Out():
 			if !ok {
 				if n := terminals.Viewers(brief.Address); n != 0 {
 					t.Fatalf("viewers after the program ended = %d", n)

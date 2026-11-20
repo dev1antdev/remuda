@@ -14,6 +14,7 @@ export type Stream = {
   size: () => { cols: number; rows: number };
   onOpen: (sentSize: string) => void; // a fresh stream, opened with this grid: the screen starts over
   onBytes: (buf: Uint8Array) => void;
+  onGrid?: (cols: number, rows: number) => void; // the terminal's grid from here on, in order with the bytes (remuda-core)
   note: (text: string) => void; // a line on the screen from remuda itself, while the stream is down
   inputLost: () => void; // typing did not surely go through, and will not be sent again
   wsOnly?: boolean; // a viewer link: the HTTP transport is not its to open, so a proxy that drops WebSockets is said instead
@@ -37,6 +38,22 @@ const INPUT_CHARS_PER_MS = 50;
 // What the terminal says by itself — mouse and focus reports, answers to the app's questions — is nobody's typing: when
 // it cannot go, nothing need be said.
 const REPORTS = /\x1b\[<[\d;]+[Mm]|\x1b\[M[\s\S]{3}|\x1b\[[IO]|\x1b\[[?>\d;]*[cnRt]|\x1b\[\?[\d;]*\$y|\x1bP[\s\S]*?\x1b\\|\x1b\][\s\S]*?(?:\x07|\x1b\\)/g;
+
+// gridOf reads the socket's grid message, {"type":"grid","cols":…,"rows":…}; null for anything else.
+export function gridOf(text: string): { cols: number; rows: number } | null {
+  try {
+    const msg = JSON.parse(text) as { type?: string; cols?: unknown; rows?: unknown };
+    return msg.type === "grid" && typeof msg.cols === "number" && typeof msg.rows === "number" ? { cols: msg.cols, rows: msg.rows } : null;
+  } catch {
+    return null;
+  }
+}
+
+// gridHeader reads the HTTP transport's X-Remuda-Grid, "<cols>x<rows>"; null when absent or malformed.
+export function gridHeader(value: string | null): { cols: number; rows: number } | null {
+  const m = /^(\d+)x(\d+)$/.exec(value ?? "");
+  return m ? { cols: Number(m[1]), rows: Number(m[2]) } : null;
+}
 
 // typedIn is how much of the text the person typed.
 const typedIn = (text: string) => text.replace(REPORTS, "").length;
@@ -81,6 +98,11 @@ export function connect(stream: Stream): Transport {
       stream.onOpen(sentSize);
     };
     ws.onmessage = (ev) => {
+      if (typeof ev.data === "string") {
+        const grid = gridOf(ev.data);
+        if (grid) stream.onGrid?.(grid.cols, grid.rows);
+        return;
+      }
       if (!(ev.data instanceof ArrayBuffer)) return;
       wsRetry = 0;
       stream.onBytes(new Uint8Array(ev.data));
@@ -223,6 +245,8 @@ export function connect(stream: Stream): Transport {
           const buf = new Uint8Array(await res.arrayBuffer());
           if (stopped) return;
           if (buf.length) stream.onBytes(buf);
+          const grid = gridHeader(res.headers.get("X-Remuda-Grid"));
+          if (grid) stream.onGrid?.(grid.cols, grid.rows);
           if (res.headers.get("X-Remuda-End") === "1") {
             // the server dropped it already; the attach ended (herdr restarted, say) and a fresh one is asked for, as the socket does
             streamGone();

@@ -12,7 +12,7 @@ import { uploadFiles } from "@/features/files/api";
 import type { OpenFile } from "@/features/files/target";
 import { installCopy } from "./copy";
 import { applyGeometry, keepFollower, type Geometry } from "./geometry";
-import { followGrid, WINDOW_OPTIONS } from "./grid";
+import { atGrid } from "./grid";
 import { applyModifier } from "./keys";
 import { createLayer } from "./layer";
 import { provideLinks } from "./links";
@@ -54,7 +54,6 @@ export function createEngine(mount: HTMLElement, machineId: string, paneId: stri
     allowProposedApi: true,
     theme: terminalTheme(props().flavor),
     disableStdin: props().readOnly,
-    windowOptions: WINDOW_OPTIONS,
   });
   const readOnly = !!props().readOnly;
   let flavorNow = props().flavor;
@@ -66,8 +65,8 @@ export function createEngine(mount: HTMLElement, machineId: string, paneId: stri
   const search = installSearch(term, () => flavorNow, () => forgetSelection());
 
   let lastSize = "";
-  // On remuda-core a viewer that keeps the size, or only watches, is told the terminal's grid in its own bytes — xterm's
-  // CSI 8;rows;cols t, ahead of the paint drawn at it — and keeps that grid rather than the roster's.
+  // On remuda-core a viewer that keeps the size, or only watches, is told the terminal's grid in order with the bytes
+  // (grid.ts) and keeps that grid rather than the roster's.
   let grid: { cols: number; rows: number } | null = null;
   let transport: Transport | null = null;
   const note = (text: string) => term.write(`\r\n\x1b[2m[remuda] ${text}\x1b[0m\r\n`);
@@ -103,10 +102,13 @@ export function createEngine(mount: HTMLElement, machineId: string, paneId: stri
   };
   apply();
 
-  const gridSet = followGrid(term, () => !!props().core && props().mode === "keep", (cols, rows) => {
-    grid = { cols, rows };
-    apply(); // the font that fits it, once the lens is on screen
-  });
+  const onGrid = (cols: number, rows: number) => {
+    if (!props().core || props().mode !== "keep") return;
+    atGrid(term, cols, rows, () => {
+      grid = { cols, rows };
+      apply(); // the font that fits it, once the lens is on screen
+    });
+  };
   // On remuda-core the terminal takes the size of the viewer last active: a desk turned to claims it back.
   const claimSize = () => {
     if (!props().core || readOnly || props().mode === "keep") return;
@@ -176,6 +178,7 @@ export function createEngine(mount: HTMLElement, machineId: string, paneId: stri
     size: () => ({ cols: term.cols, rows: term.rows }),
     onOpen,
     onBytes: paint,
+    onGrid,
     note,
     inputLost: () => actions.notify(t("What you typed may not have gone through. It will not be sent again."), { error: true }),
     wsOnly: readOnly,
@@ -196,7 +199,6 @@ export function createEngine(mount: HTMLElement, machineId: string, paneId: stri
     dispose: () => {
       props().onReady(null);
       onData.dispose();
-      gridSet.dispose();
       term.textarea?.removeEventListener("focus", claimSize);
       selection.dispose();
       layer.dispose();

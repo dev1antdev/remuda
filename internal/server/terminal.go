@@ -36,6 +36,12 @@ func (s *Server) viewerStands(r *http.Request) bool {
 	return s.Guard != nil && s.Guard.StillViewer(r)
 }
 
+// gridFrame is a grid as the socket tells it, a text frame between the binary ones: {"type":"grid","cols":…,"rows":…}.
+func gridFrame(o herdr.Out) []byte {
+	frame, _ := json.Marshal(map[string]any{"type": "grid", "cols": o.Cols, "rows": o.Rows})
+	return frame
+}
+
 type wsClientMsg struct {
 	Type string `json:"type"` // input | resize
 	Data string `json:"data,omitempty"`
@@ -103,7 +109,6 @@ func (s *Server) handlePaneWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer viewer.Close()
-	ch := viewer.Bytes()
 
 	// the writer is stopped by hand when the read loop ends: on a hijacked connection
 	// r.Context() lives until the handler returns, so the attach would linger until the pane's next byte
@@ -127,37 +132,55 @@ func (s *Server) handlePaneWS(w http.ResponseWriter, r *http.Request) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
+		out := viewer.Out()
+		var held *herdr.Out // a grid that ended a run of bytes, sent next
 		for {
-			select {
-			case <-recheck:
-				if revoked() {
-					return
-				}
-			case data, ok := <-ch:
-				if !ok {
-					c.Close(websocket.StatusNormalClosure, "terminal detached")
-					return
-				}
-				for more := true; more; {
-					select {
-					case extra, ok := <-ch:
-						if !ok {
-							more = false
-						} else {
-							// the chunk is shared with every viewer: the full-slice expression makes append copy first
-							data = append(data[:len(data):len(data)], extra...)
-						}
-					default:
-						more = false
+			next, ok := herdr.Out{}, true
+			if held != nil {
+				next, held = *held, nil
+			} else {
+				select {
+				case <-recheck:
+					if revoked() {
+						return
 					}
-				}
-				if revoked() {
+					continue
+				case next, ok = <-out:
+				case <-wctx.Done():
 					return
 				}
-				if err := c.Write(wctx, websocket.MessageBinary, data); err != nil {
+			}
+			if !ok {
+				c.Close(websocket.StatusNormalClosure, "terminal detached")
+				return
+			}
+			if revoked() {
+				return
+			}
+			if next.Grid() {
+				if err := c.Write(wctx, websocket.MessageText, gridFrame(next)); err != nil {
 					return
 				}
-			case <-wctx.Done():
+				continue
+			}
+			data := next.Data
+			for more := true; more; {
+				select {
+				case extra, ok := <-out:
+					switch {
+					case !ok:
+						more = false
+					case extra.Grid():
+						held, more = &extra, false // the bytes before it go first
+					default:
+						// the chunk is shared with every viewer: the full-slice expression makes append copy first
+						data = append(data[:len(data):len(data)], extra.Data...)
+					}
+				default:
+					more = false
+				}
+			}
+			if err := c.Write(wctx, websocket.MessageBinary, data); err != nil {
 				return
 			}
 		}

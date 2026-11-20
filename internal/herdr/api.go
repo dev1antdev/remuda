@@ -66,11 +66,21 @@ type View struct {
 
 // Viewer is one viewer's stream of a terminal: the program's bytes out, the keys and the size back.
 type Viewer interface {
-	Bytes() <-chan []byte // closed once the terminal is no longer attached
+	Out() <-chan Out // closed once the terminal is no longer attached
 	Write(data []byte) error
 	Resize(cols, rows int) error
 	Close()
 }
+
+// Out is one thing a viewer is handed, in order: the program's bytes, or, with Cols and Rows set and no bytes, the
+// terminal's grid, which remuda-core tells a viewer that keeps the size or only watches ahead of the paint drawn at it.
+type Out struct {
+	Data       []byte
+	Cols, Rows int
+}
+
+// Grid says the Out is a grid rather than bytes.
+func (o Out) Grid() bool { return o.Cols > 0 && o.Rows > 0 }
 
 var (
 	_ API       = (*Client)(nil)

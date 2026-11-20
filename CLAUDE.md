@@ -181,7 +181,8 @@ components and icons as rules for whoever changes it: @docs/design.md
 - `internal/herdr/` — everything herdr. `api.go`: what remuda asks of a
   machine, as interfaces — `API` (the snapshot, the event stream as
   `EventStream`, every request), `Terminals` (`Open` a live terminal as one
-  `Viewer` — its bytes, its keys, its size, `Close` — with a `View` of its grid,
+  `Viewer` — what it is handed in order (`Out`: the program's bytes, or the
+  terminal's grid), its keys, its size, `Close` — with a `View` of its grid,
   `Keep` and `Observe`; `Viewers`; herdr's `AttachManager.Open` is one viewer of
   the attach every viewer shares, and refuses `Observe`) — which `Machine.Ready()` hands out and every package
   takes instead of `*Client` and `*AttachManager` (only `internal/herdr` and
@@ -445,8 +446,11 @@ components and icons as rules for whoever changes it: @docs/design.md
   terminal's queries itself and strips them (no `queries.go`; xterm sees
   none to answer, so what a page sends is a person's and goes as DATA);
   a keep-size or watching viewer is handed each grid the core announces in
-  order with the bytes, as xterm's own `CSI 8;rows;cols t` ahead of the
-  paint drawn at it (the engine sizes its grid by it, see the size modes);
+  order with the bytes, an `Out` of its own ahead of the paint drawn at it —
+  never a sequence in the bytes, which the program could print itself (the
+  socket sends it as a text frame `{"type":"grid","cols","rows"}`, never
+  merged with bytes across it; the HTTP read ends at it with `X-Remuda-Grid:
+  <cols>x<rows>`; the engine sizes its grid by it, see the size modes);
   a goroutine hands the stream's bytes to the viewer and reads no further
   while the viewer has not taken them, so the core's credit waits and it
   repaints a viewer gone 4 MB behind; the bytes close with the program,
@@ -1001,12 +1005,12 @@ components and icons as rules for whoever changes it: @docs/design.md
   the connect request says keep (`&keep=1`), a `keep_size` attach that
   types but never sizes the terminal, so the engine attaches again when the
   mode changes there (`core` on the engine's props), and a keep viewer's
-  grid is the one the core hands it in the stream (`CSI 8;rows;cols t`,
-  `engine/grid.ts`: xterm calls a handler of it only with
-  `windowOptions.setWinSizeChars` on, `WINDOW_OPTIONS`, and the grid is set
-  right there while the bytes are parsed, a hidden lens's too; tested with
-  xterm itself; anywhere else the sequence is swallowed as before) rather
-  than the roster's; two fit viewers of different sizes share the
+  grid is the one the core hands it in the stream (the transport's
+  `onGrid`, `engine/grid.ts`: `atGrid` sets it through xterm's own write
+  queue, after the bytes before it and before the ones after, a hidden
+  lens's too, `validGrid` refusing what no terminal holds; a window-size
+  request the program prints stays xterm's to swallow; tested with xterm
+  itself) rather than the roster's; two fit viewers of different sizes share the
   terminal's one grid, its last active viewer's, as herdr's one attach PTY
   shared its last resize; a viewer link is
   keep and `wsOnly` (no HTTP fallback, a line saying the network drops

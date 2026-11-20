@@ -138,7 +138,8 @@ func (s *Server) handleTermOpen(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleTermRead is GET /api/term/read?sid&wait=<seconds> → raw bytes: the first chunk, then what else is queued.
-// X-Remuda-End: 1 says the attach is gone; 410 says the stream is unknown and the client reopens.
+// X-Remuda-End: 1 says the attach is gone; X-Remuda-Grid: <cols>x<rows> is the terminal's grid from the end of these
+// bytes on (remuda-core's, for a viewer that keeps the size); 410 says the stream is unknown and the client reopens.
 func (s *Server) handleTermRead(w http.ResponseWriter, r *http.Request) {
 	if s.peerStream(w, r, "/api/term/read") {
 		return
@@ -160,26 +161,29 @@ func (s *Server) handleTermRead(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 
 	var out []byte
-	ended := false
-	select {
-	case data, ok := <-st.viewer.Bytes():
-		if !ok {
+	ended, grid := false, false
+	take := func(next herdr.Out, ok bool) {
+		switch {
+		case !ok:
 			ended = true
-		} else {
-			out = append(out, data...)
+		case next.Grid(): // after the bytes before it, and the read ends: the next one is drawn at it
+			w.Header().Set("X-Remuda-Grid", fmt.Sprintf("%dx%d", next.Cols, next.Rows))
+			grid = true
+		default:
+			out = append(out, next.Data...)
 		}
+	}
+	select {
+	case next, ok := <-st.viewer.Out():
+		take(next, ok)
 	case <-time.After(time.Duration(wait) * time.Second):
 	case <-r.Context().Done():
 		return
 	}
-	for !ended && len(out) < streamMaxChunk {
+	for !ended && !grid && len(out) < streamMaxChunk {
 		select {
-		case data, ok := <-st.viewer.Bytes():
-			if !ok {
-				ended = true
-			} else {
-				out = append(out, data...)
-			}
+		case next, ok := <-st.viewer.Out():
+			take(next, ok)
 			continue
 		default:
 		}

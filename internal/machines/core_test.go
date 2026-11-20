@@ -112,8 +112,8 @@ func TestTheLocalMachineOnCoreShowsTheCoresTerminals(t *testing.T) {
 		t.Fatalf("viewers = %d, want 1", n)
 	}
 	select {
-	case first, ok := <-viewer.Bytes():
-		if !ok || len(first) == 0 {
+	case first, ok := <-viewer.Out():
+		if !ok || len(first.Data) == 0 {
 			t.Fatal("the core's first paint never came")
 		}
 	case <-time.After(10 * time.Second):
