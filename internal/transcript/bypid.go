@@ -93,7 +93,7 @@ s() {
       if [ -d "/proc/$p/fd" ]; then
         for fd in /proc/$p/fd/*; do readlink "$fd" 2>/dev/null; done
       else
-        lsof -p "$p" -Fn 2>/dev/null | sed -n 's/^n//p'
+        lsof -nP -p "$p" -Fn 2>/dev/null | sed -n 's/^n//p'
       fi | grep '/rollout-[^/]*\.jsonl$' | sort -u | while IFS= read -r f; do
         [ -f "$f" ] || continue
         head=$(head -n 1 "$f" 2>/dev/null | head -c 65536)
@@ -121,9 +121,6 @@ type claudeSessionFile struct {
 	ProcStart string `json:"procStart"`
 	StartedAt int64  `json:"startedAt"` // unix ms, when Claude Code began: never before its process was created
 }
-
-// startSlack is how far a session file's startedAt may read before its process's creation and still be its own.
-const startSlack = 1000
 
 // parseSessionsByPID reads sessionsByPIDScript's answer.
 func parseSessionsByPID(out string, procs []Running, style rpath.Style) map[int]string {
@@ -163,10 +160,12 @@ func parseSessionsByPID(out string, procs []Running, style rpath.Style) map[int]
 	return found
 }
 
-// claudeSession is the session of a candidate file that is this very process's: its pid and its start time; for a
-// native Windows process its pid, its folder and a startedAt no older than the process; else, where a side does not
-// know the start, its pid and its folder. A file left by an ended process whose pid was given to another is not.
+// claudeSession is the session of a candidate file that is this very process's, its pid's: one whose procStart is
+// the process's start when both sides know it; else, when the process's start is known (to the millisecond on
+// Windows, to the second from ps), one of its folder that began no earlier; else one of its folder. A file left by an
+// ended process whose pid was given to another is not.
 func claudeSession(payload string, pid int, start, cwd string, style rpath.Style) string {
+	began, known := startedMS(start)
 	var byFolder string
 	for _, doc := range strings.Split(payload, script.GS) {
 		var file claudeSessionFile
@@ -174,20 +173,31 @@ func claudeSession(payload string, pid int, start, cwd string, style rpath.Style
 			continue
 		}
 		inFolder := cwd == "" || file.CWD == "" || style.Equal(file.CWD, cwd)
-		if created, native := strings.CutPrefix(start, "ms:"); native {
-			began, err := strconv.ParseInt(created, 10, 64)
-			if err == nil && file.StartedAt >= began-startSlack && inFolder {
-				return file.SessionID
-			}
-		} else if file.ProcStart != "" && start != "" {
+		switch {
+		case file.ProcStart != "" && start != "" && !strings.HasPrefix(start, "ms:"):
 			if strings.TrimSpace(file.ProcStart) == start {
 				return file.SessionID
 			}
-		} else if byFolder == "" && inFolder {
+		case known && file.StartedAt > 0:
+			if file.StartedAt >= began && inFolder {
+				return file.SessionID
+			}
+		case !strings.HasPrefix(start, "ms:") && byFolder == "" && inFolder:
 			byFolder = file.SessionID
 		}
 	}
 	return byFolder
+}
+
+// startedMS is the process's creation the script told, in unix ms: PowerShell's for a native Windows process, else
+// ps's lstart read in UTC, a second's floor that the true creation is never before.
+func startedMS(start string) (int64, bool) {
+	if created, native := strings.CutPrefix(start, "ms:"); native {
+		ms, err := strconv.ParseInt(created, 10, 64)
+		return ms, err == nil
+	}
+	at, err := time.Parse(time.ANSIC, start)
+	return at.UnixMilli(), err == nil
 }
 
 // heldThread is the thread of the person's conversation among the rollouts a Codex process holds open: the
