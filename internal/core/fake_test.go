@@ -330,3 +330,19 @@ func TestACallerSlowToEncodeHoldsUpNoOtherCall(t *testing.T) {
 		t.Fatalf("a call beside a slow encoder: %v", err)
 	}
 }
+
+func TestACallWhoseContextEndedEncodesNothing(t *testing.T) {
+	client := New(fakeCore("", func(core peer, frame sent) {
+		go core.reply(frame.id, `{"terminals":[]}`)
+	}))
+	defer client.Close()
+	if _, err := client.Hello(within(t, 5*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	ended, cancel := context.WithCancel(context.Background())
+	cancel()
+	never := make(slowParams) // its MarshalJSON would block for good
+	if err := client.Call(ended, "terminal.list", never, nil); !errors.Is(err, context.Canceled) {
+		t.Fatalf("a call cancelled before it began: %v", err)
+	}
+}

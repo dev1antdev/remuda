@@ -139,6 +139,9 @@ func (c *conn) call(ctx context.Context, method string, params, result any, bind
 	if params == nil {
 		params = struct{}{}
 	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	id := c.nextID.Add(1)
 	body, err := json.Marshal(request{JSONRPC: "2.0", ID: id, Method: method, Params: params}) // outside the lock: params may be anyone's Marshaler
 	if err != nil {
