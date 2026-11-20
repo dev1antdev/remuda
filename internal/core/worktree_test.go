@@ -96,8 +96,17 @@ func TestWorktreesAreMadeAndOpenedOnACoreMachineWhereHerdrPutsThem(t *testing.T)
 		t.Errorf("an existing branch in a folder of the caller's: on %q, labelled %q", got, again.Workspace.Label)
 	}
 
-	if _, err := adapter.WorktreeCreate(source, "feat/x", "", ""); err == nil || !strings.Contains(err.Error(), "git worktree add") {
-		t.Errorf("a branch checked out already was not refused in git's words: %v", err)
+	if _, err := adapter.WorktreeCreate(source, "kept", "main", ""); err == nil || !strings.Contains(err.Error(), "already exists") {
+		t.Errorf("a new branch from a base took over one that is there: %v", err)
+	}
+	if _, err := adapter.WorktreeCreateAt(source, "feat/x", "", "", filepath.Join(home, "second")); err == nil || !strings.Contains(err.Error(), "git worktree add") {
+		t.Errorf("a branch checked out elsewhere was not refused in git's words: %v", err)
+	}
+
+	git(t, repo, "worktree", "add", "-q", "-b", "half", filepath.Join(home, ".herdr", "worktrees", "app", "half"))
+	again2, err := adapter.WorktreeCreate(source, "half", "main", "")
+	if err != nil || again2.Worktree.Path != filepath.Join(home, ".herdr", "worktrees", "app", "half") {
+		t.Errorf("an earlier attempt's checkout at the very place was not taken as it is: %+v %v", again2, err)
 	}
 
 	byHand := filepath.Join(home, "by-hand")

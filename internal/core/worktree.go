@@ -39,19 +39,25 @@ func checkoutScript(folder string) string {
 	return script.PATH + "\n" + probeFunc + "probe " + script.Quote(folder) + "\n"
 }
 
-// addScript makes a worktree of the checkout at dir for the branch, the way herdr's worktree.create does: a branch that
-// exists is checked out, a new one starts at base (dir's HEAD when none), in path or herdr's place for it, named after
-// the repository's main folder. It prints "path <folder>" and the new checkout as probe reads it; git's own words when
-// it refuses.
+// addScript makes a worktree of the checkout at dir for the branch, in path or herdr's place for it, named after the
+// repository's main folder: with a base, the branch is new from it and git refuses one that is there already (so no
+// branch of the person's is taken over); without, a branch that exists is checked out, else it starts at dir's HEAD,
+// as herdr's worktree.create does. A checkout of this repository already on the branch at that very place — an earlier
+// attempt whose workspace did not open — is taken as it is. It prints "path <folder>" and the new checkout as probe
+// reads it; git's own words when it refuses.
 func addScript(dir, branch, base, path string) string {
 	return script.PATH + "\n" + probeFunc +
 		"cd " + script.Quote(dir) + " 2>/dev/null || { echo 'the workspace folder is not there'; exit 3; }\n" +
 		script.ReadGit + " rev-parse --show-toplevel >/dev/null 2>&1 || { echo 'the workspace folder is not a git checkout'; exit 3; }\n" +
-		"b=" + script.Quote(branch) + "; base=" + script.Quote(cmp.Or(base, "HEAD")) + "; p=" + script.Quote(path) + "\n" +
+		"b=" + script.Quote(branch) + "; base=" + script.Quote(base) + "; p=" + script.Quote(path) + "\n" +
 		`[ -n "$p" ] || p="$HOME/.herdr/worktrees/$(basename "$(` + script.MainFolder + `)")/"` + script.Quote(text.Slug(branch)) + "\n" +
-		`mkdir -p "$(dirname "$p")" || exit 4` + "\n" +
-		`if git show-ref -q --verify "refs/heads/$b"; then git worktree add -q "$p" "$b" 2>&1 || exit 5; ` +
-		`else git worktree add -q -b "$b" "$p" "$base" 2>&1 || exit 5; fi` + "\n" +
+		`common() { ` + script.ReadGit + ` -C "$1" rev-parse --path-format=absolute --git-common-dir 2>/dev/null; }` + "\n" +
+		`if [ "$(` + script.ReadGit + ` -C "$p" symbolic-ref -q --short HEAD 2>/dev/null)" = "$b" ] && [ "$(common "$p")" = "$(common .)" ]; then :` + "\n" +
+		`else mkdir -p "$(dirname "$p")" || exit 4` + "\n" +
+		`  if [ -n "$base" ]; then git worktree add -q -b "$b" "$p" "$base" 2>&1 || exit 5` + "\n" +
+		`  elif git show-ref -q --verify "refs/heads/$b"; then git worktree add -q "$p" "$b" 2>&1 || exit 5` + "\n" +
+		`  else git worktree add -q -b "$b" "$p" HEAD 2>&1 || exit 5; fi` + "\n" +
+		"fi\n" +
 		`echo "path $p"` + "\n" + `probe "$p"` + "\n"
 }
 
@@ -97,7 +103,7 @@ func (a *Adapter) WorktreeCreate(workspaceID, branch, base, label string) (*herd
 	return a.WorktreeCreateAt(workspaceID, branch, base, label, "")
 }
 
-// WorktreeCreateAt is WorktreeCreate in path, "" for herdr's place.
+// WorktreeCreateAt is WorktreeCreate in path, "" for herdr's place; a base makes the branch new (addScript).
 func (a *Adapter) WorktreeCreateAt(workspaceID, branch, base, label, path string) (*herdr.WorktreeCreateResult, error) {
 	dir, err := a.sourceDir(workspaceID)
 	if err != nil {
@@ -118,7 +124,7 @@ func (a *Adapter) WorktreeCreateAt(workspaceID, branch, base, label, path string
 	}
 	res, err := a.workspaceOn(folder, cmp.Or(label, rpath.For(folder).Base(folder)), tree)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("the worktree %s is made, but its workspace did not open (making it again opens it): %w", folder, err)
 	}
 	created := &herdr.WorktreeCreateResult{Workspace: res.Workspace, RootPane: res.RootPane}
 	created.Worktree.Path, created.Worktree.Branch = folder, branch

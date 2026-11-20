@@ -511,14 +511,19 @@ components and icons as rules for whoever changes it: @docs/design.md
   `worktree_parse_test.go`): the core knows no git, so the adapter runs it
   through the machine's shell (`NewAdapter`'s required `shell`, the machine
   itself; nil only in a test that makes no worktree). `WorktreeCreateAt` is
-  `addScript` in the source workspace's folder, as herdr's worktree.create:
-  a branch that exists checked out, a new one from base (else that folder's
-  HEAD), in the path given or herdr's place,
+  `addScript` in the source workspace's folder, as herdr's worktree.create
+  — without a base a branch that exists checked out, else a new one from
+  that folder's HEAD — but with a base the branch is new from it and git's
+  `-b` refuses one that is there already (no branch of the person's taken
+  over: an arena's lanes pass `HEAD`), in the path given or herdr's place,
   `~/.herdr/worktrees/<main folder's name>/<text.Slug of the branch>` (the
   root `worktrees.Root` names, so those made before and after the move lie
   together and Tidy, Leftovers and the remove dialog stand), git's last line
   when it refuses (`text.LastLine`, 10 min at most), then a workspace on it
-  labelled after its folder unless named; `WorktreeOpen` opens a workspace on
+  labelled after its folder unless named; a checkout of this repository
+  already on the branch at that very place — an earlier attempt whose
+  workspace did not open, which the error names — is taken as it is, so
+  making it again opens it; `WorktreeOpen` opens a workspace on
   a checkout, refusing a folder outside git, and answers one open on it
   already as herdr's `already_open` (`AlreadyOpen`, its pane in front,
   `frontPane`) from the mirror — the route's own look reads the watcher's
@@ -4912,7 +4917,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   (herdr's `worktree.create` from `origin/<b>`, then `git branch
   --set-upstream-to`), a pull request's head not fetched yet fetched first
   (`+refs/heads/<h>:refs/remotes/origin/<h>`; a fork's as
-  `+refs/pull/N/head:refs/heads/<b>`, a local branch tracking nothing,
+  `refs/pull/N/head:refs/heads/<b>`, never forced, so a branch of that name
+  made meanwhile is not overwritten, a local branch tracking nothing,
   under any name the person gives a fork's pull request and by default
   `pr-<N>-<head>` — `ForkBranch`, the page's `forkBranch`: a fork's head
   named `main` is not this repository's main, which a bare head opened),
@@ -6115,7 +6121,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   state dir, the newest `Keep` 30. `Service.Start` answers at once with
   every lane starting and makes them one after another in the
   background: herdr's `worktree.create` (on a remuda-core machine the core
-  adapter's git script, `internal/core/worktree.go`) off the lane's workspace on
+  adapter's git script, `internal/core/worktree.go`, which with the lane's
+  base `HEAD` refuses a branch of that name already there rather than take
+  it over and delete it on Keep) off the lane's workspace on
   branch `arena-<arena>-<lane>`, the commit it stands on noted as the
   lane's `Base`, the agent through `sessions.StartAgentWith` with the
   model, a task's run through `tasks.StartRun` when it is a task's

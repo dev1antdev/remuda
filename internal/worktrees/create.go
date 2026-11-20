@@ -102,7 +102,7 @@ func MakePlan(src repos.Source, branch, base string, pick Pick) (Plan, error) {
 		return plan, nil
 	}
 	if forkHead {
-		plan.Action, plan.Fetch = "local", "+refs/pull/"+strconv.Itoa(prNumber)+"/head:refs/heads/"+branch
+		plan.Action, plan.Fetch = "local", "refs/pull/"+strconv.Itoa(prNumber)+"/head:refs/heads/"+branch // never forced: a branch made meanwhile is not overwritten
 		return plan, nil
 	}
 	if headPicked && branch == head {
