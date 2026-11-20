@@ -105,3 +105,73 @@ func TestStreamsAskingForTheSameWatchesShareOneFeed(t *testing.T) {
 		t.Fatalf("a closed feed is not joined again: %d opened", n)
 	}
 }
+
+// Feeds tell their standing rows at once, before the stream they open for is handed back: a stream holds them all.
+func TestAStreamHoldsEveryStandingRowItsFeedsTellAsTheyOpen(t *testing.T) {
+	const panes, perWatch = 60, 40
+	var mu sync.Mutex
+	var core peer
+	opened := 0
+	client := New(fakeCore(`"output_watches"`, func(c peer, frame sent) {
+		switch {
+		case frame.method == "events.subscribe" && bytes.Contains(frame.payload, []byte(outputOnly)):
+			mu.Lock()
+			opened++
+			n := opened
+			core = c
+			mu.Unlock()
+			channel := uint32(3 + n)
+			if n == panes {
+				time.Sleep(250 * time.Millisecond) // the last reply late, the rows before it all told
+			}
+			c.reply(frame.id, fmt.Sprintf(`{"seq":1,"terminals":[],"channel":%d}`, channel))
+			for watch := 0; watch < 2; watch++ {
+				for row := 0; row < perWatch; row++ {
+					c.write(channel, frameData, fmt.Appendf(nil, `{"jsonrpc":"2.0","method":"event","params":{"seq":2,"type":"output","data":{"watch":"%d","line":"FAIL %d","fresh":true}}}`+"\n", watch, row))
+				}
+			}
+		case frame.method == "events.subscribe":
+			c.reply(frame.id, `{"seq":1,"terminals":[{"address":"t1","state":"live"}],"channel":3}`)
+		case frame.method == "doc.get":
+			c.reply(frame.id, `{"value":null,"version":0}`)
+		}
+	}))
+	t.Cleanup(func() { client.Close() })
+	adapter := NewAdapter(client, AdapterHooks{})
+	t.Cleanup(func() { adapter.Close() })
+	if _, err := adapter.SessionSnapshot(); err != nil {
+		t.Fatal(err)
+	}
+	var subs []herdr.Subscription
+	for pane := 1; pane <= panes; pane++ {
+		for _, value := range []string{"FAIL", "AIL"} {
+			subs = append(subs, herdr.Subscription{Type: herdr.EventOutputMatched, PaneID: fmt.Sprintf("t%d", pane), Match: &herdr.OutputMatch{Type: "substring", Value: value}, Lines: perWatch})
+		}
+	}
+	stream, err := adapter.Subscribe(subs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { stream.Close() })
+	mu.Lock()
+	core.write(4, frameData, []byte(`{"jsonrpc":"2.0","method":"event","params":{"seq":3,"type":"output","data":{"watch":"0","line":"FAIL live","fresh":false}}}`+"\n"))
+	mu.Unlock()
+	standing, live := 0, 0
+	for standing < panes*2*perWatch || live == 0 {
+		ev, err := stream.Next()
+		if err != nil {
+			t.Fatalf("after %d standing rows and %d live the stream ended: %v", standing, live, err)
+		}
+		if ev.Kind != herdr.EventOutputMatched {
+			continue
+		}
+		if ev.Standing != nil && !*ev.Standing {
+			live++
+		} else {
+			standing++
+		}
+	}
+	if standing != panes*2*perWatch || live != 1 {
+		t.Fatalf("%d standing rows and %d live, want %d and 1", standing, live, panes*2*perWatch)
+	}
+}

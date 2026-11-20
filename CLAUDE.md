@@ -415,7 +415,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   `statusOf` takes the program's own word, `error` read as done; the session
   comes through `SessionOf` (Core 16 wires it; nil, none). Output watches go
   in **feeds** (`feeds.go`, tested on a fake: shared, closed with the last
-  stream, opened again after): one core subscription per pane's watches,
+  stream, opened again after, and sixty panes' 4,800 standing rows told as
+  their feeds open, all held: a stream holds `maxQueued` 4096 events plus
+  every row its watches could tell at once, the sum of their `lines`): one
+  core subscription per pane's watches,
   filtered by a label no terminal carries (`outputOnly`), shared by every
   stream asking for the same ones — the watcher's swap joins the feed that
   stands instead of subscribing again, so the core does not tell the rows

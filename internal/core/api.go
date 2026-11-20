@@ -15,8 +15,9 @@ import (
 // callWithin bounds one request the adapter sends on the watcher's or a handler's behalf, as herdr's client does.
 const callWithin = 10 * time.Second
 
-// maxQueued is the events a stream holds for a reader that fell behind; past it the stream ends as herdr's does,
-// with events_lost, and the reader takes a snapshot.
+// maxQueued is the events a stream holds for a reader that fell behind, on top of every row its output watches could
+// tell at once as their feeds open; past it the stream ends as herdr's does, with events_lost, and the reader takes a
+// snapshot.
 const maxQueued = 4096
 
 // outputOnly is a label no terminal carries: the subscription that holds a stream's output watches filters every
@@ -28,6 +29,7 @@ const outputOnly = "remuda.output-only"
 type eventStream struct {
 	adapter *Adapter
 	wake    bell
+	room    int     // the events it holds: maxQueued and the rows its watches could tell at once
 	feeds   []*feed // the adapter's feedMu guards it
 
 	mu    sync.Mutex
@@ -38,7 +40,7 @@ type eventStream struct {
 // Subscribe opens a stream: every change of the machine, whatever the subscriptions name, and the output matches they
 // ask for. A refusal of the watches is herdr's (invalid_regex, pane_not_found).
 func (a *Adapter) Subscribe(subs []herdr.Subscription) (herdr.EventStream, error) {
-	s := &eventStream{adapter: a, wake: make(bell, 1)}
+	s := &eventStream{adapter: a, wake: make(bell, 1), room: maxQueued}
 	var panes []string
 	watches := map[string][]OutputWatch{}
 	for _, sub := range subs {
@@ -49,7 +51,12 @@ func (a *Adapter) Subscribe(subs []herdr.Subscription) (herdr.EventStream, error
 			panes = append(panes, sub.PaneID)
 		}
 		id := strconv.Itoa(len(watches[sub.PaneID]))
-		watches[sub.PaneID] = append(watches[sub.PaneID], OutputWatch{ID: id, Terminal: sub.PaneID, Match: Match{Type: sub.Match.Type, Value: sub.Match.Value}, Lines: min(sub.Lines, 200)})
+		lines := min(sub.Lines, 200)
+		if lines <= 0 {
+			lines = 40 // the core's default
+		}
+		watches[sub.PaneID] = append(watches[sub.PaneID], OutputWatch{ID: id, Terminal: sub.PaneID, Match: Match{Type: sub.Match.Type, Value: sub.Match.Value}, Lines: lines})
+		s.room += lines
 	}
 	if err := a.join(s, panes, watches); err != nil {
 		return nil, err
@@ -97,7 +104,7 @@ func (s *eventStream) Close() error {
 func (s *eventStream) push(ev herdr.Event) {
 	s.mu.Lock()
 	if s.err == nil {
-		if len(s.queue) < maxQueued {
+		if len(s.queue) < s.room {
 			s.queue = append(s.queue, ev)
 		} else {
 			s.queue, s.err = nil, &herdr.Error{Code: herdr.ErrEventsLost, Message: "the reader fell behind"}
