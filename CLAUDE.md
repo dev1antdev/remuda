@@ -281,6 +281,44 @@ components and icons as rules for whoever changes it: @docs/design.md
   `PaneInfo.Tokens` / `StateLabels`, `WorkspaceInfo.Tokens` (every
   source's, the newest per name) and `Snapshot.FocusedTabID`. Never
   `title` or `display_agent`: remuda reads both back as the pane's own.
+- `internal/core/` — **the client of remuda-core** (dev1antdev/remuda-core,
+  our clone of herdr-core; its protocol in its `schema/README.md`, generation
+  1), which is to take herdr's place on the machines; nothing uses it yet
+  (the machines, Core 13; the snapshot, Core 12). `core.New(dial)` is one
+  core: a `Dialer` gives a fresh `net.Conn` (the socket here, `ssh host
+  remuda-core connect` over a master there), dialled when first needed and
+  again after it ended. `hello {generation, framed: true}` in plain mode, then
+  frames `[channel u32 LE][kind u8][len u32 LE]`: calls on channel 0 go side
+  by side (`Call` and the typed `Run`, `List`, `Get`, `Kill`, `Label`, `Read`
+  — `format` "vt" keeps the colours — `Send`, `Keys` with `now`, `Interrupt`,
+  `Wait`, `DocGet` / `DocSet` with the version, `Status`); a refusal is
+  `*core.Error` (`IsKind(err, "not_found")`), a connection lost or never made
+  a `*TransportError` (`IsTransport`), which ends every call in flight, stream
+  and subscription of that connection. `Attach` is a `Stream` on a channel of
+  its own: `Read` the first paint then the live bytes, sending CREDIT for what
+  it handed out (one nobody reads holds up nothing else: the core sends a
+  stream 256 KiB ahead at most), RESIZE frames handed to `Resized` in order
+  with them, `Write` keys, `Resize`, `Focus`, `Close`, `Ended` (the core's
+  CLOSE reason: `exited` and its code, `killed`, …); `keep_size` only toward a
+  core that lists it in `Hello.Features`. `Subscribe` is a `Subscription`:
+  the snapshot (`Seq`, `Terminals`), then `Next` hands out notices — `event`
+  (`Event{Type, Terminal, Machine, Data}`), `heartbeat`, `missed` with a fresh
+  snapshot — dropping events the snapshot already covers; its channel is open
+  before its reply arrives, so frames for a channel not named yet are kept
+  while a subscribe is in flight (`orphans`); a line cut across frames is
+  joined, its bytes credited as they come and the whole line when it is
+  taken; output watches only toward a core with `output_watches`. Tested on a
+  throwaway core (`coretest.Server`: `RC_BIN` or `remuda-core` on PATH, else
+  skipped; `serve` started as the test's own child with its own
+  `RC_SESSION`, `RC_SOCKET`, XDG folders and HOME, `RC_LAUNCHD_DIRECT` so
+  macOS does not hand it to launchd, `RC_HEARTBEAT_MS` 300, stopped through
+  `server.stop`) — calls side by side, a refusal's kind, documents, an
+  attach's echo and exit code, a stream nobody reads beside a live one, events
+  and an output watch, a severed connection — and on a fake over a pipe
+  (events before the reply, a cut line, missed). CI's check job installs
+  release remuda-v0.2.0 against its `checksums.txt`. Never start a core for a
+  test any other way: one without its own `RC_SOCKET` and XDG folders reaches
+  the person's.
 - `internal/sshx/` — one OpenSSH `ControlMaster` per host (BatchMode: fail,
   never prompt; sshd's MaxSessions is 10 by default, so every session takes
   one of 9 places first (`Conn.enter`, `sessionCount`), waiting within its
