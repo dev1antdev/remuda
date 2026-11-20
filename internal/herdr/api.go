@@ -5,7 +5,6 @@ import "time"
 // API is a machine's herdr as remuda asks it: its snapshot, its event stream and every request remuda sends. *Client
 // is herdr's own; remuda-core's adapter is the other, so the packages that ask a machine never name either.
 type API interface {
-	Ping() (version string, protocol int, err error)
 	SessionSnapshot() (*Snapshot, error)
 	Subscribe(subs []Subscription) (Events, error)
 	Bridged() bool
