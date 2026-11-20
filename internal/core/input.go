@@ -144,13 +144,13 @@ func (a *Adapter) StagePrompt(target, text string, front int, asMessage bool) (i
 	if err != nil {
 		return 0, nil, err
 	}
-	agent, err := agentIn(&t, target)
-	if err != nil {
-		return 0, nil, err
-	}
 	pid := pidIn(&t)
 	if front != 0 && pid != 0 && pid != front {
 		return 0, nil, agentLeft(target)
+	}
+	agent, err := agentIn(&t, target)
+	if err != nil {
+		return 0, nil, err
 	}
 	if front == 0 {
 		front = pid // the agent this look first saw is the one it is for, to the end of the look
@@ -171,14 +171,14 @@ func (a *Adapter) StagePrompt(target, text string, front int, asMessage bool) (i
 	if err := cn.call(ctx, "terminal.get", map[string]any{"terminal": target}, &now, nil); err != nil {
 		return pid, nil, a.refusal(err, "agent_not_found")
 	}
-	if agentOf(&now) != agent {
-		return pid, nil, &herdr.Error{Code: "agent_not_found", Message: "the agent in " + target + " has left"}
-	}
 	if pidIn(&now) != 0 {
 		pid = pidIn(&now)
 	}
 	if front != 0 && pid != 0 && pid != front {
 		return 0, nil, agentLeft(target)
+	}
+	if agentOf(&now) != agent {
+		return pid, nil, &herdr.Error{Code: "agent_not_found", Message: "the agent in " + target + " has left"}
 	}
 	if now.Status == nil {
 		return pid, nil, &herdr.Error{Code: "agent_not_ready", Message: "the agent in " + target + " cleared its status, as one leaving does: nothing was sent"}
@@ -191,7 +191,7 @@ func (a *Adapter) StagePrompt(target, text string, front int, asMessage bool) (i
 		return pid, nil, &herdr.Error{Code: "agent_blocked", Message: "the agent in " + target + " asks something: answer it first, nothing was sent"}
 	case herdr.StatusWorking:
 		if !asMessage {
-			return pid, nil, &herdr.Error{Code: "agent_not_ready", Message: "the agent in " + target + " is at work, and this prompt is for it at rest: nothing was sent"}
+			return pid, nil, agentWorking(target)
 		}
 	}
 	call := func(ctx context.Context, method string, params, result any) error {
@@ -214,9 +214,10 @@ func (a *Adapter) sendTo(call caller, target, text, agent string, now Terminal, 
 		if left != nil {
 			return left
 		}
-		if asMessage || statusOf(&again) != herdr.StatusWorking {
-			err = sendAs(call, target, text, &again, asMessage)
+		if !asMessage && statusOf(&again) == herdr.StatusWorking {
+			return agentWorking(target)
 		}
+		err = sendAs(call, target, text, &again, asMessage)
 	}
 	return a.inputRefusal(err, "agent_not_ready", "agent_blocked")
 }
@@ -224,16 +225,17 @@ func (a *Adapter) sendTo(call caller, target, text, agent string, now Terminal, 
 // sendAs is the send naming the status it saw unless the agent works (`if`), so a send that waited while the agent
 // moved — cleared its status on its way out, or started a turn a person's draft set off — is refused untyped
 // (status_mismatch); only the person's own message goes to an agent at work, naming nothing, since a turn takes it
-// as a message and one ending as it goes would refuse it. A core whose `if` names idle and working alone refuses any
-// other word before it types (invalid_params): the person's message then goes without it, and a prompt for the agent
-// at rest — done, say — is refused, since nothing would keep it out of a turn a person's draft started.
+// as a message and one ending as it goes would refuse it. A core whose `if` names idle and working alone (before Core
+// 41's send_if_any_status) refuses any other word before it types (invalid_params): the person's message then goes
+// without it, and a prompt for the agent at rest — done, say — is refused, since nothing would keep it out of a turn a
+// person's draft started.
 func sendAs(call caller, target, text string, now *Terminal, asMessage bool) error {
 	state := now.Status.State
 	named := state != "" && statusOf(now) != herdr.StatusWorking
 	err := sendPrompt(call, target, text, now, named)
 	if named && state != herdr.StatusIdle && IsKind(err, "invalid_params") {
 		if !asMessage {
-			return &herdr.Error{Code: "agent_not_ready", Message: "this remuda-core holds a prompt only for an agent idle or at work, not " + state + ": nothing was sent to " + target}
+			return &herdr.Error{Code: "invalid_request", Message: "this remuda-core holds a prompt only for an agent idle or at work, not " + state + ": nothing was sent to " + target}
 		}
 		err = sendPrompt(call, target, text, now, false)
 	}
@@ -272,6 +274,11 @@ func pidIn(t *Terminal) int {
 		return 0
 	}
 	return t.Foreground.Pid
+}
+
+// agentWorking refuses a prompt for an agent at rest to one at work: it waits for the agent's next rest.
+func agentWorking(target string) error {
+	return &herdr.Error{Code: "agent_working", Message: "the agent in " + target + " is at work, and this prompt is for it at rest: nothing was sent"}
 }
 
 func agentLeft(target string) error {

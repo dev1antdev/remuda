@@ -203,7 +203,8 @@ func exitBehindATurn(t *testing.T, from string) {
 	if _, err := person.Write([]byte("\r")); err != nil {
 		t.Fatal(err)
 	}
-	if err := waitFor(t, sent); !herdr.IsCode(err, "agent_not_ready") {
+	// at work by then, or, from done, a core whose `if` names idle and working alone: nothing sent either way
+	if err := waitFor(t, sent); !herdr.IsCode(err, "agent_working") && !herdr.IsCode(err, "invalid_request") {
 		t.Fatalf("a prompt for an agent at rest, behind a turn the person started: %v", err)
 	}
 	eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Pane(pane).AgentStatus == herdr.StatusIdle })
@@ -218,7 +219,7 @@ func TestAPromptForAnAgentAtRestWaitsOutItsTurn(t *testing.T) {
 	client, adapter, pane := idleAgent(t)
 	typing(t, client, pane, "slow\r")
 	eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Pane(pane).AgentStatus == herdr.StatusWorking })
-	if err := adapter.AgentPrompt(pane, "exit-at-work"); !herdr.IsCode(err, "agent_not_ready") {
+	if err := adapter.AgentPrompt(pane, "exit-at-work"); !herdr.IsCode(err, "agent_working") {
 		t.Fatalf("a prompt for an agent at rest, to one at work: %v", err)
 	}
 	eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Pane(pane).AgentStatus == herdr.StatusIdle })

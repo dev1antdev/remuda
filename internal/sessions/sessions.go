@@ -420,12 +420,15 @@ var ErrNoAgent = errors.New("no agent is ready in that pane; nothing was sent")
 // Enter; the text may sit in the input line of whatever runs there now, the shell included.
 var ErrNotSubmitted = errors.New("your message was pasted into the terminal but not submitted: the agent left its front as it went, so no Enter was pressed — look at the terminal and clear the line before pressing Enter there")
 
-// refused words a client's refusal of a prompt for the person: the agent asking something, none up to take it (or the
-// one looked at gone from the front, agent_left), or a paste left unsubmitted.
+// refused words a client's refusal of a prompt for the person: the agent asking something, at work while the prompt is
+// for it at rest (a schedule skips that run), none up to take it (or the one looked at gone from the front,
+// agent_left), or a paste left unsubmitted.
 func refused(err error) error {
 	switch {
 	case herdr.IsCode(err, "agent_blocked"):
 		return ErrAgentBusy
+	case herdr.IsCode(err, "agent_working"):
+		return ErrAgentWorking
 	case herdr.IsCode(err, "agent_not_found"), herdr.IsCode(err, "agent_not_ready"), herdr.IsCode(err, "agent_left"):
 		return ErrNoAgent
 	case herdr.IsCode(err, "not_submitted"):
@@ -467,7 +470,7 @@ func (in *Input) FirstPrompt(client Prompter, ref events.PaneRef, text string, t
 		switch {
 		case err == nil:
 			return nil
-		case herdr.IsCode(err, "agent_not_ready") || herdr.IsCode(err, "agent_not_found") || herdr.IsCode(err, "agent_blocked"):
+		case herdr.IsCode(err, "agent_not_ready") || herdr.IsCode(err, "agent_not_found") || herdr.IsCode(err, "agent_working") || herdr.IsCode(err, "agent_blocked"):
 			last = err
 		default:
 			return refused(err)

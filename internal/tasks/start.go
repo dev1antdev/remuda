@@ -160,7 +160,7 @@ func (l *Launcher) deliver(mc *machines.Machine, client herdr.API, run Run, task
 		case err == nil:
 			_ = l.Store.SetRun(run.ID, RunRunning, "")
 			return
-		case herdr.IsCode(err, "agent_not_ready") || herdr.IsCode(err, "agent_not_found"):
+		case herdr.IsCode(err, "agent_not_ready") || herdr.IsCode(err, "agent_not_found") || herdr.IsCode(err, "agent_working"):
 			last = err
 		case herdr.IsCode(err, "agent_blocked"):
 			last = err

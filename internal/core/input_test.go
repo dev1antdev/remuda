@@ -208,13 +208,13 @@ func TestASendRefusedUntypedIsReadAgain(t *testing.T) {
 	}{
 		{"a short turn from idle", "idle", false, []error{untyped, nil}, claudeAt(5, "idle"), "", []string{"idle", "idle"}},
 		{"a short turn from done", "done", false, []error{untyped, nil}, claudeAt(5, "done"), "", []string{"done", "done"}},
-		{"a turn from done, anyone else's", "done", false, []error{untyped}, claudeAt(5, "working"), "agent_not_ready", []string{"done"}},
-		{"a turn from idle, anyone else's", "idle", false, []error{untyped}, claudeAt(5, "working"), "agent_not_ready", []string{"idle"}},
+		{"a turn from done, anyone else's", "done", false, []error{untyped}, claudeAt(5, "working"), "agent_working", []string{"done"}},
+		{"a turn from idle, anyone else's", "idle", false, []error{untyped}, claudeAt(5, "working"), "agent_working", []string{"idle"}},
 		{"a turn from done, the person's message", "done", true, []error{untyped, nil}, claudeAt(5, "working"), "", []string{"done", ""}},
 		{"a turn from idle, the person's message", "idle", true, []error{untyped, nil}, claudeAt(5, "working"), "", []string{"idle", ""}},
 		{"another agent in front", "idle", true, []error{untyped}, claudeAt(9, "working"), "agent_left", []string{"idle"}},
 		{"the agent leaving", "done", false, []error{untyped}, claudeAt(5, ""), "agent_left", []string{"done"}},
-		{"done, a core naming idle alone, anyone else's", "done", false, []error{unnamed}, Terminal{}, "agent_not_ready", []string{"done"}},
+		{"done, a core naming idle alone, anyone else's", "done", false, []error{unnamed}, Terminal{}, "invalid_request", []string{"done"}},
 		{"done, a core naming idle alone, the person's message", "done", true, []error{unnamed, nil}, Terminal{}, "", []string{"done", ""}},
 	} {
 		core := &scripted{sends: c.sends, gets: []Terminal{c.again}}

@@ -197,7 +197,7 @@ func (s *Service) deliver(mc *machines.Machine, client herdr.API, a Arena, laneI
 		case err == nil:
 			s.settle(a.ID, laneID, LaneRunning, "")
 			return
-		case herdr.IsCode(err, "agent_not_ready") || herdr.IsCode(err, "agent_not_found"):
+		case herdr.IsCode(err, "agent_not_ready") || herdr.IsCode(err, "agent_not_found") || herdr.IsCode(err, "agent_working"):
 			last = err
 		case herdr.IsCode(err, "agent_blocked"):
 			last = err

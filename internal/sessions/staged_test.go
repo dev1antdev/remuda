@@ -64,6 +64,8 @@ func (h *holder) StagePrompt(_, text string, front int, asMessage bool) (int, fu
 	return pid, func() error {
 		<-h.sends
 		h.note("sent:" + text)
+		h.mu.Lock()
+		defer h.mu.Unlock()
 		return h.sendErr
 	}, nil
 }
@@ -294,5 +296,32 @@ func TestAHandOffNamingAPictureGetsNoEnterAfterIt(t *testing.T) {
 	submitted := &paper{agent: claudeAgent, status: []string{statusBlocked}, screens: []string{busyFoot}}
 	if err := NewInput(nil, nil).Submit(submitted, onePane, review); !errors.Is(err, ErrAskedMeanwhile) {
 		t.Fatalf("the person's own message: %v", err)
+	}
+}
+
+// A prompt for an agent at rest refused because the agent is at work is ErrAgentWorking, which a schedule skips
+// quietly, and a first prompt waits it out.
+func TestAPromptForAnAgentAtRestFindingItAtWorkWaits(t *testing.T) {
+	h, in := newHolder(), NewInput(nil, nil)
+	h.sendErr = &herdr.Error{Code: "agent_working", Message: "at work"}
+	h.sends <- struct{}{}
+	if err := in.SubmitToAgent(h, onePane, "a schedule's"); !errors.Is(err, ErrAgentWorking) {
+		t.Fatalf("a schedule's prompt to an agent at work: %v", err)
+	}
+	retry := FirstPromptRetry
+	FirstPromptRetry = time.Millisecond
+	t.Cleanup(func() { FirstPromptRetry = retry })
+	h.sends <- struct{}{}
+	go func() {
+		for !slices.Contains(h.seen(), "sent:the first") {
+			time.Sleep(time.Millisecond)
+		}
+		h.mu.Lock()
+		h.sendErr = nil
+		h.mu.Unlock()
+		h.sends <- struct{}{}
+	}()
+	if err := in.FirstPrompt(h, onePane, "the first", time.Minute); err != nil {
+		t.Fatalf("a first prompt waiting out a turn: %v", err)
 	}
 }
