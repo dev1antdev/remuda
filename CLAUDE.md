@@ -587,7 +587,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   one matched by its folder alone; only
   regular files are read, a FIFO never holds the script; a file
   counts only when its `procStart` is the process's `LC_ALL=C TZ=UTC ps -o
-  lstart`, or, where either side lacks it — Windows, not checked there yet —
+  lstart`, or, where either side lacks it — Windows, where `tasklist` says a
+  native process lives (CI's Windows job proves it) —
   when its folder is the pane's), Codex's thread id from the
   `rollout-*.jsonl` of the person's thread (its `session_meta` names no
   subagent) the process, else a child of it, holds open (`/proc/<pid>/fd`,

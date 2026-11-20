@@ -39,7 +39,8 @@ func (r *Reader) SessionsOf(procs []Running) (map[int]string, error) {
 }
 
 // sessionsByPIDScript prints a record per process: pid, agent, the process's start as Claude Code records it
-// (`ps -o lstart` in UTC; "" for a live process whose start ps does not tell, "-" for one gone), then for Claude
+// (`ps -o lstart` in UTC; "" for a live process whose start ps does not tell — `kill -0`, or Windows' `tasklist`
+// for a native process Git Bash's own tools do not see — "-" for one gone), then for Claude
 // Code the text of every candidate session file (the environment's folders, a relative one from the process's
 // folder, then the default), each ended by GS, or, for Codex, a line per open rollout:
 // the pid holding it, whether its session_meta is the person's thread (1) or a subagent's (0), the thread id that
@@ -58,7 +59,7 @@ func sessionsByPIDScript(procs []Running) string {
 	return `PATH="$PATH:/usr/sbin:/sbin"
 s() {
   start=$(LC_ALL=C TZ=UTC ps -o lstart= -p "$1" 2>/dev/null)
-  [ -n "$start" ] || kill -0 "$1" 2>/dev/null || start=-
+  [ -n "$start" ] || kill -0 "$1" 2>/dev/null || tasklist //FI "PID eq $1" //NH //FO CSV 2>/dev/null | grep -q ",\"$1\"," || start=-
   printf '%s\037%s\037%s\037' "$1" "$2" "$start"
   if [ "$2" = claude ]; then
     {
