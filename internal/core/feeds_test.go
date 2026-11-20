@@ -31,7 +31,7 @@ func TestStreamsAskingForTheSameWatchesShareOneFeed(t *testing.T) {
 		}
 	}))
 	t.Cleanup(func() { client.Close() })
-	adapter := NewAdapter(client, AdapterHooks{})
+	adapter := NewAdapter(client, nil, AdapterHooks{})
 	t.Cleanup(func() { adapter.Close() })
 	if _, err := adapter.SessionSnapshot(); err != nil {
 		t.Fatal(err)
@@ -135,7 +135,7 @@ func TestAStreamHoldsEveryStandingRowItsFeedsTellAsTheyOpen(t *testing.T) {
 		}
 	}))
 	t.Cleanup(func() { client.Close() })
-	adapter := NewAdapter(client, AdapterHooks{})
+	adapter := NewAdapter(client, nil, AdapterHooks{})
 	t.Cleanup(func() { adapter.Close() })
 	if _, err := adapter.SessionSnapshot(); err != nil {
 		t.Fatal(err)
@@ -199,7 +199,7 @@ func TestAnEditedRuleLeavesTheOtherWatchesFeedsStanding(t *testing.T) {
 		}
 	}))
 	t.Cleanup(func() { client.Close() })
-	adapter := NewAdapter(client, AdapterHooks{})
+	adapter := NewAdapter(client, nil, AdapterHooks{})
 	t.Cleanup(func() { adapter.Close() })
 	if _, err := adapter.SessionSnapshot(); err != nil {
 		t.Fatal(err)
@@ -262,7 +262,7 @@ func TestWatchesTheCoreNeverAnswersEndAfterOneSilenceOrTheAdaptersClose(t *testi
 			}
 		}))
 		t.Cleanup(func() { client.Close() })
-		adapter := NewAdapter(client, AdapterHooks{})
+		adapter := NewAdapter(client, nil, AdapterHooks{})
 		if _, err := adapter.SessionSnapshot(); err != nil {
 			t.Fatal(err)
 		}
@@ -327,7 +327,7 @@ func TestASlowCoreThatKeepsAnsweringOpensEveryWatch(t *testing.T) {
 		}
 	}))
 	t.Cleanup(func() { client.Close() })
-	adapter := NewAdapter(client, AdapterHooks{})
+	adapter := NewAdapter(client, nil, AdapterHooks{})
 	t.Cleanup(func() { adapter.Close() })
 	if _, err := adapter.SessionSnapshot(); err != nil {
 		t.Fatal(err)
@@ -369,7 +369,7 @@ func TestARefusedRegexEndsTheJoinWithoutWaitingForTheRest(t *testing.T) {
 		}
 	}))
 	t.Cleanup(func() { closes.Wait(); client.Close() })
-	adapter := NewAdapter(client, AdapterHooks{})
+	adapter := NewAdapter(client, nil, AdapterHooks{})
 	t.Cleanup(func() { adapter.Close() })
 	if _, err := adapter.SessionSnapshot(); err != nil {
 		t.Fatal(err)

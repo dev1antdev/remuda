@@ -15,6 +15,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/rpath"
 	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/shell"
+	"github.com/dev1antdev/remuda/internal/text"
 )
 
 // LeftoverTimeout is how long the look over a machine's worktrees may take: du walks every folder.
@@ -60,15 +61,15 @@ func Tidy(host shell.Shell, folder string, landed []Landed) Outcome {
 		out.Kept = "uncommitted changes (" + info.Dirty + ")"
 		return out
 	}
-	text, err := shell.Text(host, RemoveScript(info, landed), Timeout)
+	said, err := shell.Text(host, RemoveScript(info, landed), Timeout)
 	var exit *shell.ExitError
 	switch {
 	case err == nil:
 		out.Removed, out.BranchDeleted = true, info.Branch != ""
 	case errors.As(err, &exit) && exit.Code == 5:
-		out.Removed, out.BranchKept = true, lastLine(text, err.Error())
+		out.Removed, out.BranchKept = true, text.LastLine(said, err.Error())
 	default:
-		out.Kept = lastLine(text, err.Error())
+		out.Kept = text.LastLine(said, err.Error())
 	}
 	return out
 }
@@ -146,7 +147,7 @@ func Leftovers(host shell.Host, open []string) ([]Leftover, error) {
 	root := Root(host.Home())
 	out, err := shell.Text(host, LeftoversScript(rpath.For(root).Slash(root)), LeftoverTimeout)
 	if err != nil {
-		return nil, errors.New(lastLine(out, err.Error()))
+		return nil, errors.New(text.LastLine(out, err.Error()))
 	}
 	return ParseLeftovers(root, out, open), nil
 }

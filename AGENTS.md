@@ -149,7 +149,12 @@ not style.
   repository's own hooks skipped) only on the one commit or push the
   person picked it for, never remembered; git's own words shown
   when it fails; the secret check before a commit and a push, hooks
-  skipped or not. Every read
+  skipped or not. **A new worktree and its branch** are herdr's to make
+  on a herdr machine; on a remuda-core machine (and in teleport) remuda
+  makes them itself with git where herdr did (`internal/core/worktree.go`:
+  `git worktree add`, a new branch from its base), for the same callers
+  and only where a herdr machine would make one — never forced, never
+  over a folder that is there. Every read
   that diffs or lists a checkout runs `git --no-optional-locks -c
   core.fsmonitor=false -c diff.autoRefreshIndex=false` (`script.ReadGit`;
   `script/readtest` checks a script for it), so a look never touches the

@@ -32,7 +32,7 @@ func TestACoreThatFallsSilentIsDialledAgainAndItsMirrorDropped(t *testing.T) {
 	})
 	defer client.Close()
 	var lost atomic.Int32
-	adapter := NewAdapter(client, AdapterHooks{TransportError: func(error) { lost.Add(1) }})
+	adapter := NewAdapter(client, nil, AdapterHooks{TransportError: func(error) { lost.Add(1) }})
 	defer adapter.Close()
 	if snap, err := adapter.SessionSnapshot(); err != nil || len(snap.Panes) != 1 {
 		t.Fatalf("first snapshot %+v %v", snap, err)
@@ -126,7 +126,7 @@ func outputStream(t *testing.T, tell func(peer)) herdr.EventStream {
 		}
 	}))
 	t.Cleanup(func() { client.Close() })
-	adapter := NewAdapter(client, AdapterHooks{})
+	adapter := NewAdapter(client, nil, AdapterHooks{})
 	t.Cleanup(func() { adapter.Close() })
 	if _, err := adapter.SessionSnapshot(); err != nil {
 		t.Fatal(err)
@@ -142,7 +142,7 @@ func outputStream(t *testing.T, tell func(peer)) herdr.EventStream {
 func TestACoreOlderThanRemudaNeedsIsRefused(t *testing.T) {
 	client := New(fakeCore(`"events","keep_size"`, func(peer, sent) {}))
 	defer client.Close()
-	adapter := NewAdapter(client, AdapterHooks{})
+	adapter := NewAdapter(client, nil, AdapterHooks{})
 	defer adapter.Close()
 	start := time.Now()
 	if _, err := adapter.SessionSnapshot(); !IsKind(err, "needs_update") || time.Since(start) > 5*time.Second {
@@ -177,7 +177,7 @@ func TestAReadNeverReachesAnOlderCoreDialledSince(t *testing.T) {
 		return older(ctx)
 	})
 	defer client.Close()
-	adapter := NewAdapter(client, AdapterHooks{})
+	adapter := NewAdapter(client, nil, AdapterHooks{})
 	defer adapter.Close()
 	if _, err := adapter.SessionSnapshot(); err != nil {
 		t.Fatal(err)
@@ -222,7 +222,7 @@ func TestAPromptNeverReachesACoreDialledSinceTheOneThatChecksTheAgent(t *testing
 		return older(ctx)
 	})
 	defer client.Close()
-	adapter := NewAdapter(client, AdapterHooks{})
+	adapter := NewAdapter(client, nil, AdapterHooks{})
 	defer adapter.Close()
 	if _, err := adapter.SessionSnapshot(); err != nil {
 		t.Fatal(err)
