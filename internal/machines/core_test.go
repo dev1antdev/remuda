@@ -46,6 +46,21 @@ func TestTheProbeFindsRemudaCoreWhereItsInstallerPutsIt(t *testing.T) {
 
 // The local machine of a -core remuda reaches the core `remuda-core connect` finds under its environment: here a
 // throwaway one, as a scratch instance beside the real cockpit would.
+func TestAPageOnlyHostOnCoreStartsNoCoreOfItsOwn(t *testing.T) {
+	m := NewCoreManager(t.TempDir(), "", nil, true)
+	defer m.Close()
+	mc, err := m.Get(LocalID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mc.link != nil || !m.Server() {
+		t.Fatal("a page-only host on remuda-core followed a core of its own")
+	}
+	if _, _, err := mc.Ready(); !errors.Is(err, ErrServerHost) {
+		t.Fatalf("Ready on a page-only host = %v", err)
+	}
+}
+
 func TestTheLocalMachineOnCoreShowsTheCoresTerminals(t *testing.T) {
 	c := coretest.Server(t)
 	for _, kv := range c.Env {
@@ -54,7 +69,7 @@ func TestTheLocalMachineOnCoreShowsTheCoresTerminals(t *testing.T) {
 	}
 	t.Setenv("PATH", filepath.Dir(c.Bin)+string(os.PathListSeparator)+os.Getenv("PATH"))
 
-	m := NewCoreManager(t.TempDir(), "", nil)
+	m := NewCoreManager(t.TempDir(), "", nil, false)
 	defer m.Close()
 	mc, err := m.Get(LocalID)
 	if err != nil {
@@ -109,6 +124,9 @@ func TestTheLocalMachineOnCoreShowsTheCoresTerminals(t *testing.T) {
 func TestTheLocalMachineOnCoreSaysHowToInstallIt(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 	t.Setenv("HOME", t.TempDir())
+	if found, err := herdr.FindBinary("remuda-core"); err == nil {
+		t.Skipf("a remuda-core stands in a system folder (%s): dialing would reach this machine's real core", found)
+	}
 	_, err := dialLocalCore(context.Background())
 	if err == nil || !strings.Contains(err.Error(), "remuda core install") {
 		t.Fatalf("dial without remuda-core = %v", err)
