@@ -39,8 +39,9 @@ func (r *Reader) SessionsOf(procs []Running) (map[int]string, error) {
 }
 
 // sessionsByPIDScript prints a record per process: pid, agent, the process's start as Claude Code records it
-// (`ps -o lstart` in UTC), then for Claude Code the text of every candidate session file (the environment's
-// folders, then the default), each ended by GS, or, for Codex, a line per open rollout:
+// (`ps -o lstart` in UTC; "" for a live process whose start ps does not tell, "-" for one gone), then for Claude
+// Code the text of every candidate session file (the environment's folders, a relative one from the process's
+// folder, then the default), each ended by GS, or, for Codex, a line per open rollout:
 // the pid holding it, whether its session_meta is the person's thread (1) or a subagent's (0), the thread id that
 // session_meta names, its path.
 func sessionsByPIDScript(procs []Running) string {
@@ -49,7 +50,7 @@ func sessionsByPIDScript(procs []Running) string {
 		if p.PID <= 1 || (p.Agent != "claude" && p.Agent != "codex") {
 			continue
 		}
-		b.WriteString("s " + strconv.Itoa(p.PID) + " " + p.Agent + "\n")
+		b.WriteString("s " + strconv.Itoa(p.PID) + " " + p.Agent + " " + script.Quote(p.CWD) + "\n")
 	}
 	if b.Len() == 0 {
 		return ""
@@ -57,6 +58,7 @@ func sessionsByPIDScript(procs []Running) string {
 	return `PATH="$PATH:/usr/sbin:/sbin"
 s() {
   start=$(LC_ALL=C TZ=UTC ps -o lstart= -p "$1" 2>/dev/null)
+  [ -n "$start" ] || kill -0 "$1" 2>/dev/null || start=-
   printf '%s\037%s\037%s\037' "$1" "$2" "$start"
   if [ "$2" = claude ]; then
     {
@@ -76,6 +78,7 @@ s() {
       fi
       printf '%s\n' "$HOME/.claude"
     } | while IFS= read -r c; do
+      case "$c" in /* | [A-Za-z]:*) ;; ?*) c="$3/$c" ;; esac
       f="$c/sessions/$1.json"
       [ -n "$c" ] && [ -f "$f" ] && { head -c 65536 "$f"; printf '\035'; }
     done
@@ -133,6 +136,9 @@ func parseSessionsByPID(out string, procs []Running, style rpath.Style) map[int]
 			continue
 		}
 		start, payload := strings.TrimSpace(fields[2]), strings.TrimSpace(fields[3])
+		if start == "-" {
+			continue
+		}
 		var id string
 		switch fields[1] {
 		case "claude":

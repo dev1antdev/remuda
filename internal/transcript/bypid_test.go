@@ -159,6 +159,41 @@ func writeRolloutNamed(t *testing.T, home, name, id string, subagent bool) strin
 	return path
 }
 
+func TestClaudeSessionUnderARelativeConfigDirIsReadFromTheAgentsFolder(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	work := filepath.Join(home, "work", "app")
+	pid := holder(t, nil, []string{"CLAUDE_CONFIG_DIR=./.claude-profile"}, false, "")
+	writeSessionFile(t, filepath.Join(work, ".claude-profile", "sessions"), pid, "4c9d6f0e-1111-4222-8333-944455556666", work, procStart(t, pid))
+
+	got, err := NewReader(remoteHere(home)).SessionsOf([]Running{{PID: pid, Agent: "claude", CWD: work}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got[pid] != "4c9d6f0e-1111-4222-8333-944455556666" {
+		t.Fatalf("session = %q, want the one under the agent's own folder", got[pid])
+	}
+}
+
+func TestAClaudeThatEndedGivesNoSession(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	cmd := exec.Command("sh", "-c", "exit 0")
+	if err := cmd.Run(); err != nil {
+		t.Fatal(err)
+	}
+	gone := cmd.Process.Pid
+	writeSessionFile(t, filepath.Join(home, ".claude", "sessions"), gone, "4c9d6f0e-1111-4222-8333-944455556666", "/work/api", "")
+
+	got, err := NewReader(remoteHere(home)).SessionsOf([]Running{{PID: gone, Agent: "claude", CWD: "/work/api"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id, ok := got[gone]; ok {
+		t.Fatalf("an ended process gave %q", id)
+	}
+}
+
 func TestCodexSessionIsThePersonsRolloutItsProcessHoldsOpen(t *testing.T) {
 	const other = "01a1f692-0000-70f0-b846-42b3f2f3c1db"
 	cases := []struct {
@@ -240,7 +275,7 @@ func TestSessionsOfAsksTheMachineOnceForEveryAgent(t *testing.T) {
 		t.Fatalf("got %v", got)
 	}
 	scripts := host.Scripts()
-	if len(scripts) != 1 || !strings.Contains(scripts[0], "\ns 41 claude\n") || !strings.Contains(scripts[0], "\ns 52 codex\n") || strings.Contains(scripts[0], "gemini") {
+	if len(scripts) != 1 || !strings.Contains(scripts[0], "\ns 41 claude '/w'\n") || !strings.Contains(scripts[0], "\ns 52 codex '/w'\n") || strings.Contains(scripts[0], "gemini") {
 		t.Fatalf("scripts = %q", scripts)
 	}
 

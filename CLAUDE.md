@@ -581,7 +581,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   on the machine, here or over ssh, answering pid → session id — Claude
   Code's from `<config dir>/sessions/<pid>.json` (`CLAUDE_CONFIG_DIR` read
   off the process's environment, `/proc/<pid>/environ` or `ps -E`, whose
-  run-together text gives candidate folders, then the default one; every
+  run-together text gives candidate folders, a relative one taken from the
+  agent's folder, then the default one; a process gone is no record; every
   candidate's file is sent and Go weighs them, a start-verified one before
   one matched by its folder alone; only
   regular files are read, a FIFO never holds the script; a file
