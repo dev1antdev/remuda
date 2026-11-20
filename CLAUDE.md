@@ -1078,11 +1078,15 @@ components and icons as rules for whoever changes it: @docs/design.md
   limit, said in remuda-core's `schema/README.md`), and a Claude Code file then
   counts only with a `startedAt` no earlier than that creation and a
   `procStart` that is ps's start (a second alone does not tell two processes
-  given the pid within it apart; after a step of a Linux machine's clock
-  either way, the file keeps the times before it while ps's start and
-  `started_ms` moved, so a live Claude Code's file no longer matches and its
-  session goes unnamed until it starts again, a known limit: the start since
-  boot tells the process, not that the file is its own),
+  given the pid within it apart; the file holds wall-clock times alone, so
+  the start since boot tells the process but not that the file is its own —
+  after a step of a Linux machine's clock, the file keeps the times before it
+  while ps's start and `started_ms` moved, so a live Claude Code's file no
+  longer matches and its session goes unnamed until it starts again, and after
+  a step back of about the gap between two births, a file a crashed Claude
+  Code left under the pid matches the later one's every time, so the later
+  process is named the earlier one's session until it writes its own, which
+  Claude Code does as it starts: known limits, task #360),
   nor, from a core that tells none (0.2.1 and before: the pin today), one that
   began after the agent was seen running (`Running.Seen`: a later process
   took the pid before it was read), the sighting placed on the machine's
