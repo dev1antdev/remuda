@@ -51,6 +51,10 @@ func (a *Adapter) LayoutExport(tabID string) (*herdr.LayoutDescription, error) {
 // whose start never answered with its address too.
 const LabelLayout = "remuda.layout"
 
+// LabelCommand marks a terminal a layout started with a pane's own command: never a shell at its prompt, which a tidy
+// would close, though that command be a shell's.
+const LabelCommand = "remuda.command"
+
 // layoutBeforeWrite runs between a layout's last terminal and its document write: a test closes the workspace there.
 var layoutBeforeWrite = func() {}
 
@@ -110,7 +114,11 @@ func (a *Adapter) LayoutApply(workspaceID, tabID, tabLabel string, root herdr.La
 	}
 	for _, node := range tree.Panes() {
 		ctx, cancel := context.WithTimeout(context.Background(), callWithin)
-		t, err := a.runIn(ctx, space, tabID, RunParams{Argv: node.Command, Literal: len(node.Command) > 0, Cwd: cmp.Or(node.CWD, folder), Env: node.Env, Labels: map[string]string{LabelLayout: mark}})
+		labels := map[string]string{LabelLayout: mark}
+		if len(node.Command) > 0 {
+			labels[LabelCommand] = "1"
+		}
+		t, err := a.runIn(ctx, space, tabID, RunParams{Argv: node.Command, Literal: len(node.Command) > 0, Cwd: cmp.Or(node.CWD, folder), Env: node.Env, Labels: labels})
 		cancel()
 		if err != nil {
 			return fail(err)

@@ -3,7 +3,6 @@ package core
 import (
 	"encoding/json"
 	"slices"
-	"strings"
 	"testing"
 
 	"github.com/dev1antdev/remuda/internal/herdr"
@@ -99,28 +98,14 @@ func TestTheAgentIsTheForegroundProcessOrWhatTheProgramReported(t *testing.T) {
 	}
 }
 
-func TestAShellRunningACommandIsNotAtItsPrompt(t *testing.T) {
-	for argv, want := range map[string]bool{
-		"":                                  true,
-		"/bin/sh -l":                        true,
-		"zsh -i":                            true,
-		"fish --login":                      true,
-		"pwsh.exe -NoExit -Command hook":    true,
-		"cmd.exe /k":                        true,
-		"cmd.exe":                           true,
-		"sh -c loop":                        false,
-		"bash -lc loop":                     false,
-		"bash script.sh":                    false,
-		"fish --command=loop":               false,
-		"nu --commands loop":                false,
-		"pwsh.exe -File job.ps1":            false,
-		"cmd.exe /d /s /c npm run dev":      false,
-		"powershell.exe -Command Start-Job": false,
-	} {
-		shell := Terminal{Pid: 1, Foreground: &Foreground{Pid: 1, Name: "bash", Argv: strings.Fields(argv)}}
-		if got := atPrompt(&shell); got != want {
-			t.Errorf("%q at its prompt: %v, want %v", argv, got, want)
-		}
+func TestAScenePanesOwnCommandIsNeverAShellAtItsPrompt(t *testing.T) {
+	shell := Terminal{Pid: 1, Foreground: &Foreground{Pid: 1, Name: "bash", Argv: []string{"bash", "--rcfile", "/etc/team.bashrc", "-i"}}}
+	if !atPrompt(&shell) {
+		t.Fatal("the machine's shell alone in front of its terminal is not at its prompt")
+	}
+	shell.Labels = map[string]string{LabelCommand: "1"}
+	if atPrompt(&shell) {
+		t.Fatal("a scene pane's own sh -c reads as a shell at its prompt, which a tidy would close")
 	}
 }
 

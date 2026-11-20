@@ -413,12 +413,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   `herdr.AgentProgram` names it (the one matcher, `internal/herdr/agents.go`,
   which `preview` asks too: the program or the script an interpreter runs,
   past its flags, a Windows path and `.exe` too), none while the terminal's
-  own shell holds it (`atPrompt`: its own process in front and started to
-  read commands, `reading`, remuda-core's `shell_root` rule — an operand, a
-  `-c` in any cluster or `--command` runs one, so a scene pane's `sh -c '…'`
-  is never a shell at its prompt that a tidy closes or an agent is typed
-  into; PowerShell's `-NoExit` and cmd's `/k` stay at the prompt, as the
-  core's own shell on Windows does), else the app it reported through OSC 7501
+  own shell holds it (`atPrompt`: a shell's own process in front, never a
+  terminal labelled `remuda.command` — a scene pane's own command, whose
+  `sh -c '…'` keeps itself in front all along and is no shell at its prompt
+  that a tidy closes), else the app it reported through OSC 7501
   (`claude-code` → claude, `codex`, `gemini-cli` → gemini, `kimi`, any other
   app by its own name);
   `statusOf` takes the program's own word, `error` read as done; the session
@@ -593,7 +591,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   `terminal.run` with `literal` (`RunParams.Literal`), on a core whose hello
   lists `run_literal` (Core 35): no template of the program's name takes its
   place, no first message is sent, and a missing program fails the layout
-  (`spawn_failed`). `Client.Run` sends `literal` only on a connection whose
+  (`spawn_failed`); its terminal is labelled `remuda.command`
+  (`LabelCommand`), so it never reads as a shell at its prompt. `Client.Run` sends `literal` only on a connection whose
   hello lists it (`needs_update` otherwise), since an older core ignores the
   field and may start that template; such a core is refused a layout with a
   command before any pane starts (`invalid_request`): plain argv would run a
