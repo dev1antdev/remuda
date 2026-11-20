@@ -34,9 +34,9 @@ func (r *Reader) SessionsOf(procs []Running) (map[int]string, error) {
 
 // sessionsByPIDScript prints a record per process, split by US:
 //   - its pid and agent;
-//   - its start as Claude Code records it: `ps -o lstart` in UTC, "" for a live process ps does not tell of,
-//     "ft:<FILETIME>" from PowerShell's Get-Process for a native Windows process (asked on Git Bash alone), "-" for
-//     one gone;
+//   - its start as Claude Code records it: `ps -o lstart` in UTC, "ft:<FILETIME>" from PowerShell's Get-Process for
+//     a native Windows process ps does not see (asked on Git Bash alone), "-" for one gone or whose start nothing
+//     tells, which then has no session: nothing would tell it from another given its pid;
 //   - the folder the process stands in now, where /proc or lsof tells it (never a native Windows process's; lsof
 //     in a UTF-8 locale, since in C's it writes a byte past ASCII as \xNN, and its \\ and \t read back by printf);
 //   - for Claude Code, every candidate sessions/<pid>.json, each ended by GS: under the CLAUDE_CONFIG_DIR its
@@ -58,9 +58,11 @@ func sessionsByPIDScript(procs []Running) string {
 	}
 	return script.PATH + `
 case "$(uname -s 2>/dev/null)" in MINGW* | MSYS* | CYGWIN*) windows=1 ;; *) windows= ;; esac
+nl='
+'
 s() {
   start=$(LC_ALL=C TZ=UTC ps -o lstart= -p "$1" 2>/dev/null)
-  if [ -z "$start" ] && ! kill -0 "$1" 2>/dev/null; then
+  if [ -z "$start" ]; then
     start=-
     if [ -n "$windows" ]; then
       ft=$(powershell.exe -NoProfile -NonInteractive -Command "(Get-Process -Id $1 -ErrorAction Stop).StartTime.ToFileTimeUtc()" 2>/dev/null | tr -d '\r')
@@ -70,9 +72,12 @@ s() {
   cwd=
   case "$start" in -|ft:*) ;; *)
     if [ -d "/proc/$1" ]; then
-      cwd=$(readlink "/proc/$1/cwd" 2>/dev/null)
+      cwd=$(readlink "/proc/$1/cwd" 2>/dev/null; printf x)
+      cwd=${cwd%x}
+      cwd=${cwd%"$nl"}
     else
-      cwd=$(printf '%b' "$(LC_ALL=en_US.UTF-8 lsof -a -nP -p "$1" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -n 1)")
+      cwd=$(printf '%bx' "$(LC_ALL=en_US.UTF-8 lsof -a -nP -p "$1" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -n 1)")
+      cwd=${cwd%x}
     fi ;;
   esac
   printf '%s\037%s\037%s\037%s\037' "$1" "$2" "$start" "$cwd"
@@ -153,11 +158,11 @@ func parseSessionsByPID(out string, procs []Running, style rpath.Style) map[int]
 		}
 		start, standing, payload, after := strings.TrimSpace(fields[2]), fields[3], strings.TrimSpace(fields[4]), strings.TrimSpace(fields[5])
 		switch {
-		case start == "-":
-			continue // gone
+		case start == "-" || start == "":
+			continue // gone, or nothing tells it from another process given its pid
 		case standing != "" && cwd != "" && !style.Equal(standing, cwd):
 			continue // the pid went to a process elsewhere since the pane was seen
-		case start != "" && !strings.HasPrefix(start, "ft:") && after != start:
+		case !strings.HasPrefix(start, "ft:") && after != start:
 			continue // another process took the pid while it was read, or it ended
 		}
 		var id string
@@ -176,14 +181,13 @@ func parseSessionsByPID(out string, procs []Running, style rpath.Style) map[int]
 
 // claudeSession is the session of a candidate file that is this very process's, its pid's: one whose procStart is
 // the process's start when both sides know it; for a native Windows process, whose folder the script cannot read, one
-// of its folder whose procStartFt is its creation, to the millisecond; else one of its folder that, while the
-// process's start is known, began no earlier. A file left
-// by an ended process whose pid was given to another is not.
+// of its folder whose procStartFt is its creation, to the millisecond; else one of its folder that began no earlier
+// than the process. A file left by an ended process whose pid was given to another is not, nor one nothing ties to
+// the process.
 func claudeSession(payload string, pid int, start, cwd string, style rpath.Style) string {
 	began, known := startedMS(start)
 	creation, native := strings.CutPrefix(start, "ft:")
 	created, _ := filetimeOf(creation)
-	var byFolder string
 	for _, doc := range strings.Split(payload, script.GS) {
 		var file claudeSessionFile
 		if json.Unmarshal([]byte(doc), &file) != nil || file.PID != pid {
@@ -192,7 +196,7 @@ func claudeSession(payload string, pid int, start, cwd string, style rpath.Style
 		inFolder := cwd == "" || file.CWD == "" || style.Equal(file.CWD, cwd)
 		recorded, ft := filetimeOf(file.ProcStartFt)
 		switch {
-		case file.ProcStart != "" && start != "" && !native:
+		case file.ProcStart != "" && !native:
 			if strings.TrimSpace(file.ProcStart) == start {
 				return file.SessionID
 			}
@@ -204,11 +208,9 @@ func claudeSession(payload string, pid int, start, cwd string, style rpath.Style
 			if file.StartedAt >= began && inFolder {
 				return file.SessionID
 			}
-		case !native && byFolder == "" && inFolder:
-			byFolder = file.SessionID
 		}
 	}
-	return byFolder
+	return ""
 }
 
 // FILETIME counts 100 ns from 1601: a millisecond of it, and the Unix epoch in it.

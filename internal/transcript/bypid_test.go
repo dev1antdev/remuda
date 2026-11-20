@@ -179,6 +179,25 @@ func TestACodexRolloutUnderAFolderWithALineBreakIsFound(t *testing.T) {
 	}
 }
 
+// A folder whose name ends in a line break is told whole: a shell's command substitution would drop it.
+func TestAnAgentInAFolderEndingInALineBreakIsFound(t *testing.T) {
+	home := realDir(t)
+	t.Setenv("HOME", home)
+	work := filepath.Join(home, "ends\n")
+	if err := os.MkdirAll(work, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	pid := holder(t, work, nil, nil, false, "")
+	writeSessionFile(t, filepath.Join(home, ".claude", "sessions"), pid, "4c9d6f0e-1111-4222-8333-944455556666", work, procStart(t, pid))
+	got, err := NewReader(remoteHere(home)).SessionsOf([]Running{{PID: pid, Agent: "claude", CWD: work}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got[pid] != "4c9d6f0e-1111-4222-8333-944455556666" {
+		t.Fatalf("session = %q in a folder ending in a line break", got[pid])
+	}
+}
+
 func TestClaudeSessionLeftByAnEndedProcessIsNotTaken(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -392,10 +411,11 @@ func TestParseSessionsByPID(t *testing.T) {
 		{"start matches, the file of another folder", record(7, "claude", "S", claude(7, "id-1", "/a", "S")), []Running{{7, "claude", "/b"}}, rpath.Style{}, "id-1"},
 		{"the process stands in the pane's folder", standing(7, "claude", "S", "/b", claude(7, "id-1", "/a", "S")), []Running{{7, "claude", "/b"}}, rpath.Style{}, "id-1"},
 		{"the process stands elsewhere: the pid went to another", standing(7, "claude", "S", "/c", claude(7, "id-1", "/c", "S")), []Running{{7, "claude", "/b"}}, rpath.Style{}, ""},
-		{"a Windows process in its folder, spelt as Git Bash does", standing(7, "claude", "", "/c/Work/Api", claude(7, "id-1", `C:\Work\Api`, "S")), []Running{{7, "claude", `C:\Work\Api`}}, windows, "id-1"},
+		{"a Windows process in its folder, spelt as Git Bash does", standing(7, "claude", "S", "/c/Work/Api", claude(7, "id-1", `C:\Work\Api`, "S")), []Running{{7, "claude", `C:\Work\Api`}}, windows, "id-1"},
 		{"start differs", record(7, "claude", "S", claude(7, "id-1", "/a", "T")), []Running{{7, "claude", "/a"}}, rpath.Style{}, ""},
 		{"another pid's file", record(7, "claude", "S", claude(8, "id-1", "/a", "S")), []Running{{7, "claude", "/a"}}, rpath.Style{}, ""},
-		{"no start here, the folder decides", record(7, "claude", "", claude(7, "id-1", `C:\Work\Api`, "S")), []Running{{7, "claude", `c:/work/api`}}, windows, "id-1"},
+		{"no start here: nothing tells it from another process", record(7, "claude", "", claude(7, "id-1", `C:\Work\Api`, "S")), []Running{{7, "claude", `c:/work/api`}}, windows, ""},
+		{"the first start unknown, the second told", read(7, "claude", "-", "/a", claude(7, "id-1", "/a", "S"), "S"), []Running{{7, "claude", "/a"}}, rpath.Style{}, ""},
 		{"no start here, another folder", record(7, "claude", "", claude(7, "id-1", `C:\Work\Api`, "S")), []Running{{7, "claude", `C:\Work\Web`}}, windows, ""},
 		{"no session file", record(7, "claude", "S", ""), []Running{{7, "claude", "/a"}}, rpath.Style{}, ""},
 		{"a native process, started since", record(7, "claude", "ft:116444736050000000", `{"pid":7,"sessionId":"id-1","cwd":"C:\\a","startedAt":5200}`), []Running{{7, "claude", `C:\a`}}, windows, "id-1"},

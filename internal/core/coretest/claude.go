@@ -8,7 +8,8 @@ import (
 )
 
 // StandInClaude puts a `claude` on the PATH the next core starts with, in Claude Code's ways that remuda reads: it keeps
-// its session file, sessions/<pid>.json under $HOME/.claude, when given a session, and moves it to another on
+// its session file, sessions/<pid>.json under $HOME/.claude with its start as Claude Code records it, when given a
+// session, and moves it to another on
 // "/resume <id>", in the same process; says what it was started with ("args: …"); reports itself idle through OSC 7501;
 // answers /restart as a build without it does; leaves on /exit; and echoes any other line ("got: …").
 func StandInClaude(t testing.TB, session string) {
@@ -17,7 +18,8 @@ func StandInClaude(t testing.TB, session string) {
 	script := `#!/bin/sh
 keep() {
   mkdir -p "$HOME/.claude/sessions"
-  printf '{"pid":%s,"sessionId":"%s","cwd":"%s"}' $$ "$1" "$(pwd -P)" > "$HOME/.claude/sessions/$$.json"
+  start=$(LC_ALL=C TZ=UTC ps -o lstart= -p $$ | sed 's/ *$//')
+  printf '{"pid":%s,"sessionId":"%s","cwd":"%s","procStart":"%s"}' $$ "$1" "$(pwd -P)" "$start" > "$HOME/.claude/sessions/$$.json"
 }
 [ -n "SESSION" ] && keep SESSION
 printf 'args: %s\n' "$*"

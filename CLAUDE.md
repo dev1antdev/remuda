@@ -986,14 +986,16 @@ components and icons as rules for whoever changes it: @docs/design.md
   Code's from `<config dir>/sessions/<pid>.json` (`CLAUDE_CONFIG_DIR` read
   off the process's environment, `/proc/<pid>/environ` or `ps -E`, whose
   run-together text gives candidate folders, a relative one taken from the
-  agent's folder, then the default one; a process gone is no record; every
-  candidate's file is sent and Go weighs them, a start-verified one before
-  one matched by its folder alone; only
+  agent's folder, then the default one; a process gone, or one whose start
+  neither `ps` nor, on Git Bash, PowerShell tells, has no session, nothing
+  telling it from another given its pid; every
+  candidate's file is sent and Go weighs them; only
   regular files are read, a FIFO never holds the script; a process that
   stands in another folder than the pane was seen in now (`/proc/<pid>/cwd`,
   else `lsof -d cwd` in a UTF-8 locale, since in C's lsof writes a byte past
   ASCII as `\xNN`, its `\\` and `\t` read back by `printf %b`, as the
-  rollouts' paths are, each one whole, a path may hold a line break; not read
+  rollouts' paths are, each one whole, a path may hold a line break, at its
+  end too; not read
   for a native Windows process) has no session,
   whatever else matches, since the pid went to another process, and neither
   does one whose start, read again once its files were, is another (the pid
@@ -1008,8 +1010,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   while the process's start is known, its `startedAt` is no older than that
   start (CI's Windows job
   proves it; a native process's `CLAUDE_CONFIG_DIR` is out of reach there, so
-  `~\.claude` alone is read); else, where either side lacks the start, the
-  first of its folder), Codex's thread id from the
+  `~\.claude` alone is read); a file nothing ties to the process, never), Codex's thread id from the
   `rollout-*.jsonl` of the person's thread (its first line a `session_meta`
   naming no subagent: a file still empty is none; its folder is where the
   thread began, which a resume keeping the current folder leaves) the
