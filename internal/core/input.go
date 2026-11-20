@@ -124,44 +124,71 @@ func readyForPrompt(t *Terminal) bool {
 // state=clear on its way out) gets nothing, and a send to an idle agent names that status (`if`), so one that clears
 // it as the prompt goes has it refused too (status_mismatch).
 func (a *Adapter) AgentPrompt(target, text string) error {
-	t, err := a.terminal(target)
+	send, err := a.StagePrompt(target, text)
 	if err != nil {
 		return err
+	}
+	return send()
+}
+
+// StagePrompt is AgentPrompt in two steps: the look at the agent now, and the send it answers, which the core may hold
+// a minute while a person finishes a draft. sessions holds the pane's lock for the look alone, so the person's keys and
+// answers pass a prompt the core holds; the core itself types nothing else between the paste and its Enter.
+func (a *Adapter) StagePrompt(target, text string) (func() error, error) {
+	t, err := a.terminal(target)
+	if err != nil {
+		return nil, err
 	}
 	agent, err := agentIn(&t, target)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if !readyForPrompt(&t) {
-		return &herdr.Error{Code: "agent_not_ready", Message: "the agent in " + target + " has reported no status yet (one that never does takes no prompt on remuda-core)"}
+		return nil, &herdr.Error{Code: "agent_not_ready", Message: "the agent in " + target + " has reported no status yet (one that never does takes no prompt on remuda-core)"}
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), sendWithin)
+	ctx, cancel := context.WithTimeout(context.Background(), callWithin)
 	defer cancel()
 	cn, err := a.client.connection(ctx)
 	if err != nil {
-		return a.refusal(err, "agent_not_found")
+		return nil, a.refusal(err, "agent_not_found")
 	}
 	if promptsNeed != "" && !cn.hello.Has(promptsNeed) {
-		return &herdr.Error{Code: "invalid_request", Message: "a prompt to an agent waits for a remuda-core that checks, as it types, that the agent is still in front (Core 33)"}
+		return nil, &herdr.Error{Code: "invalid_request", Message: "a prompt to an agent waits for a remuda-core that checks, as it types, that the agent is still in front (Core 33)"}
 	}
 	var now Terminal
 	if err := cn.call(ctx, "terminal.get", map[string]any{"terminal": target}, &now, nil); err != nil {
-		return a.refusal(err, "agent_not_found")
+		return nil, a.refusal(err, "agent_not_found")
 	}
 	if agentOf(&now) != agent {
-		return &herdr.Error{Code: "agent_not_found", Message: "the agent in " + target + " has left"}
+		return nil, &herdr.Error{Code: "agent_not_found", Message: "the agent in " + target + " has left"}
 	}
 	if now.Status == nil {
-		return &herdr.Error{Code: "agent_not_ready", Message: "the agent in " + target + " cleared its status, as one leaving does: nothing was sent"}
+		return nil, &herdr.Error{Code: "agent_not_ready", Message: "the agent in " + target + " cleared its status, as one leaving does: nothing was sent"}
 	}
 	if now.Foreground == nil {
-		return &herdr.Error{Code: "agent_not_ready", Message: "remuda-core has not seen what runs in front of " + target + " yet"}
+		return nil, &herdr.Error{Code: "agent_not_ready", Message: "remuda-core has not seen what runs in front of " + target + " yet"}
 	}
 	params := map[string]any{"terminal": target, "text": text, "foreground": now.Foreground.Pid}
 	if statusOf(&now) == herdr.StatusIdle {
 		params["if"] = herdr.StatusIdle // not working: a turn ending as the prompt goes would refuse it
 	}
-	err = cn.call(ctx, "terminal.send", params, nil, nil)
+	return func() error {
+		ctx, cancel := context.WithTimeout(context.Background(), sendWithin)
+		defer cancel()
+		return a.sendRefusal(cn.call(ctx, "terminal.send", params, nil, nil))
+	}, nil
+}
+
+// sendRefusal is the core's refusal of a prompt in herdr's words. One it pasted and then left unsubmitted, the agent
+// gone from the front before its Enter, is prompt_not_submitted: the text may sit in the input line of whatever runs
+// there now. A terminal whose holder is older than the core cannot have it check the agent as it types.
+func (a *Adapter) sendRefusal(err error) error {
+	switch {
+	case IsKind(err, "not_submitted"):
+		return &herdr.Error{Code: "prompt_not_submitted", Message: "the prompt was pasted but not submitted, the agent gone from the terminal's front before its Enter: the text may still sit in the terminal's input line, so look at the terminal (" + err.Error() + ")"}
+	case IsKind(err, "needs_update"):
+		return &herdr.Error{Code: "invalid_request", Message: "this terminal runs under an older remuda-core holder that cannot check the agent as it types, so nothing was sent; restart the terminal (close it and start the agent again) to send it prompts (" + err.Error() + ")"}
+	}
 	return a.inputRefusal(err, "agent_not_ready", "agent_blocked")
 }
 

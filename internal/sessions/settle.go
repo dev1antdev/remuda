@@ -46,7 +46,7 @@ var ErrNotEntered = errors.New("your message reached the agent but may still be 
 
 // NotDelivered says the text did not surely reach the agent as a message, so the person keeps it and is told why.
 func NotDelivered(err error) bool {
-	for _, known := range []error{ErrAgentBusy, ErrNoAgent, ErrAskedMeanwhile, ErrLeftMeanwhile, ErrNotEntered} {
+	for _, known := range []error{ErrAgentBusy, ErrNoAgent, ErrAskedMeanwhile, ErrLeftMeanwhile, ErrNotEntered, ErrNotSubmitted} {
 		if errors.Is(err, known) {
 			return true
 		}
