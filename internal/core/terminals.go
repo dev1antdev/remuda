@@ -165,10 +165,11 @@ func (c *Client) Read(ctx context.Context, terminal string, lines int, format st
 	return read, c.Call(ctx, "terminal.read", params, &read)
 }
 
-// Send pastes text and presses Enter once the person is quiet; force types into a blocked program too.
-func (c *Client) Send(ctx context.Context, terminal, text string, force bool) (SendResult, error) {
+// Send pastes text and presses Enter once the person is quiet. It never types into a blocked program: the core
+// refuses (remuda's 409), since a dialog is answered by its own keys, never by a message typed into it.
+func (c *Client) Send(ctx context.Context, terminal, text string) (SendResult, error) {
 	var sent SendResult
-	return sent, c.Call(ctx, "terminal.send", map[string]any{"terminal": terminal, "text": text, "force": force}, &sent)
+	return sent, c.Call(ctx, "terminal.send", map[string]any{"terminal": terminal, "text": text}, &sent)
 }
 
 // Keys presses named keys (enter, esc, ctrl+c, …); now skips the wait for the person's quiet.

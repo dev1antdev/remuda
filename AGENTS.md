@@ -42,7 +42,9 @@ agree. `make publish` refuses any branch but `main`
 merged into `release` the same day, or the next fast-forward fails.
 
 Tests are plain `testing` and need no herdr: the ones that start a
-throwaway herdr server skip when `herdr` is not on PATH, and a package
+throwaway herdr server skip when `herdr` is not on PATH, the ones that
+start a throwaway remuda-core (`internal/core/coretest`) skip without
+`RC_BIN` or `remuda-core` on PATH, and a package
 that runs scripts is tested on a `shell.Fake` with a recorded answer
 (`internal/review/wire_test.go`, `internal/jobs/jobs_test.go`). The web
 side runs Vitest on its pure modules, a `*.test.ts` beside each (`lib/`,
@@ -88,6 +90,9 @@ not style.
   stealing the slot is the person's call only. A refusal is surfaced
   (`RefusedError`, 409 on HTTP, the WebSocket close reason), never retried
   with the flag.
+- **A test remuda-core is `coretest.Server`'s, never started another
+  way**: its own `RC_SESSION`, `RC_SOCKET`, XDG folders, `HOME` and
+  `RC_LAUNCHD_DIRECT`; a core started without them reaches the person's.
 - **A test herdr needs `HERDR_SOCKET_PATH`, never a changed `HOME`
   alone.** herdr ignores `HOME` for its socket: `HOME=/tmp/x herdr server
   stop` stopped the person's real server once. `internal/herdr/

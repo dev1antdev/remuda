@@ -298,9 +298,12 @@ components and icons as rules for whoever changes it: @docs/design.md
   its own: `Read` the first paint then the live bytes, sending CREDIT for what
   it handed out (one nobody reads holds up nothing else: the core sends a
   stream 256 KiB ahead at most), RESIZE frames handed to `Resized` in order
-  with them, `Write` keys, `Resize`, `Focus`, `Close`, `Ended` (the core's
+  with them when the reply confirmed them (`ResizeNotifications`; else the
+  size follows from `size` events), `AutomaticInput` the same for kind-6
+  replies, `Write` keys, `Resize`, `Focus`, `Close`, `Ended` (the core's
   CLOSE reason: `exited` and its code, `killed`, …); `keep_size` only toward a
-  core that lists it in `Hello.Features`. `Subscribe` is a `Subscription`:
+  core that lists it in `Hello.Features`. `Send` has no `force`: a blocked
+  agent is the core's refusal, never a message typed into its dialog. `Subscribe` is a `Subscription`:
   the snapshot (`Seq`, `Terminals`), then `Next` hands out notices — `event`
   (`Event{Type, Terminal, Machine, Data}`), `heartbeat`, `missed` with a fresh
   snapshot — dropping events the snapshot already covers; its channel is open

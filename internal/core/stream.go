@@ -39,7 +39,12 @@ type Stream struct {
 	conn     *conn
 	channel  uint32
 	Terminal Terminal
-	resized  func(cols, rows uint16)
+	// ResizeNotifications: the core confirmed RESIZE frames before each repaint; false, it sends none and the size
+	// is to be followed through `size` events.
+	ResizeNotifications bool
+	// AutomaticInput: every core on the path takes a terminal's own replies as kind 6 rather than as typing.
+	AutomaticInput bool
+	resized        func(cols, rows uint16)
 
 	mu     sync.Mutex
 	wake   bell
@@ -65,14 +70,17 @@ func (c *Client) Attach(ctx context.Context, params AttachParams) (*Stream, erro
 	}
 	stream := &Stream{conn: cn, resized: params.Resized, wake: make(bell, 1)}
 	var opened struct {
-		Channel  uint32   `json:"channel"`
-		Terminal Terminal `json:"terminal"`
+		Channel             uint32   `json:"channel"`
+		Terminal            Terminal `json:"terminal"`
+		ResizeNotifications bool     `json:"resize_notifications"`
+		AutomaticInput      bool     `json:"automatic_input"`
 	}
 	bind := func(result json.RawMessage) (func(), error) {
 		if err := decode(result, &opened); err != nil {
 			return nil, err
 		}
 		stream.channel, stream.Terminal = opened.Channel, opened.Terminal
+		stream.ResizeNotifications, stream.AutomaticInput = opened.ResizeNotifications, opened.AutomaticInput
 		cn.streams[opened.Channel] = stream
 		return nil, nil
 	}

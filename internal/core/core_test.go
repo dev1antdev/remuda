@@ -151,6 +151,33 @@ func TestAnAttachEchoesAndEndsWithTheProgram(t *testing.T) {
 	}
 }
 
+func TestAKeepSizeViewerHearsTheGridBeforeItsPaint(t *testing.T) {
+	ctx := within(t, 30*time.Second)
+	client := coretest.Server(t).Client(t)
+	shell, err := client.Run(ctx, core.RunParams{Argv: []string{"cat"}, Size: &core.Size{Cols: 100, Rows: 30}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var grid [2]uint16
+	stream, err := client.Attach(ctx, core.AttachParams{Terminal: shell.Address, Cols: 40, Rows: 10, KeepSize: true,
+		ResizeNotifications: true, Resized: func(cols, rows uint16) { grid = [2]uint16{cols, rows} }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !stream.ResizeNotifications || !stream.AutomaticInput {
+		t.Fatalf("the reply confirmed resize %v, automatic input %v", stream.ResizeNotifications, stream.AutomaticInput)
+	}
+	if _, err := stream.Read(make([]byte, 4096)); err != nil {
+		t.Fatal(err)
+	}
+	if grid != [2]uint16{100, 30} {
+		t.Fatalf("grid before the paint: %v", grid)
+	}
+	if got, _ := client.Get(ctx, shell.Address); got.Cols != 100 {
+		t.Fatalf("a keep-size viewer resized the terminal to %d columns", got.Cols)
+	}
+}
+
 func TestAStreamNobodyReadsHoldsNothingElseUp(t *testing.T) {
 	ctx := within(t, 60*time.Second)
 	client := coretest.Server(t).Client(t)
