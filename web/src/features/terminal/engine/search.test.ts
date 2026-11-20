@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Terminal, type IBufferRange } from "@xterm/xterm";
 import { FLAVORS } from "@/lib/theme";
-import { cellSpan, hexAlpha, installSearch, occurrences, pickNear, reselected, searchDecorations } from "./search";
+import { cellSpan, hexAlpha, installSearch, occurrences, pickNear, searchDecorations } from "./search";
 import type { FoundCount } from "./types";
 
 const FRAPPE = FLAVORS.frappe;
@@ -139,6 +139,19 @@ describe("installSearch on remuda-core", () => {
     expect(found).toEqual({ total: 2, at: 1 });
     search.dispose();
   });
+  it("steps back past a line wrapped onto the next row when the match selected was rewritten away", async () => {
+    const term = headless();
+    const search = installSearch(term, () => "frappe", () => {});
+    await written(term, `NEW a\r\nxx NEW ${"y".repeat(36)}NEW tail\r\n`);
+    let found: FoundCount = { total: -1, at: -1 };
+    search.find!("NEW", 0, (f) => (found = f));
+    search.find!("NEW", 1, (f) => (found = f));
+    expect(found).toEqual({ total: 3, at: 1 });
+    await written(term, rewrite(2, "xx OLD"));
+    search.find!("NEW", -1, (f) => (found = f));
+    expect(found).toEqual({ total: 2, at: 0 });
+    search.dispose();
+  });
   it("steps back round to the last match when the first was rewritten away", async () => {
     const term = headless();
     const search = installSearch(term, () => "frappe", () => {});
@@ -149,21 +162,5 @@ describe("installSearch on remuda-core", () => {
     search.find!("NEW", -1, (f) => (found = f));
     expect(found).toEqual({ total: 2, at: 1 });
     search.dispose();
-  });
-});
-
-describe("reselected", () => {
-  const at = (x: number, y: number): IBufferRange => ({ start: { x, y }, end: { x: x + 3, y } });
-  it("takes a forward find back to its own cell as the match found again", () => {
-    expect(reselected(1, at(4, 2), at(4, 2))).toBe(true);
-    expect(reselected(1, at(4, 2), at(9, 2))).toBe(false);
-  });
-  it("takes a backward find at or past the cell on its row as the match found again, anything else as the step", () => {
-    expect(reselected(-1, at(4, 2), at(4, 2))).toBe(true);
-    expect(reselected(-1, at(4, 2), at(9, 2))).toBe(true);
-    expect(reselected(-1, at(4, 2), at(1, 2))).toBe(false);
-    expect(reselected(-1, at(4, 2), at(0, 1))).toBe(false);
-    expect(reselected(-1, at(4, 2), at(0, 7))).toBe(false);
-    expect(reselected(-1, at(4, 2), undefined)).toBe(false);
   });
 });

@@ -19,13 +19,8 @@ const TICK_MS = 60;
 // recount, whose addon it replaces first, so a count from rows read before the write never stands
 const RECOUNT_MS = 100;
 
-// reselected says a fresh addon's first find from the match selected found that match again rather than taking the step
-// itself: a step forward lands on the very cell it started from; a step back first looks rightwards along that row, so
-// at or past the cell on the same row — a landing before it, or on another row (a wrap), is the step taken
-export function reselected(step: 1 | -1, was: IBufferRange, landed: IBufferRange | undefined): boolean {
-  if (!landed || landed.start.y !== was.start.y) return false;
-  return step > 0 ? landed.start.x === was.start.x : landed.start.x >= was.start.x;
-}
+// samePlace says two selections start at one cell
+const samePlace = (a: IBufferRange | undefined, b: IBufferRange | undefined): boolean => !!a && !!b && a.start.x === b.start.x && a.start.y === b.start.y;
 
 // hexAlpha is a six-digit hex colour with an alpha, as #rrggbbaa, the form a decoration takes
 export function hexAlpha(hex: string, alpha: number): string {
@@ -139,14 +134,16 @@ export function installSearch(term: XTerm, flavor: () => Flavor, forgetSelection
     fresh();
     term.clearSelection();
   };
-  // again finds the query with a fresh addon from the match selected: that match found once more (or the next, when it
-  // is gone), then the step taken from it
+  // again finds the query with a fresh addon forward from the match selected — that match once more, or the next when it
+  // is gone — then takes the step from there: back always (a fresh addon's own first step back would look forward
+  // along the whole wrapped line), forward only when it found that very match again
   const again = (step: 0 | 1 | -1): boolean => {
     const was = term.getSelectionPosition();
     fresh();
-    let hit = seek(step < 0);
-    if (hit && was && step !== 0 && reselected(step, was, term.getSelectionPosition())) hit = seek(step < 0);
-    return hit;
+    const hit = seek();
+    if (!hit || step === 0) return hit;
+    if (step < 0) return seek(true);
+    return samePlace(term.getSelectionPosition(), was) ? seek() : hit;
   };
   let recount: ReturnType<typeof setTimeout> | null = null;
   // the core find counts its query again once output rests, where the screen stands: a write may rewrite rows it read
