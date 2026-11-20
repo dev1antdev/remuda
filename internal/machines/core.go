@@ -91,16 +91,10 @@ func (mc *Machine) reachCore(conn *sshx.Conn, found probe) (*coreLink, error) {
 
 // RetryCore looks for remuda-core again on a remote connected without one, over the master it holds, and follows it
 // once it answers: a job there may have just installed it. A master gone meanwhile fails the machine, for Ready to dial
-// it again.
+// it again; of two looks at once the second to find the core lets its own go.
 func (mc *Machine) RetryCore() {
-	mc.coreMu.Lock()
-	defer mc.coreMu.Unlock()
 	mc.mu.Lock()
-	conn := mc.conn
-	waiting := mc.state == StateConnected && mc.noCore != nil
-	if waiting {
-		mc.lastAttempt = time.Now()
-	}
+	conn, waiting := mc.conn, mc.noCore != nil
 	mc.mu.Unlock()
 	if !waiting {
 		return
@@ -114,7 +108,7 @@ func (mc *Machine) RetryCore() {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
 	switch {
-	case mc.conn != conn || mc.noCore == nil: // removed, failed or connected afresh while it looked
+	case mc.conn != conn || mc.noCore == nil: // removed, failed, connected afresh, or the core found by another look
 		if link != nil {
 			link.close()
 		}

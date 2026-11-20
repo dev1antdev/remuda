@@ -792,8 +792,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   `StateConnected` counts it, while `Ready` answers that reason with no
   client — the watcher's snapshot error, so the roster shows the machine
   in error with those words and no workspace — and `RetryCore` looks for
-  the core again over the same master (one look at a time, `coreMu`):
-  from `Ready` every 15 s and at once on every `events.JobDone` of the
+  the core again over the same master (of two looks at once, the second
+  to find it lets its link go): from `Ready` every 15 s and at once on
+  every `events.JobDone` of the
   machine (`internal/app`), a lookup that fails asking `transportError`
   whether the master is gone. A remote's ⓘ says "remuda-core is not
   installed" first, bad, with Install opening that Updates row

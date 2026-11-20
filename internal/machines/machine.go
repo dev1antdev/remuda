@@ -39,10 +39,9 @@ type Machine struct {
 	attach herdr.Terminals // herdr's attaches, or none yet on remuda-core
 	home   string
 
-	speaksCore bool       // reached through remuda-core instead of herdr (-core, NewCoreManager)
-	link       *coreLink  // the remuda-core it follows, while connected
-	noCore     error      // why a remote connected on remuda-core follows no core: none installed there, or none answering
-	coreMu     sync.Mutex // one look for that core at a time (RetryCore)
+	speaksCore bool      // reached through remuda-core instead of herdr (-core, NewCoreManager)
+	link       *coreLink // the remuda-core it follows, while connected
+	noCore     error     // why a remote connected on remuda-core follows no core: none installed there, or none answering
 
 	fwds  map[forwardTo]*tcpForward // ports forwarded over the master, once asked for (code-server, a peer remuda, a preview)
 	fwdMu sync.Mutex                // one forward made at a time, so asks of a port at once make one, not one each
