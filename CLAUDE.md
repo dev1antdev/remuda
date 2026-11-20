@@ -1085,8 +1085,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   longer matches and its session goes unnamed until it starts again, and after
   a step back of about the gap between two births, a file a crashed Claude
   Code left under the pid matches the later one's every time, so the later
-  process is named the earlier one's session until it writes its own, which
-  Claude Code does as it starts: known limits, task #360),
+  process is named the earlier one's session — its own file, which Claude
+  Code writes as it starts, corrects the disk, while remuda goes on naming
+  what it read until a read succeeds again (`sessionsFresh`, 30 s, longer
+  while the reads fail): known limits, task #360),
   nor, from a core that tells none (0.2.1 and before: the pin today), one that
   began after the agent was seen running (`Running.Seen`: a later process
   took the pid before it was read), the sighting placed on the machine's
