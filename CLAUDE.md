@@ -5107,7 +5107,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   that comes while the schedule's previous one is still on its way (a
   slow start, Run now beside a tick) is skipped as `SkipRunning`, any
   kind. A schedule of the standup's `digest` kind, gone with it, is
-  dropped as the store is read (one log line), and `Put` refuses one. An
+  dropped as the store is read (one log line, the file written once without
+  it — never a file that read only in part), and `Put` refuses one. An
   **agent** schedule (`agent.go`,
   tested) starts a fresh agent in a folder with a prompt — the "scout"
   that looks around a project every few hours and makes tasks: `Agent`,
@@ -6648,7 +6649,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   `Handler()` calls; a handler reads the request, asks one service and
   writes the answer, and the logic lives in the context packages.
   `/api/health` and `/api/login` are mounted outside the token guard;
-  everything else behind it. Every route resolves its machine through
+  everything else behind it. A GET no route answers is the page itself
+  (`staticHandler`), but under `/api/` a JSON 404, so a page from before a
+  route went away is told so (tested in `static_test.go`). Every route resolves its machine through
   `machineFor` (query → `X-Remuda-Machine` header → POST body `machine`)
   and `ready()`. The three create routes share `create()` (agent kind
   validated by `sessions.KnownAgent` *before* any RPC, and a `resume`

@@ -371,6 +371,10 @@ func (s *Server) staticHandler() http.Handler {
 			path = "index.html"
 		}
 		if _, err := fs.Stat(s.UI, path); err != nil {
+			if strings.HasPrefix(path, "api/") {
+				httpErr(w, http.StatusNotFound, errors.New("no such route"))
+				return
+			}
 			r2 := r.Clone(r.Context())
 			r2.URL.Path = "/"
 			fileServer.ServeHTTP(w, r2)

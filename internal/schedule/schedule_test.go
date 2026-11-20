@@ -2,6 +2,8 @@ package schedule
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -197,6 +199,18 @@ func TestKindDefaultsToPromptOnLoadAndAStandupDigestIsDropped(t *testing.T) {
 	var kept []map[string]any
 	if err := state.LoadJSON(dir, file, &kept); err != nil || len(kept) != 2 {
 		t.Fatalf("the file keeps %d schedules (%v): the digest is dropped from it once", len(kept), err)
+	}
+}
+
+func TestAFileReadInPartIsNotRewrittenForADigest(t *testing.T) {
+	dir := t.TempDir()
+	body := []byte(`[{"id":"d","kind":"digest","cron":"0 9 * * *","enabled":true},{"id":"p","machine":"local","dir":"/tmp/x","cron":"0 9 * * *","prompt":"hi","enabled":"true"}]`)
+	if err := os.WriteFile(filepath.Join(dir, file), body, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	New(dir, nil, nil)
+	if got, _ := os.ReadFile(filepath.Join(dir, file)); string(got) != string(body) {
+		t.Fatalf("a damaged schedules.json was written over: %s", got)
 	}
 }
 
