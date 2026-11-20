@@ -207,11 +207,20 @@ func (a *Adapter) PaneRecent(paneID string, n int) (string, bool, error) {
 	if err != nil {
 		return "", false, err
 	}
-	rows := strings.Split(withoutSGR(ScreenText(read.Text)), "\n")
+	return lastTextRows(read.Text, n), !read.Complete, nil
+}
+
+// lastTextRows is a vt read's last n rows as plain text, down to the last row with text: a row of coloured spaces
+// shows on the screen (ScreenText keeps it) but holds no text, so it counts for nothing here.
+func lastTextRows(vt string, n int) string {
+	rows := strings.Split(withoutSGR(vt), "\n")
 	for i := range rows {
 		rows[i] = strings.TrimRight(rows[i], " ")
 	}
-	return strings.Join(rows[max(0, len(rows)-n):], "\n"), !read.Complete, nil
+	for len(rows) > 0 && rows[len(rows)-1] == "" {
+		rows = rows[:len(rows)-1]
+	}
+	return strings.Join(rows[max(0, len(rows)-n):], "\n")
 }
 
 // withoutSGR is a vt read's rows as plain text: they hold their text and SGR sequences, nothing else.

@@ -413,8 +413,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   logged once a stream; the core's refusals read as herdr's (`not_found` →
   `pane_not_found`, `invalid_regex`, `needs_update` → `invalid_request`).
   Reads: `PaneRead`, `PaneScreen` (`ScreenText` of a vt read), `PaneRecent`
-  (a vt read too, through `ScreenText`'s one rule for the rows under the
-  text, its colours stripped, `withoutSGR`: a plain read with history scrolls a
+  (a vt read too, as plain text down to the last row with text,
+  `lastTextRows` — a row of coloured spaces shows on a screen but holds no
+  text — its colours stripped, `withoutSGR`: a plain read with history scrolls a
   full-screen program with the wheel under the person's hands, the vt one
   never — such a program's history is its screen alone; at most 1000 rows,
   `truncated` past them, until Core 25 searches xterm's own buffer), each

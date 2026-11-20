@@ -148,3 +148,10 @@ func TestAReadNeverReachesAnOlderCoreDialledSince(t *testing.T) {
 		t.Fatal("a read reached the older core")
 	}
 }
+
+func TestRecentRowsEndAtTheLastTextNotAColouredBlankRow(t *testing.T) {
+	vt := "\x1b[0m49\n\x1b[0m50\n\x1b[0m\x1b[31mred\x1b[0m\n\x1b[0m\x1b[44m    \n\x1b[0m\x1b[44m    \n\x1b[0m"
+	if got := lastTextRows(vt, 3); got != "49\n50\nred" {
+		t.Fatalf("%q", got)
+	}
+}
