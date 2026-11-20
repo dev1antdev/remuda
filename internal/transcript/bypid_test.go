@@ -264,6 +264,7 @@ func TestALinuxProcessIsKnownByItsBirthToTheMillisecond(t *testing.T) {
 		{"another born 400 ms later, the boot read over 500 ms", 500 * time.Millisecond, time.Millisecond, 216980, "", true},
 		{"the very process, the boot read over 100 ms", time.Millisecond, 100 * time.Millisecond, 216940, "", true},
 		{"another born two seconds later, the boot read over 100 ms", time.Millisecond, 100 * time.Millisecond, 217140, "", false},
+		{"another born 400 ms later, the clock stepped back between its readings", -50 * time.Millisecond, -50 * time.Millisecond, 216980, "", true},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			procs := []Running{{PID: 7, Agent: "claude", CWD: "/a", Seen: seen, Started: seen.UnixMilli()}}
@@ -283,8 +284,10 @@ func TestALinuxProcessIsKnownByItsBirthToTheMillisecond(t *testing.T) {
 	}
 	for _, date := range []string{"%3N", "1795048800"} {
 		noMillis := "Linux" + script.US + "1795046400" + script.US + "12.34" + script.US + date + script.US + date + script.US + "100"
-		if b := bootOf(noMillis); b.hz != 0 {
+		if b := bootOf(noMillis); b.hz != 0 || !b.linux {
 			t.Fatalf("a date telling no milliseconds (%s) read as a boot: %+v", date, b)
+		} else if fits, sure := b.mayBe("216940", seen.UnixMilli()); fits || sure {
+			t.Fatalf("a Linux with no boot told settled a process: fits %v, sure %v", fits, sure)
 		}
 	}
 }
@@ -626,7 +629,7 @@ func TestTheCreationTheRuntimeToldDecides(t *testing.T) {
 		{"the very process, its clock stepped back since", record(start), began.Add(420 * time.Millisecond), never, rpath.Style{}, "/a", "id-1"},
 		{"another process under the pid, begun a second later", record("Thu Nov 19 00:36:11 2026"), began.Add(420 * time.Millisecond), always, rpath.Style{}, "/a", ""},
 		{"another process that reads as begun earlier: the clock stepped back", record("Thu Nov 19 00:30:00 2026"), began.Add(420 * time.Millisecond), always, rpath.Style{}, "/a", ""},
-		{"Linux's ps a second behind: it counts the boot time in whole seconds", "system" + script.US + "Linux" + script.RS + "\n" + record("Thu Nov 19 00:36:09 2026"), began.Add(420 * time.Millisecond), never, rpath.Style{}, "/a", "id-1"},
+		{"a Linux that told no boot: its second settles nothing", "system" + script.US + "Linux" + script.RS + "\n" + record("Thu Nov 19 00:36:09 2026"), began.Add(420 * time.Millisecond), always, rpath.Style{}, "/a", ""},
 		{"a Mac's ps a second behind: another process", "system" + script.US + "Darwin" + script.RS + "\n" + record("Thu Nov 19 00:36:09 2026"), began.Add(420 * time.Millisecond), always, rpath.Style{}, "/a", ""},
 		{"ps two seconds behind", record("Thu Nov 19 00:36:08 2026"), began.Add(420 * time.Millisecond), always, rpath.Style{}, "/a", ""},
 		{"a stale file of a process before it, the same second", recordAt(start, began.Add(300*time.Millisecond).UnixMilli()), began.Add(420 * time.Millisecond), always, rpath.Style{}, "/a", ""},
@@ -636,8 +639,9 @@ func TestTheCreationTheRuntimeToldDecides(t *testing.T) {
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			procs := []Running{{PID: 7, Agent: "claude", CWD: c.cwd, Seen: began.Add(time.Minute), Started: c.started.UnixMilli()}}
-			if got, _ := parseSessionsByPID(c.out, procs, c.style, c.clock); got[7] != c.want {
-				t.Fatalf("got %v, want %q", got, c.want)
+			got, unsure := parseSessionsByPID(c.out, procs, c.style, c.clock)
+			if got[7] != c.want || unsure[7] != strings.HasPrefix(c.name, "a Linux that told no boot") {
+				t.Fatalf("got %v, unsure %v, want %q", got, unsure, c.want)
 			}
 		})
 	}

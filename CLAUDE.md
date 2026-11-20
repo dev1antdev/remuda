@@ -1046,13 +1046,15 @@ components and icons as rules for whoever changes it: @docs/design.md
   millisecond, read as remuda-core reads it (`/proc/<pid>/stat`'s ticks after
   the boot the script tells first: `/proc/stat`'s whole second with the real
   clock less `/proc/uptime`, the real clock read before and after it, the
-  tightest of three tries, `linuxBoot.mayBe`, within `coreBootSlack` 10 ms of
-  the core's own reading), so a later process given the pid in the same second
-  is another; a reading wider than `maxBootSpan` 20 ms leaves the processes the
-  second compare cannot settle out of the answer, as a clock not read does
-  (below); a FILETIME's millisecond on Windows; on macOS, where ps tells no millisecond,
-  `ps -o lstart`'s second alone (`sameCreation`; on Linux the second before
-  too where no birth was read) — a later process given the pid within that
+  tightest of three tries with the clock not stepped back between, its ps
+  second the core's or the one before (`sameCreation`: ps counts the boot in
+  whole seconds), `linuxBoot.mayBe`, within `coreBootSlack` 10 ms of the
+  core's own reading), so a later process given the pid in the same second is
+  another; a reading wider than `maxBootSpan` 20 ms, or none (a `date`
+  telling no milliseconds), leaves the processes the second cannot settle out
+  of the answer, as a clock not read does (below); a FILETIME's millisecond
+  on Windows; on macOS, where ps tells no millisecond, `ps -o lstart`'s second
+  alone — a later process given the pid within that
   very second passes there, until the core's next look (half a second) tells
   the foreground's new creation; no clock read for any of it, so a step of the
   machine's clock neither lets a later process in nor hides the one seen),

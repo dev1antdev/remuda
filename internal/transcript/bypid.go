@@ -114,12 +114,13 @@ func sessionsByPIDScript(procs []Running) string {
 	}
 	return script.PATH + "\n" + script.CwdOf + `system=$(uname -s 2>/dev/null)
 if [ "$system" = Linux ]; then
-  span=
+  span= before= up= after=
   for try in 1 2 3; do
     early=$(date +%s%3N)
     read -r uptime rest < /proc/uptime
     late=$(date +%s%3N)
     case "$early$late" in *[!0-9]*) break ;; esac
+    [ "$late" -ge "$early" ] || continue
     if [ -z "$span" ] || [ $((late - early)) -lt "$span" ]; then
       span=$((late - early)) before=$early up=$uptime after=$late
     fi
@@ -316,8 +317,9 @@ const maxBootSpan = 20
 
 // linuxBoot is what a Linux machine told of its boot: /proc/stat's whole second (ps's), the earliest and latest moment
 // it can have been in ms (the real clock read before and after /proc/uptime, which counts hundredths), how far apart
-// those readings were, and the clock ticks a second.
+// those readings were, and the clock ticks a second; zero but linux where it told none that can be used.
 type linuxBoot struct {
+	linux                             bool
 	whole, earliest, latest, span, hz int64
 }
 
@@ -325,8 +327,11 @@ type linuxBoot struct {
 // ticks a second.
 func bootOf(system string) linuxBoot {
 	fields := strings.Split(system, script.US)
-	if len(fields) != 6 || fields[0] != "Linux" {
+	if fields[0] != "Linux" {
 		return linuxBoot{}
+	}
+	if len(fields) != 6 {
+		return linuxBoot{linux: true}
 	}
 	whole, errWhole := strconv.ParseInt(fields[1], 10, 64)
 	up, errUp := strconv.ParseFloat(fields[2], 64)
@@ -334,20 +339,23 @@ func bootOf(system string) linuxBoot {
 	after, errAfter := strconv.ParseInt(fields[4], 10, 64)
 	hz, errHz := strconv.ParseInt(fields[5], 10, 64)
 	if errWhole != nil || errUp != nil || errBefore != nil || errAfter != nil || errHz != nil || hz <= 0 || after < before || before < whole*1000 {
-		return linuxBoot{} // a `date` telling no milliseconds reads as seconds, before the boot
+		return linuxBoot{linux: true} // a `date` telling no milliseconds reads as seconds, before the boot
 	}
 	upMS := int64(math.Round(up * 1000))
 	inSecond := func(ms int64) int64 { return min(max(ms, whole*1000), whole*1000+999) }
-	return linuxBoot{whole: whole, earliest: inSecond(before - upMS - 10), latest: inSecond(after + 1 - upMS), span: after - before, hz: hz}
+	return linuxBoot{linux: true, whole: whole, earliest: inSecond(before - upMS - 10), latest: inSecond(after + 1 - upMS), span: after - before, hz: hz}
 }
 
 // mayBe says whether a Linux process started that many ticks after the boot fits the one remuda-core saw born at told
 // (unix ms), reckoned as the core reckons it: the boot held to ps's whole second, plus the ticks — and whether the
-// reading of the boot was tight enough to tell. Where no boot or start was told, anything fits.
+// reading of the boot and the start was good enough to tell. Off Linux it has nothing to say: anything fits.
 func (b linuxBoot) mayBe(ticks string, told int64) (fits, sure bool) {
+	if !b.linux {
+		return true, true
+	}
 	since, err := strconv.ParseInt(strings.TrimSpace(ticks), 10, 64)
 	if b.hz == 0 || err != nil {
-		return true, true
+		return false, false
 	}
 	offset := since * 1000 / b.hz
 	return told >= b.earliest+offset-coreBootSlack && told <= b.latest+offset+coreBootSlack, b.span <= maxBootSpan
