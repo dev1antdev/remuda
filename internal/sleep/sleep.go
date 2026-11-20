@@ -30,7 +30,8 @@ type Service struct {
 	Store *Store
 	Watch *watch.Watcher
 	Jobs  *jobs.Runner
-	// Lock is the per-pane typing lock: a leave and a start hold it, so nothing else lands in the bare shell between.
+	// Lock is the pane's hold (sessions.Input.Hold: its prompts, then its typing): a leave and a start hold it, so nothing
+	// else lands in the bare shell between.
 	Lock func(machineID, paneID string) sync.Locker
 	// Typed hears what a sleep types into a pane — an agent's exit, or an Esc as a key — for the activity; nil hears none.
 	// The agents leave side by side, so it is called from several goroutines at once.

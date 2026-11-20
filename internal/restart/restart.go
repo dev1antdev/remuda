@@ -151,7 +151,8 @@ type Restarter struct {
 	machines *machines.Manager
 	// Later runs a deferred restart as a job the person can see; nil means logged only.
 	Later func(mc *machines.Machine, title string, fn func(say func(string)) error)
-	// Lock is the per-pane typing lock; a restart holds it from the exit to the resumed agent.
+	// Lock is the pane's hold (sessions.Input.Hold: its prompts, then its typing); a restart holds it from the exit to the
+	// resumed agent, so no prompt goes in between.
 	Lock func(machineID, paneID string) sync.Locker
 	// Memory remembers every chat for a come-back after a reboot (recover.go); nil remembers none.
 	Memory *Memory

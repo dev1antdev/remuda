@@ -1,6 +1,7 @@
 package core_test
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"slices"
@@ -186,7 +187,9 @@ func TestTwoRemudasMakingWorkspacesAtOnceKeepEveryOne(t *testing.T) {
 	})
 }
 
-func TestAPromptWaitsForACoreThatChecksTheAgentAsItTypes(t *testing.T) {
+// idleAgent is a throwaway core with the stand-in agent started in a workspace's pane and resting there.
+func idleAgent(t *testing.T) (*core.Client, *core.Adapter, string) {
+	t.Helper()
 	standInAgent(t)
 	client := coretest.Server(t).Client(t)
 	adapter := adapterOf(t, client, core.AdapterHooks{})
@@ -205,7 +208,24 @@ func TestAPromptWaitsForACoreThatChecksTheAgentAsItTypes(t *testing.T) {
 		t.Fatal(err)
 	}
 	eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Pane(pane).AgentStatus == herdr.StatusIdle })
-	if err := adapter.AgentPrompt(pane, "hello"); !herdr.IsCode(err, "invalid_request") || !strings.Contains(err.Error(), "Core 33") {
+	return client, adapter, pane
+}
+
+func TestAPromptWaitsForACoreThatChecksTheAgentAsItTypes(t *testing.T) {
+	client, adapter, pane := idleAgent(t)
+	hello, err := client.Hello(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = adapter.AgentPrompt(pane, "hello")
+	if hello.Has("send_foreground") {
+		if err != nil {
+			t.Fatalf("a prompt through a core that checks the agent as it types: %v", err)
+		}
+		screenSays(t, adapter, pane, "got: hello")
+		return
+	}
+	if !herdr.IsCode(err, "invalid_request") || !strings.Contains(err.Error(), "Core 33") {
 		t.Fatalf("a prompt through a core that does not check the agent as it types: %v", err)
 	}
 	screen, _ := adapter.PaneRead(pane)

@@ -417,7 +417,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   (`claude-code` → claude, `codex`, `gemini-cli` → gemini, `kimi`, any other
   app by its own name);
   `statusOf` takes the program's own word, `error` read as done; the session
-  comes through `SessionOf` (Core 16 wires it; nil, none). Output watches go
+  comes through `SessionOf` (nil, none, until Core 21 hands it
+  `transcript.Reader.SessionsOf` by the foreground's pid). Output watches go
   in **feeds** (`feeds.go`, tested on a fake: shared, closed with the last
   stream, opened again after, a rule edited leaving the other watches'
   feeds standing, and 120 feeds' 4,800 standing rows told as they open, all
@@ -490,7 +491,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   `startSeen` 10 s on; the name is herdr's alone. **`AgentPrompt` goes
   only through a core that checks, as it types, that the agent is still
   in front** (`promptsNeed`: the hello feature `send_foreground`, Core 33;
-  the agent's pid sent as `foreground`, which today's cores ignore; the
+  the agent's pid sent as `foreground`, checked by the core before the
+  paste and again before its Enter; the
   look and the send both on the very connection that said so, a connection
   lost meanwhile failing the prompt rather than dialling a core that may
   not check): every
@@ -500,8 +502,15 @@ components and icons as rules for whoever changes it: @docs/design.md
   prompt reaches a core machine's agent before Core 33 (the tests lift the
   gate, `LiftPromptGate`). Through such a core it is `terminal.send` (the
   person's draft in the terminal waited for, `sendWithin` 75 s — shorter
-  would cancel a prompt already typed — under the pane's lock, so keys and
-  answers through remuda wait behind it while a draft stands, #329):
+  would cancel a prompt already typed; `StagePrompt` is the look and the
+  send apart, so `sessions.Input` holds the pane's lock for the look alone
+  and keys and answers pass a prompt the core holds, #329; one the core
+  pasted and then left unsubmitted, the agent gone from the front before
+  its Enter, keeps the core's `not_submitted` — the text may sit in the
+  input line of whatever runs there, `sessions.ErrNotSubmitted` says to
+  look at the terminal — and one through a terminal whose holder is older
+  than the core (`needs_update`, nothing typed) is `invalid_request` with
+  the core's words, that a terminal started since takes it):
   `agent_not_found` with no agent, `agent_not_ready` until it has reported
   a status since it took the terminal (`readyForPrompt`: the mirror stamps
   `agentAt` and `statusAt`, a report the foreground's next look comes
@@ -906,7 +915,36 @@ components and icons as rules for whoever changes it: @docs/design.md
   reordered), `$rewindTo`, `$set`; the legacy one-object `.json` too.
   `Reader.ResolveSession(agent, cwd, kind, value)` finds the file by the
   pane's agent (`""` tries every format, for a transcript opened by id),
-  locally and by `findScript` over ssh; `NewUsageScanner(path)` is the
+  locally and by `findScript` over ssh. **A session found by the agent's
+  process** (`bypid.go`, tested on real processes in a temp HOME and on
+  `shell.Fake`), for a machine whose runtime names no session (remuda-core,
+  Core 12): `Reader.SessionsOf([]Running{pid, agent, cwd})` is one script
+  on the machine, here or over ssh, answering pid → session id — Claude
+  Code's from `<config dir>/sessions/<pid>.json` (`CLAUDE_CONFIG_DIR` read
+  off the process's environment, `/proc/<pid>/environ` or `ps -E`, whose
+  run-together text gives candidate folders, a relative one taken from the
+  agent's folder, then the default one; a process gone is no record; every
+  candidate's file is sent and Go weighs them, a start-verified one before
+  one matched by its folder alone; only
+  regular files are read, a FIFO never holds the script; a file
+  counts only when its `procStart` is the process's `LC_ALL=C TZ=UTC ps -o
+  lstart`; else, while the process's start is known — to the second from
+  `ps`, to the millisecond for a native Windows process, which Git Bash's own
+  tools do not see, through PowerShell's `Get-Process`, asked on Git Bash
+  alone (a Linux under WSL reaches Windows' own by other numbers) — when its folder is
+  the pane's and its `startedAt` is no older than that start (CI's Windows job
+  proves it; a native process's `CLAUDE_CONFIG_DIR` is out of reach there, so
+  `~\.claude` alone is read); else, where either side lacks the start, when
+  its folder is the pane's), Codex's thread id from the
+  `rollout-*.jsonl` of the person's thread (its first line a `session_meta`
+  naming no subagent: a file still empty is none) the process, else a child of it, holds open (`/proc/<pid>/fd`,
+  else `lsof -nP`; none on Windows), none when two are, the id the one its
+  `session_meta` names (a revert's replacement file,
+  `rollout-<time>-<id>_<rollout id>.jsonl`, keeps the thread's); an id found under a
+  `CLAUDE_CONFIG_DIR` of the agent's own still names a file the readers,
+  which know the default roots alone, do not open yet;
+  stateless, since `/clear` and `/resume` change the session under the same
+  pid; nothing under `~/.claude` or `~/.codex` is written. `NewUsageScanner(path)` is the
   per-line usage reader of each format (the tracker keeps one per file
   across its delta reads); `InputField` is the input-key reader the recap
   and `ShellCommand` share.
@@ -1785,7 +1823,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   Linux), herdr's update without `--handoff`. Not there: the Code mode
   (`code.NoCodeOnWindows`; `install-code.sh` refuses), previews
   (`preview.NotOnWindows`: Windows names no listening process's folder),
-  teleport (`teleport.NotWithWindows`, both ends). **CI's windows job**
+  teleport (`teleport.NotWithWindows`, both ends), Codex's session found by
+  its process (`Reader.SessionsOf`: Git Bash has no `lsof` or `/proc` for a
+  Windows process). **CI's windows job**
   (`.github/workflows/ci.yml`, `windows-latest`) is the proof: herdr for
   Windows installed, remuda.exe built into `~/.local/bin`, the runner's own
   OpenSSH server given Git Bash and a key, then every `TestOnWindows…`
@@ -1798,7 +1838,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   stream through `remuda.exe bridge` over ssh, the door's files and its
   reverse forward, the vitals, keep-awake, the file viewer's scripts, the
   Changes lens with the secret check, a session found, read and searched
-  through remuda.exe, `remuda setup -host` and `mcp install -host` against
+  through remuda.exe, a Claude Code session found by its native process's
+  pid, `remuda setup -host` and `mcp install -host` against
   the runner, and a release's install beside a running remuda.exe. The
   check job vets and builds for `GOOS=windows`. What the runner cannot
   prove: a person's own PC, Windows on arm64, a cockpit's ControlMaster to
@@ -1966,9 +2007,11 @@ components and icons as rules for whoever changes it: @docs/design.md
   the watcher sees them settle (`events.PaneStatus` → `Restarter.OnStatus`,
   a 25 s timer, then its own job via `Restarter.Later`). A pane without a session id
   is left alone; a pane that closes with its agent is reported. `what =
-  restart-<kind>` runs the restart alone. A restart holds the pane's
-  lock (`sessions.Input.Lock`) from the exit to the resumed agent (nothing else lands in
-  the bare shell in between), a booking is tied to the session id it was
+  restart-<kind>` runs the restart alone. A restart holds the pane
+  (`sessions.Input.Hold`: the pane's prompts' lock, then its typing lock,
+  as a prompt takes them, so a prompt remuda-core holds for a draft goes
+  first and none goes after) from the exit to the resumed agent (nothing
+  else lands in the bare shell in between), a booking is tied to the session id it was
   made for, and a settled chat waits 25 s more (any change in between
   calls it off) because the person is likely reading or typing right
   then. This is the one place remuda types text the person did not
@@ -2097,7 +2140,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   merged with what an earlier sleep of it still holds) — so the roster
   says asleep and the restart memory skips its panes from the next
   snapshot — and a job ("Sleep api") makes every agent leave side by side,
-  each under its pane's lock: a fresh look (a pane gone stays asleep, a
+  each under its pane's hold (`sessions.Input.Hold`, as a restart): a fresh look (a pane gone stays asleep, a
   wake opens a tab for it; another conversation there is left), an Esc
   for one at work or asking (`interrupt`, a quiet "sent" row of the
   activity like the exit, `Typed`) and a wait for it to rest, then
@@ -2105,7 +2148,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   panes and tabs stay. An agent that would not leave stays awake and off
   the record ("api is asleep, but 1 agent did not stop: …"; none left,
   the record goes). **Wake** (`Service.Wake`): a job ("Wake api"), one
-  agent after another under its pane's lock: back already (the same
+  agent after another under its pane's hold: back already (the same
   kind and session) counts as woken; another agent in the pane, a shell
   in another folder, a shell `PaneAtPrompt` says is busy, or a start
   herdr refused stay asleep — never typed into a busy shell; a folder or
@@ -7191,10 +7234,18 @@ components and icons as rules for whoever changes it: @docs/design.md
   `ctrl`, `alt` and `shift`, each once, before a named key — enter, esc,
   tab, space, backspace, the arrows — or `ctrl` / `alt` before a letter or
   digit; a printable key alone is text), `RefOK` (a branch name git gets as an
-  argument), and `Input`: one lock per pane, `Submit` (`agent.prompt`: what is
+  argument), and `Input`: one lock per pane (a client that stages its
+  prompt, `StagedPrompter` — remuda-core, which holds a prompt while a
+  person finishes a draft in the terminal and checks the agent as it types —
+  holds it for the look alone, the pane's prompts one after another by a
+  lock of their own, so keys, typing and an answer pass the wait; `Prompt`
+  is that door, which the arena's and a task's first prompts take too;
+  `Hold` takes both, the prompts' lock first, for a restart or a sleep),
+  `Submit` (`agent.prompt`: what is
   written for an agent is never typed into a pane without one, whose shell
   would run every line; `ErrNoAgent` when none is ready, `ErrAgentBusy`
-  while a menu is open, each a 409 that leaves the person's draft; **a message
+  while a menu is open, `ErrNotSubmitted` for a prompt remuda-core pasted
+  but left unsubmitted, each a 409 that leaves the person's draft; **a message
   that names a picture gets a second Enter** — `settle.go`,
   tested on a paper client: herdr 0.9.5 writes the paste and its Enter as
   one, Claude Code swallows an Enter that arrives while it takes a paste
@@ -7237,7 +7288,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   tab alone once the person added another to the workspace, nothing for a
   pane gone, a refusal when the tab no longer holds the pane) — the agent schedules' door; and `FirstPrompt` (the text a
   person wrote in the New workspace / tab / worktree dialog for the agent
-  they started: `agent.prompt` under the pane's lock every
+  they started: `Prompt` — `agent.prompt` under the pane's lock, on
+  remuda-core the look alone under it — every
   `FirstPromptRetry` while the agent is still coming up, until it takes
   the text or `FirstPromptTimeout` passes; a dialog on the agent's screen
   — Claude Code's trust question for the folder — is waited through and
@@ -7569,7 +7621,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   question came up and the agent still holds the terminal
   (`sessions/settle.go`). A pane with no agent ready gets nothing: a 409,
   never the text typed into its shell. Everything per-pane is
-  serialized by `sessions.Input`, one lock per pane. Never queue or auto-send user input.
+  serialized by `sessions.Input`, one lock per pane (on remuda-core a
+  prompt holds it for its look alone: the core orders what is typed and
+  checks the agent as it types). Never queue or auto-send user input.
   The first prompts remuda composes itself — a handover's, a second
   opinion's review request (`opinion.Prompt`) — go only
   to the agent it just started in a new tab, and only because the person
