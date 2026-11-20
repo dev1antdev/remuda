@@ -145,6 +145,9 @@ func (s *Service) Sleep(mc *machines.Machine, workspaceID string, anyway bool) (
 	if err != nil {
 		return Started{}, err
 	}
+	if err := restart.Reread(client); err != nil {
+		return Started{}, err
+	}
 	snap, err := client.SessionSnapshot()
 	if err != nil {
 		return Started{}, err
@@ -245,6 +248,10 @@ func (s *Service) sleepOne(client restart.Leaver, machineID string, a Agent, say
 		}
 	}
 	exit := func(text string) { typed(text, false) }
+	if err := restart.Reread(client); err != nil {
+		say(fmt.Sprintf("· %s (%s): %v", title, a.Pane, err))
+		return "its session could not be read"
+	}
 	p, found, err := look(client, a.Pane)
 	switch {
 	case err != nil:

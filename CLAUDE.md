@@ -342,7 +342,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   skipped; `serve` started as the test's own child with its own
   `RC_SESSION`, `RC_SOCKET`, XDG folders and HOME, `RC_LAUNCHD_DIRECT` so
   macOS does not hand it to launchd, `RC_HEARTBEAT_MS` 300, stopped through
-  `server.stop`; `Core.Use(t)` sets that environment on the test process,
+  `server.stop`, `Core.Restart(t)` stopping it and starting it again on
+  the same state, `StandInClaude(t, session)` a `claude` first on its PATH
+  that keeps its session file, reports through OSC 7501, answers
+  `/restart` as a build without it and leaves on `/exit`; `Core.Use(t)` sets that environment on the test process,
   the core's binary first on PATH, for a `-core` fleet's `remuda-core
   connect`) — calls side by side, a refusal's kind, documents, an
   attach's echo and exit code, a stream nobody reads beside a live one, events
@@ -377,7 +380,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   `foreground` → `pane.updated` — `pane.agent_detected` when the agent
   changed — `labels` → `pane.moved`, `size` and the document →
   `layout.updated`, `created` and `restarted` → `pane.created`, `finished`
-  and `removed` → `pane.closed`, `lost` → `pane.exited`); a stream that falls `maxQueued` 4096
+  and `removed` → `pane.closed`, `lost` → `pane.exited`; a terminal lost or
+  `restarted`, or found waiting for its new shell or holding another shell
+  than before when the mirror fills again, is `restored` — the pane's
+  `Restored` — until an agent takes it); a stream that falls `maxQueued` 4096
   behind ends with `events_lost`, as herdr's does, and every stream ends when
   the subscription is lost, which is tried again 250 ms → 5 s apart (the
   machine hears `TransportError`). Each step is bounded (`bounded`: the
@@ -417,8 +423,23 @@ components and icons as rules for whoever changes it: @docs/design.md
   (`claude-code` → claude, `codex`, `gemini-cli` → gemini, `kimi`, any other
   app by its own name);
   `statusOf` takes the program's own word, `error` read as done; the session
-  comes through `SessionOf` (nil, none, until Core 21 hands it
-  `transcript.Reader.SessionsOf` by the foreground's pid). Output watches go
+  comes through `SessionOf` (a `SessionLookup`: kind, the foreground's pid,
+  its folder; nil, none), which a machine gives as its `processSessions`
+  (`internal/machines/sessions.go`, tested on paper and on a throwaway core
+  with a stand-in Claude Code keeping its session file in a temp HOME):
+  `transcript.Reader.SessionsOf` for every Claude Code and Codex process the
+  snapshots asked about, one script for all of them, a process new to it read
+  at once and every answer again once `sessionsFresh` 30 s old (a `/clear` or
+  `/resume` changes the session under the same pid), a failed read keeping
+  the last answer (logged once an hour), a process nobody asked about for
+  `sessionsForget` 2 min dropped; the snapshot reads only what was last
+  found, never waiting — `Adapter.RereadSessions` (`AdapterHooks.Reread`,
+  `processSessions.readNow`) reads them all again and waits, a read that
+  failed counting as none (`readAt` apart from `triedAt`, which paces the
+  background reads), for what is
+  about to stop an agent and resume it (`restart.Reread`, under the pane's
+  lock: a sleep's plan and each agent's exit, an update's restart), a read
+  that fails refusing the step. Output watches go
   in **feeds** (`feeds.go`, tested on a fake: shared, closed with the last
   stream, opened again after, a rule edited leaving the other watches'
   feeds standing, and 120 feeds' 4,800 standing rows told as they open, all
@@ -457,8 +478,20 @@ components and icons as rules for whoever changes it: @docs/design.md
   renames, `WorkspaceClose`, `TabClose` — and `panes.go` — `PaneSplit`
   (`splitBeside`, half the room) and `PaneClose` (`withoutPane`; a tab goes
   with its last pane and a workspace with its last tab, as herdr's) — run
-  the machine's shell in a new terminal with the place's labels and
-  `rm` (gone when its shell ends, as a herdr pane), and wait for the core's
+  the machine's shell in a new terminal with the place's labels,
+  `rm` (gone when its shell ends, as a herdr pane) and `keep` (a shell lost
+  to a reboot or the core's own stop comes back as a new one in its
+  folder, as herdr restores its panes, its agent the restart memory's to
+  bring back: "Resume after restart" and a wake start agents through the
+  adapter as on herdr; a sleep and an agent update's restart type the
+  agent's own `/exit` or `/restart`, a prompt, so on a machine they wait for
+  a core with `send_foreground`, 0.2.1 — the pinned 0.2.0 refuses them (a
+  sleep ends "did not stop"), while `lifecycle_test.go` runs both on a
+  throwaway core with the gate lifted; an exit or a kill stays final; a
+  pane remuda started before it kept them, one carrying a workspace's
+  label, is kept as the mirror fills, `keepOlder` through `Client.Keep`,
+  one by one, a refused one asked again `keepTries` 10 times 250 ms → 5 s
+  apart while it stands unkept, then at the next fill), and wait for the core's
   own news of it (`runShell`: the mirror alone puts terminals in it, so the
   pane answered is in the next snapshot and a reply never brings back a
   shell that ended meanwhile — one the core said went, `mirror.gone`, fails
@@ -965,7 +998,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   `CLAUDE_CONFIG_DIR` of the agent's own still names a file the readers,
   which know the default roots alone, do not open yet;
   stateless, since `/clear` and `/resume` change the session under the same
-  pid; nothing under `~/.claude` or `~/.codex` is written. `NewUsageScanner(path)` is the
+  pid (a core machine's cache of it is `internal/machines`' `processSessions`,
+  see `internal/core`); nothing under `~/.claude` or `~/.codex` is written. `NewUsageScanner(path)` is the
   per-line usage reader of each format (the tracker keeps one per file
   across its delta reads); `InputField` is the input-key reader the recap
   and `ShellCommand` share.
@@ -2094,11 +2128,19 @@ components and icons as rules for whoever changes it: @docs/design.md
   shell. `restart.Memory` (`Restarter.Memory`, `OpenMemory(dir)`) hears
   every `events.Snapshot` (`Restarter.Observe`) and keeps, per
   machine|pane, the agent kind, session id, folder and title of every
-  agent pane with a session in `<state>/chats.json` (written on change);
+  agent pane with a session in `<state>/chats.json` (written on change;
+  `Ran` the agent's own folder when it is not its pane's, since remuda-core
+  gives a lost shell back where the program that held the terminal last
+  stood, either folder counting as the chat's, and the resume's check
+  judging the folder the shell stands in;
+  on a remuda-core machine only Claude Code's and Codex's, the sessions
+  read off a process there being theirs alone);
   a remembered pane that is a bare shell in the same folder counts as
   *stopped* only when the change was not watched happening — the
   snapshot's `First` flag, set by the watcher on a machine's first
-  snapshot and on the first after its polls failed — and is forgotten
+  snapshot and on the first after its polls failed, or the pane's
+  `Restored` on a remuda-core machine, whose shell the core gave a new
+  one while remuda watched (see `internal/core`, Core 21) — and is forgotten
   when the person left the agent themselves, moved the shell elsewhere
   or closed the pane; `Restarter.Server` pauses the memory for its
   machine while it restarts herdr itself; a pane `Memory.Asleep` names (`sleep.Store.Holds`: a
@@ -2178,12 +2220,15 @@ components and icons as rules for whoever changes it: @docs/design.md
   closed with it), still, other, unseen; `swap` and the sleep share it.
 - `internal/sleep/` — **a workspace put to sleep and woken**, after
   Orca's hibernate mod (tested on a fake herdr: `fake_test.go`; the
-  routes' refusals on a throwaway herdr). `Plan(snap, workspace)` is
+  routes' refusals on a throwaway herdr; a sleep and a wake on a throwaway
+  remuda-core, `internal/core/lifecycle_test.go`). `Plan(snap, workspace)` is
   every agent pane of the workspace remuda can bring back on a session
   (`restart.Knows`, `restart.SessionOf`) as an `Agent{pane, tab,
   tab_name, kind, session, dir, title}`, the ones at work or asking as
   `Busy`, and the agents with no session (or of a kind remuda cannot
-  resume) left running, named. **Sleep** (`Service.Sleep(mc, workspace,
+  resume) left running, named — on a remuda-core machine every agent but
+  Claude Code and Codex, whose sessions alone are read off their processes
+  there. **Sleep** (`Service.Sleep(mc, workspace,
   anyway)`): nothing to record is refused; busy agents are a `*BusyError` (409 with `busy`,
   Orca's words: "Sleep api? Still busy: Claude Code is working…
   Sleeping interrupts them. Waking resumes their conversations where
@@ -2192,7 +2237,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   merged with what an earlier sleep of it still holds) — so the roster
   says asleep and the restart memory skips its panes from the next
   snapshot — and a job ("Sleep api") makes every agent leave side by side,
-  each under its pane's hold (`sessions.Input.Hold`, as a restart): a fresh look (a pane gone stays asleep, a
+  each under its pane's hold (`sessions.Input.Hold`, as a restart): a fresh look — on remuda-core with its session
+  read off its process again, `restart.Reread`, an agent that moved to another conversation since the plan left
+  awake — (a pane gone stays asleep, a
   wake opens a tab for it; another conversation there is left), an Esc
   for one at work or asking (`interrupt`, a quiet "sent" row of the
   activity like the exit, `Typed`) and a wait for it to rest, then

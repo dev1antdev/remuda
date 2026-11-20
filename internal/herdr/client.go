@@ -229,6 +229,9 @@ type PaneInfo struct {
 	// the display values clients reported for the pane (pane.report_metadata), every source's, the newest per name
 	Tokens      map[string]string `json:"tokens,omitempty"`
 	StateLabels map[string]string `json:"state_labels,omitempty"`
+	// Restored is remuda-core's alone: the pane's shell was lost and the core started a new one in its place, so
+	// whatever ran there did not leave at the person's word.
+	Restored bool `json:"-"`
 }
 
 // Scroll is where a pane's viewport stands in its scrollback: rows above the bottom, the most it can be, and the
