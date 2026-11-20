@@ -8,8 +8,11 @@ export type SizeMode = "fit" | "keep";
 
 // SearchApi is the find's hold on the screen: the match at a row of it (near a character column) marked once the
 // repaint lands, as long as the query is on that row, with every other match on the screen decorated, and the marks cleared.
+// find, where the terminal holds its own rows (a live terminal on remuda-core), looks through them itself: the match
+// at that index of every match, top to bottom, scrolled into view and marked, and how many there are.
 export type SearchApi = {
   show: (query: string, expectedRow: number, col: number) => void;
+  find?: (query: string, index: number) => { total: number; at: number };
   clear: () => void;
 };
 

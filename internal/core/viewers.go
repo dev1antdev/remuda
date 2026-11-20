@@ -19,6 +19,10 @@ const attachWithin = 15 * time.Second
 // viewerChunk is the most one read hands a viewer.
 const viewerChunk = 32 << 10
 
+// attachHistory is how many rows of history above the screen a viewer is painted first: as many as the page's xterm
+// keeps (`scrollback` in features/terminal/engine/engine.ts), so its find reads the terminal's own rows.
+const attachHistory = 2000
+
 // Terminals opens a machine's terminals through its core client.
 type Terminals struct {
 	client *Client
@@ -42,6 +46,7 @@ func (t *Terminals) Open(termID string, view herdr.View) (herdr.Viewer, error) {
 	v := &coreViewer{bytes: make(chan []byte, 8), done: make(chan struct{})}
 	params := AttachParams{
 		Terminal:            termID,
+		History:             attachHistory,
 		Observe:             view.Observe,
 		KeepSize:            view.Keep && !view.Observe,
 		ResizeNotifications: view.Keep || view.Observe,

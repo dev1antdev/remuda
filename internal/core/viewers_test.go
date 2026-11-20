@@ -140,3 +140,26 @@ func TestAViewerEndsWithItsProgram(t *testing.T) {
 		}
 	}
 }
+
+func TestAViewerIsPaintedTheRowsAboveTheScreen(t *testing.T) {
+	ctx := within(t, 30*time.Second)
+	client := coretest.Server(t).Client(t)
+	term, err := client.Run(ctx, core.RunParams{Argv: []string{"sh", "-c", "for i in $(seq 1 200); do echo row-$i; done; cat"}, Size: &core.Size{Cols: 80, Rows: 24}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for start := time.Now(); ; time.Sleep(50 * time.Millisecond) {
+		if read, _ := client.Read(ctx, term.Address, 0, ""); strings.Contains(read.Text, "row-200") {
+			break
+		}
+		if time.Since(start) > 10*time.Second {
+			t.Fatal("the rows never reached the screen")
+		}
+	}
+	viewer, err := core.NewTerminals(client).Open(term.Address, herdr.View{Cols: 80, Rows: 24})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer viewer.Close()
+	seen(t, viewer, "row-1\r\n") // far above a 24-row screen: only the history carries it
+}

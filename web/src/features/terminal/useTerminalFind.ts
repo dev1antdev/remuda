@@ -1,12 +1,16 @@
 // useTerminalFind drives the find over the scrollback from the find bar's store field while the terminal lens is on
 // screen. herdr keeps the rows: the query goes to the server, which finds it in the pane's last rows and says where
 // the viewport stands; the match asked for — the first for a new query, the one the bar stepped to — is scrolled
-// into view through the pane itself when it is off the screen, then marked there by xterm's search. A bar closed
-// on screen with a keyboard gives the terminal the focus back. The chat's own find runs only on its lens.
+// into view through the pane itself when it is off the screen, then marked there by xterm's search. On remuda-core
+// (core) xterm holds the terminal's own rows, so the find looks through them in the page and scrolls xterm alone;
+// when none of them has the query, the server reads the terminal's older rows and says if it is only there, where
+// the screen cannot show it. A bar closed on screen with a keyboard gives the terminal the focus back. The chat's own
+// find runs only on its lens.
 
 import { useEffect, useRef } from "react";
 import { actions, app } from "@/app/store";
 import { isTouch } from "@/lib/prefs";
+import { tn } from "@/lib/i18n";
 import { errMsg } from "@/lib/text";
 import { findScrollback, scrollPane } from "./api";
 import type { TermApi } from "./engine/types";
@@ -17,19 +21,36 @@ const DEBOUNCE_MS = 150;
 // FALLBACK_ROWS stands in for the viewport's height when herdr has not said it yet
 const FALLBACK_ROWS = 24;
 
-export function useTerminalFind(api: TermApi | null, active: boolean, machineId: string, paneId: string) {
+export function useTerminalFind(api: TermApi | null, active: boolean, machineId: string, paneId: string, core = false) {
   const open = app.use((s) => s.find !== null);
   const query = app.use((s) => s.find?.query ?? "");
   const steps = app.use((s) => s.find?.steps ?? 0);
   const at = app.use((s) => s.find?.at ?? 0);
   const on = active && open && api !== null;
   const run = useRef(0);
+  const toldOlder = useRef("");
+
+  // older says, once a query, that its matches are only in rows the terminal no longer holds for the screen
+  const older = async (q: string, id: number) => {
+    if (toldOlder.current === q) return;
+    const found = await findScrollback(machineId, paneId, q, SCROLLBACK_ROWS);
+    if (id !== run.current || !found.matches.length) return;
+    toldOlder.current = q;
+    const n = found.matches.length;
+    actions.notify(tn(n, "{n} match is only in older rows, which this terminal no longer shows", "{n} matches are only in older rows, which this terminal no longer shows"));
+  };
 
   // show finds the query in the pane's rows, counts for the bar, brings the match asked for on screen and marks it
   const show = async (q: string, index: number) => {
     if (!api) return;
     const id = ++run.current;
     try {
+      if (core && api.search.find) {
+        const { total, at: shown } = api.search.find(q, index);
+        actions.foundMatches(total, shown);
+        if (!total) await older(q, id);
+        return;
+      }
       const found = await findScrollback(machineId, paneId, q, SCROLLBACK_ROWS);
       if (id !== run.current) return;
       const total = found.matches.length;
@@ -69,7 +90,7 @@ export function useTerminalFind(api: TermApi | null, active: boolean, machineId:
     }
     const timer = setTimeout(() => void show(query, 0), DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [on, api, query, machineId, paneId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [on, api, query, machineId, paneId, core]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // a step of the bar: the rows read again, so a log still growing keeps its places
   const stepped = useRef(steps);
@@ -78,7 +99,7 @@ export function useTerminalFind(api: TermApi | null, active: boolean, machineId:
     stepped.current = steps;
     if (!on || steps === was || !query) return;
     void show(query, at);
-  }, [on, api, steps, at, query, machineId, paneId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [on, api, steps, at, query, machineId, paneId, core]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // the marks go when the bar closes or the lens leaves; closed on screen with a keyboard, the terminal takes the focus
   const wasOn = useRef(on);
