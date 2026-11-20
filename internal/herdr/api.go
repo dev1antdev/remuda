@@ -50,13 +50,37 @@ type EventStream interface {
 	Close() error
 }
 
-// Terminals is a machine's live terminals: a viewer joining one, typing into it, resizing it, and how many watch it.
+// Terminals is a machine's live terminals: a viewer opening one, and how many of this remuda's viewers watch it.
 type Terminals interface {
-	Subscribe(termID string, cols, rows int) (ch chan []byte, cancel func(), err error)
-	Write(termID string, data []byte) error
-	Resize(termID string, cols, rows int) error
+	Open(termID string, view View) (Viewer, error)
 	Viewers(termID string) int
 }
+
+// View is how one viewer opens a terminal: its grid, and whether it leaves the size to the others (Keep) or only
+// watches (Observe). herdr follows its smallest client whatever is asked, and watches nothing without typing.
+type View struct {
+	Cols, Rows int
+	Keep       bool
+	Observe    bool
+}
+
+// Viewer is one viewer's stream of a terminal: the program's bytes out, the keys and the size back.
+type Viewer interface {
+	Out() <-chan Out // closed once the terminal is no longer attached
+	Write(data []byte) error
+	Resize(cols, rows int) error
+	Close()
+}
+
+// Out is one thing a viewer is handed, in order: the program's bytes, or, with Cols and Rows set and no bytes, the
+// terminal's grid, which remuda-core tells a viewer that keeps the size or only watches ahead of the paint drawn at it.
+type Out struct {
+	Data       []byte
+	Cols, Rows int
+}
+
+// Grid says the Out is a grid rather than bytes.
+func (o Out) Grid() bool { return o.Cols > 0 && o.Rows > 0 }
 
 var (
 	_ API       = (*Client)(nil)
