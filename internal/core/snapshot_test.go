@@ -102,6 +102,28 @@ func TestTheAgentIsTheForegroundProcessOrWhatTheProgramReported(t *testing.T) {
 	}
 }
 
+func TestAScenePanesOwnCommandIsNeverAShellAtItsPrompt(t *testing.T) {
+	front := `"pid": 7, "argv": ["/bin/bash", "-l"], "foreground": {"pid": 7, "name": "bash"}`
+	for record, want := range map[string]bool{
+		`{` + front + `, "literal": true}`:                                     false,
+		`{` + front + `, "literal": false, "labels": {"remuda.command": "1"}}`: true,
+		`{` + front + `}`: true,
+		`{` + front + `, "labels": {"remuda.command": "1"}}`: false,
+		`{` + front + `, "literal": false}`:                  true,
+	} {
+		var pane Terminal
+		if err := json.Unmarshal([]byte(record), &pane); err != nil {
+			t.Fatal(err)
+		}
+		if got := atPrompt(&pane); got != want {
+			t.Errorf("%s at its prompt: %v, want %v (a running scene command must never read as an idle shell)", record, got, want)
+		}
+	}
+	if runsLiteral(Hello{Features: []string{"run_literal"}}) || !runsLiteral(Hello{Features: []string{"run_literal", "literal_record"}}) {
+		t.Fatal("a core whose record does not say literal is trusted with a pane's command")
+	}
+}
+
 func coreEvent(kind, terminal string, data any) Event {
 	raw, _ := json.Marshal(data)
 	return Event{Type: kind, Terminal: terminal, Data: raw}
