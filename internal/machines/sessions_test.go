@@ -53,11 +53,9 @@ func sessionAfter(t *testing.T, s *processSessions, agent string, pid int, want 
 }
 
 func TestAnAgentsSessionIsReadOffItsProcessWhenNewAndAgainOnceDue(t *testing.T) {
-	fresh := sessionsFresh
-	t.Cleanup(func() { sessionsFresh = fresh })
-	sessionsFresh = time.Hour
 	reads := &sessionReads{answers: map[int]string{100: "sid-a"}}
 	s := newProcessSessions("gog", reads.read)
+	s.fresh = time.Hour
 
 	if got := s.of("claude", 100, "/work/api"); got != nil {
 		t.Fatalf("a process never read answered %+v at once", got)
@@ -77,7 +75,9 @@ func TestAnAgentsSessionIsReadOffItsProcessWhenNewAndAgainOnceDue(t *testing.T) 
 		t.Fatal("an answer still fresh was read again")
 	}
 
-	sessionsFresh = 0 // every answer due: a /clear started another conversation in the same process
+	s.mu.Lock()
+	s.fresh = 0 // every answer due: a /clear started another conversation in the same process
+	s.mu.Unlock()
 	reads.mu.Lock()
 	reads.answers[100], reads.fail = "sid-c", nil
 	reads.mu.Unlock()
@@ -96,11 +96,9 @@ func TestAnAgentsSessionIsReadOffItsProcessWhenNewAndAgainOnceDue(t *testing.T) 
 }
 
 func TestProcessesNobodyAsksAboutAreForgotten(t *testing.T) {
-	fresh := sessionsFresh
-	t.Cleanup(func() { sessionsFresh = fresh })
-	sessionsFresh = 0
 	reads := &sessionReads{answers: map[int]string{100: "sid-a", 200: "sid-b"}}
 	s := newProcessSessions("gog", reads.read)
+	s.fresh = 0
 	sessionAfter(t, s, "claude", 100, "sid-a")
 	sessionAfter(t, s, "claude", 200, "sid-b")
 	s.mu.Lock()

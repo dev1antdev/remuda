@@ -421,8 +421,17 @@ components and icons as rules for whoever changes it: @docs/design.md
   (`claude-code` → claude, `codex`, `gemini-cli` → gemini, `kimi`, any other
   app by its own name);
   `statusOf` takes the program's own word, `error` read as done; the session
-  comes through `SessionOf` (nil, none, until Core 21 hands it
-  `transcript.Reader.SessionsOf` by the foreground's pid). Output watches go
+  comes through `SessionOf` (a `SessionLookup`: kind, the foreground's pid,
+  its folder; nil, none), which a machine gives as its `processSessions`
+  (`internal/machines/sessions.go`, tested on paper and on a throwaway core
+  with a stand-in Claude Code keeping its session file in a temp HOME):
+  `transcript.Reader.SessionsOf` for every Claude Code and Codex process the
+  snapshots asked about, one script for all of them, a process new to it read
+  at once and every answer again once `sessionsFresh` 30 s old (a `/clear` or
+  `/resume` changes the session under the same pid), a failed read keeping
+  the last answer (logged once an hour), a process nobody asked about for
+  `sessionsForget` 2 min dropped; the snapshot reads only what was last
+  found, never waiting. Output watches go
   in **feeds** (`feeds.go`, tested on a fake: shared, closed with the last
   stream, opened again after, a rule edited leaving the other watches'
   feeds standing, and 120 feeds' 4,800 standing rows told as they open, all
@@ -942,7 +951,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   `CLAUDE_CONFIG_DIR` of the agent's own still names a file the readers,
   which know the default roots alone, do not open yet;
   stateless, since `/clear` and `/resume` change the session under the same
-  pid; nothing under `~/.claude` or `~/.codex` is written. `NewUsageScanner(path)` is the
+  pid (a core machine's cache of it is `internal/machines`' `processSessions`,
+  see `internal/core`); nothing under `~/.claude` or `~/.codex` is written. `NewUsageScanner(path)` is the
   per-line usage reader of each format (the tracker keeps one per file
   across its delta reads); `InputField` is the input-key reader the recap
   and `ShellCommand` share.

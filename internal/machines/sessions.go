@@ -11,7 +11,7 @@ import (
 
 // How long a process's session answer stands before it is read again — a /clear or a /resume starts another
 // conversation in the same process — and how long a process no snapshot asked about is kept.
-var (
+const (
 	sessionsFresh  = 30 * time.Second
 	sessionsForget = 2 * time.Minute
 )
@@ -20,8 +20,9 @@ var (
 // (transcript.Reader.SessionsOf): a process new to it is read at once, every answer again once it is sessionsFresh
 // old, all of them in one script on the machine, off the snapshot's path, which only reads what was last found.
 type processSessions struct {
-	read func([]transcript.Running) (map[int]string, error)
-	name string // the machine's, for the log
+	read          func([]transcript.Running) (map[int]string, error)
+	name          string // the machine's, for the log
+	fresh, forget time.Duration
 
 	mu         sync.Mutex
 	procs      map[int]*process
@@ -38,7 +39,7 @@ type process struct {
 }
 
 func newProcessSessions(name string, read func([]transcript.Running) (map[int]string, error)) *processSessions {
-	return &processSessions{name: name, read: read, procs: map[int]*process{}}
+	return &processSessions{name: name, read: read, fresh: sessionsFresh, forget: sessionsForget, procs: map[int]*process{}}
 }
 
 // of is the core adapter's SessionLookup: what the last read found of the process, a read booked when it is new or due.
@@ -55,7 +56,7 @@ func (s *processSessions) of(agent string, pid int, cwd string) *herdr.AgentSess
 		s.procs[pid] = p
 	}
 	p.running, p.asked = transcript.Running{PID: pid, Agent: agent, CWD: cwd}, now
-	if now.Sub(p.readAt) >= sessionsFresh && !s.reading {
+	if now.Sub(p.readAt) >= s.fresh && !s.reading {
 		s.reading = true
 		go s.readDue()
 	}
@@ -72,9 +73,9 @@ func (s *processSessions) readDue() {
 	var due []transcript.Running
 	for pid, p := range s.procs {
 		switch {
-		case now.Sub(p.asked) > sessionsForget:
+		case now.Sub(p.asked) > s.forget:
 			delete(s.procs, pid)
-		case now.Sub(p.readAt) >= sessionsFresh:
+		case now.Sub(p.readAt) >= s.fresh:
 			due = append(due, p.running)
 		}
 	}
