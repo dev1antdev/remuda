@@ -225,3 +225,69 @@ func TestNoCoreForAMachineWithoutABuild(t *testing.T) {
 		t.Fatalf("err=%v\n%s\n%s", err, out, calls())
 	}
 }
+
+func TestCoreOnWindowsWithoutItsConPTYIsRepaired(t *testing.T) {
+	dir, calls := coreHome(t, "MINGW64_NT-10.0-26100", "x86_64", coreRelease(t, "remuda-core.exe", "0.2.0"))
+	installedCore(t, dir, "remuda-core.exe", "0.2.0")
+	out, err := installCore(t, "install")
+	if err != nil || !strings.Contains(out, "its ConPTY put back") {
+		t.Fatalf("err=%v\n%s", err, out)
+	}
+	if !exists(filepath.Join(dir, ".local", "bin", "conpty", "conpty.dll")) || strings.Contains(calls(), "old remuda-core") {
+		t.Errorf("ConPTY was not put back, or the core was swapped for its own version:\n%s", calls())
+	}
+}
+
+// coreMachine is machine(t) with remuda-core's cores in two sessions, the stand-in refusing to stop the one named stuck.
+func coreMachine(t *testing.T, sessions ...string) (string, func() string) {
+	t.Helper()
+	dir, calls := machine(t)
+	bin := filepath.Join(dir, ".local", "bin")
+	write(t, filepath.Join(bin, "remuda-core"), "#!/bin/sh\necho \"RC_SESSION=$RC_SESSION remuda-core $*\" >> \"$HOME/calls.log\"\n[ \"$RC_SESSION\" != stuck ]\n", 0o755)
+	for _, s := range sessions {
+		write(t, filepath.Join(dir, ".local", "state", "remuda-core", s, "docs.json"), "{}", 0o600)
+	}
+	share := filepath.Join(dir, ".local", "share", "remuda-core", "current", "Contents", "MacOS", "remuda-core")
+	write(t, share, "", 0o755)
+	os.Remove(filepath.Join(bin, "rc"))
+	if err := os.Symlink(share, filepath.Join(bin, "rc")); err != nil {
+		t.Fatal(err)
+	}
+	return dir, calls
+}
+
+func TestRemovalOfCoreStopsEverySessionFirst(t *testing.T) {
+	dir, calls := coreMachine(t, "work")
+	var out strings.Builder
+	if _, err := (Removal{Core: true}).Plan(&out); err != nil || !strings.Contains(out.String(), "sessions: default, work") {
+		t.Fatalf("the plan does not name the cores that stop (err=%v):\n%s", err, out.String())
+	}
+	out.Reset()
+	if err := (Removal{Core: true}).Remove(&out); err != nil {
+		t.Fatalf("%v\n%s", err, out.String())
+	}
+	for _, s := range []string{"default", "work"} {
+		if !strings.Contains(calls(), "RC_SESSION="+s+" remuda-core server stop") {
+			t.Errorf("the %s core was not stopped:\n%s", s, calls())
+		}
+	}
+	for _, f := range []string{"bin/remuda-core", "bin/rc", "share/remuda-core", "state/remuda-core"} {
+		if exists(filepath.Join(dir, ".local", f)) {
+			t.Errorf("~/.local/%s is still there\n%s", f, out.String())
+		}
+	}
+}
+
+func TestRemovalOfCoreLeavesItsFilesWhileACoreRuns(t *testing.T) {
+	dir, _ := coreMachine(t, "stuck")
+	var out strings.Builder
+	err := (Removal{Core: true}).Remove(&out)
+	if err == nil || !strings.Contains(out.String(), "remuda-core's stuck core did not stop") {
+		t.Fatalf("a core that did not stop went unsaid (err=%v):\n%s", err, out.String())
+	}
+	for _, f := range []string{"bin/remuda-core", "state/remuda-core/stuck", "state/remuda-core/default"} {
+		if !exists(filepath.Join(dir, ".local", f)) {
+			t.Errorf("~/.local/%s went while a core still ran\n%s", f, out.String())
+		}
+	}
+}

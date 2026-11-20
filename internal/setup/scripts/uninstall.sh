@@ -263,9 +263,10 @@ code_part() {
     fi
 }
 
-# remuda-core as install-core.sh put it: its core stopped first (every
-# terminal in it ends), the binary with its rc link, ConPTY on Windows, the
-# app bundles on a Mac, its state and config folders.
+# remuda-core as install-core.sh put it: the core of every session under its
+# state folder stopped first (every terminal in them ends) — nothing goes
+# while one of them is still up — then the binary with its rc link, ConPTY
+# on Windows, the app bundles on a Mac, its state and config folders.
 core_part() {
     rc_bin="$HOME/.local/bin/remuda-core"
     rc_state="${XDG_STATE_HOME:-$HOME/.local/state}/remuda-core"
@@ -278,18 +279,39 @@ core_part() {
     if [ ! -e "$rc_bin" ] && [ ! -d "$rc_state" ]; then
         return 0
     fi
-    what="remuda-core at $(tilde "$rc_bin"), its core and the terminals in it, $(tilde "$rc_state"), $(tilde "$rc_config")"
+    sessions=""
+    for d in "$rc_state"/*/; do
+        [ -d "$d" ] && sessions="${sessions:+$sessions, }$(basename "$d")"
+    done
+    what="remuda-core at $(tilde "$rc_bin"), its cores and the terminals in them, $(tilde "$rc_state"), $(tilde "$rc_config")"
     if [ "${REMUDA_RM_CORE:-0}" != 1 ]; then
         keep "$what  (-core removes it)"
-    elif [ "$ACTION" = plan ]; then
-        will "$what"
-        say "          a running core stops first: every agent and shell in its terminals ends"
-        if [ "$OS" = Linux ]; then say "          linger stays on for your account (loginctl disable-linger turns it off)"; fi
-    else
-        if [ -x "$rc_bin" ]; then "$rc_bin" server stop >/dev/null 2>&1 || fail "remuda-core's core did not stop: $rc_bin server stop"; fi
-        if [ "$(readlink "$HOME/.local/bin/rc" 2>/dev/null)" = remuda-core ]; then rm -f "$HOME/.local/bin/rc"; fi
-        if rm -rf "$rc_bin" "$HOME/.local/bin/conpty" "$HOME/.local/share/remuda-core" "$rc_state" "$rc_config"; then gone "remuda-core and its folders"; else fail "could not remove all of remuda-core's files (a core still running holds its own)"; fi
+        return 0
     fi
+    if [ "$ACTION" = plan ]; then
+        will "$what"
+        say "          its cores stop first${sessions:+ (sessions: $sessions)}: every agent and shell in their terminals ends"
+        if [ "$OS" = Linux ]; then say "          linger stays on for your account (loginctl disable-linger turns it off)"; fi
+        return 0
+    fi
+    if [ ! -x "$rc_bin" ]; then
+        fail "no $(tilde "$rc_bin") to stop remuda-core's cores with: its folders stay"
+        return 0
+    fi
+    up=0
+    for d in "$rc_state"/*/; do
+        [ -d "$d" ] || continue
+        s="$(basename "$d")"
+        RC_SESSION="$s" "$rc_bin" server stop >/dev/null 2>&1 || { up=1; fail "remuda-core's $s core did not stop: RC_SESSION=$s $rc_bin server stop"; }
+    done
+    if [ "$up" = 1 ]; then
+        fail "remuda-core's files stay while one of its cores runs"
+        return 0
+    fi
+    case "$(readlink "$HOME/.local/bin/rc" 2>/dev/null)" in
+    remuda-core | */share/remuda-core/*) rm -f "$HOME/.local/bin/rc" ;;
+    esac
+    if rm -rf "$rc_bin" "$HOME/.local/bin/conpty" "$HOME/.local/share/remuda-core" "$rc_state" "$rc_config"; then gone "remuda-core and its folders"; else fail "could not remove all of remuda-core's files (a core still running holds its own)"; fi
 }
 
 # herdr, last: stopping its server ends every pane, and this script may be

@@ -303,7 +303,7 @@ func TestPlanSaysWhatWouldGoAndTouchesNothing(t *testing.T) {
 	if _, err := (Removal{Data: true, Code: true, Core: true, Herdr: true}).Plan(&out); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"remove  your data", "remove  code-server", "remove  remuda-core", "every agent and shell in its terminals ends", "remove  herdr", "its hooks for: claude codex", "every agent and shell in its panes ends"} {
+	for _, want := range []string{"remove  your data", "remove  code-server", "remove  remuda-core", "every agent and shell in their terminals ends", "remove  herdr", "its hooks for: claude codex", "every agent and shell in its panes ends"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("the plan for everything lacks %q:\n%s", want, out.String())
 		}

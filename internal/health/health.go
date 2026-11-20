@@ -259,7 +259,7 @@ echo "arch=$(uname -m)"
 echo "cores=$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null)"
 r="$HOME/.local/bin/remuda"; [ -x "$r" ] || r="$r.exe"; if [ -x "$r" ]; then echo "remuda=$("$r" -version 2>/dev/null)"; fi
 cs=$(readlink "$HOME/.local/opt/code-server" 2>/dev/null); case "$cs" in *code-server-*) echo "code_server=${cs##*code-server-}";; esac
-c="$HOME/.local/bin/remuda-core"; [ -x "$c" ] || c="$c.exe"; if [ -x "$c" ]; then echo "remuda_core=$("$c" --version 2>/dev/null)"; fi
+c="$HOME/.local/bin/remuda-core"; [ -x "$c" ] || { c="$c.exe"; [ -f "$HOME/.local/bin/conpty/conpty.dll" ] || c=; }; if [ -n "$c" ] && [ -x "$c" ]; then echo "remuda_core=$("$c" --version 2>/dev/null)"; fi
 grep -q 'remuda[^"]*statusline' "$HOME/.claude/settings.json" 2>/dev/null && echo "statusline=wrapped"
 ` + SettingsScript + `echo "df=$(df -kP "$HOME" 2>/dev/null | tail -1)"
 echo "uptime=$(uptime 2>/dev/null)"

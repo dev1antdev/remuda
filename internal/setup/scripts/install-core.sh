@@ -38,6 +38,9 @@ CORE="$BIN/$EXE"
 # installed is the version of the remuda-core here, nothing when there is none.
 installed() { if [ -x "$CORE" ]; then "$CORE" --version 2>/dev/null | sed -n 's/^rc //p' | head -1; fi; }
 
+# whole says whether what remuda-core needs beside its binary is there: ConPTY on Windows, copied before the binary.
+whole() { case "$TARGET" in windows-*) [ -f "$BIN/conpty/conpty.dll" ] ;; *) true ;; esac; }
+
 # older says whether version $1 is older than $2.
 older() {
     awk -v a="$1" -v b="$2" 'BEGIN { split(a, x, /[.-]/); split(b, y, /[.-]/)
@@ -55,7 +58,7 @@ install) ;;
 *) echo "usage: install-core.sh [install|status]"; exit 2 ;;
 esac
 
-if [ -n "$HAVE" ] && ! older "$HAVE" "$VERSION"; then
+if [ -n "$HAVE" ] && ! older "$HAVE" "$VERSION" && whole; then
     echo "remuda-core $HAVE already at $CORE"
     exit 0
 fi
@@ -81,13 +84,16 @@ macos-*) NEW="$TMP/remuda core.app/Contents/MacOS/remuda-core"; FROM="$TMP/remud
 esac
 "$NEW" --version >/dev/null 2>&1 || { echo "the downloaded remuda-core does not run on this machine"; exit 1; }
 
-if [ -n "$HAVE" ]; then
+if [ -n "$HAVE" ] && older "$HAVE" "$VERSION"; then
     "$CORE" update --from "$FROM"
     echo "remuda-core updated from $HAVE to $VERSION: its terminals kept running"
+elif [ -n "$HAVE" ]; then
+    cp -R "$TMP/conpty" "$BIN/"
+    echo "remuda-core $HAVE at $CORE: its ConPTY put back"
 else
     case "$TARGET" in
     macos-*) "$NEW" --rc-install-bundle "$NEW" "$CORE" ;;
-    windows-*) cp -R "$NEW" "$TMP/conpty" "$BIN/" ;;
+    windows-*) cp -R "$TMP/conpty" "$BIN/" && cp "$NEW" "$CORE.new" && mv -f "$CORE.new" "$CORE" ;;
     *) cp "$NEW" "$CORE.new" && chmod 755 "$CORE.new" && mv -f "$CORE.new" "$CORE" ;;
     esac
     echo "remuda-core $VERSION installed at $CORE"

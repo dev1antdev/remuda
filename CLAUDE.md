@@ -1445,10 +1445,13 @@ components and icons as rules for whoever changes it: @docs/design.md
   what stays (exit 10 when nothing would), the person is asked
   (`confirm`: no terminal means no), `run` removes — the service, the
   binary, the log and the ssh masters always; the state dir, code-server,
-  remuda-core (its core stopped first with `remuda-core server stop`, every
-  terminal in it ending, then the binary, its `rc` link, ConPTY on Windows,
-  the app bundles under `~/.local/share/remuda-core`, its state and config
-  folders) and herdr (its hooks first, then its server stopped, the binary through
+  remuda-core (the core of every session under its state folder stopped
+  first, `RC_SESSION=<s> remuda-core server stop`, every terminal in them
+  ending — nothing of it goes while one still runs or with no binary to
+  stop them — then the binary, its `rc` link (relative, or into the
+  bundle), ConPTY on Windows, the app bundles under
+  `~/.local/share/remuda-core`, its state and config folders; linger is
+  said to stay on) and herdr (its hooks first, then its server stopped, the binary through
   brew or from under HOME, its folders) only by their flags. A folder is
   deleted as the state dir only when remuda's files are in it.
   `Removal.Remove` starts the local script in a session of its own
@@ -1466,7 +1469,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   herdr (dev1antdev/remuda-core), `setup.CoreVersion` pinned with the five
   builds' sha256 in the script (another version needs `CORE_SHA256`), into
   `~/.local/bin` — `remuda-core` with an `rc` link when no `rc` is on PATH;
-  on Windows `remuda-core.exe` and `conpty/` beside `remuda.exe`, the zip
+  on Windows `remuda-core.exe` and `conpty/` beside `remuda.exe`, ConPTY
+  copied before the exe and counted as part of it (an install missing it is
+  not current, for the installer or the vitals, and a run puts it back), the zip
   opened by `%SYSTEMROOT%\System32\tar.exe`; on a Mac `remuda core.app` by
   its own `--rc-install-bundle` — the download held in
   `~/.local/remuda-core.XXXXXX` (a noexec `/tmp` could not run the check)
