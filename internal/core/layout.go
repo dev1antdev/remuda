@@ -14,8 +14,8 @@ import (
 )
 
 // LayoutExport is a tab's pane tree as herdr's layout.export gives it: the document's splits and their shares, each
-// pane's folder as it stands now, and the label and command the layout that made it gave it. A pane the tree lacks
-// (one placed by its labels alone) goes to the right of the last; one whose terminal ended is left out.
+// pane's folder as it stands now and the label the layout that made it gave it. A pane the tree lacks (one placed by
+// its labels alone) goes to the right of the last; one whose terminal ended is left out.
 func (a *Adapter) LayoutExport(tabID string) (*herdr.LayoutDescription, error) {
 	snap, err := a.SessionSnapshot()
 	if err != nil {
