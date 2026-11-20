@@ -194,6 +194,10 @@ func TestKindDefaultsToPromptOnLoadAndAStandupDigestIsDropped(t *testing.T) {
 	if len(kinds) != 2 || kinds["a"] != KindPrompt || kinds["c"] != KindScene {
 		t.Fatalf("loaded %v", kinds)
 	}
+	var kept []map[string]any
+	if err := state.LoadJSON(dir, file, &kept); err != nil || len(kept) != 2 {
+		t.Fatalf("the file keeps %d schedules (%v): the digest is dropped from it once", len(kept), err)
+	}
 }
 
 func TestPutChecksTheKind(t *testing.T) {

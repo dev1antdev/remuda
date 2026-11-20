@@ -4,7 +4,6 @@
 
 import type { Machine, Pane } from "@/features/roster/api";
 import { displayOf, type RadarPrefs } from "@/features/roster/radar";
-import { needsMe } from "@/features/roster/needs";
 
 export type BadgeTone = "red" | "amber" | "green";
 export type Badge = { count: number; tone: BadgeTone | null };
@@ -15,6 +14,24 @@ const RANK: Record<BadgeTone, number> = { red: 3, amber: 2, green: 1 };
 // titleFor is the tab's title: the count in front while anyone needs the person
 export function titleFor(count: number): string {
   return count > 0 ? `(${count}) ${BASE_TITLE}` : BASE_TITLE;
+}
+
+// needsMe is an agent waiting for the person: a question open, a watchdog note, or a finish nobody has looked at yet
+export function needsMe(pane: Pane, radar: RadarPrefs, now: number): boolean {
+  if (pane.radar?.alert) return true;
+  const d = displayOf(pane, radar, now);
+  return d === "blocked" || d === "done";
+}
+
+// needingMe is every agent on a connected machine that needs the person, in the roster's order: Alt+N walks it
+export function needingMe(machines: Machine[], radar: RadarPrefs, now: number): { machineId: string; paneId: string }[] {
+  const out: { machineId: string; paneId: string }[] = [];
+  for (const machine of machines) {
+    if (machine.state !== "connected") continue;
+    for (const session of machine.sessions)
+      for (const tab of session.tabs) for (const pane of tab.panes) if (toneOf(pane, radar, now)) out.push({ machineId: machine.id, paneId: pane.id });
+  }
+  return out;
 }
 
 // toneOf is the colour one agent asks for, nothing when it needs nobody

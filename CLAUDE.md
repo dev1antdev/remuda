@@ -1957,15 +1957,15 @@ components and icons as rules for whoever changes it: @docs/design.md
   lens and the pane — and one from 2 s up becomes
   a toast, a minute apart at most), `Shell.tsx` (URL sync, ⌘K → the palette, ⌘F → the find bar, the service worker's
   select-pane, mark-seen, the four modes, and **the tab's badge** through `useBadge.ts`: `document.title` reads
-  "(2) remuda" while agents need the person — `needsMe` in `features/roster/needs.ts` — and `<link rel="icon">` gets the icon redrawn
+  "(2) remuda" while agents need the person — `needsMe` — and `<link rel="icon">` gets the icon redrawn
   on a canvas with a dot in the most pressing one's colour, red for a question, amber for a watchdog note, green for a
   finish not looked at, from the page's own tokens so it follows the theme; `badge.ts` is the pure part, tested:
-  `titleFor`, `toneOf`, `pressing`, `badgeOf`, `sameBadge`), `Rail.tsx` (the places),
+  `needsMe`, `needingMe`, `titleFor`, `toneOf`, `pressing`, `badgeOf`, `sameBadge`), `Rail.tsx` (the places),
   `Header.tsx`, `PaneArea.tsx`
   (the lenses, mounted once seen, and the files rail beside them in
   `.pane-body` — store field `footprint` from the pref of that name,
   default on with a mouse, a row of the View menu whatever the lens,
-  absent for a shell pane, hidden with the rail under 920 px and not polling there; **full screen** is the View menu's last row, `app/full.tsx` — store field `full`: the header, the sidebar and the rail go, the tab strip stays with its tools, the browser's own full screen is asked for where it exists; an Esc nothing else took leaves — not a field's or the terminal's, nor the one that closes a menu (Radix marks it with preventDefault), a dialog, the confirm or the file viewer (`app/escape.ts`, tested) — so does the browser's exit, and a mode change clears it; the palette has it); **Alt+N** (`app/next.ts`, by key code — never over the terminal, nor over a field on a Mac, where Option+N is the tilde's dead key: `nextKey.ts`, tested; the palette row "Go to the next agent that needs you") walks the agents that need the person — a question open, a watchdog note, a finish not looked at (`needsMe`) — in the roster's order, round and round (`nextNeedingMe` in `features/roster/needs.ts`, tested), the pane opening on its chat as a notification opens it, a toast when nobody needs one; `Overlays.tsx` (panels, dialogs, the
+  absent for a shell pane, hidden with the rail under 920 px and not polling there; **full screen** is the View menu's last row, `app/full.tsx` — store field `full`: the header, the sidebar and the rail go, the tab strip stays with its tools, the browser's own full screen is asked for where it exists; an Esc nothing else took leaves — not a field's or the terminal's, nor the one that closes a menu (Radix marks it with preventDefault), a dialog, the confirm or the file viewer (`app/escape.ts`, tested) — so does the browser's exit, and a mode change clears it; the palette has it); **Alt+N** (`app/next.ts`, by key code — never over the terminal, nor over a field on a Mac, where Option+N is the tilde's dead key: `nextKey.ts`, tested; the palette row "Go to the next agent that needs you") walks the agents that need the person — a question open, a watchdog note, a finish not looked at (`needsMe`) — in the roster's order, round and round (`stepAgent` over `needingMe` in `app/badge.ts`, tested), the pane opening on its chat as a notification opens it, a toast when nobody needs one; `Overlays.tsx` (panels, dialogs, the
   confirm, the file viewer; the keyboard sheet behind **?** — Shift and the slash key by position, never over a field or another dialog, the same key closes it — is `features/help/KeysDialog.tsx` over `help/keys.ts`, the one list of every key the page answers, tested; the palette has it as "Keyboard shortcuts"), `commands.tsx` (the **command
   palette** on ⌘K / Ctrl+K, by key code so any layout works: every pane
   as a row to jump to — each machine's liveliest first, shells at its
@@ -4080,7 +4080,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   every 10 s while this very document is on screen — `documentVisible`,
   not `pageVisible`, which the Mac app's shut window keeps true — a round
   never begun while the last is out, an unchanged reading drawing nothing,
-  `sameQuestions`; the line cut at `ASK_MAX` 90 by `cutAt`; the
+  `sameQuestions`; the line cut at `ASK_MAX` 90 by `said.ts`'s `cut`; the
   asking ones alone and only while the sidebar is on screen — beside the
   pane at a desk, the drawer open on a phone, never in full screen), else
   the watchdog's note (`askWords`), and how long it waits; a click is

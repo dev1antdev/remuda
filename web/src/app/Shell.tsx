@@ -35,13 +35,12 @@ import { useReopenKey } from "@/features/reopen/useReopenKey";
 import { useWakeOnOpen } from "@/features/sleep/useWakeOnOpen";
 import { useSharingKey } from "./SharingChip";
 import { handShell, inShell } from "@/lib/shell";
-import { modeOf } from "./shellFeed";
 import { actions, app } from "./store";
 import { useBadge } from "./useBadge";
 import { useShellFeed } from "./useShellFeed";
 import { useToasts } from "./toasts";
 import { lensOn } from "./paneLens";
-import { panelOf, writeURL } from "./url";
+import { modeOf, panelOf, writeURL } from "./url";
 import { t } from "@/lib/i18n";
 
 export default function Shell() {
@@ -136,10 +135,7 @@ export default function Shell() {
           const panel = panelOf(name);
           if (panel) actions.openPanel(panel);
         },
-        openMode: (name) => {
-          const mode = modeOf(name);
-          if (mode) actions.setMode(mode);
-        },
+        openMode: (name) => actions.setMode(modeOf(name)),
         alert: () => {},
       });
     }

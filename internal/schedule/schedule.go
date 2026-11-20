@@ -111,6 +111,9 @@ func New(dir string, submit Submit, notify func(push.Payload)) *Store {
 	}
 	if dropped > 0 {
 		log.Printf("schedules: %d standup digests dropped: the standup is gone", dropped)
+		if err := st.saveLocked(); err != nil {
+			log.Printf("schedules: %v", err)
+		}
 	}
 	return st
 }

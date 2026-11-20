@@ -9,7 +9,7 @@ describe("viewerPlaces", () => {
     expect(viewerPlaces(modes, false)).toEqual(modes);
     expect(viewerPlaces(panels, false)).toEqual(panels);
   });
-  it("keeps the agents, the Wall and the reports for a viewer", () => {
+  it("keeps the agents and the reports for a viewer", () => {
     expect(viewerPlaces(modes, true).map((p) => p.mode)).toEqual(["herdr"]);
     expect(viewerPlaces(panels, true).map((p) => p.panel)).toEqual(["usage", "activity", "server"]);
     expect(viewerCommand("server"), "the palette's Server row, which the rail must match").toBe(true);
@@ -33,11 +33,10 @@ describe("viewerToasts", () => {
       { id: "plan-offer-a1b2", action: "Run on Codex" },
       { id: "release", action: "Download & install" },
       { id: "recover-gog", action: "Resume" },
-      { id: "away", action: "Standup" },
       { id: "tailscale", action: "Log in" },
       { id: "stale", action: "Reload" },
     ];
-    expect(viewerToasts(toasts)).toEqual([{ id: "offline" }, { id: "release", action: undefined }, { id: "recover-gog", action: undefined }, { id: "away", action: "Standup" }, { id: "stale", action: "Reload" }]);
+    expect(viewerToasts(toasts)).toEqual([{ id: "offline" }, { id: "release", action: undefined }, { id: "recover-gog", action: undefined }, { id: "stale", action: "Reload" }]);
   });
 });
 

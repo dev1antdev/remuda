@@ -7,7 +7,7 @@ import { PINS_KEY, agentKey, stepAgent, walkOrder } from "@/features/roster/side
 import { DEFAULT_RADAR, type RadarPrefs } from "@/features/roster/radar";
 import { useRoster } from "@/features/roster/useRoster";
 import { useSharing } from "@/features/roster/useSharing";
-import { nextNeedingMe } from "@/features/roster/needs";
+import { needingMe } from "./badge";
 import { isMac, usePref } from "@/lib/prefs";
 import { useCurrent } from "./current";
 import { nextKeyAsked, walkKeyAsked, type KeyPress } from "./nextKey";
@@ -22,16 +22,16 @@ export function useNextNeedingMe(): () => void {
   const [radar] = usePref<RadarPrefs>("radar", DEFAULT_RADAR);
   return useCallback(() => {
     const from = current ? agentKey(current.machine.id, current.pane.id) : "";
-    const next = nextNeedingMe(machines, radar, Date.now(), from);
+    const next = stepAgent(needingMe(machines, radar, Date.now()), from, 1);
     if (!next) {
       actions.notify(t("Nobody needs you right now"), { brief: true });
       return;
     }
-    if (next.key === from) {
+    if (agentKey(next.machineId, next.paneId) === from) {
       actions.notify(t("No one else needs you right now"), { brief: true });
       return;
     }
-    actions.openPane(next.machine.id, next.pane.id);
+    actions.openPane(next.machineId, next.paneId);
   }, [machines, current, radar]);
 }
 

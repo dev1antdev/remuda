@@ -102,7 +102,7 @@ export const settings: Dictionary = {
   "The ones installed on this device show in their own face; the rest fall back to the system's monospace": "Установленные на этом устройстве показаны своим начертанием; остальные подменяет системный моноширинный",
   "The theme, the density, the code font, the sidebar, the status bar, the review and the panels travel through this remuda; alerts, the text sizes and the prompt history stay on the device": "Тема, плотность, шрифт кода, боковая панель, строка состояния, ревью и панели путешествуют через этот remuda; уведомления, размеры текста и история промптов остаются на устройстве",
   "A notification opens": "Уведомление открывает",
-  "The pane a tapped notification, the Mac app's menu, an Activity row or Alt+N brings up shows this lens; the sidebar, the tabs and the Wall keep their own ways.": "Панель, в которую ведёт нажатое уведомление, меню приложения на Mac, строка Активности или Alt+N, открывается в этой линзе; боковая панель, вкладки и Стена ведут себя по-своему.",
+  "The pane a tapped notification, the Mac app's menu, an Activity row or Alt+N brings up shows this lens; the sidebar and the tabs keep their own ways.": "Панель, в которую ведёт нажатое уведомление, меню приложения на Mac, строка Активности или Alt+N, открывается в этой линзе; боковая панель и вкладки ведут себя по-своему.",
   "the terminal": "терминал",
   "the chat": "чат",
   "the lens it was on": "ту линзу, что была",

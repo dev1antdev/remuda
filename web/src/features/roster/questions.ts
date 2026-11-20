@@ -4,6 +4,7 @@
 
 import type { Question } from "@/features/chat/api";
 import { questionLines } from "@/features/chat/question";
+import { cut } from "@/features/chat/said";
 
 // QUESTIONS_EVERY is the pace of a round of readings; MAX_ASKING how many panes one round reads, the first ones given
 export const QUESTIONS_EVERY = 10_000;
@@ -22,18 +23,7 @@ export function questionLine(question: Question | null | undefined): string {
   const { head, detail, ask } = questionLines(question.text);
   const first = detail.split("\n")[0] ?? "";
   const text = head ? (first ? `${head} · ${first}` : head) : ask;
-  return cutAt(text, ASK_MAX);
-}
-
-// cutAt shortens a text to max characters at a word, never between the halves of a surrogate pair, with an ellipsis
-export function cutAt(raw: string, max: number): string {
-  const text = raw.trim();
-  if (text.length <= max) return text;
-  const space = text.slice(0, max).lastIndexOf(" ");
-  let end = space > max / 2 ? space : max;
-  const code = text.charCodeAt(end - 1);
-  if (code >= 0xd800 && code <= 0xdbff) end -= 1;
-  return `${text.slice(0, end).trimEnd()}…`;
+  return cut(text.trim(), ASK_MAX);
 }
 
 // sameQuestions says whether two readings of what the asking agents hold up say the same, so an unchanged one draws nothing

@@ -53,5 +53,7 @@ describe("readURL", () => {
     expect(readURL().mode).toBe("herdr");
     expect(modeOf("wall")).toBe("herdr");
     expect(modeOf("tasks")).toBe("tasks");
+    expect(modeOf("agents")).toBe("herdr");
+    expect(modeOf(3)).toBe("herdr");
   });
 });

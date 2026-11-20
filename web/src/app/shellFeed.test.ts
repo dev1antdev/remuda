@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Machine, Pane, Session } from "@/features/roster/api";
 import { DEFAULT_RADAR } from "@/features/roster/radar";
-import { MAX_ROWS, maskFeed, modeOf, sameFeed, shellRows } from "./shellFeed";
+import { MAX_ROWS, maskFeed, sameFeed, shellRows } from "./shellFeed";
 
 const NOW = 1_700_000_000_000;
 
@@ -57,17 +57,6 @@ describe("sameFeed", () => {
     expect(sameFeed(a, { ...b, working: 1 })).toBe(false);
     expect(sameFeed(a, { ...b, rows: [{ ...b.rows[0]!, said: "other" }] })).toBe(false);
     expect(sameFeed(a, { ...b, rows: [] })).toBe(false);
-  });
-});
-
-describe("modeOf", () => {
-  it("reads the app's names, agents for the first mode", () => {
-    expect(modeOf("agents")).toBe("herdr");
-    expect(modeOf("wall")).toBeNull();
-    expect(modeOf("tasks")).toBe("tasks");
-    expect(modeOf("code")).toBe("code");
-    expect(modeOf("settings")).toBeNull();
-    expect(modeOf(3)).toBeNull();
   });
 });
 

@@ -15,7 +15,8 @@ export function panelOf(value: unknown): Panel {
   return PANELS.includes(value as Panel) ? (value as Panel) : null;
 }
 
-// modeOf keeps a mode the page has; any other — the Wall's, from an old link or a device that remembered it — is Agents
+// modeOf keeps a mode the page has; any other — "agents" (the Mac app's word), the Wall's from an old link, a device or
+// an older Mac app that remembered it — is Agents
 export const modeOf = (value: unknown): Mode => (MODES.includes(value as Mode) ? (value as Mode) : "herdr");
 
 export function readURL(): { requested: Selection | null; mode?: Mode; lens?: Lens; turn: TurnLinkTarget | null; panel: Panel } {

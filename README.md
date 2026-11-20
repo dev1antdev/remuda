@@ -426,7 +426,7 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   row opens an arena on a recent task with two models side by side: the
   one that ran it and the row's own.
 - **Recap** — what one conversation came to — the session on screen, or a
-  transcript opened from the search — is *Recap…* in the chat's View menu
+  transcript opened from the search — is *Recap this conversation…* in the chat's View menu
   and in the palette: prompts and answers, how long and what it cost, the
   tools it called and which failed, the longest call, the commands it
   ran, the files it edited and read, subagents started, questions asked,

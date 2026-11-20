@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAX_ASKING, askedOf, cutAt, questionLine, sameQuestions } from "./questions";
+import { MAX_ASKING, askedOf, questionLine, sameQuestions } from "./questions";
 
 describe("questionLine", () => {
   it("holds up the dialog's head and the first line of its detail", () => {
@@ -11,15 +11,6 @@ describe("questionLine", () => {
     expect(questionLine(null)).toBe("");
   });
 
-});
-
-describe("cutAt", () => {
-  it("keeps a short text, cuts a long one at a word and never between the halves of a surrogate pair", () => {
-    expect(cutAt("  short  ", 10)).toBe("short");
-    expect(cutAt("one two three four", 12)).toBe("one two…");
-    expect(cutAt("abcdefghij", 5)).toBe("abcde…");
-    expect(cutAt("abcd😀efgh", 5)).toBe("abcd…");
-  });
 });
 
 describe("sameQuestions", () => {

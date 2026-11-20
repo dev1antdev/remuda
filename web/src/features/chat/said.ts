@@ -53,7 +53,7 @@ export function plain(line: string): string {
 }
 
 // cut keeps at most max characters, at a word when one sits past the first two thirds, with an ellipsis.
-function cut(line: string, max: number): string {
+export function cut(line: string, max: number): string {
   const chars = Array.from(line);
   if (chars.length <= max) return line;
   const head = chars.slice(0, max).join("");
