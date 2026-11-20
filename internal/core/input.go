@@ -136,8 +136,9 @@ func (a *Adapter) AgentPrompt(target, text string) error {
 // a minute while a person finishes a draft. sessions holds the pane's lock for the look alone, so the person's keys and
 // answers pass a prompt the core holds; the core itself types nothing else between the paste and its Enter. It answers
 // the pid of the agent it saw, which a delivery tried again names as front: any other agent in front is agent_left,
-// so a prompt never reaches what replaced the one it was for; the pid comes with a refusal of the agent it saw too (it
-// asks something, or works). asMessage is the person's own message, which a turn started meanwhile takes as a message.
+// so a prompt never reaches what replaced the one it was for. The pid comes with every refusal once an agent was seen
+// in front — not ready yet, asking something, at work — so even a delivery no try reached is bound from its first
+// sight of the agent. asMessage is the person's own message, which a turn started meanwhile takes as a message.
 func (a *Adapter) StagePrompt(target, text string, front int, asMessage bool) (int, func() error, error) {
 	t, err := a.terminal(target)
 	if err != nil {
@@ -147,34 +148,40 @@ func (a *Adapter) StagePrompt(target, text string, front int, asMessage bool) (i
 	if err != nil {
 		return 0, nil, err
 	}
+	pid := pidIn(&t)
+	if front != 0 && pid != 0 && pid != front {
+		return 0, nil, agentLeft(target)
+	}
 	if !readyForPrompt(&t) {
-		return 0, nil, &herdr.Error{Code: "agent_not_ready", Message: "the agent in " + target + " has reported no status yet (one that never does takes no prompt on remuda-core)"}
+		return pid, nil, &herdr.Error{Code: "agent_not_ready", Message: "the agent in " + target + " has reported no status yet (one that never does takes no prompt on remuda-core)"}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), callWithin)
 	defer cancel()
 	cn, err := a.client.connection(ctx)
 	if err != nil {
-		return 0, nil, a.refusal(err, "agent_not_found")
+		return pid, nil, a.refusal(err, "agent_not_found")
 	}
 	if promptsNeed != "" && !cn.hello.Has(promptsNeed) {
-		return 0, nil, &herdr.Error{Code: "invalid_request", Message: "a prompt to an agent waits for a remuda-core that checks, as it types, that the agent is still in front (Core 33)"}
+		return pid, nil, &herdr.Error{Code: "invalid_request", Message: "a prompt to an agent waits for a remuda-core that checks, as it types, that the agent is still in front (Core 33)"}
 	}
 	var now Terminal
 	if err := cn.call(ctx, "terminal.get", map[string]any{"terminal": target}, &now, nil); err != nil {
-		return 0, nil, a.refusal(err, "agent_not_found")
+		return pid, nil, a.refusal(err, "agent_not_found")
 	}
 	if agentOf(&now) != agent {
-		return 0, nil, &herdr.Error{Code: "agent_not_found", Message: "the agent in " + target + " has left"}
+		return pid, nil, &herdr.Error{Code: "agent_not_found", Message: "the agent in " + target + " has left"}
+	}
+	if pidIn(&now) != 0 {
+		pid = pidIn(&now)
+	}
+	if front != 0 && pid != 0 && pid != front {
+		return 0, nil, agentLeft(target)
 	}
 	if now.Status == nil {
-		return 0, nil, &herdr.Error{Code: "agent_not_ready", Message: "the agent in " + target + " cleared its status, as one leaving does: nothing was sent"}
+		return pid, nil, &herdr.Error{Code: "agent_not_ready", Message: "the agent in " + target + " cleared its status, as one leaving does: nothing was sent"}
 	}
 	if now.Foreground == nil {
-		return 0, nil, &herdr.Error{Code: "agent_not_ready", Message: "remuda-core has not seen what runs in front of " + target + " yet"}
-	}
-	pid := now.Foreground.Pid
-	if front != 0 && pid != front {
-		return 0, nil, agentLeft(target)
+		return pid, nil, &herdr.Error{Code: "agent_not_ready", Message: "remuda-core has not seen what runs in front of " + target + " yet"}
 	}
 	switch statusOf(&now) {
 	case herdr.StatusBlocked:
@@ -254,6 +261,14 @@ func (a *Adapter) stillThere(call caller, target, agent string, pid int) (Termin
 		return now, agentLeft(target)
 	}
 	return now, nil
+}
+
+// pidIn is the pid in front of the terminal, 0 when none was seen there.
+func pidIn(t *Terminal) int {
+	if t.Foreground == nil {
+		return 0
+	}
+	return t.Foreground.Pid
 }
 
 func agentLeft(target string) error {

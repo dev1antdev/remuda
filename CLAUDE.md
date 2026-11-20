@@ -537,7 +537,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   to a turn; anything else is `agent_left`,
   `sessions` saying `ErrNoAgent`; and a delivery tried again
   (`sessions.Delivery`: `FirstPrompt`, a task's and an arena lane's) is
-  bound by its first look to that agent's pid, every later look
+  bound by its first sight of the agent — a refusal for its status
+  included, before it has reported one — to that agent's pid, every later look
   refusing another as `agent_left` and every send naming it to the
   core's guard, so a prompt never reaches what replaced the agent); `PaneSendKeys` is
   `terminal.keys` with `now` (keys the person pressed); `PaneSendText` types
@@ -4996,8 +4997,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   from `said.Tracker.Link` — or `{url}`, a GitHub pull request the pull
   request panel names, the pane being the agent picked, and `{check}`,
   one failed check by name — compose on the pane's machine and send the
-  text through `sessions.Input.Submit`, the person's own message, which
-  on remuda-core a turn under way takes as a message — 409 for a pane whose
+  text through `sessions.Input.HandOff`, the person's own message, which
+  on remuda-core a turn under way takes as a message (never `Submit`'s
+  Enter after a picture) — 409 for a pane whose
   agent left or is not up yet, an agent waiting on a question or nothing to send, 502 with gh's (or
   glab's) line, 400 for a link that is neither.
   **A merged worktree goes** through the remove dialog below: the

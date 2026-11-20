@@ -434,6 +434,13 @@ func refused(err error) error {
 	return err
 }
 
+// HandOff delivers text remuda composed at the person's press — a pull request's failures or reviews — as their own
+// message, which on remuda-core a turn under way takes; never with the Enter Submit adds after a picture, which is for
+// what the person wrote and would read a dialog the work just put up as their message unsent.
+func (in *Input) HandOff(client Prompter, ref events.PaneRef, text string) error {
+	return refused((&Delivery{in: in, client: client, ref: ref, text: text, asMessage: true}).Try())
+}
+
 // SubmitToAgent delivers text remuda has for an agent at rest — a schedule's prompt, a booked "continue", a tidy's
 // /compact — through Prompt: on remuda-core, never into a turn.
 func (in *Input) SubmitToAgent(client Prompter, ref events.PaneRef, text string) error {

@@ -268,12 +268,31 @@ func TestADeliveryTriedAgainNeverReachesAReplacement(t *testing.T) {
 // Only the person's own message may go to a turn started meanwhile; every other prompt is for an agent at rest.
 func TestOnlyThePersonsMessageGoesToATurn(t *testing.T) {
 	h, in := newHolder(), NewInput(nil, nil)
-	h.sends <- struct{}{}
-	h.sends <- struct{}{}
-	if err := errors.Join(in.Submit(h, onePane, "mine"), in.SubmitToAgent(h, onePane, "a schedule's")); err != nil {
+	for range 3 {
+		h.sends <- struct{}{}
+	}
+	if err := errors.Join(in.Submit(h, onePane, "mine"), in.SubmitToAgent(h, onePane, "a schedule's"), in.HandOff(h, onePane, "a review I sent")); err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Equal(h.asked, []bool{true, false}) {
+	if !slices.Equal(h.asked, []bool{true, false, true}) {
 		t.Fatalf("as a message: %v", h.asked)
+	}
+}
+
+// A pull request's hand-off naming a picture goes as it is, no Enter after it: a dialog the work puts up at once is
+// no failure of the hand-off, where the person's own message would be said to be still unsent.
+func TestAHandOffNamingAPictureGetsNoEnterAfterIt(t *testing.T) {
+	quick(t)
+	review := "review: see " + shot
+	handed := &paper{agent: claudeAgent, status: []string{statusBlocked}, screens: []string{busyFoot}}
+	if err := NewInput(nil, nil).HandOff(handed, onePane, review); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(handed.calls, []string{"prompt:" + review}) {
+		t.Fatalf("calls %v", handed.calls)
+	}
+	submitted := &paper{agent: claudeAgent, status: []string{statusBlocked}, screens: []string{busyFoot}}
+	if err := NewInput(nil, nil).Submit(submitted, onePane, review); !errors.Is(err, ErrAskedMeanwhile) {
+		t.Fatalf("the person's own message: %v", err)
 	}
 }
