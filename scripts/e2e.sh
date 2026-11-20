@@ -29,7 +29,10 @@ fail() { say "FAIL: $1"; exit 1; }
 
 case $backend in
   herdr) command -v "$herdr" >/dev/null 2>&1 || fail "no herdr on PATH (E2E_HERDR names one)" ;;
-  core) core=$(command -v "$core") || fail "no remuda-core on PATH (E2E_CORE names one)" ;;
+  core)
+    core=$(command -v "$core") || fail "no remuda-core on PATH (E2E_CORE names one)"
+    case $core in /*) ;; *) core=$PWD/$core ;; esac
+    ;;
   *) fail "E2E_BACKEND is herdr or core, not $backend" ;;
 esac
 command -v node >/dev/null 2>&1 || fail "no node on PATH"
@@ -61,7 +64,6 @@ if [ "$backend" = core ]; then
   # RC_LAUNCHD_DIRECT names this shell, the core's parent, so macOS does not hand the core to launchd
   mkdir -m 700 "$tmp/run" "$tmp/xdg-state" "$tmp/xdg-config"
   export RC_SESSION=e2e RC_SOCKET=$tmp/rc.sock XDG_RUNTIME_DIR=$tmp/run XDG_STATE_HOME=$tmp/xdg-state XDG_CONFIG_HOME=$tmp/xdg-config RC_LAUNCHD_DIRECT=$$
-  export PATH="$(dirname "$core"):$PATH" # the core remuda connects through is the one started here
 fi
 
 # The agents' CLIs are stand-ins, first on every PATH the run's scripts build ($HOME/.local/bin leads remuda's own PATH
@@ -73,6 +75,11 @@ for agent in claude codex gemini kimi; do
   chmod +x "$home/.local/bin/$agent"
 done
 export PATH="$home/.local/bin:$PATH"
+if [ "$backend" = core ]; then
+  # one binary serves, connects and stops: remuda looks for remuda-core by that name, first on this PATH
+  ln -s "$core" "$home/.local/bin/remuda-core"
+  core=$home/.local/bin/remuda-core
+fi
 
 stop() {
   status=$?

@@ -38,22 +38,19 @@ if has '(^|[[:space:];&|(])HOME=[^[:space:]]*[[:space:]]+([^[:space:]]*/)?herdr(
 fi
 
 # remuda-core holds the person's agents once they moved off herdr: `server stop` ends every terminal in it, and a
-# `serve` beside it fights it for its socket. A throwaway core is addressed by its own socket or session, in the very
-# statement that stops or serves it (flags may stand between the words).
+# `serve` beside it fights it for its socket. The core reads RC_SOCKET before anything else, and a shell may carry the
+# person's, so only an RC_SOCKET of its own set in the very statement aims one at a throwaway core (quotes read away,
+# flags may stand between the words).
 core='(^|[^[:alnum:]_.-])(remuda-core|rc)([[:space:]]+-[^[:space:]]+)*[[:space:]]+(server([[:space:]]+-[^[:space:]]+)*[[:space:]]+stop|serve)([^[:alnum:]_-]|$)'
 aimed() {
   for word in $1; do
-    case $(printf '%s' "$word" | tr -d "\"'") in
-      RC_SOCKET=?*) return 0 ;;
-      RC_SESSION= | RC_SESSION=default) ;;
-      RC_SESSION=?*) return 0 ;;
-    esac
+    case $word in RC_SOCKET=?*) return 0 ;; esac
   done
   return 1
 }
 set -f
-printf '%s\n' "$cmd" | tr ';&|' '\n\n\n' | while IFS= read -r statement; do
+printf '%s\n' "$cmd" | tr ';&|' '\n\n\n' | tr -d "\"'" | while IFS= read -r statement; do
   if printf '%s' "$statement" | grep -Eq -e "$core" && ! aimed "$statement"; then exit 3; fi
-done || refuse "'remuda-core server stop' and 'remuda-core serve' reach the person's own core and every agent in it unless the same statement names a throwaway one: RC_SOCKET=<its socket> or RC_SESSION=<a session of its own>, its XDG folders and HOME beside it (see internal/core/coretest)."
+done || refuse "'remuda-core server stop' and 'remuda-core serve' reach the person's own core and every agent in it unless the same statement names a throwaway one: RC_SOCKET=<its socket>, its RC_SESSION, XDG folders and HOME beside it (see internal/core/coretest; scripts/e2e.sh with E2E_BACKEND=core runs one whole)."
 
 exit 0

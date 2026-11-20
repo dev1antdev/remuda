@@ -37,6 +37,8 @@ jobs:
           npm run build
           npm run typecheck
           npm test
+      - name: the Bash guard's cases
+        run: sh .claude/hooks/guard-bash.test.sh
       - name: gofmt
         run: |
           out="$(gofmt -l ./cmd ./internal)"

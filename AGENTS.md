@@ -285,8 +285,10 @@ not style.
   that run without asking, a deny on writes to the transcripts under `~/.claude/projects` (`*.jsonl` only; the memory folder beside them stays writable),
   and two hooks in `.claude/hooks/`: `guard-bash.sh` refuses
   `--takeover`, an unscoped `herdr server stop`, a `HOME=…` herdr, and a
-  `remuda-core` (or `rc`) `server stop` or `serve` whose statement names no
-  throwaway core (an `RC_SOCKET=`, or an `RC_SESSION=` other than `default`);
+  `remuda-core` (or `rc`) `server stop` or `serve` whose statement sets no
+  `RC_SOCKET=` of its own (a session name is not enough: the core reads
+  `RC_SOCKET` first, and a shell may carry the person's), its cases in
+  `guard-bash.test.sh`, which CI runs;
   `gofmt.sh` formats a Go file after every edit.
 - `.claude/skills/` — `/verify` (the full check), `/live-check` (a
   scratch workspace against the real herdr, cleaned up afterwards),

@@ -1514,7 +1514,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   smoke alone. The temp folder stays on a failure, with the screenshots
   (an artifact in CI, kept after a green run too). **`E2E_BACKEND=core`**
   (herdr unless it says so) runs the same on a throwaway remuda-core in
-  herdr's place (`E2E_CORE`, else `remuda-core` on PATH): `serve` started
+  herdr's place (`E2E_CORE`, else `remuda-core` on PATH, linked as
+  `remuda-core` first on the run's PATH, so the core served, remuda's
+  `connect` and the stop are one binary): `serve` started
   as the script's own child under the environment `coretest.Server` gives
   one — `RC_SESSION`, `RC_SOCKET` (`<tmp>/rc.sock`), the XDG state, config
   and runtime folders and `RC_LAUNCHD_DIRECT` naming the script's shell
