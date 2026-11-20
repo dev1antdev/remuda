@@ -295,8 +295,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   `title` or `display_agent`: remuda reads both back as the pane's own.
 - `internal/core/` — **the client of remuda-core** (dev1antdev/remuda-core,
   our clone of herdr-core; its protocol in its `schema/README.md`, generation
-  1), which is to take herdr's place on the machines; no machine uses it yet
-  (the machines, Core 13). `core.New(dial)` is one
+  1), which is to take herdr's place on the machines; a remuda started with
+  `-core` reaches every machine through it (`machines.NewCoreManager`, "On
+  remuda-core" under `internal/machines/`). `core.New(dial)` is one
   core: a `Dialer` gives a fresh `net.Conn` (the socket here, `ssh host
   remuda-core connect` over a master there), dialled when first needed and
   again after it ended. `hello {generation, framed: true}` in plain mode, then
@@ -563,20 +564,27 @@ components and icons as rules for whoever changes it: @docs/design.md
   viewer, nothing drags. **On remuda-core** (`core.go`, `-core`,
   tested on a throwaway core): `NewCoreManager` reaches every machine
   through remuda-core instead of herdr — the local one through a
-  `remuda-core connect` of this remuda's own (`dialLocalCore`: the binary on
-  PATH, else `~/.local/bin`, under this process's environment, so
+  `remuda-core connect` of this remuda's own (`dialLocalCore`: the binary
+  `herdr.FindBinary` finds, PATH first, under this process's environment, so
   `RC_SESSION`, `RC_SOCKET` and the XDG folders aim a scratch instance at a
   throwaway core), a remote one through the same over its master
   (`remoteCoreDialer`: `DialExec`, one connection that stays, one of the
-  master's places for RPC) once the probe found the binary (`coreLookup`:
-  PATH, else `~/.local/bin/remuda-core[.exe]`; none is `errNoCore`, naming
-  `remuda core -host H install`) and it answered a hello; `rc connect`
-  starts a core where none runs. The machine's `herdr.API` is then the core
+  master's places for RPC) once the probe found the binary (`coreLookup`
+  over `script.CoreBin`, the lookup the vitals share: `~/.local/bin/
+  remuda-core`, or `remuda-core.exe` with its ConPTY beside it; none is
+  `errNoCore`, naming `remuda core -host H install`) and it answered a
+  hello; `rc connect` starts a core where none runs. A Windows PC is
+  reached the same way, which no test proves yet (the check on the real PC
+  is Core 19's). The machine's `herdr.API` is then the core
   adapter (`coreLink`: the client and `core.NewAdapter`, its transport
   errors heard by `transportError`, closed off the adapter's goroutine by
   `fail` and `Close`), its terminals refuse every attach
   (`NoAttachOnCore`) until the live terminal is built, and it has no peer
-  to relay through (`Peer` nil) nor a bridge on Windows; `OnCore` is the
+  to relay through (`Peer` nil) nor a bridge on Windows. Nothing of herdr's
+  is offered there — its update, hooks, integrations, plugins and server
+  restart (`updates.withoutHerdr`, the ⓘ's herdr concerns) — and
+  `StopServer` / `StartServer` refuse (`ErrOnCore`): herdr's agents there
+  are not the ones this remuda sees, and a stop would end them all. `OnCore` is the
   roster's machine `core`, where the ⓘ says a Claude Code older than
   `CORE_STATUS_CLAUDE` 2.1.325 tells remuda-core no status (`concerns.ts`).
   Each remote connects in the
