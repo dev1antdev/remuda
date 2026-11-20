@@ -255,8 +255,12 @@ export function connect(stream: Stream): Transport {
             return;
           }
         } catch {
+          // a read that failed on the way may have taken bytes, the only repaint among them, that never reached the
+          // screen: a fresh stream starts it over with a fresh paint, rather than reading on past the gap
           if (stopped) return;
-          await new Promise((r) => setTimeout(r, 1000));
+          closeStream();
+          later(1000);
+          return;
         }
       }
     };
