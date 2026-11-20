@@ -414,11 +414,16 @@ components and icons as rules for whoever changes it: @docs/design.md
   app by its own name);
   `statusOf` takes the program's own word, `error` read as done; the session
   comes through `SessionOf` (Core 16 wires it; nil, none). Output watches go
-  in a core subscription of the stream's own, filtered by a label no
-  terminal carries (`outputOnly`), so it tells their rows alone as
-  `pane.output_matched`, a `missed` there ending the stream with
+  in **feeds** (`feeds.go`, tested on a fake: shared, closed with the last
+  stream, opened again after): one core subscription per pane's watches,
+  filtered by a label no terminal carries (`outputOnly`), shared by every
+  stream asking for the same ones — the watcher's swap joins the feed that
+  stands instead of subscribing again, so the core does not tell the rows
+  still on the screen as if new; a pane whose watches changed gets its own,
+  opened while the old one still tells — its rows go out as
+  `pane.output_matched`, a `missed` there ending its streams with
   `events_lost` (the watcher subscribes again) and a row's `lost` count
-  logged once a stream, a row it says stood before the watch began
+  logged once a feed, a row it says stood before the watch began
   `Standing`; the core's refusals read as herdr's (`not_found` →
   `pane_not_found`, `invalid_regex`, `needs_update` → `invalid_request`).
   Reads: `PaneRead`, `PaneScreen` (`ScreenText` of a vt read), `PaneRecent`
@@ -3663,10 +3668,13 @@ components and icons as rules for whoever changes it: @docs/design.md
   standing); on a remuda-core machine the adapter hands the same watches
   to core's `events.subscribe {output}` (see `internal/core`), which tells
   every matching row as it comes into the last rows, not only the first
-  while one stands, and again every one standing when a stream begins — so
-  `OnMatch` remembers each row a watch matched lately (`maxStanding` 64), not
-  only the last, and a row told again as a stream opened is no news while one
-  that came in the gap is; `Service.Watches` is the set for a machine's snapshot — the
+  while one stands, and again every one standing when a new feed begins (a
+  pane's watches changed, or the connection was lost) — so `OnMatch`
+  remembers each row a watch matched lately (`maxStanding` 64), not only the
+  last, and a row told again as a stream opened is no news while one that came
+  in the gap is; after a lost connection a new row with the very text of one
+  matched before is taken for it, the text being all core tells (a row
+  number that survives a resubscription is task #332); `Service.Watches` is the set for a machine's snapshot — the
   person's rules where they look, then two built-in ones on every pane, at
   most `MaxWatches` 200 a machine (the rest left out, logged once an
   hour). **Built in**: `ServePattern`, a dev server announcing its address

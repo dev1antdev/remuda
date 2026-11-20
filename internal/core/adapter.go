@@ -30,6 +30,9 @@ type Adapter struct {
 	streams  map[*eventStream]struct{}
 	badDoc   bool // a document that is no document was logged already
 
+	feedMu sync.Mutex       // join and leave one at a time; held over a feed's subscribe, never by a feed's teller
+	feeds  map[string]*feed // by feedKey: the output feeds that stand
+
 	docMu sync.Mutex // one write of the document at a time from this remuda (editDoc)
 }
 
@@ -62,6 +65,7 @@ func NewAdapter(client *Client, hooks AdapterHooks) *Adapter {
 	a := &Adapter{
 		client: client, hooks: hooks, stop: stop, done: make(chan struct{}),
 		state: mirror{terminals: map[string]*Terminal{}}, answered: make(chan struct{}), streams: map[*eventStream]struct{}{},
+		feeds: map[string]*feed{},
 	}
 	go a.run(ctx)
 	return a
@@ -257,7 +261,7 @@ func (a *Adapter) drop(err error) {
 	a.mu.Unlock()
 	for s := range streams {
 		s.end(err)
-		s.closeOutput()
+		a.leave(s)
 	}
 }
 

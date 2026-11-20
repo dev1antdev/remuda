@@ -2,9 +2,7 @@ package core
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"log"
 	"net"
 	"strconv"
 	"strings"
@@ -26,12 +24,11 @@ const maxQueued = 4096
 const outputOnly = "remuda.output-only"
 
 // eventStream is one herdr event stream over the adapter: the mirror's changes as they are applied, and the rows its
-// output watches matched, through a core subscription of its own.
+// output watches matched, through the feeds it joined (feeds.go).
 type eventStream struct {
 	adapter *Adapter
 	wake    bell
-	output  *Subscription
-	panes   map[string]string // output watch id → pane
+	feeds   []*feed // the adapter's feedMu guards it
 
 	mu    sync.Mutex
 	queue []herdr.Event
@@ -41,37 +38,31 @@ type eventStream struct {
 // Subscribe opens a stream: every change of the machine, whatever the subscriptions name, and the output matches they
 // ask for. A refusal of the watches is herdr's (invalid_regex, pane_not_found).
 func (a *Adapter) Subscribe(subs []herdr.Subscription) (herdr.EventStream, error) {
-	s := &eventStream{adapter: a, wake: make(bell, 1), panes: map[string]string{}}
-	var watches []OutputWatch
-	for i, sub := range subs {
+	s := &eventStream{adapter: a, wake: make(bell, 1)}
+	var panes []string
+	watches := map[string][]OutputWatch{}
+	for _, sub := range subs {
 		if sub.Type != herdr.EventOutputMatched || sub.Match == nil {
 			continue
 		}
-		id := strconv.Itoa(i)
-		s.panes[id] = sub.PaneID
-		watches = append(watches, OutputWatch{ID: id, Terminal: sub.PaneID, Match: Match{Type: sub.Match.Type, Value: sub.Match.Value}, Lines: min(sub.Lines, 200)})
-	}
-	if len(watches) > 0 {
-		ctx, cancel := context.WithTimeout(context.Background(), callWithin)
-		output, err := a.client.Subscribe(ctx, SubscribeParams{Labels: map[string]string{outputOnly: "1"}, Output: watches})
-		cancel()
-		if err != nil {
-			return nil, a.refusal(err, "pane_not_found")
+		if watches[sub.PaneID] == nil {
+			panes = append(panes, sub.PaneID)
 		}
-		s.output = output
+		id := strconv.Itoa(len(watches[sub.PaneID]))
+		watches[sub.PaneID] = append(watches[sub.PaneID], OutputWatch{ID: id, Terminal: sub.PaneID, Match: Match{Type: sub.Match.Type, Value: sub.Match.Value}, Lines: min(sub.Lines, 200)})
+	}
+	if err := a.join(s, panes, watches); err != nil {
+		return nil, err
 	}
 	a.mu.Lock()
 	if !a.held {
 		err := a.whyNotHeld()
 		a.mu.Unlock()
-		s.closeOutput()
+		a.leave(s)
 		return nil, err
 	}
 	a.streams[s] = struct{}{}
 	a.mu.Unlock()
-	if s.output != nil {
-		go s.readOutput()
-	}
 	return s, nil
 }
 
@@ -99,14 +90,8 @@ func (s *eventStream) Close() error {
 	delete(s.adapter.streams, s)
 	s.adapter.mu.Unlock()
 	s.end(net.ErrClosed)
-	s.closeOutput()
+	s.adapter.leave(s)
 	return nil
-}
-
-func (s *eventStream) closeOutput() {
-	if s.output != nil {
-		s.output.Close()
-	}
 }
 
 func (s *eventStream) push(ev herdr.Event) {
@@ -129,39 +114,6 @@ func (s *eventStream) end(err error) {
 	}
 	s.mu.Unlock()
 	s.wake.ring()
-}
-
-// readOutput hands the stream every row its watches matched, as herdr's pane.output_matched.
-func (s *eventStream) readOutput() {
-	toldLost := false
-	for {
-		notice, err := s.output.Next(context.Background())
-		if err != nil {
-			s.end(err)
-			return
-		}
-		if notice.Kind == NoticeMissed {
-			s.end(&herdr.Error{Code: herdr.ErrEventsLost, Message: "remuda-core dropped output rows: subscribe again"})
-			return
-		}
-		if notice.Kind != NoticeEvent || notice.Event.Type != "output" {
-			continue
-		}
-		var row struct {
-			Watch string `json:"watch"`
-			Line  string `json:"line"`
-			Lost  int    `json:"lost"`
-			Fresh *bool  `json:"fresh"`
-		}
-		if json.Unmarshal(notice.Event.Data, &row) != nil {
-			continue
-		}
-		if row.Lost > 0 && !toldLost {
-			log.Printf("remuda-core dropped %d rows of output watch %s on %s before this one", row.Lost, row.Watch, s.panes[row.Watch])
-			toldLost = true
-		}
-		s.push(herdr.Event{Kind: herdr.EventOutputMatched, PaneID: s.panes[row.Watch], MatchedLine: row.Line, Text: row.Line, Standing: row.Fresh})
-	}
 }
 
 // Bridged is false: a stream costs the machine nothing, the mirror's changes are fanned out here.
