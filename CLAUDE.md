@@ -559,9 +559,31 @@ components and icons as rules for whoever changes it: @docs/design.md
   `agent_blocked`, `unavailable` → `agent_not_ready`; right before the send
   the core's own view of the terminal is read (`terminal.get`) and must
   still show that agent with a status — a cleared one, as an agent leaving
-  reports, gets nothing — and a send to an idle agent names that status
-  (`if`, never for a working one, whose turn may end as it goes;
-  `status_mismatch` → `agent_not_ready`); `PaneSendKeys` is
+  reports, gets nothing, one asking something is `agent_blocked` at the
+  look, nothing sent — and a send names the status it saw (`if`, a core
+  whose `if` names idle and working alone — before Core 41's
+  `send_if_any_status` — refusing done or error before it types: the
+  person's message then goes without it and a prompt for the agent at
+  rest is `invalid_request` in words of its own, so on such a core an
+  update's restart, a sleep, a schedule, a booked continue and a tidy's
+  `/compact` cannot reach an agent that reports done; never for a
+  working one, whose turn may end as it goes;
+  a `status_mismatch` — nothing typed — is read again, `sendTo`: the
+  same agent in front under the same pid with a status gets one more
+  send as it stands, at rest again after a short turn, or — the person's
+  own message alone, `Submit`, and a pull request's hand-off at their
+  press, `HandOff` — at work in a turn their draft started, which takes
+  it as a message; a restart's exit, a sleep's, a schedule's or a first
+  prompt is refused by an agent at work, at the look or there,
+  `agent_working` — `sessions.ErrAgentWorking`, which a schedule skips
+  quietly and the first prompts' loops wait out — and never goes to a
+  turn; anything else is `agent_left`,
+  `sessions` saying `ErrNoAgent`; and a delivery tried again
+  (`sessions.Delivery`: `FirstPrompt`, a task's and an arena lane's) is
+  bound by its first sight of the agent — a refusal for its status
+  included, before it has reported one — to that agent's pid, every later look
+  refusing another as `agent_left` and every send naming it to the
+  core's guard, so a prompt never reaches what replaced the agent); `PaneSendKeys` is
   `terminal.keys` with `now` (keys the person pressed); `PaneSendText` types
   bytes as they are into a terminal its shell holds — a command line remuda
   types into a shell it opened — through a `keep_size` attach of its own,
@@ -5075,7 +5097,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   from `said.Tracker.Link` — or `{url}`, a GitHub pull request the pull
   request panel names, the pane being the agent picked, and `{check}`,
   one failed check by name — compose on the pane's machine and send the
-  text through `sessions.Input.SubmitToAgent` — 409 for a pane whose
+  text through `sessions.Input.HandOff`, the person's own message, which
+  on remuda-core a turn under way takes as a message (never `Submit`'s
+  Enter after a picture) — 409 for a pane whose
   agent left or is not up yet, an agent waiting on a question or nothing to send, 502 with gh's (or
   glab's) line, 400 for a link that is neither.
   **A merged worktree goes** through the remove dialog below: the
@@ -7362,7 +7386,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   person finishes a draft in the terminal and checks the agent as it types —
   holds it for the look alone, the pane's prompts one after another by a
   lock of their own, so keys, typing and an answer pass the wait; `Prompt`
-  is that door, which the arena's and a task's first prompts take too;
+  is that door, once, and `Deliver` a prompt tried again, bound to the
+  agent its first look saw, which the arena's and a task's first prompts
+  and `FirstPrompt` take;
   `Hold` takes both, the prompts' lock first, for a restart or a sleep),
   `Submit` (`agent.prompt`: what is
   written for an agent is never typed into a pane without one, whose shell
@@ -7396,8 +7422,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   keystroke, a paste through `send_input` with the keys after it, which
   herdr brackets while the app asked for it; tested on a throwaway herdr),
   `SubmitToAgent` (`agent.prompt` alone: a pane whose agent left is
-  `ErrNoAgent`, never typed into its shell — the schedules, the pull
-  requests' hand-offs and a booked continue), `SubmitToFolder` (the
+  `ErrNoAgent`, never typed into its shell — the schedules, a booked
+  continue, a tidy's `/compact`: on remuda-core never into a turn), `SubmitToFolder` (the
   scheduler's door, through it); `WorkspaceIn(snap, dir)` the first
   workspace on a folder; `StartIn(client, snap, dir,
   label, kind, start)` (place.go, tested) starts an agent in a folder —
@@ -7411,8 +7437,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   tab alone once the person added another to the workspace, nothing for a
   pane gone, a refusal when the tab no longer holds the pane) — the agent schedules' door; and `FirstPrompt` (the text a
   person wrote in the New workspace / tab / worktree dialog for the agent
-  they started: `Prompt` — `agent.prompt` under the pane's lock, on
-  remuda-core the look alone under it — every
+  they started: a `Deliver` — `agent.prompt` under the pane's lock, on
+  remuda-core the look alone under it, bound to the pid of the agent it
+  first sees — tried every
   `FirstPromptRetry` while the agent is still coming up, until it takes
   the text or `FirstPromptTimeout` passes; a dialog on the agent's screen
   — Claude Code's trust question for the folder — is waited through and
@@ -7746,7 +7773,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   never the text typed into its shell. Everything per-pane is
   serialized by `sessions.Input`, one lock per pane (on remuda-core a
   prompt holds it for its look alone: the core orders what is typed and
-  checks the agent as it types). Never queue or auto-send user input.
+  checks the agent as it types). Never queue or auto-send user input —
+  but that on remuda-core a send the core refused untyped
+  (`status_mismatch`) goes once more in the same request, only to the
+  same agent under the same pid (`core.Adapter.sendTo`).
   The first prompts remuda composes itself — a handover's, a second
   opinion's review request (`opinion.Prompt`) — go only
   to the agent it just started in a new tab, and only because the person

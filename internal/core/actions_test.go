@@ -27,6 +27,8 @@ while IFS= read -r line; do
   printf 'got: %s\n' "$line"
   if [ "$line" = ask ]; then say blocked; continue; fi
   if [ "$line" = leaving ]; then say clear; continue; fi
+  if [ "$line" = slow ]; then say working; sleep 3; say idle; continue; fi
+  if [ "$line" = finish ]; then say working; sleep 0.2; say done; continue; fi
   say working
   sleep 0.2
   say idle
@@ -199,6 +201,14 @@ func idleAgent(t *testing.T) (*core.Client, *core.Adapter, string) {
 		t.Fatal(err)
 	}
 	pane := made.RootPane.PaneID
+	startStandIn(t, adapter, pane)
+	return client, adapter, pane
+}
+
+// startStandIn starts the stand-in agent at the pane's shell and waits for it to rest.
+func startStandIn(t *testing.T, adapter *core.Adapter, pane string) {
+	t.Helper()
+	var err error
 	for start := time.Now(); time.Since(start) < 10*time.Second; time.Sleep(200 * time.Millisecond) {
 		if err = adapter.AgentStart(pane, "claude"); !herdr.IsCode(err, "agent_pane_busy") {
 			break
@@ -207,8 +217,10 @@ func idleAgent(t *testing.T) (*core.Client, *core.Adapter, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Pane(pane).AgentStatus == herdr.StatusIdle })
-	return client, adapter, pane
+	eventually(t, adapter, func(s *herdr.Snapshot) bool {
+		p := s.Pane(pane)
+		return p != nil && p.Agent == "claude" && p.AgentStatus == herdr.StatusIdle
+	})
 }
 
 func TestAPromptWaitsForACoreThatChecksTheAgentAsItTypes(t *testing.T) {
@@ -278,6 +290,7 @@ func TestAnAgentStartsInTheShellAndTakesPromptsAndKeys(t *testing.T) {
 		t.Fatalf("raw typing into an agent's terminal: %v", err)
 	}
 
+	eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Pane(pane).AgentStatus == herdr.StatusIdle })
 	if err := adapter.AgentPrompt(pane, "ask"); err != nil {
 		t.Fatal(err)
 	}
