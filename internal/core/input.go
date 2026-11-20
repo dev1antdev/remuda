@@ -175,25 +175,14 @@ func (a *Adapter) StagePrompt(target, text string) (func() error, error) {
 	return func() error {
 		ctx, cancel := context.WithTimeout(context.Background(), sendWithin)
 		defer cancel()
-		return a.sendRefusal(cn.call(ctx, "terminal.send", params, nil, nil))
+		return a.inputRefusal(cn.call(ctx, "terminal.send", params, nil, nil), "agent_not_ready", "agent_blocked")
 	}, nil
 }
 
-// sendRefusal is the core's refusal of a prompt in herdr's words. One it pasted and then left unsubmitted, the agent
-// gone from the front before its Enter, is prompt_not_submitted: the text may sit in the input line of whatever runs
-// there now. A terminal whose holder is older than the core cannot have it check the agent as it types.
-func (a *Adapter) sendRefusal(err error) error {
-	switch {
-	case IsKind(err, "not_submitted"):
-		return &herdr.Error{Code: "prompt_not_submitted", Message: "the prompt was pasted but not submitted, the agent gone from the terminal's front before its Enter: the text may still sit in the terminal's input line, so look at the terminal (" + err.Error() + ")"}
-	case IsKind(err, "needs_update"):
-		return &herdr.Error{Code: "invalid_request", Message: "this terminal runs under an older remuda-core holder that cannot check the agent as it types, so nothing was sent; restart the terminal (close it and start the agent again) to send it prompts (" + err.Error() + ")"}
-	}
-	return a.inputRefusal(err, "agent_not_ready", "agent_blocked")
-}
-
 // inputRefusal is the core's refusal of typed input in herdr's words: a terminal still starting or between shells is
-// notReady, a program asking something is blocked, one gone is pane_not_found.
+// notReady, a program asking something is blocked, one gone is pane_not_found. A send the core pasted and then left
+// unsubmitted, the agent gone from the front before its Enter, keeps the core's not_submitted, the text maybe still
+// in the terminal's input line; one through a terminal whose holder is older (needs_update) is invalid_request.
 func (a *Adapter) inputRefusal(err error, notReady, blocked string) error {
 	switch {
 	case IsKind(err, "unavailable"):

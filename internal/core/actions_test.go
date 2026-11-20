@@ -187,7 +187,9 @@ func TestTwoRemudasMakingWorkspacesAtOnceKeepEveryOne(t *testing.T) {
 	})
 }
 
-func TestAPromptWaitsForACoreThatChecksTheAgentAsItTypes(t *testing.T) {
+// idleAgent is a throwaway core with the stand-in agent started in a workspace's pane and resting there.
+func idleAgent(t *testing.T) (*core.Client, *core.Adapter, string) {
+	t.Helper()
 	standInAgent(t)
 	client := coretest.Server(t).Client(t)
 	adapter := adapterOf(t, client, core.AdapterHooks{})
@@ -206,6 +208,11 @@ func TestAPromptWaitsForACoreThatChecksTheAgentAsItTypes(t *testing.T) {
 		t.Fatal(err)
 	}
 	eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Pane(pane).AgentStatus == herdr.StatusIdle })
+	return client, adapter, pane
+}
+
+func TestAPromptWaitsForACoreThatChecksTheAgentAsItTypes(t *testing.T) {
+	client, adapter, pane := idleAgent(t)
 	hello, err := client.Hello(context.Background())
 	if err != nil {
 		t.Fatal(err)

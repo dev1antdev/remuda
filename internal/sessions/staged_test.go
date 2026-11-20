@@ -157,7 +157,7 @@ func TestAPanesStagedPromptsGoInTurn(t *testing.T) {
 // A prompt pasted but left unsubmitted is said so and kept, never taken for one that went or for nothing sent.
 func TestAPastedPromptLeftUnsubmittedIsSaidSo(t *testing.T) {
 	h, in := newHolder(), NewInput(nil, nil)
-	h.sendErr = &herdr.Error{Code: "prompt_not_submitted", Message: "pasted, no Enter"}
+	h.sendErr = &herdr.Error{Code: "not_submitted", Message: "pasted, no Enter"}
 	h.sends <- struct{}{}
 	err := in.Submit(h, onePane, "hello")
 	if !errors.Is(err, ErrNotSubmitted) || !NotDelivered(err) || errors.Is(err, ErrNoAgent) {
@@ -166,4 +166,44 @@ func TestAPastedPromptLeftUnsubmittedIsSaidSo(t *testing.T) {
 	if !strings.Contains(err.Error(), "look at the terminal") {
 		t.Fatalf("words %q", err)
 	}
+}
+
+// A restart's or a sleep's hold keeps a staged prompt out until it lets go.
+func TestAStagedPromptWaitsForAHold(t *testing.T) {
+	h, in := newHolder(), NewInput(nil, nil)
+	hold := in.Hold(onePane.Machine, onePane.Pane)
+	hold.Lock()
+	sent := make(chan error, 1)
+	go func() { sent <- in.Submit(h, onePane, "hello") }()
+	time.Sleep(50 * time.Millisecond)
+	if got := h.seen(); len(got) > 0 {
+		t.Fatalf("a prompt was looked at under a hold: %v", got)
+	}
+	hold.Unlock()
+	h.sends <- struct{}{}
+	if err := <-sent; err != nil {
+		t.Fatal(err)
+	}
+}
+
+// A hold waits for a staged prompt already on its way, and meanwhile holds nothing the person's keys need.
+func TestAHoldWaitsForAPromptOnItsWayWithoutHoldingKeysUp(t *testing.T) {
+	h, in := newHolder(), NewInput(nil, nil)
+	sent := make(chan error, 1)
+	go func() { sent <- in.Submit(h, onePane, "hello") }()
+	until(t, &h.ledger, "look:hello")
+	hold, held := in.Hold(onePane.Machine, onePane.Pane), make(chan struct{})
+	go func() { hold.Lock(); close(held) }()
+	within(t, "Esc", func() error { return in.SendKeys(h, onePane, []string{"esc"}) })
+	select {
+	case <-held:
+		t.Fatal("the hold went ahead of a prompt on its way")
+	case <-time.After(50 * time.Millisecond):
+	}
+	h.sends <- struct{}{}
+	if err := <-sent; err != nil {
+		t.Fatal(err)
+	}
+	<-held
+	hold.Unlock()
 }

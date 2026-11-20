@@ -504,10 +504,11 @@ components and icons as rules for whoever changes it: @docs/design.md
   send apart, so `sessions.Input` holds the pane's lock for the look alone
   and keys and answers pass a prompt the core holds, #329; one the core
   pasted and then left unsubmitted, the agent gone from the front before
-  its Enter, is `prompt_not_submitted` — the text may sit in the input line
-  of whatever runs there, `sessions.ErrNotSubmitted` says to look at the
-  terminal — and a terminal whose holder is older than the core
-  (`needs_update`) is told to be restarted, nothing sent):
+  its Enter, keeps the core's `not_submitted` — the text may sit in the
+  input line of whatever runs there, `sessions.ErrNotSubmitted` says to
+  look at the terminal — and one through a terminal whose holder is older
+  than the core (`needs_update`, nothing typed) is `invalid_request` with
+  the core's words, that a terminal started since takes it):
   `agent_not_found` with no agent, `agent_not_ready` until it has reported
   a status since it took the terminal (`readyForPrompt`: the mirror stamps
   `agentAt` and `statusAt`, a report the foreground's next look comes
@@ -1963,9 +1964,11 @@ components and icons as rules for whoever changes it: @docs/design.md
   the watcher sees them settle (`events.PaneStatus` → `Restarter.OnStatus`,
   a 25 s timer, then its own job via `Restarter.Later`). A pane without a session id
   is left alone; a pane that closes with its agent is reported. `what =
-  restart-<kind>` runs the restart alone. A restart holds the pane's
-  lock (`sessions.Input.Lock`) from the exit to the resumed agent (nothing else lands in
-  the bare shell in between), a booking is tied to the session id it was
+  restart-<kind>` runs the restart alone. A restart holds the pane
+  (`sessions.Input.Hold`: the pane's prompts' lock, then its typing lock,
+  as a prompt takes them, so a prompt remuda-core holds for a draft goes
+  first and none goes after) from the exit to the resumed agent (nothing
+  else lands in the bare shell in between), a booking is tied to the session id it was
   made for, and a settled chat waits 25 s more (any change in between
   calls it off) because the person is likely reading or typing right
   then. This is the one place remuda types text the person did not
@@ -2094,7 +2097,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   merged with what an earlier sleep of it still holds) — so the roster
   says asleep and the restart memory skips its panes from the next
   snapshot — and a job ("Sleep api") makes every agent leave side by side,
-  each under its pane's lock: a fresh look (a pane gone stays asleep, a
+  each under its pane's hold (`sessions.Input.Hold`, as a restart): a fresh look (a pane gone stays asleep, a
   wake opens a tab for it; another conversation there is left), an Esc
   for one at work or asking (`interrupt`, a quiet "sent" row of the
   activity like the exit, `Typed`) and a wait for it to rest, then
@@ -2102,7 +2105,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   panes and tabs stay. An agent that would not leave stays awake and off
   the record ("api is asleep, but 1 agent did not stop: …"; none left,
   the record goes). **Wake** (`Service.Wake`): a job ("Wake api"), one
-  agent after another under its pane's lock: back already (the same
+  agent after another under its pane's hold: back already (the same
   kind and session) counts as woken; another agent in the pane, a shell
   in another folder, a shell `PaneAtPrompt` says is busy, or a start
   herdr refused stay asleep — never typed into a busy shell; a folder or
@@ -7193,7 +7196,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   person finishes a draft in the terminal and checks the agent as it types —
   holds it for the look alone, the pane's prompts one after another by a
   lock of their own, so keys, typing and an answer pass the wait; `Prompt`
-  is that door, which the arena's and a task's first prompts take too),
+  is that door, which the arena's and a task's first prompts take too;
+  `Hold` takes both, the prompts' lock first, for a restart or a sleep),
   `Submit` (`agent.prompt`: what is
   written for an agent is never typed into a pane without one, whose shell
   would run every line; `ErrNoAgent` when none is ready, `ErrAgentBusy`
@@ -7241,7 +7245,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   tab alone once the person added another to the workspace, nothing for a
   pane gone, a refusal when the tab no longer holds the pane) — the agent schedules' door; and `FirstPrompt` (the text a
   person wrote in the New workspace / tab / worktree dialog for the agent
-  they started: `agent.prompt` under the pane's lock every
+  they started: `Prompt` — `agent.prompt` under the pane's lock, on
+  remuda-core the look alone under it — every
   `FirstPromptRetry` while the agent is still coming up, until it takes
   the text or `FirstPromptTimeout` passes; a dialog on the agent's screen
   — Claude Code's trust question for the folder — is waited through and

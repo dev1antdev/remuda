@@ -307,6 +307,26 @@ func (in *Input) Lock(machineID, paneID string) sync.Locker {
 	return in.lock(events.PaneRef{Machine: machineID, Pane: paneID})
 }
 
+// Hold is the pane's whole hold, a restart's or a sleep's from an agent's exit to the next one's start: the prompts'
+// lock, then the typing lock, as Prompt takes them, so no prompt looked at before goes in between either. An answer
+// takes the typing lock alone (Lock), and so passes a prompt remuda-core holds.
+func (in *Input) Hold(machineID, paneID string) sync.Locker {
+	ref := events.PaneRef{Machine: machineID, Pane: paneID}
+	return &held{prompts: in.paneMutex(&in.prompts, ref), typing: in.lock(ref)}
+}
+
+type held struct{ prompts, typing *sync.Mutex }
+
+func (h *held) Lock() {
+	h.prompts.Lock()
+	h.typing.Lock()
+}
+
+func (h *held) Unlock() {
+	h.typing.Unlock()
+	h.prompts.Unlock()
+}
+
 func (in *Input) lock(ref events.PaneRef) *sync.Mutex {
 	return in.paneMutex(&in.locks, ref)
 }
@@ -387,7 +407,7 @@ func refused(err error) error {
 		return ErrAgentBusy
 	case herdr.IsCode(err, "agent_not_found"), herdr.IsCode(err, "agent_not_ready"):
 		return ErrNoAgent
-	case herdr.IsCode(err, "prompt_not_submitted"):
+	case herdr.IsCode(err, "not_submitted"):
 		return ErrNotSubmitted
 	}
 	return err
