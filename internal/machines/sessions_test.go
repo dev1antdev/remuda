@@ -14,25 +14,33 @@ import (
 	"github.com/dev1antdev/remuda/internal/transcript"
 )
 
-// sessionReads is a machine's SessionsOf on paper: the answers it holds now, and every list it was asked for.
+// sessionReads is a machine's SessionsOf on paper: the answers it holds now, a failure of the whole read, the pids it
+// cannot tell from a later process (a clock not read), and every list it was asked for.
 type sessionReads struct {
-	mu      sync.Mutex
-	answers map[int]string
-	fail    error
-	asked   [][]transcript.Running
+	mu         sync.Mutex
+	answers    map[int]string
+	fail       error
+	unverified map[int]bool
+	asked      [][]transcript.Running
 }
 
 func (r *sessionReads) read(procs []transcript.Running) (map[int]string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.asked = append(r.asked, procs)
+	if r.fail != nil {
+		return nil, r.fail
+	}
 	found := map[int]string{}
 	for _, p := range procs {
-		if id, ok := r.answers[p.PID]; ok {
-			found[p.PID] = id
+		if !r.unverified[p.PID] {
+			found[p.PID] = r.answers[p.PID]
 		}
 	}
-	return found, r.fail
+	if len(r.unverified) > 0 {
+		return found, errors.New("the machine's clock could not be read")
+	}
+	return found, nil
 }
 
 func (r *sessionReads) reads() int {
@@ -143,6 +151,28 @@ func TestAFreshReadAnswersTheConversationTheAgentRunsNow(t *testing.T) {
 	}
 	if got := ask(s, "claude", 100); got == nil || got.Value != "sid-c" {
 		t.Fatalf("the queued fresh read took the failed one for its own: %+v", got)
+	}
+}
+
+// A read that could not tell some processes from later ones given their pids (the machine's clock not read) keeps what
+// was known of them, takes what it could tell of the rest, and fails a fresh read.
+func TestAProcessTheReadCouldNotTellKeepsItsSession(t *testing.T) {
+	reads := &sessionReads{answers: map[int]string{100: "sid-a", 101: "sid-x"}}
+	s := newProcessSessions("gog", reads.read)
+	s.fresh = time.Hour
+	sessionAfter(t, s, "claude", 100, "sid-a")
+	sessionAfter(t, s, "claude", 101, "sid-x")
+	reads.mu.Lock()
+	reads.answers[100], reads.answers[101], reads.unverified = "sid-b", "", map[int]bool{100: true}
+	reads.mu.Unlock()
+	if err := s.readNow(); err == nil {
+		t.Fatal("a fresh read that could not tell a process apart answered nothing")
+	}
+	if got := ask(s, "claude", 100); got == nil || got.Value != "sid-a" {
+		t.Fatalf("a process the read could not tell lost its session: %+v", got)
+	}
+	if got := ask(s, "claude", 101); got != nil {
+		t.Fatalf("a process the same read told had none kept the old one: %+v", got)
 	}
 }
 

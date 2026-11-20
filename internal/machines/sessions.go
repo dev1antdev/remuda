@@ -107,8 +107,9 @@ func (s *processSessions) readNow() error {
 }
 
 // readDue reads every pid's holder whose read was last tried before since — read, when the answer must be one read
-// since (another caller's failed try is none) — and forgets the processes nobody asks about; a failure keeps the
-// answers read before, and an answer for a pid another process took meanwhile is dropped.
+// since (another caller's failed try is none) — and forgets the processes nobody asks about; a process the read did not
+// answer for, it failing or unable to tell that process from a later one, keeps the answer read before, and an answer
+// for a pid another process took meanwhile is dropped.
 func (s *processSessions) readDue(since time.Time, read bool) error {
 	s.readMu.Lock()
 	defer s.readMu.Unlock()
@@ -144,8 +145,8 @@ func (s *processSessions) readDue(since time.Time, read bool) error {
 			continue // another process was asked about under its pid meanwhile: what was read may be that one's
 		}
 		p.triedAt = now
-		if err == nil {
-			p.session, p.readAt = found[p.running.PID], now
+		if id, told := found[p.running.PID]; told {
+			p.session, p.readAt = id, now
 		}
 	}
 	return err
