@@ -217,9 +217,14 @@ func TestAnUnreadableFileRunsNothingAndIsNeverWrittenOver(t *testing.T) {
 	}
 	st.Tick()
 	st.Wait()
-	if _, err := st.Put(Schedule{Machine: "local", Dir: "/tmp/z", Cron: "0 9 * * *", Prompt: "new"}); err == nil || !strings.Contains(err.Error(), "unreadable") {
+	if _, err := st.Put(Schedule{Machine: "local", Dir: "/tmp/z", Cron: "* * * * *", Prompt: "new", Enabled: true}); err == nil || !strings.Contains(err.Error(), "unreadable") {
 		t.Fatalf("a save over an unreadable file: %v", err)
 	}
+	if list := st.List(); len(list) != 0 {
+		t.Fatalf("a schedule that could not be kept is listed: %+v", list)
+	}
+	st.Tick()
+	st.Wait()
 	if got, _ := os.ReadFile(filepath.Join(dir, file)); string(got) != string(body) || fired != 0 {
 		t.Fatalf("fired %d, the file now %s", fired, got)
 	}

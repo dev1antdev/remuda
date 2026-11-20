@@ -213,6 +213,7 @@ func (st *Store) Put(s Schedule) (Schedule, error) {
 	cp := s
 	st.items[s.ID] = &cp
 	if err := st.saveLocked(); err != nil {
+		st.restoreLocked(s.ID, old) // what could not be kept does not run either
 		return s, fmt.Errorf("the schedule could not be kept: %w", err)
 	}
 	return s, nil
@@ -221,9 +222,23 @@ func (st *Store) Put(s Schedule) (Schedule, error) {
 func (st *Store) Delete(id string) error {
 	st.mu.Lock()
 	defer st.mu.Unlock()
+	old := st.items[id]
 	delete(st.items, id)
+	if err := st.saveLocked(); err != nil {
+		st.restoreLocked(id, old)
+		return err
+	}
 	delete(st.firing, id)
-	return st.saveLocked()
+	return nil
+}
+
+// restoreLocked puts a schedule back as the file still has it after a save failed: the one before, or none.
+func (st *Store) restoreLocked(id string, old *Schedule) {
+	if old != nil {
+		st.items[id] = old
+	} else {
+		delete(st.items, id)
+	}
 }
 
 // Run fires one schedule now, whatever the clock says; a run that would pile up on the last one is skipped all the same.
