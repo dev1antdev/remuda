@@ -151,6 +151,7 @@ func (s *eventStream) readOutput() {
 			Watch string `json:"watch"`
 			Line  string `json:"line"`
 			Lost  int    `json:"lost"`
+			Fresh bool   `json:"fresh"`
 		}
 		if json.Unmarshal(notice.Event.Data, &row) != nil {
 			continue
@@ -159,7 +160,7 @@ func (s *eventStream) readOutput() {
 			log.Printf("remuda-core dropped %d rows of output watch %s on %s before this one", row.Lost, row.Watch, s.panes[row.Watch])
 			toldLost = true
 		}
-		s.push(herdr.Event{Kind: herdr.EventOutputMatched, PaneID: s.panes[row.Watch], MatchedLine: row.Line, Text: row.Line})
+		s.push(herdr.Event{Kind: herdr.EventOutputMatched, PaneID: s.panes[row.Watch], MatchedLine: row.Line, Text: row.Line, Standing: row.Fresh})
 	}
 }
 

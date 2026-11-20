@@ -261,7 +261,7 @@ func (w *Watcher) heard(machineID string, st *machineState, ls *liveStream, even
 			}
 			events.Publish(w.bus, events.OutputMatched{
 				Pane: events.PaneRef{Machine: machineID, Pane: event.PaneID}, Watch: o.Key, Line: event.MatchedLine, Text: event.Text,
-				Fresh: now.Sub(ls.started) < freshFor, Carried: ls.carried[carryKey(event.PaneID, o)], At: now,
+				Fresh: event.Standing || now.Sub(ls.started) < freshFor, Carried: ls.carried[carryKey(event.PaneID, o)], At: now,
 			})
 		}
 	case lazyKind, "pane_updated":

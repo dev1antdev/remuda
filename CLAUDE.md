@@ -339,7 +339,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   skipped; `serve` started as the test's own child with its own
   `RC_SESSION`, `RC_SOCKET`, XDG folders and HOME, `RC_LAUNCHD_DIRECT` so
   macOS does not hand it to launchd, `RC_HEARTBEAT_MS` 300, stopped through
-  `server.stop`) — calls side by side, a refusal's kind, documents, an
+  `server.stop`; `Core.Use(t)` sets that environment on the test process,
+  the core's binary first on PATH, for a `-core` fleet's `remuda-core
+  connect`) — calls side by side, a refusal's kind, documents, an
   attach's echo and exit code, a stream nobody reads beside a live one, events
   and an output watch, a severed connection — and on a fake over a pipe
   (events before the reply, a cut line, missed, a core that stops reading, a
@@ -416,7 +418,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   terminal carries (`outputOnly`), so it tells their rows alone as
   `pane.output_matched`, a `missed` there ending the stream with
   `events_lost` (the watcher subscribes again) and a row's `lost` count
-  logged once a stream; the core's refusals read as herdr's (`not_found` →
+  logged once a stream, a row it says stood before the watch began
+  `Standing`; the core's refusals read as herdr's (`not_found` →
   `pane_not_found`, `invalid_regex`, `needs_update` → `invalid_request`).
   Reads: `PaneRead`, `PaneScreen` (`ScreenText` of a vt read), `PaneRecent`
   (a vt read too, as plain text down to the last row with text,
@@ -3544,7 +3547,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   socket in `stream_test.go`, `stream_fail_test.go` and
   `stream_quiet_test.go`, and against a throwaway herdr: `herdr_test.go`
   hears every status of a new pane's agent with the poll a minute apart,
-  `triggers_herdr_test.go` has a trigger fire once through new streams):
+  `triggers_herdr_test.go` has a trigger fire once through new streams,
+  `firesOnce` in `triggers_live_test.go`, which `triggers_core_test.go`
+  runs on a throwaway remuda-core through a `-core` fleet too):
   one `events.subscribe` connection per
   machine (`herdr.Client.Subscribe`) holding the global kinds — a
   workspace, tab, worktree or pane made, closed, renamed, moved or
@@ -3589,7 +3594,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   An output match goes on the bus as `events.OutputMatched` for every
   watch whose pattern the row matches (herdr names no subscription), with
   `Fresh` (within `freshFor` 2 s of its stream's start: herdr tells a match
-  already standing on the screen when a watch begins) and `Carried` (the
+  already standing on the screen when a watch begins; or whenever told, a
+  row remuda-core says stood, `herdr.Event.Standing` from its `fresh`, since
+  a core tells at most 256 rows a look and a broad rule's may come later,
+  `standing_test.go`) and `Carried` (the
   stream before held that watch too, looking for the same thing: a rule
   edited is a new watch), the row read again in herdr's dialect
   (`herdr.CompileRegex`). Handlers read its cache
@@ -3606,18 +3614,15 @@ components and icons as rules for whoever changes it: @docs/design.md
 - `internal/triggers/` — **what a pane prints, and what it sets off**
   (tested: the built-in patterns on recorded lines, the rules, the dedupe,
   the actions on fakes, and herdr itself running both built-in patterns on
-  a throwaway server — the same live test, `firesOnce` in
-  `internal/watch/triggers_herdr_test.go`, runs on a throwaway remuda-core
-  through a `-core` fleet too, `triggers_core_test.go`: one push and one
-  offer through new streams, Try over `PaneRecent`, a rule past Rust's
-  compiled-size limit refused as `invalid_regex`). herdr watches the rows (`pane.output_matched`, its
+  a throwaway server, and remuda-core the same way — `firesOnce` in
+  internal/watch, a rule past Rust's compiled-size limit refused as
+  `invalid_regex` there too). herdr watches the rows (`pane.output_matched`, its
   Rust regex a line at a time, the last `lines` 40 rows of `recent`, a
   match told when it appears and once more when a watch begins with one
   standing); on a remuda-core machine the adapter hands the same watches
-  to core's `events.subscribe {output}` (`internal/core`), which tells
+  to core's `events.subscribe {output}` (see `internal/core`), which tells
   every matching row as it comes into the last rows, not only the first
-  while one stands — the quiet spells below keep that to one push — and
-  logs once a stream the rows it dropped (`lost`); `Service.Watches` is the set for a machine's snapshot — the
+  while one stands — the quiet spells below keep that to one push; `Service.Watches` is the set for a machine's snapshot — the
   person's rules where they look, then two built-in ones on every pane, at
   most `MaxWatches` 200 a machine (the rest left out, logged once an
   hour). **Built in**: `ServePattern`, a dev server announcing its address
