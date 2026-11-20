@@ -38,11 +38,12 @@ type OutputMatch struct {
 // ("pane_created") and the per-pane ones with a dot ("pane.agent_status_changed"); Kind is as herdr sent it.
 type Event struct {
 	Kind        string
-	PaneID      string // the pane it concerns, when it names one
-	AgentStatus string // pane.agent_status_changed
-	MatchedLine string // pane.output_matched: the first row that matched
-	Text        string // pane.output_matched: the rows herdr read
-	Standing    *bool  // pane.output_matched: whether the row stood before the watch began, as remuda-core says; nil from herdr
+	PaneID      string       // the pane it concerns, when it names one
+	AgentStatus string       // pane.agent_status_changed
+	MatchedLine string       // pane.output_matched: the first row that matched
+	Text        string       // pane.output_matched: the rows herdr read
+	Standing    *bool        // pane.output_matched: whether the row stood before the watch began, as remuda-core says; nil from herdr
+	Watch       *OutputMatch // pane.output_matched: the watch that told it, as remuda-core says; nil from herdr, which names none
 }
 
 // Event kinds remuda tells apart.

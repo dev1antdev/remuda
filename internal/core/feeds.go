@@ -15,9 +15,10 @@ import (
 // that stand, the new stream is not told every matching row still on a screen as if the core had just seen it, and a
 // watch that did not change keeps telling its rows as they appear. Only a new watch gets a feed of its own.
 type feed struct {
-	key  string
-	pane string
-	sub  *Subscription
+	key   string
+	pane  string
+	match herdr.OutputMatch
+	sub   *Subscription
 
 	mu      sync.Mutex
 	streams map[*eventStream]struct{}
@@ -121,7 +122,7 @@ func (a *Adapter) join(s *eventStream, watches []OutputWatch) error {
 		return a.refusal(refused, "pane_not_found")
 	}
 	for i, w := range missing {
-		f := &feed{key: feedKey(w), pane: w.Terminal, sub: subs[i], streams: map[*eventStream]struct{}{s: {}}}
+		f := &feed{key: feedKey(w), pane: w.Terminal, match: herdr.OutputMatch{Type: w.Match.Type, Value: w.Match.Value}, sub: subs[i], streams: map[*eventStream]struct{}{s: {}}}
 		a.feeds[f.key] = f
 		s.feeds = append(s.feeds, f)
 		go a.tell(f)
@@ -182,6 +183,6 @@ func (a *Adapter) tell(f *feed) {
 			log.Printf("remuda-core dropped %d rows of an output watch on %s before this one", row.Lost, f.pane)
 			toldLost = true
 		}
-		f.push(herdr.Event{Kind: herdr.EventOutputMatched, PaneID: f.pane, MatchedLine: row.Line, Text: row.Line, Standing: row.Fresh})
+		f.push(herdr.Event{Kind: herdr.EventOutputMatched, PaneID: f.pane, MatchedLine: row.Line, Text: row.Line, Standing: row.Fresh, Watch: &f.match})
 	}
 }

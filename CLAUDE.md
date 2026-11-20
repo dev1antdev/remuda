@@ -3642,7 +3642,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   dead remote is noticed at once, and the reader goroutine ends with its
   connection.
   An output match goes on the bus as `events.OutputMatched` for every
-  watch whose pattern the row matches (herdr names no subscription), with
+  watch whose pattern the row matches (herdr names no subscription; a row
+  remuda-core told goes to the watch that told it alone, `herdr.Event.Watch`,
+  so a new rule's standing copy never reaches an old rule matching the same
+  row, `standing_test.go`), with
   `Fresh` (within `freshFor` 2 s of its stream's start: herdr tells a match
   already standing on the screen when a watch begins — the clock alone for
   herdr; remuda-core says it of every row, `herdr.Event.Standing` from its

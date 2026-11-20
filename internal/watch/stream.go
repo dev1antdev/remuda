@@ -260,8 +260,8 @@ func (w *Watcher) heard(machineID string, st *machineState, ls *liveStream, even
 			fresh = *event.Standing // the server knows, where herdr's clock only guesses
 		}
 		for _, o := range ls.set.outputs[event.PaneID] {
-			if !w.matches(o.Match, event.MatchedLine) {
-				continue
+			if event.Watch != nil && o.Match != *event.Watch || event.Watch == nil && !w.matches(o.Match, event.MatchedLine) {
+				continue // a watch the server named is the one that told it; herdr names none, so its row goes to each it matches
 			}
 			events.Publish(w.bus, events.OutputMatched{
 				Pane: events.PaneRef{Machine: machineID, Pane: event.PaneID}, Watch: o.Key, Line: event.MatchedLine, Text: event.Text,
