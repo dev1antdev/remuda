@@ -567,7 +567,19 @@ components and icons as rules for whoever changes it: @docs/design.md
   reordered), `$rewindTo`, `$set`; the legacy one-object `.json` too.
   `Reader.ResolveSession(agent, cwd, kind, value)` finds the file by the
   pane's agent (`""` tries every format, for a transcript opened by id),
-  locally and by `findScript` over ssh; `NewUsageScanner(path)` is the
+  locally and by `findScript` over ssh. **A session found by the agent's
+  process** (`bypid.go`, tested on real processes in a temp HOME and on
+  `shell.Fake`), for a machine whose runtime names no session (remuda-core,
+  Core 12): `Reader.SessionsOf([]Running{pid, agent, cwd})` is one script
+  on the machine, here or over ssh, answering pid → session id — Claude
+  Code's from `<config dir>/sessions/<pid>.json` (`CLAUDE_CONFIG_DIR` read
+  off the process's environment, `/proc/<pid>/environ` or `ps -E`; a file
+  counts only when its `procStart` is the process's `LC_ALL=C TZ=UTC ps -o
+  lstart`, or, where either side lacks it — Windows — when its folder is the
+  pane's), Codex's thread id from the `rollout-*.jsonl` the process or a
+  child of it holds open (`/proc/<pid>/fd`, else `lsof`; none on Windows);
+  stateless, since `/clear` and `/resume` change the session under the same
+  pid; nothing under `~/.claude` or `~/.codex` is written. `NewUsageScanner(path)` is the
   per-line usage reader of each format (the tracker keeps one per file
   across its delta reads); `InputField` is the input-key reader the recap
   and `ShellCommand` share.
