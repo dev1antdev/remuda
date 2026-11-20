@@ -152,6 +152,20 @@ describe("installSearch on remuda-core", () => {
     expect(found).toEqual({ total: 2, at: 0 });
     search.dispose();
   });
+  it("steps back along the buffer's last row when the match selected there was rewritten away", async () => {
+    const term = headless();
+    const search = installSearch(term, () => "frappe", () => {});
+    await written(term, "a\r\nb\r\nc\r\nd\r\nNEW 1 NEW 2 NEW 3");
+    let found: FoundCount = { total: -1, at: -1 };
+    search.find!("NEW", 0, (f) => (found = f));
+    search.find!("NEW", 1, (f) => (found = f));
+    search.find!("NEW", 1, (f) => (found = f));
+    expect(found).toEqual({ total: 3, at: 2 });
+    await written(term, rewrite(5, "NEW 1 NEW 2 OLD 3"));
+    search.find!("NEW", -1, (f) => (found = f));
+    expect(found).toEqual({ total: 2, at: 1 });
+    search.dispose();
+  });
   it("steps back round to the last match when the first was rewritten away", async () => {
     const term = headless();
     const search = installSearch(term, () => "frappe", () => {});

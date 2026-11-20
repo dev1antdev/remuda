@@ -142,8 +142,11 @@ export function installSearch(term: XTerm, flavor: () => Flavor, forgetSelection
     fresh();
     const hit = seek();
     if (!hit || step === 0) return hit;
-    if (step < 0) return seek(true);
-    return samePlace(term.getSelectionPosition(), was) ? seek() : hit;
+    if (step > 0) return samePlace(term.getSelectionPosition(), was) ? seek() : hit;
+    if (seek(true)) return true;
+    // the addon's step back from a match on the buffer's last row never wraps round: from the buffer's end instead
+    term.clearSelection();
+    return seek(true);
   };
   let recount: ReturnType<typeof setTimeout> | null = null;
   // the core find counts its query again once output rests, where the screen stands: a write may rewrite rows it read
