@@ -26,6 +26,8 @@ function missingText(what: string): string {
       return tr("Every agent there has herdr's hooks.");
     case "plugins":
       return tr("No herdr plugin from GitHub is installed there, or herdr there is older than 0.9.4.");
+    case "core":
+      return tr("remuda-core is there already, or it has no build for this machine.");
   }
   return tr("Nothing to update called “{what}” there any more.", { what });
 }
