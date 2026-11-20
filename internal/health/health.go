@@ -98,7 +98,6 @@ type Latest struct {
 	Herdr  string    `json:"herdr,omitempty"`
 	Remuda string    `json:"remuda,omitempty"`
 	Code   string    `json:"code,omitempty"` // the code-server this remuda installs (PinnedCode), not a check
-	Core   string    `json:"core,omitempty"` // the remuda-core this remuda installs (PinnedCore), not a check
 }
 
 // PinnedCode is the code-server release this remuda's installer carries; the app sets it from internal/setup.
@@ -181,7 +180,6 @@ func (c *Collector) Latest() Latest {
 	defer c.mu.Unlock()
 	l := c.latest
 	l.Code = PinnedCode
-	l.Core = PinnedCore
 	return l
 }
 

@@ -34,7 +34,9 @@ func TestOnlyAnUpdateWithSomethingNewerIsAStepEverywhere(t *testing.T) {
 	if pendingUpdate("hooks", &health.Report{}, latest) || pendingUpdate("code", &health.Report{}, latest) {
 		t.Error("nothing installed counts as an update")
 	}
-	if pendingUpdate("core", &health.Report{RemudaCore: "0.2.0"}, health.Latest{Core: "0.2.0"}) {
+	health.PinnedCore = "0.2.0"
+	t.Cleanup(func() { health.PinnedCore = "" })
+	if pendingUpdate("core", &health.Report{RemudaCore: "0.2.0"}, latest) {
 		t.Error("a remuda-core as new as the one remuda installs counts as an update")
 	}
 }

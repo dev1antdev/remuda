@@ -68,7 +68,7 @@ func pendingUpdate(what string, r *health.Report, l health.Latest) bool {
 	case "code":
 		return r.CodeServer != "" && l.Code != "" && health.Newer(r.CodeServer, l.Code)
 	case "core":
-		return r.RemudaCore == "" || l.Core != "" && health.Newer(r.RemudaCore, l.Core)
+		return r.RemudaCore == "" || health.Newer(r.RemudaCore, health.PinnedCore)
 	case "remuda-release":
 		return true
 	}

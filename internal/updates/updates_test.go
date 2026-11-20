@@ -254,7 +254,7 @@ func TestCoreIsOfferedWhereItIsMissingOrOlder(t *testing.T) {
 	health.PinnedCore = "0.2.0"
 	t.Cleanup(func() { health.PinnedCore = "" })
 	find := func(r *health.Report) *Update {
-		for _, u := range Offered(r, health.Latest{Core: "0.2.0"}) {
+		for _, u := range Offered(r, health.Latest{}) {
 			if u.What == "core" {
 				return &u
 			}
