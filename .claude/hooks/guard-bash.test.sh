@@ -22,6 +22,7 @@ refuse	remuda-core server \\n  stop
 refuse	rc \\n  serve
 refuse	ls\nrc server stop
 refuse	cd /tmp &&\nremuda-core serve
+refuse	# a Windows folder: C:\Users\me\\nrc server stop
 allow	remuda-core \\n  server status
 refuse	remuda-core server stop
 refuse	rc server stop
