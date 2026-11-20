@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/core"
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/transcript"
 )
@@ -26,9 +27,16 @@ type processSessions struct {
 
 	readMu     sync.Mutex // one read on the machine at a time
 	mu         sync.Mutex
-	procs      map[int]*process
+	procs      map[processKey]*process
 	reading    bool
 	complained time.Time
+}
+
+// processKey is one process however its pid is given out again: the terminal it holds and when its agent took it.
+type processKey struct {
+	terminal string
+	since    int64
+	pid      int
 }
 
 // process is an agent's process as last read: its kind and folder, its session ("" for none found), when it was last
@@ -41,20 +49,22 @@ type process struct {
 }
 
 func newProcessSessions(name string, read func([]transcript.Running) (map[int]string, error)) *processSessions {
-	return &processSessions{name: name, read: read, fresh: sessionsFresh, forget: sessionsForget, procs: map[int]*process{}}
+	return &processSessions{name: name, read: read, fresh: sessionsFresh, forget: sessionsForget, procs: map[processKey]*process{}}
 }
 
 // of is the core adapter's SessionLookup: what the last read found of the process, a read booked when it is new or due.
-func (s *processSessions) of(agent string, pid int, cwd string) *herdr.AgentSession {
+func (s *processSessions) of(asked core.AgentProcess) *herdr.AgentSession {
 	now := time.Now()
+	running := transcript.Running{PID: asked.PID, Agent: asked.Agent, CWD: asked.Cwd}
+	key := processKey{terminal: asked.Terminal, since: asked.Since.UnixMilli(), pid: asked.PID}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	p := s.procs[pid]
-	if p == nil || p.running.Agent != agent {
+	p := s.procs[key]
+	if p == nil || p.running != running {
 		p = &process{}
-		s.procs[pid] = p
+		s.procs[key] = p
 	}
-	p.running, p.asked = transcript.Running{PID: pid, Agent: agent, CWD: cwd}, now
+	p.running, p.asked = running, now
 	if now.Sub(p.triedAt) >= s.fresh && !s.reading {
 		s.reading = true
 		since := now.Add(-s.fresh)
@@ -80,14 +90,20 @@ func (s *processSessions) readDue(since time.Time, read bool) error {
 	defer s.readMu.Unlock()
 	s.mu.Lock()
 	now := time.Now()
-	var due []transcript.Running
-	for pid, p := range s.procs {
+	latest := map[int]*process{} // one look a pid: the process last asked about holds it, an earlier one gave it up
+	for key, p := range s.procs {
 		switch {
 		case now.Sub(p.asked) > s.forget:
-			delete(s.procs, pid)
+			delete(s.procs, key)
 		case !p.triedAt.After(since), read && !p.readAt.After(since):
-			due = append(due, p.running)
+			if q := latest[key.pid]; q == nil || p.asked.After(q.asked) {
+				latest[key.pid] = p
+			}
 		}
+	}
+	due := make([]transcript.Running, 0, len(latest))
+	for _, p := range latest {
+		due = append(due, p.running)
 	}
 	s.mu.Unlock()
 	found, err := s.read(due)
@@ -98,11 +114,11 @@ func (s *processSessions) readDue(since time.Time, read bool) error {
 		s.complained = time.Now()
 		log.Printf("%s: the agents' sessions could not be read off their processes: %v", s.name, err)
 	}
-	for _, r := range due {
-		if p := s.procs[r.PID]; p != nil && p.running.Agent == r.Agent {
+	for _, p := range s.procs {
+		if r, ok := latest[p.running.PID]; ok && r == p {
 			p.triedAt = now
 			if err == nil {
-				p.session, p.readAt = found[r.PID], now
+				p.session, p.readAt = found[p.running.PID], now
 			}
 		}
 	}

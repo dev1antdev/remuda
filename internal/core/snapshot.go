@@ -158,7 +158,9 @@ func paneOf(t *Terminal, tab, space string, sessionOf SessionLookup) herdr.PaneI
 		if t.Foreground != nil {
 			pid = t.Foreground.Pid
 		}
-		pane.AgentSession = sessionOf(pane.Agent, pid, cmp.Or(pane.ForegroundCWD, pane.CWD))
+		pane.AgentSession = sessionOf(AgentProcess{
+			Agent: pane.Agent, PID: pid, Cwd: cmp.Or(pane.ForegroundCWD, pane.CWD), Terminal: t.Address, Since: t.agentAt,
+		})
 	}
 	return pane
 }

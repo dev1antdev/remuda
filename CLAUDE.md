@@ -423,12 +423,17 @@ components and icons as rules for whoever changes it: @docs/design.md
   (`claude-code` → claude, `codex`, `gemini-cli` → gemini, `kimi`, any other
   app by its own name);
   `statusOf` takes the program's own word, `error` read as done; the session
-  comes through `SessionOf` (a `SessionLookup`: kind, the foreground's pid,
-  its folder; nil, none), which a machine gives as its `processSessions`
+  comes through `SessionOf` (a `SessionLookup` of an `AgentProcess`: kind,
+  the foreground's pid, its folder, and the terminal with the moment its
+  agent took it, `agentAt`; nil, none), which a machine gives as its `processSessions`
   (`internal/machines/sessions.go`, tested on paper and on a throwaway core
   with a stand-in Claude Code keeping its session file in a temp HOME):
   `transcript.Reader.SessionsOf` for every Claude Code and Codex process the
-  snapshots asked about, one script for all of them, a process new to it read
+  snapshots asked about, kept by the process, not its pid (`processKey`: the
+  terminal, `agentAt`, the pid — a pid given out again, in another terminal
+  or to the agent that took the terminal next, never answers the session of
+  the process before it, and one pid is read once, for the process last asked
+  about), one script for all of them, a process new to it read
   at once and every answer again once `sessionsFresh` 30 s old (a `/clear` or
   `/resume` changes the session under the same pid), a failed read keeping
   the last answer (logged once an hour), a process nobody asked about for
@@ -980,18 +985,23 @@ components and icons as rules for whoever changes it: @docs/design.md
   agent's folder, then the default one; a process gone is no record; every
   candidate's file is sent and Go weighs them, a start-verified one before
   one matched by its folder alone; only
-  regular files are read, a FIFO never holds the script; a file
+  regular files are read, a FIFO never holds the script; a file of another
+  folder than the pane's never counts, whatever else matches, since the
+  pid may belong to an agent elsewhere by now; a file
   counts only when its `procStart` is the process's `LC_ALL=C TZ=UTC ps -o
-  lstart`; else, while the process's start is known — to the second from
-  `ps`, to the millisecond for a native Windows process, which Git Bash's own
-  tools do not see, through PowerShell's `Get-Process`, asked on Git Bash
-  alone (a Linux under WSL reaches Windows' own by other numbers) — when its folder is
-  the pane's and its `startedAt` is no older than that start (CI's Windows job
+  lstart`; for a native Windows process, which Git Bash's own tools do not
+  see, only when its `procStartFt` is the process's creation as
+  PowerShell's `Get-Process` tells it, a FILETIME, within a millisecond
+  (asked on Git Bash alone: a Linux under WSL reaches Windows' own by other
+  numbers; a value from 3e17 up, which Claude Code itself reads as another
+  unit, falls to the next rule); else, while the process's start is known,
+  when its `startedAt` is no older than that start (CI's Windows job
   proves it; a native process's `CLAUDE_CONFIG_DIR` is out of reach there, so
-  `~\.claude` alone is read); else, where either side lacks the start, when
-  its folder is the pane's), Codex's thread id from the
+  `~\.claude` alone is read); else, where either side lacks the start, the
+  first of its folder), Codex's thread id from the
   `rollout-*.jsonl` of the person's thread (its first line a `session_meta`
-  naming no subagent: a file still empty is none) the process, else a child of it, holds open (`/proc/<pid>/fd`,
+  naming no subagent and no other folder than the pane's: a file still
+  empty is none) the process, else a child of it, holds open (`/proc/<pid>/fd`,
   else `lsof -nP`; none on Windows), none when two are, the id the one its
   `session_meta` names (a revert's replacement file,
   `rollout-<time>-<id>_<rollout id>.jsonl`, keeps the thread's); an id found under a

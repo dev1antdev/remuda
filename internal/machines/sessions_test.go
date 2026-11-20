@@ -3,10 +3,12 @@ package machines
 import (
 	"errors"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/core"
 	"github.com/dev1antdev/remuda/internal/core/coretest"
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/transcript"
@@ -39,11 +41,18 @@ func (r *sessionReads) reads() int {
 	return len(r.asked)
 }
 
+// ask is the lookup as a snapshot makes it: the agent's process in its terminal, which its agent took at the start.
+func ask(s *processSessions, agent string, pid int) *herdr.AgentSession {
+	return s.of(core.AgentProcess{Agent: agent, PID: pid, Cwd: "/work/api", Terminal: "t" + strconv.Itoa(pid), Since: agentsTook})
+}
+
+var agentsTook = time.Now()
+
 // sessionAfter asks until the lookup answers want ("" for none), the reads it books running meanwhile.
 func sessionAfter(t *testing.T, s *processSessions, agent string, pid int, want string) {
 	t.Helper()
 	for start := time.Now(); time.Since(start) < 5*time.Second; time.Sleep(5 * time.Millisecond) {
-		got := s.of(agent, pid, "/work/api")
+		got := ask(s, agent, pid)
 		if want == "" && got == nil || got != nil && got.Value == want {
 			return
 		}
@@ -56,7 +65,7 @@ func TestAnAgentsSessionIsReadOffItsProcessWhenNewAndAgainOnceDue(t *testing.T) 
 	s := newProcessSessions("gog", reads.read)
 	s.fresh = time.Hour
 
-	if got := s.of("claude", 100, "/work/api"); got != nil {
+	if got := ask(s, "claude", 100); got != nil {
 		t.Fatalf("a process never read answered %+v at once", got)
 	}
 	sessionAfter(t, s, "claude", 100, "sid-a")
@@ -65,7 +74,7 @@ func TestAnAgentsSessionIsReadOffItsProcessWhenNewAndAgainOnceDue(t *testing.T) 
 	reads.mu.Unlock()
 	sessionAfter(t, s, "codex", 200, "sid-b") // a new process is read at once, the answer it has not changing
 	n := reads.reads()
-	s.of("claude", 100, "/work/api")
+	ask(s, "claude", 100)
 	time.Sleep(20 * time.Millisecond)
 	if reads.reads() != n {
 		t.Fatal("an answer still fresh was read again")
@@ -83,10 +92,10 @@ func TestAnAgentsSessionIsReadOffItsProcessWhenNewAndAgainOnceDue(t *testing.T) 
 	reads.fail = errors.New("ssh: connection lost")
 	reads.mu.Unlock()
 	time.Sleep(20 * time.Millisecond)
-	if got := s.of("claude", 100, "/work/api"); got == nil || got.Value != "sid-c" {
+	if got := ask(s, "claude", 100); got == nil || got.Value != "sid-c" {
 		t.Fatalf("a failed read lost what was known: %+v", got)
 	}
-	if got := s.of("codex", 100, "/work/api"); got != nil {
+	if got := ask(s, "codex", 100); got != nil {
 		t.Fatalf("another agent under the same pid took the old one's session: %+v", got)
 	}
 }
@@ -101,13 +110,13 @@ func TestAFreshReadAnswersTheConversationTheAgentRunsNow(t *testing.T) {
 	reads.mu.Lock()
 	reads.answers[100] = "sid-b"
 	reads.mu.Unlock()
-	if got := s.of("claude", 100, "/work/api"); got == nil || got.Value != "sid-a" {
+	if got := ask(s, "claude", 100); got == nil || got.Value != "sid-a" {
 		t.Fatalf("the answer was read again before it was due: %+v", got)
 	}
 	if err := s.readNow(); err != nil {
 		t.Fatal(err)
 	}
-	if got := s.of("claude", 100, "/work/api"); got == nil || got.Value != "sid-b" {
+	if got := ask(s, "claude", 100); got == nil || got.Value != "sid-b" {
 		t.Fatalf("after a fresh read: %+v", got)
 	}
 	reads.mu.Lock()
@@ -116,7 +125,7 @@ func TestAFreshReadAnswersTheConversationTheAgentRunsNow(t *testing.T) {
 	if err := s.readNow(); err == nil {
 		t.Fatal("a fresh read that failed answered nothing")
 	}
-	if got := s.of("claude", 100, "/work/api"); got == nil || got.Value != "sid-b" {
+	if got := ask(s, "claude", 100); got == nil || got.Value != "sid-b" {
 		t.Fatalf("a failed fresh read lost what was known: %+v", got)
 	}
 
@@ -132,8 +141,41 @@ func TestAFreshReadAnswersTheConversationTheAgentRunsNow(t *testing.T) {
 	if err := s.readDue(queued, true); err != nil {
 		t.Fatal(err)
 	}
-	if got := s.of("claude", 100, "/work/api"); got == nil || got.Value != "sid-c" {
+	if got := ask(s, "claude", 100); got == nil || got.Value != "sid-c" {
 		t.Fatalf("the queued fresh read took the failed one for its own: %+v", got)
+	}
+}
+
+// A pid given out again names another process: one in another terminal, or in the same terminal once another agent
+// took it, never answers the session read for the process before it, and is read at once.
+func TestAPidGivenOutAgainIsNotTheProcessBeforeIt(t *testing.T) {
+	reads := &sessionReads{answers: map[int]string{100: "sid-a"}}
+	s := newProcessSessions("gog", reads.read)
+	s.fresh = time.Hour
+	sessionAfter(t, s, "claude", 100, "sid-a")
+	reads.mu.Lock()
+	reads.answers[100] = "sid-b"
+	reads.mu.Unlock()
+
+	later := []core.AgentProcess{
+		{Agent: "claude", PID: 100, Cwd: "/work/api", Terminal: "t7", Since: agentsTook},
+		{Agent: "claude", PID: 100, Cwd: "/work/api", Terminal: "t100", Since: agentsTook.Add(time.Minute)},
+	}
+	for _, process := range later {
+		if got := s.of(process); got != nil {
+			t.Fatalf("%+v answered the session of the process before it: %+v", process, got)
+		}
+		for start := time.Now(); ; time.Sleep(5 * time.Millisecond) {
+			if got := s.of(process); got != nil && got.Value == "sid-b" {
+				break
+			}
+			if time.Since(start) > 5*time.Second {
+				t.Fatalf("%+v was never read", process)
+			}
+		}
+	}
+	if got := ask(s, "claude", 100); got == nil || got.Value != "sid-a" {
+		t.Fatalf("the process read first lost its answer: %+v", got)
 	}
 }
 
@@ -144,11 +186,11 @@ func TestProcessesNobodyAsksAboutAreForgotten(t *testing.T) {
 	sessionAfter(t, s, "claude", 100, "sid-a")
 	sessionAfter(t, s, "claude", 200, "sid-b")
 	s.mu.Lock()
-	s.procs[200].asked = time.Now().Add(-sessionsForget - time.Minute)
+	s.procs[processKey{terminal: "t200", since: agentsTook.UnixMilli(), pid: 200}].asked = time.Now().Add(-sessionsForget - time.Minute)
 	s.mu.Unlock()
 	for start := time.Now(); ; time.Sleep(5 * time.Millisecond) {
 		s.mu.Lock()
-		_, kept := s.procs[200]
+		_, kept := s.procs[processKey{terminal: "t200", since: agentsTook.UnixMilli(), pid: 200}]
 		s.mu.Unlock()
 		if !kept {
 			break
@@ -156,7 +198,7 @@ func TestProcessesNobodyAsksAboutAreForgotten(t *testing.T) {
 		if time.Since(start) > 5*time.Second {
 			t.Fatal("a process nobody asked about is kept")
 		}
-		s.of("claude", 100, "/work/api")
+		ask(s, "claude", 100)
 	}
 }
 

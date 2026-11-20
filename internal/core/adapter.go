@@ -50,9 +50,17 @@ type AdapterHooks struct {
 	Reread func() error
 }
 
-// SessionLookup names the conversation of the agent of a kind running as the process pid in the folder cwd; nil
-// while it is not known.
-type SessionLookup func(agent string, pid int, cwd string) *herdr.AgentSession
+// SessionLookup names the conversation of an agent's process; nil while it is not known.
+type SessionLookup func(AgentProcess) *herdr.AgentSession
+
+// AgentProcess is an agent's process as the mirror sees it: its kind, pid and folder, and the terminal it holds with
+// the moment the agent took it, which tell it from a later process given the same pid.
+type AgentProcess struct {
+	Agent, Cwd string
+	PID        int
+	Terminal   string
+	Since      time.Time
+}
 
 // How long a snapshot asked for before the first fill waits for it, and how the subscription is tried again.
 const (
