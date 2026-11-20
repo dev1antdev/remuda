@@ -11,6 +11,7 @@ import (
 	"net"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -39,8 +40,9 @@ type conn struct {
 	// writeWithin is the package's, as it was when the connection opened.
 	writeWithin time.Duration
 
+	nextID atomic.Uint64
+
 	mu      sync.Mutex
-	nextID  uint64
 	pending map[uint64]*pending
 	streams map[uint32]*Stream
 	subs    map[uint32]*Subscription
@@ -68,9 +70,11 @@ type answer struct {
 	err    error
 }
 
-// outgoing is one frame waiting for the writer; written, when set, hears how its write went.
+// outgoing is one frame waiting for the writer; written, when set, hears how its write went. A request's frame
+// carries its call's context: the writer drops it unsent once that context ended.
 type outgoing struct {
 	frame   []byte
+	ctx     context.Context
 	taken   bool
 	written chan error
 }
@@ -111,7 +115,7 @@ func open(ctx context.Context, nc net.Conn) (*conn, error) {
 	}
 	nc.SetDeadline(time.Time{})
 	c := &conn{
-		nc: nc, reader: reader, hello: hello, nextID: 1, writeWithin: writeWithin,
+		nc: nc, reader: reader, hello: hello, writeWithin: writeWithin,
 		pending: map[uint64]*pending{}, streams: map[uint32]*Stream{}, subs: map[uint32]*Subscription{},
 		orphans: map[uint32][][]byte{}, credits: map[uint32]int{}, pulse: make(bell, 1), done: make(chan struct{}),
 	}
@@ -135,20 +139,19 @@ func (c *conn) call(ctx context.Context, method string, params, result any, bind
 	if params == nil {
 		params = struct{}{}
 	}
-	if err := ctx.Err(); err != nil {
+	id := c.nextID.Add(1)
+	body, err := json.Marshal(request{JSONRPC: "2.0", ID: id, Method: method, Params: params}) // outside the lock: params may be anyone's Marshaler
+	if err != nil {
 		return err
 	}
 	c.mu.Lock()
+	if err := ctx.Err(); err != nil {
+		c.mu.Unlock()
+		return err
+	}
 	if c.err != nil {
 		c.mu.Unlock()
 		return c.err
-	}
-	id := c.nextID
-	c.nextID++
-	body, err := json.Marshal(request{JSONRPC: "2.0", ID: id, Method: method, Params: params})
-	if err != nil {
-		c.mu.Unlock()
-		return err
 	}
 	wait := &pending{answer: make(chan answer, 1), bind: bind}
 	c.pending[id] = wait
@@ -157,6 +160,7 @@ func (c *conn) call(ctx context.Context, method string, params, result any, bind
 		defer c.subscribed()
 	}
 	out := c.queueLocked(0, frameData, body, nil)
+	out.ctx = ctx
 	c.mu.Unlock()
 	var got answer
 	select {
@@ -286,13 +290,16 @@ func (c *conn) next() *outgoing {
 		delete(c.credits, channel)
 		return &outgoing{frame: frameOf(channel, frameCredit, binary.LittleEndian.AppendUint32(nil, uint32(owed))), taken: true}
 	}
-	if len(c.queue) == 0 {
-		return nil
+	for len(c.queue) > 0 {
+		out := c.queue[0]
+		c.queue = c.queue[1:]
+		if out.ctx != nil && out.ctx.Err() != nil {
+			continue // its caller gave up before it went: abandon finds it gone and sends nothing either
+		}
+		out.taken = true
+		return out
 	}
-	out := c.queue[0]
-	c.queue = c.queue[1:]
-	out.taken = true
-	return out
+	return nil
 }
 
 // fail ends the connection once and answers why: every call waiting, write queued, stream and subscription hears it.

@@ -294,3 +294,39 @@ func TestAnAnswerThatWonTheRaceAgainstItsContextIsKept(t *testing.T) {
 		}
 	}
 }
+
+func TestTheWriterDropsARequestWhoseCallerGaveUpWhileItWaited(t *testing.T) {
+	expired, cancel := context.WithCancel(context.Background())
+	cancel()
+	kill := &outgoing{frame: frameOf(0, frameData, []byte(`{"method":"terminal.kill"}`)), ctx: expired}
+	list := &outgoing{frame: frameOf(0, frameData, []byte(`{"method":"terminal.list"}`)), ctx: context.Background()}
+	c := &conn{credits: map[uint32]int{}, queue: []*outgoing{kill, list}}
+	if out := c.next(); out != list || kill.taken {
+		t.Fatalf("the writer took %q, the expired kill taken %v", out.frame[headerSize:], kill.taken)
+	}
+}
+
+// slowParams stands for a caller's own Marshaler that takes its time.
+type slowParams chan struct{}
+
+func (p slowParams) MarshalJSON() ([]byte, error) {
+	<-p
+	return []byte(`{}`), nil
+}
+
+func TestACallerSlowToEncodeHoldsUpNoOtherCall(t *testing.T) {
+	client := New(fakeCore("", func(core peer, frame sent) {
+		go core.reply(frame.id, `{"terminals":[]}`)
+	}))
+	defer client.Close()
+	if _, err := client.Hello(within(t, 5*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	slow := make(slowParams)
+	defer close(slow)
+	go client.Call(context.Background(), "terminal.list", slow, nil)
+	time.Sleep(50 * time.Millisecond)
+	if _, err := client.List(within(t, time.Second), false, nil); err != nil {
+		t.Fatalf("a call beside a slow encoder: %v", err)
+	}
+}
