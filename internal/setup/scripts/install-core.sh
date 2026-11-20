@@ -65,22 +65,18 @@ install) ;;
 *) echo "usage: install-core.sh [install|status]"; exit 2 ;;
 esac
 
-# one install at a time here, held from the look at what is installed to the end: a folder holding its pid, taken
-# over when that install is gone
+# one install at a time here, held from the look at what is installed to the end: a folder holding its pid, let go
+# however this ends but a kill -9; never taken over, since telling a dead install from one that just began is a race
 mkdir -p "$BIN"
 LOCK="$BIN/.remuda-core-install"
 if ! mkdir "$LOCK" 2>/dev/null; then
-    other="$(cat "$LOCK/pid" 2>/dev/null || true)"
-    if [ -n "$other" ] && kill -0 "$other" 2>/dev/null; then
-        echo "another remuda-core install runs here (pid $other): try again once it is done"
-        exit 1
-    fi
-    rm -rf "$LOCK"
-    mkdir "$LOCK" 2>/dev/null || { echo "another remuda-core install began here just now: try again once it is done"; exit 1; }
+    echo "another remuda-core install runs here (pid $(cat "$LOCK/pid" 2>/dev/null || echo unknown)); if none does, remove $LOCK and try again"
+    exit 1
 fi
-echo $$ > "$LOCK/pid"
 TMP=""
 trap 'rm -rf "$LOCK" ${TMP:+"$TMP"}' EXIT
+trap 'exit 1' INT TERM HUP
+echo $$ > "$LOCK/pid"
 
 HAVE="$(installed)"
 if [ -n "$HAVE" ] && ! older "$HAVE" "$VERSION" && whole; then

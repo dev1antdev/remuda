@@ -1479,7 +1479,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   its own `--rc-install-bundle` — the download held in
   `~/.local/remuda-core.XXXXXX` (a noexec `/tmp` could not run the check)
   and removed; one install at a time (`~/.local/bin/.remuda-core-install`,
-  a folder holding its pid, taken over once that install is gone); one installed already is swapped by its own `update --from`
+  a folder holding its pid, let go by the exit trap on any end but a kill
+  -9 and never taken over: a second install names it and stops); one installed already is swapped by its own `update --from`
   (its terminals keep running), one as new or newer left alone, a fresh
   one starts nothing; on Linux `loginctl enable-linger`, said when refused.
   `remuda setup` installs it after herdr (never under `-server`; a failure

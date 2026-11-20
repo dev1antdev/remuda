@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -339,22 +338,17 @@ func TestRemovalOfCoreKeepsEverythingWhenItCannotTellACoreRuns(t *testing.T) {
 func TestCoreInstallsOneAtATime(t *testing.T) {
 	dir, calls := coreHome(t, "Linux", "x86_64", coreRelease(t, "remuda-core", "0.2.0"))
 	lock := filepath.Join(dir, ".local", "bin", ".remuda-core-install")
-	write(t, filepath.Join(lock, "pid"), strconv.Itoa(os.Getpid()), 0o644)
+	write(t, filepath.Join(lock, "pid"), "4242", 0o644)
 	out, err := installCore(t, "install")
-	if err == nil || !strings.Contains(out, "another remuda-core install runs here") || strings.Contains(calls(), "curl") {
+	if err == nil || !strings.Contains(out, "another remuda-core install runs here (pid 4242); if none does, remove "+lock) || strings.Contains(calls(), "curl") {
 		t.Fatalf("an install went on beside another (err=%v):\n%s", err, out)
 	}
 	if !exists(lock) {
 		t.Fatal("the other install's lock was taken away")
 	}
-
-	dead := exec.Command("true")
-	if err := dead.Run(); err != nil {
-		t.Fatal(err)
-	}
-	write(t, filepath.Join(lock, "pid"), strconv.Itoa(dead.Process.Pid), 0o644)
+	os.RemoveAll(lock)
 	if out, err := installCore(t, "install"); err != nil || !strings.Contains(out, "remuda-core 0.2.0 installed") {
-		t.Fatalf("the lock of an install that is gone held this one back (err=%v):\n%s", err, out)
+		t.Fatalf("err=%v\n%s", err, out)
 	}
 	if exists(lock) {
 		t.Error("the install left its lock behind")
