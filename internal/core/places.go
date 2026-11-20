@@ -66,7 +66,10 @@ func (a *Adapter) runIn(ctx context.Context, space, tab string, p RunParams) (Te
 		p.Labels = map[string]string{}
 	}
 	p.Labels[LabelSpace], p.Labels[LabelTab], p.Rm = space, tab, true
-	cwd := p.Cwd
+	what, where := "the shell", cmp.Or(p.Cwd, "the core's folder")
+	if len(p.Argv) > 0 {
+		what = "the program " + p.Argv[0]
+	}
 	t, err := a.client.Run(ctx, p)
 	if err != nil {
 		return Terminal{}, a.refusal(err, "workspace_not_found")
@@ -79,12 +82,12 @@ func (a *Adapter) runIn(ctx context.Context, space, tab string, p RunParams) (Te
 		case held:
 			return t, nil
 		case gone || t.State != "live":
-			return Terminal{}, fmt.Errorf("the shell in %s ended as soon as it started", cmp.Or(cwd, "the core's folder"))
+			return Terminal{}, fmt.Errorf("%s in %s ended as soon as it started", what, where)
 		}
 		select {
 		case <-ctx.Done():
 			a.kill(t.Address)
-			return Terminal{}, fmt.Errorf("remuda-core never told of the shell it started in %s: %w", cmp.Or(cwd, "the core's folder"), ctx.Err())
+			return Terminal{}, fmt.Errorf("remuda-core never told of %s it started in %s: %w", what, where, ctx.Err())
 		case <-time.After(20 * time.Millisecond):
 		}
 	}
