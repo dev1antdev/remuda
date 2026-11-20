@@ -38,25 +38,13 @@ if has '(^|[[:space:];&|(])HOME=[^[:space:]]*[[:space:]]+([^[:space:]]*/)?herdr(
 fi
 
 # remuda-core holds the person's agents once they moved off herdr: `server stop` ends every terminal in it, and a
-# `serve` beside it fights it for its socket. The core reads RC_SOCKET before anything else, and a shell may carry the
-# person's, so a stop or serve goes through only when the assignments right before it set RC_SOCKET to an absolute
-# path written out (quotes read away, flags may stand between the words).
+# `serve` beside it fights it for its socket. Which core a command reaches is the shell's to work out (RC_SOCKET,
+# inherited or set, comes first), so no stop or serve of a core passes here: a throwaway core is started and stopped
+# by scripts/e2e.sh or internal/core/coretest, the person's own by the person (quotes read away, flags may stand
+# between the words).
 core='(^|[^[:alnum:]_.-])(remuda-core|rc)([[:space:]]+-[^[:space:]]+)*[[:space:]]+(server([[:space:]]+-[^[:space:]]+)*[[:space:]]+stop|serve)([^[:alnum:]_-]|$)'
-aimed() {
-  socket=
-  for word in $1; do
-    [ "$word" = env ] && continue
-    case $word in *=*) ;; *) break ;; esac
-    name=${word%%=*}
-    case $name in '' | [0-9]* | *[!A-Za-z0-9_]*) break ;; esac
-    [ "$name" = RC_SOCKET ] && socket=${word#*=}
-  done
-  case $socket in *[\$\`]*) return 1 ;; /*) return 0 ;; esac
-  return 1
-}
-set -f
-printf '%s\n' "$cmd" | tr ';&|' '\n\n\n' | tr -d "\"'" | while IFS= read -r statement; do
-  if printf '%s' "$statement" | grep -Eq -e "$core" && ! aimed "$statement"; then exit 3; fi
-done || refuse "'remuda-core server stop' and 'remuda-core serve' reach the person's own core and every agent in it unless the assignments right before the command set RC_SOCKET=<an absolute path written out>, its RC_SESSION, XDG folders and HOME beside it. A whole throwaway core is scripts/e2e.sh's (E2E_BACKEND=core) or internal/core/coretest's."
+if printf '%s' "$cmd" | tr -d "\"'" | grep -Eq -e "$core"; then
+  refuse "'remuda-core server stop' and 'remuda-core serve' may reach the person's own core and every agent in it, whatever socket the command names. A throwaway core is started and stopped by scripts/e2e.sh (E2E_BACKEND=core) or internal/core/coretest; the person stops their own core themselves."
+fi
 
 exit 0
