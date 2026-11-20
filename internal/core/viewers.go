@@ -23,21 +23,10 @@ const viewerChunk = 32 << 10
 // the terminal's own rows.
 const attachHistory = 2000
 
-// paintBudget is what a first paint may weigh: the core drops a paint past its 4 MiB stream queue whole, leaving the
-// viewer blank, and the screen and the program's state ride in it too.
-const paintBudget = 3 << 20
-
-// cellBytes is the most one cell costs in the core's paint: every attribute and three true colours as SGR come to some
-// 91 bytes a cell, measured on remuda-core 0.2.0.
-const cellBytes = 96
-
-// historyFor is the history a first paint at that grid carries without passing paintBudget, however coloured its rows.
-func historyFor(cols, rows int) int {
-	if cols <= 0 {
-		return 0
-	}
-	return max(0, min(attachHistory, paintBudget/(cols*cellBytes)-rows))
-}
+// firstPaintWithin is how long a viewer that asked for history waits for its first paint. The core sends it at once
+// but drops it whole past its 4 MiB stream queue (remuda-core 0.2.0: a richly coloured history can weigh that), and
+// the viewer would stay blank for good; it attaches again with its screen alone.
+const firstPaintWithin = 3 * time.Second
 
 // Terminals opens a machine's terminals through its core client.
 type Terminals struct {
@@ -55,15 +44,26 @@ func NewTerminals(client *Client) *Terminals {
 
 // Open attaches one viewer: Keep types but leaves the size to the others, Observe only watches. A viewer of either
 // kind is handed the terminal's grid in order with the bytes, an Out of its own ahead of the paint the core sends at
-// that grid — never a sequence in the bytes, which the program itself could print.
+// that grid — never a sequence in the bytes, which the program itself could print. It is painted attachHistory rows of
+// history first, or its screen alone when that paint never comes (firstPaintWithin).
 func (t *Terminals) Open(termID string, view herdr.View) (herdr.Viewer, error) {
+	v, err := t.attach(termID, view, attachHistory)
+	if err != nil {
+		return nil, err
+	}
+	select {
+	case <-v.painted:
+		return v, nil
+	case <-time.After(firstPaintWithin):
+		v.Close()
+		return t.attach(termID, view, 0)
+	}
+}
+
+func (t *Terminals) attach(termID string, view herdr.View, history int) (*coreViewer, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), attachWithin)
 	defer cancel()
-	v := &coreViewer{out: make(chan herdr.Out, 8), done: make(chan struct{})}
-	history := 0 // a terminal whose grid cannot be read is painted its screen alone
-	if term, err := t.client.Get(ctx, termID); err == nil {
-		history = historyFor(max(int(term.Cols), view.Cols), max(int(term.Rows), view.Rows)) // the paint is at the larger grid
-	}
+	v := &coreViewer{out: make(chan herdr.Out, 8), done: make(chan struct{}), painted: make(chan struct{})}
 	params := AttachParams{
 		Terminal:            termID,
 		History:             history,
@@ -111,6 +111,8 @@ type coreViewer struct {
 	stream  *Stream
 	out     chan herdr.Out
 	done    chan struct{}
+	painted chan struct{} // closed once the first bytes came, or the stream ended without any
+	paint   sync.Once
 	closing sync.Once
 	once    sync.Once // release, by whichever of the pump's end and Close comes first
 	release func()    // nil for a viewer nobody counts
@@ -121,9 +123,13 @@ type coreViewer struct {
 func (v *coreViewer) pump() {
 	defer close(v.out)
 	defer v.once.Do(v.released)
+	defer v.paint.Do(func() { close(v.painted) })
 	buf := make([]byte, viewerChunk)
 	for {
 		n, err := v.stream.Read(buf)
+		if n > 0 {
+			v.paint.Do(func() { close(v.painted) })
+		}
 		if n > 0 && !v.hand(herdr.Out{Data: append([]byte(nil), buf[:n]...)}) {
 			return
 		}
