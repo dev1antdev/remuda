@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"slices"
 	"sync"
 )
 
@@ -70,12 +71,7 @@ type CoreInfo struct {
 
 // Has says whether the core advertises a feature (`keep_size`, `output_watches`, …).
 func (h Hello) Has(feature string) bool {
-	for _, have := range h.Features {
-		if have == feature {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(h.Features, feature)
 }
 
 // Client is one core: a connection dialled when first needed and again after it ended.

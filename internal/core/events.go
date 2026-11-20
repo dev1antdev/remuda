@@ -66,7 +66,7 @@ type Subscription struct {
 	Terminals []Terminal
 
 	mu   sync.Mutex
-	wake chan struct{}
+	wake bell
 	// partial is a line not ended yet, credited as it arrives (a missed snapshot may outgrow the window).
 	partial         []byte
 	partialCredited int
@@ -90,7 +90,7 @@ func (c *Client) Subscribe(ctx context.Context, params SubscribeParams) (*Subscr
 	if len(params.Output) > 0 && !cn.hello.Has("output_watches") {
 		return nil, &Error{Kind: "needs_update", Message: "this remuda-core has no output watches"}
 	}
-	sub := &Subscription{conn: cn, wake: make(chan struct{}, 1)}
+	sub := &Subscription{conn: cn, wake: make(bell, 1)}
 	var opened struct {
 		Seq       uint64     `json:"seq"`
 		Terminals []Terminal `json:"terminals"`
@@ -189,7 +189,7 @@ func (s *Subscription) take(kind byte, payload []byte) {
 	switch kind {
 	case frameData:
 		s.conn.credit(s.channel, s.add(payload))
-		s.signal()
+		s.wake.ring()
 	case frameClose:
 		s.end(io.EOF)
 	}
@@ -223,12 +223,5 @@ func (s *Subscription) end(err error) {
 		s.err = err
 	}
 	s.mu.Unlock()
-	s.signal()
-}
-
-func (s *Subscription) signal() {
-	select {
-	case s.wake <- struct{}{}:
-	default:
-	}
+	s.wake.ring()
 }

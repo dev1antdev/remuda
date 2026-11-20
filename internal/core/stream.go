@@ -42,7 +42,7 @@ type Stream struct {
 	resized  func(cols, rows uint16)
 
 	mu     sync.Mutex
-	wake   chan struct{}
+	wake   bell
 	queue  []piece
 	err    error
 	closed *Ended
@@ -63,7 +63,7 @@ func (c *Client) Attach(ctx context.Context, params AttachParams) (*Stream, erro
 	if params.KeepSize && !cn.hello.Has("keep_size") {
 		return nil, &Error{Kind: "needs_update", Message: "this remuda-core cannot attach without taking the size"}
 	}
-	stream := &Stream{conn: cn, resized: params.Resized, wake: make(chan struct{}, 1)}
+	stream := &Stream{conn: cn, resized: params.Resized, wake: make(bell, 1)}
 	var opened struct {
 		Channel  uint32   `json:"channel"`
 		Terminal Terminal `json:"terminal"`
@@ -207,7 +207,7 @@ func (s *Stream) push(p piece) {
 		s.queue = append(s.queue, p)
 	}
 	s.mu.Unlock()
-	s.signal()
+	s.wake.ring()
 }
 
 // end stops the stream: a close by the core keeps the queued bytes for Read, a close of this side or a lost
@@ -222,12 +222,15 @@ func (s *Stream) end(err error, why *Ended) {
 		}
 	}
 	s.mu.Unlock()
-	s.signal()
+	s.wake.ring()
 }
 
-func (s *Stream) signal() {
+// bell wakes the one goroutine waiting on it; a ring nobody waits for stays until it is heard.
+type bell chan struct{}
+
+func (b bell) ring() {
 	select {
-	case s.wake <- struct{}{}:
+	case b <- struct{}{}:
 	default:
 	}
 }
