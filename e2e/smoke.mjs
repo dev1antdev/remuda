@@ -112,8 +112,8 @@ try {
   const health = await (await fetch(`${base}/api/health`)).json();
   step("health answers", `version ${health.version ?? "?"}`);
 
-  await until("the local machine connected", async () => (await api("GET", "/api/roster")).machines?.some((machine) => machine.id === "local" && machine.state === "connected"));
-  step("roster has the local machine, connected");
+  const local = await until("the local machine connected", async () => (await api("GET", "/api/roster")).machines?.find((machine) => machine.id === "local" && machine.state === "connected"));
+  step("roster has the local machine, connected", local.core ? "on remuda-core" : "");
 
   workspace = await api("POST", "/api/sessions", { machine: "local", dir: wsDir, agent: "shell" });
   if (typeof workspace?.id !== "string" || typeof workspace?.pane !== "string") fail(`create answered ${JSON.stringify(workspace)}`);
@@ -148,29 +148,33 @@ try {
   step("the terminal echoed back", `${screen.filter((line) => line.includes("e2e-ok")).length} lines carry e2e-ok`);
   await shot("terminal");
 
-  // the same pane on a machine the roster says is a Windows PC: the screen terminal, read again and typed into, never attached
-  const paneURL = `${base}/?machine=local&pane=${encodeURIComponent(workspace.pane)}&lens=terminal`;
-  await send("Fetch.enable", { patterns: [{ urlPattern: "*/api/roster*", requestStage: "Response" }] });
-  await send("Page.navigate", { url: paneURL });
-  await until("the screen terminal", () => present(".lens-pane:not([hidden]) .screen-term .screen-line"));
-  if (await present(".xterm")) fail("a Windows machine's pane attached a live terminal");
-  await click(".lens-pane:not([hidden]) .screen-term-screen");
-  if ((await evaluate("document.activeElement?.className ?? ''")) !== "screen-term-field") fail("the screen terminal did not take the focus");
-  await key("u", "KeyU", 2);
-  await send("Input.insertText", { text: "echo e2e-screen" });
-  await send("Input.insertText", { text: "-ok" });
-  await key("Enter", "Enter", 0, "\r");
-  const typed = await until("e2e-screen-ok through the screen terminal", async () => {
-    const read = await api("GET", `/api/screen?machine=local&pane=${encodeURIComponent(workspace.pane)}`);
-    const lines = (read.text ?? "").replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "").split(/\r?\n/).map((line) => line.trim());
-    return lines.includes("e2e-screen-ok") ? lines : null;
-  });
-  await until("the screen terminal drew its answer", () => evaluate(`[...document.querySelectorAll(".screen-term .screen-line")].some((line) => line.textContent.trim() === "e2e-screen-ok")`), 5);
-  step("the screen terminal typed and read back", `${typed.filter((line) => line.includes("e2e-screen-ok")).length} lines carry e2e-screen-ok`);
-  await shot("screen-terminal");
-  await send("Fetch.disable");
-  await send("Page.navigate", { url: paneURL });
-  await until("the live terminal again", () => present(".lens-pane:not([hidden]) .xterm .xterm-screen"));
+  // the same pane on a machine the roster says is a Windows PC: the screen terminal, read again and typed into, never
+  // attached; on remuda-core a Windows PC's pane has a live terminal like any other, so there is no screen terminal
+  if (local.core) step("the screen terminal skipped", "on remuda-core a Windows PC's pane is attached too");
+  else {
+    const paneURL = `${base}/?machine=local&pane=${encodeURIComponent(workspace.pane)}&lens=terminal`;
+    await send("Fetch.enable", { patterns: [{ urlPattern: "*/api/roster*", requestStage: "Response" }] });
+    await send("Page.navigate", { url: paneURL });
+    await until("the screen terminal", () => present(".lens-pane:not([hidden]) .screen-term .screen-line"));
+    if (await present(".xterm")) fail("a Windows machine's pane attached a live terminal");
+    await click(".lens-pane:not([hidden]) .screen-term-screen");
+    if ((await evaluate("document.activeElement?.className ?? ''")) !== "screen-term-field") fail("the screen terminal did not take the focus");
+    await key("u", "KeyU", 2);
+    await send("Input.insertText", { text: "echo e2e-screen" });
+    await send("Input.insertText", { text: "-ok" });
+    await key("Enter", "Enter", 0, "\r");
+    const typed = await until("e2e-screen-ok through the screen terminal", async () => {
+      const read = await api("GET", `/api/screen?machine=local&pane=${encodeURIComponent(workspace.pane)}`);
+      const lines = (read.text ?? "").replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "").split(/\r?\n/).map((line) => line.trim());
+      return lines.includes("e2e-screen-ok") ? lines : null;
+    });
+    await until("the screen terminal drew its answer", () => evaluate(`[...document.querySelectorAll(".screen-term .screen-line")].some((line) => line.textContent.trim() === "e2e-screen-ok")`), 5);
+    step("the screen terminal typed and read back", `${typed.filter((line) => line.includes("e2e-screen-ok")).length} lines carry e2e-screen-ok`);
+    await shot("screen-terminal");
+    await send("Fetch.disable");
+    await send("Page.navigate", { url: paneURL });
+    await until("the live terminal again", () => present(".lens-pane:not([hidden]) .xterm .xterm-screen"));
+  }
 
   // a shell has its terminal alone: the lens switch keeps its room unseen, and no chat or changes lens opens for it
   if (!(await evaluate(`document.querySelector(".lens-switch")?.classList.contains("is-vacant") === true`))) fail("a shell pane's lens switch is drawn");
