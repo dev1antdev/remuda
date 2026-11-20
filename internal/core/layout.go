@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/rpath"
 	"github.com/dev1antdev/remuda/internal/state"
 )
 
@@ -52,39 +53,40 @@ func (a *Adapter) LayoutExport(tabID string) (*herdr.LayoutDescription, error) {
 // whose start never answered with its address too.
 const LabelLayout = "remuda.layout"
 
+// commandSettle is how long a layout whose panes run commands waits before it is written, so a command that could not
+// start (a program missing on this machine) has ended and fails the layout instead of leaving its pane to vanish.
+const commandSettle = 500 * time.Millisecond
+
 // layoutBeforeWrite runs between a layout's last terminal and its document write: a test closes the workspace there.
 var layoutBeforeWrite = func() {}
 
 // LayoutApply lays a tree out as a tab, as herdr's layout.apply does: a new tab of the workspace, or, with a tab id, in
-// place of that tab, whose panes and what ran in them go once the new ones stand. Each pane is the machine's shell in
-// its folder (the workspace's when it names none), its command typed at the prompt as the person's shell reads it; the
-// document keeps the tree with each pane's terminal, label and command. The tab in front stays in front. The tree is
-// taken as scenes checked it. A workspace or tab closed while the panes started is not brought back: the layout fails
-// and ends what it started.
+// place of that tab, whose panes and what ran in them go once the new ones stand. Each pane runs its command, else the
+// machine's shell, in its folder (the workspace's when it names none); the document keeps the tree with each pane's
+// terminal, label and command. The tab in front stays in front. The tree is taken as scenes checked it. Only a
+// workspace or tab the document holds takes a layout, and one closed while the panes started is not brought back: the
+// layout fails and ends what it started.
 func (a *Adapter) LayoutApply(workspaceID, tabID, tabLabel string, root herdr.LayoutNode) (*herdr.LayoutDescription, error) {
 	if len(root.Panes()) == 0 {
 		return nil, &herdr.Error{Code: "invalid_request", Message: "a layout holds at least one pane"}
+	}
+	space, inPlace := workspaceID, tabID != ""
+	if inPlace {
+		if space = a.docSpaceOf(tabID); space == "" {
+			return nil, tabMissing(tabID)
+		}
+	} else if !a.inDoc(space) {
+		return nil, &herdr.Error{Code: "workspace_not_found", Message: "no workspace " + space + " in remuda's document on this core"}
 	}
 	snap, err := a.SessionSnapshot()
 	if err != nil {
 		return nil, err
 	}
-	space, inPlace := workspaceID, tabID != ""
 	var ending []string
-	var known bool
 	if inPlace {
-		space = cmp.Or(spaceOfTab(snap, tabID), a.docSpaceOf(tabID))
-		if space == "" {
-			return nil, tabMissing(tabID)
-		}
 		ending = panesWhere(snap, func(p *herdr.PaneInfo) bool { return p.TabID == tabID })
-		known = a.docSpaceOf(tabID) != ""
 	} else {
-		if snap.Workspace(space) == nil && !a.inDoc(space) {
-			return nil, spaceMissing(space)
-		}
 		tabID = "tab-" + state.NewID()
-		known = a.inDoc(space)
 	}
 	folder := ""
 	if ws := snap.Workspace(space); ws != nil {
@@ -93,6 +95,7 @@ func (a *Adapter) LayoutApply(workspaceID, tabID, tabLabel string, root herdr.La
 
 	tree, mark := clone(&root), state.NewID()
 	var started []string
+	commands := false
 	fail := func(err error) (*herdr.LayoutDescription, error) {
 		if swept := a.endLabelled(map[string]string{LabelLayout: mark}); swept != nil {
 			return nil, fmt.Errorf("%w; its panes may still run, as a tab of their own: %v", err, swept)
@@ -105,7 +108,11 @@ func (a *Adapter) LayoutApply(workspaceID, tabID, tabLabel string, root herdr.La
 			return fail(err)
 		}
 		started = append(started, t.Address)
+		commands = commands || len(node.Command) > 0
 		node.PaneID, node.CWD, node.Env = t.Address, cmp.Or(node.CWD, t.Cwd), nil
+	}
+	if commands {
+		time.Sleep(commandSettle)
 	}
 	layoutBeforeWrite()
 
@@ -115,24 +122,22 @@ func (a *Adapter) LayoutApply(workspaceID, tabID, tabLabel string, root herdr.La
 		if ended := a.endedOf(started); ended != "" {
 			return &herdr.Error{Code: "pane_not_found", Message: "pane " + ended + " of the layout ended before it was laid out"}
 		}
-		switch {
-		case inPlace && known && docSpaceOfTab(doc, tabID) == "":
-			return tabMissing(tabID)
-		case !inPlace && known && !slices.ContainsFunc(doc.Workspaces, func(ws DocWorkspace) bool { return ws.ID == space }):
+		i := slices.IndexFunc(doc.Workspaces, func(ws DocWorkspace) bool { return ws.ID == space })
+		if i < 0 {
 			return spaceMissing(space)
 		}
-		ws, ok := adopt(doc, snap, space)
-		if !ok {
-			return spaceMissing(space)
-		}
+		ws := &doc.Workspaces[i]
 		if !inPlace {
 			ws.Tabs = append(ws.Tabs, DocTab{ID: tabID, Label: tabLabel, Layout: clone(tree)})
 			return nil
 		}
-		laid := adoptTab(ws, snap, tabID)
-		laid.Layout = clone(tree)
+		j := slices.IndexFunc(ws.Tabs, func(t DocTab) bool { return t.ID == tabID })
+		if j < 0 {
+			return tabMissing(tabID)
+		}
+		ws.Tabs[j].Layout = clone(tree)
 		if tabLabel != "" {
-			laid.Label = tabLabel
+			ws.Tabs[j].Label = tabLabel
 		}
 		return nil
 	})
@@ -155,34 +160,21 @@ func (a *Adapter) LayoutApply(workspaceID, tabID, tabLabel string, root herdr.La
 	return &herdr.LayoutDescription{WorkspaceID: space, TabID: tabID, FocusedPaneID: started[0], Root: *tree}, nil
 }
 
-// startPane starts one pane of a layout: the machine's shell, carrying the layout's mark, and the pane's command typed at
-// its prompt once the shell holds the terminal, quoted for that shell. Typed, never run as the terminal's program: the
-// core would read a program named as one of its templates as that template, and the shell gives the command the
-// person's own PATH.
+// startPane starts one pane of a layout, carrying the layout's mark: the machine's shell, or the pane's command as a
+// line that shell runs, quoted for the machine's (cmd on Windows, told by the folder's spelling, sh elsewhere). A line,
+// never argv: the core reads an argv's program named as one of its templates as that template.
 func (a *Adapter) startPane(space, tab, mark, cwd string, env map[string]string, command []string) (Terminal, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), callWithin)
 	defer cancel()
-	t, err := a.runIn(ctx, space, tab, RunParams{Cwd: cwd, Env: env, Labels: map[string]string{LabelLayout: mark}})
-	if err != nil || len(command) == 0 {
-		return t, err
+	p := RunParams{Cwd: cwd, Env: env, Labels: map[string]string{LabelLayout: mark}}
+	if len(command) > 0 {
+		shell := "sh"
+		if rpath.For(cwd).Windows {
+			shell = "cmd"
+		}
+		p.Line = commandLine(shell, command)
 	}
-	for {
-		shell, err := a.terminal(t.Address)
-		if err != nil {
-			return t, err
-		}
-		if atPrompt(&shell) {
-			if _, err := a.client.Send(ctx, t.Address, commandLine(programName(shell.Foreground.Name), command)); err != nil {
-				return t, a.refusal(err, "pane_not_found")
-			}
-			return t, nil
-		}
-		select {
-		case <-ctx.Done():
-			return t, fmt.Errorf("the shell of pane %s never came to its prompt for %q: %w", t.Address, command[0], ctx.Err())
-		case <-time.After(50 * time.Millisecond):
-		}
-	}
+	return a.runIn(ctx, space, tab, p)
 }
 
 // endedOf is a terminal of the ones given that the mirror no longer holds, "" while all stand.

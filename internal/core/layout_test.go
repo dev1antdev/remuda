@@ -158,12 +158,18 @@ func TestALayoutTheCoreCannotLayOutIsRefused(t *testing.T) {
 		t.Fatal(err)
 	}
 	pane := herdr.LayoutNode{Type: "pane"}
+	stray, err := client.Run(t.Context(), core.RunParams{Labels: map[string]string{core.LabelSpace: "ws-labelled", core.LabelTab: "tab-labelled"}, Rm: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Workspace("ws-labelled") != nil })
 	for _, c := range []struct {
 		name, space, tab string
 		tree             herdr.LayoutNode
 		code             string
 	}{
 		{"a split of nothing", made.Workspace.WorkspaceID, "", herdr.LayoutNode{Type: "split", Direction: "right"}, "invalid_request"},
+		{"a workspace only labelled, not in the document", "ws-labelled", "", pane, "workspace_not_found"},
 		{"no such workspace", "ws-none", "", pane, "workspace_not_found"},
 		{"no such tab", "", "tab-none", pane, "tab_not_found"},
 	} {
@@ -175,9 +181,25 @@ func TestALayoutTheCoreCannotLayOutIsRefused(t *testing.T) {
 		t.Errorf("export of no tab: %v", err)
 	}
 	snap, _ := adapter.SessionSnapshot()
-	if len(snap.Panes) != 1 {
+	if len(snap.Panes) != 2 || snap.Pane(stray.Address) == nil {
 		t.Fatalf("a refused layout left terminals behind: %+v", snap.Panes)
 	}
+}
+
+func TestALayoutWhosePaneCommandCannotStartFailsAndLeavesNothing(t *testing.T) {
+	client := coretest.Server(t).Client(t)
+	adapter := adapterOf(t, client, core.AdapterHooks{})
+	made, err := adapter.WorkspaceCreate(t.TempDir(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	space := made.Workspace.WorkspaceID
+	tree := herdr.LayoutNode{Type: "split", Direction: "right", Ratio: 0.5, First: &herdr.LayoutNode{Type: "pane"},
+		Second: &herdr.LayoutNode{Type: "pane", Command: []string{"no-such-program-anywhere", "--dev"}}}
+	if _, err := adapter.LayoutApply(space, "", "", tree); err == nil {
+		t.Fatal("a layout whose command is missing was laid out")
+	}
+	eventually(t, adapter, func(s *herdr.Snapshot) bool { return len(s.Panes) == 1 && len(tabsOf(s, space)) == 1 })
 }
 
 func TestASceneCapturedOnACoreLaysItsLayoutOutInAnotherFolder(t *testing.T) {

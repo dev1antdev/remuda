@@ -510,13 +510,16 @@ components and icons as rules for whoever changes it: @docs/design.md
   is the document's tree of the tab — a pane whose terminal ended left out,
   one placed by its labels alone put to the right of the last — each pane's
   folder as the snapshot shows it now and the label and command the layout
-  that made it gave it; `LayoutApply` starts every pane as the shell in its
-  folder (else the workspace's) and types its command at the prompt, quoted
-  for that shell (`startPane`: never as the terminal's program, which the
-  core would read as a template of that name, and so with the person's own
-  PATH), then writes the tree in one `doc.set` — a new tab, the one in front
-  staying in front, or in place of a tab, whose old terminals end once the
-  new tree stands. Every terminal of one apply carries the mark
+  that made it gave it; `LayoutApply` takes only a workspace or tab the
+  document holds and starts every pane in its folder (else the
+  workspace's): the shell, or its command as a line the machine's shell
+  runs, quoted for it — cmd on a Windows folder, sh elsewhere (`startPane`:
+  never argv, whose program the core would read as a template of that name)
+  — waits `commandSettle` 0.5 s when a pane runs a command, so one that could
+  not start fails the layout, then writes the tree in one `doc.set` — a new
+  tab, the one in front staying in front, or in place of a tab, whose old
+  terminals end once the new tree stands. Every terminal of one apply
+  carries the mark
   `remuda.layout=<id>`: a layout that fails ends every terminal so marked,
   those whose start never answered too (one that cannot be ended is said,
   and shows as a tab of its own); a write the core refused fails the layout,
