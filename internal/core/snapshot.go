@@ -204,11 +204,11 @@ func appAgent(app string) string {
 	return strings.ToLower(app)
 }
 
-// atPrompt says whether the terminal's own shell holds it: nothing started from it runs in its foreground, and it is
-// no scene pane's own command, whose `sh -c '…'` keeps its own process in front all along (LabelCommand).
+// atPrompt says whether the terminal's own shell holds it: nothing started from it runs in its foreground, and it does
+// not run a scene pane's own command, whose `sh -c '…'` keeps its own process in front all along (LabelCommand).
 func atPrompt(t *Terminal) bool {
 	fg := t.Foreground
-	return fg != nil && fg.Pid == t.Pid && shells[programName(fg.Name)] && t.Labels[LabelCommand] == ""
+	return fg != nil && fg.Pid == t.Pid && shells[programName(fg.Name)] && t.Labels[LabelCommand] != commandMark(t.Argv)
 }
 
 // programName is a process's name without its folder or Windows' .exe.

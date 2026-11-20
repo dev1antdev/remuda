@@ -311,6 +311,12 @@ func TestASceneCommandIsLaidOutAsSavedThoughATemplateHasItsProgramsName(t *testi
 		t.Fatalf("a layout of a missing program: %v", err)
 	}
 	eventually(t, adapter, func(s *herdr.Snapshot) bool { return len(s.Panes) == 3 })
+
+	c.Restart(t)
+	eventually(t, adapter, func(*herdr.Snapshot) bool {
+		at, _ := adapter.PaneAtPrompt(server)
+		return at
+	})
 }
 
 func panesOfTab(snap *herdr.Snapshot, tab string) []string {

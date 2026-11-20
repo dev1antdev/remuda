@@ -3,11 +3,14 @@ package core
 import (
 	"cmp"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log"
 	"maps"
 	"slices"
+	"strings"
 
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/state"
@@ -51,9 +54,16 @@ func (a *Adapter) LayoutExport(tabID string) (*herdr.LayoutDescription, error) {
 // whose start never answered with its address too.
 const LabelLayout = "remuda.layout"
 
-// LabelCommand marks a terminal a layout started with a pane's own command: never a shell at its prompt, which a tidy
-// would close, though that command be a shell's.
+// LabelCommand marks a terminal a layout started with a pane's own command, by commandMark of its argv: while it runs
+// that command it is never a shell at its prompt, which a tidy would close, though the command be a shell's. A kept
+// terminal the core gave its shell in place of a lost command reports the shell's argv, and is a shell again.
 const LabelCommand = "remuda.command"
+
+// commandMark is what LabelCommand holds for argv.
+func commandMark(argv []string) string {
+	sum := sha256.Sum256([]byte(strings.Join(argv, "\x00")))
+	return hex.EncodeToString(sum[:8])
+}
 
 // layoutBeforeWrite runs between a layout's last terminal and its document write: a test closes the workspace there.
 var layoutBeforeWrite = func() {}
@@ -116,7 +126,7 @@ func (a *Adapter) LayoutApply(workspaceID, tabID, tabLabel string, root herdr.La
 		ctx, cancel := context.WithTimeout(context.Background(), callWithin)
 		labels := map[string]string{LabelLayout: mark}
 		if len(node.Command) > 0 {
-			labels[LabelCommand] = "1"
+			labels[LabelCommand] = commandMark(node.Command)
 		}
 		t, err := a.runIn(ctx, space, tabID, RunParams{Argv: node.Command, Literal: len(node.Command) > 0, Cwd: cmp.Or(node.CWD, folder), Env: node.Env, Labels: labels})
 		cancel()
