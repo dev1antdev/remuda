@@ -11,6 +11,7 @@ import (
 
 	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/machines"
 )
 
 const sid = "9b1c2d3e-4f50-4a6b-8c7d-0e1f2a3b4c5d"
@@ -227,7 +228,7 @@ func TestResumeStartsEachStoppedChatOnItsSessionAndSaysWhyNot(t *testing.T) {
 		// w1:p7 is gone
 	)
 	client := &fakeHerdr{snap: fresh, refuse: map[string]error{"w1:p2": errors.New("agent_start_failed: no such binary")}}
-	checks := func(s Stopped) error {
+	checks := func(s Stopped, _ string) error {
 		if s.Pane == "w1:p6" {
 			return errors.New("its folder /work/api is gone — nothing to resume into")
 		}
@@ -266,5 +267,74 @@ func TestResumeStartsEachStoppedChatOnItsSessionAndSaysWhyNot(t *testing.T) {
 	}
 	if chatsWord(1) != "1 chat" || chatsWord(3) != "3 chats" {
 		t.Fatal("chatsWord")
+	}
+}
+
+// TestARestoredShellIsStoppedThoughTheChangeWasWatched: remuda-core gives a lost shell a new one while remuda watches
+// (its own stop, a kill), so the snapshot is no first one; the pane's mark says the agent did not leave at the
+// person's word.
+func TestARestoredShellIsStoppedThoughTheChangeWasWatched(t *testing.T) {
+	noGrace(t)
+	m := OpenMemory("")
+	observe(m, "gog", true, agentPane("t1", "claude", "/work/api"), agentPane("t2", "codex", "/work/web"))
+	restored := shellPane("t1", "/work/api")
+	restored.Restored = true
+	observe(m, "gog", false, restored, shellPane("t2", "/work/web"))
+	stopped := m.Stopped("gog")
+	if len(stopped) != 1 || stopped[0].Pane != "t1" || stopped[0].Command != "claude --resume "+sid {
+		t.Fatalf("stopped: %+v", stopped)
+	}
+	if _, ok := m.chats["gog|t2"]; ok {
+		t.Fatal("an agent the person left is still remembered")
+	}
+}
+
+// TestAChatIsStoppedWhereItsAgentRanThoughItsShellStoodElsewhere: an agent started in a folder of its own (`cd sub &&
+// exec claude` from the pane's /work/api) comes back, after remuda-core's stop, as a shell in the agent's folder, the
+// one the core saw last: the chat is stopped there, and resumed there.
+func TestAChatIsStoppedWhereItsAgentRanThoughItsShellStoodElsewhere(t *testing.T) {
+	noGrace(t)
+	m := OpenMemory("")
+	ran := agentPane("t1", "claude", "/work/api")
+	ran.ForegroundCWD = "/work/api/sub"
+	observe(m, "gog", true, ran)
+	restored := shellPane("t1", "/work/api/sub")
+	restored.Restored = true
+	observe(m, "gog", false, restored)
+	stopped := m.Stopped("gog")
+	if len(stopped) != 1 || stopped[0].Pane != "t1" {
+		t.Fatalf("stopped: %+v", stopped)
+	}
+	client := &fakeHerdr{snap: snapshot(restored)}
+	r := &Restarter{Memory: m}
+	var checked string
+	checks := func(_ Stopped, dir string) error {
+		checked = dir
+		if dir != "/work/api/sub" {
+			return fmt.Errorf("its folder %s is gone — nothing to resume into", dir) // the pane's own went
+		}
+		return nil
+	}
+	out := r.resume(client, "gog", stopped, checks, func(string) {})
+	if checked != "/work/api/sub" || len(client.started) != 1 || len(out.back()) != 1 {
+		t.Fatalf("checked %q, started %v, back %v", checked, client.started, out.back())
+	}
+}
+
+// CanResume, the recovery's check, judges the folder it is handed — the one the restored shell stands in — so a chat
+// whose pane's own folder went resumes where its agent ran.
+func TestTheResumeCheckJudgesTheFolderTheShellStandsIn(t *testing.T) {
+	fleet := machines.NewCoreManager(t.TempDir(), "", nil, true) // a page-only host: no core is started
+	defer fleet.Close()
+	mc, err := fleet.Get(machines.LocalID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ran, gone := t.TempDir(), filepath.Join(t.TempDir(), "gone")
+	if err := CanResume(mc, "codex", sid, gone); err == nil {
+		t.Fatal("a folder that is gone passed the check")
+	}
+	if err := CanResume(mc, "codex", sid, ran); err != nil {
+		t.Fatalf("the folder the agent ran in: %v", err)
 	}
 }

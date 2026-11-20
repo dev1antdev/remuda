@@ -164,3 +164,35 @@ func TestSleepTakesAnotherConversationAndAGonePaneAsTheyAre(t *testing.T) {
 		t.Fatalf("the gone pane sleeps on, a wake gives it a tab: %+v", record)
 	}
 }
+
+// A /resume between the sleep's plan and the agent's exit moves it to another conversation: the fresh read before the
+// exit finds it, and the agent is left as it is rather than put to sleep on the conversation it no longer runs; one
+// that cannot be read is left too.
+func TestASleepLeavesAnAgentWhoseConversationMovedSinceThePlan(t *testing.T) {
+	quick(t)
+	f := newFake(
+		agentPane("w1:p1", "w1:t1", "claude", sidA, herdr.StatusIdle, "/work/api"),
+		agentPane("w1:p2", "w1:t1", "claude", sidB, herdr.StatusIdle, "/work/api"),
+	)
+	snap, _ := f.SessionSnapshot()
+	w, _, _, _ := Plan(snap, "w1")
+	f.moved = map[string]string{"w1:p1": sidC}
+	s := &Service{Store: Open("")}
+	s.Store.put("local", "w1", w)
+	var log []string
+	err := s.sleepAll(f, "local", "w1", w, func(line string) { log = append(log, line) })
+	if err == nil || !strings.Contains(err.Error(), "Claude Code in w1:p1 (another conversation runs there now)") {
+		t.Fatalf("sleep: %v\n%s", err, strings.Join(log, "\n"))
+	}
+	if slices.Contains(f.typed, "w1:p1 /exit") || !slices.Contains(f.typed, "w1:p2 /exit") {
+		t.Fatalf("typed: %v", f.typed)
+	}
+
+	f2 := newFake(agentPane("w1:p1", "w1:t1", "claude", sidA, herdr.StatusIdle, "/work/api"))
+	f2.rereadFails = errors.New("ssh: connection lost")
+	snap, _ = f2.SessionSnapshot()
+	w, _, _, _ = Plan(snap, "w1")
+	if err := s.sleepAll(f2, "local", "w1", w, func(string) {}); err == nil || len(f2.typed) != 0 {
+		t.Fatalf("a sleep whose fresh read failed: %v, typed %v", err, f2.typed)
+	}
+}
