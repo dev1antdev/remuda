@@ -169,8 +169,11 @@ func TestReadsAnswerInHerdrsWords(t *testing.T) {
 			t.Fatalf("recent %q %v", recent, err)
 		}
 	}
+	if text, err := adapter.PaneRead(printer.Address); err != nil || strings.HasSuffix(text, "\n") || !strings.HasSuffix(text, "red") {
+		t.Fatalf("the plain screen ends %q %v", text[max(0, len(text)-20):], err)
+	}
 	screen, err := adapter.PaneScreen(printer.Address)
-	if err != nil || !strings.Contains(screen.Text, "\x1b[") || !strings.Contains(screen.Text, "red") {
+	if err != nil || !strings.Contains(screen.Text, "\x1b[") || !strings.HasSuffix(withoutColour(screen.Text), "red") {
 		t.Fatalf("screen %q %v", screen.Text, err)
 	}
 	if _, err := adapter.PaneRead("t999"); !herdr.IsCode(err, "pane_not_found") {
@@ -238,4 +241,19 @@ func TestTheMirrorIsReadAgainAfterTheConnectionIsLost(t *testing.T) {
 	if lost.Load() == 0 {
 		t.Fatal("the machine never heard the connection was lost")
 	}
+}
+
+// withoutColour is a screen's last row's text, its SGR left out.
+func withoutColour(s string) string {
+	var out strings.Builder
+	for i := 0; i < len(s); i++ {
+		if s[i] == 0x1b {
+			for i < len(s) && s[i] != 'm' {
+				i++
+			}
+			continue
+		}
+		out.WriteByte(s[i])
+	}
+	return strings.TrimRight(out.String(), " ")
 }

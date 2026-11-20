@@ -340,7 +340,16 @@ components and icons as rules for whoever changes it: @docs/design.md
   hello nobody answers, a cancel racing its reply, a slow encoder). CI's check job installs
   release remuda-v0.2.0 against its `checksums.txt`. Never start a core for a
   test any other way: one without its own `RC_SOCKET` and XDG folders reaches
-  the person's.
+  the person's. **A screen with its colours** (`screen.go`, tested on a
+  recorded pair in `testdata/` and on a throwaway core): `Read` with format
+  "vt" gives every row of the screen as text and SGR alone, each opening with
+  a reset — what herdr's `pane.read` (format ansi) gives, rows apart by `\n`
+  where herdr's are `\r\n` — so `ScreenText` only leaves out the blank rows
+  under the last one that shows anything, as herdr does (a row of coloured
+  spaces shows); the page's `parseAnsi` draws both the same span for span
+  (`ansi.test.ts` reads the pair), and `timelapse.Plain` reads either. The
+  core adapter's `PaneScreen` (Core 12) is `ScreenText` of a vt `Read`: what
+  `/api/screen` and the timelapse recorder get on a core machine.
   **The adapter** (`adapter.go`, `api.go`, `snapshot.go`, `doc.go`, tested on
   paper in `snapshot_test.go` and on a throwaway core in `adapter_test.go`):
   `core.NewAdapter(client, AdapterHooks{TransportError, SessionOf})` is a
@@ -403,8 +412,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   `events_lost` (the watcher subscribes again) and a row's `lost` count
   logged once a stream; the core's refusals read as herdr's (`not_found` →
   `pane_not_found`, `invalid_regex`, `needs_update` → `invalid_request`).
-  Reads: `PaneRead`, `PaneScreen` (format vt), `PaneRecent` (format vt too,
-  its colours stripped, `withoutSGR`: a plain read with history scrolls a
+  Reads: `PaneRead`, `PaneScreen` (`ScreenText` of a vt read), `PaneRecent`
+  (a vt read too, through `ScreenText`'s one rule for the rows under the
+  text, its colours stripped, `withoutSGR`: a plain read with history scrolls a
   full-screen program with the wheel under the person's hands, the vt one
   never — such a program's history is its screen alone; at most 1000 rows,
   `truncated` past them, until Core 25 searches xterm's own buffer), each

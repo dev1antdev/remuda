@@ -196,7 +196,7 @@ func (a *Adapter) PaneRead(paneID string) (string, error) {
 // PaneScreen is the terminal's screen with its colours, as SGR.
 func (a *Adapter) PaneScreen(paneID string) (herdr.Screen, error) {
 	read, err := a.read(paneID, 0, "vt")
-	return herdr.Screen{Text: read.Text}, err
+	return herdr.Screen{Text: ScreenText(read.Text)}, err
 }
 
 // PaneRecent is the terminal's last n rows down to the last with text, the screen and the history above it, and
@@ -207,12 +207,9 @@ func (a *Adapter) PaneRecent(paneID string, n int) (string, bool, error) {
 	if err != nil {
 		return "", false, err
 	}
-	rows := strings.Split(withoutSGR(read.Text), "\n")
+	rows := strings.Split(withoutSGR(ScreenText(read.Text)), "\n")
 	for i := range rows {
 		rows[i] = strings.TrimRight(rows[i], " ")
-	}
-	for len(rows) > 0 && rows[len(rows)-1] == "" {
-		rows = rows[:len(rows)-1]
 	}
 	return strings.Join(rows[max(0, len(rows)-n):], "\n"), !read.Complete, nil
 }
