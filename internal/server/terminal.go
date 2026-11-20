@@ -66,18 +66,17 @@ func (s *Server) handlePaneWS(w http.ResponseWriter, r *http.Request) {
 	cols, _ := strconv.Atoi(r.URL.Query().Get("cols"))
 	rows, _ := strconv.Atoi(r.URL.Query().Get("rows"))
 
-	if !watching {
-		if pc, err := s.peerFor(mc); err != nil {
-			httpErr(w, 502, err)
-			return
-		} else if pc != nil {
-			s.relayPaneWS(w, r, pc, mc.ID(), pane.PaneID, cols, rows)
-			return
-		}
+	// never a viewer's: remuda-core has no peer, and a refusal of its is none of herdr's
+	if pc, err := s.peerFor(mc); err != nil {
+		httpErr(w, 502, err)
+		return
+	} else if pc != nil {
+		s.relayPaneWS(w, r, pc, mc.ID(), pane.PaneID, cols, rows)
+		return
 	}
 	view := herdr.View{Cols: cols, Rows: rows, Keep: r.URL.Query().Get("keep") == "1", Observe: watching}
 	viewer, err := attach.Open(pane.TerminalID, view)
-	if err != nil && !watching {
+	if err != nil {
 		if pc := s.peerAfterRefusal(mc, err); pc != nil {
 			s.relayPaneWS(w, r, pc, mc.ID(), pane.PaneID, cols, rows)
 			return

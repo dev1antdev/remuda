@@ -26,7 +26,6 @@ const (
 type termStream struct {
 	id       string
 	viewer   herdr.Viewer
-	ch       <-chan []byte
 	readMu   sync.Mutex // one long-poll at a time; never held by anyone else
 	lastRead atomic.Int64
 	mu       sync.Mutex
@@ -132,7 +131,7 @@ func (s *Server) handleTermOpen(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 409, fmt.Errorf("%s", attachRefused(mc, err)))
 		return
 	}
-	st := &termStream{id: newStreamID(), viewer: viewer, ch: viewer.Bytes()}
+	st := &termStream{id: newStreamID(), viewer: viewer}
 	st.lastRead.Store(time.Now().UnixNano())
 	s.streams.add(st)
 	writeJSON(w, map[string]any{"sid": st.id})
@@ -163,7 +162,7 @@ func (s *Server) handleTermRead(w http.ResponseWriter, r *http.Request) {
 	var out []byte
 	ended := false
 	select {
-	case data, ok := <-st.ch:
+	case data, ok := <-st.viewer.Bytes():
 		if !ok {
 			ended = true
 		} else {
@@ -175,7 +174,7 @@ func (s *Server) handleTermRead(w http.ResponseWriter, r *http.Request) {
 	}
 	for !ended && len(out) < streamMaxChunk {
 		select {
-		case data, ok := <-st.ch:
+		case data, ok := <-st.viewer.Bytes():
 			if !ok {
 				ended = true
 			} else {
