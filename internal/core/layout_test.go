@@ -311,11 +311,45 @@ func TestASceneCommandIsLaidOutAsSavedThoughATemplateHasItsProgramsName(t *testi
 		t.Fatalf("a layout of a missing program: %v", err)
 	}
 	eventually(t, adapter, func(s *herdr.Snapshot) bool { return len(s.Panes) == 3 })
+}
+
+// A scene pane whose own command is the very shell the core starts (its argv the same) comes back after a reboot as
+// that shell, a new process, at its prompt — as a remuda started afresh reads it too.
+func TestAScenePaneGivenItsShellBackAfterARestartIsAtItsPrompt(t *testing.T) {
+	c := coretest.Server(t)
+	client := c.Client(t)
+	hello, err := client.Hello(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hello.Has("run_literal") {
+		t.Skipf("remuda-core %s cannot start a program as it is (run_literal)", hello.Version)
+	}
+	adapter := adapterOf(t, client, core.AdapterHooks{})
+	made, err := adapter.WorkspaceCreate(t.TempDir(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	machineShell, err := client.Get(t.Context(), made.RootPane.PaneID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	laid, err := adapter.LayoutApply(made.Workspace.WorkspaceID, "", "", herdr.LayoutNode{Type: "pane", Command: machineShell.Argv})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pane := laid.Root.Panes()[0].PaneID
+	before, err := client.Get(t.Context(), pane)
+	if err != nil || !slices.Equal(before.Argv, machineShell.Argv) {
+		t.Fatalf("the scene's pane runs %q, the machine's shell is %q (%v)", before.Argv, machineShell.Argv, err)
+	}
 
 	c.Restart(t)
-	eventually(t, adapter, func(*herdr.Snapshot) bool {
-		at, _ := adapter.PaneAtPrompt(server)
-		return at
+	fresh := adapterOf(t, c.Client(t), core.AdapterHooks{})
+	eventually(t, fresh, func(*herdr.Snapshot) bool {
+		after, _ := client.Get(t.Context(), pane)
+		at, _ := fresh.PaneAtPrompt(pane)
+		return at && after.Pid != before.Pid && slices.Equal(after.Argv, before.Argv)
 	})
 }
 

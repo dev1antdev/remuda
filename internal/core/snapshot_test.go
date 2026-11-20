@@ -103,19 +103,21 @@ func TestTheAgentIsTheForegroundProcessOrWhatTheProgramReported(t *testing.T) {
 }
 
 func TestAScenePanesOwnCommandIsNeverAShellAtItsPrompt(t *testing.T) {
+	running := func(argv []string, pid int, mark string) *Terminal {
+		return &Terminal{Pid: pid, Argv: argv, Labels: map[string]string{LabelCommand: mark}, Foreground: &Foreground{Pid: pid, Name: "bash", Argv: argv}}
+	}
 	command := []string{"sh", "-c", "while :; do sleep 1; done"}
-	pane := Terminal{Pid: 1, Argv: command, Labels: map[string]string{LabelCommand: commandMark(command)},
-		Foreground: &Foreground{Pid: 1, Name: "bash", Argv: command}}
-	if atPrompt(&pane) {
+	if atPrompt(running(command, 7, commandMark(command, 0))) || atPrompt(running(command, 7, commandMark(command, 7))) {
 		t.Fatal("a scene pane's own sh -c reads as a shell at its prompt, which a tidy would close")
 	}
-	shell := []string{"bash", "--rcfile", "/etc/team.bashrc", "-i"}
-	pane.Pid, pane.Argv, pane.Foreground = 2, shell, &Foreground{Pid: 2, Name: "bash", Argv: shell}
-	if !atPrompt(&pane) {
+	shell := []string{"/bin/bash", "-l"}
+	if !atPrompt(running(shell, 8, commandMark(command, 7))) {
 		t.Fatal("the shell the core put in place of the lost command is not at its prompt")
 	}
-	pane.Labels = nil
-	if !atPrompt(&pane) {
+	if !atPrompt(running(shell, 8, commandMark(shell, 7))) {
+		t.Fatal("the shell the core put in place of a command that was that very shell is not at its prompt")
+	}
+	if !atPrompt(running(shell, 8, "")) {
 		t.Fatal("the machine's shell alone in front of its terminal is not at its prompt")
 	}
 }
