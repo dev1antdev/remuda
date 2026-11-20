@@ -37,4 +37,11 @@ if has '(^|[[:space:];&|(])HOME=[^[:space:]]*[[:space:]]+([^[:space:]]*/)?herdr(
   refuse "herdr ignores HOME for its socket: with HOME changed it still reaches the person's real server. Set HERDR_SOCKET_PATH=<your socket> in the same command (HOME may stay changed beside it)."
 fi
 
+# remuda-core holds the person's agents once they moved off herdr: `server stop` ends every terminal in it, and a
+# `serve` beside it fights it for its socket. A throwaway core is addressed by its own socket or session.
+core='(^|[^[:alnum:]_.-])(remuda-core|rc)[[:space:]]+'
+if { has "${core}server[[:space:]]+stop" || has "${core}serve([[:space:]]|\$)"; } && ! has 'RC_(SOCKET|SESSION)='; then
+  refuse "'remuda-core server stop' and 'remuda-core serve' without RC_SOCKET=... or RC_SESSION=... reach the person's own core and every agent in it. Address a throwaway core in the same command, its XDG folders and HOME beside it (see internal/core/coretest)."
+fi
+
 exit 0

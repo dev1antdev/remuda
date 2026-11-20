@@ -2,7 +2,8 @@
 # the TypeScript check and the page's unit tests, gofmt, go vet, the tests, and the vulnerability
 # scans — the same list as /verify in .claude/skills, run where the
 # author's machine is not. On release (and by hand), the end-to-end smoke
-# too: a throwaway herdr, a remuda of its own and headless Chrome (make e2e).
+# too: a throwaway herdr, a remuda of its own and headless Chrome (make e2e), and the same on a throwaway
+# remuda-core as a report.
 name: CI
 
 on:
@@ -47,8 +48,10 @@ jobs:
         run: |
           GOOS=windows GOARCH=amd64 go vet ./...
           GOOS=windows GOARCH=arm64 go build -o /dev/null ./cmd/remuda
-      - name: remuda-core
-        # the release internal/core's tests start a throwaway core of (internal/core/coretest), checked against its sums
+      - &remuda-core
+        name: remuda-core
+        # the release internal/core's tests (internal/core/coretest) and the e2e-core job start a throwaway core of,
+        # checked against its sums
         run: |
           mkdir -p "$RUNNER_TEMP/rc" "$HOME/.local/bin"
           cd "$RUNNER_TEMP/rc"
@@ -168,6 +171,40 @@ jobs:
         if: always()
         with:
           name: e2e-screenshots
+          path: ${{ runner.temp }}/e2e-shots
+          if-no-files-found: ignore
+
+  e2e-core:
+    name: end-to-end smoke on remuda-core
+    needs: check
+    runs-on: ubuntu-latest
+    # the same run with a throwaway remuda-core in herdr's place, remuda started with -core: a report of where the core
+    # falls short before the move off herdr, not a gate
+    if: github.ref == 'refs/heads/release' || github.event_name == 'workflow_dispatch'
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - *remuda-core
+      - name: SPA
+        working-directory: web
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+      - name: make e2e on remuda-core
+        run: E2E_BACKEND=core E2E_OUT="$RUNNER_TEMP/e2e-shots" make e2e
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: e2e-core-screenshots
           path: ${{ runner.temp }}/e2e-shots
           if-no-files-found: ignore
 

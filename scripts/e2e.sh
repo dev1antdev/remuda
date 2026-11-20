@@ -5,12 +5,13 @@
 # screen at two widths in two languages, checked for its place on the
 # screen. Nothing of the person's is touched: herdr and remuda get a HOME,
 # a socket and a state dir under one temp folder, which goes when the run
-# passes (E2E_KEEP=1 keeps it).
+# passes (E2E_KEEP=1 keeps it). E2E_BACKEND=core runs the same on a throwaway
+# remuda-core instead, remuda started with -core.
 #
 # Env: E2E_PORT (7431), E2E_CDP_PORT (9361), E2E_CODE_PORT (7439: a code-server
 # port nothing answers on, so the Code mode never reaches the person's own),
-# E2E_BIN (built when unset),
-# E2E_HERDR (herdr), CHROME_BIN (found when unset), E2E_OUT (screenshots,
+# E2E_BIN (built when unset), E2E_BACKEND (herdr, or core),
+# E2E_HERDR (herdr), E2E_CORE (remuda-core), CHROME_BIN (found when unset), E2E_OUT (screenshots,
 # <tmp>/shots when unset), E2E_KEEP, E2E_SMOKE_ONLY (the smoke alone).
 set -eu
 
@@ -19,12 +20,18 @@ port=${E2E_PORT:-7431}
 cdp=${E2E_CDP_PORT:-9361}
 codeport=${E2E_CODE_PORT:-7439}
 bin=${E2E_BIN:-$root/bin/remuda}
+backend=${E2E_BACKEND:-herdr}
 herdr=${E2E_HERDR:-herdr}
+core=${E2E_CORE:-remuda-core}
 
 say() { printf 'e2e: %s\n' "$1"; }
 fail() { say "FAIL: $1"; exit 1; }
 
-command -v "$herdr" >/dev/null 2>&1 || fail "no herdr on PATH (E2E_HERDR names one)"
+case $backend in
+  herdr) command -v "$herdr" >/dev/null 2>&1 || fail "no herdr on PATH (E2E_HERDR names one)" ;;
+  core) core=$(command -v "$core") || fail "no remuda-core on PATH (E2E_CORE names one)" ;;
+  *) fail "E2E_BACKEND is herdr or core, not $backend" ;;
+esac
 command -v node >/dev/null 2>&1 || fail "no node on PATH"
 command -v curl >/dev/null 2>&1 || fail "no curl on PATH"
 chrome=${CHROME_BIN:-}
@@ -46,7 +53,16 @@ sock=$tmp/herdr.sock
 home=$tmp/home
 out=${E2E_OUT:-$tmp/shots}
 mkdir -p "$home" "$tmp/ws" "$tmp/state" "$tmp/chrome" "$out"
+# on the core's run too, so nothing remuda asks of herdr reaches the person's server
 export HERDR_SOCKET_PATH=$sock HERDR_SOCKET=$sock
+if [ "$backend" = core ]; then
+  # the core's whole world under the run's folder, as internal/core/coretest starts one, exported so that every
+  # remuda-core command of the run, remuda's own `remuda-core connect` too, reaches this core and never the person's;
+  # RC_LAUNCHD_DIRECT names this shell, the core's parent, so macOS does not hand the core to launchd
+  mkdir -m 700 "$tmp/run" "$tmp/xdg-state" "$tmp/xdg-config"
+  export RC_SESSION=e2e RC_SOCKET=$tmp/rc.sock XDG_RUNTIME_DIR=$tmp/run XDG_STATE_HOME=$tmp/xdg-state XDG_CONFIG_HOME=$tmp/xdg-config RC_LAUNCHD_DIRECT=$$
+  export PATH="$(dirname "$core"):$PATH" # the core remuda connects through is the one started here
+fi
 
 # The agents' CLIs are stand-ins, first on every PATH the run's scripts build ($HOME/.local/bin leads remuda's own PATH
 # line): the vitals probe runs `claude --version` and `claude auth status`, and the person's real Claude Code would
@@ -61,13 +77,23 @@ export PATH="$home/.local/bin:$PATH"
 stop() {
   status=$?
   trap - EXIT INT TERM
-  [ -n "${rpid:-}" ] && kill "$rpid" 2>/dev/null
-  [ -n "${cpid:-}" ] && kill "$cpid" 2>/dev/null
-  HOME=$home HERDR_SOCKET_PATH=$sock "$herdr" server stop >/dev/null 2>&1 || true
+  [ -n "${cpid:-}" ] && kill "$cpid" 2>/dev/null || true
+  # remuda goes first and is waited for: a remuda still up reaches for its runtime again, and `remuda-core connect`
+  # starts a core where none answers
+  if [ -n "${rpid:-}" ]; then
+    kill "$rpid" 2>/dev/null || true
+    wait "$rpid" 2>/dev/null || true
+  fi
+  if [ "$backend" = core ]; then
+    HOME=$home "$core" server stop >/dev/null 2>&1 || true
+    [ -n "${corepid:-}" ] && kill "$corepid" 2>/dev/null || true
+  else
+    HOME=$home HERDR_SOCKET_PATH=$sock "$herdr" server stop >/dev/null 2>&1 || true
+  fi
   wait 2>/dev/null || true
   chrome_gone
   if [ "$status" -ne 0 ]; then
-    say "logs in $tmp (herdr.log, remuda.log, chrome.log), screenshots in $out"
+    say "logs in $tmp ($backend.log, remuda.log, chrome.log), screenshots in $out"
   elif [ -z "${E2E_KEEP:-}" ]; then
     rm -rf "$tmp" 2>/dev/null || rm -rf "$tmp" 2>/dev/null || say "left $tmp behind"
   fi
@@ -80,19 +106,27 @@ chrome_gone() {
 }
 trap stop EXIT INT TERM
 
-up() { HOME=$home HERDR_SOCKET_PATH=$sock "$herdr" status server 2>/dev/null | grep -q "status: running"; }
-
-say "starting a throwaway herdr at $sock"
-(cd "$home" && HOME=$home HERDR_SOCKET_PATH=$sock HERDR_SOCKET=$sock nohup "$herdr" server >"$tmp/herdr.log" 2>&1 </dev/null &)
+if [ "$backend" = core ]; then
+  say "starting a throwaway remuda-core at $RC_SOCKET"
+  HOME=$home "$core" serve >"$tmp/core.log" 2>&1 </dev/null &
+  corepid=$!
+  up() { [ -S "$RC_SOCKET" ]; }
+  set -- -core
+else
+  say "starting a throwaway herdr at $sock"
+  (cd "$home" && HOME=$home HERDR_SOCKET_PATH=$sock HERDR_SOCKET=$sock nohup "$herdr" server >"$tmp/herdr.log" 2>&1 </dev/null &)
+  up() { HOME=$home HERDR_SOCKET_PATH=$sock "$herdr" status server 2>/dev/null | grep -q "status: running"; }
+  set -- -socket "$sock" -herdr-bin "$herdr" -mirror
+fi
 i=0
 while ! up; do
   i=$((i + 1))
-  [ "$i" -lt 60 ] || fail "herdr did not start: $(cat "$tmp/herdr.log")"
+  [ "$i" -lt 60 ] || fail "$backend did not start: $(cat "$tmp/$backend.log")"
   sleep 0.5
 done
 
 say "starting remuda on 127.0.0.1:$port"
-HOME=$home REMUDA_STATE_DIR=$tmp/state "$bin" -addr "127.0.0.1:$port" -socket "$sock" -herdr-bin "$herdr" -code-port "$codeport" -no-version-check -mirror >"$tmp/remuda.log" 2>&1 &
+HOME=$home REMUDA_STATE_DIR=$tmp/state "$bin" -addr "127.0.0.1:$port" -code-port "$codeport" -no-version-check "$@" >"$tmp/remuda.log" 2>&1 &
 rpid=$!
 i=0
 while ! curl -sf "http://127.0.0.1:$port/api/health" >/dev/null 2>&1; do
