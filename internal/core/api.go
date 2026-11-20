@@ -284,24 +284,9 @@ func (a *Adapter) AgentGet(target string) (herdr.AgentInfo, error) {
 	return herdr.AgentInfo{Agent: agent, Status: statusOf(&t)}, nil
 }
 
-func (a *Adapter) WorkspaceCreate(cwd, label string) (*herdr.WorkspaceCreateResult, error) {
-	return nil, notOnCore("workspace.create")
-}
-func (a *Adapter) WorkspaceRename(workspaceID, label string) error {
-	return notOnCore("workspace.rename")
-}
-func (a *Adapter) WorkspaceClose(workspaceID string) error { return notOnCore("workspace.close") }
 func (a *Adapter) WorkspaceReportMetadata(m herdr.WorkspaceMetadata) error {
 	return notOnCore("workspace.report_metadata")
 }
-func (a *Adapter) TabCreate(workspaceID, label string) (*herdr.TabCreateResult, error) {
-	return nil, notOnCore("tab.create")
-}
-func (a *Adapter) TabCreateIn(workspaceID, label, cwd string, env map[string]string) (*herdr.TabCreateResult, error) {
-	return nil, notOnCore("tab.create")
-}
-func (a *Adapter) TabRename(tabID, label string) error { return notOnCore("tab.rename") }
-func (a *Adapter) TabClose(tabID string) error         { return notOnCore("tab.close") }
 func (a *Adapter) WorktreeCreate(workspaceID, branch, base, label string) (*herdr.WorktreeCreateResult, error) {
 	return nil, notOnCore("worktree.create")
 }
@@ -317,28 +302,12 @@ func (a *Adapter) LayoutExport(tabID string) (*herdr.LayoutDescription, error) {
 func (a *Adapter) LayoutApply(workspaceID, tabID, tabLabel string, root herdr.LayoutNode) (*herdr.LayoutDescription, error) {
 	return nil, notOnCore("layout.apply")
 }
-func (a *Adapter) PaneSplit(paneID, direction, cwd string) (*herdr.PaneInfo, error) {
-	return nil, notOnCore("pane.split")
-}
-func (a *Adapter) PaneClose(paneID string) error { return notOnCore("pane.close") }
 func (a *Adapter) PaneScroll(paneID string, offset int) (herdr.Scroll, error) {
 	return herdr.Scroll{}, notOnCore("pane.scroll")
-}
-func (a *Adapter) PaneSendText(paneID, text string) error { return notOnCore("pane.send_text") }
-func (a *Adapter) PaneSendKeys(paneID string, keys []string) error {
-	return notOnCore("pane.send_keys")
-}
-func (a *Adapter) PaneSendInput(paneID, text string, keys []string) error {
-	return notOnCore("pane.send_input")
 }
 func (a *Adapter) PaneReportMetadata(m herdr.PaneMetadata) error {
 	return notOnCore("pane.report_metadata")
 }
-func (a *Adapter) AgentStart(paneID, kind string) error { return notOnCore("agent.start") }
-func (a *Adapter) AgentStartWith(paneID, kind, name string, args []string, timeout time.Duration) error {
-	return notOnCore("agent.start")
-}
-func (a *Adapter) AgentPrompt(target, text string) error { return notOnCore("agent.prompt") }
 func (a *Adapter) NotificationShow(t herdr.Toast) (herdr.Shown, error) {
 	return herdr.Shown{}, notOnCore("notification.show")
 }

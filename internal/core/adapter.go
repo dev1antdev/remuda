@@ -29,6 +29,8 @@ type Adapter struct {
 	lost     error         // why the mirror is not held, after it was
 	streams  map[*eventStream]struct{}
 	badDoc   bool // a document that is no document was logged already
+
+	docMu sync.Mutex // one write of the document at a time from this remuda (editDoc)
 }
 
 // AdapterHooks are what the machine hears from its adapter and lends it.
@@ -338,6 +340,7 @@ func (m *mirror) apply(ev Event) (herdr.Event, bool) {
 			return told, false
 		}
 		t.Status, t.Records, t.Reported = status.Status, status.Records, status.Reported
+		t.statusAt = time.Now()
 		told.Kind, told.AgentStatus = herdr.EventAgentStatus, statusOf(t)
 	case "turn":
 		json.Unmarshal(ev.Data, &struct {
@@ -385,8 +388,13 @@ func (m *mirror) apply(ev Event) (herdr.Event, bool) {
 	default:
 		return told, false
 	}
-	if told.Kind == "pane.updated" && agentOf(t) != agent {
-		told.Kind = "pane.agent_detected"
+	if now := agentOf(t); now != agent {
+		if now != "" {
+			t.agentAt = time.Now()
+		}
+		if told.Kind == "pane.updated" {
+			told.Kind = "pane.agent_detected"
+		}
 	}
 	return told, true
 }
