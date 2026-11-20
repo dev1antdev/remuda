@@ -11,7 +11,7 @@ import { basename } from "@/lib/text";
 import { closeTab, createTab, renameTab } from "@/features/roster/api";
 import { offerReopen } from "@/features/reopen/offer";
 import { NO_MACHINES, startOn } from "@/features/roster/server";
-import { onWindows } from "@/features/roster/system";
+import { onWindows, screenOnly } from "@/features/roster/system";
 import { useRoster } from "@/features/roster/useRoster";
 import { useSharing } from "@/features/roster/useSharing";
 import { ChatTools, useChatViewItems } from "@/features/chat/ChatTools";
@@ -103,7 +103,7 @@ export default function PaneArea({ current }: { current: Located | null }) {
       ? { machineId: current.machine.id, paneId: current.pane.id, session: chatSession, dir: folderOf(current), agent: current.pane.agent, workspace: current.session.name, machine: current.machine.label, model: current.pane.usage?.name }
       : { machineId: "", paneId: "", session: null, dir: "", agent: "", workspace: "", machine: "" };
   const chatItems = useChatViewItems(place);
-  const terminalItems = [...useTerminalViewItems(current?.pane ?? { cols: 0, rows: 0 } as Located["pane"], onWindows(current?.machine)), ...timelapseRows(place)];
+  const terminalItems = [...useTerminalViewItems(current?.pane ?? { cols: 0, rows: 0 } as Located["pane"], screenOnly(current?.machine)), ...timelapseRows(place)];
 
   if (viewer) {
     const sub = viewer.subagent;
@@ -238,14 +238,14 @@ export default function PaneArea({ current }: { current: Located | null }) {
           </div>
         )}
         {split && <Resizer spec={PANELS.split} edge="right" label={tr("Chat width in the split")} />}
-        {seen("terminal") && viewOnly && (
+        {seen("terminal") && viewOnly && !machine.core && (
           <div className={`lens-pane screen-lens${split ? " split-terminal" : ""}`} hidden={!shown("terminal")} onFocusCapture={() => focusSide("terminal")} onPointerDownCapture={() => focusSide("terminal")}>
-            <Screen key={`${machine.id}|${pane.id}`} machineId={machine.id} paneId={pane.id} cols={pane.cols} busy={pane.status === "run" || pane.status === "input"} active={shown("terminal")} onOpen={() => {}} />
+            <Screen key={`${machine.id}|${pane.id}`} machineId={machine.id} paneId={pane.id} cols={pane.cols} busy={pane.status === "run" || pane.status === "input"} active={shown("terminal")} />
           </div>
         )}
-        {seen("terminal") && !viewOnly && (
+        {seen("terminal") && (!viewOnly || machine.core) && (
           <div className={`lens-pane${split ? " split-terminal" : ""}`} hidden={!shown("terminal")} onFocusCapture={() => focusSide("terminal")} onPointerDownCapture={() => focusSide("terminal")}>
-            <TerminalLens key={`${machine.id}|${pane.id}`} machineId={machine.id} paneId={pane.id} cols={pane.cols} rows={pane.rows} agent={pane.agent !== ""} active={shown("terminal")} focused={lens === "terminal"} screen={onWindows(machine)} host={machine.host ?? machine.label} />
+            <TerminalLens key={`${machine.id}|${pane.id}`} machineId={machine.id} paneId={pane.id} cols={pane.cols} rows={pane.rows} agent={pane.agent !== ""} active={shown("terminal")} focused={lens === "terminal"} screen={screenOnly(machine)} core={!!machine.core} readOnly={viewOnly} host={machine.host ?? machine.label} />
           </div>
         )}
         {footprint && pane.agent && <Resizer spec={PANELS.rail} edge="left" label={tr("Files rail width")} />}

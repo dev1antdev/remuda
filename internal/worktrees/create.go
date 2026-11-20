@@ -18,6 +18,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/rpath"
 	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/shell"
+	"github.com/dev1antdev/remuda/internal/text"
 )
 
 // FetchTimeout is how long a fetch of a branch before a create may take: a big repository's first fetch takes minutes.
@@ -40,6 +41,7 @@ type Plan struct {
 	Path     string `json:"path,omitempty"`    // open: the checkout there
 	From     string `json:"from,omitempty"`    // new: what the branch starts from
 	Fetch    string `json:"fetch,omitempty"`   // a refspec fetched from origin first
+	Claim    bool   `json:"claim,omitempty"`   // a fork's head: fetched into a ref of the request's own, the branch made from it where none is
 	Track    bool   `json:"track,omitempty"`   // the branch tracks origin's of its name
 	Untrack  bool   `json:"untrack,omitempty"` // a new branch from origin's tracks nothing: its first push makes its own
 	IssueRef string `json:"issue,omitempty"`   // owner/repo#N kept as branch.<b>.remuda-issue
@@ -101,7 +103,7 @@ func MakePlan(src repos.Source, branch, base string, pick Pick) (Plan, error) {
 		return plan, nil
 	}
 	if forkHead {
-		plan.Action, plan.Fetch = "local", "+refs/pull/"+strconv.Itoa(prNumber)+"/head:refs/heads/"+branch
+		plan.Action, plan.Fetch, plan.Claim = "local", "refs/pull/"+strconv.Itoa(prNumber)+"/head", true
 		return plan, nil
 	}
 	if headPicked && branch == head {
@@ -147,34 +149,12 @@ func hasBranch(list []repos.Branch, name string) bool {
 	return false
 }
 
-// Slug is a branch as herdr names its worktree's folder: lower case, a dash for every other run of characters, and
-// "worktree" for a branch with no a-z or 0-9 in it (a Cyrillic one), never the folder it goes in itself.
-func Slug(branch string) string {
-	var b strings.Builder
-	dash := false
-	for _, r := range strings.ToLower(branch) {
-		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
-			if dash && b.Len() > 0 {
-				b.WriteByte('-')
-			}
-			dash = false
-			b.WriteRune(r)
-			continue
-		}
-		dash = true
-	}
-	if b.Len() == 0 {
-		return "worktree"
-	}
-	return b.String()
-}
-
 // FolderFor is where a new worktree of the branch goes: in the project's own location, else "" for herdr's root.
 func FolderFor(location, branch string) string {
 	if location == "" {
 		return ""
 	}
-	return rpath.For(location).Join(location, Slug(branch))
+	return rpath.For(location).Join(location, text.Slug(branch))
 }
 
 // Maker is what a create needs of herdr.
@@ -192,8 +172,8 @@ type Created struct {
 // Create carries the plan out in the repository through herdr: the fetch first, the checkout, then its upstream and links.
 func Create(host shell.Shell, h Maker, root, workspaceID string, plan Plan, label, folder string) (Created, error) {
 	if plan.Fetch != "" {
-		if out, err := shell.Text(host, fetchScript(root, plan.Fetch), FetchTimeout); err != nil {
-			return Created{}, fmt.Errorf("git fetch: %s", lastLine(out, err.Error()))
+		if out, err := shell.Text(host, fetchScript(root, plan), FetchTimeout); err != nil {
+			return Created{}, fmt.Errorf("git fetch: %s", text.LastLine(out, err.Error()))
 		}
 	}
 	var (
@@ -214,16 +194,23 @@ func Create(host shell.Shell, h Maker, root, workspaceID string, plan Plan, labe
 	made := Created{WorktreeCreateResult: res}
 	if after := afterScript(root, plan); after != "" {
 		if out, err := shell.Text(host, after, Timeout); err != nil {
-			made.Notes = append(made.Notes, "git config: "+lastLine(out, err.Error()))
+			made.Notes = append(made.Notes, "git config: "+text.LastLine(out, err.Error()))
 		}
 	}
 	return made, nil
 }
 
-// fetchScript fetches one refspec from origin into the repository.
-func fetchScript(root, refspec string) string {
-	return script.PATH + "\ncd " + script.Quote(root) + " 2>/dev/null || { echo 'the repository is not there'; exit 3; }\n" +
-		"git fetch origin " + script.Quote(refspec) + " 2>&1\n"
+// fetchScript fetches the plan's refspec from origin into the repository. A fork's head lands in a ref of this
+// request's own (the script's pid: two requests at once never share one) and the branch is made from it by `git branch`,
+// which refuses one made there since the plan was read rather than move it; the ref goes whatever happened.
+func fetchScript(root string, plan Plan) string {
+	s := script.PATH + "\ncd " + script.Quote(root) + " 2>/dev/null || { echo 'the repository is not there'; exit 3; }\n"
+	if !plan.Claim {
+		return s + "git fetch origin " + script.Quote(plan.Fetch) + " 2>&1\n"
+	}
+	return s + "c=refs/remuda/fetch/$$; trap 'git update-ref -d \"$c\" 2>/dev/null' EXIT\n" +
+		"git fetch origin " + script.Quote("+"+plan.Fetch) + `":$c" 2>&1 || exit 4` + "\n" +
+		"git branch " + script.Quote(plan.Branch) + ` "$c" 2>&1` + "\n"
 }
 
 // afterScript sets the new branch's upstream as the plan says and notes the issue and pull request it was made for, where

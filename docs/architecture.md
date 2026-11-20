@@ -26,7 +26,7 @@ Three rings, and a dependency may only point inwards.
 ├─ the floor ──────────────────────────────────────────────────────────┤
 │  machines   the registry; a Machine is a shell.Host with herdr on it │
 │  herdr      herdr.API / Terminals; the RPC client, the attach PTYs   │
-│  core       remuda-core's client, which is to take herdr's place     │
+│  core       remuda-core's client and its herdr.API adapter           │
 │  transcript the session file parser and the per-machine Reader       │
 │  shell      the port: Run / Stream, Host, Fake                       │
 │  script     building POSIX scripts, reading their answers            │
@@ -70,8 +70,8 @@ The contexts are the bounded contexts of the product, in its own words:
    their tests run on a `shell.Fake` with a recorded answer. A package
    that asks a machine's herdr takes `herdr.API` and `herdr.Terminals`
    from `Machine.Ready()`, never `*herdr.Client` or
-   `*herdr.AttachManager`: remuda-core's adapter is to stand behind the
-   same two interfaces.
+   `*herdr.AttachManager`: remuda-core's adapter (`core.Adapter`) stands
+   behind `herdr.API`, its terminals (`core.Terminals`) behind `herdr.Terminals`.
 3. **Packages hear each other through the bus.** `watch` publishes
    `events.Snapshot`, `events.PaneStatus` and, off herdr's event stream,
    `events.OutputMatched`; `jobs` publishes
@@ -106,7 +106,7 @@ down through, and one folder per lens.
 ┌─ app ────────────────────────────────────────────────────────────────┐
 │  app/   the shell: the store (what is selected, the lens, the mode,  │
 │         the overlays), the URL that follows it, Header, PaneArea,    │
-│         Wall, PopOut, Overlays — the only place features compose     │
+│         Overlays — the only place features compose                   │
 ├─ features ───────────────────────────────────────────────────────────┤
 │  roster · chat · terminal · review · tasks · updates · usage ·       │
 │  search · schedules · alerts · files · code · agents · quick ·       │

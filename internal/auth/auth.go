@@ -130,6 +130,13 @@ func (g *Guard) SignedIn(r *http.Request) bool {
 	return who.ok && who.key == nil && !who.viewer
 }
 
+// StillViewer says the viewer link a request came in with still stands: its key, or the viewer device it signed in,
+// not revoked since. A socket kept open asks it again before handing the viewer more.
+func (g *Guard) StillViewer(r *http.Request) bool {
+	who := g.authenticate(r)
+	return who.ok && who.viewer
+}
+
 type deviceKey struct{}
 type callerKey struct{}
 type viewerKey struct{}

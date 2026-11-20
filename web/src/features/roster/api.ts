@@ -25,7 +25,7 @@ export type Pane = {
   said?: string; // the first line of the agent's last answer, once it finished
   pr?: PullRequest; // the last pull or merge request the agent named, "PR #15" / "MR !9"
   limit?: PaneLimit; // a subscription limit the agent stopped on, and the person's booking to continue it after the reset
-  subagents?: PaneSubagents; // the subagents a Claude Code conversation runs: the zoo's babies, the sidebar's tree
+  subagents?: PaneSubagents; // the subagents a Claude Code conversation runs: the sidebar's tree
   serves?: ServeOffer; // a dev server the pane announced and the previews found listening, offered as a preview
 };
 
@@ -140,7 +140,6 @@ export type Session = {
   collisions?: Collision[]; // the other checkouts of its repository changing the same files against the main branch, the same lines first
   muted_until?: string; // the folder is silenced until then: no push, no webhook, no feed row
   scratch?: boolean; // the floating terminal's own shell: the drawer shows it, the sidebar and the palette leave it out
-  concierge?: boolean; // the concierge's own workspace: the roster provider takes it out of the machines, its place shows it
   jira?: JiraIssue[]; // the Jira issues its branch and its agents name, once the person set a site
   ports?: ListeningPort[]; // the ports its processes listen on, as last read while a page looks (internal/ports)
   asleep?: Asleep; // put to sleep by the person: its agents left, waking resumes them (features/sleep)
@@ -222,6 +221,7 @@ export type Machine = {
   state: "connected" | "connecting" | "error";
   error?: string;
   os?: string; // "darwin" | "linux" | "windows", absent while unknown: a Windows PC's panes have the screen terminal (features/roster/system.ts)
+  core?: boolean; // reached through remuda-core instead of herdr (a remuda started with -core)
   sessions: Session[];
   health?: Health;
   awake?: Awake;

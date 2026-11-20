@@ -21,12 +21,12 @@ beforeAll(async () => {
 });
 
 describe("a pref another device set, applied here", () => {
-  const WALL = { size: "m", view: "chat", needsMe: false };
+  const BAR = { on: true, remaining: false };
   it("reaches every hook of the key in the hook's own shape: fields an older build lacked come from the fallback", () => {
-    expect(prefs.prefValue("wall", WALL)).toEqual(WALL);
-    prefs.applyPref("wall", { size: "l" }, "2026-11-01T10:00:00.000Z");
-    expect(prefs.prefValue("wall", WALL)).toEqual({ size: "l", view: "chat", needsMe: false });
-    expect(prefs.sharedPrefs().wall).toEqual({ value: { size: "l" }, at: "2026-11-01T10:00:00.000Z" });
+    expect(prefs.prefValue("statusbar", BAR)).toEqual(BAR);
+    prefs.applyPref("statusbar", { on: false }, "2026-11-01T10:00:00.000Z");
+    expect(prefs.prefValue("statusbar", BAR)).toEqual({ on: false, remaining: false });
+    expect(prefs.sharedPrefs().statusbar).toEqual({ value: { on: false }, at: "2026-11-01T10:00:00.000Z" });
   });
   it("of another type altogether is dropped for the fallback, as a stored one is", () => {
     expect(prefs.prefValue("theme.dark", "frappe")).toBe("frappe");

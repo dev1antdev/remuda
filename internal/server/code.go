@@ -12,7 +12,7 @@ import (
 // Code mode: a machine's code-server behind the guard.
 
 // editorFolders are the folders the machine's workspaces live in, remuda's own — the floating terminal's home-folder
-// shell, the concierge's folder — left out
+// shell — left out
 func (s *Server) editorFolders(machineID string, snap *herdr.Snapshot) []string {
 	return s.foldersBut(machineID, snap, s.ownWorkspace)
 }

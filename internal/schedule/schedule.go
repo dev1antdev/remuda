@@ -1,6 +1,5 @@
 // Package schedule runs things on a timetable: a prompt to the agent in a
-// workspace folder (panes come and go, the project stays), the standup as a
-// digest pushed to the person's devices, or a fresh agent started in a folder
+// workspace folder (panes come and go, the project stays), a fresh agent started in a folder
 // with a prompt and taken down once it has answered, or one of the person's scenes; a five-field cron in
 // local time; a run is never queued or retried, and one that comes while the agent it would talk to (or the agent its
 // last run started) still works or asks is skipped and noted.
@@ -39,30 +38,23 @@ const (
 	SkipLimit    = "limit"
 )
 
-// The kinds of schedule: a prompt to an agent, the standup pushed as a digest, or a fresh agent started in a folder.
+// The kinds of schedule: a prompt to an agent, or a fresh agent started in a folder (a scene's is scene.go's).
 const (
 	KindPrompt = "prompt"
-	KindDigest = "digest"
 	KindAgent  = "agent"
 )
 
-// What a digest covers: since local midnight, the last 24 hours, the last 7 days, or since its previous run.
-const (
-	SinceMidnight = "midnight"
-	SinceDay      = "24h"
-	SinceWeek     = "7d"
-	SinceLast     = "last"
-)
+// gone is the kind the standup's digests had: a stored one is dropped when the schedules are read.
+const gone = "digest"
 
 type Schedule struct {
 	ID      string `json:"id"`
-	Kind    string `json:"kind"` // prompt (the default) | digest | agent | scene
+	Kind    string `json:"kind"` // prompt (the default) | agent | scene
 	Machine string `json:"machine"`
 	Dir     string `json:"dir"`
 	Label   string `json:"label"`
 	Cron    string `json:"cron"`
 	Prompt  string `json:"prompt"`
-	Since   string `json:"since,omitempty"` // a digest's period: midnight | 24h | 7d | last
 	Agent   string `json:"agent,omitempty"` // an agent schedule's kind of agent
 	Model   string `json:"model,omitempty"` // the model as the agent's own CLI names it, "" for its default
 	Args    string `json:"args,omitempty"`  // extra arguments, as the person wrote them
@@ -85,17 +77,15 @@ type Schedule struct {
 // Submit delivers a prompt to the agent in a folder and names the pane it went to.
 type Submit func(machineID, dir, text string) (pane string, err error)
 
-// Digest is the standup since a moment as a notification's title and body; empty when nobody did anything.
-type Digest func(since time.Time) (title, body string, empty bool)
-
 type Store struct {
 	dir    string
 	submit Submit
 	notify func(push.Payload)
-	digest Digest
 	Agents Agents // the app's way to start, close and read an agent schedule's agent; set after New
 	Scenes Scenes // the app's way to a scene schedule's scene; set after New
 	now    func() time.Time
+	// unreadable is why schedules.json could not be read: until it is fixed nothing runs and nothing is written over it
+	unreadable error
 
 	mu       sync.Mutex
 	items    map[string]*Schedule
@@ -104,25 +94,38 @@ type Store struct {
 	inflight sync.WaitGroup
 }
 
-func New(dir string, submit Submit, notify func(push.Payload), digest Digest) *Store {
-	st := &Store{dir: dir, submit: submit, notify: notify, digest: digest, now: time.Now, items: map[string]*Schedule{}, firing: map[string]time.Time{}, running: map[string]bool{}}
+func New(dir string, submit Submit, notify func(push.Payload)) *Store {
+	st := &Store{dir: dir, submit: submit, notify: notify, now: time.Now, items: map[string]*Schedule{}, firing: map[string]time.Time{}, running: map[string]bool{}}
 	var list []*Schedule
 	if err := state.LoadJSON(dir, file, &list); err != nil {
 		log.Printf("%s is unreadable (%v): no schedules until it is fixed", file, err)
+		st.unreadable = err
+		return st
 	}
+	dropped := 0
 	for _, s := range list {
+		if s.Kind == gone {
+			dropped++
+			continue
+		}
 		if s.Kind == "" {
 			s.Kind = KindPrompt // the records from before the kinds
 		}
-		if s.Kind == KindDigest && s.Since == "" {
-			s.Since = SinceMidnight
-		}
 		st.items[s.ID] = s
+	}
+	if dropped > 0 {
+		log.Printf("schedules: %d standup digests dropped: the standup is gone", dropped)
+		if err := st.saveLocked(); err != nil {
+			log.Printf("schedules: %v", err)
+		}
 	}
 	return st
 }
 
 func (st *Store) saveLocked() error {
+	if st.unreadable != nil {
+		return fmt.Errorf("%s is unreadable (%v): fix it or move it aside first", file, st.unreadable)
+	}
 	return state.SaveJSON(st.dir, file, st.listLocked())
 }
 
@@ -171,22 +174,8 @@ func (st *Store) Put(s Schedule) (Schedule, error) {
 		if s.Prompt == "" {
 			return s, errors.New("the prompt is empty")
 		}
-		s.Since = ""
 		if s.Label == "" {
 			s.Label = text.FirstLine(s.Prompt, 60)
-		}
-	case KindDigest:
-		if s.Machine != "" || s.Dir != "" || s.Prompt != "" {
-			return s, errors.New("a digest goes to your devices: no machine, folder or prompt")
-		}
-		if s.Since == "" {
-			s.Since = SinceMidnight
-		}
-		if !sinceKnown(s.Since) {
-			return s, errors.New("a digest covers midnight, 24h, 7d or last")
-		}
-		if s.Label == "" {
-			s.Label = "Standup digest"
 		}
 	case KindAgent:
 		if err := checkAgent(&s); err != nil {
@@ -197,7 +186,7 @@ func (st *Store) Put(s Schedule) (Schedule, error) {
 			return s, err
 		}
 	default:
-		return s, errors.New("a schedule is a prompt, a digest, an agent or a scene")
+		return s, errors.New("a schedule is a prompt, an agent or a scene")
 	}
 	if s.Kind != KindScene {
 		s.Scene = ""
@@ -224,6 +213,7 @@ func (st *Store) Put(s Schedule) (Schedule, error) {
 	cp := s
 	st.items[s.ID] = &cp
 	if err := st.saveLocked(); err != nil {
+		st.restoreLocked(s.ID, old) // what could not be kept does not run either
 		return s, fmt.Errorf("the schedule could not be kept: %w", err)
 	}
 	return s, nil
@@ -232,9 +222,23 @@ func (st *Store) Put(s Schedule) (Schedule, error) {
 func (st *Store) Delete(id string) error {
 	st.mu.Lock()
 	defer st.mu.Unlock()
+	old := st.items[id]
 	delete(st.items, id)
+	if err := st.saveLocked(); err != nil {
+		st.restoreLocked(id, old)
+		return err
+	}
 	delete(st.firing, id)
-	return st.saveLocked()
+	return nil
+}
+
+// restoreLocked puts a schedule back as the file still has it after a save failed: the one before, or none.
+func (st *Store) restoreLocked(id string, old *Schedule) {
+	if old != nil {
+		st.items[id] = old
+	} else {
+		delete(st.items, id)
+	}
 }
 
 // Run fires one schedule now, whatever the clock says; a run that would pile up on the last one is skipped all the same.
@@ -297,8 +301,6 @@ func (st *Store) fire(s *Schedule, swap *Swap) {
 		st.mu.Unlock()
 	}()
 	switch s.Kind {
-	case KindDigest:
-		st.fireDigest(s)
 	case KindAgent:
 		st.fireAgent(s, swap)
 	case KindScene:
@@ -343,44 +345,6 @@ func (st *Store) firePrompt(s *Schedule) {
 	}
 }
 
-// fireDigest pushes the standup since the period the schedule names; a quiet period sends nothing and says so.
-func (st *Store) fireDigest(s *Schedule) {
-	now := st.now()
-	st.mu.Lock()
-	since := digestSince(s.Since, s.LastRun, now)
-	st.mu.Unlock()
-	var title, body string
-	empty := true
-	err := errors.New("no standup to digest")
-	if st.digest != nil {
-		title, body, empty = st.digest(since)
-		err = nil
-	}
-	st.mu.Lock()
-	cur, ok := st.items[s.ID]
-	if !ok {
-		st.mu.Unlock()
-		return
-	}
-	cur.LastRun, cur.Skipped = now, ""
-	switch {
-	case err != nil:
-		cur.LastOK, cur.LastResult = false, err.Error()
-	case empty:
-		cur.LastOK, cur.LastResult = true, "nothing to report"
-	default:
-		cur.LastOK, cur.LastResult = true, "sent"
-	}
-	if serr := st.saveLocked(); serr != nil {
-		log.Printf("schedules: %v", serr)
-	}
-	id := cur.ID
-	st.mu.Unlock()
-	if err == nil && !empty && st.notify != nil {
-		st.notify(push.Payload{Kind: KindDigest, Title: title, Body: body, Tag: "digest|" + id, Panel: "standup"})
-	}
-}
-
 // skipOf says why a prompt's refusal is a skipped run rather than a failed one: the agent works or asks; "" for any other.
 func skipOf(err error) string {
 	switch {
@@ -417,29 +381,6 @@ func (st *Store) noteSkip(id, why, words string) {
 	if err := st.saveLocked(); err != nil {
 		log.Printf("schedules: %v", err)
 	}
-}
-
-// digestSince is the start of a digest's period at now: local midnight, 24 hours or 7 days back, or the previous run (midnight when there was none).
-func digestSince(mode string, lastRun, now time.Time) time.Time {
-	switch mode {
-	case SinceDay:
-		return now.Add(-24 * time.Hour)
-	case SinceWeek:
-		return now.Add(-7 * 24 * time.Hour)
-	case SinceLast:
-		if !lastRun.IsZero() {
-			return lastRun
-		}
-	}
-	return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-}
-
-func sinceKnown(mode string) bool {
-	switch mode {
-	case SinceMidnight, SinceDay, SinceWeek, SinceLast:
-		return true
-	}
-	return false
 }
 
 // Tick runs every enabled schedule whose cron matches this minute and was neither run nor started this minute yet — a

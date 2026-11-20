@@ -1,14 +1,13 @@
 // useQuestions reads, for the agents that ask the person something, what they ask — the dialog off the pane's screen
 // (`GET /api/question`), one pane after another every QUESTIONS_EVERY while this very document is on screen (not while
-// the Mac app's window is shut or the tab hides behind the pop-out, which keep the page counting as visible), at most
-// MAX_ASKING of them, a round never begun while the last is still out — for the zoo's bubbles and the sidebar's "Needs
-// you". Nothing is read while nobody asks (a caller off screen passes none), and a reading that says what the last one
+// the Mac app's window is shut, which keeps the page counting as visible), at most MAX_ASKING of them, a round never
+// begun while the last is still out — for the sidebar's "Needs you". Nothing is read while nobody asks (a caller off screen passes none), and a reading that says what the last one
 // did draws nothing again.
 
 import { useEffect, useState } from "react";
 import { fetchQuestion } from "@/features/chat/api";
 import { documentVisible } from "@/lib/visibility";
-import { QUESTIONS_EVERY, askedOf, questionBubble, sameQuestions, type Asker } from "./questions";
+import { QUESTIONS_EVERY, askedOf, questionLine, sameQuestions, type Asker } from "./questions";
 
 export function useQuestions(askers: Asker[]): Map<string, string> {
   const [held, setHeld] = useState<Map<string, string>>(() => new Map());
@@ -26,7 +25,7 @@ export function useQuestions(askers: Asker[]): Map<string, string> {
       const next = new Map<string, string>();
       for (const asker of wanted) {
         try {
-          const text = questionBubble(await fetchQuestion(asker.machine, asker.pane));
+          const text = questionLine(await fetchQuestion(asker.machine, asker.pane));
           if (text) next.set(asker.key, text);
         } catch {
           // a pane that cannot be read holds nothing up

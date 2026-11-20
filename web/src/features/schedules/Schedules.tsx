@@ -1,5 +1,4 @@
-// Schedules: prompts sent to an agent on a timetable, the standup pushed as a digest, a fresh agent started in a
-// folder, or one of the scenes. A list with the next and last run, a switch per row, "Run now", and the editor.
+// Schedules: prompts sent to an agent on a timetable, a fresh agent started in a folder, or one of the scenes. A list with the next and last run, a switch per row, "Run now", and the editor.
 
 import { useState } from "react";
 import type { Machine } from "@/features/roster/api";
@@ -13,7 +12,7 @@ import { agentWords, deniedWords, watchedWords } from "./agent";
 import { deleteSchedule, fetchSchedules, putSchedule, runSchedule, type Schedule } from "./api";
 import { NEVER } from "./cron";
 import { cronWords } from "./cronWords";
-import { kindOf, sinceWords } from "./digest";
+import { kindOf } from "./kind";
 import { resultTone, resultWords } from "./runs";
 import { ScheduleEditor } from "./ScheduleEditor";
 import { sceneScheduleWords } from "./scene";
@@ -59,7 +58,7 @@ export default function Schedules({ machines, onClose, ask }: {
     >
       <Notice tone="hint">
         {t(
-          "A prompt sent to the agent running in a folder, the standup pushed to your devices as a digest, a fresh agent started in a folder with a prompt, or one of your scenes, on a timetable — in the remuda host's local time. A run is skipped and noted while the agent it would reach — or the one its last run started — is still working or waits for an answer, so nothing piles up; a minute with no agent there is noted and pushed.",
+          "A prompt sent to the agent running in a folder, a fresh agent started in a folder with a prompt, or one of your scenes, on a timetable — in the remuda host's local time. A run is skipped and noted while the agent it would reach — or the one its last run started — is still working or waits for an answer, so nothing piles up; a minute with no agent there is noted and pushed.",
         )}
       </Notice>
       {error && (
@@ -74,8 +73,7 @@ export default function Schedules({ machines, onClose, ask }: {
             <input type="checkbox" checked={s.enabled} title={s.enabled ? t("On") : t("Off")} aria-label={s.enabled ? t("On") : t("Off")} onChange={(e) => toggle(s, e.target.checked)} />
             <div className="schedule-copy">
               <div className="schedule-label">
-                {kindOf(s) === "digest" && <Icon name="sun" size={12} className="schedule-digest-mark" aria-label={t("Standup digest")} />}
-                {kindOf(s) === "scene" && <Icon name="layers" size={12} className="schedule-digest-mark" aria-label={t("Runs a scene")} />}
+                {kindOf(s) === "scene" && <Icon name="layers" size={12} className="schedule-kind-mark" aria-label={t("Runs a scene")} />}
                 {kindOf(s) === "agent" && (
                   <span className="schedule-agent-mark" aria-label={t("Starts {agent}", { agent: agentLabel(s.agent) })}>
                     <Logo agent={s.agent ?? ""} />
@@ -87,8 +85,6 @@ export default function Schedules({ machines, onClose, ask }: {
                 {cronWords(s.cron) ?? <code>{s.cron}</code>} ·{" "}
                 {kindOf(s) === "scene"
                   ? sceneScheduleWords(s, scenes)
-                  : kindOf(s) === "digest"
-                  ? t("to your devices · {since}", { since: sinceWords(s.since) })
                   : kindOf(s) === "agent"
                     ? agentWords(s, machineLabel(machines, s.machine), basename(s.dir), agentLabel(s.agent))
                     : `${machineLabel(machines, s.machine)} · ${basename(s.dir)}`}

@@ -46,7 +46,7 @@ type attach struct {
 	release     func()
 
 	mu     sync.Mutex
-	subs   map[chan []byte]bool
+	subs   map[chan Out]bool
 	dead   bool
 	linger *time.Timer
 }
@@ -158,13 +158,14 @@ func LocalAttachCommand(bin, socket string) func(string) *exec.Cmd {
 	}
 }
 
-func validSize(cols, rows int) bool {
+// ValidSize says a viewer's grid is one to give a terminal: a collapsed or hidden mount measures nonsense.
+func ValidSize(cols, rows int) bool {
 	return cols >= 20 && rows >= 5 && cols <= 500 && rows <= 300
 }
 
 // Subscribe attaches (or joins the existing attach of) a terminal; the caller must call cancel when done.
 // A joiner is caught up by a repaint, never a byte tail: TUIs draw with cursor moves relative to where it was.
-func (m *AttachManager) Subscribe(termID string, cols, rows int) (ch chan []byte, cancel func(), err error) {
+func (m *AttachManager) Subscribe(termID string, cols, rows int) (ch chan Out, cancel func(), err error) {
 	if m.Unavailable != "" {
 		return nil, nil, &RefusedError{Msg: m.Unavailable}
 	}
@@ -176,7 +177,7 @@ func (m *AttachManager) Subscribe(termID string, cols, rows int) (ch chan []byte
 		}
 	}
 
-	ch = make(chan []byte, subscriberBuf)
+	ch = make(chan Out, subscriberBuf)
 	a.mu.Lock()
 	if a.dead { // it died between the lookup and here: start over
 		a.mu.Unlock()
@@ -195,7 +196,7 @@ func (m *AttachManager) Subscribe(termID string, cols, rows int) (ch chan []byte
 			return nil, nil, err
 		}
 	}
-	if joined && validSize(cols, rows) {
+	if joined && ValidSize(cols, rows) {
 		go a.repaint(cols, rows)
 	}
 
@@ -210,6 +211,32 @@ func (m *AttachManager) Subscribe(termID string, cols, rows int) (ch chan []byte
 	}
 	return ch, cancel, nil
 }
+
+// Open is Subscribe as one viewer: its keys and sizes go to the attach every viewer of the terminal shares. herdr has
+// no viewer that only watches, so one asked for is refused.
+func (m *AttachManager) Open(termID string, view View) (Viewer, error) {
+	if view.Observe {
+		return nil, &RefusedError{Msg: "watching a terminal without typing needs remuda-core"}
+	}
+	ch, cancel, err := m.Subscribe(termID, view.Cols, view.Rows)
+	if err != nil {
+		return nil, err
+	}
+	return &sharedViewer{m: m, termID: termID, ch: ch, cancel: cancel}, nil
+}
+
+// sharedViewer is one viewer of an attach.
+type sharedViewer struct {
+	m      *AttachManager
+	termID string
+	ch     chan Out
+	cancel func()
+}
+
+func (v *sharedViewer) Out() <-chan Out             { return v.ch }
+func (v *sharedViewer) Write(data []byte) error     { return v.m.Write(v.termID, data) }
+func (v *sharedViewer) Resize(cols, rows int) error { return v.m.Resize(v.termID, cols, rows) }
+func (v *sharedViewer) Close()                      { v.cancel() }
 
 // repaint has the pane redraw for a joining viewer: a row smaller, then the size asked for.
 // Back to back, ssh and the app see only the final (unchanged) size and draw nothing.
@@ -300,14 +327,14 @@ func (m *AttachManager) takePlace() (func(), error) {
 
 func (m *AttachManager) start(termID string, cols, rows int, release func()) (*attach, error) {
 	cmd := m.NewCommand(termID)
-	if !validSize(cols, rows) {
+	if !ValidSize(cols, rows) {
 		cols, rows = 80, 24
 	}
 	f, err := pty.StartWithSize(cmd, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)})
 	if err != nil {
 		return nil, err
 	}
-	a := &attach{termID: termID, cmd: cmd, pty: f, subs: map[chan []byte]bool{}, early: make(chan []byte, 64), exited: make(chan struct{}), release: release}
+	a := &attach{termID: termID, cmd: cmd, pty: f, subs: map[chan Out]bool{}, early: make(chan []byte, 64), exited: make(chan struct{}), release: release}
 	a.readRefusal = m.ReadRefusal
 	a.watch.Store(true)
 	go a.readLoop(m)
@@ -337,7 +364,7 @@ func (a *attach) readLoop(m *AttachManager) {
 			a.mu.Lock()
 			for ch := range a.subs {
 				select {
-				case ch <- data:
+				case ch <- Out{Data: data}:
 				default: // slow viewer: drop; a reconnect repaints
 				}
 			}
@@ -384,7 +411,7 @@ func (m *AttachManager) kill(a *attach) {
 func (m *AttachManager) killLocked(a *attach) {
 	a.dead = true
 	subs := a.subs
-	a.subs = map[chan []byte]bool{}
+	a.subs = map[chan Out]bool{}
 	a.mu.Unlock()
 
 	for ch := range subs {
@@ -426,7 +453,7 @@ func (m *AttachManager) Write(termID string, data []byte) error {
 
 // Resize changes the attach PTY size; herdr reflows the pane for the smallest attached client.
 func (m *AttachManager) Resize(termID string, cols, rows int) error {
-	if !validSize(cols, rows) {
+	if !ValidSize(cols, rows) {
 		return nil
 	}
 	a, err := m.get(termID)

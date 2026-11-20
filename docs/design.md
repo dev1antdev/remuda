@@ -68,7 +68,7 @@ that stands out.
 
 - Controls: `--ctl-lg` 36, `--ctl` 32 (a button, a field, a Select), `--ctl-sm` 28, `--ctl-xs` 24. They grow with the
   text size and an eighth under a finger (`--ctl-touch`); never set a control's height in px.
-- Density: `--row-h`, `--row-pad-y`, `--tab-h`, `--tile-pad-y`, `--task-row-h`, `--gap-row`. Compact tightens them, with
+- Density: `--row-h`, `--row-pad-y`, `--tab-h`, `--task-row-h`, `--gap-row`. Compact tightens them, with
   a mouse on a screen wider than 920 px only. There is no spacing scale: take a neighbour's padding rather than invent
   one.
 - Radii only from the scale: `--r-xs` 5 (badges, keys), `--r-sm` 7 (menu items, rows), `--r-md` 10 (buttons, fields —
@@ -81,9 +81,9 @@ that stands out.
 
 ## Layout
 
-- **The rail** down the left: the five modes, the places, then the tools and Settings under a hairline; each an icon
+- **The rail** down the left: the four modes, the places, then the tools and Settings under a hairline; each an icon
   on a pill with its name under it, whole. At 920 px and below it lies along the bottom.
-- **A pane's header** is `[burger][title — takes the slack][usage pill][lens switch][pop-out][search]`. The lens
+- **A pane's header** is `[burger][title — takes the slack][usage pill][lens switch][search]`. The lens
   buttons keep equal room; a lens that cannot open is disabled, not removed; a shell keeps the switch's room unseen
   (`.lens-switch.is-vacant`).
 - **Nothing in a bar moves when state changes.** Reserve the room a count or a second button will need (the Changes

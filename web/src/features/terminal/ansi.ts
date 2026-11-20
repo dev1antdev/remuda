@@ -1,6 +1,6 @@
 // parseAnsi reads a terminal screen as herdr prints it — text with SGR colour sequences — into lines of spans, each
-// with its colours and weight resolved, every other escape (cursor moves, erases, OSC titles) dropped. The wall's
-// screen view draws the spans; nothing here touches the DOM.
+// with its colours and weight resolved, every other escape (cursor moves, erases, OSC titles) dropped. The screen
+// views draw the spans; nothing here touches the DOM.
 
 import type { AnsiPalette } from "@/lib/theme";
 
@@ -17,7 +17,7 @@ export type Span = {
 };
 export type Line = Span[];
 
-// xterm.js's own palette, the fallback; a screen tile draws with the theme's (lib/theme.ts ansiPalette), as the lens does
+// xterm.js's own palette, the fallback; a screen view draws with the theme's (lib/theme.ts ansiPalette), as the lens does
 export const XTERM_PALETTE: AnsiPalette = {
   colors: [
     "#2e3436", "#cc0000", "#4e9a06", "#c4a000", "#3465a4", "#75507b", "#06989a", "#d3d7cf",

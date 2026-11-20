@@ -63,7 +63,6 @@ func checkAgent(s *Schedule) error {
 	if s.Prompt == "" {
 		return errors.New("the prompt is empty")
 	}
-	s.Since = ""
 	if s.Label == "" {
 		s.Label = text.FirstLine(s.Prompt, 60)
 	}

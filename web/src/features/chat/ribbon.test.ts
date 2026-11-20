@@ -28,7 +28,7 @@ describe("ribbon", () => {
       user(20),
       answer(19.9, [call("Read", 19.9, 6, { file_path: "/w/app/src/app.go" }), call("Edit", 19, 12, { file_path: "/w/app/src/app.go" }), call("Bash", 18, 48, { command: "go test ./..." }), call("TodoWrite", 17, 0), text(16)], 4 * 60),
     ];
-    const model = ribbon(turns, { now: NOW, live: null, cut: false });
+    const model = ribbon(turns, { now: NOW, live: null });
     expect(model.from).toBe(NOW - RIBBON_MS);
     expect(model.stretches.filter((s) => s.call).map((s) => [s.tone, s.call!.name])).toEqual([
       ["read", "Read"],
@@ -44,7 +44,7 @@ describe("ribbon", () => {
 
   it("calls a gap quiet once three minutes pass with no call running and nothing written", () => {
     const turns = [user(20), answer(19.9, [call("Bash", 19, 30, { command: "make" }), text(16), call("Read", 10, 1, { file_path: "/x" })], 10 * 60)];
-    const model = ribbon(turns, { now: NOW, live: null, cut: false });
+    const model = ribbon(turns, { now: NOW, live: null });
     // the call ends at 18.5; the text at 16 breaks the gap; 16 → 13 is thought, 13 → 10 quiet
     expect(span(model, "quiet")).toEqual([[13, 10]]);
     expect(span(model, "think")).toContainEqual([18.5, 13]); // one stretch: a text written in it keeps it going
@@ -52,7 +52,7 @@ describe("ribbon", () => {
 
   it("runs to now while the agent works, the call still open drawn as running", () => {
     const turns = [user(5), answer(4.9, [call("Bash", 1, null, { command: "go test ./..." })])];
-    const model = ribbon(turns, { now: NOW, live: "run", cut: false });
+    const model = ribbon(turns, { now: NOW, live: "run" });
     const open = model.stretches.find((s) => s.call)!;
     expect(open).toMatchObject({ tone: "shell", to: NOW });
     expect(open.call!.running).toBe(true);
@@ -62,15 +62,15 @@ describe("ribbon", () => {
   });
 
   it("goes quiet at the end of a turn that wrote nothing for three minutes while the agent still works", () => {
-    const model = ribbon([user(10), answer(9.9, [text(9.9)])], { now: NOW, live: "run", cut: false });
+    const model = ribbon([user(10), answer(9.9, [text(9.9)])], { now: NOW, live: "run" });
     expect(model.stretches.at(-1)).toMatchObject({ tone: "quiet", to: NOW });
     expect((model.stretches.at(-1)!.from - (NOW - min(9.9))) / 1).toBe(QUIET_MS);
   });
 
   it("waits while the agent asks: the open call, or the time after its last record", () => {
-    const blocked = ribbon([user(3), answer(2.9, [call("Bash", 2, null, { command: "rm -rf build" })])], { now: NOW, live: "input", cut: false });
+    const blocked = ribbon([user(3), answer(2.9, [call("Bash", 2, null, { command: "rm -rf build" })])], { now: NOW, live: "input" });
     expect(blocked.stretches.find((s) => s.call)!.tone).toBe("wait");
-    const dialog = ribbon([user(3), answer(2.9, [text(2.5)])], { now: NOW, live: "input", cut: false });
+    const dialog = ribbon([user(3), answer(2.9, [text(2.5)])], { now: NOW, live: "input" });
     expect(dialog.stretches.at(-1)).toMatchObject({ tone: "wait", to: NOW });
     expect(toneOf(call("AskUserQuestion", 1, 40), 40_000)).toBe("wait");
     expect(toneOf(call("Agent", 1, 300), 300_000)).toBe("wait");
@@ -82,24 +82,22 @@ describe("ribbon", () => {
 
   it("leaves what came before the window out, and what came before the turns read as not read", () => {
     const old = [user(50), answer(49, [call("Read", 49, 5)], 60)];
-    expect(ribbon(old, { now: NOW, live: null, cut: false }).stretches).toEqual([]);
+    expect(ribbon(old, { now: NOW, live: null }).stretches).toEqual([]);
     // the line under an empty ribbon says so, not what a turn long before it came to
-    expect(turnWords(ribbon(old, { now: NOW, live: null, cut: false }).turn)).toBe("Nothing in the last 30 minutes");
-    expect(ribbon(old, { now: NOW, live: "run", cut: false }).turn).toMatchObject({ tools: 1, live: true });
+    expect(turnWords(ribbon(old, { now: NOW, live: null }).turn)).toBe("Nothing in the last 30 minutes");
+    expect(ribbon(old, { now: NOW, live: "run" }).turn).toMatchObject({ tools: 1, live: true });
     const long = [...Array.from({ length: 300 }, (_, i) => [user(3000 - i * 5), answer(2999.9 - i * 5, [call("Read", 2999.5 - i * 5, 2)], 60)]).flat(), user(12), answer(11.9, [call("Edit", 11, 3)], 120)];
-    const recent = ribbon(long, { now: NOW, live: null, cut: false });
+    const recent = ribbon(long, { now: NOW, live: null });
     expect(recent.stretches.filter((s) => s.call).map((s) => s.call!.name)).toEqual(["Edit"]);
     expect(recent.turn).toMatchObject({ took: 120, tools: 1 });
     const tail = [answer(12, [call("Edit", 12, 3)], 900)];
-    const cut = ribbon(tail, { now: NOW, live: null, cut: true });
-    expect(cut.stretches[0]).toMatchObject({ tone: "unread", from: NOW - RIBBON_MS, to: NOW - min(12) });
-    expect(ribbon(tail, { now: NOW, live: null, cut: false }).stretches.some((s) => s.tone === "unread")).toBe(false);
+    expect(ribbon(tail, { now: NOW, live: null }).stretches.some((s) => s.tone === "unread")).toBe(false);
     const compacted = [user(10, `${COMPACTION_PREFIX}. Summary`), answer(9.9, [text(9.8)], 20)];
-    expect(ribbon(compacted, { now: NOW, live: null, cut: false }).stretches[0]!.tone).toBe("unread");
+    expect(ribbon(compacted, { now: NOW, live: null }).stretches[0]!.tone).toBe("unread");
   });
 
   it("finds the stretch under a press: a narrow call within a few pixels, over the gap it lies in", () => {
-    const model = ribbon([user(20), answer(19.9, [text(13), call("Edit", 10, 1, { file_path: "/w/app/a.go" })], 15 * 60)], { now: NOW, live: null, cut: false });
+    const model = ribbon([user(20), answer(19.9, [text(13), call("Edit", 10, 1, { file_path: "/w/app/a.go" })], 15 * 60)], { now: NOW, live: null });
     const share = (m: number) => (RIBBON_MS - min(m)) / RIBBON_MS;
     expect(stretchAt(model, share(10), 300)!.call!.name).toBe("Edit");
     expect(stretchAt(model, share(10) + 3 / 300, 300)!.call!.name).toBe("Edit");
@@ -110,7 +108,7 @@ describe("ribbon", () => {
   });
 
   it("walks the stretches in time with the keys", () => {
-    const model = ribbon([user(20), answer(19.9, [call("Read", 19, 2), call("Edit", 18, 2)], 120)], { now: NOW, live: null, cut: false });
+    const model = ribbon([user(20), answer(19.9, [call("Read", 19, 2), call("Edit", 18, 2)], 120)], { now: NOW, live: null });
     const first = stepFrom(model, null, 1)!;
     expect(first.tone).toBe("think");
     const next = stepFrom(model, first.key, 1)!;
@@ -119,7 +117,7 @@ describe("ribbon", () => {
   });
 
   it("says what the last turn came to, failures counted, nothing when there is none", () => {
-    const model = ribbon([user(9), answer(8.9, [call("Bash", 8.8, 4, {}, { is_error: true }), call("Bash", 8.5, 4)], 67)], { now: NOW, live: null, cut: false });
+    const model = ribbon([user(9), answer(8.9, [call("Bash", 8.8, 4, {}, { is_error: true }), call("Bash", 8.5, 4)], 67)], { now: NOW, live: null });
     expect(turnWords(model.turn)).toBe("1 min 7 s, 2 tools, 1 failed");
     expect(turnWords(null)).toBe("Nothing in the last 30 minutes");
     expect(turnWords({ took: 12, tools: 0, failed: 0, live: true })).toBe("12 s so far, no tools");

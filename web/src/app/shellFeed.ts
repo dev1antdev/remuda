@@ -8,7 +8,6 @@ import type { Sharing } from "@/features/roster/useSharing";
 import { folderOf } from "@/features/roster/workspaces";
 import { t } from "@/lib/i18n";
 import type { ShellRow } from "@/lib/shell";
-import type { Mode } from "./store";
 import { toneOf } from "./badge";
 
 export type ShellFeed = { rows: ShellRow[]; working: number; idle: number };
@@ -76,13 +75,6 @@ export function sameFeed(a: ShellFeed, b: ShellFeed): boolean {
       row.state === other.state
     );
   });
-}
-
-const MODE_NAMES: Record<string, Mode> = { agents: "herdr", herdr: "herdr", wall: "wall", tasks: "tasks", review: "review", code: "code" };
-
-// modeOf reads a mode's name as the app says it, "agents" for the first mode; nothing for a name the page has no mode for
-export function modeOf(name: unknown): Mode | null {
-  return typeof name === "string" ? (MODE_NAMES[name] ?? null) : null;
 }
 
 // maskFeed is the menu as the screen-sharing mode lets it show: every machine by its neutral name when hidden, and a

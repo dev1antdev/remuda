@@ -1,5 +1,5 @@
 // The viewer links, the rows after the agents' keys in the Devices section: a link signs a TV or a colleague in
-// read-only — the Wall, the chats and the screens, nothing that types. Make one under a name, the link shows this
+// read-only — the chats and the screens, nothing that types. Make one under a name, the link shows this
 // once with Copy, a Revoke behind a confirm signs every screen it opened out.
 
 import { useState, type FormEvent } from "react";
@@ -56,7 +56,7 @@ export default function ViewerKeys() {
       <div className="settings-row device-row keys-head">
         <span>
           {t("Viewer links")}
-          <small>{t("A link that signs a screen in to look only: the Wall, the chats, the screens and the reports, never a key or a word into an agent. For the TV in the office, or a colleague watching a run.")}</small>
+          <small>{t("A link that signs a screen in to look only: the chats, the screens and the usage, never a key or a word into an agent. For the TV in the office, or a colleague watching a run.")}</small>
         </span>
       </div>
       {error && <div className="settings-row device-row"><span><small>{error}</small></span></div>}

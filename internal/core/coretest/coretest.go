@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -101,6 +102,16 @@ func Server(t testing.TB) *Core {
 			t.Fatal("remuda-core did not start within 15 s")
 		}
 	}
+}
+
+// Use aims the test process's own `remuda-core` commands at the core, as a remuda started with -core reaches its
+// machine's: the core's environment set for the test, its binary first on PATH.
+func (c *Core) Use(t testing.TB) {
+	for _, kv := range c.Env {
+		name, value, _ := strings.Cut(kv, "=")
+		t.Setenv(name, value)
+	}
+	t.Setenv("PATH", filepath.Dir(c.Bin)+string(os.PathListSeparator)+os.Getenv("PATH"))
 }
 
 // Dial reaches the core's socket.

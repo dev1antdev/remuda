@@ -1,28 +1,32 @@
 // The address says where the page is: ?machine=&pane=&mode=&lens=. A reload or a shared link lands there;
-// a tapped notification carries machine and pane the same way, or ?panel= for a panel of the page (a digest
-// opens the standup), read once at load and never written back. A link to a turn adds &session=&turn=, read once
+// a tapped notification carries machine and pane the same way, or ?panel= for a panel of the page, read once at load
+// and never written back. A link to a turn adds &session=&turn=, read once
 // at load into a jump and dropped by the first write, so a reload lands at the bottom as usual.
 
 import { readTurnLink, type TurnLinkTarget } from "@/features/chat/turnLink";
 import type { Lens, Mode, Panel, Selection } from "./store";
 
 const LENSES: Lens[] = ["chat", "terminal", "changes", "git"];
-const MODES: Mode[] = ["herdr", "wall", "tasks", "code", "review"];
-const PANELS: Panel[] = ["search", "alerts", "activity", "schedules", "usage", "standup", "concierge", "pr", "issues", "repos"];
+const MODES: Mode[] = ["herdr", "tasks", "code", "review"];
+const PANELS: Panel[] = ["search", "alerts", "activity", "schedules", "usage", "pr", "issues", "repos"];
 
 // panelOf keeps a value only when it names a panel a link may open
 export function panelOf(value: unknown): Panel {
   return PANELS.includes(value as Panel) ? (value as Panel) : null;
 }
 
+// modeOf keeps a mode the page has; any other — "agents" (the Mac app's word), the Wall's from an old link, a device or
+// an older Mac app that remembered it — is Agents
+export const modeOf = (value: unknown): Mode => (MODES.includes(value as Mode) ? (value as Mode) : "herdr");
+
 export function readURL(): { requested: Selection | null; mode?: Mode; lens?: Lens; turn: TurnLinkTarget | null; panel: Panel } {
   const q = new URLSearchParams(location.search);
   const paneId = q.get("pane");
-  const mode = q.get("mode") as Mode | null;
+  const mode = q.get("mode");
   const lens = q.get("lens") as Lens | null;
   return {
     requested: paneId ? { machineId: q.get("machine") || "local", paneId } : null,
-    mode: mode && MODES.includes(mode) ? mode : undefined,
+    mode: mode ? modeOf(mode) : undefined,
     lens: lens && LENSES.includes(lens) ? lens : undefined,
     turn: readTurnLink(location.search),
     panel: panelOf(q.get("panel")),

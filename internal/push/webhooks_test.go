@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/events"
+	"github.com/dev1antdev/remuda/internal/state"
 )
 
 // receiver records every request a webhook sent, across goroutines.
@@ -210,6 +211,32 @@ func TestViewsMaskSecretsAndReplaceKeepsThem(t *testing.T) {
 	}
 }
 
+func TestAKindNoLongerOfferedIsDroppedOnSave(t *testing.T) {
+	dir := t.TempDir()
+	w := loadWebhooks(dir)
+	if err := w.Replace("", []Webhook{
+		{Kind: "generic", Name: "mixed", URL: "https://example.com/h", Kinds: []string{"question", "digest"}, Enabled: true},
+		{Kind: "generic", Name: "digest only", URL: "https://example.com/d", Kinds: []string{"digest"}, Enabled: true},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for _, again := range []*Webhooks{w, loadWebhooks(dir)} {
+		_, views := again.Views()
+		if len(views) != 2 || len(views[0].Kinds) != 1 || views[0].Kinds[0] != "question" || views[1].Kinds == nil || len(views[1].Kinds) != 0 {
+			t.Fatalf("the webhooks that took the standup's digest: %+v", views)
+		}
+		if b, _ := json.Marshal(views[1]); !strings.Contains(string(b), `"kinds":[]`) {
+			t.Fatalf("a webhook left with no kind reaches the page as %s", b)
+		}
+	}
+	if err := state.SaveJSON(dir, webhooksFile, map[string]any{"hooks": []map[string]any{{"id": "x", "kind": "generic", "url": "https://example.com/n", "kinds": nil}}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, views := loadWebhooks(dir).Views(); len(views) != 1 || views[0].Kinds == nil {
+		t.Fatalf("a stored webhook with no kinds is read as %+v", views)
+	}
+}
+
 func TestReplaceRefusesWhatCannotBeSent(t *testing.T) {
 	w, _, _ := newWebhooks(t)
 	bad := []struct {
@@ -290,7 +317,7 @@ func TestLinkAndMasked(t *testing.T) {
 	}{
 		{"", "", Payload{Pane: "p"}},
 		{"https://r.ts.net", "https://r.ts.net/?machine=gog&pane=w1%3Ap2", Payload{Machine: "gog", Pane: "w1:p2"}},
-		{"https://r.ts.net", "https://r.ts.net/?panel=standup", Payload{Panel: "standup", Kind: "digest"}},
+		{"https://r.ts.net", "https://r.ts.net/?panel=usage", Payload{Panel: "usage", Kind: "budget"}},
 		{"https://r.ts.net", "https://r.ts.net", Payload{Kind: "test"}},
 	}
 	for _, c := range cases {

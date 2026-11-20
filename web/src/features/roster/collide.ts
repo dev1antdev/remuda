@@ -1,5 +1,5 @@
 // The collision radar in words: another checkout of the repository changing the same files against the main branch —
-// the sidebar card's and the wall tile's quiet mark, its tooltip, the Changes lens's notice and the push's order. The
+// the sidebar card's quiet mark, its tooltip, the Changes lens's notice and the push's order. The
 // pure part, tested; CollisionMark.tsx draws the mark.
 
 import { t, tn } from "@/lib/i18n";

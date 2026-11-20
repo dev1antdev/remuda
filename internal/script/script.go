@@ -77,6 +77,12 @@ func Remuda(home, version string) (bin, guard string) {
 	return bin, guard
 }
 
+// CoreBin sets the shell variable to remuda-core's binary where `remuda core install` puts it, "" when it is not there:
+// ~/.local/bin/remuda-core, or remuda-core.exe on Windows, counted only with the ConPTY it ships beside it.
+func CoreBin(variable string) string {
+	return variable + `="$HOME/.local/bin/remuda-core"; [ -x "$` + variable + `" ] || { ` + variable + `="$` + variable + `.exe"; [ -x "$` + variable + `" ] && [ -f "$HOME/.local/bin/conpty/conpty.dll" ] && [ -f "$HOME/.local/bin/conpty/x64/OpenConsole.exe" ] || ` + variable + `=; }`
+}
+
 // RemudaPath is where remuda lives on a machine with this home: ~/.local/bin/remuda, or remuda.exe there on Windows,
 // spelled with forward slashes (C:/Users/me/.local/bin/remuda.exe), which Git Bash and Windows both read.
 func RemudaPath(home string) string {
@@ -115,3 +121,10 @@ func Lines(section string) []string {
 func Fields(line string) []string {
 	return strings.Split(line, US)
 }
+
+// MainFolder prints, run inside a checkout, the repository's main folder: for a linked worktree the parent of the
+// common git dir it shares with its repository, else the checkout's own top folder.
+const MainFolder = `gd=$(cd "$(git rev-parse --git-dir 2>/dev/null)" 2>/dev/null && pwd -P); ` +
+	`common=$(cd "$(git rev-parse --git-common-dir 2>/dev/null)" 2>/dev/null && pwd -P); ` +
+	`if [ -n "$gd" ] && [ "$gd" = "$common" ]; then (cd "./$(git rev-parse --show-cdup 2>/dev/null)" 2>/dev/null && pwd); ` +
+	`elif [ -n "$common" ]; then (cd "$common/.." 2>/dev/null && pwd); fi`

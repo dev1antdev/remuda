@@ -1,5 +1,5 @@
 // Package timelapse records what an agent's screen did while it worked, so forty minutes can be watched in thirty
-// seconds. While herdr reports an agent pane working, its screen is read every few seconds the way the Wall's screen
+// seconds. While herdr reports an agent pane working, its screen is read every few seconds the way the screen
 // view reads it (pane.read with ANSI: no attach, so no slot is taken and nothing is resized), a frame kept only when
 // the screen changed, in memory; when the turn ends — the pane at rest, asking, gone — the recording is written once,
 // gzipped, 0600, under the state dir's timelapse/<machine>/. A turn still going is written again every

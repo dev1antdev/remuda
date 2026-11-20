@@ -1,6 +1,7 @@
 package machines
 
 import (
+	"errors"
 	"regexp"
 	"strings"
 	"time"
@@ -34,14 +35,24 @@ func (mc *Machine) ServerVersions() (installed, running string, err error) {
 
 var herdrSemver = regexp.MustCompile(`\d+\.\d+\.\d+`)
 
+// ErrOnCore refuses herdr's server on a machine this remuda reaches through remuda-core: herdr's agents there are not
+// the ones it sees, and a stop would end them all.
+var ErrOnCore = errors.New("this machine is reached through remuda-core: herdr there is not this remuda's to update, stop or start")
+
 // StopServer stops herdr's server on the machine, and every pane process with it.
 func (mc *Machine) StopServer() (string, error) {
+	if mc.speaksCore {
+		return "", ErrOnCore
+	}
 	bin, sock := mc.herdrPaths()
 	return mc.text(`HERDR_SOCKET_PATH=`+script.Quote(sock)+` `+script.Quote(bin)+` server stop 2>&1`, 30*time.Second)
 }
 
 // StartServer starts herdr's server on the machine now, without the spacing of the automatic starts.
 func (mc *Machine) StartServer() error {
+	if mc.speaksCore {
+		return ErrOnCore
+	}
 	bin, sock := mc.herdrPaths()
 	if mc.local {
 		return herdr.StartServerNow(bin, sock)

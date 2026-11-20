@@ -242,6 +242,28 @@ func TestTheSameRowThroughTwoStreamsIsOneMatch(t *testing.T) {
 	}
 }
 
+func TestRowsThatStoodAreNoNewsWhenAStreamToldThemAgainButOneFromTheGapIs(t *testing.T) {
+	h := &heard{}
+	s := h.service(t)
+	now := time.Now()
+	s.Observe(snapshot(true, now, shell("w1:p1")))
+	summary := "FAIL    github.com/acme/api 0.2s"
+	s.OnMatch(match("w1:p1", WatchTests, failed, false, false, now))
+	s.OnMatch(match("w1:p1", WatchTests, summary, false, false, now.Add(time.Second)))
+	eventually(t, "the run's push", func() bool { p, _, _ := h.counts(); return p == 1 })
+	// past the quiet spell a new stream begins, and remuda-core tells every row standing: the two seen, then one the
+	// pane printed while no stream stood
+	later := now.Add(TestsQuiet + time.Minute)
+	s.OnMatch(match("w1:p1", WatchTests, failed, true, true, later))
+	s.OnMatch(match("w1:p1", WatchTests, summary, true, true, later))
+	time.Sleep(30 * time.Millisecond)
+	if p, _, _ := h.counts(); p != 1 {
+		t.Fatalf("rows told again as a stream opened are no news: %d pushes", p)
+	}
+	s.OnMatch(match("w1:p1", WatchTests, "--- FAIL: TestLogout (0.01s)", true, true, later))
+	eventually(t, "the push for the row from the gap", func() bool { p, _, _ := h.counts(); return p == 2 })
+}
+
 func TestRefusalsAreKeptByMachine(t *testing.T) {
 	s := New(t.TempDir())
 	s.Refused("gog", &herdr.Error{Code: "invalid_regex", Message: "look-around is not supported"})

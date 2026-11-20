@@ -12,11 +12,11 @@ import type { SectionId } from "@/features/settings/sections";
 import type { TimelapseFound } from "@/features/terminal/timelapse/found";
 import type { BudgetStatus } from "@/features/usage/api";
 import { keepNewest, type OnPageAlert } from "@/features/alerts/onpage";
-import { readURL } from "./url";
+import { modeOf, readURL } from "./url";
 import { DEFAULT_OPEN_LENS, OPEN_LENS_KEY, lensToOpen, openLensOf } from "./openLens";
 
 export type Lens = "chat" | "terminal" | "changes" | "git";
-export type Mode = "herdr" | "wall" | "tasks" | "code" | "review";
+export type Mode = "herdr" | "tasks" | "code" | "review";
 export type Selection = { machineId: string; paneId: string };
 
 // Every "make something" dialog, keyed so only one is open at a time.
@@ -62,7 +62,7 @@ export type NoticeMsg = { text: string; error?: boolean; brief?: boolean };
 export type Confirm = { text: string; label: string; run: () => void };
 // a jump names its pane ("" = the transcript viewer): a Chat gets it only when it is that pane's
 export type Jump = { machineId: string; paneId: string; session: string; turn: string; n: number };
-export type Panel = "palette" | "search" | "alerts" | "activity" | "schedules" | "usage" | "standup" | "release" | "arena" | "server" | "concierge" | "pr" | "issues" | "repos" | null; // server: the host's vitals, in server mode; concierge: the agent asked what the others are doing; pr: the pull request panel
+export type Panel = "palette" | "search" | "alerts" | "activity" | "schedules" | "usage" | "release" | "arena" | "server" | "pr" | "issues" | "repos" | null; // server: the host's vitals, in server mode; pr: the pull request panel
 // where the pull request panel looks: a checkout on a machine, the pane it was opened from, and the pull request asked
 // for (a chip's, a link's); null opens it on the pane on screen
 export type PRAt = { machineId: string; dir: string; paneId?: string; url?: string; n: number };
@@ -87,7 +87,6 @@ export type AppState = {
   viewer: Viewer | null; // a transcript on its own: a search hit's session, or one subagent of a conversation
   jump: Jump | null;
   codeOpened: boolean; // the Code mode stays mounted once opened, so the editor never reloads
-  popout: Selection | null; // the pane in the small window above every other app (app/pip.ts owns the window)
   footprint: boolean; // the files rail beside the lenses, a per-device pref
   codeFile: { machineId: string; folder: string; path: string; line?: number; n: number } | null; // a file the Code mode is asked to open, once; folder "" keeps the one picked
   chatSession: string | null; // an older session of its folder the chat lens shows instead of the pane's live one; the export follows it
@@ -97,20 +96,18 @@ export type AppState = {
   undone: number; // the undos made from this page: a lens showing the folder reads it again
   full: boolean; // the lens takes the whole screen: no header, no sidebar, no rail (app/full.tsx)
   find: Find | null; // the find bar over the chat lens or the transcript viewer, null while closed
-  away: string | null; // what the agents did while the page was away, one toast line until it is dismissed or followed
   alerts: OnPageAlert[]; // the alerts shown on the page while it is in front (features/alerts/onpage.ts), newest last
   closedOffer: { machineId: string; ids: string[]; text: string } | null; // a close just made through the page: a toast offers its agents back
   taskAsked: { projectId: number; taskId: number; start: boolean; n: number } | null; // a task the Tasks mode is asked to open, once (one just made from an issue); start = the agent dialog on it too
   split: boolean; // the chat beside the terminal, asked for by a per-device pref; shown only on a wide screen with a mouse (app/split.ts)
   float: { machineId: string } | null; // the floating terminal's drawer, open on that machine's scratch shell; null while hidden
-  listen: boolean; // the standup panel is asked to read the day aloud once its report is in (the palette's Listen to the day)
   prAt: PRAt | null; // where the pull request panel looks, null for the pane on screen
   issuesAt: { machineId: string; dir: string } | null; // the folder the issues panel was opened on (a folder's ⋯), else it follows the pane
   issueClosed: { machineId: string; repo: string; number: number; reason: "completed" | "not_planned" } | null; // an issue just closed from the page: a toast offers Reopen
 };
 
 const fromURL = readURL();
-const mode = fromURL.mode ?? (fromURL.requested ? "herdr" : readPref<Mode>("mode", "herdr"));
+const mode = fromURL.mode ?? (fromURL.requested ? "herdr" : modeOf(readPref<string>("mode", "herdr")));
 // a link to a turn is a jump waiting for that pane's chat, which opens on it
 const linked = fromURL.turn ? { machineId: fromURL.turn.machineId, paneId: fromURL.turn.paneId, session: fromURL.turn.session, turn: fromURL.turn.turn, n: 1 } : null;
 
@@ -128,7 +125,6 @@ export const app = createStore<AppState>({
   viewer: null,
   jump: linked,
   codeOpened: mode === "code",
-  popout: null,
   footprint: readPref("footprint", !isTouch),
   codeFile: null,
   chatSession: null,
@@ -138,13 +134,11 @@ export const app = createStore<AppState>({
   undone: 0,
   full: false,
   find: null,
-  away: null,
   alerts: [],
   closedOffer: null,
   taskAsked: null,
   split: readPref("split", false),
   float: null,
-  listen: false,
   prAt: null,
   issuesAt: null,
   issueClosed: null,
@@ -261,9 +255,6 @@ export const actions = {
   clearJump() {
     app.set({ jump: null });
   },
-  setPopOut(popout: Selection | null) {
-    app.set({ popout });
-  },
   toggleFootprint() {
     const footprint = !app.get().footprint;
     app.set({ footprint });
@@ -302,10 +293,6 @@ export const actions = {
     app.set({ mode: "code", codeOpened: true, codeFile: { machineId, folder, path, line, n: ++codeOpens } });
     writePref("mode", "code");
   },
-  // what happened while the page was away, as one toast line; null takes the toast down
-  setAway(away: string | null) {
-    app.set({ away });
-  },
   // an alert shown in the corner while the page is in front; the same one once, the newest few
   addAlert(alert: OnPageAlert) {
     app.set({ alerts: keepNewest(app.get().alerts, alert) });
@@ -328,13 +315,6 @@ export const actions = {
   },
   taskOpened() {
     app.set({ taskAsked: null });
-  },
-  // listenToDay opens the standup asking it to read the day aloud; the caller primed the voice inside its gesture
-  listenToDay() {
-    app.set({ panel: "standup", listen: true });
-  },
-  listened() {
-    app.set({ listen: false });
   },
   // openIssues opens the GitHub issues panel on a folder's repository, or following the pane on screen
   openIssues(at: AppState["issuesAt"] = null) {

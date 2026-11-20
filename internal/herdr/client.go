@@ -288,6 +288,7 @@ type WorkspaceInfo struct {
 	Focused     bool              `json:"focused"`
 	ActiveTabID string            `json:"active_tab_id"`
 	Worktree    *WorktreeInfo     `json:"worktree"`
+	Folder      string            `json:"-"`                // the folder remuda placed it on, where herdr names none (remuda-core's)
 	Tokens      map[string]string `json:"tokens,omitempty"` // workspace.report_metadata's values, every source's
 }
 
@@ -371,7 +372,7 @@ type Screen struct {
 	Truncated bool
 }
 
-// PaneScreen is the pane's visible screen with its colours kept (pane.read, format ansi): the wall's screen view.
+// PaneScreen is the pane's visible screen with its colours kept (pane.read, format ansi): the screen view.
 func (c *Client) PaneScreen(paneID string) (Screen, error) {
 	var out struct {
 		Read struct {

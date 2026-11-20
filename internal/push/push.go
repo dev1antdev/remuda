@@ -60,9 +60,9 @@ type Payload struct {
 	Title   string   `json:"title"`
 	Body    string   `json:"body"`
 	Tag     string   `json:"tag"`
-	Kind    string   `json:"kind"` // input | done | test | stuck | waiting | loop | schedule | digest | task | budget | limits | review | machine | backup | signin | tests (failed) | trigger
+	Kind    string   `json:"kind"` // input | done | test | stuck | waiting | loop | schedule | task | budget | limits | review | machine | backup | signin | tests (failed) | trigger
 	Actions []Action `json:"actions,omitempty"`
-	Panel   string   `json:"panel,omitempty"`   // a panel of the page a tap opens instead of a pane (standup)
+	Panel   string   `json:"panel,omitempty"`   // a panel of the page a tap opens instead of a pane (usage)
 	Choices []string `json:"choices,omitempty"` // a question's choices in full, the words behind its choice-N actions
 	Dialog  string   `json:"dialog,omitempty"`  // the question's dialog key, sent back with a choice so no later dialog is answered
 	Worked  int64    `json:"worked,omitempty"`  // a finish: the turn's seconds, so a page can apply a device's "long turns" itself
@@ -114,8 +114,6 @@ type Service struct {
 	// Mutes are the workspace folders the person silenced for a while; Folder names a pane's folder for the check.
 	Mutes  *Mutes
 	Folder func(machine, pane string) string
-	// Quiet names a pane whose alerts go nowhere at all: the concierge's, which the person reads in its own place.
-	Quiet func(machine, pane string) bool
 	// Looked says whether a pane's finish was looked at through remuda since it last worked: its push then goes nowhere.
 	Looked func(machine, pane string) bool
 	// OnWithdraw hears that alerts were taken back: the roster, which lists them for the pages, moved.

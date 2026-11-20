@@ -114,7 +114,7 @@ export default function AlertsPanel({ onClose }: { onClose: () => void }) {
       <label className="alerts-opt alerts-open">
         <span>
           <b>{t("A notification opens")}</b>
-          <small>{t("The pane a tapped notification, the Mac app's menu, an Activity row or Alt+N brings up shows this lens; the sidebar, the tabs and the Wall keep their own ways.")}</small>
+          <small>{t("The pane a tapped notification, the Mac app's menu, an Activity row or Alt+N brings up shows this lens; the sidebar and the tabs keep their own ways.")}</small>
         </span>
         <Select
           value={openLens}

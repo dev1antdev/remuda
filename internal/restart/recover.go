@@ -59,9 +59,6 @@ type Memory struct {
 	dir string
 	// Note records what a recovery did, in the activity; nil logs only.
 	Note func(machineID, title, body string)
-	// Skip names a workspace remuda keeps for itself (the concierge's): its panes are never remembered, so neither a
-	// reboot nor a close of theirs is offered back.
-	Skip func(machineID, workspaceID string) bool
 	// Asleep names a pane of a workspace the person put to sleep: its agent left at their word and waking brings it
 	// back, so it is neither stopped by a reboot nor closed.
 	Asleep func(machineID, workspaceID, paneID string) bool
@@ -127,7 +124,7 @@ func (m *Memory) observe(e events.Snapshot) bool {
 		p := &e.Snap.Panes[i]
 		key := prefix + p.PaneID
 		seen[key] = true
-		if (m.Skip != nil && m.Skip(e.Machine, p.WorkspaceID)) || (m.Asleep != nil && m.Asleep(e.Machine, p.WorkspaceID, p.PaneID)) {
+		if m.Asleep != nil && m.Asleep(e.Machine, p.WorkspaceID, p.PaneID) {
 			if _, ok := m.chats[key]; ok {
 				delete(m.chats, key)
 				changed = true

@@ -1,6 +1,5 @@
-// The header: [burger][title — takes the slack][usage pill][lens switch][pop-out][search]. The places live on the rail.
-// Nothing in it moves when state changes: the lens group is anchored right and the pill grows into the title's slack;
-// the pop-out button is there whenever the browser can do it, disabled without a pane.
+// The header: [burger][title — takes the slack][usage pill][lens switch][search]. The places live on the rail.
+// Nothing in it moves when state changes: the lens group is anchored right and the pill grows into the title's slack.
 
 import { basename, plural } from "@/lib/text";
 import { machineLabel } from "@/features/roster/options";
@@ -13,7 +12,6 @@ import { accountWindows, gravest, limitLine, type AccountWindow } from "@/featur
 import { gitLensTip, isCheckout } from "@/features/git/checkout";
 import { FolderIcon, Icon, Tip } from "@/ui";
 import type { Located } from "./current";
-import { popOut, popOutSupported } from "./pip";
 import { lensOn } from "./paneLens";
 import { SharingChip } from "./SharingChip";
 import { actions, app, type Lens } from "./store";
@@ -67,13 +65,6 @@ export default function Header({ current }: { current: Located | null }) {
           {current.pane.usage && current.pane.usage.window > 0 && <UsagePill usage={current.pane.usage} budget={tightest(budgetsFor(budgets, current.machine.id, current.session.dir || current.pane.cwd))} limits={accountWindows(machines, Date.now())} />}
           <LensSwitch lens={lens} current={current} viewOnly={viewOnly} />
         </div>
-      )}
-      {popOutSupported && (
-        <Tip text={t("Pop out this agent: a small window above every other app")}>
-          <button type="button" className="icon-btn bell" aria-label={t("Pop out")} disabled={!current || !!viewer} onClick={() => current && void popOut({ machineId: current.machine.id, paneId: current.pane.id })}>
-            <Icon name="pip" size={18} />
-          </button>
-        </Tip>
       )}
       {!viewOnly && <Tip text={t("Search every conversation on every machine (⌘K / Ctrl+K has it too)")}>
         <button type="button" className="icon-btn bell" aria-label={t("Search")} onClick={() => actions.openSearch()}>

@@ -23,6 +23,16 @@ func (s *Snapshot) Workspace(workspaceID string) *WorkspaceInfo {
 	return nil
 }
 
+// Tab finds a tab by id, or nil.
+func (s *Snapshot) Tab(tabID string) *TabInfo {
+	for i := range s.Tabs {
+		if s.Tabs[i].TabID == tabID {
+			return &s.Tabs[i]
+		}
+	}
+	return nil
+}
+
 // WorkspaceLabel is the label of the workspace with that id, "" for none.
 func (s *Snapshot) WorkspaceLabel(workspaceID string) string {
 	for i := range s.Workspaces {
@@ -33,10 +43,14 @@ func (s *Snapshot) WorkspaceLabel(workspaceID string) string {
 	return ""
 }
 
-// WorkspaceDir is the folder a workspace lives in: its git checkout when herdr knows one, else the cwd of its first pane.
+// WorkspaceDir is the folder a workspace lives in: its git checkout when herdr knows one, else the folder it was placed
+// on, else the cwd of its first pane.
 func (s *Snapshot) WorkspaceDir(ws *WorkspaceInfo) string {
 	if ws.Worktree != nil && ws.Worktree.CheckoutPath != "" {
 		return ws.Worktree.CheckoutPath
+	}
+	if ws.Folder != "" {
+		return ws.Folder
 	}
 	for i := range s.Panes {
 		if s.Panes[i].WorkspaceID == ws.WorkspaceID {

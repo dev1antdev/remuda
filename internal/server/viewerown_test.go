@@ -12,7 +12,6 @@ import (
 	"testing"
 
 	"github.com/dev1antdev/remuda/internal/chat"
-	"github.com/dev1antdev/remuda/internal/concierge"
 	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/feed"
 	"github.com/dev1antdev/remuda/internal/health"
@@ -22,7 +21,6 @@ import (
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/recap"
 	"github.com/dev1antdev/remuda/internal/review"
-	"github.com/dev1antdev/remuda/internal/schedule"
 	"github.com/dev1antdev/remuda/internal/scratch"
 	"github.com/dev1antdev/remuda/internal/sent"
 	"github.com/dev1antdev/remuda/internal/transcript"
@@ -74,13 +72,22 @@ func TestAViewerNeverReachesRemudasOwnWorkspaces(t *testing.T) {
 	if _, err := watcher.Refresh(mc); err != nil {
 		t.Fatal(err)
 	}
-	s := &Server{Machines: fleet, Watch: watcher, Scratch: scratch.Open(state), Concierge: concierge.Open(t.TempDir()),
+	s := &Server{Machines: fleet, Watch: watcher, Scratch: scratch.Open(state),
 		Health: health.New("", fleet, "v-test", false), Jira: jira.New(state), Feed: feed.New(state), Review: review.New(state)}
 	mux := http.NewServeMux()
 	s.screenRoutes(mux)
 	s.questionRoutes(mux)
 	s.feedRoutes(mux)
+	s.terminalRoutes(mux)
 	h := s.viewerOwnGuard(mux)
+
+	// a link watches a live terminal only on remuda-core, and never the floating terminal's
+	if code, body := fileCall(h, "/ws/pane?machine=local&id="+url.QueryEscape(appPane), true); code != http.StatusForbidden {
+		t.Errorf("a viewer's live terminal on herdr: %d %s", code, body)
+	}
+	if code, body := fileCall(h, "/ws/pane?machine=local&id="+url.QueryEscape(ownPane), true); code != http.StatusNotFound {
+		t.Errorf("a viewer's live terminal of the floating terminal: %d %s", code, body)
+	}
 
 	for _, route := range []string{"/api/screen", "/api/scrollback", "/api/question"} {
 		path := route + "?machine=local&pane="
@@ -146,7 +153,7 @@ func TestAViewerNeverReachesRemudasOwnWorkspaces(t *testing.T) {
 		t.Fatal(err)
 	}
 	s.Chat = &chat.Service{Machines: fleet, Watch: watcher}
-	s.Recap = &recap.Service{Machines: fleet, Watch: watcher, Chat: s.Chat}
+	s.Recap = &recap.Service{Chat: s.Chat}
 	reads := http.NewServeMux()
 	s.chatRoutes(reads)
 	s.recapRoutes(reads)
@@ -181,7 +188,7 @@ func TestAViewerNeverReachesRemudasOwnWorkspaces(t *testing.T) {
 	s.noteSent(context.Background(), machines.LocalID, appPane, "hello", false)
 	s.Feed.Add(sent.Entry("Phone", "unmarked-secret, its pane gone", false, machines.LocalID, "w99:p9", ""))
 	s.Feed.Add(feed.Entry{Kind: "asked", Machine: machines.LocalID, Pane: "w96:p1", Title: "unmarked-secret alert, its pane gone"})
-	s.Feed.Add(feed.Entry{Kind: schedule.KindDigest, Title: "digest-secret, quoting an answer"})
+	s.Feed.Add(feed.Entry{Kind: "digest", Title: "digest-secret, quoting an answer"})
 	s.Feed.Add(feed.Entry{Kind: "done", Machine: machines.LocalID, Pane: "w98:p1", Title: "own-secret, its pane gone", Own: new(true)})
 	s.Feed.Add(feed.Entry{Kind: "done", Machine: machines.LocalID, Pane: "w97:p1", Title: "finished, its pane closed since", Own: new(false)})
 	_, body := fileCall(h, "/api/feed", true)
@@ -211,7 +218,7 @@ func TestAViewerNeverReachesRemudasOwnWorkspaces(t *testing.T) {
 }
 
 func TestAViewerGetsNoRecordingOfRemudasOwnWorkspaces(t *testing.T) {
-	for _, label := range []string{scratch.Label, concierge.Label, "renamed by hand"} {
+	for _, label := range []string{scratch.Label, "renamed by hand"} {
 		_, api, meta := recordedIn(t, label, true)
 		for _, path := range []string{"/api/timelapse/recordings?machine=local&pane=w1:p1", "/api/timelapse/search?q=step"} {
 			if rec := ask(api, "GET", path, ""); !strings.Contains(rec.Body.String(), meta.ID) {
@@ -226,7 +233,7 @@ func TestAViewerGetsNoRecordingOfRemudasOwnWorkspaces(t *testing.T) {
 		}
 	}
 	s, _, meta := recordedIn(t, "renamed long ago", false)
-	meta.Own, meta.Dir = nil, filepath.Join(s.Machines.All()[0].StateDir(), "concierge")
+	meta.Own, meta.Dir = nil, filepath.Join(s.Machines.All()[0].StateDir(), "scenes")
 	if !s.ownRecording(meta) {
 		t.Error("an unmarked recording made in a state dir")
 	}

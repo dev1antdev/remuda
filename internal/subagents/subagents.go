@@ -1,5 +1,5 @@
 // Package subagents keeps how many of every Claude Code agent's subagents are at work in its live conversation, and the
-// first of them by name, for the roster — the Wall's zoo and the sidebar's tree: read off the request path, one pane at
+// first of them by name, for the roster — the sidebar's tree: read off the request path, one pane at
 // a time per machine, only the subagents that moved lately (a long session's finished ones are never read), and only
 // while a page keeps reading the roster.
 package subagents
@@ -32,7 +32,7 @@ var (
 // MaxListed is how many of the subagents at work the roster names, the oldest first: the sidebar's tree under an agent.
 const MaxListed = 5
 
-// Count is how many of a conversation's subagents are at work — the zoo's babies — and the first MaxListed of them by
+// Count is how many of a conversation's subagents are at work and the first MaxListed of them by
 // name, with the id of the conversation's file the transcript viewer opens one of them in. The quiet and the finished
 // ones are not counted, since telling them apart would mean reading every subagent a long session ever spawned.
 type Count struct {

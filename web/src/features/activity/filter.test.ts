@@ -10,7 +10,7 @@ describe("familyOf", () => {
     expect(familyOf("input")).toBe("questions");
     expect(familyOf("done")).toBe("finished");
     expect(familyOf("loop")).toBe("watchdog");
-    expect(familyOf("digest")).toBe("schedules");
+    expect(familyOf("digest")).toBe("other");
     expect(familyOf("sent")).toBe("sent");
     expect(familyOf("machine")).toBe("machines");
     expect(familyOf("handover")).toBe("other");

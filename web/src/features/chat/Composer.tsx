@@ -2,9 +2,7 @@
 // quick prompts, dictation, Enter to send (Shift+Enter a new line; on a phone the button sends), ↑ in an empty
 // line to bring back what was sent before; a quote of the answer put after what is typed; Alt+Enter keeps the text as a
 // note in the agent's queue, sent only from the queue's own buttons. It is one box: the attachments' chips, the field
-// across its whole width, then a row of its tools with Stop and Send at its end. The compact one, in a wall tile, is
-// the line and its buttons alone; the bare one, for an agent that reads no file and keeps its own mode (the concierge), takes no
-// attachment and shows no permission mode.
+// across its whole width, then a row of its tools with Stop and Send at its end.
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { sendKeys, submitPrompt } from "@/features/roster/api";
@@ -28,17 +26,13 @@ import { t } from "@/lib/i18n";
 const NO_NOTES: QueuedNote[] = [];
 const noteId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
-export default function Composer({ machineId, paneId, working, dir, agent = "", compact = false, bare = false, quote, fill, placeholder, screen }: {
+export default function Composer({ machineId, paneId, working, dir, agent = "", quote, screen }: {
   machineId: string;
   paneId: string;
   working: boolean;
   dir: string;
   agent?: string;
-  compact?: boolean;
-  bare?: boolean; // no attachments, no permission mode
   quote?: { text: string; n: number }; // a quote of the answer to put in the box; n moves with every new one
-  fill?: { text: string; n: number }; // a text to put in the box in place of what is there, the caret after it; n moves with every new one
-  placeholder?: string;
   screen?: ScreenMode; // the chat's read of the pane's screen, for the permission mode chip of a Claude Code pane
 }) {
   // the insertions read the draft through a ref: a state updater must stay free of side effects
@@ -112,16 +106,6 @@ export default function Composer({ machineId, paneId, working, dir, agent = "", 
     setDraft(next.draft);
     area.current?.focus();
   }, [quoteN]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // a text offered elsewhere (a question the concierge suggests) goes into the box, focused, ready to edit or send
-  const fillN = fill?.n;
-  useEffect(() => {
-    if (!fill?.text) return;
-    caret.current = fill.text.length;
-    moveCaret.current = fill.text.length;
-    setDraft(fill.text);
-    area.current?.focus();
-  }, [fillN]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // the queue: the draft kept as a note for later; a send through the chat's own path takes notes away only once it went
   const queueDraft = () => {
@@ -211,9 +195,9 @@ export default function Composer({ machineId, paneId, working, dir, agent = "", 
           {error}
         </Notice>
       )}
-      {!compact && notes.length > 0 && <QueueList notes={notes} busy={sending} onSend={(list) => void sendNotes(list)} onEdit={editNote} onRemove={(note) => setNotes((list) => removeNote(list, note.id))} />}
+      {notes.length > 0 && <QueueList notes={notes} busy={sending} onSend={(list) => void sendNotes(list)} onEdit={editNote} onRemove={(note) => setNotes((list) => removeNote(list, note.id))} />}
       <div
-        className={`composer${compact ? " compact" : ""}${dragOver ? " drag" : ""}`}
+        className={`composer${dragOver ? " drag" : ""}`}
         onDragOver={(e) => {
           if (e.dataTransfer.types.includes("Files")) {
             e.preventDefault();
@@ -222,7 +206,7 @@ export default function Composer({ machineId, paneId, working, dir, agent = "", 
         }}
         onDragLeave={() => setDragOver(false)}
         onDrop={(e) => {
-          const files = bare ? [] : filesFrom(e.dataTransfer);
+          const files = filesFrom(e.dataTransfer);
           if (files.length === 0) return;
           e.preventDefault();
           setDragOver(false);
@@ -268,8 +252,8 @@ export default function Composer({ machineId, paneId, working, dir, agent = "", 
           <textarea
             ref={area}
             value={draft}
-            placeholder={placeholder ?? (compact ? t("Message…") : isTouch ? t("Message the agent… (Enter = new line)") : t("Message the agent… (Shift+Enter = new line)"))}
-            rows={Math.min(compact ? 3 : 6, Math.max(1, draft.split("\n").length))}
+            placeholder={isTouch ? t("Message the agent… (Enter = new line)") : t("Message the agent… (Shift+Enter = new line)")}
+            rows={Math.min(6, Math.max(1, draft.split("\n").length))}
             onChange={(e) => {
               history.reset();
               setCaretPos(e.target.selectionStart);
@@ -281,7 +265,7 @@ export default function Composer({ machineId, paneId, working, dir, agent = "", 
               setCaretPos(e.currentTarget.selectionStart);
             }}
             onPaste={(e) => {
-              const files = bare ? [] : filesFrom(e.clipboardData);
+              const files = filesFrom(e.clipboardData);
               if (files.length === 0) return;
               e.preventDefault();
               void attach(files);
@@ -306,7 +290,7 @@ export default function Composer({ machineId, paneId, working, dir, agent = "", 
                 }
               }
               // Alt+Enter keeps the text as a note in the queue, in the lens
-              if (!compact && e.key === "Enter" && e.altKey && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.nativeEvent.isComposing) {
+              if (e.key === "Enter" && e.altKey && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.nativeEvent.isComposing) {
                 e.preventDefault();
                 queueDraft();
                 return;
@@ -330,45 +314,39 @@ export default function Composer({ machineId, paneId, working, dir, agent = "", 
             }}
           />
           <div className="composer-tools">
-            {!compact && (
-              <>
-                {agent === "claude" && !bare && screen && <ModeChip machineId={machineId} paneId={paneId} screen={screen} />}
-                {!bare && (
-                  <Tip text={t("Attach files (up to {n}): they are uploaded into the pane's folder", { n: MAX_ATTACHMENTS })}>
-                    <button type="button" className="icon-btn lg composer-attach" aria-label={t("Attach files")} disabled={att.items.length >= MAX_ATTACHMENTS} onClick={() => picker.current?.click()}>
-                      <Icon name="paperclip" size={16} />
-                    </button>
-                  </Tip>
-                )}
-                <QuickPromptsButton
-                  dir={dir}
-                  onPick={(text) =>
-                    void expandPrompt(text, machineId, dir).then((filled) => {
-                      insertAt(filled);
-                      area.current?.focus();
-                    })
-                  }
-                  onManage={() => setManage(true)}
-                />
-                <Tip text={t("Queue it as a note for the agent (Alt+↵): sent only when you press Send on it")}>
-                  <button type="button" className="icon-btn lg composer-attach composer-queue" aria-label={t("Add to the queue")} disabled={!draft.trim() || att.uploading} onClick={queueDraft}>
-                    <Icon name="inbox" size={16} />
-                  </button>
-                </Tip>
-                {dictation.supported && (
-                  <Tip text={dictation.listening ? t("Stop dictating") : t("Dictate through this device's own speech recognition")}>
-                    <button
-                      type="button"
-                      className={`icon-btn lg composer-attach composer-mic${dictation.listening ? " listening" : ""}`}
-                      aria-label={dictation.listening ? t("Stop dictating") : t("Dictate")}
-                      aria-pressed={dictation.listening}
-                      onClick={dictation.toggle}
-                    >
-                      <Icon name="mic" size={16} />
-                    </button>
-                  </Tip>
-                )}
-              </>
+            {agent === "claude" && screen && <ModeChip machineId={machineId} paneId={paneId} screen={screen} />}
+            <Tip text={t("Attach files (up to {n}): they are uploaded into the pane's folder", { n: MAX_ATTACHMENTS })}>
+              <button type="button" className="icon-btn lg composer-attach" aria-label={t("Attach files")} disabled={att.items.length >= MAX_ATTACHMENTS} onClick={() => picker.current?.click()}>
+                <Icon name="paperclip" size={16} />
+              </button>
+            </Tip>
+            <QuickPromptsButton
+              dir={dir}
+              onPick={(text) =>
+                void expandPrompt(text, machineId, dir).then((filled) => {
+                  insertAt(filled);
+                  area.current?.focus();
+                })
+              }
+              onManage={() => setManage(true)}
+            />
+            <Tip text={t("Queue it as a note for the agent (Alt+↵): sent only when you press Send on it")}>
+              <button type="button" className="icon-btn lg composer-attach composer-queue" aria-label={t("Add to the queue")} disabled={!draft.trim() || att.uploading} onClick={queueDraft}>
+                <Icon name="inbox" size={16} />
+              </button>
+            </Tip>
+            {dictation.supported && (
+              <Tip text={dictation.listening ? t("Stop dictating") : t("Dictate through this device's own speech recognition")}>
+                <button
+                  type="button"
+                  className={`icon-btn lg composer-attach composer-mic${dictation.listening ? " listening" : ""}`}
+                  aria-label={dictation.listening ? t("Stop dictating") : t("Dictate")}
+                  aria-pressed={dictation.listening}
+                  onClick={dictation.toggle}
+                >
+                  <Icon name="mic" size={16} />
+                </button>
+              </Tip>
             )}
             <span className="composer-gap" />
             {working && (

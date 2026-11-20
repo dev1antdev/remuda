@@ -5,8 +5,8 @@ export const viewonly: Dictionary = {
   "Viewing only": "Только просмотр",
   "viewer": "просмотр",
   "Viewer links": "Ссылки для просмотра",
-  "A link that signs a screen in to look only: the Wall, the chats, the screens and the reports, never a key or a word into an agent. For the TV in the office, or a colleague watching a run.":
-    "Ссылка, по которой экран входит только смотреть: Стена, чаты, экраны и отчёты, и ни одной клавиши или слова агенту. Для телевизора в офисе или коллеги, который следит за прогоном.",
+  "A link that signs a screen in to look only: the chats, the screens and the usage, never a key or a word into an agent. For the TV in the office, or a colleague watching a run.":
+    "Ссылка, по которой экран входит только смотреть: чаты, экраны и расходы, и ни одной клавиши или слова агенту. Для телевизора в офисе или коллеги, который следит за прогоном.",
   "Shown this once: open it on the screen that should view, then keep it to yourself.": "Показана один раз: откройте её на экране, который должен смотреть, и больше никому.",
   "Copy": "Копировать",
   "Hide": "Скрыть",

@@ -22,7 +22,6 @@ import (
 	"github.com/dev1antdev/remuda/internal/chat"
 	"github.com/dev1antdev/remuda/internal/code"
 	"github.com/dev1antdev/remuda/internal/complete"
-	"github.com/dev1antdev/remuda/internal/concierge"
 	"github.com/dev1antdev/remuda/internal/drift"
 	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/feed"
@@ -94,16 +93,22 @@ type Options struct {
 	Server        bool   // serve the page only: the host is no machine of the fleet, its herdr neither needed nor kept
 	MirrorClosed  string // why this remuda writes nothing into herdr (a scratch instance beside the real one); "" writes
 	Record        bool   // record the agents' timelapses (off for a scratch instance: the real one records)
+	Core          bool   // reach every machine through remuda-core instead of herdr (-core), while the move off herdr is built
 }
 
 // Run builds remuda and serves until ctx ends.
 func Run(ctx context.Context, o Options) error {
 	bin, err := herdr.FindBinary(o.HerdrBin)
-	if err != nil && !o.Server {
+	if err != nil && !o.Server && !o.Core {
 		return fmt.Errorf("herdr: %w", err)
+	}
+	if o.Core && o.MirrorClosed == "" {
+		o.MirrorClosed = "this remuda speaks remuda-core (-core), which has no herdr sidebar to write into"
 	}
 	if o.Server {
 		log.Print("serving the page only (-server): this machine is none of the cockpit's; its herdr is neither asked nor kept")
+	} else if o.Core {
+		log.Print("speaking remuda-core on every machine (-core): herdr is neither asked nor kept, its list of machines aside")
 	} else if err := herdr.EnsureServer(bin, o.Socket); err != nil {
 		log.Printf("WARNING: herdr is not answering at %s (%v); remuda will keep trying", o.Socket, err)
 	} else if version, protocol, err := herdr.NewClient(o.Socket).Ping(); err == nil {
@@ -138,7 +143,12 @@ func Run(ctx context.Context, o Options) error {
 	} else {
 		log.Print("the agents' door stays closed: no agent-key / agent-url files are placed here or on a remote machine (-door opens it)")
 	}
-	fleet := machines.NewManager(o.Dir, o.Socket, bin, door)
+	var fleet *machines.Manager
+	if o.Core {
+		fleet = machines.NewCoreManager(o.Dir, bin, door, o.Server)
+	} else {
+		fleet = machines.NewManager(o.Dir, o.Socket, bin, door)
+	}
 	fleet.SetServer(o.Server)
 	defer fleet.Close()
 	if local, err := fleet.Get(machines.LocalID); err == nil && o.Door && !o.Server {
@@ -162,10 +172,9 @@ func Run(ctx context.Context, o Options) error {
 	defer taskStore.Close()
 
 	watcher := watch.New(fleet, bus)
-	conciergeAgent := concierge.Open(o.Dir)
 	shells := scratch.Open(o.Dir) // the floating terminal's shell on each machine
 	ownWorkspace := func(machineID, workspaceID string) bool {
-		return shells.Is(machineID, workspaceID) || shells.Ended(machineID, workspaceID) || conciergeAgent.Is(machineID, workspaceID)
+		return shells.Is(machineID, workspaceID) || shells.Ended(machineID, workspaceID)
 	}
 	ownMark := func(machineID, paneID string) *bool { // nil for a pane the last snapshot does not know
 		snap, _ := watcher.Snapshot(machineID)
@@ -267,7 +276,7 @@ func Run(ctx context.Context, o Options) error {
 		return mc, nil
 	})
 	events.Subscribe(bus, func(e events.MachineRemoved) { githubIssues.Forget(e.Machine) })
-	// how many subagents each Claude Code pane's live conversation runs, read while a page reads the roster, for the Wall's zoo
+	// how many subagents each Claude Code pane's live conversation runs, read while a page reads the roster, for the sidebar's tree
 	subagentCounts := subagents.New(chats.RecentSubagents, func(machineID string) bool {
 		mc, err := fleet.Get(machineID)
 		if err != nil {
@@ -392,18 +401,6 @@ func Run(ctx context.Context, o Options) error {
 	restarter.Memory.Note = func(machineID, title, body string) {
 		activity.Add(feed.Entry{Kind: "recover", Machine: machineID, Title: title, Body: body})
 		hub.RosterChanged()
-	}
-	// the concierge: remuda's own Claude Code agent the person asks what the others are doing; the panes of its
-	// workspace are no chat to bring back, no work to report and no alert to send
-	restarter.Memory.Skip = conciergeAgent.Is
-	restarter.Skip = conciergeAgent.Is // its own arguments would be lost on a resume: it starts again from its own place
-	pushSvc.Quiet = func(machineID, paneID string) bool {
-		snap, _ := watcher.Snapshot(machineID)
-		if snap == nil {
-			return false
-		}
-		pane := snap.Pane(paneID)
-		return pane != nil && conciergeAgent.Is(machineID, pane.WorkspaceID)
 	}
 	// what the restarts type by themselves is a quiet activity row too, like anything a device sends
 	restarter.Typed = func(machineID, paneID, text string) {
@@ -535,10 +532,8 @@ func Run(ctx context.Context, o Options) error {
 	if o.MirrorClosed != "" {
 		log.Printf("remuda's figures and alerts stay out of herdr: %s", o.MirrorClosed)
 	}
-	recaps := &recap.Service{Machines: fleet, Watch: watcher, Chat: chats, Radar: tracker, Skip: ownWorkspace}
-	schedules := schedule.New(o.Dir, input.SubmitToFolder, pushSvc.Broadcast, func(since time.Time) (string, string, bool) {
-		return recap.Digest(recaps.Standup(since), since, time.Now())
-	})
+	recaps := &recap.Service{Chat: chats}
+	schedules := schedule.New(o.Dir, input.SubmitToFolder, pushSvc.Broadcast)
 	cookbook := recipes.New(o.Dir)
 	retiring := retirements(cookbook, schedules, taskStore, fleet, watcher, meter, vitals)
 	scouts := &sessions.Launcher{Machines: fleet, Watch: watcher, Input: input, Notify: pushSvc.Broadcast}
@@ -631,14 +626,12 @@ func Run(ctx context.Context, o Options) error {
 		}
 		hub.RosterChanged()
 	})
-	if !o.Server {
+	if !o.Server && !o.Core {
 		events.Subscribe(bus, func(e events.LocalHerdrDown) { keeper.Revive(e.Err) })
 	}
 	events.Subscribe(bus, func(e events.Snapshot) { keepAwake.Observe(e.Machine, awake.Working(e.Snap)) })
 	events.Subscribe(bus, func(e events.MachineRemoved) { keepAwake.Forget(e.Machine) })
 	events.Subscribe(bus, func(e events.MachineRemoved) { shells.Forget(e.Machine) })
-	events.Subscribe(bus, func(e events.Snapshot) { conciergeAgent.Observe(e.Machine, e.Snap) })
-	events.Subscribe(bus, func(e events.MachineRemoved) { conciergeAgent.Forget(e.Machine) })
 	sceneSet := sceneRunner(o.Dir, cookbook, fleet, watcher, input, tracker, meter, shells, pushSvc.Notify, activity)
 	schedules.Scenes = sceneSchedules(sceneSet)
 
@@ -766,7 +759,7 @@ func Run(ctx context.Context, o Options) error {
 	go turns.Tracker.Loop(ctx.Done())
 
 	updater := &updates.Service{Health: vitals, Jobs: runner, Restart: restarter, Watch: watcher, Machines: fleet}
-	sleeps := sleeper(o.Dir, bus, fleet, watcher, runner, input, restarter, updater, activity, conciergeAgent.Is, hub.RosterChanged)
+	sleeps := sleeper(o.Dir, bus, fleet, watcher, runner, input, restarter, updater, activity, hub.RosterChanged)
 	fleetSetup := &drift.Service{Fleet: fleet, Health: vitals, Updates: updater, Dirs: func(machineID string) []string {
 		if snap, _ := watcher.Snapshot(machineID); snap != nil {
 			return snap.WorkspaceDirs()
@@ -777,6 +770,10 @@ func Run(ctx context.Context, o Options) error {
 	projectSettings := repos.Open(o.Dir) // each repository's worktree defaults, setup script and run actions
 	events.Subscribe(bus, func(e events.MachineRemoved) { projectSettings.Forget(e.Machine) })
 	repoSync := repositories(o.Dir, fleet, watcher, reviews, turns.Tracker, ownWorkspace)
+	gitOps, stage := gitWrites(watcher, turns.Tracker), stageWrites(fleet, watcher, turns)
+	if o.Core {
+		holdCheckoutWrites(gitOps, stage, repoSync, turns)
+	}
 	events.Subscribe(bus, func(e events.MachineRemoved) { repoSync.Forget(e.Machine, true) })
 	arenas := &arena.Service{Store: arena.Open(o.Dir), Machines: fleet, Watch: watcher, Input: input, Tasks: taskStore, Notify: pushSvc.Notify, Dir: o.Dir,
 		ModelOf: func(machineID, paneID string) string {
@@ -819,7 +816,6 @@ func Run(ctx context.Context, o Options) error {
 		Arena:     arenas,
 		Limits:    planLimits,
 		Scratch:   shells,
-		Concierge: conciergeAgent,
 		Jira:      issues,
 		Backup:    backups,
 		SelfPort:  auth.PortOf(o.Addr),
@@ -833,8 +829,8 @@ func Run(ctx context.Context, o Options) error {
 
 		Collisions: radarOfCollisions,
 		Undo:       turns,
-		GitOps:     gitWrites(watcher, turns.Tracker),
-		Stage:      stageWrites(fleet, watcher, turns),
+		GitOps:     gitOps,
+		Stage:      stage,
 		Scenes:     sceneSet,
 		Repos:      projectSettings,
 		Sleep:      sleeps,

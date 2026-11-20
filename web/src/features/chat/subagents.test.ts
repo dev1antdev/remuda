@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Subagent, Turn } from "./api";
-import { sameSubagents, subagentLine, subagentWords, subagentsOf } from "./subagents";
+import { sameSubagents, subagentLine, subagentsOf } from "./subagents";
 
 const working: Subagent = { id: "agent-a1", tool_id: "toolu_1", description: "PR: quiet hours", kind: "fork", status: "working", tools: 4, doing: { type: "tool", tool_name: "Bash", input: { command: "go test ./..." } } };
 const done: Subagent = { id: "agent-a2", tool_id: "toolu_2", description: "Find the parser", kind: "Explore", status: "done", tools: 9, failed: 1, report: "## Found\n\nThe parser lives in `claude.go`.\n\nMore below.", took: 42 };
@@ -38,21 +38,5 @@ describe("subagentLine", () => {
     expect(subagentLine(done)).toBe("Found");
     expect(subagentLine(quiet)).toBe("Starting on it.");
     expect(subagentLine({ ...working, doing: undefined, report: undefined })).toBe("");
-  });
-});
-
-describe("subagentWords", () => {
-  it("says what the lead waits on", () => {
-    expect(subagentWords([working, done], true)).toBe("waiting on 1 subagent");
-    expect(subagentWords([working, { ...working, id: "b" }], true)).toBe("waiting on 2 subagents");
-    expect(subagentWords([], true)).toBe("waiting on a subagent");
-    expect(subagentWords(undefined, true)).toBe("waiting on a subagent");
-  });
-  it("counts the ones still at work otherwise, nothing when none is", () => {
-    expect(subagentWords([working, done, quiet], false)).toBe("1 subagent working");
-    expect(subagentWords([working], false)).toBe("1 subagent working");
-    expect(subagentWords([working, { ...working, id: "b" }], false)).toBe("2 subagents working");
-    expect(subagentWords([done, quiet], false)).toBe("");
-    expect(subagentWords(undefined, false)).toBe("");
   });
 });

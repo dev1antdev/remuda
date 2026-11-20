@@ -1,4 +1,4 @@
-// The terminal's reads: a pane's screen as text with its colours for the wall's screen view, the find over its
+// The terminal's reads: a pane's screen as text with its colours for the screen views, the find over its
 // scrollback, and the one move, a scroll of the pane to a match.
 
 import { check, getJSON, sendJSON } from "@/lib/http";

@@ -3,7 +3,7 @@ import { isShared, merge, plan } from "./syncKeys";
 
 describe("isShared", () => {
   it("names the keys that travel", () => {
-    for (const key of ["theme", "theme.dark", "theme.light", "theme.accent", "radar", "wall", "review.split", "chat.timeline", "ribbon", "footprint", "tasks.view", "standup.period", "usage.heat", "code.follow", "sidebar.pins"]) expect(isShared(key), key).toBe(true);
+    for (const key of ["theme", "theme.dark", "theme.light", "theme.accent", "radar", "review.split", "chat.timeline", "ribbon", "footprint", "tasks.view", "usage.heat", "code.follow", "sidebar.pins"]) expect(isShared(key), key).toBe(true);
   });
   it("takes every panel width by its prefix, not the bare prefix", () => {
     expect(isShared("panel.sidebar")).toBe(true);
@@ -18,7 +18,7 @@ describe("isShared", () => {
     expect(isShared("pins")).toBe(false);
   });
   it("keeps the device's own keys at home", () => {
-    for (const key of ["alerts", "alerts.voice", "alerts.quiet", "prompt.history:local|/x", "feed.seen", "release.seen", "wall.hidden", "collapsed", "wsFolded", "termFont", "text.size", "send.targets", "mode", "prefs.sync", "__stamps", "theme.other"]) expect(isShared(key), key).toBe(false);
+    for (const key of ["alerts", "alerts.voice", "alerts.quiet", "prompt.history:local|/x", "feed.seen", "release.seen", "wall", "wall.hidden", "standup.period", "collapsed", "wsFolded", "termFont", "text.size", "send.targets", "mode", "prefs.sync", "__stamps", "theme.other"]) expect(isShared(key), key).toBe(false);
     for (const key of ["density", "font.mono", "lang"]) expect(isShared(key), key).toBe(true);
   });
 });
@@ -47,7 +47,7 @@ describe("plan", () => {
     expect(out.push).toEqual({ theme: { value: "light", at: now }, "panel.sidebar": { value: 300, at: "2026-10-25T09:00:00.000Z" } });
   });
   it("applies what only the server has", () => {
-    const remote = { wall: { value: { size: "l" }, at: "2026-10-25T09:00:00.000Z" } };
+    const remote = { radar: { value: { order: "recent" }, at: "2026-10-25T09:00:00.000Z" } };
     expect(plan({}, remote, now)).toEqual({ apply: remote, push: {} });
   });
   it("lets the newer side win and leaves a settled key alone", () => {

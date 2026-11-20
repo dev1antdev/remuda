@@ -24,7 +24,6 @@ export const terminal: Dictionary = {
   Left: "Влево",
   "Minimum width": "Минимальная ширина",
   Newline: "Новая строка",
-  "Open the terminal in Agents": "Открыть терминал в Агентах",
   "Resize the pane to this screen": "Подогнать панель под этот экран",
   Right: "Вправо",
   "Search history": "История поиска",

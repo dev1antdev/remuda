@@ -44,7 +44,6 @@ export const hookKindOptions = (): { value: string; label: string; hint: string 
   { value: "question", label: t("a question"), hint: t("an agent waits for an answer, 10 s after — answered at the desk, it's never sent") },
   { value: "finish", label: t("a finish"), hint: t("every turn an agent ends, 10 s after") },
   { value: "watchdog", label: t("a watchdog note"), hint: t("stuck, waiting too long, or looping on one call") },
-  { value: "digest", label: t("the digest"), hint: t("a digest schedule's standup") },
   { value: "schedule", label: t("a schedule"), hint: t("a scheduled prompt that could not be delivered, a scout's answer") },
   { value: "task", label: t("a task"), hint: t("an agent's run on a task finished or opened a pull request") },
   { value: "budget", label: t("a budget"), hint: t("a limit at 80 % or crossed") },
@@ -58,7 +57,7 @@ export const hookKindOptions = (): { value: string; label: string; hint: string 
 ];
 
 // DEFAULT_KINDS is what a new webhook hears: everything but the finishes, which come after every turn.
-export const DEFAULT_KINDS = ["question", "watchdog", "digest", "schedule", "task", "budget", "limits", "review", "machine", "backup", "signin", "tests", "trigger"];
+export const DEFAULT_KINDS = ["question", "watchdog", "schedule", "task", "budget", "limits", "review", "machine", "backup", "signin", "tests", "trigger"];
 
 const kindLabel = (kind: string) => hookKindOptions().find((o) => o.value === kind)?.label ?? kind;
 

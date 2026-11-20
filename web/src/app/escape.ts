@@ -1,6 +1,6 @@
 // Whose Escape a press is. A menu takes the Esc that closes it first (Radix marks it with preventDefault), a dialog, the
 // confirm, the file viewer or a panel take theirs, a field and the terminal keep their own; only what is left is the
-// page's, to leave full screen or give a focused tile back to the grid. The pure part of app/full.tsx and the Wall.
+// page's, to leave full screen. The pure part of app/full.tsx.
 
 export type EscapePress = { key: string; defaultPrevented: boolean; target: { closest?: (selector: string) => unknown } | null };
 

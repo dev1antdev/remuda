@@ -94,10 +94,6 @@ func Specs() []Spec {
 				"pane":    prop("string", "the pane as agents_list lists it, like w3:p1"),
 				"since":   prop("string", "the period: midnight, 24h, 7d, a date YYYY-MM-DD or an RFC 3339 moment; omit for the whole conversation"),
 			})},
-		{Name: "standup", Description: "The standup over every agent: what each did and answered in the period, as the person's Standup panel shows it.",
-			InputSchema: schema(nil, map[string]any{
-				"since": prop("string", "the period: midnight (the default), 24h, 7d, a date YYYY-MM-DD or an RFC 3339 moment"),
-			})},
 	}
 }
 
@@ -171,12 +167,6 @@ func (t *Tools) Call(name string, args json.RawMessage) (string, error) {
 			return "", fmt.Errorf("bad arguments: %w", err)
 		}
 		return t.AgentRecap(a)
-	case "standup":
-		var a StandupArgs
-		if err := json.Unmarshal(args, &a); err != nil {
-			return "", fmt.Errorf("bad arguments: %w", err)
-		}
-		return t.Standup(a)
 	}
 	return t.Labels()
 }

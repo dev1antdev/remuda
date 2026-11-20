@@ -1,6 +1,6 @@
-// The rail: the page's places down the left edge — the five modes, then the panels that are no place of their own and
+// The rail: the page's places down the left edge — the four modes, then the panels that are no place of their own and
 // Settings — each an icon with its name under it, so nothing needs guessing. Under 920 px it lies along the bottom, the
-// four modes a thumb reaches and the rest behind More.
+// three modes a thumb reaches and the rest behind More.
 
 import { unread } from "@/features/activity/group";
 import { DEFAULT_FILTER, filterWords, type Filter } from "@/features/activity/filter";
@@ -20,14 +20,11 @@ import { t, tc } from "@/lib/i18n";
 type Place = { label: string; short?: string; icon: IconName; about: string };
 const MODES: (Place & { mode: Mode; desk?: boolean })[] = [
   { mode: "herdr", label: t("Agents"), icon: "terminal", about: t("Your agents and terminals, from herdr") },
-  { mode: "wall", label: t("Wall"), icon: "layers", about: t("Every agent on one screen, a tile each") },
   { mode: "tasks", label: t("Tasks"), icon: "list", about: t("Your tasks, kept on this remuda") },
   { mode: "code", label: t("Code"), icon: "code", about: t("VS Code on a machine, through remuda"), desk: true },
   { mode: "review", label: t("Review"), icon: "circle-check", about: t("Every workspace with changes to review, in one list") },
 ];
 const PANELS: (Place & { panel: Panel })[] = [
-  { panel: "concierge", label: t("Concierge"), icon: "concierge", about: t("Ask what your agents are doing, in plain words; it can file a task for you") },
-  { panel: "standup", label: t("Standup"), icon: "sun", about: t("What every agent did today, in one report") },
   { panel: "usage", label: t("Usage"), icon: "chart", about: t("What the agents cost, by day, project and session") },
   { panel: "schedules", label: t("Schedules"), short: tc("rail", "Schedules"), icon: "calendar", about: t("Prompts sent to agents on a timetable") },
   { panel: "repos", label: t("Repositories"), short: t("Repos"), icon: "folder-git", about: t("Every repository on every machine at a glance: what is not pushed or not pulled; fetch, pull and push") },

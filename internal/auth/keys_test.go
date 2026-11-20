@@ -96,7 +96,7 @@ func TestKeyAllowsTasksAndReadsOnly(t *testing.T) {
 			t.Errorf("%s refused", path)
 		}
 	}
-	for _, path := range []string{"/api/roster", "/api/recap", "/api/standup"} {
+	for _, path := range []string{"/api/roster", "/api/recap"} {
 		if !key.Allows("GET", path) {
 			t.Errorf("a read of %s refused", path)
 		}
@@ -170,7 +170,7 @@ func TestGuardLetsAKeyReachTasksOnly(t *testing.T) {
 	if code, body := withKey(h, "/api/roster", key); code != 200 || body != "caller=GOG device=" {
 		t.Fatalf("a read of the roster with the key: %d %q", code, body)
 	}
-	if code, body := withKeyMethod(h, "POST", "/api/standup", key); code != 403 || body != "this key is for tasks and reading only" {
+	if code, body := withKeyMethod(h, "POST", "/api/recap", key); code != 403 || body != "this key is for tasks and reading only" {
 		t.Fatalf("a write to a read route with the key: %d %q", code, body)
 	}
 	if code, body := withKeyMethod(h, "POST", "/api/submit", key); code != 403 || body != "this key is for tasks and reading only" {

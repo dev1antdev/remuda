@@ -14,8 +14,7 @@ import (
 )
 
 // repositories is the Repositories place over the fleet: the main folder of every machine's workspace as the sidebar
-// groups it (server.FolderOf: herdr's repo_root, else the review sweep's root), never the floating terminal's or the
-// concierge's; a pull held back while the watcher sees an agent at work or asking in the checkout or the undo's tracker
+// groups it (server.FolderOf: herdr's repo_root, else the review sweep's root), never the floating terminal's; a pull held back while the watcher sees an agent at work or asking in the checkout or the undo's tracker
 // a turn still ending there; and the secret check before a push.
 func repositories(dir string, fleet *machines.Manager, watcher *watch.Watcher, reviews *review.Store, turns *undo.Tracker, own func(machineID, workspaceID string) bool) *gitsync.Service {
 	return &gitsync.Service{

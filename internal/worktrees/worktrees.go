@@ -16,6 +16,7 @@ import (
 
 	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/shell"
+	"github.com/dev1antdev/remuda/internal/text"
 )
 
 // Timeout is how long one git call may take.
@@ -42,7 +43,7 @@ func InspectScript(path string) string {
 func ParseInspect(path, out string) (Info, error) {
 	lines := strings.SplitN(strings.TrimRight(out, "\n"), "\n", 3)
 	if len(lines) < 2 || lines[1] == "" {
-		return Info{}, errors.New(lastLine(out, "git answered nothing"))
+		return Info{}, errors.New(text.LastLine(out, "git answered nothing"))
 	}
 	info := Info{Path: path, Branch: lines[0], Repo: lines[1]}
 	if info.Branch == "HEAD" {
@@ -58,7 +59,7 @@ func ParseInspect(path, out string) (Info, error) {
 func Inspect(host shell.Shell, path string) (Info, error) {
 	out, err := shell.Text(host, InspectScript(path), Timeout)
 	if err != nil && strings.TrimSpace(out) != "" {
-		return Info{}, errors.New(lastLine(out, err.Error()))
+		return Info{}, errors.New(text.LastLine(out, err.Error()))
 	}
 	if err != nil {
 		return Info{}, err
@@ -147,23 +148,7 @@ func Discard(host shell.Shell, info Info) error {
 	}
 	var exit *shell.ExitError
 	if errors.As(err, &exit) && exit.Code == 5 {
-		return errors.New("the worktree is removed; the branch stays: " + lastLine(out, err.Error()))
+		return errors.New("the worktree is removed; the branch stays: " + text.LastLine(out, err.Error()))
 	}
-	return errors.New(lastLine(out, err.Error()))
-}
-
-// lastLine is git's complaint: the last line it printed that is no hint, else the fallback.
-func lastLine(text, fallback string) string {
-	lines := script.Lines(strings.TrimSpace(text))
-	if len(lines) == 0 {
-		return fallback
-	}
-	last := lines[len(lines)-1]
-	for i := len(lines) - 1; i >= 0; i-- {
-		if !strings.HasPrefix(strings.TrimSpace(lines[i]), "hint:") { // git's advice after the refusal it explains
-			last = lines[i]
-			break
-		}
-	}
-	return strings.TrimSpace(last)
+	return errors.New(text.LastLine(out, err.Error()))
 }

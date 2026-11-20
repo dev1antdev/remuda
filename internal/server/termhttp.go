@@ -25,11 +25,10 @@ const (
 
 type termStream struct {
 	id       string
-	termID   string
-	attach   herdr.Terminals
-	ch       chan []byte
-	cancel   func()
-	readMu   sync.Mutex // one long-poll at a time; never held by anyone else
+	viewer   herdr.Viewer
+	readMu   sync.Mutex // one long-poll at a time; never held by anyone else; guards grid and next
+	grid     herdr.Out  // the grid the bytes are drawn at now, once remuda-core told one
+	next     *herdr.Out // a grid that came after bytes a read already held: the next read opens with it
 	lastRead atomic.Int64
 	mu       sync.Mutex
 	closed   bool
@@ -41,7 +40,7 @@ func (s *termStream) end() {
 	defer s.mu.Unlock()
 	if !s.closed {
 		s.closed = true
-		s.cancel()
+		s.viewer.Close()
 	}
 }
 
@@ -125,7 +124,7 @@ func (s *Server) handleTermOpen(w http.ResponseWriter, r *http.Request) {
 		open(pc)
 		return
 	}
-	ch, cancel, err := attach.Subscribe(pane.TerminalID, cols, rows)
+	viewer, err := attach.Open(pane.TerminalID, herdr.View{Cols: cols, Rows: rows, Keep: r.URL.Query().Get("keep") == "1"})
 	if err != nil {
 		if pc := s.peerAfterRefusal(mc, err); pc != nil {
 			open(pc)
@@ -134,14 +133,16 @@ func (s *Server) handleTermOpen(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 409, fmt.Errorf("%s", attachRefused(mc, err)))
 		return
 	}
-	st := &termStream{id: newStreamID(), termID: pane.TerminalID, attach: attach, ch: ch, cancel: cancel}
+	st := &termStream{id: newStreamID(), viewer: viewer}
 	st.lastRead.Store(time.Now().UnixNano())
 	s.streams.add(st)
 	writeJSON(w, map[string]any{"sid": st.id})
 }
 
 // handleTermRead is GET /api/term/read?sid&wait=<seconds> → raw bytes: the first chunk, then what else is queued.
-// X-Remuda-End: 1 says the attach is gone; 410 says the stream is unknown and the client reopens.
+// X-Remuda-End: 1 says the attach is gone; X-Remuda-Grid: <cols>x<rows> is the grid these bytes are drawn at
+// (remuda-core's, for a viewer that keeps the size), on every read once known, so a read lost on the way loses no
+// grid; a grid that changes after some bytes ends the read; 410 says the stream is unknown and the client reopens.
 func (s *Server) handleTermRead(w http.ResponseWriter, r *http.Request) {
 	if s.peerStream(w, r, "/api/term/read") {
 		return
@@ -163,30 +164,40 @@ func (s *Server) handleTermRead(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 
 	var out []byte
-	ended := false
-	select {
-	case data, ok := <-st.ch:
-		if !ok {
+	ended, full := false, false
+	if st.next != nil {
+		st.grid, st.next = *st.next, nil
+	}
+	take := func(next herdr.Out, ok bool) {
+		switch {
+		case !ok:
 			ended = true
-		} else {
-			out = append(out, data...)
+		case next.Grid() && len(out) > 0: // the bytes held are drawn at the grid before it: it opens the next read
+			st.next, full = &next, true
+		case next.Grid():
+			st.grid = next
+		default:
+			out = append(out, next.Data...)
 		}
+	}
+	select {
+	case next, ok := <-st.viewer.Out():
+		take(next, ok)
 	case <-time.After(time.Duration(wait) * time.Second):
 	case <-r.Context().Done():
 		return
 	}
-	for !ended && len(out) < streamMaxChunk {
+	for !ended && !full && len(out) < streamMaxChunk {
 		select {
-		case data, ok := <-st.ch:
-			if !ok {
-				ended = true
-			} else {
-				out = append(out, data...)
-			}
+		case next, ok := <-st.viewer.Out():
+			take(next, ok)
 			continue
 		default:
 		}
 		break
+	}
+	if st.grid.Grid() {
+		w.Header().Set("X-Remuda-Grid", fmt.Sprintf("%dx%d", st.grid.Cols, st.grid.Rows))
 	}
 	if ended {
 		w.Header().Set("X-Remuda-End", "1")
@@ -211,7 +222,7 @@ func (s *Server) handleTermInput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(data) > 0 {
-		if err := st.attach.Write(st.termID, data); err != nil {
+		if err := st.viewer.Write(data); err != nil {
 			httpErr(w, 502, err)
 			return
 		}
@@ -231,7 +242,7 @@ func (s *Server) handleTermResize(w http.ResponseWriter, r *http.Request) {
 	}
 	cols, _ := strconv.Atoi(r.URL.Query().Get("cols"))
 	rows, _ := strconv.Atoi(r.URL.Query().Get("rows"))
-	st.attach.Resize(st.termID, cols, rows)
+	st.viewer.Resize(cols, rows)
 	w.WriteHeader(http.StatusNoContent)
 }
 

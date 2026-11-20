@@ -55,7 +55,7 @@ type rosterPane struct {
 	PR    *rosterPR      `json:"pr,omitempty"`   // the last pull or merge request the agent named
 	// a subscription limit the agent stopped on, and the person's booking to continue it after the reset
 	Limit *limits.PaneLimit `json:"limit,omitempty"`
-	// how many of its live conversation's subagents work and the first of them by name, for the zoo and the sidebar; nil for none
+	// how many of its live conversation's subagents work and the first of them by name, for the sidebar; nil for none
 	Subagents *subagents.Count `json:"subagents,omitempty"`
 	// a dev server the pane announced and the previews found listening, offered as a preview
 	Serves *triggers.Offer `json:"serves,omitempty"`
@@ -111,9 +111,8 @@ type rosterSession struct {
 	Scratch     bool            `json:"scratch,omitempty"`     // the floating terminal's own shell: the drawer shows it, the sidebar does not
 	// the other checkouts of its repository changing the same files against the main branch, the same lines first
 	Collisions []collisions.Collision `json:"collisions,omitempty"`
-	Concierge  bool                   `json:"concierge,omitempty"` // the concierge's own workspace: its place shows it, the sidebar, the wall and the pickers do not
-	Ports      []ports.Port           `json:"ports,omitempty"`     // the ports its processes listen on, as last read while a page looks
-	Asleep     *sleep.Status          `json:"asleep,omitempty"`    // put to sleep by the person: since when, and how many agents wait to be woken
+	Ports      []ports.Port           `json:"ports,omitempty"`  // the ports its processes listen on, as last read while a page looks
+	Asleep     *sleep.Status          `json:"asleep,omitempty"` // put to sleep by the person: since when, and how many agents wait to be woken
 	Tabs       []rosterTab            `json:"tabs"`
 }
 
@@ -122,8 +121,9 @@ type rosterMachine struct {
 	Label    string            `json:"label"`
 	Host     string            `json:"host,omitempty"`
 	Source   string            `json:"source,omitempty"`
-	OS       string            `json:"os"`    // darwin | linux | windows as its connection read it, "" before a remote's first; a Windows machine has no live attach
-	State    string            `json:"state"` // connected | connecting | error
+	OS       string            `json:"os"`             // darwin | linux | windows as its connection read it, "" before a remote's first; a Windows machine has no live attach
+	Core     bool              `json:"core,omitempty"` // reached through remuda-core instead of herdr (-core)
+	State    string            `json:"state"`          // connected | connecting | error
 	Error    string            `json:"error,omitempty"`
 	Sessions []rosterSession   `json:"sessions"`
 	Health   *health.Report    `json:"health,omitempty"`
@@ -234,7 +234,6 @@ func (s *Server) sessionsFromSnapshot(machineID string, snap *herdr.Snapshot) []
 			ActiveTabID: ws.ActiveTabID,
 			Tabs:        tabs,
 			Scratch:     s.Scratch != nil && s.Scratch.Is(machineID, ws.WorkspaceID),
-			Concierge:   s.Concierge != nil && s.Concierge.Is(machineID, ws.WorkspaceID),
 		}
 		if s.Sleep != nil {
 			session.Asleep = s.Sleep.Store.Status(machineID, ws.WorkspaceID)
@@ -361,7 +360,7 @@ func (s *Server) rosterFor(viewer bool) ([]byte, string) {
 	for _, mc := range list {
 		state, errMsg := mc.State()
 		entry := rosterMachine{
-			ID: mc.ID(), Label: mc.Label(), Host: mc.Cfg.Host, Source: mc.Cfg.Source, OS: mc.OS(),
+			ID: mc.ID(), Label: mc.Label(), Host: mc.Cfg.Host, Source: mc.Cfg.Source, OS: mc.OS(), Core: mc.OnCore(),
 			State: state, Error: errMsg, Sessions: []rosterSession{},
 		}
 		if state == machines.StateConnected {

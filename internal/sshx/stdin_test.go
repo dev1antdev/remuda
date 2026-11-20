@@ -2,6 +2,7 @@ package sshx
 
 import (
 	"errors"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -279,5 +280,32 @@ func TestAScriptHoldingANulNeverRuns(t *testing.T) {
 	}
 	if out, err := c.RunWithInput("cat", []byte("a\x00b"), 10*time.Second); err != nil || string(out) != "a\x00b" {
 		t.Errorf("data on stdin must stay whole: %q, %v", out, err)
+	}
+}
+
+// TestAnExecConnectionKeepsItsStdinOnAHostThatDiscardsIt: a connection's stdin is the whole conversation (herdr's RPC
+// through nc, remuda-core's connect), so a host's config set to discard it is overridden as for a script, and no
+// terminal is asked for.
+func TestAnExecConnectionKeepsItsStdinOnAHostThatDiscardsIt(t *testing.T) {
+	dir := t.TempDir()
+	stub := "#!/bin/sh\ncase \"$*\" in *\" -G \"*) exit 0 ;; esac\nkeep=\nnotty=\nfor word; do case \"$word\" in StdinNull=no) keep=1 ;; -T) notty=1 ;; esac; line=$word; done\n" +
+		"[ -n \"$notty\" ] || { echo 'a terminal was asked for' >&2; exit 1; }\n" +
+		"if [ -n \"$keep\" ]; then exec sh -c \"$line\"; fi\nexec sh -c \"$line\" </dev/null\n"
+	if err := os.WriteFile(filepath.Join(dir, "ssh"), []byte(stub), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	c := &Conn{Host: "roofr.remote", ctl: filepath.Join(t.TempDir(), "ctl")}
+	conn, err := c.DialExec("head -n 1", 10*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	if _, err := conn.Write([]byte("hello\n")); err != nil {
+		t.Fatal(err)
+	}
+	got := make([]byte, 6)
+	if _, err := io.ReadFull(conn, got); err != nil || string(got) != "hello\n" {
+		t.Fatalf("%q, %v", got, err)
 	}
 }

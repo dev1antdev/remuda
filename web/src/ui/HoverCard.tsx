@@ -6,7 +6,6 @@
 import { HoverCard as Card } from "radix-ui";
 import { useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from "react";
 import { hoverIntent, type Timers } from "./hoverIntent";
-import { usePortalHost } from "./portal";
 
 // movedAt is when the pointer last moved anywhere on the page, heard once for every card
 let movedAt = -Infinity;
@@ -68,7 +67,6 @@ const TAKE_FOCUS_AFTER = 60;
 // HoverCard sits inside its row (position: relative): an anchor as large as the row, which takes no pointer, and the
 // card beside it in the page's portal. Opened by hand (takeFocus), it is a popover and takes the focus.
 export default function HoverCard({ open, onClose, takeFocus = false, side = "right", className, children }: { open: boolean; onClose: () => void; takeFocus?: boolean; side?: "right" | "bottom"; className?: string; children: ReactNode }) {
-  const host = usePortalHost();
   const content = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open || !takeFocus) return;
@@ -80,7 +78,7 @@ export default function HoverCard({ open, onClose, takeFocus = false, side = "ri
       <Card.Trigger asChild>
         <span className="hover-anchor" aria-hidden="true" />
       </Card.Trigger>
-      <Card.Portal container={host}>
+      <Card.Portal>
         <Card.Content
           ref={content}
           tabIndex={-1}
