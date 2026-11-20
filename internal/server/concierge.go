@@ -100,7 +100,7 @@ func (s *Server) handleConciergePick(w http.ResponseWriter, r *http.Request) {
 }
 
 // conciergeReady is the machine the concierge runs on, connected: a 409 with what to do when it cannot run there.
-func (s *Server) conciergeReady(w http.ResponseWriter, r *http.Request) (*machines.Machine, *herdr.Client, bool) {
+func (s *Server) conciergeReady(w http.ResponseWriter, r *http.Request) (*machines.Machine, herdr.API, bool) {
 	view := s.conciergeView()
 	if view.Trouble != "" {
 		httpErr(w, http.StatusConflict, errors.New(view.Trouble))
@@ -111,7 +111,7 @@ func (s *Server) conciergeReady(w http.ResponseWriter, r *http.Request) (*machin
 }
 
 // conciergeHost is the machine as a start needs it
-func (s *Server) conciergeHost(mc *machines.Machine, client *herdr.Client) concierge.Host {
+func (s *Server) conciergeHost(mc *machines.Machine, client herdr.API) concierge.Host {
 	return concierge.Host{
 		ID: mc.ID(), Home: mc.Home(), Client: client, Remuda: concierge.RemudaOn(mc.Local(), mc.Home()),
 		Snapshot: func() (*herdr.Snapshot, error) { return s.Watch.Refresh(mc) },

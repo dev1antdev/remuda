@@ -61,7 +61,7 @@ func TestEventsFromAThrowawayHerdr(t *testing.T) {
 }
 
 // next reads n events within a few seconds, each as "kind pane [status | matched line]".
-func next(t *testing.T, s *herdr.Stream, n int) []string {
+func next(t *testing.T, s herdr.Events, n int) []string {
 	t.Helper()
 	got := make(chan string, n)
 	go func() {

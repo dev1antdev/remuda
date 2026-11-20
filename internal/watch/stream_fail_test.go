@@ -106,7 +106,7 @@ func TestEveryStreamThatEndsLeavesNoConnection(t *testing.T) {
 	watching(t, f, func(w *Watcher) {
 		mc, _ := w.machines.Get(machines.LocalID)
 		client, _, _ := mc.Ready()
-		client.Dial = func(timeout time.Duration) (net.Conn, error) {
+		client.(*herdr.Client).Dial = func(timeout time.Duration) (net.Conn, error) {
 			conn, err := net.DialTimeout("unix", f.sock, timeout)
 			if err != nil {
 				return nil, err
@@ -155,7 +155,7 @@ func TestANewStreamIsFollowedByASnapshot(t *testing.T) {
 			if bridged {
 				mc, _ := w.machines.Get(machines.LocalID)
 				client, _, _ := mc.Ready()
-				client.Dial = func(timeout time.Duration) (net.Conn, error) { return net.DialTimeout("unix", f.sock, timeout) }
+				client.(*herdr.Client).Dial = func(timeout time.Duration) (net.Conn, error) { return net.DialTimeout("unix", f.sock, timeout) }
 			}
 		})
 		f.subscribed(t)

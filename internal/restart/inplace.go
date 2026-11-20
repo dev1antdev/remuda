@@ -74,7 +74,7 @@ func Version(screen string) string {
 // inPlace asks the agent to restart itself with the session kept and reads the outcome off the screen, since herdr
 // sees nothing of it: true when that settled the matter, false when the agent does not have the command, so the
 // exit and resume follow.
-func (r *Restarter) inPlace(key string, client *herdr.Client, p herdr.PaneInfo, a agent, session string, say func(string)) (bool, error) {
+func (r *Restarter) inPlace(key string, client herdr.API, p herdr.PaneInfo, a agent, session string, say func(string)) (bool, error) {
 	paneID, title := p.PaneID, p.DisplayTitle()
 	before, _ := client.PaneRead(paneID)
 	echoes := Echoes(before)
