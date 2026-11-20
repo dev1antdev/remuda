@@ -352,7 +352,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   `/api/screen` and the timelapse recorder get on a core machine.
   **The adapter** (`adapter.go`, `api.go`, `snapshot.go`, `doc.go`, tested on
   paper in `snapshot_test.go` and on a throwaway core in `adapter_test.go`):
-  `core.NewAdapter(client, AdapterHooks{TransportError, SessionOf})` is a
+  `core.NewAdapter(client, AdapterHooks{TransportError, SessionOf, Shell})` is a
   machine's core as `herdr.API`, so the packages that read a machine keep
   herdr's model. One unfiltered subscription keeps **a mirror in memory** —
   the live terminals of this machine (not a `machine/t7` of one the core
@@ -393,7 +393,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   foreground process's; a workspace carries the document's folder as
   `WorkspaceInfo.Folder` (never from herdr), which `Snapshot.WorkspaceDir`
   reads before the panes; a tab's and workspace's status is its most
-  pressing pane's. **Left empty** for now: `Worktree` (Core 20), `Focused`,
+  pressing pane's; its `Worktree` is the document's (below). **Left empty**
+  for now: `Focused`,
   `FocusedPaneID` / `FocusedTabID`, `Tokens` / `StateLabels` (herdr's own
   UI), `Scroll` (Core 25), `Label` of a pane; what reads them takes
   herdr's plain-folder, no-focus path.
@@ -470,8 +471,30 @@ components and icons as rules for whoever changes it: @docs/design.md
   pageup, pagedown and delete (herdr 0.9.5 names none) go as the core's
   named keys, encoded for the program's keyboard modes (`keyBytes`);
   `PaneSendInput` refuses a paste of several lines (typed raw, each would
-  run). Still answering `invalid_request` "… is not on remuda-core yet":
-  worktrees (Core 20), `LayoutExport` / `LayoutApply` (Core 22),
+  run). **Worktrees** (Core 20, `worktree.go`, tested on coretest with
+  `shell.Local` in a HOME of the test's own and on paper,
+  `worktree_parse_test.go`): the core knows no git, so the adapter runs it
+  through the machine's shell (`AdapterHooks.Shell`, the machine itself; nil:
+  `WorktreeCreate*` refused, no checkout read). `WorktreeCreateAt` is
+  `addScript` in the source workspace's folder, as herdr's worktree.create:
+  a branch that exists checked out, a new one from base (else that folder's
+  HEAD), in the path given or herdr's place,
+  `~/.herdr/worktrees/<main checkout's name>/<text.Slug of the branch>` (the
+  root `worktrees.Root` names, so those made before and after the move lie
+  together and Tidy, Leftovers and the remove dialog stand), git's last line
+  when it refuses (`lastWords`, 10 min at most), then a workspace on it
+  labelled after its folder unless named; `WorktreeOpen` answers a workspace
+  open on the checkout already (`AlreadyOpen`, its front pane), else opens one
+  on it, refusing a folder outside git. **The checkout a workspace is** —
+  herdr's `WorktreeInfo`: top, `git-common-dir` as `RepoKey`, the main
+  checkout (`worktree list`'s first) as `RepoRoot` and its name, linked when
+  the git dir is not the common one (`probeFunc`, `script.ReadGit`,
+  `--path-format=absolute`: git 2.31 and up; `parseCheckout`, spelt by
+  `rpath`) — is read once when the workspace is made (`workspaceOn`,
+  `checkoutOf`, 20 s; outside git or failed: none, the workspace made all
+  the same) and kept in the document's workspace as `worktree`, so no
+  snapshot asks git. Still answering `invalid_request` "… is not on
+  remuda-core yet": `LayoutExport` / `LayoutApply` (Core 22),
   `PaneScroll` (Core 25), and the writes into herdr's own UI
   (`*ReportMetadata`, `NotificationShow`). `Bridged` is false: a stream costs the core nothing. The
   watcher still paces the snapshots an event asks for (`internal/watch`,
@@ -4817,7 +4840,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   when that is origin's, so its first push makes its own, as Orca's
   `--no-track`); `BadBranch` refuses what check-ref-format would. herdr's
   `WorktreeCreateAt` makes the checkout, in the project's location
-  (`FolderFor`: `<location>/<Slug>`, herdr's own naming: lower case, a dash
+  (`FolderFor`: `<location>/<text.Slug>`, herdr's own naming: lower case, a dash
   for every other run, `worktree` for a branch with no a-z or 0-9 — a
   Cyrillic one — never the location itself, which then held the worktree
   and every later one inside it) or herdr's root; the issue and pull request it was

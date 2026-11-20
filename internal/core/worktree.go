@@ -2,7 +2,6 @@ package core
 
 import (
 	"cmp"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -94,7 +93,7 @@ func (a *Adapter) checkoutOf(folder string) *herdr.WorktreeInfo {
 }
 
 // errNoShell is why a machine whose adapter was lent no shell makes no worktree.
-var errNoShell = errors.New("no shell to run git on this remuda-core machine")
+var errNoShell = &herdr.Error{Code: "invalid_request", Message: "no shell to run git on this remuda-core machine"}
 
 // WorktreeCreate makes a worktree of the workspace's repository in herdr's place and opens it as a workspace.
 func (a *Adapter) WorktreeCreate(workspaceID, branch, base, label string) (*herdr.WorktreeCreateResult, error) {
