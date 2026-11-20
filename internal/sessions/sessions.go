@@ -299,7 +299,7 @@ type Input struct {
 }
 
 func NewInput(m *machines.Manager, w *watch.Watcher) *Input {
-	return &Input{Machines: m, Watch: w}
+	return &Input{Machines: m, Watch: w, locks: map[events.PaneRef]*sync.Mutex{}, prompts: map[events.PaneRef]*sync.Mutex{}}
 }
 
 // Lock is the pane's typing lock; a restart holds it from the exit to the resumed agent.
@@ -312,7 +312,7 @@ func (in *Input) Lock(machineID, paneID string) sync.Locker {
 // takes the typing lock alone (Lock), and so passes a prompt remuda-core holds.
 func (in *Input) Hold(machineID, paneID string) sync.Locker {
 	ref := events.PaneRef{Machine: machineID, Pane: paneID}
-	return &held{prompts: in.paneMutex(&in.prompts, ref), typing: in.lock(ref)}
+	return &held{prompts: in.paneMutex(in.prompts, ref), typing: in.lock(ref)}
 }
 
 type held struct{ prompts, typing *sync.Mutex }
@@ -328,19 +328,16 @@ func (h *held) Unlock() {
 }
 
 func (in *Input) lock(ref events.PaneRef) *sync.Mutex {
-	return in.paneMutex(&in.locks, ref)
+	return in.paneMutex(in.locks, ref)
 }
 
-func (in *Input) paneMutex(set *map[events.PaneRef]*sync.Mutex, ref events.PaneRef) *sync.Mutex {
+func (in *Input) paneMutex(set map[events.PaneRef]*sync.Mutex, ref events.PaneRef) *sync.Mutex {
 	in.mu.Lock()
 	defer in.mu.Unlock()
-	if *set == nil {
-		*set = map[events.PaneRef]*sync.Mutex{}
+	if set[ref] == nil {
+		set[ref] = &sync.Mutex{}
 	}
-	if (*set)[ref] == nil {
-		(*set)[ref] = &sync.Mutex{}
-	}
-	return (*set)[ref]
+	return set[ref]
 }
 
 // Prompt hands text to the pane's agent and answers the client's own refusal: herdr's agent.prompt under the pane's
@@ -361,7 +358,7 @@ func (in *Input) prompt(client Prompter, ref events.PaneRef, text string, then f
 		}
 		return then()
 	}
-	order := in.paneMutex(&in.prompts, ref)
+	order := in.paneMutex(in.prompts, ref)
 	order.Lock()
 	defer order.Unlock()
 	lock.Lock()
