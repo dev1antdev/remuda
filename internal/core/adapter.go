@@ -45,8 +45,14 @@ type AdapterHooks struct {
 	// TransportError hears a failure to reach the core, never its refusal: the machine marks itself dead on it.
 	TransportError func(error)
 	// SessionOf names an agent's conversation by its process. It answers from memory, never waiting; nil for none.
-	SessionOf func(agent string, pid int) *herdr.AgentSession
+	SessionOf SessionLookup
+	// Reread has SessionOf's answers read again now, waiting for them; nil for none.
+	Reread func() error
 }
+
+// SessionLookup names the conversation of the agent of a kind running as the process pid in the folder cwd; nil
+// while it is not known.
+type SessionLookup func(agent string, pid int, cwd string) *herdr.AgentSession
 
 // How long a snapshot asked for before the first fill waits for it, and how the subscription is tried again.
 const (
@@ -84,6 +90,15 @@ func (a *Adapter) Close() error {
 }
 
 var _ herdr.API = (*Adapter)(nil)
+
+// RereadSessions has the agents' sessions read off their processes again before it answers, for a step about to stop
+// an agent and resume it: a snapshot answers what the last read found, which may be half a minute old.
+func (a *Adapter) RereadSessions() error {
+	if a.hooks.Reread == nil {
+		return nil
+	}
+	return a.hooks.Reread()
+}
 
 // SessionSnapshot is the machine as the mirror holds it, without a request; before the core first answered it waits
 // for that.
@@ -156,7 +171,7 @@ func (a *Adapter) follow(ctx context.Context) (filled bool, err error) {
 	}
 	version := cn.hello.Version
 	onSub := func() *conn { return cn }
-	a.fill(sub.Terminals, doc, version)
+	a.keepOlder(a.fill(sub.Terminals, doc, version))
 	for {
 		var notice Notice
 		err := bounded(ctx, quietFor, onSub, func(ctx context.Context) (err error) {
@@ -179,9 +194,59 @@ func (a *Adapter) follow(ctx context.Context) (filled bool, err error) {
 			if err != nil {
 				return true, err
 			}
-			a.fill(notice.Terminals, doc, version)
+			a.keepOlder(a.fill(notice.Terminals, doc, version))
 		}
 	}
+}
+
+// keepOlder has the panes remuda started before it kept them kept too, so a reboot brings them back as well — each
+// one carrying a workspace's label, never another program's terminal. One refused does not hold the others back and
+// is tried again, keepTries times at most, retryFrom → retryUpTo apart, while it stands unkept; the next fill tries
+// again after that.
+func (a *Adapter) keepOlder(addresses []string) {
+	if len(addresses) == 0 {
+		return
+	}
+	go func() {
+		wait := retryFrom
+		var err error
+		for try := 0; try < keepTries && len(addresses) > 0; try++ {
+			if try > 0 {
+				select {
+				case <-a.life.Done():
+					return
+				case <-time.After(wait):
+				}
+				wait = min(wait*2, retryUpTo)
+			}
+			var refused []string
+			for _, address := range addresses {
+				if !a.unkept(address) {
+					continue
+				}
+				ctx, cancel := context.WithTimeout(a.life, callWithin)
+				if refusal := a.client.Keep(ctx, address, true); refusal != nil && !IsKind(refusal, "not_found") {
+					refused, err = append(refused, address), refusal
+				}
+				cancel()
+			}
+			addresses = refused
+		}
+		if len(addresses) > 0 && a.life.Err() == nil {
+			log.Printf("remuda-core: %s not kept, so a reboot would close them: %v", strings.Join(addresses, ", "), err)
+		}
+	}()
+}
+
+// keepTries is how often keepOlder asks the core to keep a pane before it leaves it to the next fill.
+const keepTries = 10
+
+// unkept says whether the mirror holds the terminal live, one of remuda's panes, and not kept.
+func (a *Adapter) unkept(address string) bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	t := a.state.terminals[address]
+	return t != nil && !t.Keep && t.Labels[LabelSpace] != ""
 }
 
 // bounded runs a step of the subscription within its time. A step the core lets run out on a connection it holds
@@ -230,20 +295,31 @@ func (a *Adapter) readDoc(ctx context.Context, cn *conn) (Document, error) {
 }
 
 // fill replaces the mirror with a snapshot of the core's — this machine's terminals, not those of a machine it
-// added, which come addressed as `machine/t7` — and tells every stream that the machine moved.
-func (a *Adapter) fill(terminals []Terminal, doc Document, version string) {
+// added, which come addressed as `machine/t7` — and tells every stream that the machine moved. A terminal waiting for
+// a new shell, or whose shell is another than the one the mirror held before, was restored meanwhile; unkept are
+// remuda's panes started before it kept them.
+func (a *Adapter) fill(terminals []Terminal, doc Document, version string) (unkept []string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	before := a.state.terminals
 	a.state = mirror{terminals: make(map[string]*Terminal, len(terminals)), doc: doc, version: version, gone: map[string]bool{}}
 	for i := range terminals {
-		if terminals[i].State == "live" && local(terminals[i].Address) {
-			followShell(&terminals[i])
-			a.state.terminals[terminals[i].Address] = &terminals[i]
+		t := &terminals[i]
+		if t.State != "live" || !local(t.Address) {
+			continue
+		}
+		followShell(t)
+		was := before[t.Address]
+		t.restored = agentOf(t) == "" && (t.Reason != "" || was != nil && (was.restored || was.Pid != t.Pid))
+		a.state.terminals[t.Address] = t
+		if !t.Keep && t.Labels[LabelSpace] != "" {
+			unkept = append(unkept, t.Address)
 		}
 	}
 	a.held, a.lost = true, nil
 	a.answer()
 	a.tellLocked(herdr.Event{Kind: "layout.updated"})
+	return unkept
 }
 
 // answer lets the snapshots waiting for the core's first answer go; the caller holds the lock.
@@ -331,6 +407,7 @@ func (m *mirror) apply(ev Event) (herdr.Event, bool) {
 			m.went(record.Address)
 			return herdr.Event{Kind: "pane.closed", PaneID: record.Address}, t != nil
 		}
+		record.restored = ev.Type == "restarted"
 		return m.add(record), true
 	case "removed", "finished":
 		m.went(ev.Terminal)
@@ -394,7 +471,7 @@ func (m *mirror) apply(ev Event) (herdr.Event, bool) {
 			ExitCode **int   `json:"exit_code"`
 			Signal   **int   `json:"signal"`
 		}{&t.Reason, &t.ExitCode, &t.Signal})
-		t.Pid, t.Foreground = 0, nil
+		t.Pid, t.Foreground, t.restored = 0, nil, true
 		told.Kind = "pane.exited"
 	case "keep":
 		json.Unmarshal(ev.Data, &struct {
@@ -406,7 +483,7 @@ func (m *mirror) apply(ev Event) (herdr.Event, bool) {
 	}
 	if became := agentOf(t); became != agent {
 		if became != "" {
-			t.agentAt = now
+			t.agentAt, t.restored = now, false
 			// a report naming this agent that came before the foreground's next look was the agent's own, its first
 			if t.Status != nil && appAgent(t.Status.App) == became && now.Sub(t.statusAt) <= foregroundLag {
 				t.agentAt = t.statusAt

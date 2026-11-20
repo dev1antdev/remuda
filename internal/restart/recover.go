@@ -35,7 +35,23 @@ type Chat struct {
 	Kind    string `json:"kind"`
 	Session string `json:"session"`
 	Dir     string `json:"dir"`
-	Title   string `json:"title,omitempty"`
+	// Ran is the folder the agent itself ran in when it was not its pane's: remuda-core gives a lost shell back in the
+	// folder of the program that last held the terminal.
+	Ran   string `json:"ran,omitempty"`
+	Title string `json:"title,omitempty"`
+}
+
+// in says whether a shell standing in dir is where the chat was: its pane's folder, or the agent's own.
+func (c Chat) in(dir string) bool {
+	return dir == c.Dir || c.Ran != "" && dir == c.Ran
+}
+
+// ranIn is the folder the pane's agent runs in when it is not the pane's own, else "".
+func ranIn(p *herdr.PaneInfo, dir string) string {
+	if p.ForegroundCWD != dir {
+		return p.ForegroundCWD
+	}
+	return ""
 }
 
 // Stopped is a remembered chat whose pane came back as a bare shell; the roster carries it, with the folder and the
@@ -98,7 +114,8 @@ func OpenMemory(dir string) *Memory {
 
 // Observe folds a machine's snapshot in: an agent pane with a session is remembered; a remembered pane that is a
 // bare shell in the same folder was stopped by a reboot when the change was not watched happening (the snapshot is
-// the machine's first, or the first after its herdr was away) and has stood so for stoppedGrace, and is forgotten
+// the machine's first, or the first after its herdr was away, or remuda-core gave the pane a new shell in place of a
+// lost one: Restored) and has stood so for stoppedGrace, and is forgotten
 // when the person left the agent themselves; a pane no longer there was closed — listed as such, then forgotten.
 func (m *Memory) Observe(e events.Snapshot) {
 	if m.observe(e) && m.OnStopped != nil {
@@ -137,7 +154,8 @@ func (m *Memory) observe(e events.Snapshot) bool {
 			delete(m.shells, key)
 			if sid := sessionOf(p); sid != "" {
 				m.faces[key] = faceOf(e.Snap, p)
-				c := Chat{Kind: p.Agent, Session: sid, Dir: paneDir(e.Snap, p), Title: firstNonEmpty(e.Snap.WorkspaceLabel(p.WorkspaceID), p.DisplayTitle())}
+				dir := paneDir(e.Snap, p)
+				c := Chat{Kind: p.Agent, Session: sid, Dir: dir, Ran: ranIn(p, dir), Title: firstNonEmpty(e.Snap.WorkspaceLabel(p.WorkspaceID), p.DisplayTitle())}
 				if old, ok := m.chats[key]; !ok || old != c {
 					m.chats[key] = c
 					changed = true
@@ -150,7 +168,7 @@ func (m *Memory) observe(e events.Snapshot) bool {
 			continue
 		}
 		since, unwatched := m.shells[key]
-		if p.Agent == "" && (unwatched || e.First) {
+		if p.Agent == "" && (unwatched || e.First || p.Restored) {
 			if !unwatched {
 				since = e.At
 				m.shells[key] = since
@@ -158,7 +176,7 @@ func (m *Memory) observe(e events.Snapshot) bool {
 			// a restored pane reads the server's folder as its own for a moment: the folder is judged after the grace
 			switch {
 			case e.At.Sub(since) < stoppedGrace:
-			case p.Dir() == c.Dir:
+			case c.in(p.Dir()):
 				stopped = append(stopped, stoppedOf(p.PaneID, c, firstNonEmpty(c.Title, p.DisplayTitle())))
 			default:
 				delete(m.chats, key)
@@ -386,7 +404,7 @@ func (r *Restarter) recover(mc *machines.Machine, panes []string, auto bool, say
 	}
 	defer r.releaseRecovery(mc.ID())
 	say(fmt.Sprintf("%s stopped with the reboot on %s", chatsWord(len(stopped)), mc.Label()))
-	checks := func(s Stopped) error { return CanResume(mc, s.chat.Kind, s.chat.Session, s.chat.Dir) }
+	checks := func(s Stopped, dir string) error { return CanResume(mc, s.chat.Kind, s.chat.Session, dir) }
 	out := r.resume(client, mc.ID(), stopped, checks, say)
 	var lines []string
 	for _, o := range out {
@@ -483,8 +501,9 @@ func (os outcomes) failed() (list []string) {
 	return
 }
 
-// resume is the recovery over a client: a fresh look at each pane, the checks, the start on the session.
-func (r *Restarter) resume(client starter, machineID string, stopped []Stopped, checks func(Stopped) error, say func(string)) outcomes {
+// resume is the recovery over a client: a fresh look at each pane, the checks of the folder its shell stands in now,
+// the start on the session.
+func (r *Restarter) resume(client starter, machineID string, stopped []Stopped, checks func(Stopped, string) error, say func(string)) outcomes {
 	var out outcomes
 	for _, s := range stopped {
 		out = append(out, r.resumeOne(client, machineID, s, checks, say))
@@ -492,7 +511,7 @@ func (r *Restarter) resume(client starter, machineID string, stopped []Stopped, 
 	return out
 }
 
-func (r *Restarter) resumeOne(client starter, machineID string, s Stopped, checks func(Stopped) error, say func(string)) outcome {
+func (r *Restarter) resumeOne(client starter, machineID string, s Stopped, checks func(Stopped, string) error, say func(string)) outcome {
 	if r.Lock != nil {
 		l := r.Lock(machineID, s.Pane)
 		l.Lock()
@@ -525,10 +544,10 @@ func (r *Restarter) resumeOne(client starter, machineID string, s Stopped, check
 		return settle(true, fmt.Sprintf("· %s (%s): %s is back already", s.Title, s.Pane, a.Title))
 	case p.Agent != "":
 		return settle(false, fmt.Sprintf("· %s (%s): runs %q now — left as it is", s.Title, s.Pane, p.Agent))
-	case p.Dir() != s.chat.Dir:
+	case !s.chat.in(p.Dir()):
 		return settle(false, fmt.Sprintf("· %s (%s): the shell is in %s now, not %s — left as it is", s.Title, s.Pane, p.Dir(), s.chat.Dir))
 	}
-	if err := checks(s); err != nil {
+	if err := checks(s, p.Dir()); err != nil {
 		return settle(false, fmt.Sprintf("· %s (%s): %v", s.Title, s.Pane, err))
 	}
 	args := a.resume(s.chat.Session)

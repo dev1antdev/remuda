@@ -282,8 +282,12 @@ const CHECKS = `(() => {
 })()`;
 
 let shots = 0;
+// the screens a remuda started with -core has not: no screen terminal (a Windows PC's pane is attached there too), no
+// herdr, and no write on a checkout, held back there while herdr's agents, which it cannot see, may work in it
+const NOT_ON_CORE = ["screen-terminal", "settings-herdr", "changes-stage", "changes-commit"];
 // screen opens one screen, waits for its landmarks, checks it, shoots it and closes it again; a failure is noted, never thrown
 async function screen(name, { open, expect = [], close = closeAll, settle = 350 }) {
+  if (onCore && NOT_ON_CORE.includes(name)) return say(`${pass.name} › ${name}: left out on remuda-core`);
   where = `${pass.name} › ${name}`;
   consoleErrors = [];
   const began = Date.now();
@@ -386,7 +390,7 @@ const made = [];
 const now = Date.now();
 const iso = (ms) => new Date(ms).toISOString();
 const sessions = async () => (await api("GET", "/api/roster")).machines.find((m) => m.id === "local")?.sessions ?? [];
-let app, tree, notes, inbox, drawTask, paneA1, paneA2, paneB, paneN, paneTree, morningScene, eveningScene;
+let app, tree, notes, inbox, drawTask, paneA1, paneA2, paneB, paneN, paneTree, morningScene, eveningScene, onCore;
 let DRESS = {};
 const NOTE_TEXT = "Waiting on the API team for the new endpoint.\nDon't merge before Friday's release.";
 // the morning's first step lays its tab out as two panes, the agent on the left and a dev server on the right
@@ -395,6 +399,7 @@ const SCENE_LAYOUT = { agent: 0, root: { type: "split", direction: "right", rati
 // seed makes the workspaces the screens draw — the repository with two tabs and a linked worktree, a plain folder —
 // a task, a Jira site nobody answers at, and the agents the browser's roster will wear
 async function seed() {
+  onCore = (await api("GET", "/api/roster")).machines.find((m) => m.id === "local")?.core === true;
   app = await api("POST", "/api/sessions", { machine: "local", dir: appDir, name: "app", agent: "shell" });
   made.push(app.id);
   await api("POST", "/api/tabs", { machine: "local", workspace: app.id, name: "", agent: "shell" });
@@ -2387,9 +2392,11 @@ async function newWorktreeFlow() {
   writeFileSync(`${created.path}/draft.txt`, "not committed\n");
   const look = await api("GET", `/api/worktrees/${encodeURIComponent(created.id)}/removal?machine=local`);
   check(look.dirty === 1 && look.branch === "e2e-made", `the look is ${JSON.stringify(look)}`);
-  const gone = await api("POST", `/api/worktrees/${encodeURIComponent(created.id)}/remove`, { machine: "local", delete_branch: true, stamp: look.stamp, keep_folder: false });
-  check(gone.worktree?.removed === true && !existsSync(created.path), `the removal answered ${JSON.stringify(gone)}`);
-  made.splice(made.indexOf(created.id), 1);
+  if (!onCore) {
+    const gone = await api("POST", `/api/worktrees/${encodeURIComponent(created.id)}/remove`, { machine: "local", delete_branch: true, stamp: look.stamp, keep_folder: false });
+    check(gone.worktree?.removed === true && !existsSync(created.path), `the removal answered ${JSON.stringify(gone)}`);
+    made.splice(made.indexOf(created.id), 1);
+  }
   await api("PUT", "/api/repos/settings", { machine: "local", root: appDir, settings: {} });
 }
 
@@ -3201,7 +3208,10 @@ try {
   for (pass of PASSES) await runPass();
   await changesFlow().catch((error) => failed(`stopped: ${error.message}`));
   await newWorktreeFlow().catch((error) => failed(`stopped: ${error.message}`));
-  await worktreeFlow().catch((error) => failed(`stopped: ${error.message}`));
+  // on remuda-core no worktree is tidied away with its workspace nor listed as left over: the checkout's writes hold back
+  // there, a worktree's removal in the new worktree flow too
+  if (onCore) say("worktree flow: left out on remuda-core");
+  else await worktreeFlow().catch((error) => failed(`stopped: ${error.message}`));
   await previewFlow().catch((error) => failed(`stopped: ${error.message}`));
   await portsFlow().catch((error) => failed(`stopped: ${error.message}`));
   say(`${shots} screens in ${Math.round((Date.now() - started) / 1000)} s, screenshots in ${out}/display`);

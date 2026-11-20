@@ -8,6 +8,9 @@
 
 cmd=$(field .tool_input.command)
 [ -n "$cmd" ] || exit 0
+# the lines as written and as the shell joins them, one ending in a backslash going on with the next: a rule that
+# matches either form refuses
+cmd=$(printf '%s\n' "$cmd"; printf '%s\n' "$cmd" | awk '{ if (sub(/\\$/, "")) printf "%s", $0; else print }')
 
 has() { printf '%s' "$cmd" | grep -Eq -e "$1"; }
 refuse() {
@@ -35,6 +38,16 @@ fi
 # happened once.
 if has '(^|[[:space:];&|(])HOME=[^[:space:]]*[[:space:]]+([^[:space:]]*/)?herdr([[:space:]]|$)' && ! scoped; then
   refuse "herdr ignores HOME for its socket: with HOME changed it still reaches the person's real server. Set HERDR_SOCKET_PATH=<your socket> in the same command (HOME may stay changed beside it)."
+fi
+
+# remuda-core holds the person's agents once they moved off herdr: `server stop` ends every terminal in it, and a
+# `serve` beside it fights it for its socket. Which core a command reaches is the shell's to work out (RC_SOCKET,
+# inherited or set, comes first), so no stop or serve of a core passes here: a throwaway core is started and stopped
+# by scripts/e2e.sh or internal/core/coretest, the person's own by the person (quotes read away, flags may stand
+# between the words).
+core='(^|[^[:alnum:]_.-])(remuda-core|rc)([[:space:]]+-[^[:space:]]+)*[[:space:]]+(server([[:space:]]+-[^[:space:]]+)*[[:space:]]+stop|serve)([^[:alnum:]_-]|$)'
+if printf '%s' "$cmd" | tr -d "\"'" | grep -Eq -e "$core"; then
+  refuse "'remuda-core server stop' and 'remuda-core serve' may reach the person's own core and every agent in it, whatever socket the command names. A throwaway core is started and stopped by scripts/e2e.sh (E2E_BACKEND=core) or internal/core/coretest; the person stops their own core themselves."
 fi
 
 exit 0
