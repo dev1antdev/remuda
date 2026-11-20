@@ -3606,10 +3606,18 @@ components and icons as rules for whoever changes it: @docs/design.md
 - `internal/triggers/` — **what a pane prints, and what it sets off**
   (tested: the built-in patterns on recorded lines, the rules, the dedupe,
   the actions on fakes, and herdr itself running both built-in patterns on
-  a throwaway server). herdr watches the rows (`pane.output_matched`, its
+  a throwaway server — the same live test, `firesOnce` in
+  `internal/watch/triggers_herdr_test.go`, runs on a throwaway remuda-core
+  through a `-core` fleet too, `triggers_core_test.go`: one push and one
+  offer through new streams, Try over `PaneRecent`, a rule past Rust's
+  compiled-size limit refused as `invalid_regex`). herdr watches the rows (`pane.output_matched`, its
   Rust regex a line at a time, the last `lines` 40 rows of `recent`, a
   match told when it appears and once more when a watch begins with one
-  standing); `Service.Watches` is the set for a machine's snapshot — the
+  standing); on a remuda-core machine the adapter hands the same watches
+  to core's `events.subscribe {output}` (`internal/core`), which tells
+  every matching row as it comes into the last rows, not only the first
+  while one stands — the quiet spells below keep that to one push — and
+  logs once a stream the rows it dropped (`lost`); `Service.Watches` is the set for a machine's snapshot — the
   person's rules where they look, then two built-in ones on every pane, at
   most `MaxWatches` 200 a machine (the rest left out, logged once an
   hour). **Built in**: `ServePattern`, a dev server announcing its address
