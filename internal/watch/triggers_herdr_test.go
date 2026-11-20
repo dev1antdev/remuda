@@ -21,11 +21,15 @@ import (
 // The quiet spells are off, so only the dedupe of what stood keeps it to one.
 func TestATriggerFiresOnceThroughNewStreams(t *testing.T) {
 	sock := herdrtest.Server(t)
+	firesOnce(t, machines.NewManager(t.TempDir(), sock, "", nil))
+}
+
+// firesOnce is the test above on the fleet's local machine, whatever it speaks.
+func firesOnce(t *testing.T, fleet *machines.Manager) {
 	savedQuiet, savedRule := triggers.TestsQuiet, triggers.RuleQuiet
 	triggers.TestsQuiet, triggers.RuleQuiet = 0, 0
 	t.Cleanup(func() { triggers.TestsQuiet, triggers.RuleQuiet = savedQuiet, savedRule })
 
-	fleet := machines.NewManager(t.TempDir(), sock, "", nil)
 	mc, err := fleet.Get(machines.LocalID)
 	if err != nil {
 		t.Fatal(err)
@@ -40,6 +44,14 @@ func TestATriggerFiresOnceThroughNewStreams(t *testing.T) {
 	service.Listening = func(string, int) (string, bool) { return "vite", true }
 	service.Changed = func() { mu.Lock(); offers++; mu.Unlock() }
 	service.Resubscribe = watcher.Resubscribe
+	var refused error
+	watcher.Refused = func(_ string, err error) {
+		if err != nil {
+			mu.Lock()
+			refused = err
+			mu.Unlock()
+		}
+	}
 	watcher.Outputs = service.Watches
 	events.Subscribe(bus, service.Observe)
 	events.Subscribe(bus, service.OnMatch)
@@ -60,7 +72,10 @@ func TestATriggerFiresOnceThroughNewStreams(t *testing.T) {
 	}()
 	eventually(t, "the stream", func() bool { return watcher.Streaming(machines.LocalID) })
 
-	client := herdr.NewClient(sock)
+	client, _, err := mc.Ready()
+	if err != nil {
+		t.Fatal(err)
+	}
 	made, err := client.WorkspaceCreate(os.TempDir(), "api")
 	if err != nil {
 		t.Fatal(err)
@@ -83,6 +98,15 @@ func TestATriggerFiresOnceThroughNewStreams(t *testing.T) {
 	if first.Kind != "tests" || first.Title != "Tests failed in api" {
 		t.Fatalf("the push: %+v", first)
 	}
+	// Try reads the pane's last rows as the route does, the screen and the history above it.
+	recent, _, err := client.PaneRecent(pane, 500)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tried, err := triggers.Try(triggers.Rule{Match: "substring", Pattern: "TestLogin", Action: triggers.ActionFeed}, recent)
+	if err != nil || tried.Count == 0 {
+		t.Fatalf("Try on the pane's rows: %+v %v\n%s", tried, err, recent)
+	}
 	for i, pattern := range []string{"never printed", "nor this"} {
 		if _, err := service.Replace([]triggers.Rule{{Name: "rule", Match: "substring", Pattern: pattern, Action: triggers.ActionFeed, Enabled: true}}); err != nil {
 			t.Fatal(err)
@@ -92,6 +116,14 @@ func TestATriggerFiresOnceThroughNewStreams(t *testing.T) {
 			t.Fatalf("after new stream %d, the rows that stood are no news: %d pushes, %d offers", i+1, p, o)
 		}
 	}
+
+	// A rule past Rust's compiled-size limit passes the page's checks and is refused by the terminal's server as
+	// invalid_regex: the stream stands again without the person's watches.
+	if _, err := service.Replace([]triggers.Rule{{Name: "huge", Match: "regex", Pattern: `\w{1000}\w{1000}`, Action: triggers.ActionFeed, Enabled: true}}); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the refusal", func() bool { mu.Lock(); defer mu.Unlock(); return herdr.IsCode(refused, "invalid_regex") })
+	eventually(t, "the stream without them", func() bool { return watcher.Streaming(machines.LocalID) })
 }
 
 func eventually(t *testing.T, what string, cond func() bool) {
