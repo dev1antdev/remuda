@@ -162,9 +162,7 @@ func TestALayoutTheCoreCannotLayOutIsRefused(t *testing.T) {
 		tree             herdr.LayoutNode
 		code             string
 	}{
-		{"a sideways split", made.Workspace.WorkspaceID, "", herdr.LayoutNode{Type: "split", Direction: "left", First: &pane, Second: &pane}, "invalid_request"},
-		{"a split with one side", made.Workspace.WorkspaceID, "", herdr.LayoutNode{Type: "split", Direction: "right", First: &pane}, "invalid_request"},
-		{"a share past the whole", made.Workspace.WorkspaceID, "", herdr.LayoutNode{Type: "split", Direction: "right", Ratio: 1.5, First: &pane, Second: &pane}, "invalid_request"},
+		{"a split of nothing", made.Workspace.WorkspaceID, "", herdr.LayoutNode{Type: "split", Direction: "right"}, "invalid_request"},
 		{"no such workspace", "ws-none", "", pane, "workspace_not_found"},
 		{"no such tab", "", "tab-none", pane, "tab_not_found"},
 	} {

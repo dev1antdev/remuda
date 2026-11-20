@@ -48,10 +48,10 @@ func (a *Adapter) LayoutExport(tabID string) (*herdr.LayoutDescription, error) {
 // LayoutApply lays a tree out as a tab, as herdr's layout.apply does: a new tab of the workspace, or, with a tab id, in
 // place of that tab, whose panes and what ran in them go once the new ones stand. Each pane runs its command, else the
 // machine's shell, in its folder (the workspace's when it names none); the document keeps the tree with each pane's
-// terminal, label and command. The tab in front stays in front.
+// terminal, label and command. The tab in front stays in front. The tree is taken as scenes checked it.
 func (a *Adapter) LayoutApply(workspaceID, tabID, tabLabel string, root herdr.LayoutNode) (*herdr.LayoutDescription, error) {
-	if err := checkTree(&root); err != nil {
-		return nil, err
+	if len(root.Panes()) == 0 {
+		return nil, &herdr.Error{Code: "invalid_request", Message: "a layout holds at least one pane"}
 	}
 	snap, err := a.SessionSnapshot()
 	if err != nil {
@@ -118,28 +118,6 @@ func (a *Adapter) LayoutApply(workspaceID, tabID, tabLabel string, root herdr.La
 	return &herdr.LayoutDescription{WorkspaceID: space, TabID: tabID, FocusedPaneID: started[0], Root: *tree}, nil
 }
 
-// checkTree refuses what herdr's layout.apply would: a node neither a pane nor a split, a split missing a side, going
-// neither right nor down, or with a share outside 0–1.
-func checkTree(node *herdr.LayoutNode) error {
-	switch {
-	case node == nil:
-		return invalidLayout("a split lacks a side")
-	case node.Type == "pane":
-		return nil
-	case node.Type != "split":
-		return invalidLayout("a layout's node is a pane or a split, not " + node.Type)
-	case node.Direction != "right" && node.Direction != "down":
-		return invalidLayout("a split goes right or down, not " + node.Direction)
-	case node.Ratio < 0 || node.Ratio >= 1:
-		return invalidLayout("a split's share is between 0 and 1")
-	}
-	return cmp.Or(checkTree(node.First), checkTree(node.Second))
-}
-
-func invalidLayout(message string) error {
-	return &herdr.Error{Code: "invalid_request", Message: message}
-}
-
 // docTree is a copy of the tab's tree as the mirror's document holds it, nil for a tab it lacks.
 func (a *Adapter) docTree(tab string) *herdr.LayoutNode {
 	a.mu.Lock()
@@ -150,13 +128,6 @@ func (a *Adapter) docTree(tab string) *herdr.LayoutNode {
 		}
 	}
 	return nil
-}
-
-// docSpaceOf is the workspace the mirror's document puts a tab in ("" when none does).
-func (a *Adapter) docSpaceOf(tab string) string {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return docSpaceOfTab(&a.state.doc, tab)
 }
 
 func clone(node *herdr.LayoutNode) *herdr.LayoutNode {

@@ -204,6 +204,13 @@ func (a *Adapter) inDoc(space string) bool {
 	return slices.ContainsFunc(a.state.doc.Workspaces, func(ws DocWorkspace) bool { return ws.ID == space })
 }
 
+// docSpaceOf is the workspace the mirror's document puts a tab in ("" when none does).
+func (a *Adapter) docSpaceOf(tab string) string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return docSpaceOfTab(&a.state.doc, tab)
+}
+
 // WorkspaceRename names a workspace.
 func (a *Adapter) WorkspaceRename(workspaceID, label string) error {
 	snap, err := a.SessionSnapshot()
@@ -298,9 +305,8 @@ func (a *Adapter) TabClose(tabID string) error {
 	if err != nil {
 		return err
 	}
-	space := spaceOfTab(snap, tabID)
 	panes := panesWhere(snap, func(p *herdr.PaneInfo) bool { return p.TabID == tabID })
-	if space == "" && !a.tabInDoc(tabID) {
+	if cmp.Or(spaceOfTab(snap, tabID), a.docSpaceOf(tabID)) == "" {
 		return tabMissing(tabID)
 	}
 	if err := a.kill(panes...); err != nil {
@@ -312,12 +318,6 @@ func (a *Adapter) TabClose(tabID string) error {
 		dropTab(doc, snap, tabID, panes)
 		return nil
 	})
-}
-
-func (a *Adapter) tabInDoc(tab string) bool {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return docSpaceOfTab(&a.state.doc, tab) != ""
 }
 
 // dropTab takes a tab out of the document, and its workspace when no other tab of it holds a terminal that stays.
