@@ -121,9 +121,7 @@ func parseSessionsByPID(out string, procs []Running, style rpath.Style) map[int]
 			}
 			id = file.SessionID
 		case "codex":
-			if payload != "" {
-				id = CodexSessionID(payload)
-			}
+			id = CodexSessionID(payload)
 		}
 		if text.SessionID(id) {
 			found[pid] = id
