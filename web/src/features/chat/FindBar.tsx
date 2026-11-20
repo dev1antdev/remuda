@@ -6,13 +6,14 @@
 import { useEffect, useRef, type KeyboardEvent } from "react";
 import { actions, app } from "@/app/store";
 import { isMac } from "@/lib/prefs";
-import { Icon, Tip } from "@/ui";
+import { Icon, Tip, tipLines } from "@/ui";
 import { countWords } from "./find";
 import { t } from "@/lib/i18n";
 
 const SHORTCUT = isMac ? "⌘F" : "Ctrl+F";
 
-export function FindTool({ what = t("in this conversation"), shortcut = SHORTCUT }: { what?: string; shortcut?: string }) {
+// note: a line the toggle's tooltip adds under its name, what the find cannot reach
+export function FindTool({ what = t("in this conversation"), shortcut = SHORTCUT, note = "" }: { what?: string; shortcut?: string; note?: string }) {
   const find = app.use((s) => s.find);
   const field = useRef<HTMLInputElement>(null);
   // every ⌘F puts the focus back in the field, with the query selected for a new one
@@ -69,7 +70,7 @@ export function FindTool({ what = t("in this conversation"), shortcut = SHORTCUT
           </Tip>
         </span>
       )}
-      <Tip text={t("Find {what} ({shortcut})", { what, shortcut })}>
+      <Tip text={tipLines(t("Find {what} ({shortcut})", { what, shortcut }) + (note ? `\n${note}` : ""))}>
         <button type="button" className={`icon-btn sm find-toggle${find ? " on" : ""}`} aria-label={t("Find {what}", { what })} aria-pressed={!!find} onClick={() => (find ? actions.closeFind() : actions.openFind())}>
           <Icon name="search" size={14} />
         </button>

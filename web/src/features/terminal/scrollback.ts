@@ -5,6 +5,10 @@
 // SCROLLBACK_ROWS is how many rows one find reads: a build log's tail, not the whole history.
 export const SCROLLBACK_ROWS = 5000;
 
+// XTERM_SCROLLBACK is how many rows above the screen the page's xterm keeps; on remuda-core the attach paints up to as many
+// (attachHistory in internal/core/viewers.go), so the find reads the terminal's own rows.
+export const XTERM_SCROLLBACK = 2000;
+
 export type Scroll = { offset_from_bottom: number; max_offset_from_bottom: number; viewport_rows: number };
 export type ScrollbackMatch = { row: number; col: number; len: number };
 export type Found = { matches: ScrollbackMatch[]; rows: number; truncated: boolean; scroll: Scroll | null };
@@ -48,4 +52,19 @@ export function nearest(rows: number[], expected: number): number {
 // clampAt keeps the current match inside a list that may have changed under it.
 export function clampAt(at: number, total: number): number {
   return total <= 0 ? 0 : Math.min(Math.max(at, 0), total - 1);
+}
+
+// OlderRead is the one read, for a pane and query, of the rows older than a terminal on remuda-core holds for its
+// screen: every step of the query awaits it rather than reading again or skipping it, and it is told once.
+export type OlderRead = { key: string; matches: Promise<number>; told: boolean };
+
+// olderRead keeps the read held while the key is the same, and starts one for a new key.
+export function olderRead(held: OlderRead | null, key: string, read: () => Promise<number>): OlderRead {
+  return held?.key === key ? held : { key, matches: read(), told: false };
+}
+
+// tellsOlder says whether the older rows' matches are news: the run asking is still the current one, this read has not
+// been told, the older rows hold the query, and the terminal's own rows still hold none.
+export function tellsOlder(current: boolean, read: OlderRead, older: number, counted: number): boolean {
+  return current && !read.told && older > 0 && counted === 0;
 }

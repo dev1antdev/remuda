@@ -158,3 +158,48 @@ func TestAViewerEndsWithItsProgram(t *testing.T) {
 		}
 	}
 }
+
+// richRows prints 4000 rows whose every cell carries every attribute and three true colours, then END-OF-LOG: past
+// 1000 such rows a first paint passes the core's 4 MiB queue, which drops it whole
+const richRows = `awk 'BEGIN{for(r=0;r<4000;r++){for(c=0;c<80;c++)printf "\033[0;1;2;3;4;5;7;9;53;38;2;%d;%d;%d;48;2;%d;%d;%d;58;2;%d;%d;%dmx",c%256,r%256,(c*r)%256,255-c%256,255-r%256,(c+r)%256,(c*7)%256,(r*3)%256,(c+r*5)%256; printf "\033[0m\r\n"} print "END-OF-LOG"}'`
+
+// paintedOver runs script in an 80x24 terminal, waits for shown on its screen, then opens a viewer and waits for want
+// among what it is handed.
+func paintedOver(t *testing.T, script, shown, want string) {
+	t.Helper()
+	ctx := within(t, 90*time.Second)
+	client := coretest.Server(t).Client(t)
+	term, err := client.Run(ctx, core.RunParams{Argv: []string{"sh", "-c", script}, Size: &core.Size{Cols: 80, Rows: 24}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for start := time.Now(); ; time.Sleep(100 * time.Millisecond) {
+		if read, _ := client.Read(ctx, term.Address, 0, ""); strings.Contains(read.Text, shown) {
+			break
+		}
+		if time.Since(start) > 60*time.Second {
+			t.Fatalf("%q never reached the screen", shown)
+		}
+	}
+	viewer, err := core.NewTerminals(client).Open(term.Address, herdr.View{Cols: 80, Rows: 24})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer viewer.Close()
+	(&watched{viewer: viewer}).until(t, want)
+}
+
+func TestAViewerIsPaintedTheRowsAboveTheScreen(t *testing.T) {
+	// far above a 24-row screen: only the history carries row-1
+	paintedOver(t, "for i in $(seq 1 200); do echo row-$i; done; cat", "row-200", "row-1\r\n")
+}
+
+func TestADenselyColouredLogStillPaintsTheScreen(t *testing.T) {
+	paintedOver(t, richRows+"; cat", "END-OF-LOG", "END-OF-LOG")
+}
+
+func TestAProgramPrintingOverADroppedPaintStillShowsTheScreen(t *testing.T) {
+	// a line rewritten every tenth of a second under END-OF-LOG: its output reaches a viewer whose paint the core
+	// dropped, and must not pass for that paint
+	paintedOver(t, richRows+"; i=0; while :; do i=$((i+1)); printf '\rtick %d' $i; sleep 0.1; done", "tick", "END-OF-LOG")
+}

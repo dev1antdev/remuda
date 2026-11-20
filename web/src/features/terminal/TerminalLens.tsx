@@ -31,7 +31,7 @@ export function TerminalLens({ machineId, paneId, cols, rows, agent, active, foc
   const modifier = terminal.use((s) => s.modifier);
   const selectMode = terminal.use((s) => s.selectMode);
   const api = terminal.use((s) => s.api);
-  useTerminalFind(api, active && focused, machineId, paneId);
+  useTerminalFind(api, active && focused, machineId, paneId, core);
   const flavor = useFlavor();
   const mono = useMono();
   const onOpenFile = useCallback((target: { path: string; line?: number; prefer?: "file" | "changes" }) => actions.openFile(machineId, paneId, target), [machineId, paneId]);
