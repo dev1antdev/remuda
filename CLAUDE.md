@@ -294,7 +294,18 @@ components and icons as rules for whoever changes it: @docs/design.md
   `Wait`, `DocGet` / `DocSet` with the version, `Status`); a refusal is
   `*core.Error` (`IsKind(err, "not_found")`), a connection lost or never made
   a `*TransportError` (`IsTransport`), which ends every call in flight, stream
-  and subscription of that connection. `Attach` is a `Stream` on a channel of
+  and subscription of that connection. **Nobody but two goroutines touches
+  the wire** (`conn.go`, `writer.go`): one reads every frame and never writes
+  (the credit it owes is only counted), one writes what the others queue —
+  credits first — each frame bounded by `writeWithin` 30 s, a write that fails
+  or stalls ending the connection (half a frame may be out). A call waits for
+  its answer or its context and nothing else: one whose context ended before
+  the writer took it is never sent (nor encoded, if it ended before the call
+  began), one already sent is followed by `$/cancelRequest`, and a reply and
+  a cancel settle once — whichever takes the call from `pending` — so a
+  channel a late reply opened is closed. The dial and hello run once for every
+  caller waiting, outside the client's lock, bounded by `helloWithin` 15 s;
+  `Close` aborts them. `Attach` is a `Stream` on a channel of
   its own: `Read` the first paint then the live bytes, sending CREDIT for what
   it handed out (one nobody reads holds up nothing else: the core sends a
   stream 256 KiB ahead at most), RESIZE frames handed to `Resized` in order
@@ -318,7 +329,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   `server.stop`) — calls side by side, a refusal's kind, documents, an
   attach's echo and exit code, a stream nobody reads beside a live one, events
   and an output watch, a severed connection — and on a fake over a pipe
-  (events before the reply, a cut line, missed). CI's check job installs
+  (events before the reply, a cut line, missed, a core that stops reading, a
+  hello nobody answers, a cancel racing its reply, a slow encoder). CI's check job installs
   release remuda-v0.2.0 against its `checksums.txt`. Never start a core for a
   test any other way: one without its own `RC_SOCKET` and XDG folders reaches
   the person's.
