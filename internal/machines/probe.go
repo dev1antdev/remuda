@@ -18,7 +18,14 @@ type probe struct {
 	remuda  string // remuda's own binary on a Windows machine, the bridge to herdr there
 	appData string // %APPDATA% on Windows, where herdr keeps its socket
 	state   string // the folder remuda keeps there
+	core    string // remuda-core's binary, asked for by a remuda speaking it (-core), "" when none was found
 }
+
+// coreLookup prints remuda-core's binary as `core=`: on PATH, else where `remuda core install` puts it.
+const coreLookup = `c=$(command -v remuda-core 2>/dev/null) || for p in "$HOME/.local/bin/remuda-core" "$HOME/.local/bin/remuda-core.exe"; do [ -x "$p" ] && { c=$p; break; }; done
+[ -n "$c" ] && printf 'core=%s\n' "$c"
+true
+`
 
 // probeScript prints the machine's home, its system and, when asked to find it, herdr's binary, a key=value a line; on
 // Windows, where Git Bash is the ssh shell, Windows' own spelling of the home, %APPDATA% and remuda's own binary too.
@@ -65,6 +72,8 @@ func parseProbe(out string) probe {
 			p.state = strings.TrimSpace(value)
 		case "remuda":
 			p.remuda = strings.TrimSpace(value)
+		case "core":
+			p.core = strings.TrimSpace(value)
 		case "herdr":
 			if p.herdr == "" {
 				p.herdr = strings.TrimSpace(value)
@@ -108,6 +117,11 @@ func errWindowsShell(host string) error {
 // errNoRemuda is the connection's word for a Windows machine without remuda.exe, herdr's only door there.
 func errNoRemuda(host string) error {
 	return fmt.Errorf("remuda.exe is not on %s: it is how this cockpit reaches herdr's named pipe there. Run `remuda setup -host %s` from here", host, host)
+}
+
+// errNoCore is the connection's word for a machine without remuda-core, to a remuda that speaks it (-core).
+func errNoCore(host string) error {
+	return fmt.Errorf("remuda-core is not on %s. Run `remuda core -host %s install` from here", host, host)
 }
 
 // windowsSocket is herdr's default socket on a Windows machine: %APPDATA%\herdr\herdr.sock, a named pipe of that name.

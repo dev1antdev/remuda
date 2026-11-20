@@ -17,6 +17,15 @@ describe("concerns", () => {
     expect(keys(list)).toEqual(["claude", "codex", "kimi", "herdr-server"]);
     expect(list.map((c) => c.update)).toEqual(["claude", "codex", "kimi", "restart-herdr"]);
   });
+  it("says on a machine reached through remuda-core that a Claude Code older than 2.1.325 tells it no status, its update the same button", () => {
+    const old = health({ claude: "2.1.323" });
+    const latest = { at: "", claude: "2.1.330" };
+    expect(concerns(old, latest, "v0.9.0", false, [], false, { core: true })).toEqual([
+      { key: "claude", text: "Claude Code 2.1.323 tells remuda-core no status: its agents show none until it is 2.1.325 or later", update: "claude" },
+    ]);
+    expect(concerns(old, latest, "v0.9.0", false)[0]?.text).toBe("Claude Code 2.1.330 is out (2.1.323 here)");
+    expect(concerns(health({ claude: "2.1.325" }), { at: "", claude: "2.1.325" }, "v0.9.0", false, [], false, { core: true })).toEqual([]);
+  });
   it("asks for herdr's hooks to be installed again when the installed herdr writes newer ones", () => {
     const h = health({ herdr: "0.9.5", outdated_hooks: [{ agent: "claude", have: "v10", want: "v11" }, { agent: "codex", have: "v8", want: "v10" }, { agent: "copilot" }] });
     expect(concerns(h, { at: "", herdr: "0.9.5" }, "v0.6.0", false)).toEqual([{ key: "hooks", text: "herdr's hooks for Claude Code, Codex and Copilot are outdated", update: "hooks" }]);
