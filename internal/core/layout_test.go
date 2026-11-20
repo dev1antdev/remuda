@@ -283,7 +283,7 @@ func TestASceneCommandIsLaidOutAsSavedThoughATemplateHasItsProgramsName(t *testi
 		return scene.Tree(folder)
 	}
 
-	command := []string{"sh", "-c", `printf '<%s>' "$@"; sleep 60`, "remuda", "two words", "$HOME", "%PATH%", `"quoted"`}
+	command := []string{"sh", "-c", `printf '<%s>' "$@"; while :; do sleep 1; done`, "remuda", "two words", "$HOME", "%PATH%", `"quoted"`}
 	tree := sceneWith(command...)
 	laid, err := adapter.LayoutApply(space, "", "Dev", tree)
 	if err != nil {
@@ -296,6 +296,15 @@ func TestASceneCommandIsLaidOutAsSavedThoughATemplateHasItsProgramsName(t *testi
 	}
 	if exported, err := adapter.LayoutExport(laid.TabID); err != nil || !sameShape(&exported.Root, &tree) {
 		t.Fatalf("exported %+v, laid out %+v (%v)", exported, tree, err)
+	}
+	shell := laid.Root.Panes()[0].PaneID
+	eventually(t, adapter, func(*herdr.Snapshot) bool {
+		ran, _ := client.Get(t.Context(), server)
+		at, _ := adapter.PaneAtPrompt(shell)
+		return at && ran.Foreground != nil && ran.Foreground.Pid == ran.Pid
+	})
+	if at, err := adapter.PaneAtPrompt(server); at || err != nil {
+		t.Fatalf("the scene's running sh -c reads as a shell at its prompt, which a tidy would close (%v)", err)
 	}
 
 	if _, err := adapter.LayoutApply(space, "", "", sceneWith("rc-no-such-program", "--flag")); !herdr.IsCode(err, "spawn_failed") {

@@ -204,10 +204,35 @@ func appAgent(app string) string {
 	return strings.ToLower(app)
 }
 
-// atPrompt says whether the terminal's own shell holds it: nothing started from it runs in its foreground.
+// atPrompt says whether the terminal's own shell holds it: nothing started from it runs in its foreground, and it was
+// started to read commands, not to run one (a scene pane's `sh -c '…'` keeps its own process in front all along).
 func atPrompt(t *Terminal) bool {
 	fg := t.Foreground
-	return fg != nil && fg.Pid == t.Pid && shells[programName(fg.Name)]
+	return fg != nil && fg.Pid == t.Pid && shells[programName(fg.Name)] && reading(fg.Argv)
+}
+
+// reading says whether a shell's argv leaves it reading commands, by remuda-core's own rule (shell_root): an operand
+// (a script, -c's command), --command or a short option cluster holding c runs one and ends. PowerShell's -NoExit and
+// cmd's /k stay at the prompt after it, as the core's own shell on Windows does.
+func reading(argv []string) bool {
+	if len(argv) < 2 {
+		return true
+	}
+	for _, arg := range argv[1:] {
+		if lower := strings.ToLower(arg); lower == "-noexit" || lower == "/k" {
+			return true
+		}
+	}
+	for _, arg := range argv[1:] {
+		option, _, _ := strings.Cut(arg, "=")
+		switch {
+		case !strings.HasPrefix(arg, "-") && !strings.HasPrefix(arg, "+"),
+			option == "--command" || option == "--commands",
+			strings.HasPrefix(arg, "-") && !strings.HasPrefix(arg, "--") && strings.Contains(arg[1:], "c"):
+			return false
+		}
+	}
+	return true
 }
 
 // programName is a process's name without its folder or Windows' .exe.

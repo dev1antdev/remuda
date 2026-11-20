@@ -413,7 +413,12 @@ components and icons as rules for whoever changes it: @docs/design.md
   `herdr.AgentProgram` names it (the one matcher, `internal/herdr/agents.go`,
   which `preview` asks too: the program or the script an interpreter runs,
   past its flags, a Windows path and `.exe` too), none while the terminal's
-  own shell holds it (`atPrompt`), else the app it reported through OSC 7501
+  own shell holds it (`atPrompt`: its own process in front and started to
+  read commands, `reading`, remuda-core's `shell_root` rule — an operand, a
+  `-c` in any cluster or `--command` runs one, so a scene pane's `sh -c '…'`
+  is never a shell at its prompt that a tidy closes or an agent is typed
+  into; PowerShell's `-NoExit` and cmd's `/k` stay at the prompt, as the
+  core's own shell on Windows does), else the app it reported through OSC 7501
   (`claude-code` → claude, `codex`, `gemini-cli` → gemini, `kimi`, any other
   app by its own name);
   `statusOf` takes the program's own word, `error` read as done; the session
