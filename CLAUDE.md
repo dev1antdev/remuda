@@ -290,8 +290,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   `title` or `display_agent`: remuda reads both back as the pane's own.
 - `internal/core/` — **the client of remuda-core** (dev1antdev/remuda-core,
   our clone of herdr-core; its protocol in its `schema/README.md`, generation
-  1), which is to take herdr's place on the machines; nothing uses it yet
-  (the machines, Core 13; the snapshot, Core 12). `core.New(dial)` is one
+  1), which is to take herdr's place on the machines; no machine uses it yet
+  (the machines, Core 13). `core.New(dial)` is one
   core: a `Dialer` gives a fresh `net.Conn` (the socket here, `ssh host
   remuda-core connect` over a master there), dialled when first needed and
   again after it ended. `hello {generation, framed: true}` in plain mode, then
@@ -341,6 +341,49 @@ components and icons as rules for whoever changes it: @docs/design.md
   release remuda-v0.2.0 against its `checksums.txt`. Never start a core for a
   test any other way: one without its own `RC_SOCKET` and XDG folders reaches
   the person's.
+  **The adapter** (`adapter.go`, `api.go`, `snapshot.go`, `doc.go`, tested on
+  paper in `snapshot_test.go` and on a throwaway core in `adapter_test.go`):
+  `core.NewAdapter(client, AdapterHooks{TransportError, SessionOf})` is a
+  machine's core as `herdr.API`, so the packages that read a machine keep
+  herdr's model. One unfiltered subscription keeps **a mirror in memory** —
+  the live terminals of this machine (not a `machine/t7` of one the core
+  added) and the `remuda` document (`DocName`), read after subscribing, again
+  on its `doc` event and after `missed` — so `SessionSnapshot` answers from
+  memory, never a request (before the first fill it waits `firstFillWait`
+  10 s; once lost it answers why at once), and each event changes one
+  terminal and is told to every open stream in herdr's words (`mirror.apply`:
+  `status` → `pane.agent_status_changed` with the status, `title`, `turn` and
+  `foreground` → `pane.updated` — `pane.agent_detected` when the agent
+  changed — `labels` → `pane.moved`, `size` and the document →
+  `layout.updated`, `created`, `finished`, `removed`, `lost` → `pane.created`
+  / `pane.closed` / `pane.exited`); a stream that falls `maxQueued` 4096
+  behind ends with `events_lost`, as herdr's does, and every stream ends when
+  the subscription is lost, which is tried again 250 ms → 5 s apart (the
+  machine hears `TransportError`). **The document** (`Document`): the
+  workspaces in order, each `{id, label, folder, active_tab, tabs}`, a tab
+  `{id, label, layout}`, its tree herdr's `LayoutNode` with a terminal's
+  address as each pane's id; a terminal carries `remuda.space` /
+  `remuda.tab` (`LabelSpace`, `LabelTab`). `mirror.snapshot` lays it out: a
+  tab's terminals from its tree, then the ones labelled for it, a terminal
+  labelled for a tab or workspace the document lacks in one of its own, an
+  unlabelled terminal in a workspace of its own (`core-<address>`, named
+  after its folder); a tab with no live terminal and a workspace with no tab
+  are left out; a pane's id is its terminal's address, its size the
+  terminal's grid, a tab's and workspace's status its most pressing pane's.
+  **The agent** (`agentOf`): the foreground process when it is one of
+  `agentNames` (its name or argv's first two, a Windows `.exe` too), none
+  while the terminal's own shell holds it, else the app it reported through
+  OSC 7501 (`claude-code` → claude, `codex`, `gemini-cli` → gemini, `kimi`);
+  `statusOf` takes the program's own word, `error` read as done; the session
+  comes through `SessionOf` (Core 16 wires it; nil, none). Output watches go
+  in a core subscription of the stream's own, filtered by a label no
+  terminal carries (`outputOnly`), so it tells their rows alone as
+  `pane.output_matched`; the core's refusals read as herdr's (`not_found` →
+  `pane_not_found`, `invalid_regex`, `needs_update` → `invalid_request`).
+  Reads: `PaneRead`, `PaneScreen` (format vt), `PaneRecent`, `PaneAtPrompt`
+  and `PaneShellPID` (off the mirror's `foreground` and `pid`), `AgentGet`;
+  every write answers `invalid_request` "… is not on remuda-core yet"
+  (Core 15). `Bridged` is false: a stream costs the core nothing.
 - `internal/sshx/` — one OpenSSH `ControlMaster` per host (BatchMode: fail,
   never prompt; sshd's MaxSessions is 10 by default, so every session takes
   one of 9 places first (`Conn.enter`, `sessionCount`), waiting within its
