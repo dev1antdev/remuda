@@ -20,6 +20,16 @@ type Update struct {
 	Title   string `json:"title"`
 	Command string `json:"command"`
 	Note    string `json:"note,omitempty"`
+
+	script string // what runs when the command shown only names it: a script this remuda carries, too long to travel back on every Run
+}
+
+// run is the script the update runs: its own, else the command shown.
+func (u Update) run() string {
+	if u.script != "" {
+		return u.script
+	}
+	return u.Command
 }
 
 // brewUpdate goes before every `brew upgrade`: Homebrew's own auto-update runs
@@ -151,7 +161,8 @@ func Plan(what string, r *health.Report) (Update, error) {
 		if r.RemudaCore != "" {
 			u.Title, u.Note = "Update remuda-core", r.RemudaCore+arrow(health.PinnedCore)+". Swapped by its own update: its terminals keep running."
 		}
-		u.Command = "# remuda-core's installer as this remuda carries it, the one `remuda core -host H install` runs\n" + path + "\n" + setup.CoreInstaller()
+		u.Command = "# this remuda's own remuda-core installer, the one `remuda core -host H install` runs, over the SSH connection:\n# remuda-core " + health.PinnedCore + ", its checksum verified, into ~/.local/bin"
+		u.script = path + "\n" + setup.CoreInstaller()
 		return u, nil
 	case "mcp":
 		if r == nil || r.Remuda == "" {

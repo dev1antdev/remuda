@@ -1957,9 +1957,12 @@ components and icons as rules for whoever changes it: @docs/design.md
   remuda-core" / "Update remuda-core") on every machine where it is
   missing or older and a build exists (a Mac or Linux
   on either CPU, Windows on x86-64: `AssetName` less Windows on arm),
-  whatever the backend, its command this remuda's own installer
+  whatever the backend, run as this remuda's own installer
   (`setup.CoreInstaller`, the script `remuda core -host H install` runs)
-  over the machine's shell, so no remuda need be there; Update
+  over the machine's shell, so no remuda need be there — the command
+  shown names it and its version, the installer itself the job's script
+  (`Update.script`, never sent back on Run: Update everywhere's request
+  for a fleet of installs stays under its 1 MB); Update
   everywhere puts it everywhere before the move — on a remote after its
   remuda release (`remoteOrder`), on the page's own host before it. An
   agent's update on a machine connected without its core moves no chat

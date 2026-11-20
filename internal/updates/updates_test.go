@@ -1,6 +1,7 @@
 package updates
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -266,11 +267,21 @@ func TestCoreIsOfferedWhereItIsMissingOrOlder(t *testing.T) {
 		return nil
 	}
 	mac := health.Report{Remuda: "v0.16.0", OS: "macOS 26.1", Arch: "arm64"}
-	if u := find(&mac); u == nil || u.Title != "Install remuda-core" || !strings.HasSuffix(u.Command, "\n"+setup.CoreInstaller()) {
+	if u := find(&mac); u == nil || u.Title != "Install remuda-core" || !strings.Contains(u.Command, "remuda-core 0.2.0") || !strings.HasSuffix(u.run(), "\n"+setup.CoreInstaller()) {
 		t.Fatalf("a Mac without remuda-core: %+v", u)
 	}
-	if u := find(&health.Report{OS: "Linux 6.12", Arch: "amd64"}); u == nil || !strings.HasSuffix(u.Command, setup.CoreInstaller()) {
+	if u := find(&health.Report{OS: "Linux 6.12", Arch: "amd64"}); u == nil || !strings.HasSuffix(u.run(), setup.CoreInstaller()) {
 		t.Fatalf("a Linux machine with neither remuda nor remuda-core is not offered this remuda's own installer: %+v", u)
+	}
+	// Update everywhere sends every step's command back on Run, under the server's 1 MB a request: a fleet's worth of
+	// installs must fit, so the installer itself never travels in the command
+	u := find(&mac)
+	steps := make([]Step, 500)
+	for i := range steps {
+		steps[i] = Step{Machine: fmt.Sprintf("machine-%d", i), Label: "A machine", What: u.What, Title: u.Title, Command: u.Command}
+	}
+	if body, _ := json.Marshal(map[string]any{"steps": steps}); len(body) >= 1<<20 {
+		t.Fatalf("500 installs make a request of %d bytes", len(body))
 	}
 	older := mac
 	older.RemudaCore = "0.1.9"

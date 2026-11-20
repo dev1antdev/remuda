@@ -193,7 +193,7 @@ func (s *Service) Start(mc *machines.Machine, what, command string) (jobs.Job, e
 	if what == "herdr" {
 		then = s.herdrThen(mc)
 	}
-	return s.Jobs.StartThen(mc, u.Title, u.Command, first, then), nil
+	return s.Jobs.StartThen(mc, u.Title, u.run(), first, then), nil
 }
 
 // serverRestartPlan offers a restart of herdr's server when it still runs an older version than the one installed.
