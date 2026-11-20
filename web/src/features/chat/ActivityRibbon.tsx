@@ -1,4 +1,4 @@
-// ActivityRibbon: what an agent did in the last half hour, one SVG under a tile's state line and under the chat's timeline: a
+// ActivityRibbon: what an agent did in the last half hour, one SVG under the chat's timeline: a
 // stretch per call in the colour of its kind, the gaps between them as thought, now at the right. A hover or a tap names
 // the stretch in the line under it, with the kind's icon, so the colour is never the only cue; ← → walk the stretches.
 // A row of the View menu and the palette switch it (useRibbonShown, pref ribbon).
@@ -10,7 +10,6 @@ import { Icon, type IconName } from "@/ui";
 import { t } from "@/lib/i18n";
 import type { Turn } from "./api";
 import { ribbon, stepFrom, stretchAt, stretchWords, toneWords, turnWords, type Live, type Stretch, type Tone } from "./ribbon";
-import { useChat } from "./useChat";
 
 export const RIBBON_PREF = "ribbon";
 
@@ -125,17 +124,3 @@ export const Ribbon = memo(function Ribbon({ turns, status, dir, cut, unread, on
     </div>
   );
 });
-
-// ScreenRibbon is the ribbon of a wall tile showing the pane's screen: it reads the same tail the chat view reads, at the
-// same pace, only while the ribbon is on
-export function ScreenRibbon({ machineId, paneId, status, dir, tailTurns }: { machineId: string; paneId: string; status: string; dir: string; tailTurns: number }) {
-  const [shown] = useRibbonShown();
-  const busy = status === "run" || status === "input";
-  const { data } = useChat({ machineId, paneId, sessionId: null, dir, every: busy ? 3000 : 15000, active: shown, last: tailTurns });
-  const turns = data?.turns ?? [];
-  if (!shown) return null;
-  return <Ribbon turns={turns} status={status} dir={dir} cut={turns.length >= tailTurns} unread={tailUnread(tailTurns)} className="tile-ribbon" />;
-}
-
-// tailUnread is a tile's word for the time before the turns it reads
-export const tailUnread = (n: number) => t("Earlier than the {n} turns a tile reads; the chat lens has the whole conversation", { n });

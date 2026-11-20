@@ -1,6 +1,6 @@
 // The audio context the page's alert sounds ring on: made or resumed inside a click or a key, the gesture a browser
 // waits for before it lets a page make a sound — the play buttons in the alerts panel, or the page's next click after
-// a reload with sounds on — and let go while they are off. The zoo's voices keep a context of their own.
+// a reload with sounds on — and let go while they are off.
 
 import { useEffect } from "react";
 import { due, play, soundFor, type Sound, type SoundChoice } from "./sounds";

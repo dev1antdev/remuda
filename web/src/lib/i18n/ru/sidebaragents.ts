@@ -18,6 +18,7 @@ export const sidebaragents: Dictionary = {
   "finished, not looked at yet": "закончили, вы ещё не смотрели",
   "Show its {n} subagents": ["Показать его {n} субагента", "Показать его {n} субагента", "Показать его {n} субагентов"],
   "Fold its subagents": "Свернуть его субагентов",
+  "{n} subagents working": ["{n} субагент работает", "{n} субагента работают", "{n} субагентов работают"],
   "Pin this agent to the top": "Закрепить этого агента наверху",
   "a subagent": "субагент",
   "Open its conversation": "Открыть его разговор",

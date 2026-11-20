@@ -35,7 +35,7 @@ import AlertsPanel from "@/features/alerts/AlertsPanel";
 import FileViewer from "@/features/files/FileViewer";
 import Schedules from "@/features/schedules/Schedules";
 import Search from "@/features/search/Search";
-import RecapDialog from "@/features/standup/RecapDialog";
+import RecapDialog from "@/features/recap/RecapDialog";
 import HandoverDialog from "@/features/chat/HandoverDialog";
 import TeleportDialog from "@/features/teleport/TeleportDialog";
 import ModelDialog from "@/features/chat/ModelDialog";
@@ -47,8 +47,6 @@ import RecipesDialog from "@/features/recipes/RecipesDialog";
 import StartFromRecipeDialog from "@/features/recipes/StartFromRecipeDialog";
 import RunSceneDialog from "@/features/scenes/RunSceneDialog";
 import ScenesDialog from "@/features/scenes/ScenesDialog";
-import Standup from "@/features/standup/StandupPanel";
-import Concierge from "./Concierge";
 import ReposPanel from "@/features/repos/ReposPanel";
 import UpdatesDialog from "@/features/updates/Updates";
 import BudgetDialog from "@/features/usage/BudgetDialog";
@@ -118,9 +116,7 @@ export default function Overlays() {
       {panel === "activity" && <Activity onClose={actions.closePanel} />}
       {panel === "schedules" && <Schedules machines={machines} onClose={actions.closePanel} ask={actions.ask} />}
       {panel === "search" && <Search machines={machines} initial={search} onClose={actions.closePanel} onOpen={openHit} onOpenScreen={openScreenHit} />}
-      {panel === "standup" && <Standup onClose={actions.closePanel} />}
       {panel === "arena" && <ArenaPanel onClose={actions.closePanel} />}
-      {panel === "concierge" && !viewOnly && <Concierge onClose={actions.closePanel} />}
       {panel === "pr" && !viewOnly && <PRPanel onClose={actions.closePanel} />}
       {panel === "issues" && !viewOnly && <IssuesPanel onClose={actions.closePanel} />}
       {panel === "repos" && !viewOnly && <ReposPanel onClose={actions.closePanel} />}

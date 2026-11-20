@@ -1,21 +1,7 @@
-// What an agent answered last, in one line, for a tile's state line once it has finished: the text its last turn
-// ended with (after its last tool call), the Markdown marks stripped, cut at a word. The server's internal/said
-// does the same for the roster.
-
-import type { Turn } from "./api";
+// A text in one line: its first line that says something, the Markdown marks stripped, cut at a word — what a pin, a
+// prompt card or a subagent's row shows of an answer. The server's internal/said does the same for the roster.
 
 export const SAID_MAX = 120;
-
-export function said(turns: Turn[]): string {
-  const last = turns[turns.length - 1];
-  if (!last || last.role !== "assistant") return "";
-  let texts: string[] = [];
-  for (const part of last.parts) {
-    if (part.type === "tool") texts = [];
-    else if (part.type === "text" && part.text?.trim()) texts.push(part.text.trim());
-  }
-  return firstLine(texts.join("\n\n"));
-}
 
 // LEAD_MARKS is the run of list and quote marks and headings a line starts with, taken in one pass
 const LEAD_MARKS = /^(?:(?:#{1,6}\s+|>\s*|[-*+]\s+|\d+[.)]\s+|\[[ xX]\]\s+)\s*)+/;

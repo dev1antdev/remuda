@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { kindOf } from "./digest";
+import { kindOf } from "./kind";
 import { resultWords } from "./runs";
 import { sceneSchedule, sceneScheduleWords } from "./scene";
 

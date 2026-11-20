@@ -65,3 +65,9 @@ func (s *Server) handleScratchClose(w http.ResponseWriter, r *http.Request) {
 	s.Watch.Refresh(mc)
 	writeJSON(w, map[string]any{"ok": true})
 }
+
+// ownWorkspace says whether a workspace is one remuda keeps for itself — the floating terminal's shell — which the
+// editor's folders, the previews, a viewer's files and the sidebar leave out.
+func (s *Server) ownWorkspace(machineID, workspaceID string) bool {
+	return s.Scratch != nil && s.Scratch.Is(machineID, workspaceID)
+}

@@ -1,12 +1,12 @@
 // A page a viewer link signed in: it draws what the full page draws and hides every control that would type or change
 // anything. The server refuses those calls anyway (403); this keeps the buttons from being there. The pure part.
 
-// VIEWER_MODES are the modes a viewer has: the agents and the Wall; the tasks, the code and the review all write
-const VIEWER_MODES = new Set(["herdr", "wall"]);
+// VIEWER_MODES are the modes a viewer has: the agents; the tasks, the code and the review all write
+const VIEWER_MODES = new Set(["herdr"]);
 
-// VIEWER_PANELS are the panels a viewer has: the reports, the feed and a server's vitals (its panel hides its buttons
-// for a viewer); the schedules are the person's own
-const VIEWER_PANELS = new Set(["standup", "usage", "activity", "server"]);
+// VIEWER_PANELS are the panels a viewer has: the usage, the feed and a server's vitals (its panel hides its buttons for
+// a viewer); the schedules are the person's own
+const VIEWER_PANELS = new Set(["usage", "activity", "server"]);
 
 // viewerPlaces keeps the rail's places a viewer may open; the full list stands for everyone else
 export function viewerPlaces<T extends { mode?: string; panel?: string | null }>(places: T[], viewOnly: boolean): T[] {
@@ -14,10 +14,10 @@ export function viewerPlaces<T extends { mode?: string; panel?: string | null }>
   return places.filter((place) => (place.mode ? VIEWER_MODES.has(place.mode) : place.panel ? VIEWER_PANELS.has(place.panel) : false));
 }
 
-// VIEWER_COMMANDS are the palette's commands a viewer keeps: moving about, what a lens shows, the reports, the keys; the
+// VIEWER_COMMANDS are the palette's commands a viewer keeps: moving about, what a lens shows, the usage, the keys; the
 // look's rows and the screen-sharing mode go by their prefixes. Every other one types, starts, closes, renames or saves
 // something on the server.
-const VIEWER_COMMANDS = new Set(["next-needs", "mode:herdr", "mode:wall", "lens:chat", "lens:terminal", "lens:git", "find", "timeline", "prompts", "export", "recap", "pins", "timelapse", "popout", "find-viewer", "timeline-viewer", "prompts-viewer", "ribbon", "export-viewer", "recap-viewer", "wall-needs", "wall-idle", "wall-unfocus", "wall-focus", "wall-office", "wall-view", "wall-zoo", "full", "rail", "panels", "split", "activity", "usage", "scorecard", "standup", "listen-day", "budgets", "keys", "server"]);
+const VIEWER_COMMANDS = new Set(["next-needs", "mode:herdr", "lens:chat", "lens:terminal", "lens:git", "find", "timeline", "prompts", "export", "recap", "pins", "timelapse", "find-viewer", "timeline-viewer", "prompts-viewer", "ribbon", "export-viewer", "recap-viewer", "full", "rail", "panels", "split", "activity", "usage", "scorecard", "budgets", "keys", "server"]);
 const VIEWER_COMMAND_PREFIXES = ["theme-", "text-", "lang-", "open-lens-", "sharing"];
 
 // viewerCommand says whether a viewer's palette lists the command with this id

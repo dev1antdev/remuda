@@ -6,7 +6,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/schedule"
 )
 
-// Schedules: prompts, digests and fresh agents on a timetable (internal/schedule).
+// Schedules: prompts, fresh agents and scenes on a timetable (internal/schedule).
 
 func (s *Server) scheduleRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/schedules", s.handleSchedules)

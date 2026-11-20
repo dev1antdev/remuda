@@ -137,9 +137,9 @@ export function scanWords(listed: Listed): string {
 }
 
 // workspaceOn is the workspace standing on the repository, the sidebar's way (its folder), for Open Changes; never the
-// floating terminal's or the concierge's
+// floating terminal's
 export function workspaceOn(sessions: Session[], path: string): Session | undefined {
-  return sessions.find((session) => !session.scratch && !session.concierge && folderOf(session) === path);
+  return sessions.find((session) => !session.scratch && folderOf(session) === path);
 }
 
 // paneOf is the pane a workspace opens on: its active tab's agent, else any agent's, else its first pane

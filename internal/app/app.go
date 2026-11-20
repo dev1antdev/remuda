@@ -22,7 +22,6 @@ import (
 	"github.com/dev1antdev/remuda/internal/chat"
 	"github.com/dev1antdev/remuda/internal/code"
 	"github.com/dev1antdev/remuda/internal/complete"
-	"github.com/dev1antdev/remuda/internal/concierge"
 	"github.com/dev1antdev/remuda/internal/drift"
 	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/feed"
@@ -162,10 +161,9 @@ func Run(ctx context.Context, o Options) error {
 	defer taskStore.Close()
 
 	watcher := watch.New(fleet, bus)
-	conciergeAgent := concierge.Open(o.Dir)
 	shells := scratch.Open(o.Dir) // the floating terminal's shell on each machine
 	ownWorkspace := func(machineID, workspaceID string) bool {
-		return shells.Is(machineID, workspaceID) || shells.Ended(machineID, workspaceID) || conciergeAgent.Is(machineID, workspaceID)
+		return shells.Is(machineID, workspaceID) || shells.Ended(machineID, workspaceID)
 	}
 	ownMark := func(machineID, paneID string) *bool { // nil for a pane the last snapshot does not know
 		snap, _ := watcher.Snapshot(machineID)
@@ -267,7 +265,7 @@ func Run(ctx context.Context, o Options) error {
 		return mc, nil
 	})
 	events.Subscribe(bus, func(e events.MachineRemoved) { githubIssues.Forget(e.Machine) })
-	// how many subagents each Claude Code pane's live conversation runs, read while a page reads the roster, for the Wall's zoo
+	// how many subagents each Claude Code pane's live conversation runs, read while a page reads the roster, for the sidebar's tree
 	subagentCounts := subagents.New(chats.RecentSubagents, func(machineID string) bool {
 		mc, err := fleet.Get(machineID)
 		if err != nil {
@@ -391,18 +389,6 @@ func Run(ctx context.Context, o Options) error {
 	restarter.Memory.Note = func(machineID, title, body string) {
 		activity.Add(feed.Entry{Kind: "recover", Machine: machineID, Title: title, Body: body})
 		hub.RosterChanged()
-	}
-	// the concierge: remuda's own Claude Code agent the person asks what the others are doing; the panes of its
-	// workspace are no chat to bring back, no work to report and no alert to send
-	restarter.Memory.Skip = conciergeAgent.Is
-	restarter.Skip = conciergeAgent.Is // its own arguments would be lost on a resume: it starts again from its own place
-	pushSvc.Quiet = func(machineID, paneID string) bool {
-		snap, _ := watcher.Snapshot(machineID)
-		if snap == nil {
-			return false
-		}
-		pane := snap.Pane(paneID)
-		return pane != nil && conciergeAgent.Is(machineID, pane.WorkspaceID)
 	}
 	// what the restarts type by themselves is a quiet activity row too, like anything a device sends
 	restarter.Typed = func(machineID, paneID, text string) {
@@ -534,10 +520,8 @@ func Run(ctx context.Context, o Options) error {
 	if o.MirrorClosed != "" {
 		log.Printf("remuda's figures and alerts stay out of herdr: %s", o.MirrorClosed)
 	}
-	recaps := &recap.Service{Machines: fleet, Watch: watcher, Chat: chats, Radar: tracker, Skip: ownWorkspace}
-	schedules := schedule.New(o.Dir, input.SubmitToFolder, pushSvc.Broadcast, func(since time.Time) (string, string, bool) {
-		return recap.Digest(recaps.Standup(since), since, time.Now())
-	})
+	recaps := &recap.Service{Chat: chats}
+	schedules := schedule.New(o.Dir, input.SubmitToFolder, pushSvc.Broadcast)
 	cookbook := recipes.New(o.Dir)
 	retiring := retirements(cookbook, schedules, taskStore, fleet, watcher, meter, vitals)
 	scouts := &sessions.Launcher{Machines: fleet, Watch: watcher, Input: input, Notify: pushSvc.Broadcast}
@@ -636,8 +620,6 @@ func Run(ctx context.Context, o Options) error {
 	events.Subscribe(bus, func(e events.Snapshot) { keepAwake.Observe(e.Machine, awake.Working(e.Snap)) })
 	events.Subscribe(bus, func(e events.MachineRemoved) { keepAwake.Forget(e.Machine) })
 	events.Subscribe(bus, func(e events.MachineRemoved) { shells.Forget(e.Machine) })
-	events.Subscribe(bus, func(e events.Snapshot) { conciergeAgent.Observe(e.Machine, e.Snap) })
-	events.Subscribe(bus, func(e events.MachineRemoved) { conciergeAgent.Forget(e.Machine) })
 	sceneSet := sceneRunner(o.Dir, cookbook, fleet, watcher, input, tracker, meter, shells, pushSvc.Notify, activity)
 	schedules.Scenes = sceneSchedules(sceneSet)
 
@@ -765,7 +747,7 @@ func Run(ctx context.Context, o Options) error {
 	go turns.Tracker.Loop(ctx.Done())
 
 	updater := &updates.Service{Health: vitals, Jobs: runner, Restart: restarter, Watch: watcher, Machines: fleet}
-	sleeps := sleeper(o.Dir, bus, fleet, watcher, runner, input, restarter, updater, activity, conciergeAgent.Is, hub.RosterChanged)
+	sleeps := sleeper(o.Dir, bus, fleet, watcher, runner, input, restarter, updater, activity, hub.RosterChanged)
 	fleetSetup := &drift.Service{Fleet: fleet, Health: vitals, Updates: updater, Dirs: func(machineID string) []string {
 		if snap, _ := watcher.Snapshot(machineID); snap != nil {
 			return snap.WorkspaceDirs()
@@ -818,7 +800,6 @@ func Run(ctx context.Context, o Options) error {
 		Arena:     arenas,
 		Limits:    planLimits,
 		Scratch:   shells,
-		Concierge: conciergeAgent,
 		Jira:      issues,
 		Backup:    backups,
 		SelfPort:  auth.PortOf(o.Addr),

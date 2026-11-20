@@ -1,14 +1,24 @@
 import { describe, expect, it } from "vitest";
-import { MAX_ASKING, askedOf, questionBubble, sameQuestions } from "./questions";
+import { MAX_ASKING, askedOf, cutAt, questionLine, sameQuestions } from "./questions";
 
-describe("questionBubble", () => {
+describe("questionLine", () => {
   it("holds up the dialog's head and the first line of its detail", () => {
-    expect(questionBubble({ text: "Bash command\nrm -rf build\nclean the build\nDo you want to proceed?", options: [] })).toBe("Bash command · rm -rf build");
+    expect(questionLine({ text: "Bash command\nrm -rf build\nclean the build\nDo you want to proceed?", options: [] })).toBe("Bash command · rm -rf build");
   });
 
   it("holds the asking line when the dialog has no head, nothing without a dialog", () => {
-    expect(questionBubble({ text: "Which database?", options: [] })).toBe("Which database?");
-    expect(questionBubble(null)).toBe("");
+    expect(questionLine({ text: "Which database?", options: [] })).toBe("Which database?");
+    expect(questionLine(null)).toBe("");
+  });
+
+});
+
+describe("cutAt", () => {
+  it("keeps a short text, cuts a long one at a word and never between the halves of a surrogate pair", () => {
+    expect(cutAt("  short  ", 10)).toBe("short");
+    expect(cutAt("one two three four", 12)).toBe("one two…");
+    expect(cutAt("abcdefghij", 5)).toBe("abcde…");
+    expect(cutAt("abcd😀efgh", 5)).toBe("abcd…");
   });
 });
 

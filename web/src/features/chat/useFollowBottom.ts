@@ -15,7 +15,7 @@ export function useFollowBottom(logRef: RefObject<HTMLDivElement | null>, { acti
   const pinning = useRef(false); // toBottom's frames are running and see every growth themselves
 
   // back on screen, the place is put back; this runs before a jump's own scroll, so a search hit wins
-  // the log's own window: in the pop-out that is the small window, whose frames and selection are its own
+  // the log's own window, whose frames and selection it watches
   const windowOf = (log: HTMLElement) => log.ownerDocument.defaultView ?? window;
 
   // toBottom scrolls to the end and keeps doing so, a frame at a time, until the end holds still: the turns near it are
@@ -95,7 +95,7 @@ export function useFollowBottom(logRef: RefObject<HTMLDivElement | null>, { acti
   useEffect(() => {
     const log = logRef.current;
     if (!log) return;
-    // a gesture over a log that cannot scroll moves whatever is around it (the wall's grid), not this log
+    // a gesture over a log that cannot scroll moves whatever is around it, not this log
     const letGo = (up: boolean) => {
       if (log.scrollHeight <= log.clientHeight + 1) return;
       released.current = up;

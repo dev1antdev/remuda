@@ -134,8 +134,8 @@ function stretchesOf(x: Exchange, live: Live, last: boolean, now: number): { cal
   return { calls, base, end };
 }
 
-// ribbon is the last RIBBON_MS of a conversation: cut says the turns read may start after the window does (a tile's tail,
-// a file a compaction began), so the time before the first of them is not read rather than idle
+// ribbon is the last RIBBON_MS of a conversation: cut says the turns read may start after the window does (a file a
+// compaction began), so the time before the first of them is not read rather than idle
 export function ribbon(turns: Turn[], { now, live, cut }: { now: number; live: Live; cut: boolean }): RibbonModel {
   const from = now - RIBBON_MS;
   const exchanges = exchangesOf(turns);

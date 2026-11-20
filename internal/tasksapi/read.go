@@ -5,8 +5,8 @@ import (
 	"time"
 )
 
-// The read side of the door: what the agents are doing, as the roster, a conversation's recap and the standup
-// say it to the person — for an agent that wants to know who is on what before it files or takes a task.
+// The read side of the door: what the agents are doing, as the roster and a conversation's recap say it to the
+// person — for an agent that wants to know who is on what before it files or takes a task.
 
 // Roster is the cockpit's roster as a program needs it: every machine with its workspaces, tabs and panes.
 type Roster struct {
@@ -23,13 +23,12 @@ type Machine struct {
 	Sessions []Workspace `json:"sessions"`
 }
 
-// Workspace is one of herdr's workspaces with its tabs; the concierge's is remuda's own, the one asking about the others.
+// Workspace is one of herdr's workspaces with its tabs.
 type Workspace struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Dir       string `json:"dir,omitempty"`
-	Concierge bool   `json:"concierge,omitempty"`
-	Tabs      []Tab  `json:"tabs"`
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Dir  string `json:"dir,omitempty"`
+	Tabs []Tab  `json:"tabs"`
 }
 
 // Tab is one tab with its panes.
@@ -81,12 +80,6 @@ type Recap struct {
 	Markdown string `json:"markdown"`
 }
 
-// Standup is the standup over every agent as the cockpit answers it: the report as Markdown.
-type Standup struct {
-	Since    string `json:"since"`
-	Markdown string `json:"markdown"`
-}
-
 // AgentPane is an agent pane with the workspace and tab it sits in.
 type AgentPane struct {
 	Workspace Workspace
@@ -113,27 +106,10 @@ func (c *Client) Recap(machine, pane, session string, since time.Time) (Recap, e
 	return out, c.do("GET", "/api/recap?"+v.Encode(), nil, &out)
 }
 
-// Standup reads the standup since the moment given, or since local midnight in the zone named when it is zero.
-func (c *Client) Standup(since time.Time, tz string) (Standup, error) {
-	v := url.Values{}
-	if tz != "" {
-		v.Set("tz", tz)
-	}
-	if !since.IsZero() {
-		v.Set("since", since.UTC().Format(time.RFC3339))
-	}
-	var out Standup
-	return out, c.do("GET", "/api/standup?"+v.Encode(), nil, &out)
-}
-
-// AgentPanes is every agent pane of a machine with its place, in the roster's order; a shell is left out, and so is the
-// concierge, which works on nothing.
+// AgentPanes is every agent pane of a machine with its place, in the roster's order; a shell is left out.
 func (m Machine) AgentPanes() []AgentPane {
 	var out []AgentPane
 	for _, ws := range m.Sessions {
-		if ws.Concierge {
-			continue
-		}
 		for _, tab := range ws.Tabs {
 			for _, pane := range tab.Panes {
 				if pane.Agent != "" {

@@ -36,7 +36,7 @@ func (st *Store) checkScene(s *Schedule) error {
 	if !ok {
 		return errors.New("that scene is gone")
 	}
-	s.Since, s.Model, s.Args, s.Close = "", "", "", false
+	s.Model, s.Args, s.Close = "", "", false
 	if s.Label == "" {
 		s.Label = name
 	}

@@ -63,7 +63,8 @@ describe("sameFeed", () => {
 describe("modeOf", () => {
   it("reads the app's names, agents for the first mode", () => {
     expect(modeOf("agents")).toBe("herdr");
-    expect(modeOf("wall")).toBe("wall");
+    expect(modeOf("wall")).toBeNull();
+    expect(modeOf("tasks")).toBe("tasks");
     expect(modeOf("code")).toBe("code");
     expect(modeOf("settings")).toBeNull();
     expect(modeOf(3)).toBeNull();

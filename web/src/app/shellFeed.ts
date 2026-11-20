@@ -78,7 +78,7 @@ export function sameFeed(a: ShellFeed, b: ShellFeed): boolean {
   });
 }
 
-const MODE_NAMES: Record<string, Mode> = { agents: "herdr", herdr: "herdr", wall: "wall", tasks: "tasks", review: "review", code: "code" };
+const MODE_NAMES: Record<string, Mode> = { agents: "herdr", herdr: "herdr", tasks: "tasks", review: "review", code: "code" };
 
 // modeOf reads a mode's name as the app says it, "agents" for the first mode; nothing for a name the page has no mode for
 export function modeOf(name: unknown): Mode | null {

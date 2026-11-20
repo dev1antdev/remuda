@@ -10,11 +10,10 @@ import { PromptKeys } from "./PromptKeys";
 import { choosable, keysTo, pressInTurn, questionLines, sameDialog } from "./question";
 import { t } from "@/lib/i18n";
 
-export function QuestionCard({ machineId, paneId, active, compact = false, onKeys, children }: {
+export function QuestionCard({ machineId, paneId, active, onKeys, children }: {
   machineId: string;
   paneId: string;
   active: boolean; // read every 2 s only while on screen (10 s with the event socket up, and at once when the pane's status moves)
-  compact?: boolean; // a tile: the head and the ask, the detail left out
   onKeys: (keys: string[]) => Promise<boolean | void> | boolean | void; // false: the keys did not reach the pane
   children: ReactNode; // the words before the blind keys when the screen shows no dialog
 }) {
@@ -64,7 +63,7 @@ export function QuestionCard({ machineId, paneId, active, compact = false, onKey
   return (
     <div className="question" title={asked.text}>
       {head && <div className="question-head">{head}</div>}
-      {!compact && detail && <pre className="question-detail">{detail}</pre>}
+      {detail && <pre className="question-detail">{detail}</pre>}
       {ask && ask !== head && <div className="question-ask">{ask}</div>}
       <div className="question-options">
         {asked.options.map((o, i) => (

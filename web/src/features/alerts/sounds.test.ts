@@ -71,7 +71,7 @@ describe("the sound an alert rings with", () => {
     expect(soundFor(["done", "input"], "chime")).toBe("chime");
     expect(soundFor(["done", "stuck"], "bell")).toBe("bell");
     expect(soundFor(["review", "done"], "bell")).toBe("run");
-    expect(soundFor(["digest"], "bell")).toBe("chime");
+    expect(soundFor(["schedule"], "bell")).toBe("chime");
   });
   it("reads the switch of before as the chime, and an unknown pick as off", () => {
     expect(choiceOf("bell", true)).toBe("bell");

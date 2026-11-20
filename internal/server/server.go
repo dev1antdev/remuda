@@ -27,7 +27,6 @@ import (
 	"github.com/dev1antdev/remuda/internal/code"
 	"github.com/dev1antdev/remuda/internal/collisions"
 	"github.com/dev1antdev/remuda/internal/complete"
-	"github.com/dev1antdev/remuda/internal/concierge"
 	"github.com/dev1antdev/remuda/internal/drift"
 	"github.com/dev1antdev/remuda/internal/feed"
 	"github.com/dev1antdev/remuda/internal/filetree"
@@ -120,7 +119,7 @@ type Server struct {
 	Previews   *preview.Service    // the machines' dev servers opened on the cockpit, nil without
 	SelfPort   int                 // the port of -addr, never offered as a preview
 	Opinions   *opinion.Service    // the second opinions another agent gave on a folder's changes
-	Subagents  *subagents.Tracker  // how many subagents each Claude Code pane's conversation runs, for the Wall's zoo
+	Subagents  *subagents.Tracker  // how many subagents each Claude Code pane's conversation runs, for the sidebar's tree
 	Retire     *retire.Service     // what is set to a model or mode being retired, nil without
 	Scorecard  *scorecard.Service  // which model does the work best, from the runs, reviews, requests and arenas
 	Mirror     *mirror.Service     // remuda's figures and alerts inside herdr itself
@@ -129,7 +128,6 @@ type Server struct {
 	Drift      *drift.Service      // how every machine is set up, side by side
 	Collisions *collisions.Service // the workspaces of one repository changing the same files, nil without
 	Undo       *undo.Service       // the agents' turns kept to be undone, and the undo at the person's word
-	Concierge  *concierge.Service  // the Claude Code agent the person asks what the others are doing, on the machine they pick
 	Scenes     *scenes.Service     // the morning set-ups and the evening tidies, run at the person's press
 	GitOps     *gitops.Service     // git's writes on a checkout at the person's press, refused while an agent works there
 	Stage      *gitstage.Service   // the Changes lens's git writes, each at the person's press; nil writes nothing
@@ -193,7 +191,6 @@ func (s *Server) Handler() http.Handler {
 	s.arenaRoutes(api)
 	s.limitRoutes(api)
 	s.scratchRoutes(api)
-	s.conciergeRoutes(api)
 	s.jiraRoutes(api)
 	s.backupRoutes(api)
 	s.leftoverRoutes(api)

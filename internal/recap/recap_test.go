@@ -89,26 +89,16 @@ func TestInputFieldReadsACutInput(t *testing.T) {
 	}
 }
 
-func TestMarkdownIsAStandupReport(t *testing.T) {
-	since := time.Date(2026, 10, 24, 0, 0, 0, 0, time.UTC)
-	now := time.Date(2026, 10, 24, 18, 30, 0, 0, time.UTC)
-	items := []Item{
-		{Machine: "gog", Label: "gog", Workspace: "api", Agent: "claude", State: "blocked", Recap: Of(sample(), time.Time{})},
-		{Machine: "local", Workspace: "remuda", Agent: "claude", State: "idle", Recap: Recap{}},
-	}
-	md := Markdown(items, since, now)
-	for _, want := range []string{"# Standup · 24 Oct 2026", "## api on gog — needs you", "2 prompts · 2 answers · 1 min 37 s · 38k tokens · $0.43", "7 tool calls (Read 3, Agent 1, AskUserQuestion 1, Bash 1) · 1 failed call · longest Bash 1 min 2 s (go test ./...)", "- Edited: `/a/b.go`", "- Read: `/old.go`, `/a/c.go`", "1 subagent · 1 question", "- Last answer: Fixed", "Nothing to report from remuda."} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown lacks %q:\n%s", want, md)
+func TestLinesAreTheReportsLines(t *testing.T) {
+	lines := strings.Join(Lines(Of(sample(), time.Time{})), "\n")
+	for _, want := range []string{"2 prompts · 2 answers · 1 min 37 s · 38k tokens · $0.43", "7 tool calls (Read 3, Agent 1, AskUserQuestion 1, Bash 1) · 1 failed call · longest Bash 1 min 2 s (go test ./...)", "Edited: `/a/b.go`", "Read: `/old.go`, `/a/c.go`", "1 subagent · 1 question", "Last answer: Fixed"} {
+		if !strings.Contains(lines, want) {
+			t.Errorf("lines lack %q:\n%s", want, lines)
 		}
-	}
-	if quiet := Markdown(items[1:], since, now); !strings.Contains(quiet, "Nothing happened in this period.") {
-		t.Errorf("quiet report:\n%s", quiet)
 	}
 	long := Of(sample(), time.Time{})
 	long.Commands = []string{strings.Repeat("x", 100), "a", "b", "c", "d", "e", "f"}
-	ran := Markdown([]Item{{Workspace: "w", Recap: long}}, since, now)
-	if !strings.Contains(ran, "- Ran: `"+strings.Repeat("x", 59)+"…`, `a`, `b`, `c`, `d`, `e`, +1 more") {
+	if ran := strings.Join(Lines(long), "\n"); !strings.Contains(ran, "Ran: `"+strings.Repeat("x", 59)+"…`, `a`, `b`, `c`, `d`, `e`, +1 more") {
 		t.Errorf("commands are cut and capped:\n%s", ran)
 	}
 }

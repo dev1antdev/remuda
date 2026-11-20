@@ -7,7 +7,6 @@ import { DropdownMenu } from "radix-ui";
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 import Icon, { type IconName } from "./icons";
-import { usePortalHost } from "./portal";
 import Tip from "./Tip";
 
 export type MenuItem =
@@ -20,11 +19,10 @@ export type MenuItem =
 // open and onOpenChange hold it from outside, for a row that opens its menu on a right-click too.
 export default function Menu({ trigger, tip, items, align = "end", side = "bottom", label, open, onOpenChange }: { trigger: ReactNode; tip?: ReactNode; items: MenuItem[] | (() => MenuItem[]); align?: "start" | "center" | "end"; side?: "top" | "bottom" | "left" | "right"; label?: string; open?: boolean; onOpenChange?: (open: boolean) => void }) {
   const opener = <DropdownMenu.Trigger asChild>{trigger}</DropdownMenu.Trigger>;
-  const host = usePortalHost();
   return (
     <DropdownMenu.Root modal={false} open={open} onOpenChange={onOpenChange}>
       {tip ? <Tip text={tip}>{opener}</Tip> : opener}
-      <DropdownMenu.Portal container={host}>
+      <DropdownMenu.Portal>
         <DropdownMenu.Content className="menu" align={align} side={side} sideOffset={6} collisionPadding={8} hideWhenDetached aria-label={label} onClick={(e) => e.stopPropagation()}>
           <MenuRows items={typeof items === "function" ? items() : items} />
         </DropdownMenu.Content>
@@ -70,16 +68,15 @@ function MenuRows({ items }: { items: MenuItem[] }) {
 // first render, closing on a pick, Esc or a click elsewhere; the point is an empty anchor laid over the page's body, so
 // no container of the caller's moves it.
 export function MenuAt({ at, items, label, onClose }: { at: { x: number; y: number }; items: MenuItem[]; label?: string; onClose: () => void }) {
-  const host = usePortalHost();
   return (
     <DropdownMenu.Root open modal={false} onOpenChange={(open) => !open && onClose()}>
       {createPortal(
         <DropdownMenu.Trigger asChild>
           <span className="menu-anchor" style={{ left: at.x, top: at.y }} aria-hidden="true" />
         </DropdownMenu.Trigger>,
-        host ?? document.body,
+        document.body,
       )}
-      <DropdownMenu.Portal container={host}>
+      <DropdownMenu.Portal>
         <DropdownMenu.Content className="menu" align="start" side="bottom" sideOffset={2} collisionPadding={8} aria-label={label} onClick={(e) => e.stopPropagation()}>
           <MenuRows items={items} />
         </DropdownMenu.Content>

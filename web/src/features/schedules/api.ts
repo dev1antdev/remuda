@@ -1,10 +1,9 @@
-// Schedules: prompts to an agent on a timetable, the standup pushed as a digest, a fresh agent started in a folder, or one of the scenes.
+// Schedules: prompts to an agent on a timetable, a fresh agent started in a folder, or one of the scenes.
 
 import type { Denial } from "@/features/agents/deny";
 import { getJSON, sendJSON } from "@/lib/http";
 
-export type ScheduleKind = "prompt" | "digest" | "agent" | "scene";
-export type DigestSince = "midnight" | "24h" | "7d" | "last";
+export type ScheduleKind = "prompt" | "agent" | "scene";
 // why a run was skipped: the agent still works, waits for an answer, has not taken its prompt yet, its machine has not said,
 // the run before is still on its way, a scene's tidy found an agent at work, or its agent's plan window holds a new start
 // (an offer to run it on the other vendor goes out)
@@ -21,7 +20,6 @@ export type Schedule = {
   label: string;
   cron: string;
   prompt: string;
-  since?: DigestSince; // a digest's period
   agent?: string; // an agent schedule's kind of agent
   model?: string; // the model as the agent's own CLI names it, "" for its default
   args?: string; // extra arguments, as typed

@@ -18,7 +18,6 @@ describe("wanted", () => {
       expect(wanted(entry(1, kind), prefs()), kind).toBe(true);
       expect(wanted(entry(1, kind), prefs({ watchdog: false })), kind).toBe(false);
     }
-    expect(wanted(entry(1, "digest"), prefs({ watchdog: false }))).toBe(true);
     expect(wanted(entry(1, "schedule"), prefs({ watchdog: false }))).toBe(true);
     expect(wanted(entry(1, "backup", { machine: "", pane: "" }), prefs({ watchdog: false })), "a failed backup goes to every device, as push.Broadcast sends it").toBe(true);
     expect(alertOf(entry(1, "backup", { machine: "", pane: "" })).tone).toBe("warn");
@@ -40,7 +39,7 @@ describe("newAlerts", () => {
 });
 
 describe("alertOf and keepNewest", () => {
-  it("makes a toast that opens the pane, a digest the standup", () => {
+  it("makes a toast that opens the pane", () => {
     const question = alertOf(entry(3, "input", { title: "api needs you", body: "claude is waiting" }));
     expect(question).toEqual({
       id: "alert-3",
@@ -56,7 +55,6 @@ describe("alertOf and keepNewest", () => {
     expect(alertText(question)).toBe("api needs you · claude is waiting");
     expect(alertText(alertOf(entry(9, "machine", { pane: "" })))).toBe("t9");
     expect(alertOf(entry(4, "done"))).toMatchObject({ tone: "success", lingers: true });
-    expect(alertOf(entry(5, "digest", { pane: "", machine: "" }))).toMatchObject({ panel: "standup", pane: undefined, machine: undefined });
   });
   it("opens the usage for a budget or a limit, and a backup's failure warns", () => {
     expect(alertOf(entry(6, "budget", { pane: "" }))).toMatchObject({ panel: "usage", tone: "warn" });

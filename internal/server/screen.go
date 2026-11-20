@@ -14,7 +14,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/sessions"
 )
 
-// The wall's screen view: a pane's terminal as text with its colours, read from herdr on demand at the tiles' pace.
+// A pane's terminal as text with its colours, read from herdr on demand: a viewer link's terminal lens.
 // The terminal lens's find over the scrollback reads the pane's rows here too, and scrolls the pane to a match. The
 // screen terminal — a pane with no attach, a Windows machine's — is that screen read again and again, typed into here.
 

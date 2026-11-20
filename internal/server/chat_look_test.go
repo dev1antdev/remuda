@@ -8,9 +8,9 @@ import (
 )
 
 // A read of a pane's conversation is the person's look at it — which takes its finish's notification back, or keeps it
-// from going out at all — only from the chat lens of a page they can see: never a tile's tail, a viewer's screen, or a
-// page whose own document is hidden (the Mac app's window closed, which goes on polling for its menu bar; a tab behind
-// a pop-out), which says so with look=0.
+// from going out at all — only from the chat lens of a page they can see: never a tail, a viewer's screen, or a page
+// whose own document is hidden (the Mac app's window closed, which goes on polling for its menu bar), which says so
+// with look=0.
 func TestAChatReadIsALookOnlyFromAPageThePersonSees(t *testing.T) {
 	read := func(query string, viewer bool) bool {
 		r := httptest.NewRequest("GET", "/api/chat?machine=local&pane=w1:p1"+query, nil)

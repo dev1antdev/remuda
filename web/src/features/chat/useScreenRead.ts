@@ -10,14 +10,13 @@ import { fetchScreenRead, type ScreenRead } from "./api";
 import { freshRead } from "./progress";
 
 export const WORKING_EVERY = 5000;
-export const TILE_SCREEN_EVERY = 10_000; // a wall tile's, while its agent works
 
-export function useScreenRead(machineId: string, paneId: string, { enabled, working, every: pace }: { enabled: boolean; working: boolean; every?: number }): { read: ScreenRead | null; reload: () => void } {
+export function useScreenRead(machineId: string, paneId: string, { enabled, working }: { enabled: boolean; working: boolean }): { read: ScreenRead | null; reload: () => void } {
   const connected = useLiveConnected();
-  const every = pace ?? (working ? WORKING_EVERY : connected ? 15_000 : 10_000);
+  const every = working ? WORKING_EVERY : connected ? 15_000 : 10_000;
   const { data, reload } = useQuery(() => fetchScreenRead(machineId, paneId), [machineId, paneId], { every, enabled: enabled && !!paneId, keep: true });
   const wasWorking = useRef(working);
-  const [began, setBegan] = useState(0); // when the work under way began: a tile's last read is the turn before's
+  const [began, setBegan] = useState(0); // when the work under way began: a read from before it keeps no spinner
   useEffect(() => {
     if (working && !wasWorking.current) {
       setBegan(Date.now());

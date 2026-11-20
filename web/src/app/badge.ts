@@ -1,10 +1,10 @@
-// The browser tab's badge: the title counts the agents that need the person — the Wall's Needs-me rule, a question open,
-// a watchdog note, a finish not looked at — and the favicon wears the colour of the most pressing one: red for a
+// The browser tab's badge: the title counts the agents that need the person — a question open, a watchdog note, a
+// finish not looked at — and the favicon wears the colour of the most pressing one: red for a
 // question, amber for a note, green for a finish. The pure part; useBadge draws it.
 
 import type { Machine, Pane } from "@/features/roster/api";
 import { displayOf, type RadarPrefs } from "@/features/roster/radar";
-import { needsMe } from "@/features/roster/wall";
+import { needsMe } from "@/features/roster/needs";
 
 export type BadgeTone = "red" | "amber" | "green";
 export type Badge = { count: number; tone: BadgeTone | null };

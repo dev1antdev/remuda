@@ -65,8 +65,8 @@ export const auditpanels: Dictionary = {
   "Workspace name (optional)": "Название пространства (необязательно)",
   "Label (optional)": "Имя (необязательно)",
   "(optional)": "(необязательно)",
-  "What the agents on each machine use to read and write your tasks through remuda mcp and remuda tasks, and to read who is doing what (the roster, a recap, the standup): never the rest. A revoked one is replaced when remuda next connects to that machine (this one at its next start).":
-    "Ими агенты на каждой машине читают и пишут ваши задачи через remuda mcp и remuda tasks и смотрят, кто чем занят (список, сводка, стендап) — и ничего больше. Отозванный ключ заменяется, когда remuda в следующий раз подключится к той машине (к этой — при следующем запуске).",
+  "What the agents on each machine use to read and write your tasks through remuda mcp and remuda tasks, and to read who is doing what (the roster, a recap): never the rest. A revoked one is replaced when remuda next connects to that machine (this one at its next start).":
+    "Ими агенты на каждой машине читают и пишут ваши задачи через remuda mcp и remuda tasks и смотрят, кто чем занят (список, сводка) — и ничего больше. Отозванный ключ заменяется, когда remuda в следующий раз подключится к той машине (к этой — при следующем запуске).",
   "Every key the page answers (also behind ?)": "Все клавиши, на которые отвечает страница (ещё за ?)",
   "A note for the agent (optional)": "Заметка для агента (необязательно)",
   "Not done": "Не готово",

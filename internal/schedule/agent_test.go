@@ -63,7 +63,7 @@ func (d *scoutDoor) notify(p push.Payload) {
 func scoutStore(t *testing.T, dir string) (*Store, *scoutDoor) {
 	t.Helper()
 	door := &scoutDoor{answer: "Made three tasks."}
-	st := New(dir, nil, door.notify, nil)
+	st := New(dir, nil, door.notify)
 	st.Agents = door.agents()
 	return st, door
 }
@@ -262,7 +262,7 @@ func TestAgentSchedulePutChecksItsFields(t *testing.T) {
 		}
 	}
 	s, err := st.Put(scout)
-	if err != nil || s.Since != "" || s.Model != "gpt-5" {
+	if err != nil || s.Model != "gpt-5" {
 		t.Fatalf("a sound one refused: %v %+v", err, s)
 	}
 }

@@ -210,6 +210,16 @@ func TestViewsMaskSecretsAndReplaceKeepsThem(t *testing.T) {
 	}
 }
 
+func TestAKindNoLongerOfferedIsDroppedOnSave(t *testing.T) {
+	w := loadWebhooks(t.TempDir())
+	if err := w.Replace("", []Webhook{{Kind: "generic", Name: "old", URL: "https://example.com/h", Kinds: []string{"question", "digest"}, Enabled: true}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, views := w.Views(); len(views) != 1 || len(views[0].Kinds) != 1 || views[0].Kinds[0] != "question" {
+		t.Fatalf("a webhook that took the standup's digest: %+v", views)
+	}
+}
+
 func TestReplaceRefusesWhatCannotBeSent(t *testing.T) {
 	w, _, _ := newWebhooks(t)
 	bad := []struct {
@@ -290,7 +300,7 @@ func TestLinkAndMasked(t *testing.T) {
 	}{
 		{"", "", Payload{Pane: "p"}},
 		{"https://r.ts.net", "https://r.ts.net/?machine=gog&pane=w1%3Ap2", Payload{Machine: "gog", Pane: "w1:p2"}},
-		{"https://r.ts.net", "https://r.ts.net/?panel=standup", Payload{Panel: "standup", Kind: "digest"}},
+		{"https://r.ts.net", "https://r.ts.net/?panel=usage", Payload{Panel: "usage", Kind: "budget"}},
 		{"https://r.ts.net", "https://r.ts.net", Payload{Kind: "test"}},
 	}
 	for _, c := range cases {

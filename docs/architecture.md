@@ -101,7 +101,7 @@ down through, and one folder per lens.
 ┌─ app ────────────────────────────────────────────────────────────────┐
 │  app/   the shell: the store (what is selected, the lens, the mode,  │
 │         the overlays), the URL that follows it, Header, PaneArea,    │
-│         Wall, PopOut, Overlays — the only place features compose     │
+│         Overlays — the only place features compose                   │
 ├─ features ───────────────────────────────────────────────────────────┤
 │  roster · chat · terminal · review · tasks · updates · usage ·       │
 │  search · schedules · alerts · files · code · agents · quick ·       │

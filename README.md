@@ -134,8 +134,8 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   reads its favicon once, right then, and keeps a copy; nothing is fetched
   later — or a picture from your computer, a company's logo made into a
   small square. Without one a folder wears its initial on a tile in a
-  colour of its name. The icon is the server's, so every device and the
-  Wall, the palette and the header show it.
+  colour of its name. The icon is the server's, so every device, the
+  palette and the header show it.
 - **Screen-sharing mode** — sharing your screen at work and the sidebar
   names a client's projects? Alt+H (or "Screen-sharing mode" in the View
   menu or the palette) turns it on: the folders and machines you marked
@@ -143,8 +143,7 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   the mode's own pick when nothing is marked — read as "Project A",
   "Machine 2", their icons a plain tile, their branches gone, the agents'
   titles and answers hidden; a hidden folder's chat, terminal and files
-  are covered until you click "Show this pane", its wall tiles show their
-  state only, and the palette, the toasts, Activity and the Mac app's
+  are covered until you click "Show this pane", and the palette, the toasts, Activity and the Mac app's
   menu say the neutral names too. An amber "Sharing" chip in the header
   says it is on and holds its menu. It lives on this device only; nothing
   the server keeps or sends changes, so a notification on your phone still
@@ -153,7 +152,7 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   account's e-mail and an API token from id.atlassian.com; a server: its
   address and a personal access token) and the issue keys a workspace's
   branch or its agents name — `feature/CRMOPS-6279-…`, "fixed
-  CRMOPS-6279" — show as a chip on its sidebar card and wall tile,
+  CRMOPS-6279" — show as a chip on its sidebar card,
   "CRMOPS-6279 · In Review" in the status's colour, a click opening the
   issue. "New task from a Jira issue…" (the Tasks head's link menu, the
   palette) makes a task of one, its description and labels with it. The
@@ -173,16 +172,16 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   into turns (text, thinking, tool calls with outputs), polled with ETags.
   Claude Code's session files, Codex's rollouts and Gemini CLI's chats
   all read into the same turns, so a Codex or Gemini pane has its chat,
-  recap, standup line, meter and search like a Claude Code one (Gemini's
+  recap, meter and search like a Claude Code one (Gemini's
   reader is written from the CLI's own types and has not been seen live).
 - **One socket for the news** — the page keeps one WebSocket to its
   remuda, which says when the roster moved or a transcript grew, so the
-  sidebar, the wall and the chat redraw within about a second instead of
+  sidebar and the chat redraw within about a second instead of
   on the next poll, and the polls themselves slow down to a safety net:
   fewer requests, less battery on a phone. Without the socket (an old
   proxy, a hiccup) everything polls as before. remuda itself hears herdr
   the same way: one event stream per machine, so a question or a finish
-  is on the page, the Wall and your phone about a quarter of a second
+  is on the page and your phone about a quarter of a second
   after the agent stopped, and herdr is asked for its state every 15–20 s
   instead of every 2–4 while the stream stands.
 - **The address follows you** — `?machine=&pane=&mode=&lens=` is what you
@@ -196,7 +195,7 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   question as it stands on the screen (Claude Code's permission prompts,
   its "trust this folder", an AskUserQuestion) with a button per choice;
   a tap walks the cursor there and presses Enter, Esc closes. From the
-  phone, the wall and the pop-out too. A dialog remuda cannot read leaves
+  phone too. A dialog remuda cannot read leaves
   the blind ↑ ↓ Enter Esc. Beside the composer's tools a small chip says
   Claude Code's permission mode as its footer does — accept edits, plan,
   auto, manual, bypass in amber — and a tap cycles it with shift+tab, the
@@ -205,8 +204,8 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   herdr has a manifest for, with the model, extra arguments and first
   prompt you chose under Options), `workspace.close`.
 - **The rail** — the places of the page down the left edge, each an
-  icon with its name: Agents, Wall, Tasks, Code, Review, then Standup,
-  Usage, Schedules, Activity and Settings. On a phone it lies along the
+  icon with its name: Agents, Tasks, Code, Review, then Usage, Schedules,
+  Repositories, Activity, Shell and Settings. On a phone it lies along the
   bottom under the thumb, with Code, the panels and Settings behind
   More. The sidebar's head keeps two buttons: + (a workspace, a PC) and
   ⋯ (message several agents, the order, the settings). Settings is two
@@ -237,19 +236,19 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   is light — or always one of them ("Theme: …", "Dark theme: Nord",
   "Light theme: …" in the palette, ⌘K). The accent — peach unless you
   say — is any of the theme's fourteen colours, a swatch each. The
-  terminal (in the theme's own terminal colours), the Wall's screens, a
-  timelapse and its GIF, the zoo, the diagrams and the Code editor all
+  terminal (in the theme's own terminal colours), a viewer's screens, a
+  timelapse and its GIF, the diagrams and the Code editor all
   follow, and every theme is checked to read: text at 7:1 on its
   background, the dimmer greys at 4.5:1 and 3:1, the ink on every accent
   at 4.5:1.
 - **English or Russian** — the page speaks the language of your browser,
   or the one you pick in Settings › General › Language ("Язык: Русский" in
   the palette); a change reloads the page. The agents' answers, the
-  pushes, the standup and the MCP answers stay as they are.
+  pushes and the MCP answers stay as they are.
 - **Text size, density and font** — the Look section of Settings also
   sets the page's text size (Small to Larger, "Text size: …" in the
   palette too; the terminal keeps its own size in its View menu), the
-  density (Compact tightens the sidebar rows, the tabs, the tile heads
+  density (Compact tightens the sidebar rows, the tabs, the task rows
   and the gaps between turns, on a wide screen with a mouse) and the
   monospace font for code and the terminal, from the families installed
   on this device — each shows in its own face in the list, an
@@ -258,7 +257,7 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
 - **Machines in your order** — drag a machine by its name in the sidebar
   (a grip shows under the pointer) and drop it above or below another;
   on a phone, or from the keyboard, its ⋯ menu has Move up and Move
-  down. The order is kept on the cockpit, so every device, the Wall and
+  down. The order is kept on the cockpit, so every device and
   the palette list the machines the same way; a machine added later
   comes last.
 - **Under a finger** — on a phone or a tablet every control is an
@@ -298,89 +297,34 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   fresh one next time.
 - **Settings that follow you** — "Sync these settings between devices",
   the last row of Settings › Look, keeps the theme, the dark and light ones, the
-  accent, the density, the code font, the sidebar's settings, the Wall's,
+  accent, the density, the code font, the sidebar's settings,
   the review's two columns, the files rail, the timeline, the activity
-  ribbon, the tasks view, the standup period, the year's tone, Code's Follow and the panels' widths in this remuda,
+  ribbon, the tasks view, the year's tone, Code's Follow and the panels' widths in this remuda,
   so the phone and the desk agree: a change on one device reaches the
   others within a minute (at once when they come back into view), the
   newer choice winning. Alerts, quiet hours, read-aloud, the text sizes
   (the page's and the terminal's) and the prompt history stay on the
   device they were set on.
-- **Wall** — the **Wall** mode in the top bar puts every agent on one
-  screen: a tile per agent pane on every connected machine, with its
-  state and how long it has lasted, what it runs this second (the tool
-  call under way, else thinking or writing) and how far its plan is
-  (3/7) or, once it has finished,
-  the first line of what it answered, its pull request as a link when
-  it named one (GitHub or GitLab; the workspace's ⋯ menu has it too)
-  and how it stands beside the link — "2/2 checks · approved", red when
-  a check failed, the branch conflicts or the review asks for changes,
-  amber while checks run or a merge request's threads are open ("2 open
-  threads") — read with `gh` (`glab` for a GitLab merge request) on
-  that machine as you, every two minutes while the page is open, so
-  remuda itself asks GitHub nothing (while a request's checks have
-  settled, a conditional request that costs no rate limit says whether
-  it moved at all). The chips open a menu: *Pull request panel* (below),
-  and when a check failed, *Hand the failed checks to the agent* names
-  each failed check's `gh run view <run> --job <id> --log-failed`
-  command and sends a short end of its log to the agent; *Send the
-  review comments to the agent* does the same with the reviewers'
-  verdicts and their comments on the lines, numbered as the Changes
-  lens numbers yours. Both ask the agent to fix and say what it changed,
-  and end by telling it that what is quoted is data, not instructions,
-  and not to push, post or resolve threads unless you ask. Nothing is
-  sent unless you choose the row, and an
-  agent waiting on a question refuses, as the chat does;
-  the last turns of its conversation and a line to answer it,
-  in a grid that fits the window (S / M / L). Hide the idle ones, or
-  keep only the agents that need you — a question, a watchdog note, a
-  finish you have not looked at, each ringed on the wall — hide any
-  tile, bring them back; **focus** one agent and it takes the whole wall
-  while the others wait in a strip under it; a click on a tile's head opens that agent
-  in Agents. **Office** turns the wall into a show for a second screen or
-  a TV: one agent large — the one asking you something, else whoever
-  needs you, else each in turn every 20 s — the rest as cards in a column
-  beside it, in full screen; a card's click or the pin on any tile keeps
-  that agent featured, ← and → walk them by hand, Esc leaves. The tiles ask only for the last few turns, so a wall of a
-  dozen agents stays light. **Screen** turns every tile into the pane's
-  terminal as it is — the rows with their colours, scaled to the tile,
-  the prompt and the status at the bottom — a wall of monitors, read
-  from herdr without attaching, so nothing is resized and no attach slot
-  is taken; a click opens that terminal. **Zoo** turns every agent into a
-  little creature in its vendor's colour, for the TV across the room: it
-  bounces at a laptop while it works, raises a hand under a "?" when it
-  asks you something (and holds up what it asks), holds up an amber "!"
-  for a watchdog note, dances over a finish you have not looked at,
-  sleeps with a "z" when idle (dim when long idle, under a blanket at
-  night), slumps under an empty battery when it hit its plan limit, and
-  tilts its head when its state is unknown; press and hold one (or its
-  speaker under the pointer) and it tells you its day in its own voice —
-  "Today I answered 3 times and edited app.go. Now I'm waiting for your
-  answer." — high for Gemini, low for the Codex robot — the pose and the sign say it
-  even without colour. Each vendor is a species of its own — a round
-  critter with antennae for Claude Code, a robot for Codex, an egg
-  between sparkles for Gemini CLI, a moon rabbit for Kimi Code — and
-  wears its model's hat (a top hat for Opus, a wizard's for Fable, a
-  beret for Sonnet, a sprout for Haiku, a cap for OpenAI's models) and a
-  trinket of its own, so two agents of one kind tell apart; it grows
-  rounder as its context fills (a belt from 80 %, a puff and slim again
-  after a compaction), piles coins for what it cost (amber or red when a
-  budget runs short), flies its pull request's flag in its checks'
-  colour and wears a crown once it is merged, brings out coffee after
-  20 minutes of work and sweats after an hour, and its subagents at
-  work hop around it as babies. The creatures stand in a pen per
-  machine whose weather is the machine's body — sun and sweat when it
-  runs hot, a storm for under-voltage, boxes for a nearly full disk —
-  under the sky of your hour, and the day runs along the foot: answers,
-  waits, spend, merges, who worked longest. When an agent finishes the
-  resting ones clap, a merged pull request sets off fireworks, the eyes
-  follow your pointer, and with the voices switched on (off by default)
-  each chirps in its species' voice. A click opens it, a hover or a long
-  press tells its state in words, office mode and the pop-out show it
-  large, and reduced motion keeps every creature still in its pose. In Chrome a tile — or the agent on screen,
-  from the header — **pops out** into a small window that stays above
-  every other app (Document Picture-in-Picture): the agent keeps you
-  company over your editor, and the line to answer it is right there.
+- **The pull request an agent named** — when an agent's answer names a
+  pull request (GitHub or GitLab), its sidebar card wears it as an icon and
+  its number in the colour of its state, the workspace's ⋯ menu has
+  *Open PR*, and how it stands — "2/2 checks · approved", red when a check
+  failed, the branch conflicts or the review asks for changes, amber while
+  checks run or a merge request's threads are open ("2 open threads") — is
+  read with `gh` (`glab` for a GitLab merge request) on that machine as
+  you, every two minutes while the page is open, so remuda itself asks
+  GitHub nothing (while a request's checks have settled, a conditional
+  request that costs no rate limit says whether it moved at all). Its menu
+  offers *Pull request panel* (below), and when a check failed, *Hand the
+  failed checks to the agent* names each failed check's `gh run view <run>
+  --job <id> --log-failed` command and sends a short end of its log to the
+  agent; *Send the review comments to the agent* does the same with the
+  reviewers' verdicts and their comments on the lines, numbered as the
+  Changes lens numbers yours. Both ask the agent to fix and say what it
+  changed, and end by telling it that what is quoted is data, not
+  instructions, and not to push, post or resolve threads unless you ask.
+  Nothing is sent unless you choose the row, and an agent waiting on a
+  question refuses, as the chat does.
 - **Review** — the **Review** mode lists every workspace on every machine
   with uncommitted work, the ones with changes since you last looked
   first, and opens the Changes lens of the one you pick beside the list:
@@ -450,14 +394,12 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   merge does it for you. Once a minute remuda reads each checkout's work
   against the repository's main branch (its branch's own commits and
   what is still uncommitted) and compares them: a quiet bolt on the
-  sidebar card, and on the wall tile and the review row beside the other
+  sidebar card, and on the review row beside the other
   workspace's name — amber when the same lines (or lines side by side)
   change, quiet when only the same files do — and its tooltip lists the files,
   where they touch, and which of the two should land first: the one with
   a pull request open, else the one whose agent has finished, else the
-  smaller change. The Changes lens says it in a notice, the zoo draws a
-  lightning between the two creatures (a small bolt on each when they
-  stand in different pens), and a new overlap of the same lines is one
+  smaller change. The Changes lens says it in a notice, and a new overlap of the same lines is one
   push — to the workspace that should wait and rebase — respecting your
   mutes and quiet hours.
 - **Arena** — one prompt to several agents at once: "Arena…" in a task's
@@ -483,46 +425,19 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   for the quiet green mark of a column's best. The button at the end of a
   row opens an arena on a recent task with two models side by side: the
   one that ran it and the row's own.
-- **Standup** — the sun button in the sidebar head (or "Standup" in the
-  palette) is one report over every agent on every machine: what each
-  did since midnight — prompts and answers, how long and what it cost,
-  the tools it called and which failed, the longest call, the commands
-  it ran, the files it edited and read, subagents started, questions
-  asked — and the first line of its last answer, the agents that need
-  you first. Under each agent a thin **day strip** shows *when*: green
-  while it worked, red while it waited on a question of its own, dim
-  while it sat idle, the hours marked under it; hover a stretch for its
-  times, click one to open the chat right there. Switch to the last 24
-  hours or 7 days; **Copy as Markdown**
-  gives the report ready to paste into a channel. Come back to the page
-  after an hour or more and a toast says what happened meanwhile —
-  "Away 3 h: 2 agents answered, 1 waits for you, $4.20 spent" — with the
-  standup one click away; nothing when nothing happened. The same recap of one
-  conversation — the session on screen, or a transcript opened from the
-  search — is the sun button beside the chat's export, and in the
-  palette. All of it is read from the transcripts remuda already has;
-  nothing is sent anywhere. **Listen** (the headphones beside the period,
-  or "Listen to the day" in the palette) reads the day aloud on the way
-  to work, the way a colleague would tell it: "Good morning. Here is
-  your day so far. 3 agents did some work. Together they spent about
-  9 dollars at API prices. In web on GOG, Codex is waiting for your
-  answer…" — who waits for you first, who finished what and what it
-  cost, its last answer in its own words, the reviews waiting and a plan
-  limit near its end, then what is left; a few minutes at most, in the
-  page's language. Play, pause, back, skip to the next agent; the
-  sentence being said is on screen and the agent marked in the report,
-  and a phone's lock screen shows it with its buttons (Chrome on
-  Android goes on with the screen locked; Safari on an iPhone stops
-  when the screen locks, so keep it on). It is the browser's own voice,
-  the one picked under Read aloud, and nothing passes through remuda;
-  a recap has Listen too. **A standup digest every morning**: in
-  Schedules, pick "Standup digest" instead of a prompt, a time ("Weekdays"
-  at 9:00) and what it covers — since midnight, the last 24 hours, the
-  last 7 days, or since the previous digest — and every device that gets
-  remuda's alerts receives one push: how many agents finished, how many
-  wait for you, what it cost, a line per agent; a tap opens the Standup.
-  Quiet hours hold it, and a period with nothing in it sends nothing.
-  **A scout every few hours**: the third kind of schedule, "Start an
+- **Recap** — what one conversation came to — the session on screen, or a
+  transcript opened from the search — is *Recap…* in the chat's View menu
+  and in the palette: prompts and answers, how long and what it cost, the
+  tools it called and which failed, the longest call, the commands it
+  ran, the files it edited and read, subagents started, questions asked,
+  and the first line of its last answer. A thin **day strip** shows
+  *when*: green while it worked, red while it waited on a question of its
+  own, dim while it sat idle, the hours marked under it; hover a stretch
+  for its times, click one to open the chat right there. **Copy as
+  Markdown** gives it ready to paste. All of it is read from the
+  transcript remuda already has; nothing is sent anywhere.
+- **Schedules** — a prompt to the agent in a folder on a timetable, or
+  **a scout every few hours**: the second kind of schedule, "Start an
   agent", opens a fresh tab in a folder, starts the agent you name (with
   a model and arguments if you like, or a saved recipe that fills the
   four fields at once) and hands it your prompt once it is
@@ -563,7 +478,7 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   up: a run is skipped, noted in quiet words and pushed nowhere, while the
   agent it would reach — or the one the schedule's last run started — is
   still working or waits for your answer.
-- **Tasks** — the **Agents | Wall | Tasks | Code | Review** switch in the top bar opens remuda's
+- **Tasks** — the **Agents | Tasks | Code | Review** switch in the top bar opens remuda's
   own task list: projects on the left, Today / Upcoming / All open /
   Proposed, quick add, done, due dates, priorities, labels, descriptions,
   search — and a **board** per project: the columns a task moves through
@@ -639,7 +554,7 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   pipeline's jobs as the checks, its approvals, its threads still open,
   the failed job's log and the open threads handed to the agent from the
   same menu, and the merge moving the task to *Done*. Once merged, its menu
-  on the tile offers *Close & remove worktree…*, the table below.
+  offers *Close & remove worktree…*, the table below.
   Closing a workspace that stands on a worktree herdr or remuda made
   (under `~/.herdr/worktrees`), or *Close & remove worktree…* in its ⋯
   menu, opens a table of what goes, after Orca's: the folder *Deleted*,
@@ -923,17 +838,16 @@ files. Settings › Devices lists the keys, one per machine, with a Revoke each.
 
 **Viewer links** sign a screen in to look only. Make one in Settings ›
 Devices under a name — "the office TV", a colleague's — and open it where
-the viewing happens: that browser gets the Wall, the sidebar, the chats,
-the screens and their timelapses, the standup, the usage and Activity, and nothing that types or
+the viewing happens: that browser gets the sidebar, the chats,
+the screens and their timelapses, the usage and Activity, and nothing that types or
 changes — no composer, no keys, no question buttons, no Changes lens, no
-tasks; the Git lens draws its graph and opens no menu; the terminal lens shows the pane's screen as the Wall does, without
+tasks; the Git lens draws its graph and opens no menu; the terminal lens shows the pane's screen, without
 attaching, and the file viewer opens only files inside the machines'
 workspace folders — none at the home folder or above it, none of remuda's
 own, and never `~/.ssh` or remuda's state folder. Every call past that is refused with "this link is for
 viewing only", a viewer's look marks nothing as seen, and the header says
-*Viewing only*. The floating terminal and the concierge are yours alone: a
-viewer link does not see them, their screens, their conversations or their
-timelapses. It reads the conversation each pane is in, not the earlier
+*Viewing only*. The floating terminal is yours alone: a
+viewer link does not see it, its screen or its timelapses. It reads the conversation each pane is in, not the earlier
 sessions of a folder. The link is shown once; revoking it signs every screen it
 opened out at once, and the pairing link opened on such a screen makes it
 a device of your own.
@@ -986,8 +900,7 @@ with **+ PC** in the sidebar, and it connects like the others.
 Updates panel offers herdr's update, the agents', and a newer
 `remuda.exe` from the release.
 
-What works on a Windows PC: its agents in the sidebar, the Wall and the
-zoo, the chat with its composer and question card, the Changes lens and
+What works on a Windows PC: its agents in the sidebar, the chat with its composer and question card, the Changes lens and
 the review, the file viewer and uploads, the vitals (memory, disk, load,
 the Windows edition), keep-awake while agents work, the search and the
 usage report, its agents' door to your tasks, the restarts after an
@@ -1058,7 +971,7 @@ remuda setup -host pi.remote -server -tailscale   # no herdr there; the unit run
 ```
 
 `-server` (or `REMUDA_SERVER=1`) keeps the machine remuda runs on out of
-the cockpit: it is not in the sidebar, the Wall or any picker, no
+the cockpit: it is not in the sidebar or any picker, no
 workspace starts there, and its herdr is neither needed nor kept. Its
 health stands behind **Server** on the rail instead — load, disk,
 memory, temperature, the CPU's clock and a Raspberry Pi's throttling
@@ -1198,7 +1111,7 @@ triggers stay quiet, though a task still moves. The webhooks hear them as
 ## Timelapse — forty minutes of an agent's work in thirty seconds
 
 While an agent works, the cockpit reads its screen every 4 seconds — the
-way the Wall's screen view does, without attaching, so the pane is never
+way a viewer's screen does, without attaching, so the pane is never
 resized and no terminal slot is taken — on every machine, whether or not a
 page is open, and keeps a frame only when the screen moved. When the turn
 ends (the agent at rest, asking you something, its pane closed, its
@@ -1345,11 +1258,11 @@ Context Protocol server over stdio with ten tools — `tasks_list`,
 `task_get`, `task_create` (a Markdown description, a column, a due date, a
 priority, labels, the project's fields), `task_update` (move it to another
 column, mark it done, retitle, rewrite), `task_comment`, `projects_list`,
-`labels_list`, and three that only read what your agents are doing:
+`labels_list`, and two that only read what your agents are doing:
 `agents_list` (every agent on every machine, its state and for how long,
 its last answer, its pull request, its cost; the agent's own pane marked),
-`agent_recap` (what one conversation came to, as the Recap dialog shows it)
-and `standup` (the report over all of them) — and it tells the agent when
+and `agent_recap` (what one conversation came to, as the Recap dialog shows
+it) — and it tells the agent when
 to use which: look who is already on what before filing or taking a task.
 A task an agent makes remembers the pane that made it and lands in the project's
 **Proposed** column (unless the agent named a column), where the Tasks
@@ -1374,8 +1287,8 @@ while you are away.
 
 How the agents get in: the remuda that holds the list leaves an `agent-key`
 and an `agent-url` in remuda's state dir on every machine its agents run on;
-the key opens the tasks routes and a read of the roster, a recap and the
-standup, nothing else, on the cockpit itself or
+the key opens the tasks routes and a read of the roster and a recap,
+nothing else, on the cockpit itself or
 through its door forwarded over ssh (`REMUDA_AGENT_URL` and
 `REMUDA_AGENT_KEY` override them, for a script of your own). When the
 connection to a machine drops, the door opens again with the reconnect, on
@@ -1391,33 +1304,6 @@ Codex's `~/.codex/config.toml`:
     [mcp_servers.remuda]
     command = "/Users/you/.local/bin/remuda"
     args = ["mcp"]
-
-## The concierge — ask what is going on
-
-**Concierge** in the rail (More on a phone, or the palette's *Ask the
-concierge…*) is a conversation with the cockpit itself: *"What did the
-agents finish today?"*, *"Who is working on auth?"*, *"File a task for the
-flaky web tests."* remuda has no model of its own — the concierge is an
-ordinary Claude Code agent remuda starts and keeps in a folder of its own
-(`concierge/` in remuda's state dir on the machine, with a short `CLAUDE.md`
-saying who it is and to answer briefly in your language). It runs on your
-Mac when one is connected, else on the first connected machine with Claude
-Code (never a `-server` host); the picker at the top of its panel moves it.
-
-It can only read and file: it starts with `--strict-mcp-config` and remuda's
-own MCP server alone, so none of your other MCP servers or claude.ai
-connectors are there, and with settings that allow `agents_list`,
-`agent_recap`, `standup`, `tasks_list`, `task_get`, `projects_list`,
-`labels_list`, `task_create` and `task_comment`, deny every tool that reads
-or writes a file, runs a command, goes on the web or starts another agent,
-and deny instead of asking — so it never waits on a prompt. A task it files
-lands in **Proposed**, like any agent's; it cannot move one. What it is sent
-is what you type in its box, nothing else; opening its place starts it
-(answering Claude Code's trust question for its own folder), and its
-conversation comes back after a restart. **New conversation** starts a fresh
-one, and its workspace never shows in the sidebar, on the Wall or in a
-folder picker. A remote machine needs remuda installed for it (`remuda setup
--host <host>`); the panel says so when it is not.
 
 ## From your phone
 
@@ -1498,8 +1384,8 @@ make e2e       # the end-to-end smoke and the display checks: throwaway herdr + 
 ```
 
 When the page stalls — nothing clickable for a moment — the browser
-console gets a line like `[remuda] The page stalled 4.2 s on the Wall (13
-tiles)` with the mode, the lens and the pane it was on, and a stall of
+console gets a line like `[remuda] The page stalled 4.2 s in Agents, chat
+lens, local w1:p1` with the mode, the lens and the pane it was on, and a stall of
 two seconds or more shows a toast saying so; paste the line into an
 issue and the cause is half found.
 
@@ -1529,8 +1415,7 @@ thumbnail under the call in the chat; a click opens it. **Subagents**: an
 agent Claude Code spawns for a task (a fork, an Explore, a custom one)
 shows under the call that started it — working, quiet or done, what it
 is on this second or the first line of its report, how many tool calls —
-and *Open* reads its own conversation; a tile's state line says "waiting
-on 2 subagents" or "2 subagents working" while they run.
+and *Open* reads its own conversation.
 
 **The files rail:** a rail beside the chat and the terminal (View ›
 Files the agent touched), in two tabs. **Agent** lists every file the agent edited or read
@@ -1621,20 +1506,19 @@ Esc, the question's own two choices), and ⌥⌘R to show or hide the
 window from anywhere. It signs in by itself on the Mac that runs remuda
 and is one more device of the alerts above, so quiet hours and the alert
 settings apply to it; a remuda elsewhere is paired by its link in
-Settings…. Not in it: the pop-out and dictation, both browser APIs.
+Settings…. Not in it: dictation, a browser API.
 
 **Read aloud** is the same panel's last switch: the browser's own voice
 says what an agent answered when it finishes ("api: Tests pass."), that
 one is waiting for you, or a watchdog note — while the page is open and
 in front, in the voice you pick, a Russian one for a Russian answer.
-Nothing passes through remuda; a reload says nothing. The same voice
-reads the Standup aloud and gives the zoo's creatures theirs.
+Nothing passes through remuda; a reload says nothing.
 
 **Webhooks** are the same panel's last section, for a phone without Web
 Push or a channel the team reads: a Telegram bot (its token and your chat
 id), a Slack incoming webhook, an ntfy topic, or any address that takes
 JSON. Each one hears the kinds you tick — a question, a finish, a
-watchdog note, the digest, a schedule, a task, a budget, a review, a
+watchdog note, a schedule, a task, a budget, a review, a
 machine away or back, a backup that failed, a sign-in running out — with
 the title, the body and a link back to the pane, built from the address
 you set at the top of the section (your tailnet's is offered when there
@@ -1647,7 +1531,7 @@ not name here.
 **Mute a workspace** when one folder keeps pinging while you work on
 another: the workspace's ⋯ menu offers *Mute for an hour* and *Mute until
 tomorrow 09:00*. Until then its panes send no push, no webhook and add no
-Activity row — a bell-off on the sidebar row and the Wall tile says so,
+Activity row — a bell-off on the sidebar row says so,
 with the time left in its tooltip — and the menu row reads *Unmute · 42
 min left*. The mute ends by itself; the page's badge and read-aloud go on
 as before, since they read the roster rather than the alerts.
@@ -1803,7 +1687,7 @@ the chat and in a task's comments, in your theme's colours, with its
 source a click away (Source); the file viewer draws a Markdown file and a
 `.mmd` diagram too (Preview, beside File and Changes). Mermaid is loaded
 only when a diagram is on screen; a block it cannot read stays code with
-the reason; a wall tile keeps it as code.
+the reason.
 
 **Between agents:** every assistant turn has a *forward* link that sends its
 text, headed "From *workspace*:", to any other agent on any machine — the
@@ -1858,8 +1742,7 @@ reply. Open a card (a click, or ↑ ↓ and Enter) to read the prompt and the
 reply whole with the files it changed; the chat jumps to that turn.
 **While Claude Code works**, the line over the composer says what its
 own spinner says — "Refactoring… 2 min 14 s · ↓ 6.8k" — read off the
-pane's screen with the permission mode, and a wall tile's state line
-says the same. A message you typed while the agent worked shows in the
+pane's screen with the permission mode. A message you typed while the agent worked shows in the
 turn it reached, marked "Sent while it worked"; the search, the recap,
 the handover and the export count it as yours. Each run of tool calls
 is one card, a line a call: done, failed or running, what it was about,
@@ -1867,7 +1750,7 @@ how long it took, a chevron for its result; an answer's foot adds the
 tokens it wrote, "↓ 9.1k", as the CLI counts them.
 **The activity ribbon** (View › Activity ribbon, on by default) is what
 the agent did in the last half hour, now at the right, under the
-timeline and under every Wall tile's state line: a stretch per call in
+timeline: a stretch per call in
 the colour of its kind — reading cyan, writing yellow, the shell purple,
 waiting on you or on its subagents grey, other tools pink — over the
 time it spent thinking in blue, and "Quiet" in light red once three
@@ -1876,13 +1759,10 @@ stretch, or tap it, and the line under it names it with its kind's icon
 — "Bash · go test ./... · 48 s · failed · 20 min ago"; otherwise the
 line says what the latest turn came to, "1 min 7 s, 18 tools, 1 failed",
 or "Nothing in the last 30 minutes" when it ended before them.
-A Wall tile reads its last 12 turns, so when those began less than half
-an hour ago the time before them says "not read" rather than idle.
 **Plan** — when the agent keeps a task list (Claude Code's own
 TaskCreate / TaskUpdate, or TodoWrite), a quiet line over the chat says
 how far it is and what it is on, in the agent's own words — "Plan 3/7 ·
-Building the page" — and unfolds to the list; a wall tile says 3/7 in
-its state line, and in the conversation each change to the list is one
+Building the page" — and unfolds to the list, and in the conversation each change to the list is one
 line, not a block of JSON. Read from the transcript, so a remote
 machine's agent has it too.
 **Dictation** (🎤) uses the browser's own speech recognition — Safari on
@@ -1891,8 +1771,8 @@ iPhone, Chrome on the desk; nothing passes through remuda.
 **Type `/` or `@`** in the composer and a list opens over it: `/` as the first character lists the slash commands the pane's agent knows — Claude Code's own, your commands and skills under `~/.claude`, the project's under its `.claude` — and `@` lists the folder's files as git sees them (Codex and Gemini panes get their own command lists); ↑ ↓ walk, ↵ or Tab picks, Esc closes, a tap picks on the phone. **Switch the model** (View menu, or the palette) tells a Claude Code pane `/model` with Opus, Sonnet, Haiku or an id you type: the terminal shows the switch, the next answer's foot line names the model, and Claude Code keeps the pick as its default for new sessions, as its own `/model` does.
 
 **Machines** carry the names herdr gave them, and every remote one a
-hue of its own — the edge of its block in the sidebar, of its tiles on
-the Wall, a dot in the palette — so three machines are told apart at a
+hue of its own — the edge of its block in the sidebar, a dot in the
+palette — so three machines are told apart at a
 glance; the ⋯ beside a machine
 renames it for remuda (the Mac you sit at too), copies its SSH host, or
 removes one you added here.
@@ -2043,8 +1923,7 @@ with how long it took, a failed one is red, and that line counts the
 failed and the repeated calls. An Edit shows what it changed right
 under its line — the old and new lines, the words that differ marked,
 a long one folded past two dozen lines — so a review of the agent's
-work needs no file opened. On the Wall a tile says how long the
-running command has gone on, amber past a minute. 📊 opens the report: by day, by
+work needs no file opened. 📊 opens the report: by day, by
 project, by model, by machine, the sessions that cost the most — every
 machine reads its own transcripts, nothing is sent anywhere. On a
 subscription it is a measure of where the work went, not a bill. Under
@@ -2091,14 +1970,14 @@ asking a question or on another conversation by then.
 **Command palette** (⌘K, Ctrl+K elsewhere): type a few letters and
 jump to any agent on any machine — by its name, workspace, folder,
 machine or tab — or run what the page has a button for: a mode, a lens,
-a new workspace, tab or worktree, a rename, the pop-out, the files
+a new workspace, tab or worktree, a rename, the files
 rail, the panels. The liveliest agents come first, the current one is
 marked; ↑ ↓ move, ↵ runs, Esc closes. The last row searches every
 conversation for what you typed. **?** opens the keyboard sheet: every
 key the page answers, in groups. **Alt+N** goes to the next agent that
 needs you — a question open, a watchdog note, a finish you have not
-looked at — round and round in the sidebar's order; on the Wall that
-tile takes the wall, elsewhere the agent opens on its chat. **Alt+]** and
+looked at — round and round in the sidebar's order, the agent opening
+on its chat. **Alt+]** and
 **Alt+[** step through every agent, one after another as the sidebar
 draws them, the pinned ones first. The browser
 tab counts them too: its title reads "(2) remuda" and the favicon wears
@@ -2122,21 +2001,6 @@ pinned turn wears a mark in the margin, and **Pins…** in the View menu
 conversations, newest first — a click opens the conversation there, an
 older session of the folder included, so a pin survives a compaction.
 Pins travel with your settings when sync is on.
-
-**Wall:** a mode for the big screen — every agent on every connected
-machine as a tile: its state and workspace, its context and cost, how
-long it has been at it, what it runs this second and how far its plan
-is — or, once it is done, the first line of its answer — the last dozen turns of its
-conversation, the question it asks with its choices as buttons,
-and a line to answer. Tiles keep the roster's order, so nothing jumps
-when an agent changes state; hide the idle ones, keep only the ones that
-need you, or hide any single tile, focus one agent with the rest in a
-strip under it, pick the tile size, click a head to open the agent in full, switch the
-wall to **Screen** to see every terminal as it is instead of its chat, or put it in
-**Office** mode for a TV — one agent large, whoever needs you first, else each in turn,
-the rest as cards, pinnable, full screen. In Chrome, a tile
-or the current agent **pops out** into a small always-on-top window
-(Document Picture-in-Picture), one at a time, closed from its own frame.
 
 Planned: a remote-machine session picker, incremental transcript parsing for
 very long sessions.

@@ -36,7 +36,7 @@ export function waitingAgents(machines: Machine[]): Waiting[] {
   for (const machine of machines) {
     if (machine.state !== "connected") continue;
     for (const session of machine.sessions) {
-      if (session.scratch || session.concierge) continue;
+      if (session.scratch) continue;
       for (const tab of session.tabs)
         for (const pane of tab.panes) {
           if (!needsYou(pane)) continue;
@@ -55,7 +55,7 @@ export type Tally = { agents: number; needs: number; working: number; done: numb
 export function tallyOf(sessions: Session[]): Tally {
   const n: Tally = { agents: 0, needs: 0, working: 0, done: 0 };
   for (const s of sessions) {
-    if (s.scratch || s.concierge) continue;
+    if (s.scratch) continue;
     for (const tab of s.tabs)
       for (const p of tab.panes) {
         if (!p.agent) continue;
@@ -96,7 +96,7 @@ export function pinnedRows(machines: Machine[], pins: string[]): Pinned[] {
   for (const machine of machines) {
     if (machine.state !== "connected") continue;
     for (const session of machine.sessions) {
-      if (session.scratch || session.concierge) continue;
+      if (session.scratch) continue;
       session.tabs.forEach((tab) =>
         tab.panes.forEach((pane, i) => {
           const key = agentKey(machine.id, pane.id);

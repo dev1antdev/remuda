@@ -8,7 +8,7 @@ import (
 )
 
 // Mutes: a workspace folder silenced for a while — set with the time to unmute at, lifted, listed. The roster
-// carries each workspace's muted_until, so the sidebar and the Wall show the mark without a request of their own.
+// carries each workspace's muted_until, so the sidebar shows the mark without a request of their own.
 
 func (s *Server) muteRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/mutes", s.handleMutes)

@@ -1,6 +1,6 @@
 import { t } from "@/lib/i18n";
 // Every key the page answers, in groups, for the sheet behind ?. The one list to read; each binding lives where it is
-// handled (the Shell, the composer, the review's keys.ts, the palette, the wall).
+// handled (the Shell, the composer, the review's keys.ts, the palette).
 
 // a chord per key cap, "⌘ K"; `viewer: false` marks a key a viewer link's page does not answer
 export type KeyRow = { keys: string[]; what: string; viewer?: false };
@@ -73,13 +73,6 @@ function allGroups(mac: boolean): KeyGroup[] {
         { keys: [t("Space")], what: t("play or pause the turn") },
         { keys: ["←", "→"], what: t("the frame before or after") },
         { keys: ["↵", "⇧ ↵"], what: t("in the find: the next or previous place the text stood on screen") },
-      ],
-    },
-    {
-      title: t("Wall"),
-      rows: [
-        { keys: ["Esc"], what: t("back to the grid from a focused tile, or out of office mode") },
-        { keys: ["←", "→"], what: t("office mode: feature the previous or next agent, pinned") },
       ],
     },
     {

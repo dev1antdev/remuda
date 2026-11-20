@@ -1,8 +1,8 @@
 // The display checks scripts/e2e.sh runs after the smoke: every screen of the page drawn at a desk's width and a
 // phone's, in English and in Russian, against a remuda of its own on a throwaway herdr. A few workspaces are made
 // through the API — a repository with a linked worktree, a second tab, a plain folder — and the browser's copy of
-// the roster is dressed with agents (Fetch interception, nothing changes on the server) so the cards, the tiles, the
-// zoo and the plan limits have something to draw. Each screen is opened the way a person opens it (the palette by its
+// the roster is dressed with agents (Fetch interception, nothing changes on the server) so the cards and the plan limits
+// have something to draw. Each screen is opened the way a person opens it (the palette by its
 // row's id, a click, a key), screenshotted, and checked: no sideways scroll, every menu, popover, dialog, toast and
 // drawer inside the screen, no text squeezed to nothing, the content clear of the rail and the header, its landmarks
 // there, no console error. Every failure is collected and named by pass, screen and element; any one fails the run.
@@ -31,7 +31,7 @@ const ALL_PASSES = [
 // E2E_DISPLAY_PASSES=desk-en,phone-ru runs only those
 const PASSES = process.env.E2E_DISPLAY_PASSES ? ALL_PASSES.filter((p) => process.env.E2E_DISPLAY_PASSES.split(",").includes(p.name)) : ALL_PASSES;
 const OVERLAYS = ".menu, .popover, .row-menu, .modal, .toast, .sel-pop, .float-term, .palette, .fv, .tip-card";
-const CONTENT = ".pane-area, .wall, .tasks-main, .code-mode, .queue, .float-term, .status-bar";
+const CONTENT = ".pane-area, .tasks-main, .code-mode, .queue, .float-term, .status-bar";
 
 const say = (line) => console.log(`e2e display: ${line}`);
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -80,14 +80,12 @@ socket.onmessage = (message) => {
     const url = msg.params.request?.url ?? "";
     if (url.includes("/api/opinion")) void fakeOpinion(msg.params);
     else if (url.includes("/api/pr/")) void fakePullRequests(msg.params, send);
-    else if (url.includes("/api/concierge")) void fakeConcierge(msg.params);
     else if (url.includes("/api/scorecard")) void fakeScorecard(msg.params);
     else if (/\/api\/(scenes\/|scene-runs\/)/.test(url)) void fakeScenes(msg.params);
     else if (url.includes("/api/review/conflict")) void fakeConflictRead(msg.params);
     else if (/\/api\/review\?/.test(url)) void dressReview(msg.params);
     else if (url.includes("/api/review/secrets")) void fakeSecrets(msg.params);
     else if (url.includes("/api/timelapse/recordings") || url.includes("/api/timelapse/search")) void fakeTimelapse(msg.params);
-    else if (url.includes("/api/standup")) void fakeStandup(msg.params);
     else if (url.includes("/api/recap")) void fakeRecap(msg.params);
     else if (url.includes("/api/fleet-setup")) void fakeFleet(msg.params);
     else if (url.includes("/api/undo")) void fakeUndo(msg.params);
@@ -186,12 +184,6 @@ async function palette(id) {
     throw new Error(`the palette has no row ${id}`);
   }
   await sleep(250);
-}
-
-// conciergeHidden fails the screen when the concierge's workspace shows in the place given: its own place draws it alone
-async function conciergeHidden(selector) {
-  const shown = await evaluate(`[...document.querySelectorAll(${JSON.stringify(selector)})].some((el) => el.textContent.includes("concierge-e2e"))`);
-  if (shown) failed(`the concierge's workspace shows in ${selector}`);
 }
 
 // closeAll puts the page back to no overlay: Esc until nothing is open, the sidebar drawer shut
@@ -320,10 +312,8 @@ async function screen(name, { open, expect = [], close = closeAll, settle = 350 
 const git = (cwd, ...args) => execFileSync("git", ["-c", "user.email=e2e@remuda.invalid", "-c", "user.name=e2e", ...args], { cwd, stdio: "pipe" });
 const appDir = `${tmp}/display/app`;
 const notesDir = `${tmp}/display/notes`;
-const deskDir = `${tmp}/display/concierge-e2e`; // the concierge's folder: a shell workspace the browser's roster marks as the concierge's
 mkdirSync(appDir, { recursive: true });
 mkdirSync(notesDir, { recursive: true });
-mkdirSync(deskDir, { recursive: true });
 git(appDir, "init", "-q", "-b", "main");
 // the repository holds work of every kind for the Changes lens: a file edited in two places far apart, a staged
 // edit, a deleted file and a new one
@@ -396,7 +386,7 @@ const made = [];
 const now = Date.now();
 const iso = (ms) => new Date(ms).toISOString();
 const sessions = async () => (await api("GET", "/api/roster")).machines.find((m) => m.id === "local")?.sessions ?? [];
-let app, tree, notes, desk, inbox, drawTask, paneA1, paneA2, paneB, paneN, paneDesk, paneTree, morningScene, eveningScene;
+let app, tree, notes, inbox, drawTask, paneA1, paneA2, paneB, paneN, paneTree, morningScene, eveningScene;
 let DRESS = {};
 const NOTE_TEXT = "Waiting on the API team for the new endpoint.\nDon't merge before Friday's release.";
 // the morning's first step lays its tab out as two panes, the agent on the left and a dev server on the right
@@ -412,8 +402,6 @@ async function seed() {
   made.push(tree.id);
   notes = await api("POST", "/api/sessions", { machine: "local", dir: notesDir, name: "notes", agent: "shell" });
   made.push(notes.id);
-  desk = await api("POST", "/api/sessions", { machine: "local", dir: deskDir, name: "concierge-e2e", agent: "shell" });
-  made.push(desk.id);
   await api("PUT", "/api/jira", { site: "http://127.0.0.1:9", account: "", token: "e2e" }).catch((error) => failed(`a Jira site: ${error.message}`));
   // the person's own triggers, one everywhere and one on the repository's folder, for the triggers dialog; a regex
   // herdr could not read is refused before it reaches a machine's stream
@@ -478,8 +466,7 @@ async function seed() {
     const a = list.find((s) => s.id === app.id);
     const b = list.find((s) => s.id === tree.id);
     const n = list.find((s) => s.id === notes.id);
-    const d = list.find((s) => s.id === desk.id);
-    return a?.tabs.length >= 2 && b && n?.tabs[0]?.panes[0] && d?.tabs[0]?.panes[0] ? { a, b, n, d } : null;
+    return a?.tabs.length >= 2 && b && n?.tabs[0]?.panes[0] ? { a, b, n } : null;
   }, 20);
   if (!ready) throw new Error("the seeded workspaces did not reach the roster");
   // the repository's checkout keeps a note, through the real route: the roster carries it to the card and its hover card
@@ -487,7 +474,6 @@ async function seed() {
   if (kept.text !== NOTE_TEXT) failed(`the note was kept as ${JSON.stringify(kept)}`);
   paneA1 = ready.a.tabs[0].panes[0].id;
   paneN = ready.n.tabs[0].panes[0].id;
-  paneDesk = ready.d.tabs[0].panes[0].id;
   paneA2 = ready.a.tabs[1].panes[0].id;
   paneB = ready.b.tabs[0].panes[0].id;
   paneTree = paneB;
@@ -518,7 +504,6 @@ async function seed() {
       said: "The flag is renamed in all twelve places, the tests pass and the release notes say so.",
       pr: { url: "https://github.com/example/app/pull/14", label: "PR #14", status: { title: "Rename the flag", state: "MERGED", draft: false, mergeable: "UNKNOWN", review: "APPROVED", checks: { total: 2, pass: 2, fail: 0, pending: 0, skipped: 0 }, at: iso(now - 30 * 60e3) } },
     },
-    [paneDesk]: { agent: "claude", status: "idle", title: "concierge", radar: { state: "idle", last_active: now - 60e3 } },
   };
   say(`seeded: app ${app.id} (two tabs), its worktree ${tree.id}, notes ${notes.id}, the Inbox ${inbox}`);
 }
@@ -885,51 +870,11 @@ async function fakeTimelapse({ requestId, request }) {
 // a recap as the server sums one up, with what the case at hand says
 const recapOf = (over) => ({ prompts: 0, answers: 0, took: 0, tokens: 0, cost: 0, calls: 0, tools: {}, failed: 0, commands: [], edited: [], read: [], subagents: 0, questions: 0, asking: false, ...over });
 
-// fakeStandup answers the standup with the dressed agents' day — the Codex asking, the Claude Code that finished with its
-// files and its last answer, the one at work — so the panel, the zoo's foot and the voice have something to tell
-async function fakeStandup({ requestId }) {
-  const items = [
-    { machine: "local", label: "This machine", workspace: "app", pane: Object.keys(DRESS).find((id) => DRESS[id].status === "input"), dir: appDir, agent: "codex", state: "blocked", recap: recapOf({ prompts: 1, answers: 1, took: 95, calls: 3, tools: { exec_command: 3 }, commands: ["go build ./..."], asking: true, cost: 0.4 }) },
-    { machine: "local", label: "This machine", workspace: "feature-x", pane: Object.keys(DRESS).find((id) => DRESS[id].status === "done"), dir: appDir, agent: "claude", state: "done", recap: recapOf({ prompts: 4, answers: 4, took: 26 * 60, tokens: 182000, cost: 3.1, calls: 31, tools: { Edit: 12, Read: 14, Bash: 5 }, edited: [`${appDir}/src/flag.go`, `${appDir}/src/flag_test.go`, `${appDir}/NOTES.md`], read: [`${appDir}/src/app.go`], commands: ["go test ./...", "make web"], said: DRESS[Object.keys(DRESS).find((id) => DRESS[id].status === "done")]?.said }) },
-    { machine: "local", label: "This machine", workspace: "app", pane: paneA1, dir: appDir, agent: "claude", state: "working", recap: recapOf({ prompts: 2, answers: 1, took: 12 * 60, cost: 4.2, calls: 18, tools: { Edit: 6, Bash: 4 }, edited: [`${appDir}/src/screen0.tsx`], commands: ["npm test"], said: "Every screen draws at both widths." }) },
-  ];
-  const body = { since: iso(new Date(new Date(now).setHours(0, 0, 0, 0)).getTime()), items, markdown: "# Standup\n" };
-  await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(body)).toString("base64") });
-}
-
-// fakeRecap answers one conversation's recap, the zoo's creature telling its day among them
+// fakeRecap answers one conversation's recap
 async function fakeRecap({ requestId }) {
   const body = { since: "", recap: recapOf({ prompts: 3, answers: 3, took: 18 * 60, cost: 2.2, calls: 12, tools: { Edit: 4, Bash: 2 }, edited: [`${appDir}/src/app.go`, `${appDir}/README.md`], commands: ["go test ./..."] }), markdown: "" };
   await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(body)).toString("base64") });
 }
-
-// FAKE_VOICE puts a stand-in voice where the browser's is: headless Chrome says nothing, so this one keeps what it is
-// handed, starts each queue's first line and never ends it, and the screens are checked on what the page shows
-const FAKE_VOICE = `(() => {
-  if (window.__fakeVoice) return;
-  const real = Object.getOwnPropertyDescriptor(window, "speechSynthesis");
-  const said = [];
-  const queue = [];
-  const voice = {
-    get speaking() { return queue.length > 0; },
-    get pending() { return queue.length > 1; },
-    paused: false,
-    speak(line) { queue.push(line); said.push(line.text); if (queue.length === 1) setTimeout(() => queue[0] === line && line.onstart?.(), 0); },
-    cancel() { for (const line of queue.splice(0)) line.onerror?.({ error: "interrupted" }); },
-    getVoices() { return []; },
-    pause() {}, resume() {}, addEventListener() {}, removeEventListener() {},
-  };
-  Object.defineProperty(window, "speechSynthesis", { configurable: true, value: voice });
-  window.__fakeVoice = { said, real };
-})()`;
-const REAL_VOICE = `(() => {
-  const fake = window.__fakeVoice;
-  if (!fake) return;
-  delete window.speechSynthesis;
-  if (fake.real) Object.defineProperty(window, "speechSynthesis", fake.real);
-  delete window.__fakeVoice;
-})()`;
-const sentence = () => evaluate(`document.querySelector('.listen-bar .listen-sentence')?.textContent ?? ""`);
 
 // fakeScreenSearch answers the search over the screens as the server would for the two fake recordings, which show the
 // same frames: where the query first stood, the rows around it, how long it stayed; the panel's search, over every
@@ -1035,7 +980,7 @@ const PROMPTS_CHAT = [
     output: 2100,
     parts: [
       { type: "tool", tool_name: "Read", tool_id: "toolu_e2e_p5", at: iso(now - 5 * 60e3), took: 0.1, input: { file_path: `${appDir}/README.md` }, output: "# app" },
-      { type: "queued", text: "Show it in the **wall tile** too.", at: iso(now - 4 * 60e3) },
+      { type: "queued", text: "Show it on the **sidebar card** too.", at: iso(now - 4 * 60e3) },
       { type: "tool", tool_name: "Bash", tool_id: "toolu_e2e_p6", at: iso(now - 20e3), input: { command: "npm test -- progress" } },
     ],
   },
@@ -1121,7 +1066,7 @@ async function fakeUndo({ requestId, request }) {
   await send("Fetch.fulfillRequest", { requestId, responseCode: code, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(body)).toString("base64") });
 }
 
-// ASKED is what the dressed Codex asks on its screen, which the sidebar's "Needs you" and the zoo's bubble quote
+// ASKED is what the dressed Codex asks on its screen, which the sidebar's "Needs you" quotes
 const ASKED = "Bash command\ngo build ./...\nbuild the app\nDo you want to proceed?";
 
 // fakeQuestion answers a read of a pane's dialog: while the chat's own screens are up the dressed pane's screen shows
@@ -1249,7 +1194,6 @@ async function dressRoster({ requestId, responseStatusCode, responseHeaders = []
     for (const session of machine.sessions ?? []) {
       if (session.id === app.id || session.id === tree.id) session.icon = { emoji: "🦊" }; // the icon is the folder's, the worktree's too
       if (session.id === tree.id) session.branch ??= "feature-x"; // the branch the issues panel finds linked to issue #41
-      if (session.id === desk?.id) session.concierge = true; // the page shows it in the concierge's place alone
       if (session.id === notes?.id) session.asleep = { at: iso(now - 40 * 60e3), agents: 2 }; // put to sleep: its card dims, its menu offers Wake
       if (session.id === app.id) {
         session.jira = [{ key: "APP-12", summary: "Draw every screen", status: "In Review", category: "indeterminate", url: "https://example.atlassian.net/browse/APP-12" }];
@@ -1368,9 +1312,8 @@ async function sleepScreens() {
   });
 }
 
-// dressCollisions has the repository and its worktree change the same lines of src/app.go — a lightning between their
-// creatures in the zoo — and the repository the same file as a clone on a machine not on the wall, a bolt on its
-// creatures; each with a risk the Review mode's queue sorts and draws
+// dressCollisions has the repository and its worktree change the same lines of src/app.go, and the repository the same
+// file as a clone on a machine not on the sidebar; each with a risk the Review mode's queue sorts and draws
 function dressCollisions(session) {
   const peer = (other, name) => ({ machine: "local", workspace: other.id, name, dir: other.id === app.id ? appDir : `${appDir}-feature-x` });
   const files = [{ path: "src/app.go", lines: true, from: 6, to: 12 }, { path: "README.md", lines: false }];
@@ -1399,13 +1342,9 @@ const DENIED = [
   { tool: "Write", what: `${tmp}/display/app/src/new-screen.tsx`, at: iso(now - 18 * 60e3), tool_id: "toolu_e2e_2" },
 ];
 
-// dressChat adds DENIED to the lens's answer for the dressed agent pane (a tile's tail, last=N, carries none)
+// dressChat adds DENIED to the lens's answer for the dressed agent pane (a tail, last=N, carries none)
 async function dressChat({ requestId, request, responseStatusCode, responseHeaders = [] }) {
   const url = new URL(request.url);
-  if (url.searchParams.get("pane") === paneDesk) {
-    await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(conciergeChat())).toString("base64") });
-    return;
-  }
   if (ribbonChat && url.searchParams.get("pane") === paneA1) {
     const chat = { session_id: "0e2e0000-bbbb-4ccc-8ddd-000000000002", sessions: [], turns: ribbonTurns(), ...(url.searchParams.has("last") ? {} : { denied: DENIED }) };
     await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(chat)).toString("base64") });
@@ -1426,34 +1365,6 @@ async function dressChat({ requestId, request, responseStatusCode, responseHeade
   const headers = responseHeaders.filter((h) => !/^(etag|content-length|content-encoding)$/i.test(h.name));
   await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: headers, body: Buffer.from(JSON.stringify(chat)).toString("base64") });
 }
-
-// fakeConcierge answers the concierge's place as if Claude Code ran in the concierge-e2e workspace on this machine, a
-// Mac: where it runs, a start, a new conversation; no agent is asked anything
-async function fakeConcierge({ requestId, request }) {
-  const running = { machine: "local", workspace: desk.id, pane: paneDesk, dir: deskDir, started: false };
-  const path = new URL(request.url).pathname;
-  const view = { machine: "local", machines: [{ id: "local", label: "This Mac · e2e", connected: true, mac: true }], running };
-  const body = request.method === "GET" || request.method === "PUT" ? view : request.method === "DELETE" ? { ok: true } : path.endsWith("/new") ? { ...running, started: true } : running;
-  await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(body)).toString("base64") });
-}
-
-// conciergeChat is the concierge's conversation: a question, the tool it looked through, the answer
-const conciergeChat = () => ({
-  session_id: "0e2e0000-1111-2222-3333-444455556666",
-  sessions: [],
-  turns: [
-    { role: "user", ts: iso(now - 120e3), ids: ["e2e-c1"], parts: [{ type: "text", text: "What did the agents finish today?" }] },
-    {
-      role: "assistant",
-      ts: iso(now - 100e3),
-      ids: ["e2e-c2"],
-      parts: [
-        { type: "tool", tool_name: "mcp__remuda__standup", tool_id: "toolu_e2e_c1", at: iso(now - 115e3), took: 1.2, input: { since: "midnight" }, output: "# Standup" },
-        { type: "text", text: "Two finished today:\n\n- **feature-x** on this Mac renamed the flag everywhere it is read; the tests pass.\n- **app** opened PR #15, one check failing.\n\nA Codex in **app** waits for your answer." },
-      ],
-    },
-  ],
-});
 
 // FEED is the activity the browser is shown: an id far past the server's own, and the alert a screen puts in it
 const FEED = { id: 900000, entries: [] };
@@ -2639,10 +2550,7 @@ async function runPass() {
     },
   });
   await screen("sidebar", {
-    open: async () => {
-      await sidebarOpen();
-      await conciergeHidden(".sidebar");
-    },
+    open: async () => sidebarOpen(),
     expect: [".ws-folder-head", ".ws-item", ".machine-head", ".ws-item .collide-mark.is-lines", ".needs-you .inbox-row", ".ws-item .ws-agent-line", ".sidebar-foot"],
     close: async () => {},
   });
@@ -2968,45 +2876,6 @@ async function runPass() {
       close: async () => (i === 3 ? closeAll() : undefined),
     });
 
-  await screen("wall-chat", { open: async () => palette("mode:wall"), expect: [".wall-bar", ".tile", ".tile .collide-mark"] });
-  // the activity ribbon on the working agent's tile: its last half hour in colours, a stretch named at a press
-  await screen("wall-ribbon", {
-    open: async () => {
-      ribbonChat = true; // the tile's next read of its tail, within a poll, brings the dressed half hour
-      if (!(await until(() => present('.tile .ribbon-s[data-tone="shell"]'), 25))) throw new Error("the working agent's tile draws no shell call on its ribbon");
-      check((await count(".tile .ribbon-s.is-quiet")) >= 1, "five minutes with nothing written do not read as quiet on the ribbon");
-      await tap('.tile .ribbon-s.is-write');
-      if (!(await until(() => present(".tile .ribbon-named.is-write"), 4))) return failed("a press on the ribbon names no stretch");
-      check((await evaluate(`document.querySelector('.tile .ribbon-named.is-write')?.textContent ?? ""`)).includes("Edit"), "the stretch pressed is not named by its call");
-    },
-    expect: [".tile .ribbon-named .ribbon-what", ".tile .ribbon-scale"],
-    close: async () => {
-      ribbonChat = false;
-      await closeAll();
-    },
-  });
-  await screen("wall-screen", { open: async () => palette("wall-view"), expect: [".wall-bar", ".tile", ".tile .ribbon-track"] });
-  await screen("wall-zoo", {
-    open: async () => {
-      await palette("wall-zoo");
-      await conciergeHidden(".wall");
-    },
-    expect: [".zoo-grid .zoo-creature", ".zoo-bolts path.is-lines", ".zoo-bolt"],
-  });
-  // a creature asked about its day says it in its bubble, in its own voice
-  await screen("zoo-tell", {
-    open: async () => {
-      await evaluate(FAKE_VOICE);
-      await tap(".zoo-grid .zoo-creature .zoo-tell");
-      const telling = `(() => { const bubble = document.querySelector('.zoo-bubble.is-telling'); return !!bubble && bubble.textContent.trim().length > 3; })()`;
-      if (!(await until(() => evaluate(telling), 6))) failed("a creature asked about its day shows nothing in its bubble");
-      check(await evaluate(`(window.__fakeVoice?.said ?? []).some((text) => /^(Today I|Сегодня я)/.test(text))`), "the creature's voice was handed nothing about its day");
-    },
-    expect: [".zoo-bubble.is-telling"],
-    close: async () => evaluate(REAL_VOICE),
-  });
-  if (!pass.phone) await screen("wall-office", { open: async () => palette("wall-office"), expect: [".wall-office"], close: async () => palette("wall-office") });
-
   await screen("tasks-board", { open: async () => palette("mode:tasks"), expect: [".board", ".board-col-note"] });
   await screen("project-settings", { open: async () => tap(".tasks-settings-btn"), expect: [".project-settings .ps-queue"], settle: 500, close: async () => {} });
   await screen("project-settings-agents", {
@@ -3035,60 +2904,7 @@ async function runPass() {
   await screen("review", { open: async () => palette("mode:review"), expect: [".queue-head", ".queue-item .risk-chip.is-high", ".queue-item .collide-mark"] });
   await screen("code", { open: async () => palette("mode:code"), expect: [".code-mode"] });
 
-  for (const panel of ["standup", "usage", "schedules", "activity", "alerts", "arenas"]) await screen(`panel-${panel}`, { open: async () => palette(panel), expect: [".modal"], settle: 600 });
-  // the day read aloud: Listen in the standup, the sentence being said under its agent, skip and pause, the lock screen
-  await screen("standup-listen", {
-    open: async () => {
-      await palette("standup");
-      if (!(await until(() => present(".standup-item"), 8))) return failed("the standup lists none of the agents it was given");
-      await evaluate(FAKE_VOICE);
-      await tap(".listen-start");
-      if (!(await until(async () => (await sentence()).length > 3, 4))) return failed("Listen shows no sentence being said");
-      const first = await sentence();
-      check((await count(".listen-bar .listen-controls .icon-btn")) === 3 && (await present(".listen-bar .listen-stop")), "the Listen bar lacks its play, back, skip or stop");
-      await tap(".listen-bar .listen-skip");
-      if (!(await until(async () => (await sentence()) !== first && (await sentence()).length > 3, 4))) failed("skipping to the next agent moved nothing");
-      check(await present(".standup-item.is-reading"), "the agent being told of is not marked in the report");
-      check(await evaluate(`(() => { const title = (navigator.mediaSession?.metadata?.title ?? "").replace(/…$/, ""); return title.length > 3 && (document.querySelector('.listen-sentence')?.textContent ?? "").startsWith(title); })()`), "the lock screen does not name the sentence being said");
-      await tap(".listen-bar .listen-toggle");
-      check(await present(".listen-bar.is-paused"), "pause does not pause");
-    },
-    expect: [".modal .listen-bar .listen-sentence"],
-    close: async () => {
-      await evaluate(REAL_VOICE);
-      await closeAll();
-    },
-  });
-  await screen("listen-day", {
-    open: async () => {
-      await evaluate(FAKE_VOICE);
-      await palette("listen-day");
-      if (!(await until(async () => (await sentence()).length > 3, 8))) failed("Listen to the day opens the standup reading nothing");
-    },
-    expect: [".modal .listen-bar"],
-    close: async () => {
-      await evaluate(REAL_VOICE);
-      await closeAll();
-    },
-  });
-
-  // the concierge: its conversation in its place (its workspace in no sidebar, wall or palette row: conciergeHidden);
-  // a new conversation offers the questions to start with
-  await screen("concierge", {
-    open: async () => palette("concierge"),
-    expect: [".modal.concierge", ".concierge-chat .turn-assistant", ".concierge-chat .composer textarea"],
-    settle: 600,
-  });
-  await screen("concierge-new", {
-    open: async () => {
-      await palette("concierge");
-      if (!(await until(() => present(".concierge-chat .turn-assistant"), 6))) throw new Error("the concierge's conversation did not show");
-      await tap(".concierge-bar .btn.sm");
-    },
-    expect: [".concierge-hint"],
-    settle: 400,
-  });
-
+  for (const panel of ["usage", "schedules", "activity", "alerts", "arenas"]) await screen(`panel-${panel}`, { open: async () => palette(panel), expect: [".modal"], settle: 600 });
   // the plan limits seen coming: the 5 hours' run-out in amber, the week lasting, the held card's offer — and its run
   await screen("usage-plan-limits", {
     open: async () => {
@@ -3265,7 +3081,7 @@ async function runPass() {
   await screen("palette", {
     open: async () => {
       await key("k", "KeyK", CMD);
-      if (await until(() => present(".palette .palette-row"), 4)) await conciergeHidden(".palette");
+      await until(() => present(".palette .palette-row"), 4);
     },
     expect: [".palette .palette-row"],
   });
@@ -3284,24 +3100,8 @@ async function runPass() {
     ["broadcast", "broadcast"],
   ])
     await screen(`dialog-${name}`, { open: async () => palette(id), expect: [".modal", ...(notice ? [notice] : [])], settle: 700 });
-  // the dressed agent's conversation recapped and read aloud a line at a time
-  await screen("recap-listen", {
-    open: async () => {
-      await evaluate(FAKE_VOICE);
-      await palette("recap");
-      if (!(await until(() => present(".modal .listen-start:not(:disabled)"), 6))) return failed("the recap's Listen never comes ready");
-      await tap(".modal .listen-start");
-      if (!(await until(async () => (await sentence()).length > 3, 4))) return failed("the recap's Listen shows no sentence being said");
-      const first = await sentence();
-      await tap(".listen-bar .listen-skip");
-      if (!(await until(async () => (await sentence()) !== first, 4))) failed("skipping a line of the recap moved nothing");
-    },
-    expect: [".modal .listen-bar .listen-sentence"],
-    close: async () => {
-      await evaluate(REAL_VOICE);
-      await closeAll();
-    },
-  });
+  // the dressed agent's conversation recapped: its lines and the files it edited
+  await screen("recap", { open: async () => palette("recap"), expect: [".modal .recap-line", ".modal .recap-files"], settle: 500 });
   await screen("timelapse", {
     open: async () => {
       await palette("timelapse");
@@ -3370,7 +3170,6 @@ try {
       { urlPattern: "*/api/feed*", requestStage: "Response" },
       { urlPattern: "*/api/chat?*", requestStage: "Response" },
       { urlPattern: "*/api/opinion*", requestStage: "Request" },
-      { urlPattern: "*/api/concierge*", requestStage: "Request" },
       { urlPattern: "*/api/scorecard*", requestStage: "Request" },
       { urlPattern: "*/api/scenes/*", requestStage: "Request" },
       { urlPattern: "*/api/scene-runs/*", requestStage: "Request" },
@@ -3378,7 +3177,6 @@ try {
       { urlPattern: "*/api/review?dir=*", requestStage: "Response" },
       { urlPattern: "*/api/review/conflict*", requestStage: "Request" },
       { urlPattern: "*/api/timelapse/recordings*", requestStage: "Request" },
-      { urlPattern: "*/api/standup*", requestStage: "Request" },
       { urlPattern: "*/api/pr/*", requestStage: "Request" },
       { urlPattern: "*/api/recap*", requestStage: "Request" },
       { urlPattern: "*/api/timelapse/search*", requestStage: "Request" },
