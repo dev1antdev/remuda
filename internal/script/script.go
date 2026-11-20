@@ -128,19 +128,3 @@ const MainFolder = `gd=$(cd "$(git rev-parse --git-dir 2>/dev/null)" 2>/dev/null
 	`common=$(cd "$(git rev-parse --git-common-dir 2>/dev/null)" 2>/dev/null && pwd -P); ` +
 	`if [ -n "$gd" ] && [ "$gd" = "$common" ]; then (cd "./$(git rev-parse --show-cdup 2>/dev/null)" 2>/dev/null && pwd); ` +
 	`elif [ -n "$common" ]; then (cd "$common/.." 2>/dev/null && pwd); fi`
-
-// BranchInUse stops with git's own reasons for keeping a branch: checked out in a worktree, or being rebased or
-// bisected in one, where git's list shows that worktree detached, or waiting to be moved by a rebase --update-refs. A
-// record that cannot be read counts as naming it.
-func BranchInUse(branch string) string {
-	ref, name := Quote("refs/heads/"+branch), Quote(branch)
-	return "inuse() { echo 'the branch is in use in another worktree'; exit 5; }\n" +
-		"names() { [ -e \"$2\" ] || return 0; grep -Fqx -e \"$1\" \"$2\" 2>/dev/null; [ $? -eq 1 ] || inuse; }\n" +
-		"list=$(git worktree list --porcelain) || inuse\n" +
-		"printf '%s\\n' \"$list\" | grep -Fqx \"branch \"" + ref + " && inuse\n" +
-		"common=$(git rev-parse --git-common-dir) || inuse\n" +
-		"for d in \"$common\" \"$common\"/worktrees/*; do\n" +
-		"  for f in rebase-merge/head-name rebase-apply/head-name rebase-merge/update-refs; do names " + ref + " \"$d/$f\"; done\n" +
-		"  names " + name + " \"$d/BISECT_START\"\n" +
-		"done\n"
-}

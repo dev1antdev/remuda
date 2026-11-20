@@ -42,10 +42,10 @@ func checkoutScript(folder string) string {
 // addScript makes a worktree of the checkout at dir for the branch, in path or herdr's place for it, named after the
 // repository's main folder: with a base, the branch is new from it and git refuses one that is there already (so no
 // branch of the person's is taken over); without, a branch that exists is checked out, else it starts at dir's HEAD,
-// as herdr's worktree.create does. It prints "path <folder>", "made <commit>" for a branch it made, and the checkout as
-// probe reads it. When git refuses it prints its words last, after "left <folder>" when a checkout stands at a place
-// that was free (a hook of the repository's failed after the checkout, or another request made it there meanwhile):
-// whose it is cannot be told, so nothing is taken down.
+// as herdr's worktree.create does. It prints "path <folder>" and the checkout as probe reads it. When git refuses it
+// prints its words last, after "left <folder>" when a checkout stands at a place that was free (a hook of the
+// repository's failed after the checkout, or another request made it there meanwhile). Nothing is ever taken down:
+// whose a checkout is by then cannot be told.
 func addScript(dir, branch, base, path string) string {
 	return script.PATH + "\n" + probeFunc +
 		"cd " + script.Quote(dir) + " 2>/dev/null || { echo 'the workspace folder is not there'; exit 3; }\n" +
@@ -53,35 +53,12 @@ func addScript(dir, branch, base, path string) string {
 		"b=" + script.Quote(branch) + "; base=" + script.Quote(base) + "; p=" + script.Quote(path) + "\n" +
 		`[ -n "$p" ] || p="$HOME/.herdr/worktrees/$(basename "$(` + script.MainFolder + `)")/"` + script.Quote(text.Slug(branch)) + "\n" +
 		`mkdir -p "$(dirname "$p")" || exit 4` + "\n" +
-		`fresh=; [ -e "$p" ] || fresh=y; had=; git show-ref -q --verify "refs/heads/$b" && had=y` + "\n" +
-		`if [ -z "$base" ] && [ -n "$had" ]; then said=$(git worktree add -q "$p" "$b" 2>&1); rc=$?` + "\n" +
+		`fresh=; [ -e "$p" ] || fresh=y` + "\n" +
+		`if [ -z "$base" ] && git show-ref -q --verify "refs/heads/$b"; then said=$(git worktree add -q "$p" "$b" 2>&1); rc=$?` + "\n" +
 		`else said=$(git worktree add -q -b "$b" "$p" "${base:-HEAD}" 2>&1); rc=$?; fi` + "\n" +
-		`if [ "$rc" = 0 ]; then echo "path $p"; [ -n "$had" ] || echo "made $(git rev-parse "refs/heads/$b")"; probe "$p"; exit 0; fi` + "\n" +
+		`if [ "$rc" = 0 ]; then echo "path $p"; probe "$p"; exit 0; fi` + "\n" +
 		`[ -z "$fresh" ] || [ ! -e "$p" ] || echo "left $p"` + "\n" +
 		`printf '%s\n' "$said"; exit 5` + "\n"
-}
-
-// undoScript takes down a worktree addScript made whose workspace did not open, so making it again starts clean: the checkout
-// (never forced: a file in it keeps it), then the branch only when addScript made it, it is still on the commit made,
-// and no worktree uses it (script.BranchInUse) — else it is kept, said.
-func undoScript(dir, path, branch, made string) string {
-	s := script.PATH + "\ncd " + script.Quote(dir) + " 2>/dev/null || exit 3\n" +
-		"git worktree remove " + script.Quote(path) + " 2>&1 || exit 4\n"
-	if made != "" {
-		s += "if ( " + script.BranchInUse(branch) + " ) >/dev/null 2>&1; then git update-ref -d " +
-			script.Quote("refs/heads/"+branch) + " " + script.Quote(made) + " 2>&1 || exit 5\n" +
-			"else echo " + script.Quote("the branch "+branch+" is kept: a worktree uses it") + "; exit 6; fi\n"
-	}
-	return s
-}
-
-// takeDown undoes a worktree addScript made (its add went through, so it is this request's), and says so after why.
-func (a *Adapter) takeDown(dir, folder, branch, made string, why error) error {
-	out, err := shell.Text(a.shell, undoScript(rpath.For(dir).Slash(dir), rpath.For(folder).Slash(folder), branch, made), checkoutWithin)
-	if err != nil {
-		return fmt.Errorf("%w; the worktree at %s was not all taken down: %s", why, folder, text.LastLine(out, err.Error()))
-	}
-	return fmt.Errorf("%w; the worktree was taken down again", why)
 }
 
 // fieldsOf is a script's "key value" lines.
@@ -156,7 +133,7 @@ func (a *Adapter) WorktreeCreateAt(workspaceID, branch, base, label, path string
 	}
 	res, err := a.workspaceOn(folder, cmp.Or(label, rpath.For(folder).Base(folder)), tree)
 	if err != nil {
-		return nil, a.takeDown(dir, folder, branch, fieldsOf(out)["made"], fmt.Errorf("the worktree's workspace did not open: %w", err))
+		return nil, fmt.Errorf("the worktree %s is made on %s, but its workspace did not open (New worktree opens it): %w", folder, branch, err)
 	}
 	created := &herdr.WorktreeCreateResult{Workspace: res.Workspace, RootPane: res.RootPane}
 	created.Worktree.Path, created.Worktree.Branch = folder, branch

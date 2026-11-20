@@ -88,10 +88,26 @@ func LandedAt(landed []Landed, branch, tip string) bool {
 	return branch != "" && tip != "" && slices.Contains(landedCommits(landed, branch), tip)
 }
 
+// branchInUseScript stops with git's own reasons for keeping a branch: checked out in a worktree, or being rebased or
+// bisected in one, where git's list shows that worktree detached, or waiting to be moved by a rebase --update-refs. A
+// record that cannot be read counts as naming it.
+func branchInUseScript(branch string) string {
+	ref, name := script.Quote("refs/heads/"+branch), script.Quote(branch)
+	return "inuse() { echo 'the branch is in use in another worktree'; exit 5; }\n" +
+		"names() { [ -e \"$2\" ] || return 0; grep -Fqx -e \"$1\" \"$2\" 2>/dev/null; [ $? -eq 1 ] || inuse; }\n" +
+		"list=$(git worktree list --porcelain) || inuse\n" +
+		"printf '%s\\n' \"$list\" | grep -Fqx \"branch \"" + ref + " && inuse\n" +
+		"common=$(git rev-parse --git-common-dir) || inuse\n" +
+		"for d in \"$common\" \"$common\"/worktrees/*; do\n" +
+		"  for f in rebase-merge/head-name rebase-apply/head-name rebase-merge/update-refs; do names " + ref + " \"$d/$f\"; done\n" +
+		"  names " + name + " \"$d/BISECT_START\"\n" +
+		"done\n"
+}
+
 // deleteBranchAt deletes the branch if it still ends on the commit, a shell word: the ref is compared and removed in one
 // step, so a commit that arrives meanwhile keeps it. What git branch -D would refuse stays too.
 func deleteBranchAt(branch, commit string) string {
-	return script.BranchInUse(branch) +
+	return branchInUseScript(branch) +
 		"git update-ref --no-deref -d " + script.Quote("refs/heads/"+branch) + " " + commit + " 2>&1 || exit 5\n" +
 		"git config --remove-section " + script.Quote("branch."+branch) + " 2>/dev/null || true\n"
 }
