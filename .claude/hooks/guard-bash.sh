@@ -39,18 +39,24 @@ fi
 
 # remuda-core holds the person's agents once they moved off herdr: `server stop` ends every terminal in it, and a
 # `serve` beside it fights it for its socket. The core reads RC_SOCKET before anything else, and a shell may carry the
-# person's, so only an RC_SOCKET of its own set in the very statement aims one at a throwaway core (quotes read away,
-# flags may stand between the words).
+# person's, so a stop or serve goes through only when the assignments right before it set RC_SOCKET to an absolute
+# path written out (quotes read away, flags may stand between the words).
 core='(^|[^[:alnum:]_.-])(remuda-core|rc)([[:space:]]+-[^[:space:]]+)*[[:space:]]+(server([[:space:]]+-[^[:space:]]+)*[[:space:]]+stop|serve)([^[:alnum:]_-]|$)'
 aimed() {
+  socket=
   for word in $1; do
-    case $word in RC_SOCKET=?*) return 0 ;; esac
+    [ "$word" = env ] && continue
+    case $word in *=*) ;; *) break ;; esac
+    name=${word%%=*}
+    case $name in '' | [0-9]* | *[!A-Za-z0-9_]*) break ;; esac
+    [ "$name" = RC_SOCKET ] && socket=${word#*=}
   done
+  case $socket in *[\$\`]*) return 1 ;; /*) return 0 ;; esac
   return 1
 }
 set -f
 printf '%s\n' "$cmd" | tr ';&|' '\n\n\n' | tr -d "\"'" | while IFS= read -r statement; do
   if printf '%s' "$statement" | grep -Eq -e "$core" && ! aimed "$statement"; then exit 3; fi
-done || refuse "'remuda-core server stop' and 'remuda-core serve' reach the person's own core and every agent in it unless the same statement names a throwaway one: RC_SOCKET=<its socket>, its RC_SESSION, XDG folders and HOME beside it (see internal/core/coretest; scripts/e2e.sh with E2E_BACKEND=core runs one whole)."
+done || refuse "'remuda-core server stop' and 'remuda-core serve' reach the person's own core and every agent in it unless the assignments right before the command set RC_SOCKET=<an absolute path written out>, its RC_SESSION, XDG folders and HOME beside it. A whole throwaway core is scripts/e2e.sh's (E2E_BACKEND=core) or internal/core/coretest's."
 
 exit 0

@@ -36,7 +36,17 @@ refuse	RC_SOCKET= remuda-core serve
 refuse	RC_SOCKET="" rc server stop
 refuse	echo RC_SOCKET=x; rc server stop
 refuse	RC_SOCKET=/tmp/e/rc.sock true && remuda-core server stop
+refuse	RC_SOCKET="$scratch_socket" remuda-core server stop
+refuse	RC_SOCKET=$(mktemp -u) rc serve
+refuse	RC_SOCKET=`mktemp -u` rc serve
+refuse	RC_SOCKET=~/rc.sock rc server stop
+refuse	RC_SOCKET=rc.sock rc server stop
+refuse	rc server stop # RC_SOCKET=/tmp/e/rc.sock
+refuse	rc server stop RC_SOCKET=/tmp/e/rc.sock
+refuse	RC_SOCKET=/tmp/e/rc.sock RC_SOCKET= rc server stop
+refuse	if true; then RC_SOCKET=/tmp/e/rc.sock true; rc server stop; fi
 allow	RC_SOCKET=/tmp/e/rc.sock remuda-core server stop
+allow	RC_SOCKET="/tmp/e/rc.sock" remuda-core server stop
 allow	RC_SOCKET=/tmp/e/rc.sock HOME=/tmp/e "/opt/rc/remuda-core" serve
 allow	env RC_SOCKET=/tmp/e/rc.sock RC_SESSION=e2e rc --json server stop
 allow	RC_SOCKET=/tmp/e/rc.sock remuda-core serve >/tmp/e/core.log 2>&1 &
