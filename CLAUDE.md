@@ -39,7 +39,12 @@ components and icons as rules for whoever changes it: @docs/design.md
   `undo.Tracker.Scratch`), `-server`
   (also `REMUDA_SERVER=1`; `app.Options.Server`, see "Server mode"
   below; without it the host is a machine of its own, there is no
-  `-client` flag); subcommands
+  `-client` flag), `-core` (also `REMUDA_CORE=1`; `app.Options.Core`,
+  for the move off herdr while it is built: every machine is reached
+  through remuda-core instead — `machines.NewCoreManager`, see "On
+  remuda-core" under `internal/machines/` — herdr neither found nor kept,
+  its list of machines still read when it is there, the mirror closed;
+  the release that makes the move takes the flag away with herdr); subcommands
   `search` and `usage` for the deployed binary on a remote machine,
   `bridge` (hidden: `bridge.go`, stdin to the herdr server on this machine
   and its answers to stdout — a Windows machine's herdr is a named pipe the
@@ -290,8 +295,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   `title` or `display_agent`: remuda reads both back as the pane's own.
 - `internal/core/` — **the client of remuda-core** (dev1antdev/remuda-core,
   our clone of herdr-core; its protocol in its `schema/README.md`, generation
-  1), which is to take herdr's place on the machines; no machine uses it yet
-  (the machines, Core 13). `core.New(dial)` is one
+  1), which is to take herdr's place on the machines; a remuda started with
+  `-core` reaches every machine through it (`machines.NewCoreManager`, "On
+  remuda-core" under `internal/machines/`). `core.New(dial)` is one
   core: a `Dialer` gives a fresh `net.Conn` (the socket here, `ssh host
   remuda-core connect` over a master there), dialled when first needed and
   again after it ended. `hello {generation, framed: true}` in plain mode, then
@@ -555,7 +561,44 @@ components and icons as rules for whoever changes it: @docs/design.md
   the accent showing where, the dragged block dimmed; the new order shows
   at once and stands until the roster lists it; a finger and the keyboard
   have the menu's Move up and Move down; with one machine, or for a
-  viewer, nothing drags. Each remote connects in the
+  viewer, nothing drags. **On remuda-core** (`core.go`, `-core`,
+  tested on a throwaway core): `NewCoreManager` reaches every machine
+  through remuda-core instead of herdr — the local one through a
+  `remuda-core connect` of this remuda's own (`dialLocalCore`: the binary
+  `herdr.FindBinary` finds, PATH first, under this process's environment, so
+  `RC_SESSION`, `RC_SOCKET` and the XDG folders aim a scratch instance at a
+  throwaway core), a remote one through the same over its master
+  (`remoteCoreDialer`: `DialExec`, one connection that stays, one of the
+  master's places for RPC) once the probe found the binary (`coreLookup`
+  over `script.CoreBin`, the lookup the vitals share: `~/.local/bin/
+  remuda-core`, or `remuda-core.exe` with its ConPTY beside it; none is
+  `errNoCore`, naming `remuda core -host H install`) and it answered a
+  hello; `rc connect` starts a core where none runs. A Windows PC is
+  reached the same way, which no test proves yet (the check on the real PC
+  is Core 19's). The machine's `herdr.API` is then the core
+  adapter (`coreLink`: the client and `core.NewAdapter`, its transport
+  errors heard by `transportError`, closed off the adapter's goroutine by
+  `fail` and `Close`), its terminals refuse every attach
+  (`NoAttachOnCore`) until the live terminal is built, and it has no peer
+  to relay through (`Peer` nil) nor a bridge on Windows. Nothing of herdr's
+  is offered there — its update, hooks, integrations, plugins and server
+  restart (`updates.withoutHerdr`, the ⓘ's herdr concerns) — and
+  `StopServer` / `StartServer` refuse (`ErrOnCore`): herdr's agents there
+  are not the ones this remuda sees, and a stop would end them all (an
+  update of herdr's on such a machine is refused in `Start` too). For the
+  same reason every checkout write holds back as while an agent works
+  there — the Git and Changes lenses, a pull, an undo, a worktree removed
+  (`holdCheckoutWrites` in `internal/app/core.go`), no leftover worktree
+  is listed or removed there (`heldOnCore`, a 409), no work is moved
+  onto such a machine (a 400 before the move writes a checkout) and no new
+  worktree is made (a 400 before a pull request's head is fetched), all by
+  the fleet's own `Manager.Core`, whichever machine a request names — and a page-only host
+  (`-server -core`) starts no core of its own. An exec connection keeps
+  its stdin and asks for no terminal whatever the host's ssh config says
+  (`DialExec` is a script's session). `OnCore` is the
+  roster's machine `core`, where the ⓘ says a Claude Code older than
+  `CORE_STATUS_CLAUDE` 2.1.325 tells remuda-core no status (`concerns.ts`).
+  Each remote connects in the
   background: dial master → one script reads `$HOME` and finds the herdr
   bin (incl. `~/.local/bin`) → RPC transport → `Ping` → **the door**
   (`door.go`, in a goroutine, once per connection): this remuda's port
