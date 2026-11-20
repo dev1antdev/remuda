@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { Terminal, type IBufferRange } from "@xterm/xterm";
 import { FLAVORS } from "@/lib/theme";
-import { cellSpan, hexAlpha, occurrences, pickNear, searchDecorations } from "./search";
+import { cellSpan, hexAlpha, installSearch, occurrences, pickNear, searchDecorations } from "./search";
+import type { FoundCount } from "./types";
 
 const FRAPPE = FLAVORS.frappe;
 const LATTE = FLAVORS.latte;
@@ -76,5 +78,51 @@ describe("cellSpan", () => {
   });
   it("falls back to the characters without a line", () => {
     expect(cellSpan(undefined, 5, 2)).toEqual({ col: 5, width: 2 });
+  });
+});
+
+// headless is a real xterm with the selection a mounted one keeps, which the search addon selects its matches with
+function headless(cols = 40, rows = 5): Terminal {
+  const term = new Terminal({ allowProposedApi: true, cols, rows, scrollback: 100 });
+  let range: IBufferRange | undefined;
+  const select = (col: number, row: number, length: number) => {
+    const end = row * cols + col + length;
+    range = { start: { x: col, y: row }, end: { x: end % cols, y: Math.floor(end / cols) } };
+  };
+  const own: Record<string, unknown> = { select, getSelectionPosition: () => range, clearSelection: () => (range = undefined) };
+  return new Proxy(term, { get: (target, key, receiver) => (typeof key === "string" && key in own ? own[key] : Reflect.get(target, key, receiver)) });
+}
+
+const written = (term: Terminal, data: string) => new Promise<void>((done) => term.write(data, done));
+const rest = (ms: number) => new Promise((done) => setTimeout(done, ms));
+// rewrite puts text at the start of a row and the cursor back where it was, as a program redrawing a line does
+const rewrite = (row: number, text: string) => `\x1b7\x1b[${row};1H${text}\x1b8`;
+
+describe("installSearch on remuda-core", () => {
+  it("counts a row rewritten in place once output rests", async () => {
+    const term = headless();
+    const search = installSearch(term, () => "frappe", () => {});
+    await written(term, "OLD row\r\nsecond\r\n");
+    let found: FoundCount = { total: -1, at: -1 };
+    search.find!("NEW", 0, (f) => (found = f));
+    expect(found.total).toBe(0);
+    await written(term, rewrite(1, "NEW"));
+    await rest(350);
+    expect(found.total).toBe(1);
+    search.dispose();
+  });
+  it("steps over a row rewritten in place since the last step", async () => {
+    const term = headless();
+    const search = installSearch(term, () => "frappe", () => {});
+    await written(term, "NEW a\r\nOLD b\r\n");
+    let found: FoundCount = { total: -1, at: -1 };
+    search.find!("NEW", 0, (f) => (found = f));
+    expect(found).toEqual({ total: 1, at: 0 });
+    await written(term, rewrite(2, "NEW"));
+    search.find!("NEW", 1, (f) => (found = f));
+    expect(found).toEqual({ total: 2, at: 1 });
+    search.find!("NEW", -1, (f) => (found = f));
+    expect(found).toEqual({ total: 2, at: 0 });
+    search.dispose();
   });
 });

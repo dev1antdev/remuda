@@ -6,7 +6,7 @@
 // the addon look through xterm's buffer itself, count, step and scroll xterm, never the pane.
 
 import { SearchAddon, type ISearchDecorationOptions, type ISearchOptions } from "@xterm/addon-search";
-import type { IBufferLine, Terminal as XTerm } from "@xterm/xterm";
+import type { IBufferLine, IBufferRange, Terminal as XTerm } from "@xterm/xterm";
 import { findRanges } from "@/features/chat/find";
 import { swatches, type Flavor, type Swatches } from "@/lib/theme";
 import { nearest } from "../scrollback";
@@ -15,6 +15,12 @@ import type { FoundCount, SearchApi } from "./types";
 // SETTLE_MS is how long the screen gets to repaint after a scroll before the match is looked for, a few frames at a time.
 const SETTLE_MS = 1500;
 const TICK_MS = 60;
+// RECOUNT_MS is how long output rests before the core find counts its query again: under the addon's own 200 ms
+// recount, whose addon it replaces first, so a count from rows read before the write never stands
+const RECOUNT_MS = 100;
+
+// samePlace says two selections start at one cell
+const samePlace = (a: IBufferRange | undefined, b: IBufferRange | undefined): boolean => !!a && !!b && a.start.x === b.start.x && a.start.y === b.start.y;
 
 // hexAlpha is a six-digit hex colour with an alpha, as #rrggbbaa, the form a decoration takes
 export function hexAlpha(hex: string, alpha: number): string {
@@ -90,8 +96,9 @@ export function installSearch(term: XTerm, flavor: () => Flavor, forgetSelection
   const listen = () => addon.onDidChangeResults((r) => heard?.({ total: Math.max(0, r.resultCount), at: Math.max(0, r.resultIndex) }));
   term.loadAddon(addon);
   listen();
-  // fresh replaces the addon before a find: its cache of the rows cannot know that herdr rewrote them in place (the
-  // cursor ends where it began, so xterm reports no move), and a stale cache finds the screen as it was
+  // fresh replaces the addon before a find: its cache of the rows cannot know that a row was rewritten in place (herdr's
+  // repaint, or a program on remuda-core redrawing a line and putting the cursor back: xterm reports no move), and a
+  // stale cache finds the screen as it was
   const fresh = () => {
     addon.dispose();
     addon = new SearchAddon();
@@ -127,9 +134,33 @@ export function installSearch(term: XTerm, flavor: () => Flavor, forgetSelection
     fresh();
     term.clearSelection();
   };
+  // again finds the query with a fresh addon from the match selected: that match found once more (or the next, when it
+  // is gone), then the step taken from it
+  const again = (step: 0 | 1 | -1): boolean => {
+    const was = term.getSelectionPosition();
+    fresh();
+    let hit = seek(step < 0);
+    const moved = !samePlace(term.getSelectionPosition(), was);
+    if (hit && was && (step < 0 || (step > 0 && !moved))) hit = seek(step < 0);
+    return hit;
+  };
+  let recount: ReturnType<typeof setTimeout> | null = null;
+  // the core find counts its query again once output rests, where the screen stands: a write may rewrite rows it read
+  const written = term.onWriteParsed(() => {
+    if (!heard || !query) return;
+    if (recount) clearTimeout(recount);
+    recount = setTimeout(() => {
+      recount = null;
+      if (!heard || !query) return;
+      const top = term.buffer.active.viewportY;
+      if (!again(0)) heard({ total: 0, at: 0 });
+      term.scrollToLine(top);
+    }, RECOUNT_MS);
+  });
   const stop = () => {
     if (pending) clearTimeout(pending);
-    pending = null;
+    if (recount) clearTimeout(recount);
+    pending = recount = null;
   };
   const clear = () => {
     stop();
@@ -164,7 +195,11 @@ export function installSearch(term: XTerm, flavor: () => Flavor, forgetSelection
     find(next, step, hear) {
       stop();
       heard = hear;
-      if (step === 0 || next !== query) restart();
+      if (step !== 0 && next === query) {
+        if (!again(step)) hear({ total: 0, at: 0 });
+        return;
+      }
+      restart();
       query = next;
       if (!seek(step < 0)) hear({ total: 0, at: 0 });
     },
@@ -176,6 +211,7 @@ export function installSearch(term: XTerm, flavor: () => Flavor, forgetSelection
     },
     dispose() {
       stop();
+      written.dispose();
       addon.dispose();
     },
   };
