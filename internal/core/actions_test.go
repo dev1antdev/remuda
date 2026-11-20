@@ -228,6 +228,19 @@ func TestAnAgentStartsInTheShellAndTakesPromptsAndKeys(t *testing.T) {
 	}
 	screenSays(t, adapter, pane, "got: typed")
 
+	// remuda's own typing is no person's draft: a prompt right after it is not held back for one
+	if err := adapter.PaneSendText(pane, "draft "); err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	if err := adapter.AgentPrompt(pane, "at once"); err != nil {
+		t.Fatal(err)
+	}
+	if took := time.Since(start); took > 8*time.Second {
+		t.Fatalf("the prompt waited %s behind remuda's own typing", took)
+	}
+	screenSays(t, adapter, pane, "got: draft at once")
+
 	if err := adapter.AgentPrompt(pane, "ask"); err != nil {
 		t.Fatal(err)
 	}

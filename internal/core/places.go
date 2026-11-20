@@ -58,11 +58,25 @@ func (a *Adapter) runShell(ctx context.Context, space, tab, cwd string, env map[
 		return Terminal{}, a.refusal(err, "workspace_not_found")
 	}
 	a.mu.Lock()
-	if a.held && t.State == "live" && local(t.Address) && a.state.terminals[t.Address] == nil {
+	ended := t.State != "live" || a.state.gone[t.Address]
+	if a.held && !ended && local(t.Address) && a.state.terminals[t.Address] == nil {
 		a.tellLocked(a.state.add(t))
 	}
 	a.mu.Unlock()
+	if ended {
+		return Terminal{}, fmt.Errorf("the shell in %s ended as soon as it started", cmp.Or(cwd, "the core's folder"))
+	}
 	return t, nil
+}
+
+// holds says whether a live terminal the mirror holds now, other than the ones ending, is in a place the snapshot
+// shows: read when the document is written, not before the terminals were ended, so a terminal another request put
+// there meanwhile keeps its place.
+func (a *Adapter) holds(pick func(*herdr.PaneInfo) bool, ending []string) bool {
+	a.mu.Lock()
+	snap := a.state.snapshot(nil)
+	a.mu.Unlock()
+	return len(panesWhere(snap, func(p *herdr.PaneInfo) bool { return pick(p) && !slices.Contains(ending, p.PaneID) })) > 0
 }
 
 // kill ends terminals side by side; one the core no longer has is gone already.
@@ -302,7 +316,7 @@ func (a *Adapter) TabClose(tabID string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), callWithin)
 	defer cancel()
 	return a.editDoc(ctx, func(doc *Document) error {
-		dropTab(doc, snap, tabID, panes)
+		a.dropTab(doc, tabID, panes)
 		return nil
 	})
 }
@@ -313,8 +327,9 @@ func (a *Adapter) tabInDoc(tab string) bool {
 	return docSpaceOfTab(&a.state.doc, tab) != ""
 }
 
-// dropTab takes a tab out of the document, and its workspace when no other tab of it holds a terminal that stays.
-func dropTab(doc *Document, snap *herdr.Snapshot, tab string, ending []string) {
+// dropTab takes a tab out of the document as it reads now, and its workspace when the document keeps no other tab of
+// it and no terminal but the ending ones is in it.
+func (a *Adapter) dropTab(doc *Document, tab string, ending []string) {
 	for i := range doc.Workspaces {
 		ws := &doc.Workspaces[i]
 		if !slices.ContainsFunc(ws.Tabs, func(t DocTab) bool { return t.ID == tab }) {
@@ -327,8 +342,8 @@ func dropTab(doc *Document, snap *herdr.Snapshot, tab string, ending []string) {
 				ws.ActiveTab = ws.Tabs[0].ID
 			}
 		}
-		stays := panesWhere(snap, func(p *herdr.PaneInfo) bool { return p.WorkspaceID == ws.ID && !slices.Contains(ending, p.PaneID) })
-		if len(stays) == 0 {
+		space := ws.ID
+		if len(ws.Tabs) == 0 && !a.holds(func(p *herdr.PaneInfo) bool { return p.WorkspaceID == space }, ending) {
 			doc.Workspaces = slices.Delete(doc.Workspaces, i, i+1)
 		}
 		return

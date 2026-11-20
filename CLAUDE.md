@@ -429,7 +429,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   with its last pane and a workspace with its last tab, as herdr's) — run
   the machine's shell in a new terminal with the place's labels and
   `rm` (gone when its shell ends, as a herdr pane), put it in the mirror at
-  once (`runShell`, so the pane answered is there for the next request),
+  once (`runShell`, so the pane answered is there for the next request;
+  one the core said went already — `mirror.gone`, kept until the next fill
+  — fails the create rather than come back as a ghost),
   and change the document through `editDoc`: read, change, write at the
   version read, made again on a `conflict` (another remuda's write) up to
   `docTries` 5, one at a time from this remuda (`docMu`), the mirror taking
@@ -439,7 +441,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   of labels alone) is adopted into it (`adopt`, `adoptTab`); ids are
   `ws-` / `tab-` and `state.NewID`; closing ends the place's
   terminals side by side (`kill`, `killWithin` 15 s each, one already
-  gone counting as gone). `input.go` — `AgentStartWith` types the agent's
+  gone counting as gone), and a workspace leaves the document only when the
+  document read at the write keeps no other tab of it and the mirror then
+  holds no other terminal in it (`holds`), so a tab another request made
+  meanwhile keeps its workspace. `input.go` — `AgentStartWith` types the agent's
   command line into the pane's shell at its prompt, as herdr's agent.start
   runs it, the shell staying under the agent (`terminal.send`: pasted and
   Enter; quoted for the shell at the prompt, `commandLine`: POSIX, pwsh's
@@ -454,7 +459,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   `terminal.send` (the person's draft in the terminal waited for,
   `sendWithin` 75 s — shorter would cancel a prompt already typed — under
   the pane's lock, so keys and answers through remuda wait behind it while
-  a draft stands; no person types into a core terminal before Core 14):
+  a draft stands; no person types into a core terminal before Core 14,
+  whose live terminal needs remuda-core to bind a send to the program in
+  front first, else an agent leaving during the wait would have the prompt
+  typed into its shell — Core 33):
   `agent_not_found` with no agent, `agent_not_ready` until it has reported
   a status since it took the terminal (`readyForPrompt`: the mirror stamps
   `agentAt` and `statusAt`, a report the foreground's next look comes
@@ -466,7 +474,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   `agent_blocked`, `unavailable` → `agent_not_ready`; `PaneSendKeys` is
   `terminal.keys` with `now` (keys the person pressed); `PaneSendText` types
   bytes as they are through a `keep_size` attach of its own, since the core
-  takes text only as a paste, but the bytes sessions sends for home, end,
+  takes text only as a paste, as the terminal's automatic input
+  (`Stream.WriteAutomatic`), never a person's typing, so it starts no draft
+  the core would hold a prompt back for — a prompt goes at once, to the
+  agent the mirror saw — but the bytes sessions sends for home, end,
   pageup, pagedown and delete (herdr 0.9.5 names none) go as the core's
   named keys, encoded for the program's keyboard modes (`keyBytes`);
   `PaneSendInput` refuses a paste of several lines (typed raw, each would

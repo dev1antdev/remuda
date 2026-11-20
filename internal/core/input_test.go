@@ -2,6 +2,7 @@ package core
 
 import (
 	"encoding/json"
+	"slices"
 	"testing"
 	"time"
 
@@ -85,5 +86,45 @@ func TestAReportBeforeTheForegroundsLookCountsAsTheAgentsFirst(t *testing.T) {
 	m.apply(Event{Type: "foreground", Terminal: "t1", Data: json.RawMessage(`{"pid":11,"name":"claude","argv":["claude"]}`)})
 	if term := m.terminals["t1"]; agentOf(term) != "claude" || !readyForPrompt(term) {
 		t.Fatalf("the agent is %q, ready %v", agentOf(term), readyForPrompt(term))
+	}
+}
+
+func placed(space, tab string) *Terminal {
+	return &Terminal{Address: space + tab, State: "live", Labels: map[string]string{LabelSpace: space, LabelTab: tab}}
+}
+
+func TestClosingATabKeepsAWorkspaceSomethingElseIsInNow(t *testing.T) {
+	ending := []string{"w1a"}
+	cases := []struct {
+		name  string
+		tabs  []DocTab
+		live  []*Terminal
+		stays bool
+	}{
+		{"another tab in the document", []DocTab{{ID: "a"}, {ID: "b"}}, []*Terminal{placed("w1", "a")}, true},
+		{"a terminal another request put there meanwhile", []DocTab{{ID: "a"}}, []*Terminal{placed("w1", "a"), placed("w1", "new")}, true},
+		{"nothing else", []DocTab{{ID: "a"}}, []*Terminal{placed("w1", "a")}, false},
+	}
+	for _, c := range cases {
+		a := &Adapter{held: true, state: mirror{terminals: map[string]*Terminal{}}}
+		for _, term := range c.live {
+			a.state.terminals[term.Address] = term
+		}
+		doc := Document{Workspaces: []DocWorkspace{{ID: "w1", ActiveTab: "a", Tabs: c.tabs}}}
+		a.dropTab(&doc, "a", ending)
+		if stays := len(doc.Workspaces) == 1; stays != c.stays {
+			t.Errorf("%s: the workspace stays %v", c.name, stays)
+		}
+		if c.stays && slices.ContainsFunc(doc.Workspaces[0].Tabs, func(tab DocTab) bool { return tab.ID == "a" }) {
+			t.Errorf("%s: the closed tab is still there", c.name)
+		}
+	}
+}
+
+func TestATerminalTheCoreSaidWentIsNotPutBack(t *testing.T) {
+	m := mirror{terminals: map[string]*Terminal{}}
+	m.apply(Event{Type: "removed", Terminal: "t7", Data: json.RawMessage(`{}`)})
+	if !m.gone["t7"] {
+		t.Fatal("a removal of a terminal the mirror never held is forgotten")
 	}
 }

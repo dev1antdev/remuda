@@ -97,20 +97,19 @@ func (a *Adapter) PaneClose(paneID string) error {
 	if err := a.kill(paneID); err != nil {
 		return err
 	}
-	others := panesWhere(snap, func(p *herdr.PaneInfo) bool { return p.TabID == pane.TabID && p.PaneID != paneID })
 	ctx, cancel := context.WithTimeout(context.Background(), callWithin)
 	defer cancel()
+	ending := []string{paneID}
 	return a.editDoc(ctx, func(doc *Document) error {
-		if len(others) == 0 {
-			dropTab(doc, snap, pane.TabID, []string{paneID})
-			return nil
-		}
 		for i := range doc.Workspaces {
 			for j := range doc.Workspaces[i].Tabs {
 				if tab := &doc.Workspaces[i].Tabs[j]; tab.ID == pane.TabID {
 					tab.Layout = withoutPane(tab.Layout, paneID)
 				}
 			}
+		}
+		if !a.holds(func(p *herdr.PaneInfo) bool { return p.TabID == pane.TabID }, ending) {
+			a.dropTab(doc, pane.TabID, ending)
 		}
 		return nil
 	})

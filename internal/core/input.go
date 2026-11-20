@@ -160,7 +160,9 @@ func (a *Adapter) PaneSendKeys(paneID string, keys []string) error {
 var keyBytes = map[string]string{"\x1bOH": "home", "\x1bOF": "end", "\x1b[5~": "pageup", "\x1b[6~": "pagedown", "\x1b[3~": "delete"}
 
 // PaneSendText types text as it is, byte for byte: through a viewer of the terminal's own that leaves its size alone,
-// since the core takes text only as a paste.
+// since the core takes text only as a paste. It goes as the terminal's automatic input, never as a person's typing, so
+// it starts no draft that would make the core hold a prompt back: a prompt checked against the mirror is typed at
+// once, while the agent seen is still there.
 func (a *Adapter) PaneSendText(paneID, text string) error {
 	if key, ok := keyBytes[text]; ok {
 		return a.PaneSendKeys(paneID, []string{key})
@@ -176,7 +178,7 @@ func (a *Adapter) PaneSendText(paneID, text string) error {
 		return a.refusal(err, "pane_not_found")
 	}
 	defer stream.Close()
-	_, err = stream.Write([]byte(text))
+	_, err = stream.WriteAutomatic([]byte(text))
 	return a.refusal(err, "pane_not_found")
 }
 
