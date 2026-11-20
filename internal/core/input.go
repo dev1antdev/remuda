@@ -11,6 +11,11 @@ import (
 	"github.com/dev1antdev/remuda/internal/script"
 )
 
+// promptsNeed is the hello feature of a remuda-core that, as it types a send, checks the program in front of the
+// terminal is still the one named (`foreground`, Core 33). A prompt goes to an agent only through such a core: an agent
+// that left a moment before would otherwise have the prompt typed into its shell, which would run it. A test lifts it.
+var promptsNeed = "send_foreground"
+
 // sendWithin bounds a prompt: the core holds it while the person finishes a draft in the terminal (60 s at most since
 // their last key) and then watches its turn start (5 s). A shorter bound would cancel a prompt typed already, and the
 // person would send it twice.
@@ -110,8 +115,9 @@ func readyForPrompt(t *Terminal) bool {
 	return !t.statusAt.IsZero() && !t.statusAt.Before(t.agentAt)
 }
 
-// AgentPrompt hands the agent in the pane a message: the core pastes it and presses Enter, and refuses while the agent
-// asks something (agent_blocked). A pane whose agent has not come up, or that has none, gets nothing: what is written
+// AgentPrompt hands the agent in the pane a message, only through a core that checks the agent is still in front as it
+// types (promptsNeed, the agent's pid named as `foreground`): the core pastes it and presses Enter, and refuses while
+// the agent asks something (agent_blocked). A pane whose agent has not come up, or that has none, gets nothing: what is written
 // for an agent never reaches a shell. The core's own view of the terminal is read right before, so an agent that left
 // since the mirror's last news is not taken for there; an agent whose status is cleared (Claude Code reports
 // state=clear on its way out) gets nothing, and a send to an idle agent names that status (`if`), so one that clears
@@ -130,6 +136,13 @@ func (a *Adapter) AgentPrompt(target, text string) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), sendWithin)
 	defer cancel()
+	cn, err := a.client.connection(ctx)
+	if err != nil {
+		return a.refusal(err, "agent_not_found")
+	}
+	if promptsNeed != "" && !cn.hello.Has(promptsNeed) {
+		return &herdr.Error{Code: "invalid_request", Message: "a prompt to an agent waits for a remuda-core that checks, as it types, that the agent is still in front (Core 33)"}
+	}
 	now, err := a.client.Get(ctx, target)
 	if err != nil {
 		return a.refusal(err, "agent_not_found")
@@ -140,7 +153,10 @@ func (a *Adapter) AgentPrompt(target, text string) error {
 	if now.Status == nil {
 		return &herdr.Error{Code: "agent_not_ready", Message: "the agent in " + target + " cleared its status, as one leaving does: nothing was sent"}
 	}
-	params := map[string]any{"terminal": target, "text": text}
+	if now.Foreground == nil {
+		return &herdr.Error{Code: "agent_not_ready", Message: "remuda-core has not seen what runs in front of " + target + " yet"}
+	}
+	params := map[string]any{"terminal": target, "text": text, "foreground": now.Foreground.Pid}
 	if statusOf(&now) == herdr.StatusIdle {
 		params["if"] = herdr.StatusIdle // not working: a turn ending as the prompt goes would refuse it
 	}

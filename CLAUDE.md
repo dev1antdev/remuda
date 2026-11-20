@@ -458,14 +458,18 @@ components and icons as rules for whoever changes it: @docs/design.md
   cursor); a shell not at its prompt is `agent_pane_busy`, which
   `sessions.StartAgent` tries again; the start counts once something else
   holds the terminal, and fails when the shell is still at its prompt
-  `startSeen` 10 s on; the name is herdr's alone. `AgentPrompt` is
-  `terminal.send` (the person's draft in the terminal waited for,
-  `sendWithin` 75 s — shorter would cancel a prompt already typed — under
-  the pane's lock, so keys and answers through remuda wait behind it while
-  a draft stands; no person types into a core terminal before Core 14,
-  whose live terminal needs remuda-core to bind a send to the program in
-  front first, else an agent leaving during the wait would have the prompt
-  typed into its shell — Core 33):
+  `startSeen` 10 s on; the name is herdr's alone. **`AgentPrompt` goes
+  only through a core that checks, as it types, that the agent is still
+  in front** (`promptsNeed`: the hello feature `send_foreground`, Core 33;
+  the agent's pid sent as `foreground`, which today's cores ignore): every
+  other core refuses it as `invalid_request` "a prompt to an agent waits
+  for a remuda-core that checks…" — an agent that left a moment before
+  would have the prompt typed into its shell, which would run it — so no
+  prompt reaches a core machine's agent before Core 33 (the tests lift the
+  gate, `LiftPromptGate`). Through such a core it is `terminal.send` (the
+  person's draft in the terminal waited for, `sendWithin` 75 s — shorter
+  would cancel a prompt already typed — under the pane's lock, so keys and
+  answers through remuda wait behind it while a draft stands, #329):
   `agent_not_found` with no agent, `agent_not_ready` until it has reported
   a status since it took the terminal (`readyForPrompt`: the mirror stamps
   `agentAt` and `statusAt`, a report the foreground's next look comes
@@ -478,11 +482,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   the core's own view of the terminal is read (`terminal.get`) and must
   still show that agent with a status — a cleared one, as an agent leaving
   reports, gets nothing — and a send to an idle agent names that status
-  (`if`, never for a working one, whose turn may end as it goes), so an
-  agent that cleared its status leaving — Claude Code reports
-  `state=clear` — has the prompt refused (`status_mismatch` →
-  `agent_not_ready`); only a crash inside the core's foreground poll (about
-  half a second) is left to Core 33; `PaneSendKeys` is
+  (`if`, never for a working one, whose turn may end as it goes;
+  `status_mismatch` → `agent_not_ready`); `PaneSendKeys` is
   `terminal.keys` with `now` (keys the person pressed); `PaneSendText` types
   bytes as they are into a terminal its shell holds — a command line remuda
   types into a shell it opened — through a `keep_size` attach of its own,

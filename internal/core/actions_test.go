@@ -186,7 +186,36 @@ func TestTwoRemudasMakingWorkspacesAtOnceKeepEveryOne(t *testing.T) {
 	})
 }
 
+func TestAPromptWaitsForACoreThatChecksTheAgentAsItTypes(t *testing.T) {
+	standInAgent(t)
+	client := coretest.Server(t).Client(t)
+	adapter := adapterOf(t, client, core.AdapterHooks{})
+	eventually(t, adapter, func(*herdr.Snapshot) bool { return true })
+	made, err := adapter.WorkspaceCreate(t.TempDir(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pane := made.RootPane.PaneID
+	for start := time.Now(); time.Since(start) < 10*time.Second; time.Sleep(200 * time.Millisecond) {
+		if err = adapter.AgentStart(pane, "claude"); !herdr.IsCode(err, "agent_pane_busy") {
+			break
+		}
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Pane(pane).AgentStatus == herdr.StatusIdle })
+	if err := adapter.AgentPrompt(pane, "hello"); !herdr.IsCode(err, "invalid_request") || !strings.Contains(err.Error(), "Core 33") {
+		t.Fatalf("a prompt through a core that does not check the agent as it types: %v", err)
+	}
+	screen, _ := adapter.PaneRead(pane)
+	if strings.Contains(screen, "got: hello") {
+		t.Fatal("the prompt was typed")
+	}
+}
+
 func TestAnAgentStartsInTheShellAndTakesPromptsAndKeys(t *testing.T) {
+	core.LiftPromptGate(t)
 	standInAgent(t)
 	client := coretest.Server(t).Client(t)
 	adapter := adapterOf(t, client, core.AdapterHooks{})
