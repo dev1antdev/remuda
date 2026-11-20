@@ -265,8 +265,16 @@ code_part() {
 
 # remuda-core as install-core.sh put it: the core of every session under its
 # state folder stopped first (every terminal in them ends) — nothing goes
-# while one of them is still up — then the binary with its rc link, ConPTY
-# on Windows, the app bundles on a Mac, its state and config folders.
+# while any remuda-core of this account still runs, one on a socket of its
+# own too — then the binary with its rc link, ConPTY on Windows, the app
+# bundles on a Mac, its state and config folders.
+core_running() {
+    if [ "$OS" = Windows ]; then
+        tasklist //FI "IMAGENAME eq remuda-core.exe" //FO CSV //NH 2>/dev/null | sed -n 's/^"remuda-core.exe","\([0-9]*\)".*/\1/p' | tr '\n' ' ' | sed 's/ *$//'
+    else
+        pgrep -u "$UID_NUM" -x remuda-core 2>/dev/null | tr '\n' ' ' | sed 's/ *$//'
+    fi
+}
 core_part() {
     rc_bin="$HOME/.local/bin/remuda-core"
     rc_state="${XDG_STATE_HOME:-$HOME/.local/state}/remuda-core"
@@ -280,7 +288,7 @@ core_part() {
         return 0
     fi
     sessions=""
-    for d in "$rc_state"/*/; do
+    for d in "$rc_state"/*/ "$rc_state"/.[!.]*/; do
         [ -d "$d" ] && sessions="${sessions:+$sessions, }$(basename "$d")"
     done
     what="remuda-core at $(tilde "$rc_bin"), its cores and the terminals in them, $(tilde "$rc_state"), $(tilde "$rc_config")"
@@ -299,11 +307,21 @@ core_part() {
         return 0
     fi
     up=0
-    for d in "$rc_state"/*/; do
+    for d in "$rc_state"/*/ "$rc_state"/.[!.]*/; do
         [ -d "$d" ] || continue
         s="$(basename "$d")"
         RC_SESSION="$s" "$rc_bin" server stop >/dev/null 2>&1 || { up=1; fail "remuda-core's $s core did not stop: RC_SESSION=$s $rc_bin server stop"; }
     done
+    i=0
+    while [ "$i" -lt 10 ] && [ -n "$(core_running)" ]; do
+        sleep 0.5
+        i=$((i + 1))
+    done
+    left="$(core_running)"
+    if [ -n "$left" ]; then
+        up=1
+        fail "a remuda-core still runs (pid $left), a session on a socket of its own perhaps: stop it, then remove remuda-core again"
+    fi
     if [ "$up" = 1 ]; then
         fail "remuda-core's files stay while one of its cores runs"
         return 0

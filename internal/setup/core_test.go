@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/dev1antdev/remuda/internal/health"
 )
 
 func TestCoreVersionMatchesTheScript(t *testing.T) {
@@ -27,7 +29,7 @@ func coreRelease(t *testing.T, binary, version string) []byte {
 	var buf bytes.Buffer
 	gz := gzip.NewWriter(&buf)
 	tw := tar.NewWriter(gz)
-	for name, body := range map[string]string{binary: script, "LICENSE": "Apache-2.0", "conpty/conpty.dll": "dll"} {
+	for name, body := range map[string]string{binary: script, "LICENSE": "Apache-2.0", "conpty/conpty.dll": "dll", "conpty/x64/OpenConsole.exe": "exe"} {
 		mode := int64(0o644)
 		if name == binary {
 			mode = 0o755
@@ -226,15 +228,23 @@ func TestNoCoreForAMachineWithoutABuild(t *testing.T) {
 	}
 }
 
-func TestCoreOnWindowsWithoutItsConPTYIsRepaired(t *testing.T) {
+func TestCoreOnWindowsWithoutAllOfItsConPTYIsRepaired(t *testing.T) {
 	dir, calls := coreHome(t, "MINGW64_NT-10.0-26100", "x86_64", coreRelease(t, "remuda-core.exe", "0.2.0"))
 	installedCore(t, dir, "remuda-core.exe", "0.2.0")
+	write(t, filepath.Join(dir, ".local", "bin", "conpty", "conpty.dll"), "half a copy", 0o644)
 	out, err := installCore(t, "install")
 	if err != nil || !strings.Contains(out, "its ConPTY put back") {
 		t.Fatalf("err=%v\n%s", err, out)
 	}
-	if !exists(filepath.Join(dir, ".local", "bin", "conpty", "conpty.dll")) || strings.Contains(calls(), "old remuda-core") {
-		t.Errorf("ConPTY was not put back, or the core was swapped for its own version:\n%s", calls())
+	conpty := filepath.Join(dir, ".local", "bin", "conpty")
+	if got, _ := os.ReadFile(filepath.Join(conpty, "conpty.dll")); string(got) != "dll" || !exists(filepath.Join(conpty, "x64", "OpenConsole.exe")) || exists(conpty+".new") {
+		t.Errorf("ConPTY was not put back whole (%q):\n%s", got, out)
+	}
+	if strings.Contains(calls(), "old remuda-core") {
+		t.Errorf("the core was swapped for its own version:\n%s", calls())
+	}
+	if !strings.Contains(health.Script(), `[ -f "$HOME/.local/bin/conpty/conpty.dll" ] && [ -f "$HOME/.local/bin/conpty/x64/OpenConsole.exe" ]`) {
+		t.Error("the vitals count a Windows remuda-core whole by other files than its installer does")
 	}
 }
 
@@ -274,6 +284,24 @@ func TestRemovalOfCoreStopsEverySessionFirst(t *testing.T) {
 	for _, f := range []string{"bin/remuda-core", "bin/rc", "share/remuda-core", "state/remuda-core"} {
 		if exists(filepath.Join(dir, ".local", f)) {
 			t.Errorf("~/.local/%s is still there\n%s", f, out.String())
+		}
+	}
+}
+
+func TestRemovalOfCoreStopsAHiddenSessionAndKeepsEverythingWhileACoreStillRuns(t *testing.T) {
+	dir, calls := coreMachine(t, ".work")
+	write(t, filepath.Join(dir, ".local", "bin", "pgrep"), "#!/bin/sh\ncase \"$*\" in *remuda-core*) echo 4242 ;; *) exit 1 ;; esac\n", 0o755)
+	var out strings.Builder
+	err := (Removal{Core: true}).Remove(&out)
+	if !strings.Contains(calls(), "RC_SESSION=.work remuda-core server stop") {
+		t.Errorf("the hidden session's core was not stopped:\n%s", calls())
+	}
+	if err == nil || !strings.Contains(out.String(), "a remuda-core still runs (pid 4242") {
+		t.Fatalf("a core still running went unsaid (err=%v):\n%s", err, out.String())
+	}
+	for _, f := range []string{"bin/remuda-core", "state/remuda-core/.work"} {
+		if !exists(filepath.Join(dir, ".local", f)) {
+			t.Errorf("~/.local/%s went while a core still ran\n%s", f, out.String())
 		}
 	}
 }

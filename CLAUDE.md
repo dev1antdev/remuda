@@ -1447,8 +1447,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   binary, the log and the ssh masters always; the state dir, code-server,
   remuda-core (the core of every session under its state folder stopped
   first, `RC_SESSION=<s> remuda-core server stop`, every terminal in them
-  ending — nothing of it goes while one still runs or with no binary to
-  stop them — then the binary, its `rc` link (relative, or into the
+  ending, hidden ones too — nothing of it goes while any remuda-core of the
+  account still runs afterwards (`core_running`: `pgrep -x`, `tasklist` on
+  Windows; a session on a socket of its own) or with no binary to stop
+  them — then the binary, its `rc` link (relative, or into the
   bundle), ConPTY on Windows, the app bundles under
   `~/.local/share/remuda-core`, its state and config folders; linger is
   said to stay on) and herdr (its hooks first, then its server stopped, the binary through
@@ -1470,7 +1472,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   builds' sha256 in the script (another version needs `CORE_SHA256`), into
   `~/.local/bin` — `remuda-core` with an `rc` link when no `rc` is on PATH;
   on Windows `remuda-core.exe` and `conpty/` beside `remuda.exe`, ConPTY
-  copied before the exe and counted as part of it (an install missing it is
+  (`conpty.dll` and `x64/OpenConsole.exe`) staged as `conpty.new` and
+  swapped in before the exe, and counted as part of it (an install missing it is
   not current, for the installer or the vitals, and a run puts it back), the zip
   opened by `%SYSTEMROOT%\System32\tar.exe`; on a Mac `remuda core.app` by
   its own `--rc-install-bundle` — the download held in
