@@ -8,6 +8,7 @@ import (
 
 	"github.com/dev1antdev/remuda/internal/core"
 	"github.com/dev1antdev/remuda/internal/core/coretest"
+	"github.com/dev1antdev/remuda/internal/timelapse"
 )
 
 // screenScript prints one of each style; testdata/screen-vt.txt and screen-herdr.txt are its screen as remuda-core 0.2.0
@@ -39,7 +40,7 @@ func TestACoreScreenShowsTheRowsHerdrsShows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, want := shown(core.ScreenText(string(vt))), shown(strings.ReplaceAll(string(ansi), "\r\n", "\n"))
+	got, want := shown(core.ScreenText(string(vt))), shown(string(ansi))
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("core shows\n%q\nherdr shows\n%q", got, want)
 	}
@@ -65,20 +66,11 @@ func TestALiveCoreScreenEndsAtItsLastText(t *testing.T) {
 	}
 }
 
-// shown is each row's text with its escape sequences taken out, as the screen views and timelapse.Plain read it.
+// shown is each row as the timelapse player reads it (timelapse.Plain drops herdr's \r too).
 func shown(screen string) []string {
-	var rows []string
-	for _, row := range strings.Split(screen, "\n") {
-		var b strings.Builder
-		for i := 0; i < len(row); i++ {
-			if row[i] != 0x1b {
-				b.WriteByte(row[i])
-				continue
-			}
-			for i++; i < len(row) && (row[i] == '[' || row[i] >= 0x20 && row[i] <= 0x3f); i++ {
-			}
-		}
-		rows = append(rows, b.String())
+	rows := strings.Split(screen, "\n")
+	for i, row := range rows {
+		rows[i] = timelapse.Plain(row)
 	}
 	return rows
 }
