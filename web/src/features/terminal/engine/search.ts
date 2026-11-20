@@ -89,7 +89,7 @@ export function cellSpan(line: IBufferLine | undefined, from: number, length: nu
 // installSearch loads the addon into the terminal; refresh paints the current find again (a flavour change). A match
 // is selected the way the addon does it, and forgetSelection tells the engine's own selection tracker that this one
 // is not the person's — else it would carry the mark to wherever that text seems to have moved after a repaint.
-export function installSearch(term: XTerm, flavor: () => Flavor, forgetSelection: () => void): SearchApi & { refresh: () => void; dispose: () => void } {
+export function installSearch(term: XTerm, flavor: () => Flavor, forgetSelection: () => void): SearchApi & { refresh: () => void; onPainted: () => void; dispose: () => void } {
   let addon = new SearchAddon();
   // heard is the core find's ear: every count the addon gives, its own find's and each it redoes as output arrives
   let heard: ((found: FoundCount) => void) | null = null;
@@ -149,18 +149,6 @@ export function installSearch(term: XTerm, flavor: () => Flavor, forgetSelection
     return seek(true);
   };
   let recount: ReturnType<typeof setTimeout> | null = null;
-  // the core find counts its query again once output rests, where the screen stands: a write may rewrite rows it read
-  const written = term.onWriteParsed(() => {
-    if (!heard || !query) return;
-    if (recount) clearTimeout(recount);
-    recount = setTimeout(() => {
-      recount = null;
-      if (!heard || !query) return;
-      const top = term.buffer.active.viewportY;
-      if (!again(0)) heard({ total: 0, at: 0 });
-      term.scrollToLine(top);
-    }, RECOUNT_MS);
-  });
   const stop = () => {
     if (pending) clearTimeout(pending);
     if (recount) clearTimeout(recount);
@@ -209,13 +197,23 @@ export function installSearch(term: XTerm, flavor: () => Flavor, forgetSelection
     },
     clear,
     refresh() {
-      if (!query) return;
-      fresh();
-      seek();
+      if (query) again(0);
+    },
+    // onPainted hears a write landed: the core find counts its query again once output rests, where the screen stands,
+    // since a write may rewrite rows it read
+    onPainted() {
+      if (!heard || !query) return;
+      if (recount) clearTimeout(recount);
+      recount = setTimeout(() => {
+        recount = null;
+        if (!heard || !query) return;
+        const top = term.buffer.active.viewportY;
+        if (!again(0)) heard({ total: 0, at: 0 });
+        term.scrollToLine(top);
+      }, RECOUNT_MS);
     },
     dispose() {
       stop();
-      written.dispose();
       addon.dispose();
     },
   };

@@ -135,6 +135,7 @@ export function createEngine(mount: HTMLElement, machineId: string, paneId: stri
       follow();
       layer.schedule();
       selection.onPainted();
+      search.onPainted();
     });
   };
   // onOpen resets the screen for a fresh stream: there is no replay, the server nudges the app into a

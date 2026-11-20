@@ -107,6 +107,7 @@ describe("installSearch on remuda-core", () => {
     search.find!("NEW", 0, (f) => (found = f));
     expect(found.total).toBe(0);
     await written(term, rewrite(1, "NEW"));
+    search.onPainted();
     await rest(350);
     expect(found.total).toBe(1);
     search.dispose();
