@@ -3,26 +3,30 @@ package core
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"time"
 )
 
 // Terminal is a terminal as the core tells it (schema `Terminal`): the facts remuda reads.
 type Terminal struct {
-	Address    string            `json:"address"`
-	Name       string            `json:"name"`
-	Labels     map[string]string `json:"labels"`
-	Argv       []string          `json:"argv"`
-	Cwd        string            `json:"cwd"`
-	Keep       bool              `json:"keep"`
-	State      string            `json:"state"`
-	Pid        int               `json:"pid"`
-	ExitCode   *int              `json:"exit_code"`
-	Signal     *int              `json:"signal"`
-	Reason     string            `json:"reason"`
-	CreatedMs  int64             `json:"created_ms"`
-	FinishedMs int64             `json:"finished_ms"`
-	Cols       uint16            `json:"cols"`
-	Rows       uint16            `json:"rows"`
+	Address string            `json:"address"`
+	Name    string            `json:"name"`
+	Labels  map[string]string `json:"labels"`
+	Argv    []string          `json:"argv"`
+	// Literal: it runs what a literal run started (a scene pane's own command), not a shell keep gave it since; nil
+	// from a core whose record says nothing of it (one without literal_record, rolled back to, say).
+	Literal    *bool  `json:"literal"`
+	Cwd        string `json:"cwd"`
+	Keep       bool   `json:"keep"`
+	State      string `json:"state"`
+	Pid        int    `json:"pid"`
+	ExitCode   *int   `json:"exit_code"`
+	Signal     *int   `json:"signal"`
+	Reason     string `json:"reason"`
+	CreatedMs  int64  `json:"created_ms"`
+	FinishedMs int64  `json:"finished_ms"`
+	Cols       uint16 `json:"cols"`
+	Rows       uint16 `json:"rows"`
 	// Status is what the program last reported through OSC 7501, nil when it never said or has exited.
 	Status   *Status           `json:"status"`
 	StatusMs int64             `json:"status_ms"`
@@ -66,16 +70,29 @@ type Foreground struct {
 	StartedMS int64 `json:"started_ms"`
 }
 
+// literalRuns are the hello features of a remuda-core that starts argv as it is (`literal`, Core 35) and says so on the
+// terminal's record until keep gives it a shell (`literal_record`). An older core ignores `literal` and may start a
+// template of the program's name, sending its first message; one without the record reads every terminal as no literal
+// run, a scene pane's running `sh -c` a shell at its prompt. A test hides them.
+var literalRuns = []string{"run_literal", "literal_record"}
+
+// runsLiteral says whether the core takes a literal run and tells it on the record.
+func runsLiteral(h Hello) bool {
+	return !slices.ContainsFunc(literalRuns, func(feature string) bool { return !h.Has(feature) })
+}
+
 // RunParams starts a program in a new terminal: Argv, or Line through the machine's shell, or neither for the shell.
+// Literal starts Argv as it is, with no template looked up by its first word.
 type RunParams struct {
-	Argv   []string          `json:"argv,omitempty"`
-	Line   string            `json:"line,omitempty"`
-	Name   string            `json:"name,omitempty"`
-	Cwd    string            `json:"cwd,omitempty"`
-	Env    map[string]string `json:"env,omitempty"`
-	Labels map[string]string `json:"labels,omitempty"`
-	Size   *Size             `json:"size,omitempty"`
-	Keep   bool              `json:"keep,omitempty"`
+	Argv    []string          `json:"argv,omitempty"`
+	Literal bool              `json:"literal,omitempty"`
+	Line    string            `json:"line,omitempty"`
+	Name    string            `json:"name,omitempty"`
+	Cwd     string            `json:"cwd,omitempty"`
+	Env     map[string]string `json:"env,omitempty"`
+	Labels  map[string]string `json:"labels,omitempty"`
+	Size    *Size             `json:"size,omitempty"`
+	Keep    bool              `json:"keep,omitempty"`
 	// Rm removes the terminal once its program exits, as herdr closes a pane whose shell ended.
 	Rm bool `json:"rm,omitempty"`
 }
@@ -137,9 +154,17 @@ type ServerStatus struct {
 	Finished int      `json:"finished"`
 }
 
+// Run starts a terminal. A literal run goes only on a connection whose core said it takes one.
 func (c *Client) Run(ctx context.Context, params RunParams) (Terminal, error) {
+	cn, err := c.connection(ctx)
+	if err != nil {
+		return Terminal{}, err
+	}
+	if params.Literal && !runsLiteral(cn.hello) {
+		return Terminal{}, &Error{Kind: "needs_update", Message: "this remuda-core cannot start a program without reading its name as a template's"}
+	}
 	var t Terminal
-	return t, c.Call(ctx, "terminal.run", params, &t)
+	return t, cn.call(ctx, "terminal.run", params, &t, nil)
 }
 
 // List is the live terminals, the finished ones too with all, those carrying every label given.

@@ -241,3 +241,57 @@ func TestRecentRowsEndAtTheLastTextNotAColouredBlankRow(t *testing.T) {
 		t.Fatalf("%q", got)
 	}
 }
+
+// stagedOn is an adapter over a core whose one terminal is the agent given, sends counted.
+func stagedOn(t *testing.T, terminal string, sends *atomic.Int32) *Adapter {
+	return seenThenGot(t, terminal, terminal, sends)
+}
+
+// seenThenGot is stagedOn whose mirror shows one terminal and whose terminal.get answers another, a look that raced a
+// change in front.
+func seenThenGot(t *testing.T, seen, got string, sends *atomic.Int32) *Adapter {
+	t.Helper()
+	client := New(fakeCore(`"output_watches","send_foreground"`, func(core peer, frame sent) {
+		switch frame.method {
+		case "events.subscribe":
+			core.reply(frame.id, `{"seq":1,"terminals":[`+seen+`],"channel":3}`)
+		case "doc.get":
+			core.reply(frame.id, `{"value":null,"version":0}`)
+		case "terminal.get":
+			core.reply(frame.id, got)
+		case "terminal.send":
+			sends.Add(1)
+			core.reply(frame.id, `{"status":"idle","turn":0}`)
+		}
+	}))
+	t.Cleanup(func() { client.Close() })
+	adapter := NewAdapter(client, nil, AdapterHooks{})
+	t.Cleanup(func() { adapter.Close() })
+	if _, err := adapter.SessionSnapshot(); err != nil {
+		t.Fatal(err)
+	}
+	return adapter
+}
+
+// A delivery is bound from its first sight of the agent, before the agent has reported a status; a later look that
+// finds another pid in front is agent_left, and nothing is sent to it.
+func TestADeliveryIsBoundFromItsFirstSightOfTheAgent(t *testing.T) {
+	var sends atomic.Int32
+	quiet := stagedOn(t, `{"address":"t1","state":"live","pid":10,"foreground":{"pid":11,"name":"claude","argv":["claude"]}}`, &sends)
+	pid, _, err := quiet.StagePrompt("t1", "the task", 0, false)
+	if !herdr.IsCode(err, "agent_not_ready") || pid != 11 {
+		t.Fatalf("an agent with no status yet: pid %d, %v", pid, err)
+	}
+	replaced := stagedOn(t, `{"address":"t1","state":"live","pid":10,"foreground":{"pid":12,"name":"claude","argv":["claude"]},"status":{"state":"idle","app":"claude-code"}}`, &sends)
+	if _, _, err := replaced.StagePrompt("t1", "the task", 11, false); !herdr.IsCode(err, "agent_left") {
+		t.Fatalf("another agent in front of a bound delivery: %v", err)
+	}
+	first := seenThenGot(t, `{"address":"t1","state":"live","pid":10,"foreground":{"pid":11,"name":"claude","argv":["claude"]},"status":{"state":"idle","app":"claude-code"}}`,
+		`{"address":"t1","state":"live","pid":10,"foreground":{"pid":12,"name":"claude","argv":["claude"]},"status":{"state":"idle","app":"claude-code"}}`, &sends)
+	if _, _, err := first.StagePrompt("t1", "the task", 0, false); !herdr.IsCode(err, "agent_left") {
+		t.Fatalf("a first look whose agent was replaced between the mirror and the core: %v", err)
+	}
+	if sends.Load() != 0 {
+		t.Fatal("a send reached the agent that replaced the one the delivery was for")
+	}
+}

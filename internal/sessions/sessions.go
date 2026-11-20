@@ -282,9 +282,12 @@ var ErrAgentBusy = errors.New("the agent is waiting for an answer — answer its
 // StagedPrompter is a client whose prompt is looked at first and typed after, maybe a minute later: remuda-core holds a
 // prompt while a person finishes a draft in the terminal, and checks as it types that the agent is still in front and
 // that nothing else's input interleaves. The look needs the pane's lock; the wait does not, so the person's keys and
-// answers pass a prompt the core holds.
+// answers pass a prompt the core holds. The look answers the agent's pid, with a refusal of that agent too (it asks
+// something, or works), which a delivery tried again names as front:
+// any other agent in front is refused (agent_left); asMessage, the person's own message, goes to a turn started
+// meanwhile, everyone else's to an agent at rest alone.
 type StagedPrompter interface {
-	StagePrompt(target, text string) (send func() error, err error)
+	StagePrompt(target, text string, front int, asMessage bool) (pid int, send func() error, err error)
 }
 
 // Input is the one door for what people type into panes: every delivery holds the pane's lock, so nothing interleaves.
@@ -340,52 +343,73 @@ func (in *Input) paneMutex(set map[events.PaneRef]*sync.Mutex, ref events.PaneRe
 	return set[ref]
 }
 
-// Prompt hands text to the pane's agent and answers the client's own refusal: herdr's agent.prompt under the pane's
-// lock, or, through a StagedPrompter, the look under that lock and the typing after it.
+// Prompt hands text to the pane's agent once and answers the client's own refusal: herdr's agent.prompt under the
+// pane's lock, or, through a StagedPrompter, the look under that lock and the typing after it.
 func (in *Input) Prompt(client Prompter, ref events.PaneRef, text string) error {
-	return in.prompt(client, ref, text, nil)
+	return in.Deliver(client, ref, text).Try()
 }
 
-// prompt is Prompt with then, run under the pane's lock once the prompt went; for herdr in the same hold as the prompt.
-func (in *Input) prompt(client Prompter, ref events.PaneRef, text string, then func() error) error {
-	lock := in.lock(ref)
-	staged, ok := client.(StagedPrompter)
+// Delivery is a prompt for a pane's agent, tried until the agent takes it (a first prompt, a task's, an arena lane's).
+// On remuda-core its first look binds it to the agent it saw, so no later try reaches what replaced that agent.
+type Delivery struct {
+	in        *Input
+	client    Prompter
+	ref       events.PaneRef
+	text      string
+	asMessage bool
+	then      func() error
+	front     int
+}
+
+// Deliver is a delivery of text to the pane's agent, the agent at rest.
+func (in *Input) Deliver(client Prompter, ref events.PaneRef, text string) *Delivery {
+	return &Delivery{in: in, client: client, ref: ref, text: text}
+}
+
+// Try is one attempt, then run under the pane's lock once the prompt went; for herdr in the same hold as the prompt.
+func (d *Delivery) Try() error {
+	lock := d.in.lock(d.ref)
+	staged, ok := d.client.(StagedPrompter)
 	if !ok {
 		lock.Lock()
 		defer lock.Unlock()
-		if err := client.AgentPrompt(ref.Pane, text); err != nil || then == nil {
+		if err := d.client.AgentPrompt(d.ref.Pane, d.text); err != nil || d.then == nil {
 			return err
 		}
-		return then()
+		return d.then()
 	}
-	order := in.paneMutex(in.prompts, ref)
+	order := d.in.paneMutex(d.in.prompts, d.ref)
 	order.Lock()
 	defer order.Unlock()
 	lock.Lock()
-	send, err := staged.StagePrompt(ref.Pane, text)
+	pid, send, err := staged.StagePrompt(d.ref.Pane, d.text, d.front, d.asMessage)
 	lock.Unlock()
+	if pid != 0 {
+		d.front = pid
+	}
 	if err != nil {
 		return err
 	}
-	if err := send(); err != nil || then == nil {
+	if err := send(); err != nil || d.then == nil {
 		return err
 	}
 	lock.Lock()
 	defer lock.Unlock()
-	return then()
+	return d.then()
 }
 
 // Submit delivers what a person wrote for the pane's agent, the way the chat does: herdr's own submit, and for a message
-// that names a picture the Enter Claude Code loses of it (settle.go). Without an agent nothing goes.
+// that names a picture the Enter Claude Code loses of it (settle.go). Without an agent nothing goes. On remuda-core a
+// turn the person's own draft started meanwhile takes it as a message.
 func (in *Input) Submit(client Prompter, ref events.PaneRef, text string) error {
-	var then func() error
+	d := &Delivery{in: in, client: client, ref: ref, text: text, asMessage: true}
 	if two, ok := client.(interface {
 		Settler
 		Prompter
 	}); ok && NamesPicture(text) {
-		then = func() error { return enterAfterPaste(two, ref.Pane) }
+		d.then = func() error { return enterAfterPaste(two, ref.Pane) }
 	}
-	return refused(in.prompt(client, ref, text, then))
+	return refused(d.Try())
 }
 
 // ErrNoAgent: the pane has no agent up to take the text, and what was written for one must not reach its shell, which
@@ -396,13 +420,16 @@ var ErrNoAgent = errors.New("no agent is ready in that pane; nothing was sent")
 // Enter; the text may sit in the input line of whatever runs there now, the shell included.
 var ErrNotSubmitted = errors.New("your message was pasted into the terminal but not submitted: the agent left its front as it went, so no Enter was pressed — look at the terminal and clear the line before pressing Enter there")
 
-// refused words a client's refusal of a prompt for the person: the agent asking something, none up to take it, or a
-// paste left unsubmitted.
+// refused words a client's refusal of a prompt for the person: the agent asking something, at work while the prompt is
+// for it at rest (a schedule skips that run), none up to take it (or the one looked at gone from the front,
+// agent_left), or a paste left unsubmitted.
 func refused(err error) error {
 	switch {
 	case herdr.IsCode(err, "agent_blocked"):
 		return ErrAgentBusy
-	case herdr.IsCode(err, "agent_not_found"), herdr.IsCode(err, "agent_not_ready"):
+	case herdr.IsCode(err, "agent_working"):
+		return ErrAgentWorking
+	case herdr.IsCode(err, "agent_not_found"), herdr.IsCode(err, "agent_not_ready"), herdr.IsCode(err, "agent_left"):
 		return ErrNoAgent
 	case herdr.IsCode(err, "not_submitted"):
 		return ErrNotSubmitted
@@ -410,8 +437,15 @@ func refused(err error) error {
 	return err
 }
 
-// SubmitToAgent delivers text meant for an agent — a schedule's prompt, a pull request's failures, a booked "continue" —
-// through Prompt.
+// HandOff delivers text remuda composed at the person's press — a pull request's failures or reviews — as their own
+// message, which on remuda-core a turn under way takes; never with the Enter Submit adds after a picture, which is for
+// what the person wrote and would read a dialog the work just put up as their message unsent.
+func (in *Input) HandOff(client Prompter, ref events.PaneRef, text string) error {
+	return refused((&Delivery{in: in, client: client, ref: ref, text: text, asMessage: true}).Try())
+}
+
+// SubmitToAgent delivers text remuda has for an agent at rest — a schedule's prompt, a booked "continue", a tidy's
+// /compact — through Prompt: on remuda-core, never into a turn.
 func (in *Input) SubmitToAgent(client Prompter, ref events.PaneRef, text string) error {
 	return refused(in.Prompt(client, ref, text))
 }
@@ -428,14 +462,15 @@ var (
 // never answered; the error says why the text was not delivered.
 func (in *Input) FirstPrompt(client Prompter, ref events.PaneRef, text string, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
+	delivery := in.Deliver(client, ref, text)
 	var last error
 	for {
 		time.Sleep(FirstPromptRetry)
-		err := in.Prompt(client, ref, text)
+		err := delivery.Try()
 		switch {
 		case err == nil:
 			return nil
-		case herdr.IsCode(err, "agent_not_ready") || herdr.IsCode(err, "agent_not_found") || herdr.IsCode(err, "agent_blocked"):
+		case herdr.IsCode(err, "agent_not_ready") || herdr.IsCode(err, "agent_not_found") || herdr.IsCode(err, "agent_working") || herdr.IsCode(err, "agent_blocked"):
 			last = err
 		default:
 			return refused(err)

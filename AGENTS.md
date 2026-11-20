@@ -85,7 +85,9 @@ not style.
   description or fields of a card in the Queued column or a running
   pipeline, move such a card to another project, delete a card, nor change or delete a project, its columns,
   its fields or its agents, and no task lands in the Queued column by
-  itself.
+  itself; and, on remuda-core, a send the core refused untyped
+  (`status_mismatch`) goes once more in the same request, only to the
+  same agent under the same pid (`core.Adapter.sendTo`).
 - **Never `--takeover`.** herdr allows one attached client per terminal;
   stealing the slot is the person's call only. A refusal is surfaced
   (`RefusedError`, 409 on HTTP, the WebSocket close reason), never retried

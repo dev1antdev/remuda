@@ -65,8 +65,14 @@ func (t *Terminals) Open(termID string, view herdr.View) (herdr.Viewer, error) {
 		}
 	case <-timer.C:
 	}
+	// the screen alone attaches before the first viewer leaves: between the two the terminal would take the core's own
+	// grid, and its program a resize and a redraw at it
+	screen, err := t.attach(termID, view, 0)
 	v.Close()
-	return t.attach(termID, view, 0)
+	if err != nil {
+		return nil, err
+	}
+	return screen, nil
 }
 
 func (t *Terminals) attach(termID string, view herdr.View, history int) (*coreViewer, error) {

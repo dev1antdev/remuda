@@ -59,14 +59,18 @@ func (a *Adapter) runShell(ctx context.Context, space, tab, cwd string, env map[
 // runIn starts what p says (the machine's shell when it names nothing) in a new terminal of a workspace's tab, its
 // labels beside the tab's, and waits for the core's own news of it, so the pane it answers is in the snapshot the
 // caller reads next. The mirror alone puts terminals in it: a reply to the start never does, which could bring back a
-// shell that ended meanwhile. One that ends first fails the start. The terminal is kept: a lost shell comes back.
+// shell that ended meanwhile. One that ends first fails the start. The terminal is kept: a lost one comes back as the
+// machine's shell, never its command run again.
 func (a *Adapter) runIn(ctx context.Context, space, tab string, p RunParams) (Terminal, error) {
 	p.Labels = maps.Clone(p.Labels)
 	if p.Labels == nil {
 		p.Labels = map[string]string{}
 	}
 	p.Labels[LabelSpace], p.Labels[LabelTab], p.Rm, p.Keep = space, tab, true, true
-	cwd := p.Cwd
+	what, where := "the shell", cmp.Or(p.Cwd, "the core's folder")
+	if len(p.Argv) > 0 {
+		what = "the program " + p.Argv[0]
+	}
 	t, err := a.client.Run(ctx, p)
 	if err != nil {
 		return Terminal{}, a.refusal(err, "workspace_not_found")
@@ -79,12 +83,12 @@ func (a *Adapter) runIn(ctx context.Context, space, tab string, p RunParams) (Te
 		case held:
 			return t, nil
 		case gone || t.State != "live":
-			return Terminal{}, fmt.Errorf("the shell in %s ended as soon as it started", cmp.Or(cwd, "the core's folder"))
+			return Terminal{}, fmt.Errorf("%s in %s ended as soon as it started", what, where)
 		}
 		select {
 		case <-ctx.Done():
 			a.kill(t.Address)
-			return Terminal{}, fmt.Errorf("remuda-core never told of the shell it started in %s: %w", cmp.Or(cwd, "the core's folder"), ctx.Err())
+			return Terminal{}, fmt.Errorf("remuda-core never told of %s it started in %s: %w", what, where, ctx.Err())
 		case <-time.After(20 * time.Millisecond):
 		}
 	}
