@@ -588,7 +588,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   update of herdr's on such a machine is refused in `Start` too). For the
   same reason every checkout write holds back as while an agent works
   there — the Git and Changes lenses, a pull, an undo, a worktree removed
-  (`holdCheckoutWrites` in `internal/app/core.go`) — and a page-only host
+  (`holdCheckoutWrites` in `internal/app/core.go`), no leftover worktree
+  is listed or removed there (`heldOnCore`, a 409) and no work is moved
+  onto such a machine (a 400 before the move writes a checkout) — and a page-only host
   (`-server -core`) starts no core of its own. An exec connection keeps
   its stdin and asks for no terminal whatever the host's ssh config says
   (`DialExec` is a script's session). `OnCore` is the
