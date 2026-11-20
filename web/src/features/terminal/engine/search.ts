@@ -19,8 +19,13 @@ const TICK_MS = 60;
 // recount, whose addon it replaces first, so a count from rows read before the write never stands
 const RECOUNT_MS = 100;
 
-// samePlace says two selections start at one cell
-const samePlace = (a: IBufferRange | undefined, b: IBufferRange | undefined): boolean => !!a && !!b && a.start.x === b.start.x && a.start.y === b.start.y;
+// reselected says a fresh addon's first find from the match selected found that match again rather than taking the step
+// itself: a step forward lands on the very cell it started from; a step back first looks rightwards along that row, so
+// at or past the cell on the same row — a landing before it, or on another row (a wrap), is the step taken
+export function reselected(step: 1 | -1, was: IBufferRange, landed: IBufferRange | undefined): boolean {
+  if (!landed || landed.start.y !== was.start.y) return false;
+  return step > 0 ? landed.start.x === was.start.x : landed.start.x >= was.start.x;
+}
 
 // hexAlpha is a six-digit hex colour with an alpha, as #rrggbbaa, the form a decoration takes
 export function hexAlpha(hex: string, alpha: number): string {
@@ -140,8 +145,7 @@ export function installSearch(term: XTerm, flavor: () => Flavor, forgetSelection
     const was = term.getSelectionPosition();
     fresh();
     let hit = seek(step < 0);
-    const moved = !samePlace(term.getSelectionPosition(), was);
-    if (hit && was && (step < 0 || (step > 0 && !moved))) hit = seek(step < 0);
+    if (hit && was && step !== 0 && reselected(step, was, term.getSelectionPosition())) hit = seek(step < 0);
     return hit;
   };
   let recount: ReturnType<typeof setTimeout> | null = null;
