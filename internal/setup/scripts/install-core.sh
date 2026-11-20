@@ -98,6 +98,6 @@ windows-*) ;;
 esac
 # linger: without it systemd ends the core with the last login, an ssh session's too
 if [ "$(uname -s)" = Linux ] && command -v loginctl >/dev/null 2>&1; then
-    loginctl enable-linger "$(id -un)" 2>/dev/null || echo "warning: loginctl enable-linger was refused, so the core stops when your last login ends; run sudo loginctl enable-linger -- $(id -un) on this machine once"
+    loginctl --no-ask-password enable-linger "$(id -un)" 2>/dev/null || echo "warning: loginctl enable-linger was refused, so the core stops when your last login ends; run sudo loginctl enable-linger -- $(id -un) on this machine once"
 fi
 "$CORE" --version

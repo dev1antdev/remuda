@@ -97,7 +97,7 @@ func TestCoreInstallsTheCheckedReleaseOnLinux(t *testing.T) {
 	if !strings.Contains(log, "curl -fsSL -o") || !strings.Contains(log, "/releases/download/remuda-v0.2.0/remuda-core-linux-x86_64.tar.gz") {
 		t.Errorf("the pinned release was not the one fetched:\n%s", log)
 	}
-	if !strings.Contains(log, "loginctl enable-linger") {
+	if !strings.Contains(log, "loginctl --no-ask-password enable-linger") {
 		t.Errorf("linger was not asked for, so the core would end with the last login:\n%s", log)
 	}
 	if strings.Contains(log, "new remuda-core") {

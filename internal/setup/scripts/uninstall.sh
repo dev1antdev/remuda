@@ -268,7 +268,7 @@ code_part() {
 # app bundles on a Mac, its state and config folders.
 core_part() {
     rc_bin="$HOME/.local/bin/remuda-core"
-    rc_state="$HOME/.local/state/remuda-core"
+    rc_state="${XDG_STATE_HOME:-$HOME/.local/state}/remuda-core"
     rc_config="${XDG_CONFIG_HOME:-$HOME/.config}/remuda-core"
     if [ "$OS" = Windows ]; then
         rc_bin="$rc_bin.exe"
@@ -284,6 +284,7 @@ core_part() {
     elif [ "$ACTION" = plan ]; then
         will "$what"
         say "          a running core stops first: every agent and shell in its terminals ends"
+        if [ "$OS" = Linux ]; then say "          linger stays on for your account (loginctl disable-linger turns it off)"; fi
     else
         if [ -x "$rc_bin" ]; then "$rc_bin" server stop >/dev/null 2>&1 || fail "remuda-core's core did not stop: $rc_bin server stop"; fi
         if [ "$(readlink "$HOME/.local/bin/rc" 2>/dev/null)" = remuda-core ]; then rm -f "$HOME/.local/bin/rc"; fi

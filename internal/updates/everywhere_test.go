@@ -2,6 +2,7 @@ package updates
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -34,11 +35,7 @@ func TestOnlyAnUpdateWithSomethingNewerIsAStepEverywhere(t *testing.T) {
 	if pendingUpdate("hooks", &health.Report{}, latest) || pendingUpdate("code", &health.Report{}, latest) {
 		t.Error("nothing installed counts as an update")
 	}
-	health.PinnedCore = "0.2.0"
-	t.Cleanup(func() { health.PinnedCore = "" })
-	if pendingUpdate("core", &health.Report{RemudaCore: "0.2.0"}, latest) {
-		t.Error("a remuda-core as new as the one remuda installs counts as an update")
-	}
+
 }
 
 func TestEverywhereRefusesAStepThatMovedAndRunsNoneOfThem(t *testing.T) {
@@ -122,5 +119,15 @@ func TestAServersHostIsOfferedItsReleaseAlone(t *testing.T) {
 		if u.What != "remuda-release" {
 			t.Errorf("a server's host is offered %s", u.What)
 		}
+	}
+}
+
+func TestRemudaCoreFollowsARemotesReleaseAndPrecedesTheHosts(t *testing.T) {
+	at := func(order []string, what string) int { return slices.Index(order, what) }
+	if at(remoteOrder, "core") < at(remoteOrder, "remuda-release") {
+		t.Error("a remote's remuda-core step runs before its new remuda, the one that knows `remuda core`")
+	}
+	if at(everywhereOrder, "core") > at(everywhereOrder, "remuda-release") {
+		t.Error("the host's remuda-core step comes after the release that restarts this very remuda")
 	}
 }

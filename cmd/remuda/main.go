@@ -110,7 +110,7 @@ func mirrorClosed(withMirror, scratch bool) string {
 }
 
 // windowsServes is what remuda on Windows says when asked to serve the page: there it is the helper a cockpit reaches.
-const windowsServes = "remuda on Windows does not serve the page: it is the helper a cockpit on a Mac or Linux reaches over ssh (remuda setup -host <this PC> there). Its commands here: remuda tasks, remuda mcp, remuda statusline, remuda -version."
+const windowsServes = "remuda on Windows does not serve the page: it is the helper a cockpit on a Mac or Linux reaches over ssh (remuda setup -host <this PC> there). Its commands here: remuda tasks, remuda mcp, remuda statusline, remuda core, remuda -version."
 
 // recordsHere says whether this instance records the agents' timelapses and keeps their turns to undo: not a scratch instance (REMUDA_STATE_DIR set)
 // unless -record asks, so a second remuda beside the real one never reads the person's screens or work into a folder of its own.

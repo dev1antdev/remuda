@@ -44,8 +44,12 @@ type Batch struct {
 }
 
 // everywhereOrder is the order of a machine's steps: herdr first, then the hooks it writes, the agents, code-server,
-// remuda-core, and remuda's own release last, since installing it restarts that machine's remuda
-var everywhereOrder = []string{"herdr", "hooks", "claude", "codex", "gemini", "kimi", "code", "core", "remuda-release"}
+// remuda-core, and remuda's own release last, since installing it restarts the page's own remuda; remoteOrder puts
+// remuda-core after a remote's release, whose remuda is the one that knows `remuda core`
+var (
+	everywhereOrder = []string{"herdr", "hooks", "claude", "codex", "gemini", "kimi", "code", "core", "remuda-release"}
+	remoteOrder     = []string{"herdr", "hooks", "claude", "codex", "gemini", "kimi", "code", "remuda-release", "core"}
+)
 
 // StepTimeout is how long a step's job may run before the next one starts anyway.
 var StepTimeout = 30 * time.Minute
@@ -54,8 +58,8 @@ var StepTimeout = 30 * time.Minute
 var stepPoll = time.Second
 
 // pendingUpdate says whether an offer installs something newer than the machine has: a tool's newer version known,
-// hooks behind the installed herdr, a code-server older than the one remuda installs, a remuda-core missing or older
-// than it installs; a release is offered only when newer
+// hooks behind the installed herdr, a code-server older than the one remuda installs; a release and remuda-core are
+// offered only when needed
 func pendingUpdate(what string, r *health.Report, l health.Latest) bool {
 	switch what {
 	case "herdr":
@@ -67,9 +71,7 @@ func pendingUpdate(what string, r *health.Report, l health.Latest) bool {
 		return len(r.OutdatedHooks) > 0
 	case "code":
 		return r.CodeServer != "" && l.Code != "" && health.Newer(r.CodeServer, l.Code)
-	case "core":
-		return r.RemudaCore == "" || health.Newer(r.RemudaCore, health.PinnedCore)
-	case "remuda-release":
+	case "remuda-release", "core": // offered only when newer, or missing for remuda-core
 		return true
 	}
 	return false
@@ -86,8 +88,12 @@ func (s *Service) machineSteps(mc *machines.Machine) []Step {
 	for _, u := range s.Available(mc) {
 		offered[u.What] = u
 	}
+	order := remoteOrder
+	if mc.Local() {
+		order = everywhereOrder
+	}
 	var steps []Step
-	for _, what := range everywhereOrder {
+	for _, what := range order {
 		if u, ok := offered[what]; ok && pendingUpdate(what, report, latest) {
 			steps = append(steps, Step{Machine: mc.ID(), Label: mc.Label(), What: u.What, Title: u.Title, Command: u.Command})
 		}

@@ -1411,7 +1411,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   throwaway on the person's `HOME` resumed a live Claude Code session in a
   hidden pane and wrote its probe workspace into their session file (it
   happened, 2026-11-12). `internal/herdr/herdrtest.Server` sets both.
-- **Installing and uninstalling need no checkout** (`internal/setup`: six
+- **Installing and uninstalling need no checkout** (`internal/setup`: seven
   embedded POSIX scripts, and `setup_test.go` drives them in a temp HOME
   with stand-ins for launchctl, systemctl, herdr, brew and ssh first on
   PATH — never against the real machine; a Windows PC's way through
@@ -1473,13 +1473,18 @@ components and icons as rules for whoever changes it: @docs/design.md
   and removed; one installed already is swapped by its own `update --from`
   (its terminals keep running), one as new or newer left alone, a fresh
   one starts nothing; on Linux `loginctl enable-linger`, said when refused.
-  `remuda setup` installs it after herdr (never under `-server`); the
+  `remuda setup` installs it after herdr (never under `-server`; a failure
+  is said and setup goes on — CI's Windows job checks it really lands
+  there, `live_windows_test.go`); the
   vitals read `remuda_core`; Updates offers `what = core` ("Install
   remuda-core" / "Update remuda-core") on every machine with remuda where
-  it is missing or older and a build exists (`coreBuilt`: a Mac or Linux
-  on either CPU, Windows on x86-64), whatever the backend, so Update
-  everywhere puts it everywhere before the move; its command first checks
-  the machine's remuda knows `remuda core` (`-h`).
+  it is missing or older and a build exists (a Mac or Linux
+  on either CPU, Windows on x86-64: `AssetName` less Windows on arm),
+  whatever the backend, so Update
+  everywhere puts it everywhere before the move — on a remote after its
+  remuda release (`remoteOrder`), since its command first checks the
+  machine's remuda knows `remuda core` (`-h`: an older one would start a
+  server on an unknown word), on the page's own host before it.
 - **herdr is remuda's to run.** `herdr.EnsureServer(bin, socket)` pings
   and, when nothing answers, starts `herdr server` (the headless server)
   detached, at most once per two minutes — at startup and whenever the

@@ -67,14 +67,6 @@ const remudaThere = `r="$HOME/.local/bin/remuda"; [ -x "$r" ] || r="$r.exe"; `
 // windowsReport says the vitals are a Windows machine's.
 func windowsReport(r *health.Report) bool { return r != nil && strings.HasPrefix(r.OS, "Windows") }
 
-// coreBuilt says whether remuda-core has a release for the machine: a Mac or Linux on either CPU, Windows on x86-64.
-func coreBuilt(r *health.Report) bool {
-	if windowsReport(r) {
-		return r.Arch == "amd64"
-	}
-	return (strings.HasPrefix(r.OS, "macOS") || strings.HasPrefix(r.OS, "Linux")) && (r.Arch == "amd64" || r.Arch == "arm64")
-}
-
 // Plan is the update for one thing on a machine with this report, run as the user and never with sudo.
 func Plan(what string, r *health.Report) (Update, error) {
 	path := script.PATH + "; "
@@ -151,7 +143,7 @@ func Plan(what string, r *health.Report) (Update, error) {
 		if r == nil || r.Remuda == "" {
 			return Update{}, fmt.Errorf("remuda is not installed there to run remuda-core's installer")
 		}
-		if !coreBuilt(r) {
+		if AssetName(r.OS, r.Arch) == "" || windowsReport(r) && r.Arch == "arm64" { // remuda's own builds, less Windows on arm
 			return Update{}, fmt.Errorf("remuda-core has no build for %s %s", r.OS, r.Arch)
 		}
 		if r.RemudaCore != "" && !health.Newer(r.RemudaCore, health.PinnedCore) {

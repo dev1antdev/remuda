@@ -103,7 +103,7 @@ func Run(o Options, out io.Writer) error {
 		}
 		fmt.Fprintf(out, "— remuda-core%s\n", where(o.Host))
 		if err := Core(o.Host, "install", out); err != nil {
-			return fmt.Errorf("remuda-core: %w", err)
+			fmt.Fprintf(out, "remuda-core was not installed (%v): the rest goes on, and the page's Updates offers it again\n", err)
 		}
 	}
 	if o.NoService {
