@@ -22,7 +22,7 @@ once after cloning and after every change under `web/`.
 | TypeScript check | `make typecheck` (`tsc --noEmit` + `go vet`) |
 | The page's unit tests (Vitest on the pure modules) | `make webtest` (`npm test` in `web/`; `make test` runs it too) |
 | Everything, as CI does (`.github/workflows/ci.yml`) | `make test && make typecheck`, or `docker build --target test .` |
-| The end-to-end smoke and the display checks: a throwaway herdr, a remuda of its own, headless Chrome, every screen at a desk's and a phone's width in English and Russian (`scripts/e2e.sh`, `e2e/smoke.mjs`, `e2e/display.mjs`) | `make e2e` (needs herdr, node and Chrome; nothing of yours is touched; `E2E_DISPLAY_PASSES=desk-en` for one pass, `E2E_SMOKE_ONLY=1` for the smoke alone) |
+| The end-to-end smoke and the display checks: a throwaway herdr, a remuda of its own, headless Chrome, every screen at a desk's and a phone's width in English and Russian (`scripts/e2e.sh`, `e2e/smoke.mjs`, `e2e/display.mjs`) | `make e2e` (needs herdr (or remuda-core with `E2E_BACKEND=core`), node and Chrome; nothing of yours is touched; `E2E_DISPLAY_PASSES=desk-en` for one pass, `E2E_SMOKE_ONLY=1` for the smoke alone, `E2E_BACKEND=core` on a throwaway remuda-core instead of herdr) |
 | A pull request | against `release`: `gh pr create --base release` |
 | A release | `git checkout main && git merge --ff-only release && git tag -a vX.Y.Z -m 'remuda X.Y.Z' && make publish` — the Release workflow builds and publishes it |
 | Binaries for every host | `make release`; `make deploy HOST=<ssh host>` |
@@ -90,14 +90,17 @@ not style.
   description or fields of a card in the Queued column or a running
   pipeline, move such a card to another project, delete a card, nor change or delete a project, its columns,
   its fields or its agents, and no task lands in the Queued column by
-  itself.
+  itself; and, on remuda-core, a send the core refused untyped
+  (`status_mismatch`) goes once more in the same request, only to the
+  same agent under the same pid (`core.Adapter.sendTo`).
 - **Never `--takeover`.** herdr allows one attached client per terminal;
   stealing the slot is the person's call only. A refusal is surfaced
   (`RefusedError`, 409 on HTTP, the WebSocket close reason), never retried
   with the flag.
-- **A test remuda-core is `coretest.Server`'s, never started another
-  way**: its own `RC_SESSION`, `RC_SOCKET`, XDG folders, `HOME` and
-  `RC_LAUNCHD_DIRECT`; a core started without them reaches the person's.
+- **A test remuda-core is `coretest.Server`'s or `scripts/e2e.sh`'s
+  (`E2E_BACKEND=core`), each with its own `RC_SESSION`, `RC_SOCKET`, XDG
+  folders, `HOME` and `RC_LAUNCHD_DIRECT`; never started another way**: a
+  core started without them reaches the person's.
 - **A test herdr needs `HERDR_SOCKET_PATH`, never a changed `HOME`
   alone.** herdr ignores `HOME` for its socket: `HOME=/tmp/x herdr server
   stop` stopped the person's real server once. `internal/herdr/
@@ -288,7 +291,11 @@ not style.
 - `.claude/settings.json` — Claude Code: the read-only and build commands
   that run without asking, a deny on writes to the transcripts under `~/.claude/projects` (`*.jsonl` only; the memory folder beside them stays writable),
   and two hooks in `.claude/hooks/`: `guard-bash.sh` refuses
-  `--takeover`, an unscoped `herdr server stop` and a `HOME=…` herdr;
+  `--takeover`, an unscoped `herdr server stop`, a `HOME=…` herdr, and a
+  `remuda-core` (or `rc`) `server stop` or `serve`, whatever socket it
+  names (a throwaway core is `scripts/e2e.sh`'s or `coretest.Server`'s,
+  the person's own is theirs to stop), its cases in `guard-bash.test.sh`,
+  which CI runs;
   `gofmt.sh` formats a Go file after every edit.
 - `.claude/skills/` — `/verify` (the full check), `/live-check` (a
   scratch workspace against the real herdr, cleaned up afterwards),

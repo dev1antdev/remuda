@@ -154,11 +154,16 @@ func paneOf(t *Terminal, tab, space string, sessionOf SessionLookup) herdr.PaneI
 		pane.ForegroundCWD = t.Foreground.Cwd
 	}
 	if pane.Agent != "" && sessionOf != nil {
-		pid := t.Pid
-		if t.Foreground != nil {
-			pid = t.Foreground.Pid
+		asked := AgentProcess{
+			Agent: pane.Agent, PID: t.Pid, Cwd: cmp.Or(pane.ForegroundCWD, pane.CWD), Terminal: t.Address, Held: t.held, Seen: t.heldAt,
 		}
-		pane.AgentSession = sessionOf(pane.Agent, pid, cmp.Or(pane.ForegroundCWD, pane.CWD))
+		if t.Foreground != nil {
+			asked.PID, asked.Started = t.Foreground.Pid, t.Foreground.StartedMS
+			if since := t.Foreground.SinceBoot; since != nil {
+				asked.SinceBoot = *since
+			}
+		}
+		pane.AgentSession = sessionOf(asked)
 	}
 	return pane
 }
@@ -204,10 +209,21 @@ func appAgent(app string) string {
 	return strings.ToLower(app)
 }
 
-// atPrompt says whether the terminal's own shell holds it: nothing started from it runs in its foreground.
+// atPrompt says whether the terminal's own shell holds it: nothing started from it runs in its foreground, and it does
+// not run a scene pane's own command, whose `sh -c '…'` keeps itself in front all along (runsCommand).
 func atPrompt(t *Terminal) bool {
 	fg := t.Foreground
-	return fg != nil && fg.Pid == t.Pid && shells[programName(fg.Name)]
+	return fg != nil && fg.Pid == t.Pid && shells[programName(fg.Name)] && !runsCommand(t)
+}
+
+// runsCommand says whether the terminal runs a scene pane's own command: its record's word, else, from a core whose
+// record has none, the label remuda gave it, so a running command is never taken for an idle shell — at worst a shell
+// such a core gave the pane after a reboot is taken for the command.
+func runsCommand(t *Terminal) bool {
+	if t.Literal != nil {
+		return *t.Literal
+	}
+	return t.Labels[LabelCommand] != ""
 }
 
 // programName is a process's name without its folder or Windows' .exe.

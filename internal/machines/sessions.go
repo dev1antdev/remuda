@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/core"
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/transcript"
 )
@@ -26,9 +27,17 @@ type processSessions struct {
 
 	readMu     sync.Mutex // one read on the machine at a time
 	mu         sync.Mutex
-	procs      map[int]*process
+	procs      map[processKey]*process
 	reading    bool
 	complained time.Time
+}
+
+// processKey is one process however its pid is given out again: the terminal it holds and the count of the moment it
+// was seen take it.
+type processKey struct {
+	terminal string
+	held     uint64
+	pid      int
 }
 
 // process is an agent's process as last read: its kind and folder, its session ("" for none found), when it was last
@@ -41,20 +50,22 @@ type process struct {
 }
 
 func newProcessSessions(name string, read func([]transcript.Running) (map[int]string, error)) *processSessions {
-	return &processSessions{name: name, read: read, fresh: sessionsFresh, forget: sessionsForget, procs: map[int]*process{}}
+	return &processSessions{name: name, read: read, fresh: sessionsFresh, forget: sessionsForget, procs: map[processKey]*process{}}
 }
 
 // of is the core adapter's SessionLookup: what the last read found of the process, a read booked when it is new or due.
-func (s *processSessions) of(agent string, pid int, cwd string) *herdr.AgentSession {
+func (s *processSessions) of(asked core.AgentProcess) *herdr.AgentSession {
 	now := time.Now()
+	running := transcript.Running{PID: asked.PID, Agent: asked.Agent, CWD: asked.Cwd, Seen: asked.Seen, Started: asked.Started, SinceBoot: transcript.SinceBoot(asked.SinceBoot)}
+	key := processKey{terminal: asked.Terminal, held: asked.Held, pid: asked.PID}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	p := s.procs[pid]
-	if p == nil || p.running.Agent != agent {
+	p := s.procs[key]
+	if p == nil || p.running != running {
 		p = &process{}
-		s.procs[pid] = p
+		s.procs[key] = p
 	}
-	p.running, p.asked = transcript.Running{PID: pid, Agent: agent, CWD: cwd}, now
+	p.running, p.asked = running, now
 	if now.Sub(p.triedAt) >= s.fresh && !s.reading {
 		s.reading = true
 		since := now.Add(-s.fresh)
@@ -66,31 +77,61 @@ func (s *processSessions) of(agent string, pid int, cwd string) *herdr.AgentSess
 	return &herdr.AgentSession{Kind: "id", Value: p.session}
 }
 
+// holders is, pid by pid, the process holding it now: the one seen take its terminal last.
+func (s *processSessions) holders() map[int]*process {
+	held := map[int]processKey{}
+	for key := range s.procs {
+		if other, ok := held[key.pid]; !ok || s.tookLater(key, other) {
+			held[key.pid] = key
+		}
+	}
+	holders := make(map[int]*process, len(held))
+	for pid, key := range held {
+		holders[pid] = s.procs[key]
+	}
+	return holders
+}
+
+// tookLater says whether the process under key took its pid after the one under other.
+func (s *processSessions) tookLater(key, other processKey) bool {
+	if key.held != other.held {
+		return key.held > other.held
+	}
+	return s.procs[key].asked.After(s.procs[other].asked)
+}
+
 // readNow reads every process asked about lately again before it answers, for a step about to stop an agent and
 // resume it on its session: a snapshot answers what the last read found, and a /resume may have moved the agent since.
 func (s *processSessions) readNow() error {
 	return s.readDue(time.Now(), true)
 }
 
-// readDue reads every process asked about lately whose read was last tried before since — read, when the answer must
-// be one read since (another caller's failed try is none) — and forgets the ones nobody asks about; a failure keeps
-// the answers read before.
+// readDue reads every pid's holder whose read was last tried before since — read, when the answer must be one read
+// since (another caller's failed try is none) — and forgets the processes nobody asks about; a process the read did not
+// answer for, it failing or unable to tell that process from a later one, keeps the answer read before, and an answer
+// for a pid another process took meanwhile is dropped.
 func (s *processSessions) readDue(since time.Time, read bool) error {
 	s.readMu.Lock()
 	defer s.readMu.Unlock()
 	s.mu.Lock()
 	now := time.Now()
-	var due []transcript.Running
-	for pid, p := range s.procs {
-		switch {
-		case now.Sub(p.asked) > s.forget:
-			delete(s.procs, pid)
-		case !p.triedAt.After(since), read && !p.readAt.After(since):
-			due = append(due, p.running)
+	for key, p := range s.procs {
+		if now.Sub(p.asked) > s.forget {
+			delete(s.procs, key)
 		}
 	}
+	var due []*process
+	for _, p := range s.holders() {
+		if !p.triedAt.After(since) || read && !p.readAt.After(since) {
+			due = append(due, p)
+		}
+	}
+	look := make([]transcript.Running, len(due))
+	for i, p := range due {
+		look[i] = p.running
+	}
 	s.mu.Unlock()
-	found, err := s.read(due)
+	found, err := s.read(look)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.reading = false
@@ -98,12 +139,14 @@ func (s *processSessions) readDue(since time.Time, read bool) error {
 		s.complained = time.Now()
 		log.Printf("%s: the agents' sessions could not be read off their processes: %v", s.name, err)
 	}
-	for _, r := range due {
-		if p := s.procs[r.PID]; p != nil && p.running.Agent == r.Agent {
-			p.triedAt = now
-			if err == nil {
-				p.session, p.readAt = found[r.PID], now
-			}
+	holders := s.holders()
+	for _, p := range due {
+		if holders[p.running.PID] != p {
+			continue // another process was asked about under its pid meanwhile: what was read may be that one's
+		}
+		p.triedAt = now
+		if id, told := found[p.running.PID]; told {
+			p.session, p.readAt = id, now
 		}
 	}
 	return err

@@ -38,25 +38,40 @@ func (l *ledger) PaneSendKeys(_ string, keys []string) error {
 	return nil
 }
 
-// holder stages its prompts as remuda-core does: the look answers at once, the send waits.
+// holder stages its prompts as remuda-core does: the look answers at once with the pid in front, the send waits.
 type holder struct {
 	ledger
 	sendErr error
+	pid     int
+	asks    bool   // the agent in front asks something: the look refuses it
+	asked   []bool // asMessage, look after look
 }
 
-func newHolder() *holder { return &holder{ledger: ledger{sends: make(chan struct{}, 4)}} }
+func newHolder() *holder { return &holder{ledger: ledger{sends: make(chan struct{}, 4)}, pid: 100} }
 
-func (h *holder) StagePrompt(_, text string) (func() error, error) {
+func (h *holder) StagePrompt(_, text string, front int, asMessage bool) (int, func() error, error) {
 	h.note("look:" + text)
-	return func() error {
+	h.mu.Lock()
+	h.asked = append(h.asked, asMessage)
+	pid, asks := h.pid, h.asks
+	h.mu.Unlock()
+	if front != 0 && front != pid {
+		return 0, nil, &herdr.Error{Code: "agent_left", Message: "another agent in front"}
+	}
+	if asks {
+		return pid, nil, &herdr.Error{Code: "agent_blocked", Message: "asks first"}
+	}
+	return pid, func() error {
 		<-h.sends
 		h.note("sent:" + text)
+		h.mu.Lock()
+		defer h.mu.Unlock()
 		return h.sendErr
 	}, nil
 }
 
 func (h *holder) AgentPrompt(pane, text string) error {
-	send, err := h.StagePrompt(pane, text)
+	_, send, err := h.StagePrompt(pane, text, 0, false)
 	if err != nil {
 		return err
 	}
@@ -206,4 +221,107 @@ func TestAHoldWaitsForAPromptOnItsWayWithoutHoldingKeysUp(t *testing.T) {
 	}
 	<-held
 	hold.Unlock()
+}
+
+// A first prompt whose agent left the front as it went is not tried again, so it never reaches what replaced it.
+func TestAFirstPromptIsNotTriedAgainOnceItsAgentLeft(t *testing.T) {
+	retry := FirstPromptRetry
+	FirstPromptRetry = time.Millisecond
+	t.Cleanup(func() { FirstPromptRetry = retry })
+	h, in := newHolder(), NewInput(nil, nil)
+	h.sendErr = &herdr.Error{Code: "agent_left", Message: "gone from the front"}
+	h.sends <- struct{}{}
+	if err := in.FirstPrompt(h, onePane, "the task", time.Minute); !errors.Is(err, ErrNoAgent) {
+		t.Fatalf("refusal %v", err)
+	}
+	if got := h.seen(); !slices.Equal(got, []string{"look:the task", "sent:the task"}) {
+		t.Fatalf("tried again: %v", got)
+	}
+}
+
+// A delivery tried again is bound to the agent its first look saw: once another agent leads the pane, it stops there,
+// and a refusal it may try again after (the agent asking first) never sends the prompt to what replaced the agent.
+func TestADeliveryTriedAgainNeverReachesAReplacement(t *testing.T) {
+	for refused, want := range map[string][]string{
+		"at the look": {"look:the task", "look:the task"},
+		"at the send": {"look:the task", "sent:the task", "look:the task"},
+	} {
+		h, in := newHolder(), NewInput(nil, nil)
+		if refused == "at the look" {
+			h.asks = true
+		} else {
+			h.sendErr = &herdr.Error{Code: "agent_blocked", Message: "asks first"}
+			h.sends <- struct{}{}
+		}
+		d := in.Deliver(h, onePane, "the task")
+		if err := d.Try(); !herdr.IsCode(err, "agent_blocked") {
+			t.Fatalf("%s: first try %v", refused, err)
+		}
+		h.pid, h.asks, h.sendErr = 200, false, nil
+		if err := d.Try(); !herdr.IsCode(err, "agent_left") {
+			t.Fatalf("%s: a try with another agent in front: %v", refused, err)
+		}
+		if got := h.seen(); !slices.Equal(got, want) {
+			t.Fatalf("%s: calls %v", refused, got)
+		}
+	}
+}
+
+// Only the person's own message may go to a turn started meanwhile; every other prompt is for an agent at rest.
+func TestOnlyThePersonsMessageGoesToATurn(t *testing.T) {
+	h, in := newHolder(), NewInput(nil, nil)
+	for range 3 {
+		h.sends <- struct{}{}
+	}
+	if err := errors.Join(in.Submit(h, onePane, "mine"), in.SubmitToAgent(h, onePane, "a schedule's"), in.HandOff(h, onePane, "a review I sent")); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(h.asked, []bool{true, false, true}) {
+		t.Fatalf("as a message: %v", h.asked)
+	}
+}
+
+// A pull request's hand-off naming a picture goes as it is, no Enter after it: a dialog the work puts up at once is
+// no failure of the hand-off, where the person's own message would be said to be still unsent.
+func TestAHandOffNamingAPictureGetsNoEnterAfterIt(t *testing.T) {
+	quick(t)
+	review := "review: see " + shot
+	handed := &paper{agent: claudeAgent, status: []string{statusBlocked}, screens: []string{busyFoot}}
+	if err := NewInput(nil, nil).HandOff(handed, onePane, review); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(handed.calls, []string{"prompt:" + review}) {
+		t.Fatalf("calls %v", handed.calls)
+	}
+	submitted := &paper{agent: claudeAgent, status: []string{statusBlocked}, screens: []string{busyFoot}}
+	if err := NewInput(nil, nil).Submit(submitted, onePane, review); !errors.Is(err, ErrAskedMeanwhile) {
+		t.Fatalf("the person's own message: %v", err)
+	}
+}
+
+// A prompt for an agent at rest refused because the agent is at work is ErrAgentWorking, which a schedule skips
+// quietly, and a first prompt waits it out.
+func TestAPromptForAnAgentAtRestFindingItAtWorkWaits(t *testing.T) {
+	h, in := newHolder(), NewInput(nil, nil)
+	h.sendErr = &herdr.Error{Code: "agent_working", Message: "at work"}
+	h.sends <- struct{}{}
+	if err := in.SubmitToAgent(h, onePane, "a schedule's"); !errors.Is(err, ErrAgentWorking) {
+		t.Fatalf("a schedule's prompt to an agent at work: %v", err)
+	}
+	retry := FirstPromptRetry
+	FirstPromptRetry = time.Millisecond
+	t.Cleanup(func() { FirstPromptRetry = retry })
+	h.sends <- struct{}{}
+	go func() {
+		for !slices.Contains(h.seen(), "sent:the first") {
+			time.Sleep(time.Millisecond)
+		}
+		h.mu.Lock()
+		h.sendErr = nil
+		h.mu.Unlock()
+		h.sends <- struct{}{}
+	}()
+	if err := in.FirstPrompt(h, onePane, "the first", time.Minute); err != nil {
+		t.Fatalf("a first prompt waiting out a turn: %v", err)
+	}
 }
