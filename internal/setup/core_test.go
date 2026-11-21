@@ -104,17 +104,17 @@ func leftovers(t *testing.T, dir string) []string {
 }
 
 func TestCoreInstallsTheCheckedReleaseOnLinux(t *testing.T) {
-	dir, calls := coreHome(t, "Linux", "x86_64", coreRelease(t, "remuda-core", "0.2.3"))
+	dir, calls := coreHome(t, "Linux", "x86_64", coreRelease(t, "remuda-core", "0.2.4"))
 	out, err := installCore(t, "install")
 	if err != nil {
 		t.Fatalf("%v\n%s", err, out)
 	}
 	core := filepath.Join(dir, ".local", "bin", "remuda-core")
-	if got, _ := exec.Command(core, "--version").Output(); strings.TrimSpace(string(got)) != "rc 0.2.3" {
+	if got, _ := exec.Command(core, "--version").Output(); strings.TrimSpace(string(got)) != "rc 0.2.4" {
 		t.Fatalf("remuda-core is not in place (%q):\n%s", got, out)
 	}
 	log := calls()
-	if !strings.Contains(log, "curl -fsSL -o") || !strings.Contains(log, "/releases/download/remuda-v0.2.3/remuda-core-linux-x86_64.tar.gz") {
+	if !strings.Contains(log, "curl -fsSL -o") || !strings.Contains(log, "/releases/download/remuda-v0.2.4/remuda-core-linux-x86_64.tar.gz") {
 		t.Errorf("the pinned release was not the one fetched:\n%s", log)
 	}
 	if !strings.Contains(log, "loginctl --no-ask-password enable-linger") {
@@ -131,13 +131,13 @@ func TestCoreInstallsTheCheckedReleaseOnLinux(t *testing.T) {
 	if left := leftovers(t, dir); len(left) > 0 {
 		t.Errorf("the download was left behind: %v", left)
 	}
-	if !strings.Contains(out, "checksum ok") || !strings.Contains(out, "remuda-core 0.2.3 installed") {
+	if !strings.Contains(out, "checksum ok") || !strings.Contains(out, "remuda-core 0.2.4 installed") {
 		t.Errorf("the installer did not say what it checked and installed:\n%s", out)
 	}
 }
 
 func TestCoreRefusesADownloadThePinDoesNotVouchFor(t *testing.T) {
-	dir, _ := coreHome(t, "Linux", "aarch64", coreRelease(t, "remuda-core", "0.2.3"))
+	dir, _ := coreHome(t, "Linux", "aarch64", coreRelease(t, "remuda-core", "0.2.4"))
 	t.Setenv("CORE_SHA256", sumOf("something else"))
 	out, err := installCore(t, "install")
 	if err == nil || !strings.Contains(out, "checksum mismatch") {
@@ -158,7 +158,7 @@ func installedCore(t *testing.T, dir, name, version string) {
 }
 
 func TestCoreUpdatesAnOlderOneThroughItsOwnSwap(t *testing.T) {
-	dir, calls := coreHome(t, "Linux", "x86_64", coreRelease(t, "remuda-core", "0.2.3"))
+	dir, calls := coreHome(t, "Linux", "x86_64", coreRelease(t, "remuda-core", "0.2.4"))
 	installedCore(t, dir, "remuda-core", "0.1.9")
 	out, err := installCore(t, "install")
 	if err != nil {
@@ -167,15 +167,15 @@ func TestCoreUpdatesAnOlderOneThroughItsOwnSwap(t *testing.T) {
 	if !strings.Contains(calls(), "old remuda-core update --from "+filepath.Join(dir, ".local", "remuda-core.")) {
 		t.Errorf("the installed core was not swapped through its own update, which keeps its terminals running:\n%s", calls())
 	}
-	if !strings.Contains(out, "updated from 0.1.9 to 0.2.3") {
+	if !strings.Contains(out, "updated from 0.1.9 to 0.2.4") {
 		t.Errorf("the update is not said:\n%s", out)
 	}
 }
 
 func TestCoreLeavesOneAsNewOrNewer(t *testing.T) {
-	for _, version := range []string{"0.2.3", "0.3.1"} {
+	for _, version := range []string{"0.2.4", "0.3.1"} {
 		t.Run(version, func(t *testing.T) {
-			dir, calls := coreHome(t, "Linux", "x86_64", coreRelease(t, "remuda-core", "0.2.3"))
+			dir, calls := coreHome(t, "Linux", "x86_64", coreRelease(t, "remuda-core", "0.2.4"))
 			installedCore(t, dir, "remuda-core", version)
 			out, err := installCore(t, "install")
 			if err != nil || !strings.Contains(out, "remuda-core "+version+" already at") {
@@ -189,7 +189,7 @@ func TestCoreLeavesOneAsNewOrNewer(t *testing.T) {
 }
 
 func TestCoreInstallsTheAppBundleOnAMac(t *testing.T) {
-	dir, calls := coreHome(t, "Darwin", "arm64", coreRelease(t, "remuda core.app/Contents/MacOS/remuda-core", "0.2.3"))
+	dir, calls := coreHome(t, "Darwin", "arm64", coreRelease(t, "remuda core.app/Contents/MacOS/remuda-core", "0.2.4"))
 	out, err := installCore(t, "install")
 	if err != nil {
 		t.Fatalf("%v\n%s", err, out)
@@ -204,7 +204,7 @@ func TestCoreInstallsTheAppBundleOnAMac(t *testing.T) {
 }
 
 func TestCoreOnWindowsGoesBesideRemudaExeWithConPTY(t *testing.T) {
-	dir, calls := coreHome(t, "MINGW64_NT-10.0-26100", "x86_64", coreRelease(t, "remuda-core.exe", "0.2.3"))
+	dir, calls := coreHome(t, "MINGW64_NT-10.0-26100", "x86_64", coreRelease(t, "remuda-core.exe", "0.2.4"))
 	out, err := installCore(t, "install")
 	if err != nil {
 		t.Fatalf("%v\n%s", err, out)
@@ -225,12 +225,12 @@ func TestCoreOnWindowsGoesBesideRemudaExeWithConPTY(t *testing.T) {
 }
 
 func TestCoreStatusSaysWhatIsThere(t *testing.T) {
-	dir, calls := coreHome(t, "Linux", "x86_64", coreRelease(t, "remuda-core", "0.2.3"))
+	dir, calls := coreHome(t, "Linux", "x86_64", coreRelease(t, "remuda-core", "0.2.4"))
 	if out, err := installCore(t, "status"); err != nil || !strings.Contains(out, "remuda-core is not installed here") {
 		t.Fatalf("err=%v\n%s", err, out)
 	}
-	installedCore(t, dir, "remuda-core", "0.2.3")
-	if out, err := installCore(t, "status"); err != nil || !strings.Contains(out, "remuda-core 0.2.3 at") {
+	installedCore(t, dir, "remuda-core", "0.2.4")
+	if out, err := installCore(t, "status"); err != nil || !strings.Contains(out, "remuda-core 0.2.4 at") {
 		t.Fatalf("err=%v\n%s", err, out)
 	}
 	if strings.Contains(calls(), "curl") || strings.Contains(calls(), "old remuda-core") {
@@ -239,7 +239,7 @@ func TestCoreStatusSaysWhatIsThere(t *testing.T) {
 }
 
 func TestNoCoreForAMachineWithoutABuild(t *testing.T) {
-	_, calls := coreHome(t, "MINGW64_NT-10.0-26100", "aarch64", coreRelease(t, "remuda-core.exe", "0.2.3"))
+	_, calls := coreHome(t, "MINGW64_NT-10.0-26100", "aarch64", coreRelease(t, "remuda-core.exe", "0.2.4"))
 	out, err := installCore(t, "install")
 	if err == nil || !strings.Contains(out, "has no build for") || strings.Contains(calls(), "curl") {
 		t.Fatalf("err=%v\n%s\n%s", err, out, calls())
@@ -247,8 +247,8 @@ func TestNoCoreForAMachineWithoutABuild(t *testing.T) {
 }
 
 func TestCoreOnWindowsWithoutAllOfItsConPTYIsRepaired(t *testing.T) {
-	dir, calls := coreHome(t, "MINGW64_NT-10.0-26100", "x86_64", coreRelease(t, "remuda-core.exe", "0.2.3"))
-	installedCore(t, dir, "remuda-core.exe", "0.2.3")
+	dir, calls := coreHome(t, "MINGW64_NT-10.0-26100", "x86_64", coreRelease(t, "remuda-core.exe", "0.2.4"))
+	installedCore(t, dir, "remuda-core.exe", "0.2.4")
 	write(t, filepath.Join(dir, ".local", "bin", "conpty", "conpty.dll"), "half a copy", 0o644)
 	out, err := installCore(t, "install")
 	if err != nil || !strings.Contains(out, "its ConPTY put back") {
@@ -354,7 +354,7 @@ func TestRemovalOfCoreKeepsEverythingWhenItCannotTellACoreRuns(t *testing.T) {
 }
 
 func TestCoreInstallsOneAtATime(t *testing.T) {
-	dir, calls := coreHome(t, "Linux", "x86_64", coreRelease(t, "remuda-core", "0.2.3"))
+	dir, calls := coreHome(t, "Linux", "x86_64", coreRelease(t, "remuda-core", "0.2.4"))
 	lock := filepath.Join(dir, ".local", "bin", ".remuda-core-install")
 	write(t, filepath.Join(lock, "pid"), "4242", 0o644)
 	out, err := installCore(t, "install")
@@ -365,7 +365,7 @@ func TestCoreInstallsOneAtATime(t *testing.T) {
 		t.Fatal("the other install's lock was taken away")
 	}
 	os.RemoveAll(lock)
-	if out, err := installCore(t, "install"); err != nil || !strings.Contains(out, "remuda-core 0.2.3 installed") {
+	if out, err := installCore(t, "install"); err != nil || !strings.Contains(out, "remuda-core 0.2.4 installed") {
 		t.Fatalf("err=%v\n%s", err, out)
 	}
 	if exists(lock) {

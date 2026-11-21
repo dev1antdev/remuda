@@ -57,7 +57,7 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/rc" "$HOME/.local/bin"
           cd "$RUNNER_TEMP/rc"
-          base=https://github.com/dev1antdev/remuda-core/releases/download/remuda-v0.2.3
+          base=https://github.com/dev1antdev/remuda-core/releases/download/remuda-v0.2.4
           curl -fsSLO "$base/remuda-core-linux-x86_64.tar.gz"
           curl -fsSLO "$base/checksums.txt"
           grep ' remuda-core-linux-x86_64.tar.gz$' checksums.txt | sha256sum -c -

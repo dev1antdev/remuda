@@ -162,7 +162,7 @@ func TestAViewerEndsWithItsProgram(t *testing.T) {
 }
 
 // richRows prints 4000 rows whose every cell carries every attribute and three true colours, then END-OF-LOG: past
-// 1000 such rows a first paint passes the core's 4 MiB queue, which drops it whole
+// 1000 such rows a first paint passes the core's 4 MiB queue, which 0.2.4 cuts and an older core drops whole
 const richRows = `awk 'BEGIN{for(r=0;r<4000;r++){for(c=0;c<80;c++)printf "\033[0;1;2;3;4;5;7;9;53;38;2;%d;%d;%d;48;2;%d;%d;%d;58;2;%d;%d;%dmx",c%256,r%256,(c*r)%256,255-c%256,255-r%256,(c+r)%256,(c*7)%256,(r*3)%256,(c+r*5)%256; printf "\033[0m\r\n"} print "END-OF-LOG"}'`
 
 // paintedOver runs script in an 80x24 terminal, waits for shown on its screen, then opens a viewer and waits for want
@@ -202,10 +202,13 @@ func TestADenselyColouredLogStillPaintsTheScreen(t *testing.T) {
 
 func TestAProgramPrintingOverADroppedPaintStillShowsTheScreen(t *testing.T) {
 	// a line rewritten every tenth of a second under END-OF-LOG: its output reaches a viewer whose paint the core
-	// dropped, and must not pass for that paint
+	// cut or dropped, and must not pass for that paint (a core older than 0.2.4 drops it)
 	paintedOver(t, richRows+"; i=0; while :; do i=$((i+1)); printf '\rtick %d' $i; sleep 0.1; done", "tick", "END-OF-LOG")
 }
 
+// On the pinned core the paint comes cut, so no second attach happens here; on an older core that drops it, the
+// attach again must leave the program's grid alone. The retry itself is pinned on a fake, in
+// TestAPaintThatDoesNotComeAttachesAgainWithTheScreenAlone.
 func TestARetryWithTheScreenAloneNeverResizesTheProgram(t *testing.T) {
 	winched := filepath.Join(t.TempDir(), "winched")
 	paintedOver(t, richRows+"; trap \"stty size >> '"+winched+"'\" WINCH; while :; do sleep 0.1; done", "END-OF-LOG", "END-OF-LOG")

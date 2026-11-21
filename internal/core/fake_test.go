@@ -9,8 +9,11 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/dev1antdev/remuda/internal/herdr"
 )
 
 // peer is the core's end of a pipe: the shapes a real core rarely shows on demand (events before their reply, a line
@@ -344,5 +347,58 @@ func TestACallWhoseContextEndedEncodesNothing(t *testing.T) {
 	never := make(slowParams) // its MarshalJSON would block for good
 	if err := client.Call(ended, "terminal.list", never, nil); !errors.Is(err, context.Canceled) {
 		t.Fatalf("a call cancelled before it began: %v", err)
+	}
+}
+
+// A core whose paint never comes: the first attach's bytes are the program's own output, not a paint, so the viewer
+// attaches again with its screen alone — the second ask carries no history, and the first stream is closed.
+func TestAPaintThatDoesNotComeAttachesAgainWithTheScreenAlone(t *testing.T) {
+	asked := make(chan string, 2)
+	closed := make(chan uint32, 2)
+	client := New(fakeCore(`"attach"`, func(core peer, frame sent) {
+		switch {
+		case frame.method == "terminal.attach":
+			asked <- string(frame.payload)
+			channel := uint32(7 + len(asked))
+			go func() {
+				core.reply(frame.id, fmt.Sprintf(`{"channel":%d,"terminal":{"address":"t1"}}`, channel))
+				if channel == 8 {
+					core.write(channel, frameData, []byte("the program's own output, no paint"))
+				} else {
+					core.write(channel, frameData, []byte{paintStart, 'o', 'k'})
+				}
+			}()
+		case frame.kind == frameClose:
+			closed <- frame.channel
+		}
+	}))
+	defer client.Close()
+	viewer, err := NewTerminals(client).Open("t1", herdr.View{Cols: 80, Rows: 24})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer viewer.Close()
+	attach := func(what string) string {
+		t.Helper()
+		select {
+		case payload := <-asked:
+			return payload
+		case <-time.After(5 * time.Second):
+			t.Fatalf("%s attach never came", what)
+			return ""
+		}
+	}
+	first, second := attach("the first"), attach("the screen alone")
+	// no history field is zero rows
+	if !strings.Contains(first, `"history":2000`) || strings.Contains(second, `"history"`) {
+		t.Fatalf("attaches: %q then %q", first, second)
+	}
+	select {
+	case channel := <-closed:
+		if channel != 8 {
+			t.Fatalf("closed channel %d", channel)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the stream whose paint did not come was not closed")
 	}
 }
