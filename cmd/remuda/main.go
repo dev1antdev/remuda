@@ -77,11 +77,10 @@ func main() {
 		Addr: *addr, HerdrBin: "herdr", Socket: herdr.SocketPath(), CodePort: *codePort,
 		Tailscale: *tailscale, TailscaleName: *tsName, AuthKey: os.Getenv("TS_AUTHKEY"),
 		VersionCheck: !*noCheck, Version: version,
-		Door:         doorOpen(*noDoor, *withDoor, os.Getenv("REMUDA_STATE_DIR") != ""),
-		MirrorClosed: mirrorReason,
-		Record:       recordsHere(*withRecord, os.Getenv("REMUDA_STATE_DIR") != ""),
-		Server:       *serverOnly,
-		HerdrStops:   herdrStops(os.Getenv("REMUDA_STATE_DIR") != ""),
+		Door:       doorOpen(*noDoor, *withDoor, os.Getenv("REMUDA_STATE_DIR") != ""),
+		Record:     recordsHere(*withRecord, os.Getenv("REMUDA_STATE_DIR") != ""),
+		Server:     *serverOnly,
+		HerdrStops: herdrStops(os.Getenv("REMUDA_STATE_DIR") != ""),
 	})
 	if err != nil {
 		log.Print(err)
@@ -97,10 +96,6 @@ func doorOpen(noDoor, withDoor, scratch bool) bool {
 	}
 	return !scratch || withDoor
 }
-
-// mirrorReason is why remuda writes nothing into herdr any more: it speaks remuda-core everywhere, and herdr's
-// sidebar has nothing of that (Core 26f takes the mirror away).
-const mirrorReason = "this remuda speaks remuda-core, whose sidebar herdr does not have"
 
 // windowsServes is what remuda on Windows says when asked to serve the page: there it is the helper a cockpit reaches.
 const windowsServes = "remuda on Windows does not serve the page: it is the helper a cockpit on a Mac or Linux reaches over ssh (remuda setup -host <this PC> there). Its commands here: remuda tasks, remuda mcp, remuda statusline, remuda core, remuda -version."

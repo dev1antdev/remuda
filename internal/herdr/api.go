@@ -12,7 +12,6 @@ type API interface {
 	WorkspaceCreate(cwd, label string) (*WorkspaceCreateResult, error)
 	WorkspaceRename(workspaceID, label string) error
 	WorkspaceClose(workspaceID string) error
-	WorkspaceReportMetadata(m WorkspaceMetadata) error
 	TabCreate(workspaceID, label string) (*TabCreateResult, error)
 	TabCreateIn(workspaceID, label, cwd string, env map[string]string) (*TabCreateResult, error)
 	TabRename(tabID, label string) error
@@ -34,14 +33,11 @@ type API interface {
 	PaneSendInput(paneID, text string, keys []string) error
 	PaneAtPrompt(paneID string) (bool, error)
 	PaneShellPID(paneID string) (int, error)
-	PaneReportMetadata(m PaneMetadata) error
 
 	AgentStart(paneID, kind string) error
 	AgentStartWith(paneID, kind, name string, args []string, timeout time.Duration) error
 	AgentPrompt(target, text string) error
 	AgentGet(target string) (AgentInfo, error)
-
-	NotificationShow(t Toast) (Shown, error)
 }
 
 // EventStream is one open event stream: the events in order, then the error it ended on.

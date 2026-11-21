@@ -282,9 +282,9 @@ const CHECKS = `(() => {
 })()`;
 
 let shots = 0;
-// the screens a remuda on remuda-core has not yet: no screen terminal (a Windows PC's pane is attached there too), no
-// herdr — both go with Core 26f and 26g
-const NOT_ON_CORE = ["screen-terminal", "settings-herdr"];
+// the screens a remuda on remuda-core has not yet: no screen terminal (a Windows PC's pane is attached there too) —
+// Core 26g
+const NOT_ON_CORE = ["screen-terminal"];
 // screen opens one screen, waits for its landmarks, checks it, shoots it and closes it again; a failure is noted, never thrown
 async function screen(name, { open, expect = [], close = closeAll, settle = 350 }) {
   if (onCore && NOT_ON_CORE.includes(name)) return say(`${pass.name} › ${name}: left out on remuda-core`);
@@ -3029,7 +3029,7 @@ async function runPass() {
     open: async () => {
       await palette("settings");
       if (!(await until(() => present(".settings-pane .settings-section"), 6))) return failed("Settings shows no section");
-      check((await count(".settings-nav [role=tab]")) === 9, "Settings does not list its nine sections");
+      check((await count(".settings-nav [role=tab]")) === 8, "Settings does not list its eight sections");
       check((await count('.settings-nav [role=tab][aria-selected="true"]')) === 1 && (await count(".settings-dialog .settings-section")) === 1, "Settings does not show one section, the one picked in its list");
     },
     expect: [".settings-dialog .settings-nav", ".settings-pane .settings-section"],
@@ -3070,19 +3070,6 @@ async function runPass() {
       check(await present(".backup-settings .notice"), "the Backups section does not say how the last run went");
     },
     expect: [".backup-settings"],
-    close: async () => {},
-  });
-  await screen("settings-herdr", {
-    open: async () => {
-      await settingsSection("herdr");
-      if (!(await until(() => present(".mirror-settings .config-snippet"), 6))) return failed("Inside herdr shows no snippet");
-      check(await evaluate(`[...document.querySelectorAll('.mirror-settings .settings-row input[type=checkbox]')].map((box) => box.checked).join()`) === "true,false", "Inside herdr does not start with the figures on and the toasts off");
-      check(await evaluate(`document.querySelector('.mirror-settings .config-snippet')?.textContent.includes("$remuda_cost")`), "Inside herdr shows no snippet naming remuda's tokens");
-      await tap(".mirror-settings .backup-actions .btn:not(.sm)");
-      if (!(await until(async () => (await count(".mirror-settings .mirror-outcomes li")) >= 1, 8))) failed("the test toast says nothing of how it went on the machine");
-      check(await evaluate(`document.querySelector('.mirror-settings .mirror-outcomes')?.textContent.includes("ui.toast.delivery")`), "the test toast does not say that the throwaway remuda-core keeps its toasts off");
-    },
-    expect: [".mirror-settings .config-snippet"],
     close: async () => {},
   });
   await closeAll();

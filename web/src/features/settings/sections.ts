@@ -4,7 +4,7 @@
 import { t } from "@/lib/i18n";
 import type { IconName } from "@/ui/icons";
 
-export const SECTION_IDS = ["look", "sidebar", "general", "sleep", "herdr", "jira", "backups", "timelapse", "devices"] as const;
+export const SECTION_IDS = ["look", "sidebar", "general", "sleep", "jira", "backups", "timelapse", "devices"] as const;
 export type SectionId = (typeof SECTION_IDS)[number];
 
 export type Section = { id: SectionId; label: string; icon: IconName };
@@ -31,7 +31,6 @@ export function sectionGroups(viewOnly: boolean): SectionGroup[] {
     label: t("This cockpit"),
     sections: [
       { id: "sleep", label: t("Sleep and resume"), icon: "moon" },
-      { id: "herdr", label: t("Inside herdr"), icon: "square-terminal" },
       { id: "jira", label: t("Jira"), icon: "tag" },
       { id: "backups", label: t("Backups"), icon: "archive" },
       { id: "timelapse", label: t("Timelapse"), icon: "film" },
