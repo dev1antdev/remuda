@@ -129,7 +129,7 @@ export const agents: Dictionary = {
   "flat, by activity": "плоско, по активности",
   "for {time}": "уже {time}",
   "grouped by activity": "группами, по активности",
-  "herdr's own order": "порядок самого herdr",
+  "the agents' own order": "порядок самих агентов",
   "Claude Code {have} tells remuda-core no status: its agents show none until it is {version} or later": "Claude Code {have} не сообщает remuda-core своё состояние: его агенты будут без статуса, пока он не станет {version} или новее",
   "remuda-core is not installed": "remuda-core не установлен",
   Install: "Установить",

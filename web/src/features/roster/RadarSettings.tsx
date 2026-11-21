@@ -17,7 +17,7 @@ export function RadarFields({ prefs, onPrefs }: { prefs: RadarPrefs; onPrefs: (p
           options={[
             { value: "active", label: t("grouped by activity"), icon: <Icon name="arrow-up-down" size={14} /> },
             { value: "recent", label: t("flat, by activity"), icon: <Icon name="list" size={14} /> },
-            { value: "herdr", label: t("herdr's own order"), icon: <Icon name="layers" size={14} /> },
+            { value: "herdr", label: t("the agents' own order"), icon: <Icon name="layers" size={14} /> },
             { value: "priority", label: t("by priority: needs you, done, working, idle"), icon: <Icon name="clock" size={14} /> },
             { value: "prefix", label: t("by ticket prefix: PR-12, INS-4…"), icon: <Icon name="tag" size={14} /> },
           ]}

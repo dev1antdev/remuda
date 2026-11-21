@@ -1,14 +1,15 @@
-# remuda — browser/phone client for herdr.
+# remuda — the cockpit for the agents remuda-core runs.
 #
 # Stages:
 #   web      builds the React SPA
 #   build    compiles the Go binary with the SPA embedded
 #   test     runs go vet + go test + the TypeScript typecheck and the page's unit tests (docker build --target test)
-#   runtime  the image to run: the binary, herdr (for `terminal attach`), ssh, git
+#   runtime  the image to run: the binary, ssh, git
 #
-# The container is only the bridge: herdr itself keeps running on the host.
-# See compose.yaml for the mounts it needs (herdr socket, ~/.claude, ~/.ssh,
-# and your projects at the same paths so the file viewer can read them).
+# The container serves the page only: it reaches every machine's remuda-core
+# over ssh, as a page-only host does. See compose.yaml for the mounts it needs
+# (~/.claude, ~/.ssh, and your projects at the same paths so the file viewer
+# can read them).
 
 ARG GO_VERSION=1.27
 ARG NODE_VERSION=22
@@ -39,26 +40,18 @@ RUN go vet ./... && go test ./... && cd web && npm run typecheck && npm test
 
 # ---- runtime ----
 FROM debian:bookworm-slim AS runtime
-ARG HERDR_INSTALL=0
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates curl openssh-client git \
+ && apt-get install -y --no-install-recommends ca-certificates openssh-client git \
  && rm -rf /var/lib/apt/lists/*
-# herdr's own installer: detects linux/{x86_64,aarch64} and verifies the checksum.
-# HERDR_INSTALL=1 runs herdr's installer at build time — an unpinned
-# `curl | sh`, so it is off by default: mount the host's binary, or set it
-# knowing that.
-RUN if [ "$HERDR_INSTALL" = "1" ]; then \
-      HERDR_INSTALL_DIR=/usr/local/bin sh -c "curl -fsSL https://herdr.dev/install.sh | sh"; \
-    fi
 COPY --from=build /out/remuda /usr/local/bin/remuda
 
 # Runs as the uid you pass (compose: `user: "${UID}:${GID}"`) so files under
 # the mounted home keep your ownership; HOME must match the mount point.
 # Without one it still is not root: an unprivileged uid, and the home open
 # to it.
-ENV HOME=/home/herdr
-RUN mkdir -p /home/herdr && chmod 777 /home/herdr
-WORKDIR /home/herdr
+ENV HOME=/home/remuda
+RUN mkdir -p /home/remuda && chmod 777 /home/remuda
+WORKDIR /home/remuda
 USER 1000:1000
 EXPOSE 7317
 # Loopback-only is the binary's default; inside a container the port mapping

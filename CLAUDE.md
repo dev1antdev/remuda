@@ -1,8 +1,8 @@
 # remuda — notes for agents
 
 Self-hosted web/phone cockpit for the AI coding agents on the user's
-machines, on top of **herdr** (0.9+), which it installs, starts and
-updates. Go server + embedded React SPA. See README.md for the user
+machines, which run in **remuda-core**: remuda installs it, follows it
+and watches it. Go server + embedded React SPA. See README.md for the user
 story. Renamed from herdr-ui on 2026-10-11 (before that: drover): the
 state dir, the service and the browser's localStorage keys carry over
 by themselves (`state.Dir`, install-service.sh, prefs.ts); the binary,
@@ -793,11 +793,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   untouched, one older than the flag — its unit would exit at once,
   over and over. A herdr already there is left installed and running.
   The host is offered its own release alone (`serverHostOnly` in
-  `updates.Available`, tested): a herdr, its hooks, an agent or the
-  tasks' MCP there serve no workspace, and its herdr's restart would
-  meet `ErrServerHost`; the Server place lists the release, the disk
-  and the body alone (`hostConcerns`, tested) and says a herdr still
-  installed there is not used.
+  `updates.Available`, tested): remuda-core, an agent or the tasks' MCP
+  there serve no workspace; the Server place lists the release, the disk
+  and the body alone (`hostConcerns`, tested).
   **Remotes are the ones setup added**: `SyncHerdr` used to read `herdr machine
   list --json` and add them under herdr's own id, and that read is gone with
   herdr (Core 26e: no herdr binary is found, so the watcher's call returns
@@ -2071,11 +2069,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   -9 and never taken over: a second install names it and stops); one installed already is swapped by its own `update --from`
   (its terminals keep running), one as new or newer left alone, a fresh
   one starts nothing; on Linux `loginctl enable-linger`, said when refused.
-  `remuda setup` installs it and nothing else (never under `-server`; with a
-  service a failure is said and setup goes on, the page's ⓘ then saying
-  what is missing with an Install, while `-no-service` has nothing to come
-  up and fails — CI's Windows job checks it really lands there,
-  `live_windows_test.go`); the
+  `remuda setup` installs it and nothing else (never under `-server`; a
+  failure ends setup, since a machine without its runtime is not set up and
+  no service comes up to offer it again — CI's Windows job checks it really
+  lands there, `live_windows_test.go`); the
   vitals read `remuda_core`; Updates offers `what = core` ("Install
   remuda-core" / "Update remuda-core") on every machine where it is
   missing or older and a build exists (a Mac or Linux
@@ -2192,8 +2189,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   `Restored` on a remuda-core machine, whose shell the core gave a new
   one while remuda watched (see `internal/core`, Core 21) — and is forgotten
   when the person left the agent themselves, moved the shell elsewhere
-  or closed the pane; `Restarter.Server` pauses the memory for its
-  machine while it restarts herdr itself; a pane `Memory.Asleep` names (`sleep.Store.Holds`: a
+  or closed the pane; a pane `Memory.Asleep` names (`sleep.Store.Holds`: a
   workspace the person put to sleep, its agents left at their word and
   the sleep's to wake — neither stopped by a reboot nor closed). The
   roster carries `machine.stopped [{pane, agent, title, dir, command, from}]`
@@ -2320,8 +2316,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   anywhere — a `Closed` entry (agent, session, folder, the pane's title,
   its workspace's name and its tab's own name, read off the last
   snapshot that showed it, `paneFace`), newest first, once per session,
-  the last `ClosedKeep` (20) per machine in `<state>/closed.json`; never
-  while the memory is paused for remuda's own restart of herdr, never a
+  the last `ClosedKeep` (20) per machine in `<state>/closed.json`; never a
   pane that came back as a shell (that is the reboot's list), dropped
   with its machine. `GET /api/closed` lists every machine's, less the
   ones whose session a pane runs again; `POST /api/closed/reopen

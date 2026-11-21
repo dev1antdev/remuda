@@ -5,8 +5,8 @@ rider picks the one for the day.* This one is yours: every AI coding
 agent on every computer you own, from your browser or your phone —
 chat, live terminal, the changes they made, tasks, schedules, the
 machines' vitals and updates. Self-hosted; every byte stays on hardware
-you control. (Formerly herdr-ui; it runs on top of **herdr**, which it
-installs, starts and updates for you.)
+you control. (Formerly herdr-ui; the agents run in **remuda-core**, which
+remuda installs and watches for you.)
 
 A from-scratch, auditable replacement for
 [herdr-web-ui](https://github.com/devswha/herdr-web-ui):
@@ -986,8 +986,8 @@ itself last.
 
 ## Docker / Portainer
 
-For a **Linux host** that runs herdr (the container shares the host's unix
-socket; macOS VMs can't, run the binary there):
+For a **Linux host**: the container serves the page only and reaches every
+machine's remuda-core over ssh (nothing of the agents runs in it):
 
 ```bash
 cp .env.example .env     # HOST_HOME, UID/GID, optional token and projects root
@@ -995,11 +995,10 @@ docker compose up -d     # http://127.0.0.1:7317
 ```
 
 In Portainer: add the repository as a stack, set the same variables in the
-stack environment. The image carries `remuda`, `herdr`, `ssh` and
-`git`; it mounts the host user's `~/.config` (herdr's socket + remuda's
-state), `~/.claude` (transcripts), `~/.ssh` (remote
-machines) and the projects root (file viewer), all at the same paths as on
-the host, running as that user's uid.
+stack environment. The image carries `remuda`, `ssh` and `git`; it mounts
+the host user's `~/.config` (remuda's state), `~/.claude` (transcripts),
+`~/.ssh` (remote machines) and the projects root (file viewer), all at the
+same paths as on the host, running as that user's uid.
 
 ```bash
 docker compose --profile test run --rm test   # go vet + go test + tsc
@@ -1331,7 +1330,8 @@ once, then "Add to Home Screen" — it installs as a PWA.
   token is still asked for.
 - Outbound: nothing, except (unless `-no-version-check`) one request to
   the npm registry and one to GitHub every six hours to learn the newest
-  Claude Code and herdr, so a machine can say it wants an update.
+  Claude Code, Codex, Gemini CLI, Kimi Code and remuda, so a machine can
+  say it wants an update.
 - Single bearer token, constant-time compared, no accounts. A signed-in
   browser holds a device cookie (a random secret, hashed on disk), never the
   token: a device is revoked in Settings without touching the others.

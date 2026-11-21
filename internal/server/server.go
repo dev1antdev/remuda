@@ -132,7 +132,7 @@ type Server struct {
 	Stage       *gitstage.Service   // the Changes lens's git writes, each at the person's press; nil writes nothing
 	Repos       *repos.Store        // each repository's project settings: worktree defaults, the setup script, the run actions
 	Ports       *ports.Tracker      // the ports the machines' processes listen on, matched to their workspaces
-	Resources   *resources.Service  // what the machines' herdr panes weigh on them, for the status bar
+	Resources   *resources.Service  // what the machines' terminals weigh on them, for the status bar
 	Sleep       *sleep.Service      // the workspaces put to sleep and woken at the person's press, and the resume switches
 	Issues      *ghissues.Service   // a GitHub repository's issues, read and written through gh on the machine as the person
 	Sync        *gitsync.Service    // every repository at a glance, fetched, pulled and pushed at the person's press

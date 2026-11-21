@@ -599,15 +599,17 @@ func TestTheServiceUnitsRunFromAHomeWithASpace(t *testing.T) {
 	}
 }
 
-// TestSetupWithOnlyTheCoreToInstallSaysWhenItFailed: -no-service has nothing after the core, and no page would come up
-// to offer it again, so a core that did not install is the command's error.
-func TestSetupWithOnlyTheCoreToInstallSaysWhenItFailed(t *testing.T) {
-	dir := home(t)
-	write(t, filepath.Join(dir, ".local", "bin", "curl"), "#!/bin/sh\nexit 22\n", 0o755)
-	t.Setenv("PATH", filepath.Join(dir, ".local", "bin")+":/usr/bin:/bin")
-	var out strings.Builder
-	if err := Run(Options{NoService: true}, &out); err == nil || !strings.Contains(err.Error(), "remuda-core") {
-		t.Fatalf("a -no-service setup that installed no core = %v\n%s", err, out.String())
+// TestASetupThatCouldNotInstallTheCoreIsAnError: a machine without its runtime is not set up — no service comes up to
+// offer it again, and a Windows PC installs no service at all — so the core's failure ends setup, whatever the flags.
+func TestASetupThatCouldNotInstallTheCoreIsAnError(t *testing.T) {
+	for _, o := range []Options{{}, {NoService: true}} {
+		dir := home(t)
+		write(t, filepath.Join(dir, ".local", "bin", "curl"), "#!/bin/sh\nexit 22\n", 0o755)
+		t.Setenv("PATH", filepath.Join(dir, ".local", "bin")+":/usr/bin:/bin")
+		var out strings.Builder
+		if err := Run(o, &out); err == nil || !strings.Contains(err.Error(), "remuda-core") {
+			t.Fatalf("setup %+v without its core = %v\n%s", o, err, out.String())
+		}
 	}
 }
 

@@ -96,12 +96,9 @@ func Run(o Options, out io.Writer) error {
 		fmt.Fprintf(out, "— no remuda-core%s: a server serves the page only, the agents run on its machines\n", where(o.Host))
 	} else {
 		fmt.Fprintf(out, "— remuda-core%s\n", where(o.Host))
+		// the runtime is what the cockpit is for: a host without it, or a Windows PC with no service either, is not set up
 		if err := Core(o.Host, "install", out); err != nil {
-			if o.NoService { // nothing else is set up, and nothing would come up to offer it again
-				return fmt.Errorf("remuda-core: %w", err)
-			}
-			// the page still comes up, its ⓘ saying what is missing, and "Install remuda-core" there tries again
-			fmt.Fprintf(out, "remuda-core was not installed (%v): the rest goes on, and the page's Updates offers it again\n", err)
+			return fmt.Errorf("remuda-core: %w", err)
 		}
 	}
 	if o.NoService {

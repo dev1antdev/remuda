@@ -52,7 +52,7 @@ import { themeCommands } from "./themeCommands";
 const FIND_KEY = isMac ? "⌘F" : "Ctrl+F";
 
 const MODES: { mode: Mode; title: string; hint: string; icon: IconName }[] = [
-  { mode: "herdr", title: t("Go to Agents"), hint: t("your agents and terminals, from herdr"), icon: "terminal" },
+  { mode: "herdr", title: t("Go to Agents"), hint: t("your agents and terminals, in remuda-core"), icon: "terminal" },
   { mode: "tasks", title: t("Go to Tasks"), hint: t("your tasks, kept on this remuda"), icon: "list" },
   { mode: "code", title: t("Go to Code"), hint: t("VS Code on a machine, through remuda"), icon: "code" },
   { mode: "review", title: t("Go to Review"), hint: t("every workspace with changes to review, in one list"), icon: "circle-check" },
@@ -113,8 +113,8 @@ function useCommands(): (query: string) => Entry[] {
 
       command("next-needs", t("Go to the next agent that needs you"), goNext, { hint: `${NEXT_KEY} · ${t("a question open, a watchdog note, a finish not looked at")}`, icon: "arrow-right", keywords: ["next", "needs", "attention", "waiting", "blocked", "question", "done", "jump"] });
       for (const m of MODES) if (m.mode !== mode) command(`mode:${m.mode}`, m.title, () => actions.setMode(m.mode), { hint: m.hint, icon: m.icon, keywords: ["mode", m.mode] });
-      command("update-everywhere", t("Update everywhere…"), () => actions.openDialog({ kind: "update-everywhere" }), { hint: t("every connected machine's pending updates, one after another"), icon: "refresh-cw", keywords: ["update", "upgrade", "all", "machines", "herdr", "claude", "codex", "release"] });
-      command("fleet-setup", t("Fleet setup…"), () => actions.openDialog({ kind: "fleet-setup" }), { hint: t("how every machine is set up, side by side, the odd one out marked"), icon: "columns", keywords: ["fleet", "setup", "config", "drift", "compare", "machines", "mcp", "hooks", "claude.md", "agents.md"] });
+      command("update-everywhere", t("Update everywhere…"), () => actions.openDialog({ kind: "update-everywhere" }), { hint: t("every connected machine's pending updates, one after another"), icon: "refresh-cw", keywords: ["update", "upgrade", "all", "machines", "remuda-core", "claude", "codex", "release"] });
+      command("fleet-setup", t("Fleet setup…"), () => actions.openDialog({ kind: "fleet-setup" }), { hint: t("how every machine is set up, side by side, the odd one out marked"), icon: "columns", keywords: ["fleet", "setup", "config", "drift", "compare", "machines", "mcp", "claude.md", "agents.md"] });
       if (server) command("server", t("Server · {name}", { name: server.label }), () => actions.togglePanel("server"), { hint: t("its load, memory, temperature and throttling"), icon: "server", keywords: ["server", "host", "pi", "raspberry", "vitals", "temperature", "memory", "throttle"] });
       command("reopen", t("Reopen a closed agent…"), () => actions.openDialog({ kind: "reopen" }), { hint: `${REOPEN_KEY} · ${t("an agent whose tab or workspace closed, back on its own session")}`, icon: "refresh-cw", keywords: ["reopen", "undo", "closed", "restore", "tab", "back", "resume"] });
       if (current && !viewer) {

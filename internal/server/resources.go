@@ -11,7 +11,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/resources"
 )
 
-// The status bar's right side: what the pane's machine's herdr panes weigh on it (internal/resources), the ports its
+// The status bar's right side: what the pane's machine's terminals weigh on it (internal/resources), the ports its
 // processes listen on (internal/ports), and a port's process stopped at the person's word. A GET here is the person's
 // and their devices': a viewer link reaches neither, an agent's key none.
 
@@ -21,7 +21,7 @@ func (s *Server) resourceRoutes(api *http.ServeMux) {
 	api.HandleFunc("POST /api/ports/stop", s.handlePortStop)
 }
 
-// handleResources is GET /api/resources?machine=: the machine's load as its herdr panes make it, by workspace. The
+// handleResources is GET /api/resources?machine=: the machine's load as its terminals make it, by workspace. The
 // status bar asks it every few seconds, so that machine's ports are read at the quicker pace meanwhile.
 func (s *Server) handleResources(w http.ResponseWriter, r *http.Request) {
 	if s.Resources == nil {

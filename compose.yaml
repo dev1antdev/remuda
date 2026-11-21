@@ -4,7 +4,7 @@
 # your machines.json over ssh, as a page-only host does, and speaks
 # remuda-core there. Set these in Portainer's stack environment (or a .env file):
 #
-#   HOST_HOME      the host user's home (herdr socket, ~/.claude, ~/.ssh live there)
+#   HOST_HOME      the host user's home (~/.claude and ~/.ssh live there)
 #   UID / GID      that user's ids, so mounted files keep their ownership
 #   REMUDA_TOKEN optional; otherwise a token is generated into ${HOST_HOME}/.config/remuda
 #   PROJECTS       optional: a projects root to mount at the same path for the file viewer
@@ -21,20 +21,20 @@ services:
     restart: unless-stopped
     user: "${UID:-1000}:${GID:-1000}"
     environment:
-      HOME: ${HOST_HOME:-/home/herdr}
+      HOME: ${HOST_HOME:-/home/remuda}
       REMUDA_TOKEN: ${REMUDA_TOKEN:-}
     command: ["-addr", "0.0.0.0:7317", "-server"]
     ports:
       - "127.0.0.1:7317:7317"
     volumes:
       # remuda's own state (token, machines.json, push keys) and the ssh config beside it
-      - ${HOST_HOME:-/home/herdr}/.config:${HOST_HOME:-/home/herdr}/.config
+      - ${HOST_HOME:-/home/remuda}/.config:${HOST_HOME:-/home/remuda}/.config
       # Claude Code transcripts for the chat lens (read-only)
-      - ${HOST_HOME:-/home/herdr}/.claude:${HOST_HOME:-/home/herdr}/.claude:ro
+      - ${HOST_HOME:-/home/remuda}/.claude:${HOST_HOME:-/home/remuda}/.claude:ro
       # ssh config + keys for remote machines (read-only)
-      - ${HOST_HOME:-/home/herdr}/.ssh:${HOST_HOME:-/home/herdr}/.ssh:ro
+      - ${HOST_HOME:-/home/remuda}/.ssh:${HOST_HOME:-/home/remuda}/.ssh:ro
       # your projects at the same path, so the file viewer and git diff work
-      - ${PROJECTS:-${HOST_HOME:-/home/herdr}/Projects}:${PROJECTS:-${HOST_HOME:-/home/herdr}/Projects}:ro
+      - ${PROJECTS:-${HOST_HOME:-/home/remuda}/Projects}:${PROJECTS:-${HOST_HOME:-/home/remuda}/Projects}:ro
       # git's safe.directory check needs to see the repo owner; harmless otherwise
       - /etc/passwd:/etc/passwd:ro
 
@@ -54,7 +54,7 @@ services:
     working_dir: /src
     user: "${UID:-1000}:${GID:-1000}"
     environment:
-      HOME: ${HOST_HOME:-/home/herdr}
+      HOME: ${HOST_HOME:-/home/remuda}
       GOCACHE: /tmp/gocache
       GOMODCACHE: /tmp/gomod
       npm_config_cache: /tmp/npm
@@ -71,6 +71,6 @@ services:
       - "127.0.0.1:5173:5173"
     volumes:
       - .:/src
-      - ${HOST_HOME:-/home/herdr}/.config:${HOST_HOME:-/home/herdr}/.config
-      - ${HOST_HOME:-/home/herdr}/.claude:${HOST_HOME:-/home/herdr}/.claude:ro
-      - ${HOST_HOME:-/home/herdr}/.ssh:${HOST_HOME:-/home/herdr}/.ssh:ro
+      - ${HOST_HOME:-/home/remuda}/.config:${HOST_HOME:-/home/remuda}/.config
+      - ${HOST_HOME:-/home/remuda}/.claude:${HOST_HOME:-/home/remuda}/.claude:ro
+      - ${HOST_HOME:-/home/remuda}/.ssh:${HOST_HOME:-/home/remuda}/.ssh:ro

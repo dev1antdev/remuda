@@ -1,5 +1,5 @@
-// Package drift is how every machine is set up, side by side: what the vitals already know (the agents, herdr, its
-// hooks, remuda, Claude Code's settings) and what one read-only script reads beside them — remuda's MCP server in each
+// Package drift is how every machine is set up, side by side: what the vitals already know (the agents, remuda,
+// Claude Code's settings) and what one read-only script reads beside them — remuda's MCP server in each
 // agent's own config file, the agents' global instruction files and every repository checkout behind
 // the machine's workspaces — laid out as a table whose norm is what most machines share, the odd one out marked, with
 // the update remuda already has that brings it in line where there is one. Nothing is written and no agent is run:

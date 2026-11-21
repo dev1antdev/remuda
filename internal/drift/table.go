@@ -35,9 +35,9 @@ type Column struct {
 	Error string `json:"error,omitempty"`
 }
 
-// Section is a group of rows: the agents, herdr, remuda, Claude Code's settings, the instructions, or one repository.
+// Section is a group of rows: the agents, remuda, Claude Code's settings, the instructions, or one repository.
 type Section struct {
-	ID      string            `json:"id"`                // agents | herdr | remuda | claude | instructions | repo
+	ID      string            `json:"id"`                // agents | remuda | claude | instructions | repo
 	Name    string            `json:"name,omitempty"`    // a repository's: owner/repo, or its folder's name
 	Folders map[string]string `json:"folders,omitempty"` // a repository's main checkout on each machine, by machine id
 	Rows    []Row             `json:"rows"`

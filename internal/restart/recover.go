@@ -105,7 +105,6 @@ type Memory struct {
 	chats   map[string]Chat      // machine|pane
 	shells  map[string]time.Time // machine|pane → since when a remembered pane has stood as a bare shell, unwatched
 	stopped map[string][]Stopped // per machine, in pane order
-	paused  map[string]bool      // machines whose herdr remuda restarts itself: the shells are its own to bring back
 	faces   map[string]paneFace  // machine|pane → its names when last seen, for the closed list
 	closed  map[string][]Closed  // per machine, newest first: the agents whose panes went away
 
@@ -114,7 +113,7 @@ type Memory struct {
 
 // OpenMemory reads the chats remembered in dir and the agents closed there; "" keeps them in memory alone.
 func OpenMemory(dir string) *Memory {
-	m := &Memory{dir: dir, chats: map[string]Chat{}, shells: map[string]time.Time{}, stopped: map[string][]Stopped{}, paused: map[string]bool{}, faces: map[string]paneFace{}, closed: map[string][]Closed{}}
+	m := &Memory{dir: dir, chats: map[string]Chat{}, shells: map[string]time.Time{}, stopped: map[string][]Stopped{}, faces: map[string]paneFace{}, closed: map[string][]Closed{}}
 	if dir != "" {
 		if err := state.LoadJSON(dir, chatsFile, &m.chats); err != nil {
 			log.Printf("%s: %v — starting with no chat remembered", chatsFile, err)
@@ -150,9 +149,6 @@ func (m *Memory) observe(e events.Snapshot) bool {
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if m.paused[e.Machine] {
-		return false
-	}
 	onCore := m.Core != nil && m.Core()
 	prefix := e.Machine + "|"
 	seen := map[string]bool{}
@@ -356,21 +352,6 @@ func (m *Memory) dropShellsLocked(machineID string) {
 			delete(m.shells, key)
 		}
 	}
-}
-
-// Pause keeps the machine's shells off the stopped list while remuda restarts its herdr itself.
-func (m *Memory) Pause(machineID string) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.paused[machineID] = true
-	m.dropShellsLocked(machineID)
-}
-
-// Unpause ends a Pause.
-func (m *Memory) Unpause(machineID string) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	delete(m.paused, machineID)
 }
 
 // settle takes a pane off the stopped list once a recovery dealt with it; one that will not come back is forgotten, and

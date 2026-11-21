@@ -97,7 +97,7 @@ func (s *Service) RestartPane(mc *machines.Machine, paneID string) (jobs.Job, er
 		return jobs.Job{}, err
 	}
 	title := "Restart " + restart.Title(kind) + " in " + p.DisplayTitle()
-	command := "# in " + paneID + " on " + mc.Label() + ", through herdr:\n" + restartCommand(kind, session)
+	command := "# in " + paneID + " on " + mc.Label() + ", through remuda-core:\n" + restartCommand(kind, session)
 	return s.Jobs.Run(mc, title, command, func(say func(string)) error { return s.Restart.Pane(mc, paneID, say) }), nil
 }
 
@@ -199,7 +199,7 @@ func restartPlan(kind string, snap *herdr.Snapshot) (Update, int) {
 		note += fmt.Sprintf(", %d of them busy (those restart once they have settled for a while)", len(busy))
 	}
 	note += ". " + restartWords(kind) + fmt.Sprintf(" — for a %s that updated itself, or after `%s update` run by hand. A message half-typed in a chat's box is lost.", title, kind)
-	cmd := "# in every " + title + " pane here (" + strings.Join(ids, ", ") + "), through herdr:\n" + restartCommand(kind, "<session>")
+	cmd := "# in every " + title + " pane here (" + strings.Join(ids, ", ") + "), through remuda-core:\n" + restartCommand(kind, "<session>")
 	return Update{What: "restart-" + kind, Title: "Restart " + title + " chats", Command: cmd, Note: note}, n
 }
 
