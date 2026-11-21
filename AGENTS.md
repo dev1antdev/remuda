@@ -94,9 +94,7 @@ not style.
   (`status_mismatch`) goes once more in the same request, only to the
   same agent under the same pid (`core.Adapter.sendTo`).
 - **Never `--takeover`.** herdr allows one attached client per terminal;
-  stealing the slot is the person's call only. A refusal is surfaced
-  (`RefusedError`, 409 on HTTP, the WebSocket close reason), never retried
-  with the flag.
+  stealing the slot is the person's call only, never remuda's.
 - **A test remuda-core is `coretest.Server`'s or `scripts/e2e.sh`'s,
   each with its own `RC_SESSION`, `RC_SOCKET`, XDG
   folders, `HOME` and `RC_LAUNCHD_DIRECT`; never started another way**: a
@@ -236,7 +234,7 @@ not style.
   `*machines.Machine`, and builds its scripts with `internal/script`. A
   package that asks a machine's herdr takes the `herdr.API` and
   `herdr.Terminals` that `Machine.Ready()` hands out; only `internal/herdr`
-  and `internal/machines` name `*herdr.Client` or `*herdr.AttachManager`.
+  and `internal/machines` name `*herdr.Client`.
   Packages hear each other through `internal/events`; the subscriptions
   are listed once, in `internal/app`. `docs/architecture.md` draws the
   map; a new feature is a package with its use cases, a file in

@@ -183,11 +183,12 @@ components and icons as rules for whoever changes it: @docs/design.md
   `EventStream`, every request), `Terminals` (`Open` a live terminal as one
   `Viewer` — what it is handed in order (`Out`: the program's bytes, or the
   terminal's grid), its keys, its size, `Close` — with a `View` of its grid,
-  `Keep` and `Observe`; `Viewers`; herdr's `AttachManager.Open` is one viewer of
-  the attach every viewer shares, and refuses `Observe`) — which `Machine.Ready()` hands out and every package
-  takes instead of `*Client` and `*AttachManager` (only `internal/herdr` and
-  `internal/machines` name those), so remuda-core's adapter can stand in for
-  herdr while the move to it is built; the model (`Snapshot`, `PaneInfo`,
+  `Keep` and `Observe`; `Viewers`), and `ValidSize`: a viewer's grid is one to
+  give a terminal when it is 20–500 columns and 5–300 rows, a collapsed or
+  hidden mount measuring nonsense. `Machine.Ready()` hands the two out and every
+  package takes them instead of `*Client` (only `internal/herdr` and
+  `internal/machines` name it); remuda-core's adapter (`internal/core`) is the one
+  implementation left; the model (`Snapshot`, `PaneInfo`,
   `Event`) is remuda's either way. `client.go`: newline-JSON RPC over
   the Unix socket, **one request = one connection** (herdr closes the socket
   after each response; never pool) — dialled by `DialLocal` (`local_unix.go`;
@@ -217,8 +218,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   `internal/herdr/herdrtest`) starts that throwaway for any package's
   test, its socket and its `HOME` both temporary. `Client.Bridged` says
   the client dials through a command (`nc -U` over ssh) rather than a
-  socket; `AttachManager.Viewers(terminal)` is how many of this remuda's
-  viewers have a terminal open. **An output watch's regex is herdr's
+  socket; the machine's `Terminals.Viewers(terminal)` is how many of this
+  remuda's viewers have a terminal open. **An output watch's regex is herdr's
   Rust dialect** (`regex.go`, tested on what a throwaway herdr 0.9.5
   refused and matched, through `events.subscribe` and
   `pane.wait_for_output`): `CompileRegex` reads it in Go as herdr does —
@@ -245,27 +246,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   with its last tab), `PaneAtPrompt` (`pane.process_info`: the shell's
   own process group holds the terminal) and `PaneShellPID` (the same
   call's `shell_pid`, the root of a pane's processes, which the snapshot
-  does not carry; `internal/resources`). `attach.go`: ref-counted
-  `herdr terminal attach` PTYs (creack/pty), one per terminal shared by all
-  viewers, 45s linger after the last viewer leaves. **No byte replay** for a
-  viewer joining a live attach: TUIs draw with relative cursor moves, so a
-  tail from an arbitrary byte misplaces everything after it (the footer
-  and prompt box of Claude Code vanish). A joiner gets a repaint instead —
-  the PTY is resized by a row and back, herdr and the app redraw.
-  `AttachManager.NewCommand` builds the attach process, so the same manager
-  serves a local herdr exec or an `ssh -tt` to a remote one;
-  `AttachManager.Unavailable`, when set, refuses every attach at once with
-  its reason (a Windows machine's: herdr has no terminal attach there). **Terminal
-  queries are answered at the server** (`queries.go`, tested): herdr asks
-  the client at attach for the pixel mouse mode (DECRQM 1016) and the
-  device attributes, and every viewer's xterm would answer — late, once per
-  viewer, the answers typed into the pane as `1016;2$y1;2c` — so the read
-  loop answers DA1, DA2 and DECRQM once as xterm.js would and strips them
-  from what the viewers get, a query cut by a chunk boundary held until it
-  completes; the cursor-position report (`CSI 6 n`) still passes, since
-  only xterm knows the cursor.
-  **Never pass `--takeover`** — stealing herdr's attach slot is the user's
-  call only. `Client.OnTransportError` fires for failures to *reach* herdr
+  does not carry; `internal/resources`).
+  `Client.OnTransportError` fires for failures to *reach* herdr
   (not for herdr's own `*Error` refusals); a remote machine hooks it to
   mark itself dead, so handlers never call MarkDead. `Client.PaneScreen` is `pane.read` with the
   colours kept (the chat's screen read); `PaneRecent` is the pane's last n
@@ -725,10 +707,8 @@ components and icons as rules for whoever changes it: @docs/design.md
 - `internal/sshx/` — one OpenSSH `ControlMaster` per host (BatchMode: fail,
   never prompt; sshd's MaxSessions is 10 by default, so every session takes
   one of 9 places first (`Conn.enter`, `sessionCount`), waiting within its
-  own timeout: at most 5 scripts, 3 of them over a minute long, and 5
-  terminals (`HoldTerminal`; a new one ends attaches nobody watches, then
-  waits 3 s and says why), the last places left to short scripts and the last
-  two to herdr's RPC), with socket and port forwarding (`-O forward -L`; a
+  own timeout: at most 5 scripts, 3 of them over a minute long, the last
+  place left to short scripts and the last two to herdr's RPC), with socket and port forwarding (`-O forward -L`; a
   socket forward the master already holds is cancelled first, since
   asked for the same one again the master keeps its listener and binds
   nothing, so the file unlinked before the ask would be gone for good),
@@ -736,12 +716,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   -R 127.0.0.1:<remote>:127.0.0.1:<ours>`, a forward of that port left
   on a reused master cancelled first; asked as 0, a port the host picks,
   which the master prints), remote exec (`RunWithInput` for a
-  secret that must not travel on a command line), and the `ssh -tt … sh
-  -c 'HERDR_SOCKET_PATH=<the machine's socket> exec herdr terminal
-  attach …'` command builder (`AttachCmd`: the socket as the local attach
-  gets it, through sh since the login shell there may be anything).
-  Every session — a script, the `nc -U` bridge, an attach — rides the
-  master or fails (`session`: `-o ProxyCommand=false`, which a live master
+  secret that must not travel on a command line).
+  Every session — a script, the `nc -U` bridge — rides the master or fails (`session`: `-o ProxyCommand=false`, which a live master
   never consults): with the master gone ssh would connect by itself, a
   handshake per request, and a bridge answering that way never lets the
   machine notice (tested on the real ssh against the loopback's port 1).
@@ -779,7 +755,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   remuda implements no SSH itself.
 - `internal/machines/` — the multi-PC registry: `manager.go` (the
   registry), `machine.go` (one machine: its state, the ssh master, the
-  herdr client and attach manager, the peer, port forwards), `herdr.go`
+  herdr client, port forwards), `herdr.go`
   (herdr's binary and server on the machine), `files.go` (the file
   viewer's reads and the one write), `shell.go` (a `Machine` is a
   `shell.Host`: `Run` / `Stream` here through `sh -c` or over the master,
@@ -800,8 +776,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   `Ready()` is `ErrServerHost`, so a route naming it says why; the app
   neither needs nor starts its herdr (it never looks for one now),
   places no door for its own agents (the remotes still get theirs), and
-  `/api/health` answers `server: true` with no herdr, which the vitals'
-  peer probe reads as no peer to relay terminals through. The roster
+  `/api/health` answers `server: true` with no herdr. The roster
   carries the host as `server {id, label, health}`; the page's
   `useRoster()` gives it as `server` (a machine with no workspaces,
   `hostMachine` in `features/roster/server.ts`, tested) and `host` (the
@@ -891,8 +866,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   as its shell for git, its transport
   errors heard by `transportError`, closed off the adapter's goroutine by
   `fail` and `Close`), its terminals are `core.Terminals` (every viewer
-  an attach of its own, see `internal/core`), and it has no peer
-  to relay through (`Peer` nil) nor a bridge on Windows. Nothing of herdr's
+  an attach of its own, see `internal/core`), and it has no bridge on
+  Windows. Nothing of herdr's
   is offered there — its update, hooks, integrations, plugins and server
   restart (`updates.withoutHerdr`, the ⓘ's herdr concerns) — and
   `StopServer` / `StartServer` refuse (`ErrOnCore`): herdr's agents there
@@ -1959,32 +1934,6 @@ components and icons as rules for whoever changes it: @docs/design.md
   scripts are tested on stand-ins — `caffeinate`, `systemd-inhibit` and
   a `uname` answering `AWAKE_TEST_OS` — first on PATH in a temp HOME,
   so nothing real is held. No sudo.
-- **Peers** (`internal/server/peer.go`): herdr allows one attached client
-  per terminal ("already has an attached client; retry with --takeover"),
-  so two remuda reaching the same pane — the machine's own and this one
-  over SSH — collide. The health script also probes `127.0.0.1:7317/api/
-  health` on the machine and reads its token file; a running remuda
-  becomes `Machine.Peer()` (port, token, version; stale after an hour).
-  With a peer, `/ws/pane` is relayed to the peer's `/ws/pane` (frames
-  piped both ways, its close reason passed on) and the HTTP transport's
-  stream is opened there (`sid = <machine>~<peer sid>`, every later
-  request forwarded), over `Machine.ForwardAddr(port)` — the same port
-  forward as code-server. herdr prints its refusal *into the PTY* and
-  exits, as ssh does when the machine will have no more sessions
-  (`ReadRefusal`), so `attach.go` watches a fresh attach's first chunks
-  (`watchStart`: a refusal followed by the exit within `refusalExitWait`
-  — the words alone on a screen, an agent reading this very file, are
-  the pane's own and the attach stands — or 300 ms / 512 bytes of real
-  output) and
-  `Subscribe` returns a `*RefusedError` (`herdr.Refused(err)`) instead
-  of painting it; a refusal triggers one more probe (`peerAfterRefusal`,
-  at most every 30 s); still no peer → the refusal is the WebSocket close
-  reason (≤120 bytes; the client writes it on the screen at every retry)
-  or a 409 on the HTTP transport, whose words the client writes the same
-  way; an attach that ended is asked for again on either transport. A plain GET of `/ws/pane` (the client's
-  proxy probe) is 426 before anything attaches. A peer's requests carry
-  the bearer token and no Origin, so csrfGuard lets them through. Never
-  `--takeover`.
 - **A Windows PC of the fleet** (the remote side): a Windows machine is a
   remote reached over ssh like any other — its terminal is live, an attach
   of remuda-core like any machine's — the cockpit itself always a Mac or
@@ -2005,8 +1954,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   `remuda.exe bridge` (`cmd/remuda/bridge.go`) — `Machine.OS()` /
   `Windows()` / `Paths()`, the roster's machine `os` ("darwin" | "linux" |
   "windows" | "" before a remote's first connect, the page's contract);
-  the attach manager refuses at once (`NoAttachOnWindows`), never an
-  `ssh -tt … herdr terminal attach`; herdr's server is started outside the
+  herdr's server is started outside the
   ssh session by PowerShell's `Start-Process -WindowStyle Hidden`
   (`herdr.StartWindowsServerScript`, `StartServerScriptOn`): started from
   the session it held the session open and died with it. What runs there
@@ -4135,10 +4083,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   vitest, pytest, cargo test, mocha, rspec, node's runner) → one
   `push.Notify` of kind `tests` ("Tests failed in api") per pane, never
   while its agent works (it is on it), never while a viewer has the pane's
-  terminal open through this remuda (`AttachManager.Viewers`) or through
-  the machine's own remuda this one relays it to (`Server.Relaying`, the
-  WebSocket relays counted in `internal/server/relays.go`; the HTTP
-  transport's relayed streams are not), then quiet
+  terminal open through this remuda (`core.Terminals.Viewers`: the person's
+  viewers, never a link's), then quiet
   for `TestsQuiet` 30 min. **The person's rules** (`rules.go`,
   `triggers.json` in the state dir, 0600, replaced whole, at most
   `MaxRules` 50): `Rule{name, machine, dir, match substring|regex,
@@ -7183,8 +7129,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   macOS", created, last seen, ip) and the HttpOnly cookie `remuda_token`
   carries `d.<id>.<secret>`; `Devices.Check` compares the hash in constant
   time and bumps `last_seen` at most once a minute. `Authorization:
-  Bearer <token>` still passes with no device (API clients, the peer
-  relay, the e2e); a legacy cookie holding the raw token passes once and
+  Bearer <token>` still passes with no device (API clients, the e2e); a legacy cookie holding the raw token passes once and
   is upgraded to a device cookie on that very response, so a browser
   signed in before devices keeps working. A revoked device's cookie is
   dropped and refused at once (no 500 ms wait: a page of the person's own
@@ -7262,7 +7207,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   `gitTarget`), and the
   upgrades of `/ws/events` and of `/ws/pane` (a live terminal only watched,
   on a machine on remuda-core alone: herdr's answers 403, and
-  `viewerOwnGuard` keeps it to a pane of the viewer's roster by its `id`) —
+  `viewerOwnGuard` keeps it to a pane of the viewer's roster by its `id`; a
+  plain GET of `/ws/pane`, the page's own proxy probe, is 426 before anything
+  attaches) —
   or of the page itself and its files (anything outside
   `/api/`, `/ws/` and the code-server proxy `/code/`); never the HTTP
   terminal, a submit, a key, the tasks or any change: 403 "this link is for
@@ -7287,8 +7234,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   wears "Viewing only" and no search, Changes is shut, the Git lens draws
   its graph and opens no menu, the terminal lens on a machine on
   remuda-core is the live terminal only watched (`/ws/pane` is a viewer's
-  route; `handlePaneWS` opens it `Observe`, drops what the page sends,
-  refuses a viewer on herdr with a 403 before any peer is asked, and asks
+  route; `handlePaneWS` opens it `Observe`, drops what the page sends, and asks
   again right before every write (a frame gathers at most `maxFrame` 256 KB,
   so a terminal that never stops printing is asked about that often) and
   every `viewerRecheck` 5 s on a quiet terminal
@@ -7333,8 +7279,7 @@ components and icons as rules for whoever changes it: @docs/design.md
 - `internal/server/` — the HTTP adapter: one file per context (`roster.go`,
   `machines.go`, `sessions.go`, `chat.go`, `files.go`, `push.go`,
   `search.go`, `usage.go`, `quick.go`, `schedule.go`, `review.go`,
-  `code.go`, `update.go`, `tasks.go`, `screen.go`, `question.go`, `devices.go`, `keys.go`, `terminal.go` with `termhttp.go` and
-  `peer.go`), each registering its routes in a `…Routes(mux)` that
+  `code.go`, `update.go`, `tasks.go`, `screen.go`, `question.go`, `devices.go`, `keys.go`, `terminal.go` with `termhttp.go`), each registering its routes in a `…Routes(mux)` that
   `Handler()` calls; a handler reads the request, asks one service and
   writes the answer, and the logic lives in the context packages.
   `/api/health` and `/api/login` are mounted outside the token guard;
@@ -7865,8 +7810,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   text frames. Over the HTTP transport typing goes once or not at all
   (`engine/transport.ts`, on `screen/sender.ts`, a sender per stream): what
   fails, hangs or finds no stream is dropped, never sent later, and a toast
-  says so unless it was only the terminal's own reports. The attach PTY paints the screen on start; late joiners get
-  a repaint (see attach.go), never a byte replay.
+  says so unless it was only the terminal's own reports. An attach paints the screen on start; late joiners are
+  painted it again, never handed a byte replay.
 - herdr `pane.send_keys` grammar is lowercase with `+` modifiers: `enter`,
   `esc`, `up`, `down`, `tab`, `shift+tab`, `backspace`, `ctrl+c`… (verified
   live on 0.9.1; the server lowercases and checks it, `sessions.Keys`; 0.9.5

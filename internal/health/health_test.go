@@ -28,7 +28,7 @@ plugin=herdr.push dcolinmorgan/herdr-push
 df=/dev/disk3s5   482797652 188483048 271706504    41% 1511806 2717065040    0%   /System/Volumes/Data
 uptime=23:21  up 33 mins, 2 users, load averages: 6.52 3.32 3.43
 `
-	r, peer := Parse(out)
+	r := Parse(out)
 	if r.OS != "macOS 26.6.2" || r.Claude != "2.1.285" || r.ClaudeVia != "brew" || r.Herdr != "0.9.3" || r.Remuda != "v0.4.0-8-g3262e05" {
 		t.Fatalf("versions: %+v", r)
 	}
@@ -47,25 +47,15 @@ uptime=23:21  up 33 mins, 2 users, load averages: 6.52 3.32 3.43
 	if len(r.Plugins) != 1 || r.Plugins[0] != (Plugin{"herdr.push", "dcolinmorgan/herdr-push"}) {
 		t.Fatalf("plugins: %+v", r.Plugins)
 	}
-	if bad, _ := Parse("hook=$(id) v1 < v2\nhook=claude\nplugin=only-an-id\n"); len(bad.OutdatedHooks) != 1 || bad.OutdatedHooks[0] != (Hook{Agent: "claude"}) || len(bad.Plugins) != 0 {
+	if bad := Parse("hook=$(id) v1 < v2\nhook=claude\nplugin=only-an-id\n"); len(bad.OutdatedHooks) != 1 || bad.OutdatedHooks[0] != (Hook{Agent: "claude"}) || len(bad.Plugins) != 0 {
 		t.Fatalf("a hook line is an agent name and maybe its versions, a plugin line an id and a source: %+v", bad)
 	}
-	l, _ := Parse("os=Linux 6.8.0\nuptime= 10:11:12 up 5 days,  3:02,  1 user,  load average: 0.52, 0.58, 0.59\ndf=/dev/sda1 100000000 50000000 50000000 50% /\n")
+	l := Parse("os=Linux 6.8.0\nuptime= 10:11:12 up 5 days,  3:02,  1 user,  load average: 0.52, 0.58, 0.59\ndf=/dev/sda1 100000000 50000000 50000000 50% /\n")
 	if l.Load1 != 0.52 || l.Uptime != "5 days,  3:02" || l.DiskUsedPct != 50 {
 		t.Fatalf("linux: %+v", l)
 	}
-	if e, _ := Parse(""); e.Claude != "" {
+	if e := Parse(""); e.Claude != "" {
 		t.Fatal("empty")
-	}
-	if peer != nil || r.Running {
-		t.Fatal("no peer lines, no peer")
-	}
-	p, peer2 := Parse("peer={\"herdr\":true,\"ok\":true,\"version\":\"v0.4.0-9-gabc\"}\npeer_token=abc123\n")
-	if !p.Running || peer2 == nil || peer2.Token != "abc123" || peer2.Version != "v0.4.0-9-gabc" || peer2.Port != 7317 {
-		t.Fatalf("peer: %+v %+v", p, peer2)
-	}
-	if _, none := Parse("peer_token=abc123\n"); none != nil {
-		t.Fatal("a token without an answer is no peer")
 	}
 }
 
@@ -101,7 +91,7 @@ func TestProbeReadsHerdrsHooksAndPlugins(t *testing.T) {
 	if probe := Script(); !strings.Contains(probe, OutdatedHooks+" | sed 's/^/hook=/'") || !strings.Contains(probe, GitHubPlugins+" | sed 's/^/plugin=/'") || !strings.Contains(probe, Integrations+" | sed 's/^/integration=/'") {
 		t.Fatal("the probe does not print them as hook=, plugin= and integration= lines")
 	}
-	r, _ := Parse("integration=" + strings.ReplaceAll(strings.TrimSpace(states), "\n", "\nintegration=") + "\nintegration=$(id) current\nintegration=gemini broken\n")
+	r := Parse("integration=" + strings.ReplaceAll(strings.TrimSpace(states), "\n", "\nintegration=") + "\nintegration=$(id) current\nintegration=gemini broken\n")
 	want := map[string]string{"pi": "missing", "claude": "outdated", "codex": "current", "antigravity-cli": "outdated", "letta": "outdated"}
 	if len(r.Integrations) != len(want) {
 		t.Fatalf("integrations read: %v", r.Integrations)
@@ -171,16 +161,16 @@ func TestParseRelease(t *testing.T) {
 }
 
 func TestParseReadsTheStatusLineWrapper(t *testing.T) {
-	if r, _ := Parse("os=macOS 26\nstatusline=wrapped\n"); !r.Statusline {
+	if r := Parse("os=macOS 26\nstatusline=wrapped\n"); !r.Statusline {
 		t.Fatal("the wrapper was not read")
 	}
-	if r, _ := Parse("os=macOS 26\n"); r.Statusline {
+	if r := Parse("os=macOS 26\n"); r.Statusline {
 		t.Fatal("a wrapper read from nothing")
 	}
 }
 
 func TestParseReadsRemudaCore(t *testing.T) {
-	r, _ := Parse("os=macOS 26\nremuda_core=rc 0.2.0\n")
+	r := Parse("os=macOS 26\nremuda_core=rc 0.2.0\n")
 	if r.RemudaCore != "0.2.0" {
 		t.Fatalf("remuda_core = %q", r.RemudaCore)
 	}
@@ -190,11 +180,11 @@ func TestParseReadsRemudaCore(t *testing.T) {
 }
 
 func TestParseReadsCodeServer(t *testing.T) {
-	r, _ := Parse("os=macOS 26\ncode_server=4.140.0\n")
+	r := Parse("os=macOS 26\ncode_server=4.140.0\n")
 	if r.CodeServer != "4.140.0" {
 		t.Fatalf("code_server = %q", r.CodeServer)
 	}
-	r, _ = Parse("os=macOS 26\n")
+	r = Parse("os=macOS 26\n")
 	if r.CodeServer != "" {
 		t.Fatalf("code_server without the link = %q", r.CodeServer)
 	}

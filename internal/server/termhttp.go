@@ -114,23 +114,9 @@ func (s *Server) handleTermOpen(w http.ResponseWriter, r *http.Request) {
 	s.Radar.Seen(mc.ID(), pane.PaneID)
 	cols, _ := strconv.Atoi(r.URL.Query().Get("cols"))
 	rows, _ := strconv.Atoi(r.URL.Query().Get("rows"))
-	open := func(pc *peerClient) {
-		s.peerOpen(w, r, pc, mc.ID(), pane.PaneID, cols, rows)
-	}
-	if pc, err := s.peerFor(mc); err != nil {
-		httpErr(w, 502, err)
-		return
-	} else if pc != nil {
-		open(pc)
-		return
-	}
 	viewer, err := attach.Open(pane.TerminalID, herdr.View{Cols: cols, Rows: rows, Keep: r.URL.Query().Get("keep") == "1"})
 	if err != nil {
-		if pc := s.peerAfterRefusal(mc, err); pc != nil {
-			open(pc)
-			return
-		}
-		httpErr(w, 409, fmt.Errorf("%s", attachRefused(mc, err)))
+		httpErr(w, 409, fmt.Errorf("%s", attachRefused(err)))
 		return
 	}
 	st := &termStream{id: newStreamID(), viewer: viewer}
@@ -144,9 +130,6 @@ func (s *Server) handleTermOpen(w http.ResponseWriter, r *http.Request) {
 // (remuda-core's, for a viewer that keeps the size), on every read once known, so a read lost on the way loses no
 // grid; a grid that changes after some bytes ends the read; 410 says the stream is unknown and the client reopens.
 func (s *Server) handleTermRead(w http.ResponseWriter, r *http.Request) {
-	if s.peerStream(w, r, "/api/term/read") {
-		return
-	}
 	st := s.streams.get(r.URL.Query().Get("sid"))
 	if st == nil {
 		httpErr(w, http.StatusGone, fmt.Errorf("stream expired"))
@@ -208,9 +191,6 @@ func (s *Server) handleTermRead(w http.ResponseWriter, r *http.Request) {
 
 // handleTermInput is POST /api/term/input?sid: the body is what the keyboard typed.
 func (s *Server) handleTermInput(w http.ResponseWriter, r *http.Request) {
-	if s.peerStream(w, r, "/api/term/input") {
-		return
-	}
 	st := s.streams.get(r.URL.Query().Get("sid"))
 	if st == nil {
 		httpErr(w, http.StatusGone, fmt.Errorf("stream expired"))
@@ -232,9 +212,6 @@ func (s *Server) handleTermInput(w http.ResponseWriter, r *http.Request) {
 
 // handleTermResize is POST /api/term/resize?sid&cols&rows.
 func (s *Server) handleTermResize(w http.ResponseWriter, r *http.Request) {
-	if s.peerStream(w, r, "/api/term/resize") {
-		return
-	}
 	st := s.streams.get(r.URL.Query().Get("sid"))
 	if st == nil {
 		httpErr(w, http.StatusGone, fmt.Errorf("stream expired"))
@@ -248,9 +225,6 @@ func (s *Server) handleTermResize(w http.ResponseWriter, r *http.Request) {
 
 // handleTermClose is DELETE /api/term/close?sid.
 func (s *Server) handleTermClose(w http.ResponseWriter, r *http.Request) {
-	if s.peerStream(w, r, "/api/term/close") {
-		return
-	}
 	s.streams.remove(r.URL.Query().Get("sid"))
 	w.WriteHeader(http.StatusNoContent)
 }

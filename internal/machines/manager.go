@@ -200,7 +200,6 @@ func NewManager(dir, localSocket, localHerdrBin string, door *Door) *Manager {
 	local := localMachine(dir)
 	local.herdrBin, local.socket = localHerdrBin, localSocket
 	local.client = herdr.NewClient(localSocket)
-	local.attach = herdr.NewAttachManager(herdr.LocalAttachCommand(localHerdrBin, localSocket))
 	return newManager(dir, localHerdrBin, door, local, false)
 }
 

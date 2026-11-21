@@ -104,7 +104,7 @@ func TestSettingsScriptReadsTheDefaultModelAndFastMode(t *testing.T) {
 	if out != "claude_model=claude-opus-4-8\nclaude_fast=on\n" {
 		t.Fatalf("settings: %q", out)
 	}
-	if r, _ := Parse(out); r.ClaudeModel != "claude-opus-4-8" || !r.ClaudeFast {
+	if r := Parse(out); r.ClaudeModel != "claude-opus-4-8" || !r.ClaudeFast {
 		t.Fatalf("parsed %+v", r)
 	}
 	write("{\n  \"fastMode\": true,\n  \"fastModePerSessionOptIn\": true\n}\n")

@@ -30,13 +30,11 @@ A from-scratch, auditable replacement for
 ## How it works
 
 ```
-browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock (RPC)
-                                        │          ├─ `herdr terminal attach` PTY
+browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ remuda-core: its RPC and one attach per viewer
                                         │          └─ reads ~/.claude/projects/…
                                         │
                                         └─ per remote machine: one ssh ControlMaster
-                                             ├─ -L forward of the remote herdr.sock (RPC)
-                                             ├─ `ssh -tt host herdr terminal attach` (PTY)
+                                             ├─ `remuda-core connect` there: RPC and attaches
                                              └─ `ssh host tail -c …` of the transcript
 ```
 
@@ -1824,15 +1822,6 @@ sidebar's + menu, each one as "Scene: Morning…" too, and a schedule of
 the "Run a scene" kind runs one on a timetable: a set-up as you saved
 it, a tidy only while nobody's agent on its machines works or asks (else
 the run is skipped and noted). Kept on this remuda like the recipes.
-
-**Several remuda at once:** each machine may run its own (the phone on
-the studio Mac's, the desk on its own). herdr lets one client attach to a terminal
-at a time, so when a remote machine's own remuda is running (and
-reachable on its loopback port 7317), this one reaches that machine's
-terminals through it instead of attaching directly — both sides can look
-at the same pane, and nobody gets "already has an attached client". The
-vitals probe finds it and reads its token over your SSH; without it the
-direct attach stays.
 
 **Machine vitals:** the ⓘ next to each machine shows which Claude Code,
 herdr and remuda run there, disk and load — and the day they had: a small

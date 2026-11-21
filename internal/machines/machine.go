@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"os/exec"
 	"regexp"
 	"strconv"
 	"sync"
@@ -36,16 +35,15 @@ type Machine struct {
 
 	conn   *sshx.Conn
 	client herdr.API       // herdr's client, or the adapter over remuda-core (speaksCore)
-	attach herdr.Terminals // herdr's attaches, or none yet on remuda-core
+	attach herdr.Terminals // remuda-core's terminals, the adapter over the machine's own core
 	home   string
 
 	speaksCore bool      // reached through remuda-core instead of herdr (-core, NewCoreManager)
 	link       *coreLink // the remuda-core it follows, while connected
 	noCore     error     // why a remote connected on remuda-core follows no core: none installed there, or none answering
 
-	fwds  map[forwardTo]*tcpForward // ports forwarded over the master, once asked for (code-server, a peer remuda, a preview)
+	fwds  map[forwardTo]*tcpForward // ports forwarded over the master, once asked for (code-server, a preview)
 	fwdMu sync.Mutex                // one forward made at a time, so asks of a port at once make one, not one each
-	peer  *Peer
 
 	onState func(id, label, state, reason string) // the manager's ear for connected / error, nil for the local one
 
@@ -69,15 +67,6 @@ type tcpForward struct {
 	conn *sshx.Conn
 	port int
 	addr string
-}
-
-// Peer is the remuda running on the machine itself. herdr lets one client attach to a terminal at a time,
-// so when the peer holds that attach, this remuda reaches the pane through it (relayed over the master).
-type Peer struct {
-	Port    int
-	Token   string
-	Version string
-	At      time.Time
 }
 
 // hostRe accepts ssh destinations (host, user@host, [v6]:port) and nothing ssh would read as an option.
@@ -211,15 +200,10 @@ func (mc *Machine) connect() {
 		return
 	}
 	client.OnTransportError = mc.transportError
-	attach := herdr.NewAttachManager(func(termID string) *exec.Cmd {
-		return conn.AttachCmd(bin, sock, termID)
-	})
-	attach.Hold = conn.HoldTerminal
-	attach.ReadRefusal = func(first string) (string, bool) { return sshx.SessionRefused(conn.Host, first) }
 	mc.mu.Lock()
 	mc.herdrBin, mc.socket = bin, sock
 	mc.mu.Unlock()
-	mc.connected(conn, found, client, attach, nil, nil)
+	mc.connected(conn, found, client, nil, nil, nil)
 }
 
 // connected makes the connection the machine's and tells whoever listens, unless the machine was removed while it
@@ -338,27 +322,6 @@ func (mc *Machine) ForwardHostAddr(host string, port int) (string, error) {
 	mc.fwds[to] = &tcpForward{conn: conn, port: port, addr: addr}
 	mc.mu.Unlock()
 	return addr, nil
-}
-
-// SetPeer records the remuda found running on the machine (nil: none).
-func (mc *Machine) SetPeer(p *Peer) {
-	mc.mu.Lock()
-	mc.peer = p
-	mc.mu.Unlock()
-}
-
-// Peer is the machine's own remuda: nil when none runs there, for the local machine, on remuda-core, or past an hour.
-func (mc *Machine) Peer() *Peer {
-	if mc.local || mc.speaksCore { // remuda-core lets every viewer attach: nothing to relay through
-		return nil
-	}
-	mc.mu.Lock()
-	defer mc.mu.Unlock()
-	if mc.peer == nil || time.Since(mc.peer.At) > time.Hour {
-		return nil
-	}
-	cp := *mc.peer
-	return &cp
 }
 
 // ---- remote execution ----

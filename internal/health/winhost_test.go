@@ -12,7 +12,7 @@ func TestTheVitalsOfARealWindowsAreRead(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, peer := Parse(string(recorded))
+	r := Parse(string(recorded))
 	if r.OS != "Windows 10.0.26100" || r.Model != "Windows Server 2025 Datacenter (build 26100)" || r.Arch != "amd64" || r.Cores != 4 {
 		t.Errorf("the system: %q, %q, %s, %d cores", r.OS, r.Model, r.Arch, r.Cores)
 	}
@@ -24,9 +24,6 @@ func TestTheVitalsOfARealWindowsAreRead(t *testing.T) {
 	}
 	if r.Herdr != "0.9.5" || r.HerdrServer != "0.9.5" || r.HerdrVia != "installer" || r.Remuda != "dev" || r.TempC != 0 || r.Throttle != nil {
 		t.Errorf("herdr %q (server %q, via %q), remuda %q, %v °C, %+v", r.Herdr, r.HerdrServer, r.HerdrVia, r.Remuda, r.TempC, r.Throttle)
-	}
-	if peer != nil {
-		t.Error("no peer on Windows")
 	}
 }
 
@@ -64,11 +61,11 @@ func TestAWindowsUptimeIsSaidAsBSDsUptimeSaysIt(t *testing.T) {
 }
 
 func TestWindowsFreeMemoryIsItsAvailableMemory(t *testing.T) {
-	r, _ := Parse("meminfo=MemTotal:       16771836 kB\nmeminfo=MemFree:        14157204 kB\n")
+	r := Parse("meminfo=MemTotal:       16771836 kB\nmeminfo=MemFree:        14157204 kB\n")
 	if r.MemTotalMB != 16378 || r.MemAvailMB != 13825 {
 		t.Errorf("read %d MB available of %d MB", r.MemAvailMB, r.MemTotalMB)
 	}
-	r, _ = Parse("meminfo=MemTotal: 4000000 kB\nmeminfo=MemFree: 100000 kB\nmeminfo=MemAvailable: 2000000 kB\n")
+	r = Parse("meminfo=MemTotal: 4000000 kB\nmeminfo=MemFree: 100000 kB\nmeminfo=MemAvailable: 2000000 kB\n")
 	if r.MemAvailMB != 1953 {
 		t.Errorf("Linux's own available memory wins: %d", r.MemAvailMB)
 	}

@@ -27,7 +27,6 @@ func limitedSSH(t *testing.T) (peak func() int) {
 		"trap 'rm -f \"$me\"' EXIT\n" +
 		"what=\"$*\"; case \"$what\" in *eval*) what=\"$what $(cat)\" ;; esac\n" + // a script comes on stdin, a request on the line
 		"case \"$what\" in\n" +
-		"*refuse*) echo 'debug1: asking the master' >&2; exec 1>&-; sleep 0.05; echo 'mux_client_request_session: session request failed: Session open refused by peer' >&2; exit 255 ;;\n" +
 		"*quick*) echo done ;;\n" +
 		"*hold*) rm -f \"$me\"; exec sleep 30 ;;\n" +
 		"*) sleep 0.6 ;;\nesac\n"
@@ -160,28 +159,7 @@ func TestTheWaitComesOutOfTheTimeout(t *testing.T) {
 	}
 }
 
-func TestARefusedSessionIsSaidInWords(t *testing.T) {
-	limitedSSH(t)
-	c := limited()
-	_, err := c.Run("refuse", 5*time.Second)
-	if err == nil || !strings.Contains(err.Error(), "MaxSessions") {
-		t.Errorf("a script: %v", err)
-	}
-	if err := c.Stream("refuse", 5*time.Second, func([]byte) {}); err == nil || !strings.Contains(err.Error(), "MaxSessions") {
-		t.Errorf("a stream: %v", err)
-	}
-	conn, err := c.DialExec("refuse", 5*time.Second)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer conn.Close()
-	_, err = conn.Read(make([]byte, 8))
-	if err == nil || !strings.Contains(err.Error(), "MaxSessions") || errors.Is(err, io.EOF) {
-		t.Errorf("a request, at its first failure: %v", err)
-	}
-}
-
-// TestEachKindLeavesTheLastPlacesToTheNext: terminals and long scripts stop first, then short scripts, then requests.
+// TestEachKindLeavesTheLastPlacesToTheNext: long scripts stop first, then short scripts, then requests.
 func TestEachKindLeavesTheLastPlacesToTheNext(t *testing.T) {
 	c := limited()
 	var leave []func()
@@ -198,17 +176,13 @@ func TestEachKindLeavesTheLastPlacesToTheNext(t *testing.T) {
 			t.Fatalf("one %s too many went in", what)
 		}
 	}
-	take("terminal", kindTerminal, maxTerminals)
-	take("long script", kindLong, maxSessions-rpcReserve-shortReserve-maxTerminals)
-	take("short script", kindShort, shortReserve)
-	take("request", kindRPC, rpcReserve)
-	if _, err := c.HoldTerminal(10 * time.Millisecond); err == nil || !strings.Contains(err.Error(), "one more terminal") {
-		t.Errorf("a terminal past the limit: %v", err)
-	}
+	take("long script", kindLong, maxLongScripts)
+	take("short script", kindShort, maxScripts-maxLongScripts)
+	take("request", kindRPC, maxSessions-maxScripts)
 	for _, out := range leave {
 		out()
 	}
-	if s := &c.sessions; s.total != 0 || s.scripts != 0 || s.long != 0 || s.terminals != 0 {
+	if s := &c.sessions; s.total != 0 || s.scripts != 0 || s.long != 0 {
 		t.Errorf("places left taken: %+v", s)
 	}
 }
@@ -222,7 +196,7 @@ func TestNothingStartsOnceItsTimeIsGone(t *testing.T) {
 	if c.sessions.total != 0 {
 		t.Fatalf("%d places kept by what did not start", c.sessions.total)
 	}
-	release, err := c.HoldTerminal(0)
+	release, _, err := c.enter(kindShort, 0)
 	if err != nil {
 		t.Fatalf("a place asked for with no wait: %v", err)
 	}
@@ -255,24 +229,24 @@ func TestNothingIsWrittenPastTheDeadline(t *testing.T) {
 	}
 }
 
-// TestRequestsSitInTheirOwnPlacesFirst: the event stream of a bridged machine takes nothing from a short script.
+// TestRequestsSitInTheirOwnPlacesFirst: the event stream of a bridged machine takes nothing from a short script, and
+// scripts leave the requests every place they do not use.
 func TestRequestsSitInTheirOwnPlacesFirst(t *testing.T) {
 	c := limited()
-	for _, step := range []struct {
-		what string
-		kind sessionKind
-		n    int
-	}{{"request", kindRPC, rpcReserve}, {"terminal", kindTerminal, maxTerminals}, {"long script", kindLong, 1}, {"short script", kindShort, shortReserve}} {
-		for range step.n {
-			if _, _, err := c.enter(step.kind, 10*time.Millisecond); err != nil {
-				t.Fatalf("%s: %v", step.what, err)
-			}
+	for range maxScripts {
+		if _, _, err := c.enter(kindShort, 10*time.Millisecond); err != nil {
+			t.Fatalf("a short script: %v", err)
+		}
+	}
+	for range maxSessions - maxScripts {
+		if _, _, err := c.enter(kindRPC, 10*time.Millisecond); err != nil {
+			t.Fatalf("a request beside %d scripts: %v", maxScripts, err)
 		}
 	}
 	if c.sessions.total != maxSessions {
 		t.Fatalf("%d open", c.sessions.total)
 	}
-	for _, kind := range []sessionKind{kindRPC, kindShort, kindLong, kindTerminal} {
+	for _, kind := range []sessionKind{kindRPC, kindShort, kindLong} {
 		if _, _, err := c.enter(kind, 10*time.Millisecond); err == nil {
 			t.Errorf("kind %d went past the limit of the connection", kind)
 		}

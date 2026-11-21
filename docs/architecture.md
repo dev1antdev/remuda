@@ -68,9 +68,9 @@ The contexts are the bounded contexts of the product, in its own words:
    cut by. `review`, `jobs`, `search` and `usage` are written this way;
    their tests run on a `shell.Fake` with a recorded answer. A package
    that asks a machine's herdr takes `herdr.API` and `herdr.Terminals`
-   from `Machine.Ready()`, never `*herdr.Client` or
-   `*herdr.AttachManager`: remuda-core's adapter (`core.Adapter`) stands
-   behind `herdr.API`, its terminals (`core.Terminals`) behind `herdr.Terminals`.
+   from `Machine.Ready()`, never `*herdr.Client`: remuda-core's adapter
+   (`core.Adapter`) stands behind `herdr.API`, its terminals
+   (`core.Terminals`) behind `herdr.Terminals`.
 3. **Packages hear each other through the bus.** `watch` publishes
    `events.Snapshot`, `events.PaneStatus` and, off herdr's event stream,
    `events.OutputMatched`; `jobs` publishes
