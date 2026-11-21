@@ -10,13 +10,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/wintest"
 )
 
 // TestOnWindowsTheReleaseTakesThePlaceOfARunningRemudaExe runs a release's install step over the runner's OpenSSH
-// while remuda.exe runs there — a bridge to herdr holding it, as the cockpit's event stream does — and the new one
-// is in place after.
+// while remuda.exe runs there — the agents' MCP server, as a cockpit has it open — and the new one is in place after.
 func TestOnWindowsTheReleaseTakesThePlaceOfARunningRemudaExe(t *testing.T) {
 	wintest.Live(t)
 	exe := wintest.RemudaExe(t)
@@ -27,7 +25,7 @@ func TestOnWindowsTheReleaseTakesThePlaceOfARunningRemudaExe(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(filepath.Dir(exe), "remuda.new.exe"), data, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	running := exec.Command(exe, "bridge", herdr.OwnSocket())
+	running := exec.Command(exe, "mcp")
 	stdin, err := running.StdinPipe()
 	if err != nil {
 		t.Fatal(err)

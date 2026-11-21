@@ -89,11 +89,23 @@ func (c *Client) dial(timeout time.Duration) (net.Conn, error) {
 	if c.Dial != nil {
 		return c.Dial(timeout)
 	}
-	conn, err := DialLocal(c.Socket, timeout)
+	conn, err := dialLocal(c.Socket, timeout)
 	if err != nil {
 		return nil, fmt.Errorf("cannot reach herdr at %s: %w", c.Socket, err)
 	}
 	return conn, nil
+}
+
+// dialLocal opens herdr's unix socket on this machine, the local herdr the tests of this package start: Windows' named
+// pipe went with the bridge (Core 26i), and the client itself goes in Core 26j.
+func dialLocal(socket string, timeout time.Duration) (net.Conn, error) {
+	return net.DialTimeout("unix", socket, timeout)
+}
+
+// localSocket is herdr's default socket on this machine: under ~/.config/herdr.
+func localSocket() string {
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".config", "herdr", "herdr.sock")
 }
 
 type rpcFrame struct {

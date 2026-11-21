@@ -43,10 +43,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   that did was Core 26f); `-core` and
   `REMUDA_CORE`, with `-herdr-bin`, `-socket` and `-mirror`, went with the
   move (Core 26e); subcommands
-  `search` and `usage` for the deployed binary on a remote machine,
-  `bridge` (hidden: `bridge.go`, stdin to the herdr server on this machine
-  and its answers to stdout — a Windows machine's herdr is a named pipe the
-  cockpit reaches only this way, see "A Windows PC of the fleet"), and
+  `search` and `usage` for the deployed binary on a remote machine, and
   `setup`, `uninstall`, `code` and `core` (see "Installing and uninstalling"
   below), `mcp` and `tasks` (the agents' door to the task list, see
   `internal/mcp`); `remuda -h` lists them (`help` in main.go). On Windows
@@ -198,7 +195,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   runtime's completion port and a read waiting for the answer never holds
   the request's write back, `ERROR_PIPE_BUSY` tried again; `PipeName`;
   `OwnSocket` is herdr's own resolution, `$HERDR_SOCKET_PATH` else the
-  default session's, which `remuda bridge` takes). **The one connection that stays**:
+  default session's). **Core 26i took the Windows pipe, `DialLocal`, with
+  the bridge: the unix dial lives in `client.go` until the client goes
+  (Core 26j).** **The one connection that stays**:
   `events.go`, `Client.Subscribe(subs)` — herdr's `events.subscribe`,
   answered `subscription_started` and then one event a line on the same
   connection, the deadline cleared; its subscriptions are fixed for the
@@ -752,7 +751,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   of its own, one line whose only escapes stand outside
   its quotes, their stdin being herdr's; `remuda setup
   -host` (`internal/setup`) still puts its script on the line; `CommandConn` is an exec as a `net.Conn`
-  (the `nc -U` and `remuda bridge` transports, and the Windows tests);
+  (the `nc -U` transport, and the Windows tests);
   `Put` cuts a Windows path at its own separator (`rpath.For`).
   remuda implements no SSH itself.
 - `internal/machines/` — the multi-PC registry: `manager.go` (the
@@ -934,9 +933,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   log line, not a failure of the connection. **Two RPC
   transports**: a forwarded unix socket when the sshd allows streamlocal
   forwarding, else one `ssh host nc -U <sock>` exec per request
-  (one sshd on :2222 answers "unknown channel type"); a Windows machine
-  has a third, `bridgeClient` (`transport.go`): every request one
-  `sh -c 'exec remuda.exe bridge <socket>'` exec (`BridgeCommand`). The watcher's event
+  (one sshd on :2222 answers "unknown channel type"); a Windows PC needs
+  neither any more (Core 26i): it is reached by `remuda-core.exe connect`
+  over the ssh like every machine. The watcher's event
   stream rides the same one as a connection that stays: through the
   forwarded socket like any request, or as one long-lived `nc -U` exec, a
   session of the master for as long as it stands (one of its places for RPC),
@@ -1930,21 +1929,15 @@ components and icons as rules for whoever changes it: @docs/design.md
   under MSYS2 as it is. The connection's probe (`machines/probe.go`,
   `probeScript` / `parseProbe`, tested on the runner's recorded answer in
   `machines/testdata/windows-probe.txt`) prints `home`, `os` (uname:
-  MINGW*/MSYS*/CYGWIN* is `windows`), and on Windows `winhome` (`cygpath
-  -w "$HOME"`, the machine's `Home()`), `%APPDATA%`, remuda.exe and
-  herdr's stable alias `%LOCALAPPDATA%\Programs\Herdr\bin\herdr.exe` (the
-  release on PATH moves with an update); a `cmd.exe` or PowerShell answer
-  ("is not recognized as") fails the connection naming the line to run,
-  and no remuda.exe fails it with `remuda setup -host`. herdr's socket
-  there is `%APPDATA%\herdr\herdr.sock`, a named pipe: no ssh forward or
-  nc reaches it, so the RPC and the watcher's event stream go through
-  `remuda.exe bridge` (`cmd/remuda/bridge.go`) — `Machine.OS()` /
-  `Windows()` / `Paths()`, the roster's machine `os` ("darwin" | "linux" |
-  "windows" | "" before a remote's first connect, the page's contract);
-  herdr's server is started outside the
-  ssh session by PowerShell's `Start-Process -WindowStyle Hidden`
-  (`herdr.StartWindowsServerScript`, `StartServerScriptOn`): started from
-  the session it held the session open and died with it. What runs there
+  MINGW*/MSYS*/CYGWIN* is `windows`) and on Windows `winhome` (`cygpath
+  -w "$HOME"`, the machine's `Home()`), and `coreLookup` prints
+  remuda-core.exe where its installer puts it; a `cmd.exe` or PowerShell
+  answer ("is not recognized as") fails the connection naming the line to
+  run. Nothing of herdr's is looked for there any more (Core 26i): the PC
+  is reached by `remuda-core.exe connect` over the ssh, as every machine
+  is, which is also what `Machine.OS()` / `Windows()` / `Paths()` and the
+  roster's machine `os` ("darwin" | "linux" | "windows" | "" before a
+  remote's first connect, the page's contract) come from. What runs there
   and how: the vitals (`health/winhost.go`: `winver` the registry's
   edition and build as the model — Windows 11 still says "Windows 10"
   there, the build tells — `winup` /proc's uptime and load for Git Bash's
@@ -1966,16 +1959,16 @@ components and icons as rules for whoever changes it: @docs/design.md
   teleport (`teleport.NotWithWindows`, both ends), Codex's session found by
   its process (`Reader.SessionsOf`: Git Bash has no `lsof` or `/proc` for a
   Windows process). **CI's windows job**
-  (`.github/workflows/ci.yml`, `windows-latest`) is the proof: herdr for
-  Windows installed, remuda.exe built into `~/.local/bin`, the runner's own
-  OpenSSH server given Git Bash and a key, then every `TestOnWindows…`
-  (build-tagged `windows`, gated on `REMUDA_WINDOWS_HERDR=1`, helpers in
-  `internal/wintest`: `Remote` runs a script through Windows' ssh on its
-  stdin as `sshx.Remote` sends it, `Host` is the runner as a remote `shell.Host`,
-  `Record` keeps an answer for the fixtures, uploaded as the job's
-  artifact) — the server started over ssh outliving its session, the pipe
-  taking a write while a read waits, the probe, the whole RPC and an event
-  stream through `remuda.exe bridge` over ssh, the door's files and its
+  (`.github/workflows/ci.yml`, `windows-latest`) is the proof: remuda-core.exe
+  and its ConPTY installed by the release's checksum, remuda.exe built into
+  `~/.local/bin`, the runner's own OpenSSH server given Git Bash and a key,
+  then every `TestOnWindows…` (build-tagged `windows`, gated on
+  `REMUDA_WINDOWS_CORE=1`, helpers in `internal/wintest`: `Remote` runs a
+  script through Windows' ssh on its stdin as `sshx.Remote` sends it, `Host`
+  is the runner as a remote `shell.Host`, `Record` keeps an answer for the
+  fixtures, uploaded as the job's artifact) — the probe, a terminal run in
+  the core through `remuda-core.exe connect` over ssh, the snapshot read
+  through the adapter and the terminal attached as a viewer, the door's files and its
   reverse forward, the vitals, keep-awake, the file viewer's scripts, the
   Changes lens with the secret check, a session found, read and searched
   through remuda.exe, a Claude Code session found by its native process's

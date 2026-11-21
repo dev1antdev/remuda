@@ -22,7 +22,7 @@ func TestTheProbeFindsRemudaCoreWhereItsInstallerPutsIt(t *testing.T) {
 		t.Fatal(err)
 	}
 	run := func() probe {
-		cmd := exec.Command("sh", "-c", probeScript(false)+coreLookup)
+		cmd := exec.Command("sh", "-c", probeScript()+coreLookup)
 		cmd.Env = []string{"HOME=" + home, "PATH=/usr/bin:/bin"}
 		out, err := cmd.Output()
 		if err != nil {
@@ -182,8 +182,7 @@ func TestTheHerdrBeforeTheMoveIsTheOneRemudaReached(t *testing.T) {
 }
 
 // A remote's herdr socket is the one remuda dials there, before the move and after it: its remote_socket, else herdr's
-// default under the home, or under %APPDATA% on Windows wherever the profile keeps it — never one the ssh environment
-// names; nothing before the machine's first connect.
+// default under the home — never one the ssh environment names; nothing before the machine's first connect.
 func TestTheMovedHerdrOfARemoteIsTheSocketRemudaDials(t *testing.T) {
 	posix := probe{os: "linux", home: "/home/me"}
 	if got := herdrSocket(Config{}, posix); got != "/home/me/.config/herdr/herdr.sock" {
@@ -192,9 +191,8 @@ func TestTheMovedHerdrOfARemoteIsTheSocketRemudaDials(t *testing.T) {
 	if got := herdrSocket(Config{RemoteSocket: "/run/h.sock"}, posix); got != "/run/h.sock" {
 		t.Fatalf("remote_socket: %q", got)
 	}
-	redirected := probe{os: "windows", home: `C:\Users\me`, appData: `D:\Profiles\me\AppData\Roaming`}
-	if got := herdrSocket(Config{}, redirected); got != `D:\Profiles\me\AppData\Roaming\herdr\herdr.sock` {
-		t.Fatalf("a Windows profile kept on another drive: %q", got)
+	if got := herdrSocket(Config{}, probe{os: "windows", home: `C:\Users\me`}); got != `C:\Users\me/.config/herdr/herdr.sock` {
+		t.Fatalf("a Windows machine without its own remote_socket: %q", got)
 	}
 	gog := &Machine{Cfg: Config{ID: "gog", HerdrBin: "/usr/local/bin/herdr"}}
 	if bin, socket := gog.MovedHerdr(); bin != "/usr/local/bin/herdr" || socket != "" {

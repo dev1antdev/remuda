@@ -18,38 +18,29 @@ func TestAWindowsProbeIsReadInWindowsSpelling(t *testing.T) {
 		t.Fatal(err)
 	}
 	found := parseProbe(string(recorded))
-	if found.os != "windows" || found.home != `C:\Users\runneradmin` || found.appData != `C:\Users\runneradmin\AppData\Roaming` {
+	if found.os != "windows" || found.home != `C:\Users\runneradmin` {
 		t.Fatalf("read %+v", found)
-	}
-	if found.herdr != "/c/Users/runneradmin/AppData/Local/Programs/Herdr/bin/herdr.exe" {
-		t.Fatalf("herdr's stable alias goes first, the release on PATH moves with an update: %q", found.herdr)
-	}
-	if got := windowsSocket(found.appData); got != `C:\Users\runneradmin\AppData\Roaming\herdr\herdr.sock` {
-		t.Fatalf("the socket herdr names, and its pipe after it: %q", got)
-	}
-	if got := BridgeCommand(found.remuda, windowsSocket(found.appData)); !strings.HasPrefix(got, "sh -c ") || !strings.Contains(got, `/c/Users/runneradmin/.local/bin/remuda.exe'\'' bridge '\''C:\Users\runneradmin\AppData\Roaming\herdr\herdr.sock`) {
-		t.Fatalf("the bridge's exec: %s", got)
 	}
 }
 
 func TestAMacOrLinuxProbeIsReadAsBefore(t *testing.T) {
 	for answer, system := range map[string]string{
-		"home=/Users/me\nos=Darwin\nherdr=/opt/homebrew/bin/herdr\n": "darwin",
-		"home=/home/me\nos=Linux\nherdr=/home/me/.local/bin/herdr\n": "linux",
-		"home=/home/me\nos=FreeBSD\n":                                "freebsd",
+		"home=/Users/me\nos=Darwin\ncore=/Users/me/.local/bin/remuda-core\n": "darwin",
+		"home=/home/me\nos=Linux\ncore=/home/me/.local/bin/remuda-core\n":    "linux",
+		"home=/home/me\nos=FreeBSD\n":                                        "freebsd",
 	} {
 		found := parseProbe(answer)
-		if found.os != system || !strings.HasPrefix(found.home, "/") || found.remuda != "" {
+		if found.os != system || !strings.HasPrefix(found.home, "/") {
 			t.Errorf("%q read as %+v", answer, found)
 		}
 	}
 }
 
 func TestTheProbeNamesTheFolderRemudaKeepsThere(t *testing.T) {
-	if script := probeScript(false); !strings.Contains(script, `XDG_CONFIG_HOME`) || !strings.Contains(script, `state=`) {
+	if script := probeScript(); !strings.Contains(script, `XDG_CONFIG_HOME`) || !strings.Contains(script, `state=`) {
 		t.Error("the probe does not reckon the state dir as the machine's remuda does")
 	}
-	if !strings.Contains(probeScript(false), `${REMUDA_STATE_DIR:-$d}`) {
+	if !strings.Contains(probeScript(), `${REMUDA_STATE_DIR:-$d}`) {
 		t.Error("a state dir set for the machine's remuda is not looked at")
 	}
 	if found := parseProbe("home=/home/me\nos=Linux\nstate=/home/me/dotfiles/remuda\n"); found.state != "/home/me/dotfiles/remuda" {
@@ -78,9 +69,9 @@ func TestAWindowsShellThatIsNotGitBashIsNamed(t *testing.T) {
 	}
 }
 
-func TestTheProbeLooksForHerdrOnlyWhenNotConfigured(t *testing.T) {
-	if strings.Contains(probeScript(false), "command -v herdr") || !strings.Contains(probeScript(true), "command -v herdr") {
-		t.Fatal("a configured herdr_bin is not looked for")
+func TestTheProbeLooksForNoHerdrAnyMore(t *testing.T) {
+	if strings.Contains(probeScript(), "herdr") {
+		t.Fatal("the probe still looks for herdr: herdr is not this remuda's to find (Core 26i)")
 	}
 }
 

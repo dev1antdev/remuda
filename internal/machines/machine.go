@@ -2,7 +2,6 @@ package machines
 
 import (
 	"fmt"
-	"log"
 	"net"
 	"regexp"
 	"strconv"
@@ -28,7 +27,6 @@ type Machine struct {
 	lastAlive   time.Time // last `ssh -O check`, so transport errors don't spawn one each
 	removed     bool      // taken out of the registry; never reconnect, pollers stop
 	serverHost  bool      // the local one, when remuda serves the page only: its herdr is never asked (Manager.SetServer)
-	serverStart time.Time // when remuda last started `herdr server` there
 	herdrBin    string    // herdr's binary on the machine, once known
 	socket      string
 	os          string // darwin | linux | windows as the connection read it, "" before a remote's first connect
@@ -116,7 +114,7 @@ func (mc *Machine) fail(err error) {
 	}
 }
 
-// connect dials the master, finds the remote home and herdr binary, picks the RPC transport and pings herdr.
+// connect dials the master, reads the remote home and system, and reaches remuda-core there.
 func (mc *Machine) connect() {
 	mc.mu.Lock()
 	mc.state = StateConnecting
@@ -134,12 +132,8 @@ func (mc *Machine) connect() {
 		mc.fail(err)
 	}
 
-	// one round trip for $HOME, the system and the herdr binary (or remuda-core's): a non-interactive ssh PATH often misses ~/.local/bin
-	probing := probeScript(mc.Cfg.HerdrBin == "" && !mc.speaksCore)
-	if mc.speaksCore {
-		probing += coreLookup
-	}
-	out, err := shell.Text(conn, probing, 10*time.Second)
+	// one round trip for $HOME and the system, and remuda-core's binary: a non-interactive ssh PATH often misses ~/.local/bin
+	out, err := shell.Text(conn, probeScript()+coreLookup, 10*time.Second)
 	if err != nil {
 		if windowsShell(out + err.Error()) {
 			bail(errWindowsShell(mc.Cfg.Host))
@@ -149,61 +143,19 @@ func (mc *Machine) connect() {
 		return
 	}
 	found := parseProbe(out)
-	home := found.home
-	if home == "" {
+	if found.home == "" {
 		bail(fmt.Errorf("cannot read remote $HOME"))
 		return
 	}
-	if mc.speaksCore {
-		mc.mu.Lock()
-		mc.socket = herdrSocket(mc.Cfg, found) // herdr's, as remuda dialled it before the move: MovedHerdr
-		mc.mu.Unlock()
-		link, err := mc.reachCore(conn, found)
-		if err != nil { // the master stays, so the vitals and Updates' Install remuda-core reach the machine
-			mc.connected(conn, found, nil, nil, nil, err)
-			return
-		}
-		mc.connected(conn, found, link.adapter, link.terminals, link, nil)
-		return
-	}
-	bin := mc.Cfg.HerdrBin
-	if bin == "" {
-		bin = found.herdr
-	}
-	if bin == "" {
-		bail(fmt.Errorf("herdr not found on %s (set herdr_bin in machines.json)", mc.Cfg.Host))
-		return
-	}
-	windows := found.os == "windows"
-	if windows && found.remuda == "" {
-		bail(errNoRemuda(mc.Cfg.Host))
-		return
-	}
-
-	sock := herdrSocket(mc.Cfg, found)
-	connectRPC := func() (*herdr.Client, error) {
-		if windows {
-			return bridgeClient(conn, found.remuda, sock)
-		}
-		return rpcClient(conn, sock)
-	}
-	client, err := connectRPC()
-	if err != nil && mc.mayStartServer() {
-		if _, serr := conn.Run(herdr.StartServerScriptOn(found.os, bin, sock), 25*time.Second); serr == nil {
-			client, err = connectRPC()
-		} else {
-			log.Printf("%s: start herdr server: %v", mc.Cfg.Host, serr)
-		}
-	}
-	if err != nil {
-		bail(fmt.Errorf("herdr on %s not answering through %s: %v", mc.Cfg.Host, sock, err))
-		return
-	}
-	client.OnTransportError = mc.transportError
 	mc.mu.Lock()
-	mc.herdrBin, mc.socket = bin, sock
+	mc.socket = herdrSocket(mc.Cfg, found) // herdr's, as remuda dialled it before the move: MovedHerdr
 	mc.mu.Unlock()
-	mc.connected(conn, found, client, nil, nil, nil)
+	link, err := mc.reachCore(conn, found)
+	if err != nil { // the master stays, so the vitals and Updates' Install remuda-core reach the machine
+		mc.connected(conn, found, nil, nil, nil, err)
+		return
+	}
+	mc.connected(conn, found, link.adapter, link.terminals, link, nil)
 }
 
 // connected makes the connection the machine's and tells whoever listens, unless the machine was removed while it

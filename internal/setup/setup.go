@@ -115,7 +115,7 @@ func Run(o Options, out io.Writer) error {
 		}
 	}
 	if windows {
-		fmt.Fprintf(out, "— no service on %s: remuda.exe there is the helper this cockpit reaches over ssh, herdr's named pipe through remuda.exe bridge\n", o.Host)
+		fmt.Fprintf(out, "— no service on %s: remuda.exe there is the helper this cockpit reaches over ssh\n", o.Host)
 		return nil
 	}
 	fmt.Fprintf(out, "— the remuda service%s\n", where(o.Host))

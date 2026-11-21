@@ -81,12 +81,13 @@ jobs:
 
   windows:
     name: a Windows machine of the fleet
-    # a real Windows with herdr for Windows, its OpenSSH server running commands in Git Bash as the person sets theirs:
-    # herdr reached through remuda.exe bridge, the remote scripts run as a cockpit runs them (internal/wintest)
+    # a real Windows with remuda-core.exe and its ConPTY, its OpenSSH server running commands in Git Bash as the person
+    # sets theirs: the core reached through `remuda-core.exe connect` over that ssh, the remote scripts run as a cockpit
+    # runs them (internal/wintest)
     runs-on: windows-latest
     timeout-minutes: 20
     env:
-      REMUDA_WINDOWS_HERDR: "1"
+      REMUDA_WINDOWS_CORE: "1"
       REMUDA_SSH_HOST: pc
     steps:
       - uses: actions/checkout@v7
@@ -94,9 +95,21 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: herdr for Windows
-        shell: pwsh
-        run: powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://herdr.dev/install.ps1 | iex"
+      - name: remuda-core for Windows, with its ConPTY
+        shell: bash
+        run: |
+          # the release remuda pins (internal/setup/setup.go), its checksum verified as remuda's own installer does
+          base=https://github.com/dev1antdev/remuda-core/releases/download/remuda-v0.2.4
+          curl -fsSLO "$base/remuda-core-windows-x86_64.zip"
+          curl -fsSLO "$base/checksums.txt"
+          grep ' remuda-core-windows-x86_64.zip$' checksums.txt | sha256sum -c -
+          # the zip's ConPTY put beside the exe, as install-core.sh stages it: without it a terminal cannot start there
+          tmp="$RUNNER_TEMP/core" && mkdir -p "$tmp" "$HOME/.local/bin"
+          "$SYSTEMROOT/System32/tar.exe" -xf remuda-core-windows-x86_64.zip -C "$tmp"
+          cp "$tmp/remuda-core.exe" "$HOME/.local/bin/remuda-core.exe"
+          rm -rf "$HOME/.local/bin/conpty" && cp -R "$tmp/conpty" "$HOME/.local/bin/conpty"
+          test -f "$HOME/.local/bin/conpty/conpty.dll" && test -f "$HOME/.local/bin/conpty/x64/OpenConsole.exe"
+          "$HOME/.local/bin/remuda-core.exe" --version
       - name: remuda.exe where remuda setup puts it
         shell: bash
         run: |
@@ -124,12 +137,12 @@ jobs:
           New-Item -ItemType Directory -Force "$HOME\.ssh" | Out-Null
           (Get-Content $env:REMUDA_SSH_CONFIG) -replace '\\', '/' | Set-Content -Encoding ascii "$HOME\.ssh\config"
       - name: go test on Windows
-        # one package at a time, herdr's first: its test starts the server the way a cockpit does
+        # one package at a time, machines' first: its test starts a terminal in the core the way a cockpit does
         shell: bash
         run: |
           export PATH="/c/Windows/System32/OpenSSH:$PATH" # Windows' own ssh for remuda setup -host: Git's would refuse the key's permissions
           go test -count=1 ./internal/rpath/
-          go test -p 1 -count=1 -v -run '^TestOnWindows' ./internal/herdr/ ./internal/machines/ ./internal/health/ ./internal/awake/ ./internal/setup/ ./internal/updates/ ./internal/review/ ./internal/search/ ./internal/filetree/ ./internal/transcript/
+          go test -p 1 -count=1 -v -run '^TestOnWindows' ./internal/machines/ ./internal/health/ ./internal/awake/ ./internal/setup/ ./internal/updates/ ./internal/review/ ./internal/search/ ./internal/filetree/ ./internal/transcript/
       - uses: actions/upload-artifact@v7
         # the answers this Windows gave, the unit tests' fixtures
         if: always()
