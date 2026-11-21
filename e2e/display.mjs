@@ -2198,6 +2198,8 @@ async function changesFlow() {
     if (!(await until(() => present(`${LENS} .review-head`), 15))) throw new Error("the Changes lens did not come up");
   };
   const lookAgain = async () => {
+    // an edit, or the mark before it, makes the lens read the folder again: its head comes back once the read does
+    if (!(await until(() => present(`${LENS} .review-head .review-look-again`), 15))) throw new Error("the Changes head did not come back");
     await tap(await mark(`document.querySelector('${LENS} .review-head .review-look-again')`, "look-again"));
     await sleep(400);
   };
