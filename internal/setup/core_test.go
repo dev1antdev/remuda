@@ -21,8 +21,19 @@ func TestCoreVersionMatchesTheScript(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(ci), "remuda-v"+CoreVersion+"\n") {
-		t.Fatalf("CI installs another remuda-core release than the %s this binary pins", CoreVersion)
+	var named bool
+	for _, line := range strings.Split(string(ci), "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "base=") || !strings.Contains(line, "/remuda-core/releases/download/") {
+			continue
+		}
+		named = true
+		if !strings.HasSuffix(line, "/remuda-v"+CoreVersion) {
+			t.Fatalf("CI downloads %q, not the remuda-core %s this binary pins", line, CoreVersion)
+		}
+	}
+	if !named {
+		t.Fatal("CI's remuda-core step names no release")
 	}
 }
 
