@@ -19,7 +19,7 @@ import { t, tc } from "@/lib/i18n";
 // short is the word under the icon when the language's full name does not fit there
 type Place = { label: string; short?: string; icon: IconName; about: string };
 const MODES: (Place & { mode: Mode; desk?: boolean })[] = [
-  { mode: "herdr", label: t("Agents"), icon: "terminal", about: t("Your agents and terminals, from herdr") },
+  { mode: "herdr", label: t("Agents"), icon: "terminal", about: t("Your agents and terminals, in remuda-core") },
   { mode: "tasks", label: t("Tasks"), icon: "list", about: t("Your tasks, kept on this remuda") },
   { mode: "code", label: t("Code"), icon: "code", about: t("VS Code on a machine, through remuda"), desk: true },
   { mode: "review", label: t("Review"), icon: "circle-check", about: t("Every workspace with changes to review, in one list") },

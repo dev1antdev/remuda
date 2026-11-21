@@ -1,4 +1,4 @@
-// The status bar's server calls: the machine's load as its herdr panes make it, its listening ports as last read,
+// The status bar's server calls: the machine's load as its terminals make it, its listening ports as last read,
 // and a port's process stopped at the person's word.
 
 import type { ListeningPort } from "@/features/roster/api";

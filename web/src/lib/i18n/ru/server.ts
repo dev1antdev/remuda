@@ -41,7 +41,6 @@ export const server: Dictionary = {
   "This remuda serves the page only: the machine it runs on is none of the cockpit's, its agents run on the machines in the sidebar.":
     "Этот remuda только отдаёт страницу: машина, на которой он работает, не входит в кабину, агенты работают на машинах из боковой панели.",
   System: "Система",
-  "not needed here": "здесь не нужен",
   "its load, memory, temperature and throttling": "нагрузка, память, температура и троттлинг",
   // Update everywhere
   "Update everywhere": "Обновить везде",
@@ -63,6 +62,5 @@ export const server: Dictionary = {
     "Шаг за шагом, каждый — как написано в его команде; неудачный шаг не останавливает остальные. remuda этой страницы — последним: он перезапустится, когда его шаг закончится.",
   "Close (it keeps running)": "Закрыть (продолжит работать)",
   "Run all {n}": "Запустить все: {n}",
-  "{version} installed, not used here": "{version} установлен, здесь не используется",
   "remuda here is restarting onto its new version; the page offers a reload once it answers.": "remuda здесь перезапускается на новую версию; страница предложит перезагрузку, когда он ответит.",
 };

@@ -26,7 +26,7 @@ func TestOnWindowsTheVitalsAreReadAsACockpitReadsThem(t *testing.T) {
 	if r.DiskFreeGB <= 0 || r.DiskUsedPct <= 0 || r.Cores <= 0 || r.Arch != "amd64" || r.Uptime == "" {
 		t.Errorf("disk %.1f GB free (%d%% used), %d cores, arch %q, up %q", r.DiskFreeGB, r.DiskUsedPct, r.Cores, r.Arch, r.Uptime)
 	}
-	if r.Herdr == "" || r.HerdrServer == "" || r.Remuda == "" {
-		t.Errorf("herdr %q, its server %q, remuda %q", r.Herdr, r.HerdrServer, r.Remuda)
+	if r.Remuda == "" {
+		t.Errorf("remuda %q", r.Remuda)
 	}
 }

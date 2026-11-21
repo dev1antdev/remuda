@@ -28,13 +28,3 @@ func TestAWindowsMachineGetsTheReleasesExeAndNoServiceRestart(t *testing.T) {
 		t.Errorf("a Linux machine's release is as before:\n%s", u.Command)
 	}
 }
-
-func TestHerdrOnWindowsUpdatesWithoutAHandoff(t *testing.T) {
-	u, err := Plan("herdr", &health.Report{OS: "Windows 10.0.26100", Herdr: "0.9.4", HerdrVia: "installer"})
-	if err != nil || strings.Contains(u.Command, "--handoff") || !strings.Contains(u.Command, "herdr update &&") {
-		t.Fatalf("%v: %s", err, u.Command)
-	}
-	if u, _ := Plan("herdr", &health.Report{OS: "Linux 6.8", Herdr: "0.9.4", HerdrVia: "installer"}); !strings.Contains(u.Command, "herdr update --handoff") {
-		t.Fatalf("Linux keeps its handoff: %s", u.Command)
-	}
-}

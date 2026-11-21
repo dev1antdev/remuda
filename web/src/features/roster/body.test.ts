@@ -54,14 +54,7 @@ describe("a machine's body", () => {
     const list = concerns({ ...pi, temp_c: 88, remuda_core: "rc 0.2.4" }, undefined, undefined, true);
     expect(list.map((c) => [c.key, c.bad])).toEqual([["body-0", true]]);
   });
-  it("lists for a server's host its release and its body, never the herdr still installed there", () => {
-    const leftHerdr: Health = { ...pi, herdr: "0.9.5", herdr_server: "0.9.4", outdated_hooks: [{ agent: "claude", have: "1", want: "2" }], temp_c: 78 };
-    const latest = { at: "2026-11-05T10:00:00Z", herdr: "0.9.6", remuda: "v0.12.6" };
-    const keys = hostConcerns(leftHerdr, latest, "v0.12.5").map((c) => c.key);
-    expect(keys).toEqual(["release", "body-0"]);
-    expect(concerns(leftHerdr, latest, "v0.12.5", false).map((c) => c.key)).not.toContain("herdr");
-    expect(hostConcerns(leftHerdr, latest, "v0.12.5", true).every((c) => !c.update)).toBe(true);
-  });
+
 });
 
 describe("a machine's battery", () => {

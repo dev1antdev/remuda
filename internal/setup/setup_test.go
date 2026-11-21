@@ -17,7 +17,7 @@ import (
 )
 
 func TestScriptsParse(t *testing.T) {
-	for name, script := range map[string]string{"setup": setupScript, "install-service": serviceScript, "install": installScript, "uninstall": uninstallScript, "install-code": codeScript, "install-mcp": mcpScript, "install-core": coreScript} {
+	for name, script := range map[string]string{"install-service": serviceScript, "install": installScript, "uninstall": uninstallScript, "install-code": codeScript, "install-mcp": mcpScript, "install-core": coreScript} {
 		cmd := exec.Command("sh", "-n")
 		cmd.Stdin = strings.NewReader(script)
 		if out, err := cmd.CombinedOutput(); err != nil {
@@ -595,6 +595,20 @@ func TestTheServiceUnitsRunFromAHomeWithASpace(t *testing.T) {
 	for _, want := range []string{"systemctl --user enable remuda.service", "systemctl --user restart remuda.service", "systemctl --user enable code-server.service"} {
 		if !strings.Contains(string(calls), want) {
 			t.Errorf("the stand-ins never saw %q:\n%s", want, calls)
+		}
+	}
+}
+
+// TestASetupThatCouldNotInstallTheCoreIsAnError: a machine without its runtime is not set up — no service comes up to
+// offer it again, and a Windows PC installs no service at all — so the core's failure ends setup, whatever the flags.
+func TestASetupThatCouldNotInstallTheCoreIsAnError(t *testing.T) {
+	for _, o := range []Options{{}, {NoService: true}} {
+		dir := home(t)
+		write(t, filepath.Join(dir, ".local", "bin", "curl"), "#!/bin/sh\nexit 22\n", 0o755)
+		t.Setenv("PATH", filepath.Join(dir, ".local", "bin")+":/usr/bin:/bin")
+		var out strings.Builder
+		if err := Run(o, &out); err == nil || !strings.Contains(err.Error(), "remuda-core") {
+			t.Fatalf("setup %+v without its core = %v\n%s", o, err, out.String())
 		}
 	}
 }

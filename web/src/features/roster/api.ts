@@ -168,9 +168,6 @@ export type Health = {
   gemini_via?: "brew" | "npm" | "native" | "";
   kimi?: string;
   kimi_via?: "brew" | "npm" | "native" | "";
-  herdr?: string;
-  herdr_via?: "brew" | "installer" | "";
-  herdr_server?: string; // the version the running server is on, when one runs
   arch?: string;
   remuda?: string;
   disk_free_gb: number;
@@ -179,8 +176,6 @@ export type Health = {
   cores?: number; // what a load of 1.0 per core means
   history?: Sample[]; // the day's probes, oldest first, kept in the state dir's vitals.json
   uptime?: string;
-  outdated_hooks?: { agent: string; have?: string; want?: string }[]; // herdr's agent integrations behind the installed herdr
-  plugins?: { id: string; source: string }[]; // herdr plugins installed from GitHub, the ones `herdr plugin update` refreshes
   error?: string;
   code_server?: string; // the release linked under ~/.local/opt/code-server
   remuda_core?: string; // ~/.local/bin/remuda-core's version
@@ -205,7 +200,7 @@ export type Health = {
 export type Battery = { percent: number; discharging?: boolean; charging?: boolean };
 
 // the newest versions out there; remuda is its own newest release on GitHub
-export type Latest = { at: string; claude?: string; codex?: string; gemini?: string; kimi?: string; herdr?: string; remuda?: string; code?: string }; // code: the code-server this remuda installs
+export type Latest = { at: string; claude?: string; codex?: string; gemini?: string; kimi?: string; remuda?: string; code?: string }; // code: the code-server this remuda installs
 
 export type Tailscale = { state: "starting" | "needs_login" | "running" | "error"; login_url?: string; url?: string; hostname?: string; error?: string };
 

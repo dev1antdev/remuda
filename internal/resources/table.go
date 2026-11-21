@@ -1,6 +1,6 @@
-// Package resources is what a machine's herdr panes weigh on it: every process of every pane's tree summed — CPU as
-// a share of all its cores, memory as resident bytes — by workspace, with the herdr server's own beside them, for the
-// status bar's "CPU 12 % · 3.8 GB". One process table a read (ps on a Mac, /proc on Linux), the panes' shells as herdr
+// Package resources is what a machine's terminals weigh on it: every process of every pane's tree summed — CPU as
+// a share of all its cores, memory as resident bytes — by workspace, with remuda-core's own beside them, for the
+// status bar's "CPU 12 % · 3.8 GB". One process table a read (ps on a Mac, /proc on Linux), the panes' shells as remuda-core
 // names them, nothing on a Windows machine yet.
 package resources
 

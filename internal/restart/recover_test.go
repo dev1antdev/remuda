@@ -142,25 +142,6 @@ func TestMemoryFollowsTheAgentBackAndForgetsWhatIsGone(t *testing.T) {
 	}
 }
 
-func TestMemoryIsPausedWhileRemudaRestartsHerdrItself(t *testing.T) {
-	noGrace(t)
-	m := OpenMemory("")
-	observe(m, "local", true, agentPane("w1:p1", "claude", "/work/api"))
-	m.Pause("local")
-	observe(m, "local", true, shellPane("w1:p1", "/work/api"))
-	if len(m.Stopped("local")) != 0 {
-		t.Fatal("paused: the server restart brings its own chats back")
-	}
-	if m.chats["local|w1:p1"].Kind != "claude" {
-		t.Fatal("paused: the memory stands")
-	}
-	m.Unpause("local")
-	observe(m, "local", false, agentPane("w1:p1", "claude", "/work/api"))
-	if len(m.Stopped("local")) != 0 || len(m.chats) != 1 {
-		t.Fatal("after the pause")
-	}
-}
-
 func TestMemoryIsKeptAcrossARestartOfRemuda(t *testing.T) {
 	noGrace(t)
 	dir := t.TempDir()

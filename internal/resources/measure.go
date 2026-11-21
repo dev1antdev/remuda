@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// Root is a herdr pane and the shell its terminal runs: the root of every process started in it.
+// Root is a pane and the shell its terminal runs: the root of every process started in it.
 type Root struct {
 	Pane, Workspace string
 	PID             int
@@ -48,8 +48,8 @@ type Workspace struct {
 	Terminals []Terminal `json:"terminals"`
 }
 
-// Usage is what a machine's herdr panes weigh on it at one moment: every workspace by memory, the herdr server's own
-// processes beside them, and their sum against the machine's cores and memory.
+// Usage is what a machine's terminals weigh on it at one moment: every workspace by memory, remuda-core's own processes
+// beside them, and their sum against the machine's cores and memory.
 type Usage struct {
 	At         time.Time   `json:"at"`
 	Cores      int         `json:"cores"`
@@ -57,12 +57,13 @@ type Usage struct {
 	Total      Weight      `json:"total"`
 	CPUKnown   bool        `json:"cpu_known"` // false when a Linux machine's ticks had no reading before to be told against
 	Workspaces []Workspace `json:"workspaces"`
-	Herdr      Weight      `json:"herdr"`            // the herdr server and its attaches, past the panes
-	Unread     int         `json:"unread,omitempty"` // panes whose shell herdr did not name, or is gone
+	Core       Weight      `json:"core"`             // remuda-core, the terminal runtime, past the panes
+	Herdr      Weight      `json:"herdr"`            // Core under the name a page from before Core 26k reads: a tab open across an upgrade or a rollback
+	Unread     int         `json:"unread,omitempty"` // panes whose shell remuda-core did not name, or is gone
 }
 
-// Measure sums every pane's tree of processes into its workspace, each process counted once, then the herdr
-// server's own; cpu is a process's CPU as percent of one core.
+// Measure sums every pane's tree of processes into its workspace, each process counted once, then remuda-core's
+// own; cpu is a process's CPU as percent of one core.
 func Measure(table Table, cpu func(Proc) float64, roots []Root, cpuKnown bool, at time.Time) Usage {
 	sort.Slice(roots, func(i, j int) bool {
 		if roots[i].Workspace != roots[j].Workspace {
@@ -95,12 +96,12 @@ func Measure(table Table, cpu func(Proc) float64, roots []Root, cpuKnown bool, a
 	}
 	sort.Ints(pids)
 	for _, pid := range pids {
-		if p := table.Procs[pid]; p.Name == "herdr" || p.Name == "herdr.exe" {
-			usage.Herdr.add(sumTree(pid, table, claimed, cpu))
+		if p := table.Procs[pid]; p.Name == "remuda-core" || p.Name == "remuda-core.exe" {
+			usage.Core.add(sumTree(pid, table, claimed, cpu))
 		}
 	}
 	share := func(w *Weight) { w.CPU /= float64(table.Cores) }
-	share(&usage.Herdr)
+	share(&usage.Core)
 	for _, id := range order {
 		ws := byID[id]
 		share(&ws.Weight)
@@ -111,7 +112,8 @@ func Measure(table Table, cpu func(Proc) float64, roots []Root, cpuKnown bool, a
 		usage.Workspaces = append(usage.Workspaces, *ws)
 		usage.Total.add(Weight{CPU: ws.CPU, RSSKB: ws.RSSKB})
 	}
-	usage.Total.add(Weight{CPU: usage.Herdr.CPU, RSSKB: usage.Herdr.RSSKB})
+	usage.Total.add(Weight{CPU: usage.Core.CPU, RSSKB: usage.Core.RSSKB})
+	usage.Herdr = usage.Core
 	sort.SliceStable(usage.Workspaces, func(i, j int) bool { return usage.Workspaces[i].RSSKB > usage.Workspaces[j].RSSKB })
 	return usage
 }

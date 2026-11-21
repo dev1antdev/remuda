@@ -4,7 +4,9 @@
 # your machines.json over ssh, as a page-only host does, and speaks
 # remuda-core there. Set these in Portainer's stack environment (or a .env file):
 #
-#   HOST_HOME      the host user's home (herdr socket, ~/.claude, ~/.ssh live there)
+#   HOST_HOME      the host user's home (~/.claude and ~/.ssh live there);
+#                  the default is the image's own home, under its old name, so an
+#                  existing stack keeps mounting its state and keys there
 #   UID / GID      that user's ids, so mounted files keep their ownership
 #   REMUDA_TOKEN optional; otherwise a token is generated into ${HOST_HOME}/.config/remuda
 #   PROJECTS       optional: a projects root to mount at the same path for the file viewer

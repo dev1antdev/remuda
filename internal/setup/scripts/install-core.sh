@@ -89,7 +89,14 @@ TMP="$(mktemp -d "$HOME/.local/remuda-core.XXXXXX")"
 ARCHIVE="$TMP/core.$EXT"
 URL="https://github.com/dev1antdev/remuda-core/releases/download/remuda-v$VERSION/remuda-core-$TARGET.$EXT"
 echo "downloading $URL"
-curl -fsSL -o "$ARCHIVE" "$URL"
+# either fetcher: a host with wget alone (the release installer's own rule) gets its core too
+if command -v curl >/dev/null 2>&1; then
+    curl -fsSL -o "$ARCHIVE" "$URL"
+elif command -v wget >/dev/null 2>&1; then
+    wget -q -O "$ARCHIVE" "$URL"
+else
+    echo "curl or wget is needed to download remuda-core"; exit 1
+fi
 if command -v sha256sum >/dev/null 2>&1; then GOT=$(sha256sum "$ARCHIVE" | cut -d' ' -f1); else GOT=$(shasum -a 256 "$ARCHIVE" | cut -d' ' -f1); fi
 [ "$GOT" = "$SHA" ] || { echo "checksum mismatch: got $GOT, want $SHA"; exit 1; }
 echo "checksum ok"

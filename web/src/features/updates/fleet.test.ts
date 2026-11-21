@@ -70,9 +70,6 @@ describe("the Fleet setup's words", () => {
     expect(valueWords(row(0, 1), { value: "other" })).toBe("another way");
     expect(valueWords(row(1, 0), { value: "no" })).toBe("no");
     expect(valueWords({ id: "claude.fast", kind: "flag", state: "same", cells: {} }, { value: "yes" })).toBe("on");
-    expect(valueWords({ id: "herdr.server", kind: "version", state: "same", cells: {} }, { value: "" })).toBe("not running");
-    expect(valueWords({ id: "herdr.plugin", arg: "p", kind: "plugin", state: "same", cells: {} }, { value: "github:someone/herdr-push" })).toBe("someone/herdr-push");
-    expect(valueWords({ id: "herdr.plugin", arg: "p", kind: "plugin", state: "same", cells: {} }, { value: "linked" })).toBe("local");
     expect(valueWords(row(2, 0), row(2, 0).cells.gog!)).toBe("bbbbbbb");
     expect(valueWords(row(2, 0), { value: "" })).toBe("absent");
     expect(valueWords(row(3, 1), row(3, 1).cells.gog!)).toBe("3 commits behind");
@@ -107,13 +104,12 @@ describe("the Fleet setup's words", () => {
   it("says what is left to do by hand, the newest copy of a file named", () => {
     const left = byHand(table, name, now);
     expect(left.map((h) => h.title)).toEqual(["Codex", "~/.claude/CLAUDE.md", "owner/app · Behind its upstream", "owner/app · CLAUDE.md"]);
-    expect(left[0]!.words).toBe("Install Codex on Pi with its own installer, then run remuda setup there for herdr's hooks — or leave it, if it is not wanted there.");
+    expect(left[0]!.words).toBe("Install Codex on Pi with its own installer — or leave it, if it is not wanted there.");
     expect(left[1]!.words).toBe("~/.claude/CLAUDE.md differs on GOG (the copy changed last is GOG's, 2 h ago): copy the one you want to the others by hand. remuda never writes the agents' configs.");
     expect(left[2]!.words).toBe("Pull on GOG: the checkout there is behind its upstream as of its last fetch.");
     expect(left[3]!.words).toBe("CLAUDE.md differs on This Mac, GOG (the copy changed last is This Mac's, 1 h ago): commit it where it changed and pull it on the others.");
     expect(handWords({ id: "claude.model", kind: "model", state: "odd", cells: { gog: { value: "default", mark: "odd" } } }, ["GOG"], ["This Mac"], false)).toContain("/model in Claude Code there");
     expect(handWords({ id: "agent.version", arg: "claude", kind: "version", state: "odd", cells: { gog: { value: "2.1.1", mark: "odd" } } }, ["GOG"], [], false)).toBe("Update Claude Code on GOG by hand: remuda has no update for it there.");
-    expect(handWords({ id: "herdr.plugin", arg: "p", kind: "plugin", state: "odd", cells: {} }, ["GOG"], ["Pi"], true)).toBe("Install the plugin on GOG as it is on Pi, or remove it where it is not wanted.");
     const ahead: FleetRow = { id: "agent.version", arg: "claude", kind: "version", state: "odd", norm: "2.1.1", cells: { gog: { value: "2.1.9", mark: "odd" }, pi: { value: "2.1.1", action: update("claude") } } };
     expect(byHand({ ...table, sections: [{ id: "agents", rows: [ahead] }] }, name, now)).toEqual([]);
     setLang("ru");

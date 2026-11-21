@@ -5,8 +5,8 @@
 #
 # It downloads the release binary for this OS and CPU, checks it against
 # the release's checksums.txt, puts it at ~/.local/bin/remuda and runs
-# `remuda setup`: herdr installed if missing, its server started, the
-# agent hooks, the background service, the page opened. Nothing asks for
+# `remuda setup`: remuda-core installed if missing, the background service,
+# the page opened. Nothing asks for
 # sudo and nothing but curl (or wget) has to be there first. Run again, it
 # is the upgrade. Arguments go to `remuda setup`:
 #

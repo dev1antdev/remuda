@@ -50,7 +50,7 @@ mkdir -p "$home" "$tmp/ws" "$tmp/state" "$tmp/chrome" "$out"
 # remuda-core command of the run, remuda's own `remuda-core connect` too, reaches this core and never the person's;
 # RC_LAUNCHD_DIRECT names this shell, the core's parent, so macOS does not hand the core to launchd
 mkdir -m 700 "$tmp/run" "$tmp/xdg-state" "$tmp/xdg-config"
-# no herdr answers under these: the vitals probe asks `herdr status server`, and it must not reach the person's
+# no herdr answers under these: the move at the person's press asks it, and it must not reach the person's
 export HERDR_SOCKET_PATH=$tmp/herdr.sock HERDR_SOCKET=$tmp/herdr.sock
 export RC_SESSION=e2e RC_SOCKET=$tmp/rc.sock XDG_RUNTIME_DIR=$tmp/run XDG_STATE_HOME=$tmp/xdg-state XDG_CONFIG_HOME=$tmp/xdg-config RC_LAUNCHD_DIRECT=$$
 

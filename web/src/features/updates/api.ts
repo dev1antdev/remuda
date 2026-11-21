@@ -38,13 +38,13 @@ export type FleetCell = { value: string; mark?: "odd" | "split"; at?: number; no
 export type FleetRow = {
   id: string;
   arg?: string;
-  kind: "version" | "via" | "flag" | "hook" | "plugin" | "model" | "hash" | "text" | "behind";
+  kind: "version" | "via" | "flag" | "model" | "hash" | "text" | "behind";
   state: "same" | "odd" | "split" | "single";
   norm?: string;
   cells: Record<string, FleetCell>; // by machine id; a machine without one is a machine the row does not apply to
   hand?: string[]; // the machines off the row's best that no update brings in line: theirs to do by hand
 };
-export type FleetSection = { id: "agents" | "herdr" | "remuda" | "claude" | "instructions" | "repo"; name?: string; folders?: Record<string, string>; rows: FleetRow[] };
+export type FleetSection = { id: "agents" | "remuda" | "claude" | "instructions" | "repo"; name?: string; folders?: Record<string, string>; rows: FleetRow[] };
 export type FleetColumn = { id: string; label: string; away?: boolean; error?: string };
 export type FleetTable = { at: string; machines: FleetColumn[]; sections: FleetSection[]; single?: { name: string; machine: string; folder: string }[] };
 // fresh reads every machine at once, its vitals too; otherwise a read stands a minute

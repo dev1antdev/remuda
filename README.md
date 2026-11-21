@@ -5,8 +5,8 @@ rider picks the one for the day.* This one is yours: every AI coding
 agent on every computer you own, from your browser or your phone —
 chat, live terminal, the changes they made, tasks, schedules, the
 machines' vitals and updates. Self-hosted; every byte stays on hardware
-you control. (Formerly herdr-ui; it runs on top of **herdr**, which it
-installs, starts and updates for you.)
+you control. (Formerly herdr-ui; the agents run in **remuda-core**, which
+remuda installs and watches for you.)
 
 A from-scratch, auditable replacement for
 [herdr-web-ui](https://github.com/devswha/herdr-web-ui):
@@ -215,7 +215,7 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ remuda-core: its 
   already gone and says whether you are using it faster than the time
   passes, on pace or under it, with the forecast and when it resets; the
   pane's branch, its pull request in the colour of its state and its Jira
-  issue; and for the pane's machine what its herdr panes weigh on it ("CPU
+  issue; and for the pane's machine what its terminals weigh on it ("CPU
   12 % · 3.8 GB", a click lists its workspaces by memory), the ports their
   processes listen on (a click lists them by workspace, each with Preview
   and Stop — a SIGTERM to that process after you confirm) and its name.
@@ -594,15 +594,14 @@ The script ([`internal/setup/scripts/install.sh`](internal/setup/scripts/install
 read it first if you like) downloads the release binary for the machine's
 OS and CPU (macOS and Linux, arm64 and amd64; on Windows, under Git Bash, `remuda.exe` alone — see *A Windows PC*), checks it against the
 release's `checksums.txt` and refuses a download that does not match, puts
-it at `~/.local/bin/remuda` and runs `remuda setup`: herdr installed if
-missing, its headless server started, the status hooks for the agents it
-finds (and brought up to date when a newer herdr writes newer ones), and
-remuda as a background service on `127.0.0.1:7317`. On a Mac
+it at `~/.local/bin/remuda` and runs `remuda setup`: remuda-core installed
+if missing (the terminal runtime your agents run in, and the one the page
+looks at), and remuda as a background service on `127.0.0.1:7317`. On a Mac
 the page then opens in your browser, signed in; elsewhere the sign-in link
 is printed. Nothing asks for sudo, and the same line run again is the
 upgrade. What it cannot do for you is install a coding agent — Claude Code,
-Codex, Gemini CLI or Kimi Code — and sign you in to it: do that, then `remuda setup`
-once more for that agent's hooks. (git, which worktrees and the Changes
+Codex, Gemini CLI or Kimi Code — and sign you in to it: do that, and
+"Update everywhere" or `remuda setup` picks the agent up. (git, which worktrees and the Changes
 lens use, comes with Apple's Command Line Tools: macOS offers them the
 first time git is called.)
 
@@ -613,16 +612,14 @@ Arguments go to `remuda setup` (`… | sh -s -- -tailscale`);
 With the binary in hand, the pieces by name:
 
 ```bash
-remuda setup                      # herdr installed if missing, its server
-                                    # started, the agent hooks, remuda-core,
-                                    # this binary to ~/.local/bin and the
-                                    # service running it
+remuda setup                      # remuda-core installed if missing, this
+                                    # binary to ~/.local/bin and the service
+                                    # running it
 remuda setup -host studio.remote     # the same on a remote machine over ssh; one
                                     # without remuda fetches the release for
                                     # its own OS and CPU
 remuda code [-host studio.remote]    # code-server, for the Code mode
-remuda core [-host studio.remote]    # remuda-core, the terminal runtime remuda
-                                    # moves its machines to from herdr
+remuda core [-host studio.remote]    # remuda-core alone, the terminal runtime
 remuda uninstall                  # the way back (below)
 remuda -h                         # all of it, and the server's flags
 ```
@@ -658,21 +655,14 @@ remuda's own and go only by their flags:
 end: the page's sign-in and preferences in your browser, and the files
 you attached in chats (each project's `.remuda/uploads`).
 
-herdr is installed with Homebrew when there is one, else with herdr's own
-installer into `~/.local/bin`. remuda also starts herdr's headless
-server whenever none answers — at its own start, and on a remote machine
-when it connects — so agents are there whether or not a terminal window
-is. The server is started through your login shell with a clean
-environment, so its panes see the PATH and exports your terminal has.
-Updates — herdr, Claude Code, Codex, Gemini CLI, Kimi Code, herdr's own
-agent hooks and its plugins from GitHub, and remuda itself on a remote
-machine — run from the page: the ⓘ beside a machine shows what is out of
-date with an Update button, the ⋯ menu has "Updates…"; each shows the
-exact command first and streams its output. A newer herdr writes newer
-hooks into your agents' settings: the ⓘ says whose are outdated, an
-update of herdr installs them again by itself, and "Update herdr plugins"
-is `herdr plugin update` for the plugins installed from GitHub (herdr
-0.9.4 and up). After an
+remuda-core is installed by its own installer, the pinned release with its
+checksum verified, into `~/.local/bin`; a fresh one starts nothing until
+remuda connects to it, and one as new or newer is left as it is.
+Updates — remuda-core, Claude Code, Codex, Gemini CLI, Kimi Code,
+code-server and remuda itself on a remote machine — run from the page:
+the ⓘ beside a machine shows what is out of date with an Update button,
+the ⋯ menu has "Updates…"; each shows the
+exact command first and streams its output. After an
 agent update, the chats running that agent are restarted onto the new
 version: Claude Code is told its own `/restart` and comes back on the
 installed version with the conversation kept, in place; the others — and
@@ -685,17 +675,13 @@ offered on its own ("Restart Claude Code chats") for an agent that
 updated itself, and for one chat at a time from the workspace's ⋯ menu
 or the palette ("Restart Claude Code on its session…"): for an agent
 that got stuck, the same restart in its pane, refused while it has a
-question open or is still working. An update of herdr ends with its server on the new
-version: herdr's own live handoff when the installer did one, otherwise
-the server is restarted — herdr restores the workspaces and panes, and
-remuda starts every chat again with its session resumed ("Restart
-herdr's server" is offered whenever the server lags the binary).
+question open or is still working.
 
 **Fleet setup shows how every machine is set up, side by side** (the
 Updates dialog, the machine's ⋯ menu, the Server place, or the palette):
 a column per machine and a row per fact — each agent's version and how
-it was installed, herdr and its hooks for each agent, its plugins,
-remuda and code-server, whether remuda's MCP server is registered with
+it was installed, remuda-core, remuda and code-server, whether remuda's
+MCP server is registered with
 each agent, Claude Code's status line, default model and fast mode, the
 global `~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md` and
 `~/.gemini/GEMINI.md`, and for every repository checked out on two
@@ -704,7 +690,7 @@ last fetch, and its `CLAUDE.md`, `AGENTS.md` and `.claude/settings.json`.
 The value most machines share is the norm and the one that differs is
 marked; a row's tooltip says what it is. Only the rows that differ show
 until you ask for every fact. What an update remuda already has can fix
-— an agent or herdr update, herdr's hooks (missing ones too), `remuda mcp
+— an agent or remuda-core update, `remuda mcp
 install`, `remuda statusline install`, code-server — is listed under
 **Bring in line** with its command, and Run… opens that machine's Updates
 on it; the rest (another CLAUDE.md, another default model, a checkout
@@ -823,9 +809,8 @@ master — one connection, one place for RPC and the terminals — or says
 `remuda core -host H` when none is installed there. Every
 script goes over the session's stdin, so a machine whose login shell is
 fish or tcsh, or whose sshd is Dropbear, runs it as written. Nothing is
-installed on the remote (when no herdr server answers there, remuda starts
-one, as the user); removing a machine tears the SSH connection down and
-touches nothing there.
+installed on the remote; removing a machine tears the SSH connection down
+and touches nothing there.
 
 On first run remuda generates an access token (stored at
 `~/Library/Application Support/remuda/token`, 0600) and prints a sign-in URL.
@@ -970,12 +955,12 @@ for every browser and phone while the agents run on your other
 machines. Run it as a server:
 
 ```bash
-remuda setup -host pi.remote -server -tailscale   # no herdr there; the unit runs remuda -server
+remuda setup -host pi.remote -server -tailscale   # no remuda-core there; the unit runs remuda -server
 ```
 
 `-server` (or `REMUDA_SERVER=1`) keeps the machine remuda runs on out of
 the cockpit: it is not in the sidebar or any picker, no
-workspace starts there, and its herdr is neither needed nor kept. Its
+workspace starts there, and no remuda-core is installed there. Its
 health stands behind **Server** on the rail instead — load, disk,
 memory, temperature, the CPU's clock and a Raspberry Pi's throttling
 (under-voltage, capped clock; the full firmware word where `vcgencmd`
@@ -995,14 +980,14 @@ Every machine's ⓘ shows the same body now (memory, temperature, clock,
 throttling, and a laptop's battery — how full, on battery or on its
 charger, read with `pmset` on a Mac and the power supply class on Linux,
 no sudo), and **Update everywhere** in Updates runs every connected
-machine's pending updates one after another — herdr, the agents,
-code-server, remuda's release — each command shown first, the cockpit
+machine's pending updates one after another — the agents, code-server,
+remuda-core, remuda's release — each command shown first, the cockpit
 itself last.
 
 ## Docker / Portainer
 
-For a **Linux host** that runs herdr (the container shares the host's unix
-socket; macOS VMs can't, run the binary there):
+For a **Linux host**: the container serves the page only and reaches every
+machine's remuda-core over ssh (nothing of the agents runs in it):
 
 ```bash
 cp .env.example .env     # HOST_HOME, UID/GID, optional token and projects root
@@ -1010,11 +995,11 @@ docker compose up -d     # http://127.0.0.1:7317
 ```
 
 In Portainer: add the repository as a stack, set the same variables in the
-stack environment. The image carries `remuda`, `herdr`, `ssh` and
-`git`; it mounts the host user's `~/.config` (herdr's socket + remuda's
-state), `~/.claude` (transcripts), `~/.ssh` (remote
-machines) and the projects root (file viewer), all at the same paths as on
-the host, running as that user's uid.
+stack environment. The image carries `remuda`, `ssh` and `git` (its home is
+still `/home/herdr`, so a stack already running keeps its state and keys); it mounts
+the host user's `~/.config` (remuda's state), `~/.claude` (transcripts),
+`~/.ssh` (remote machines) and the projects root (file viewer), all at the
+same paths as on the host, running as that user's uid.
 
 ```bash
 docker compose --profile test run --rm test   # go vet + go test + tsc
@@ -1346,7 +1331,8 @@ once, then "Add to Home Screen" — it installs as a PWA.
   token is still asked for.
 - Outbound: nothing, except (unless `-no-version-check`) one request to
   the npm registry and one to GitHub every six hours to learn the newest
-  Claude Code and herdr, so a machine can say it wants an update.
+  Claude Code, Codex, Gemini CLI, Kimi Code and remuda, so a machine can
+  say it wants an update.
 - Single bearer token, constant-time compared, no accounts. A signed-in
   browser holds a device cookie (a random secret, hashed on disk), never the
   token: a device is revoked in Settings without touching the others.

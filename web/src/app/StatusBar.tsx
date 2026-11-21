@@ -1,5 +1,5 @@
 // The status bar along the foot of the main area, after Orca's: the agents' plan limits on the left, where the pane on
-// screen works in the middle, and on the right the load its machine's herdr panes make, the ports they listen on and
+// screen works in the middle, and on the right the load its machine's terminals make, the ports they listen on and
 // the machine's name. On a desk with a mouse alone, out of the way in full screen, hidden from the View menu or
 // Settings; its segments keep their room, so nothing in it moves when a value does.
 

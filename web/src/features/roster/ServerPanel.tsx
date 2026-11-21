@@ -74,8 +74,6 @@ export default function ServerPanel({ server, onClose }: { server: Machine; onCl
           <BodyRows health={h} span={span} />
           <dt>remuda</dt>
           <dd>{version ?? "—"}</dd>
-          <dt>herdr</dt>
-          <dd>{h.herdr ? t("{version} installed, not used here", { version: h.herdr }) : t("not needed here")}</dd>
           {tailscale && (
             <>
               <dt>Tailscale</dt>

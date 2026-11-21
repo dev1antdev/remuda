@@ -4,6 +4,8 @@
 import type { Dictionary } from "../../i18n";
 
 export const fleet: Dictionary = {
+  "The remuda-core on each machine: the terminal runtime remuda's agents run in.": "remuda-core на каждой машине: среда терминалов, в которой работают агенты remuda.",
+  "Install {agent} on {machines} with its own installer — or leave it, if it is not wanted there.": "Установите {agent} на {machines} его собственным установщиком — или оставьте как есть, если он там не нужен.",
   "Fleet setup": "Настройка машин",
   "Fleet setup…": "Настройка машин…",
   "how every machine is set up, side by side, the odd one out marked": "как настроена каждая машина, рядом друг с другом, с отметкой у выбивающейся",
@@ -23,15 +25,10 @@ export const fleet: Dictionary = {
   "not read": "не прочитана",
   "No value most machines share": "Нет значения, общего для большинства машин",
   "Most machines: {value}": "У большинства машин: {value}",
-  "Every agent there has herdr's hooks.": "У всех агентов там есть хуки herdr.",
 
   "Claude Code's settings": "Настройки Claude Code",
   "Global instructions": "Общие инструкции",
   "{agent}: installed with": "{agent}: установлен через",
-  "herdr installed": "Установленный herdr",
-  "herdr's running server": "Запущенный сервер herdr",
-  "{agent} hooks": "Хуки {agent}",
-  "Plugin {id}": "Плагин {id}",
   "Tasks for {agent} (MCP)": "Задачи для {agent} (MCP)",
   "Plan limits in the status line": "Лимиты плана в строке статуса",
   "Default model": "Модель по умолчанию",
@@ -41,16 +38,9 @@ export const fleet: Dictionary = {
   "The {agent} version on each machine, as the vitals last read it.": "Версия {agent} на каждой машине, как её в последний раз прочитала проверка состояния.",
   "How {agent} was installed there — Homebrew, npm or its own installer — which decides how it is updated.":
     "Как там установлен {agent} — через Homebrew, npm или собственный установщик: от этого зависит, как он обновляется.",
-  "The herdr installed on each machine.": "herdr, установленный на каждой машине.",
-  "The herdr server running on each machine: one still on an older version than the herdr installed is restarted onto it.":
-    "Сервер herdr, запущенный на каждой машине: если он ещё на более старой версии, чем установленный herdr, его перезапускают на новую.",
-  "herdr's {agent} hooks, which tell herdr, and so remuda, what the agent is doing: current, outdated or missing.":
-    "Хуки herdr для {agent}, через которые herdr, а значит и remuda, знает, что делает агент: актуальные, устаревшие или отсутствуют.",
-  "Whether herdr's plugin {id} is installed there, and where from.": "Установлен ли там плагин herdr {id} и откуда.",
   "The remuda on each machine: it keeps the agents' door to your tasks there.":
     "remuda на каждой машине: она держит там дверь агентов к вашим задачам.",
   "The code-server the Code mode opens on each machine.": "code-server, который режим «Код» открывает на каждой машине.",
-  "The remuda-core on each machine: the terminal runtime remuda moves its machines to from herdr.": "remuda-core на каждой машине: среда терминалов, на которую remuda переводит машины с herdr.",
   "Whether remuda's MCP server — your task list for the agents — is registered in {agent}'s own config there.":
     "Зарегистрирован ли MCP-сервер remuda — ваш список задач для агентов — в собственной конфигурации {agent} там.",
   "Whether Claude Code's status line goes through remuda there, which keeps its plan limits for the meter.":
@@ -92,16 +82,9 @@ export const fleet: Dictionary = {
   ],
   "the copy changed last is {machine}'s, {when}": "последней менялась копия на {machine}, {when}",
 
-  "Install {agent} on {machines} with its own installer, then run remuda setup there for herdr's hooks — or leave it, if it is not wanted there.":
-    "Установите {agent} на {machines} его собственным установщиком, затем запустите там remuda setup для хуков herdr — или оставьте как есть, если он там не нужен.",
   "Update {agent} on {machines} by hand: remuda has no update for it there.": "Обновите {agent} на {machines} вручную: у remuda там нет для него обновления.",
   "{agent} is installed another way on {machines}; remuda updates each the way it was installed. To match, reinstall it there by hand.":
     "На {machines} {agent} установлен иначе; remuda обновляет каждый так, как он был установлен. Чтобы совпадало, переустановите его там вручную.",
-  "Bring herdr on {machines} in line by hand: remuda setup there installs it and starts its server.":
-    "Приведите herdr на {machines} к норме вручную: remuda setup там установит его и запустит сервер.",
-  "Run herdr integration install {agent} on {machines}.": "Запустите herdr integration install {agent} на {machines}.",
-  "Install the plugin on {machines} as it is on {others}, or remove it where it is not wanted.": "Установите плагин на {machines}, как на {others}, или удалите его там, где он не нужен.",
-  "The plugin comes from another place on {machines}: install it from the same one everywhere.": "На {machines} плагин взят из другого места: установите его везде из одного и того же.",
   "Install the same remuda on {machines}: the installer's one line there, or Updates once a newer release is out.":
     "Установите ту же remuda на {machines}: одной строкой установщика там или через «Обновления», когда выйдет новый релиз.",
   "Run remuda code install on {machines}.": "Запустите remuda code install на {machines}.",

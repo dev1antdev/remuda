@@ -4,6 +4,7 @@
 import type { Dictionary } from "../../i18n";
 
 export const panels: Dictionary = {
+  "This goes through remuda-core on {machine}, pane by pane:": "Это пойдёт через remuda-core на {machine}, панель за панелью:",
   " · closes when answered": " · закроется после ответа",
   "+{n} more": "+{n} ещё",
   "A day": "День",
@@ -120,7 +121,6 @@ export const panels: Dictionary = {
   "That's a folder.": "Это папка.",
   "The editor keeps its own theme: {error}": "Редактор остался со своей темой: {error}",
   "The limit must be above zero.": "Лимит должен быть больше нуля.",
-  "This goes through herdr on {machine}, pane by pane:": "Это пойдёт через herdr на {machine}, панель за панелью:",
   "This runs on {machine}, as you, through the shell remuda already uses there:": "Это выполнится на {machine} от вашего имени, через shell, которым remuda там уже пользуется:",
   "This runs on {machine}, as you: the download from GitHub, the check, the install, the restart of remuda there:": "Это выполнится на {machine} от вашего имени: загрузка с GitHub, проверка, установка, перезапуск remuda там:",
   Today: "Сегодня",

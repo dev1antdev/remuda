@@ -1,7 +1,7 @@
-// Package updates is what a machine can update and how: herdr, the agents
-// and remuda itself, each a command the person sees before it runs as a
-// job, with the chats brought onto a new agent afterwards. Nothing asks
-// for sudo.
+// Package updates is what a machine can update and how: remuda-core, the
+// agents and remuda itself, each a command the person sees before it runs
+// as a job, with the chats brought onto a new agent afterwards. Nothing
+// asks for sudo.
 package updates
 
 import (
@@ -45,40 +45,12 @@ func (u Update) run() string {
 // once a day at most, so without it an upgrade can miss a version that is out.
 const brewUpdate = "brew update && "
 
-// hooksStep follows an install of herdr, only one that went through: every agent integration the new herdr reports
-// outdated is installed again, so the hooks match it.
-const hooksStep = " &&\nfor a in $(" + health.OutdatedHooks + " | cut -d' ' -f1); do herdr integration install \"$a\" || echo \"!! the $a hooks did not update\"; done"
-
-const hooksNote = "The agent hooks the new herdr reports outdated are installed again. "
-
-// serverStep follows an install of herdr: a comment for the shell, and the promise the herdr restart keeps.
-const serverStep = "\n# then the running server onto it: kept when herdr's handoff already did that, else restarted with every chat started again on its session"
-
-const serverNote = "When the running server is still on the old version afterwards (Homebrew, or a handoff that did not happen) it is restarted: herdr restores the workspaces, tabs and panes, and remuda starts every chat again with its session resumed; shells and other pane processes come back as fresh shells."
-
-// pluginUpdateSince is the herdr that brought `herdr plugin update`.
-const pluginUpdateSince = "0.9.4"
-
 // arrow is " → want", or nothing when the version is unknown.
 func arrow(want string) string {
 	if want == "" {
 		return ""
 	}
 	return " → " + want
-}
-
-// MissingIntegrations are the agents installed on the machine whose herdr integration herdr reports not installed.
-func MissingIntegrations(r *health.Report) []string {
-	if r == nil || r.Herdr == "" {
-		return nil
-	}
-	var missing []string
-	for _, agent := range restart.Kinds("agents") {
-		if agentVersion(r, agent) != "" && r.Integrations[agent] == "missing" {
-			missing = append(missing, agent)
-		}
-	}
-	return missing
 }
 
 // remudaThere sets $r to the machine's own remuda: ~/.local/bin/remuda, or remuda.exe there on Windows.
@@ -102,55 +74,6 @@ func Plan(what string, r *health.Report) (Update, error) {
 		return "", fmt.Errorf("unknown install")
 	}
 	switch what {
-	case "herdr":
-		if r == nil || r.Herdr == "" {
-			return Update{}, fmt.Errorf("herdr is not installed there")
-		}
-		if r.HerdrVia == "brew" {
-			return Update{What: what, Title: "Update herdr", Command: path + brewUpdate + "brew upgrade herdr && herdr --version" + hooksStep + serverStep,
-				Note: "Installed with Homebrew: the formulae are refreshed first, then the upgrade. " + hooksNote + serverNote}, nil
-		}
-		if windowsReport(r) {
-			return Update{What: what, Title: "Update herdr", Command: path + "herdr update && herdr --version" + hooksStep + serverStep,
-				Note: "herdr's own updater, through its Windows installer: Windows has no live handoff, so the running server keeps its panes on the old version. " + hooksNote + serverNote}, nil
-		}
-		return Update{What: what, Title: "Update herdr", Command: path + "herdr update --handoff && herdr --version" + hooksStep + serverStep,
-			Note: "herdr's own updater, with a live handoff: the new server takes the running panes over. " + hooksNote + serverNote}, nil
-	case "hooks":
-		if r == nil || len(r.OutdatedHooks) == 0 {
-			return Update{}, fmt.Errorf("herdr's hooks there are current")
-		}
-		var steps, versions []string
-		for _, h := range r.OutdatedHooks {
-			steps = append(steps, "herdr integration install "+h.Agent)
-			versions = append(versions, strings.TrimSpace(h.Agent+" "+h.Have+arrow(h.Want)))
-		}
-		return Update{What: what, Title: "Update herdr's agent hooks", Command: path + strings.Join(steps, " && "),
-			Note: strings.Join(versions, ", ") + ". The hooks are what tell herdr, and so remuda, what an agent is doing; an agent already running picks the new ones up once it is restarted."}, nil
-	case "integrations":
-		missing := MissingIntegrations(r)
-		if len(missing) == 0 {
-			return Update{}, fmt.Errorf("every agent there has herdr's hooks")
-		}
-		var steps []string
-		for _, agent := range missing {
-			steps = append(steps, "herdr integration install "+agent)
-		}
-		return Update{What: what, Title: "Install herdr's agent hooks", Command: path + strings.Join(steps, " && "),
-			Note: strings.Join(missing, ", ") + ": installed there without herdr's hooks, as remuda setup installs them. The hooks are what tell herdr, and so remuda, what an agent is doing; an agent already running picks them up once it is restarted."}, nil
-	case "plugins":
-		if r == nil || len(r.Plugins) == 0 {
-			return Update{}, fmt.Errorf("no herdr plugin from GitHub is installed there")
-		}
-		if health.Newer(r.Herdr, pluginUpdateSince) {
-			return Update{}, fmt.Errorf("herdr plugin update needs herdr %s; %s is installed there", pluginUpdateSince, r.Herdr)
-		}
-		var names []string
-		for _, p := range r.Plugins {
-			names = append(names, p.ID+" ("+p.Source+")")
-		}
-		return Update{What: what, Title: "Update herdr plugins", Command: path + "herdr plugin update --yes",
-			Note: strings.Join(names, ", ") + ". Fetched again from GitHub at the ref recorded when it was installed; an unchanged commit is skipped. Panes already running a plugin keep its old files, new runs use the update."}, nil
 	case "code":
 		if r == nil || r.CodeServer == "" {
 			return Update{}, fmt.Errorf("code-server is not installed there")
@@ -258,7 +181,7 @@ func Offered(r *health.Report, l health.Latest) []Update {
 	type cand struct {
 		what, have, latest string
 	}
-	for _, c := range []cand{{"herdr", r.Herdr, l.Herdr}, {"claude", r.Claude, l.Claude}, {"codex", r.Codex, l.Codex}, {"gemini", r.Gemini, l.Gemini}, {"kimi", r.Kimi, l.Kimi}} {
+	for _, c := range []cand{{"claude", r.Claude, l.Claude}, {"codex", r.Codex, l.Codex}, {"gemini", r.Gemini, l.Gemini}, {"kimi", r.Kimi, l.Kimi}} {
 		if c.have == "" {
 			continue
 		}
@@ -271,15 +194,7 @@ func Offered(r *health.Report, l health.Latest) []Update {
 		} else {
 			u.Note = c.have + " is the latest known. " + u.Note
 		}
-		if c.what == "herdr" && r.HerdrServer != "" && r.HerdrServer != r.Herdr {
-			u.Note = "The server runs " + r.HerdrServer + " while " + r.Herdr + " is installed. " + u.Note
-		}
 		out = append(out, u)
-	}
-	for _, what := range []string{"hooks", "integrations", "plugins"} {
-		if u, err := Plan(what, r); err == nil {
-			out = append(out, u)
-		}
 	}
 	if u, err := Plan("code", r); err == nil {
 		if l.Code != "" && health.Newer(r.CodeServer, l.Code) {

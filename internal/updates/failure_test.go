@@ -2,15 +2,12 @@ package updates
 
 import (
 	"bufio"
-	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"syscall"
 	"testing"
-
-	"github.com/dev1antdev/remuda/internal/health"
 )
 
 // standIns puts scripts first on the PATH the update scripts set, in a home of the test's own.
@@ -33,42 +30,6 @@ func runIn(home, command string) error {
 	cmd := exec.Command("/bin/sh", "-c", command)
 	cmd.Env = []string{"HOME=" + home, "PATH=/usr/bin:/bin"}
 	return cmd.Run()
-}
-
-func TestAHerdrUpdateThatFailsFailsItsJob(t *testing.T) {
-	const herdr = `case "$1" in update) [ -e "$HOME/fails" ] && exit 7 ;; --version) echo 0.9.9 ;; esac; exit 0`
-	const brew = `[ "$1" = upgrade ] && [ -e "$HOME/fails" ] && exit 7; exit 0`
-	for name, report := range map[string]*health.Report{
-		"its own updater": {Herdr: "0.9.3", HerdrVia: "native"},
-		"Homebrew":        {Herdr: "0.9.3", HerdrVia: "brew"},
-	} {
-		update, err := Plan("herdr", report)
-		if err != nil {
-			t.Fatal(err)
-		}
-		home := standIns(t, map[string]string{"herdr": herdr, "brew": brew})
-		if err := runIn(home, update.Command); err != nil {
-			t.Errorf("%s: an update that went through: %v", name, err)
-		}
-		if err := os.WriteFile(filepath.Join(home, "fails"), nil, 0o600); err != nil {
-			t.Fatal(err)
-		}
-		var exit *exec.ExitError
-		if err := runIn(home, update.Command); !errors.As(err, &exit) || exit.ExitCode() != 7 {
-			t.Errorf("%s: a failed update ended with %v", name, err)
-		}
-	}
-}
-
-func TestAFailedHerdrUpdateLeavesTheServerRunning(t *testing.T) {
-	var said []string
-	then := (&Service{}).herdrThen(nil) // no machine: going on to the versions or the restart would panic
-	if err := then(func(line string) { said = append(said, line) }, errors.New("exit status 7")); err != nil {
-		t.Fatal(err)
-	}
-	if len(said) != 1 {
-		t.Errorf("said %q", said)
-	}
 }
 
 func TestAReleaseThatDoesNotRunIsNotInstalled(t *testing.T) {

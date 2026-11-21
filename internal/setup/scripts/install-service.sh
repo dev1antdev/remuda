@@ -22,7 +22,7 @@ if [ "${REMUDA_TAILSCALE:-0}" = "1" ]; then
     TS_ARGS="-tailscale -tailscale-hostname ${REMUDA_TAILSCALE_HOSTNAME:-remuda}"
 fi
 # REMUDA_SERVER=1 makes the service serve the page only (remuda -server):
-# this machine is none of the cockpit's, its herdr neither needed nor kept.
+# this machine is none of the cockpit's, no remuda-core is installed there.
 if [ "${REMUDA_SERVER:-0}" = "1" ]; then
     TS_ARGS="-server${TS_ARGS:+ $TS_ARGS}"
 fi
@@ -104,7 +104,7 @@ Linux)
         mkdir -p "$UNIT_DIR"
         cat > "$UNIT" <<EOF
 [Unit]
-Description=remuda — browser/phone client for herdr
+Description=remuda — the cockpit for the agents remuda-core runs
 After=default.target
 
 [Service]

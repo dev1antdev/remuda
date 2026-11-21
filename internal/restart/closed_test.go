@@ -69,17 +69,6 @@ func TestAShellOrAnExitIsNotAClose(t *testing.T) {
 	}
 }
 
-func TestAPausedMachineNotesNoClose(t *testing.T) {
-	m := OpenMemory("")
-	observe(m, "local", false, agentPane("w1:p1", "claude", "/work/api"))
-	m.Pause("local")
-	observe(m, "local", false)
-	m.Unpause("local")
-	if closed := m.Closed(); len(closed) != 0 {
-		t.Fatalf("remuda's own restart of herdr closes nothing: %+v", closed)
-	}
-}
-
 func TestTheClosedListKeepsTheNewestOncePerSession(t *testing.T) {
 	m := OpenMemory("")
 	at := time.Date(2026, 11, 4, 9, 0, 0, 0, time.UTC)

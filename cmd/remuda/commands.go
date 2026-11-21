@@ -95,16 +95,16 @@ func usageCmd(args []string) {
 	_ = json.NewEncoder(os.Stdout).Encode(rep)
 }
 
-// setupCmd is `remuda setup [-host H] [-tailscale] …`: herdr and its server, the agent integrations and the remuda service, here or over ssh.
+// setupCmd is `remuda setup [-host H] [-tailscale] …`: remuda-core and the remuda service, here or over ssh.
 func setupCmd(args []string) {
 	fs := flag.NewFlagSet("setup", flag.ExitOnError)
 	host := fs.String("host", "", "set up a remote machine over ssh instead of this one")
 	ts := fs.Bool("tailscale", false, "the service joins your tailnet by itself (see -tailscale on the server)")
 	tsName := fs.String("tailscale-hostname", "remuda", "the node's name on the tailnet")
 	addr := fs.String("addr", "127.0.0.1:7317", "the service's loopback address")
-	noService := fs.Bool("no-service", false, "herdr and its server only; no remuda service")
+	noService := fs.Bool("no-service", false, "remuda-core only; no remuda service")
 	open := fs.Bool("open", false, "open the page in the browser once the service answers (a Mac at the desk only)")
-	serverOnly := fs.Bool("server", false, "the service serves the page only (-server): no herdr installed or started there, the machine none of the cockpit's")
+	serverOnly := fs.Bool("server", false, "the service serves the page only (-server): no remuda-core installed there, the machine none of the cockpit's")
 	fs.Parse(args)
 	err := setup.Run(setup.Options{Host: *host, Tailscale: *ts, TSName: *tsName, AuthKey: os.Getenv("TS_AUTHKEY"), Addr: *addr, NoService: *noService, Server: *serverOnly, Version: version}, os.Stdout)
 	if err != nil {

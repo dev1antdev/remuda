@@ -22,8 +22,8 @@ func TestTheVitalsOfARealWindowsAreRead(t *testing.T) {
 	if r.DiskUsedPct != 81 || r.DiskFreeGB < 29 || r.Uptime != "4 mins" || r.Load1 != 0.49 {
 		t.Errorf("disk %d%% used, %.1f GB free; up %q, load %v", r.DiskUsedPct, r.DiskFreeGB, r.Uptime, r.Load1)
 	}
-	if r.Herdr != "0.9.5" || r.HerdrServer != "0.9.5" || r.HerdrVia != "installer" || r.Remuda != "dev" || r.TempC != 0 || r.Throttle != nil {
-		t.Errorf("herdr %q (server %q, via %q), remuda %q, %v °C, %+v", r.Herdr, r.HerdrServer, r.HerdrVia, r.Remuda, r.TempC, r.Throttle)
+	if r.Remuda != "dev" || r.TempC != 0 || r.Throttle != nil {
+		t.Errorf("remuda %q, %v °C, %+v", r.Remuda, r.TempC, r.Throttle)
 	}
 }
 

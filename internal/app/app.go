@@ -774,7 +774,7 @@ func Run(ctx context.Context, o Options) error {
 	srv.Ports = listening
 	go listening.Loop(ctx.Done())
 	events.Subscribe(bus, func(e events.MachineRemoved) { listening.Forget(e.Machine) })
-	// what the machines' herdr panes weigh on them: one process table a read, each pane's shell as herdr names it
+	// what the machines' terminals weigh on them: one process table a read, each pane's shell as remuda-core names it
 	srv.Resources = resources.New(resources.Inputs{
 		Panes: func(machineID string) []resources.Pane {
 			snap, _ := watcher.Snapshot(machineID)

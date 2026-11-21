@@ -1,4 +1,4 @@
-// The machine's load in the status bar: "CPU 12 % · 3.8 GB", what the pane's machine's herdr panes weigh on it, read
+// The machine's load in the status bar: "CPU 12 % · 3.8 GB", what the pane's machine's terminals weigh on it, read
 // every 5 s while the page has the focus and every 30 s while it only shows; a click opens its workspaces by memory,
 // each with its heaviest process and its terminals, a click on one opening it, and Sleep or Wake beside a workspace.
 
@@ -12,7 +12,7 @@ import { t } from "@/lib/i18n";
 import { useQuery } from "@/lib/query";
 import { Icon, Popover, Tip } from "@/ui";
 import { fetchLoad } from "./api";
-import { cpuBarWords, cpuLevel, cpuWords, footWords, graver, loadTip, memLevel, memWords, paneToOpen, terminalName, workspaceLine, type Usage, type WorkspaceLoad } from "./load";
+import { cpuBarWords, cpuLevel, cpuWords, footWords, graver, loadTip, memLevel, memWords, paneToOpen, runtimeOf, terminalName, workspaceLine, type Usage, type WorkspaceLoad } from "./load";
 import { useFocused } from "./useFocused";
 
 export default function Load({ machine, windows }: { machine: Machine; windows: boolean }) {
@@ -43,7 +43,7 @@ export default function Load({ machine, windows }: { machine: Machine; windows: 
       side="top"
       align="end"
       className="load-pop"
-      label={t("What herdr's panes weigh on {machine}", { machine: name })}
+      label={t("What the machine's terminals weigh on {machine}", { machine: name })}
       tip={usage ? loadTip(usage, name) : query.error || t("Measuring…")}
       trigger={
         <button type="button" className={`btn ghost sm status-item status-load${tone ? ` is-${tone}` : ""}`} aria-label={t("The load on {machine}", { machine: name })}>
@@ -61,7 +61,7 @@ export default function Load({ machine, windows }: { machine: Machine; windows: 
   );
 }
 
-// LoadList is the popup: the workspaces by memory, herdr's own at the foot, what the CPU share means
+// LoadList is the popup: the workspaces by memory, remuda-core's own at the foot, what the CPU share means
 function LoadList({ usage, machine, onPick }: { usage: Usage; machine: Machine; onPick: () => void }) {
   const { sessionHidden, folderName } = useSharing();
   const [unfolded, setUnfolded] = useState<string | null>(null);
@@ -83,7 +83,7 @@ function LoadList({ usage, machine, onPick }: { usage: Usage; machine: Machine; 
         <strong>{t("Load")}</strong>
         <span className="load-head-sum">{t("CPU {cpu} · {mem} of {total}", { cpu: usage.cpu_known ? cpuWords(usage.total.cpu) : "…", mem: memWords(usage.total.rss_kb), total: memWords(usage.mem_kb) })}</span>
       </div>
-      {usage.workspaces.length === 0 && <div className="load-empty">{t("No pane of herdr's runs anything on this machine now.")}</div>}
+      {usage.workspaces.length === 0 && <div className="load-empty">{t("No terminal runs anything on this machine now.")}</div>}
       {usage.workspaces.map((ws) => {
         const session = byId.get(ws.id);
         const folded = unfolded !== ws.id;
@@ -114,12 +114,12 @@ function LoadList({ usage, machine, onPick }: { usage: Usage; machine: Machine; 
           </div>
         );
       })}
-      <div className="load-row is-herdr">
+      <div className="load-row is-core">
         <span className="load-ws-name">
-          <span className="load-ws-title">herdr</span>
-          <span className="load-ws-line">{t("the server itself and its attaches")}</span>
+          <span className="load-ws-title">remuda-core</span>
+          <span className="load-ws-line">{t("the terminal runtime itself")}</span>
         </span>
-        <Numbers cpu={usage.herdr.cpu} kb={usage.herdr.rss_kb} known={usage.cpu_known} total={usage.mem_kb} />
+        <Numbers cpu={runtimeOf(usage).cpu} kb={runtimeOf(usage).rss_kb} known={usage.cpu_known} total={usage.mem_kb} />
       </div>
       <div className="load-foot">{footWords(usage)}</div>
     </div>

@@ -151,32 +151,6 @@ export function HealthButton({ machine: m, latest, serverVersion, viewOnly = fal
                 </dd>
               </>
             )}
-            <dt>herdr</dt>
-            <dd>
-              {h.herdr ?? "—"}
-              {h.herdr_server && h.herdr !== h.herdr_server ? <span className="health-new"> · {t("server {version}", { version: h.herdr_server })}</span> : null}
-              {h.herdr && l?.herdr && newer(h.herdr, l.herdr) ? <span className="health-new"> → {l.herdr}</span> : null}
-            </dd>
-            {h.outdated_hooks?.length ? (
-              <>
-                <dt>{t("herdr hooks")}</dt>
-                <dd>
-                  {h.outdated_hooks.map((k, i) => (
-                    <span key={k.agent}>
-                      {i > 0 ? ", " : ""}
-                      {k.agent} {k.have}
-                      {k.want ? <span className="health-new"> → {k.want}</span> : null}
-                    </span>
-                  ))}
-                </dd>
-              </>
-            ) : null}
-            {h.plugins?.length ? (
-              <>
-                <dt>{t("herdr plugins")}</dt>
-                <dd>{h.plugins.map((p) => p.id).join(", ")}</dd>
-              </>
-            ) : null}
             <dt>remuda</dt>
             <dd>
               {h.remuda ?? (m.id === "local" ? serverVersion : t("not deployed"))}

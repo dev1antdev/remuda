@@ -1,8 +1,8 @@
 # remuda — notes for agents
 
 Self-hosted web/phone cockpit for the AI coding agents on the user's
-machines, on top of **herdr** (0.9+), which it installs, starts and
-updates. Go server + embedded React SPA. See README.md for the user
+machines, which run in **remuda-core**: remuda installs it, follows it
+and watches it. Go server + embedded React SPA. See README.md for the user
 story. Renamed from herdr-ui on 2026-10-11 (before that: drover): the
 state dir, the service and the browser's localStorage keys carry over
 by themselves (`state.Dir`, install-service.sh, prefs.ts); the binary,
@@ -793,11 +793,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   untouched, one older than the flag — its unit would exit at once,
   over and over. A herdr already there is left installed and running.
   The host is offered its own release alone (`serverHostOnly` in
-  `updates.Available`, tested): a herdr, its hooks, an agent or the
-  tasks' MCP there serve no workspace, and its herdr's restart would
-  meet `ErrServerHost`; the Server place lists the release, the disk
-  and the body alone (`hostConcerns`, tested) and says a herdr still
-  installed there is not used.
+  `updates.Available`, tested): remuda-core, an agent or the tasks' MCP
+  there serve no workspace; the Server place lists the release, the disk
+  and the body alone (`hostConcerns`, tested).
   **Remotes are the ones setup added**: `SyncHerdr` used to read `herdr machine
   list --json` and add them under herdr's own id, and that read is gone with
   herdr (Core 26e: no herdr binary is found, so the watcher's call returns
@@ -869,11 +867,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   errors heard by `transportError`, closed off the adapter's goroutine by
   `fail` and `Close`), its terminals are `core.Terminals` (every viewer
   an attach of its own, see `internal/core`), and it has no bridge on
-  Windows. Nothing of herdr's
-  is offered there — its update, hooks, integrations, plugins and server
-  restart (`updates.withoutHerdr`, the ⓘ's herdr concerns) — and
-  `StopServer` / `StartServer` refuse (`ErrOnCore`): herdr's agents there
-  are not the ones this remuda sees, and a stop would end them all. For the
+  Windows. Nothing of herdr's is offered there at all (Core 26k): its
+  update, hooks, integrations, plugins and a restart of its server are gone
+  from the page and from `internal/updates`, since herdr's agents on such a
+  machine are not the ones this remuda sees. For the
   same reason every checkout write holds back as while an agent works
   there — the Git and Changes lenses, a pull, an undo, a worktree removed
   the writes into a checkout the Git and Changes lenses, a pull and an undo
@@ -1501,13 +1498,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   only the focused one runs its find and gets the tab strip's tools
   (`focused` on `Chat` and `TerminalLens`); the Changes lens and the Git
   lens replace both; the terminal is the same mounted lens, so it attaches once.
-- `internal/health` — each machine's vitals (Claude Code / herdr /
-  remuda versions, how Claude Code was installed, herdr's agent hooks
-  that lag the installed herdr (`OutdatedHooks`, the shell behind
-  `Report.OutdatedHooks`), every integration herdr reports with its
-  state (`Integrations` → `Report.Integrations {agent: current | outdated
-  | missing}`, "not installed" read as missing) and its plugins from GitHub (`GitHubPlugins` →
-  `Report.Plugins`), disk, load, the core count, uptime, and **the body**
+- `internal/health` — each machine's vitals (Claude Code / remuda /
+  remuda-core versions, how Claude Code was installed, disk, load, the
+  core count, uptime, and **the body**
   (`host.go`, tested on rp-orange's and a Mac's recorded answers):
   `HostScript` prints raw lines that Go parses — memory from
   `/proc/meminfo` or a Mac's `hw.memsize` and `vm_stat` (free, inactive,
@@ -1566,7 +1559,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   and two per core, `DISK_THRESHOLDS` 10 % / 5 % free, `spanWords`,
   `sparkTitle`), pure SVG, the thresholds as dashed amber and red lines,
   hidden with fewer than two samples; the newest
-  Claude Code, Codex, Gemini CLI and Kimi Code (npm registry), herdr and **remuda
+  Claude Code, Codex, Gemini CLI and Kimi Code (npm registry) and **remuda
   itself** (GitHub releases) every 6 hours unless `-no-version-check` —
   the only outbound requests remuda makes by itself (a read on demand
   asks again when the last look is over 5 minutes old, `RefreshLatest`);
@@ -1574,11 +1567,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   only when the person asks for them in the icon dialog (`internal/icons`).
   `release.go`: the newest release with its assets (`Collector.Release`).
   **`internal/updates`** turns all of that into what the page offers:
-  `Plan(what, report)` / `Offered(report, latest)` are the commands for
-  herdr and the agents (`what = integrations`, "Install herdr's agent
-  hooks": `herdr integration install <agent>` for every agent installed
-  there whose integration herdr reports not installed, `MissingIntegrations`,
-  as `remuda setup` installs them — not a step of Update everywhere; `what = mcp`, "Connect the agents to your
+  `Plan(what, report)` / `Offered(report, latest)` are the commands for the
+  agents and remuda-core (`what = mcp`, "Connect the agents to your
   tasks": `remuda mcp install` on every machine with a remuda, see
   `internal/mcp`; `what = statusline`, "Show Claude Code's plan limits":
   `remuda statusline install`, see `internal/limits`), `ReleaseUpdate(have, os, arch, rel, local)` offers
@@ -1604,9 +1594,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   → `features/updates/EverywhereDialog.tsx`, `everywhere.ts` tested):
   `GET /api/updates/everywhere` is `EverywherePlan`, every connected
   machine's pending updates as `Step{machine, label, what, title,
-  command}` — herdr, hooks, the agents, code-server, remuda-core (where
-  none is or an older one), a newer remuda release, only where something
-  newer is known (`pendingUpdate`), in that
+  command}` — the agents, code-server, remuda-core (where none is or an
+  older one), a newer remuda release, only where something newer is known
+  (`pendingUpdate`), in that
   order on each machine, the remotes first and the page's own host last,
   since its remuda restarts once its job ends; each command shown before
   Run; `POST /api/updates/everywhere {steps}` checks every step against
@@ -1616,8 +1606,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   the page's own host last) and `runBatch` runs them one after another
   through `Start`, each waiting for its job (`StepTimeout` 30 min), a
   failed or skipped step leaving the rest to run; a step an earlier one
-  already saw to (the herdr update installs the hooks itself) or whose
-  command moved meanwhile is skipped with the reason, not failed
+  already saw to, or whose command moved meanwhile, is skipped with the
+  reason, not failed
   (`stillPending`); `GET …/everywhere/{id}` is the run's `Batch` with
   each step's state, the last five kept in memory — a run gone with the
   page's own remuda, its release step started, reads on the page as
@@ -1826,7 +1816,7 @@ components and icons as rules for whoever changes it: @docs/design.md
 - `internal/drift/` — **Fleet setup: how every machine is set up, side
   by side, the odd one out marked** (tested: the script on this
   machine's sh, awk, sed and git in a temp HOME with anonymized config
-  files, a herdr stand-in and a repository with a linked worktree one
+  files and a repository with a linked worktree one
   commit behind; `Parse` on fixture lines; `Build` on a fleet of
   fixtures). `Script(dirs)` is one read-only POSIX script per machine,
   no agent run: remuda's MCP server in each agent's own config —
@@ -1838,9 +1828,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   there is one (else unread, no cell); the global instruction files
   (`~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`, `~/.gemini/GEMINI.md`)
   as sha256 and mtime (`sha256sum`, else `shasum -a 256`, else openssl);
-  `herdr plugin list` (a GitHub plugin by `github:owner/repo`, a local
-  one by its kind alone, its path being the machine's own); and for the
-  watcher's workspace folders the main checkout of each
+  and for the watcher's workspace folders the main checkout of each
   (`script.MainFolder`, the folder `pwd -P`'d so a worktree and its
   repository count once): the origin without a user or token in it
   (`sed` strips `scheme://user:token@`), the root commit when there is no
@@ -1849,9 +1837,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   when), and `RepoFiles` (CLAUDE.md, AGENTS.md, .claude/settings.json)
   hashed. Only names, versions, hashes, flags and times leave the
   machine. `Build(machines, at)` is the `Table`: `Column`s, `Section`s
-  agents (`agent.version`, `agent.via` per agent), herdr (`herdr.version`,
-  `herdr.server`, `herdr.hooks` per agent installed, `herdr.plugin` per
-  plugin seen), remuda (`remuda.version`, `code.version`, `core.version`, `mcp` per
+  agents (`agent.version`, `agent.via` per agent), remuda (`remuda.version`,
+  `code.version`, `core.version`, `mcp` per
   agent installed, `statusline`), claude (`claude.model`, `claude.fast`),
   instructions, and a `repo` section per repository on two machines or
   more (`repoKey`: `teleport.RemoteKey` of the origin, else `root:<first
@@ -1861,15 +1848,14 @@ components and icons as rules for whoever changes it: @docs/design.md
   whose read failed has no cell (the vitals' rows still stand for a failed
   script). `settle` is the rule: the norm is the value most cells share; a
   tie goes to the better value where the row ranks them (`newer` versions
-  over older and installed over not, `hookRank` current › outdated ›
-  missing, `yes` for a flag remuda installs, `present`, `fewer` behind),
+  over older and installed over not, `yes` for a flag remuda installs,
+  `present`, `fewer` behind),
   else the row is `split` and every cell marked so; a cell off the norm is
   `odd`; one cell is `single`. **Bring in line** only through updates
   remuda already has: on a row that differs, every cell below the row's
   best gets the machine's own offered `updates.Update` as its `Action`
-  when it offers it (`agent.version` → the agent, `herdr.version` →
-  herdr, `herdr.server` → restart-herdr, outdated hooks → hooks, missing
-  → integrations, `remuda.version` → remuda-release else remuda,
+  when it offers it (`agent.version` → the agent,
+  `remuda.version` → remuda-release else remuda,
   `code.version` → code, `core.version` → core, `mcp` → mcp, `statusline` → statusline); the
   machines below the best with no such update, and every other marked
   cell not at the best value (each of them in a row that ranks nothing:
@@ -1897,7 +1883,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   log; its close comes back, its finish reads the table afresh), Run…
   disabled for a machine the roster does not list; **By hand** says what
   to do on the row's `hand` machines (`handWords`: install
-  the agent, `herdr integration install`, `/model` or settings.json for
+  the agent, `/model` or settings.json for
   the model, copy the instruction file — naming whose copy changed last
   — commit and pull a repository's file, pull a checkout behind; remuda
   never writes the agents' configs); `fleet.ts` the pure part, tested:
@@ -1974,7 +1960,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   (`remuda-windows-amd64.exe` / `-arm64.exe`, `updates/winrelease.go`: the
   running remuda.exe renamed aside first, no service to restart, the next
   bridge runs the new one; never "Deploy this remuda there" from a Mac or
-  Linux), herdr's update without `--handoff`. Not there: the Code mode
+  Linux). Not there: the Code mode
   (`code.NoCodeOnWindows`; `install-code.sh` refuses), previews
   (`preview.NotOnWindows`: Windows names no listening process's folder),
   teleport (`teleport.NotWithWindows`, both ends), Codex's session found by
@@ -2010,7 +1996,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   throwaway on the person's `HOME` resumed a live Claude Code session in a
   hidden pane and wrote its probe workspace into their session file (it
   happened, 2026-11-12). `internal/herdr/herdrtest.Server` sets both.
-- **Installing and uninstalling need no checkout** (`internal/setup`: seven
+- **Installing and uninstalling need no checkout** (`internal/setup`: six
   embedded POSIX scripts, and `setup_test.go` drives them in a temp HOME
   with stand-ins for launchctl, systemctl, herdr, brew and ssh first on
   PATH — never against the real machine; a Windows PC's way through
@@ -2019,11 +2005,11 @@ components and icons as rules for whoever changes it: @docs/design.md
   `live_windows_test.go`). **A Windows host**: `setup -host` asks it
   `uname -s` first (`remoteSystem`: Git Bash's MINGW…, or the
   "is not recognized" of cmd.exe or PowerShell, answered with the
-  DefaultShell line), refuses `-server` there, and after setup.sh (herdr
-  for Windows through `irm https://herdr.dev/install.ps1 | iex`, its server
-  started by PowerShell's `Start-Process`) and install.sh (MINGW: the
-  `remuda-windows-<arch>.exe` asset at `~/.local/bin/remuda.exe`, a running
-  one renamed aside first) installs no service; `uninstall.sh` there takes
+  DefaultShell line), refuses `-server` there, and after remuda-core
+  (`install-core.sh`: the `.zip` through Windows' own `tar.exe`) and
+  install.sh (MINGW: the `remuda-windows-<arch>.exe` asset at
+  `~/.local/bin/remuda.exe`, a running one renamed aside first) installs no
+  service; `uninstall.sh` there takes
   remuda.exe and `%APPDATA%\remuda`, and with `-herdr` the package under
   `~/.herdr/packages` (never `~/.herdr/worktrees`), its folders and its
   entry on the account's PATH. `install.sh` is the one line
@@ -2066,8 +2052,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   `install-code.sh` (`setup.Code`). **remuda-core** (`remuda core [-host H]
   [install|status]`, `install-core.sh`, `setup.Core`, tested in
   `core_test.go` on stand-ins for uname, curl, loginctl, cygpath and
-  Windows' own `tar.exe`): the terminal runtime the machines move to from
-  herdr (dev1antdev/remuda-core), `setup.CoreVersion` pinned with the five
+  Windows' own `tar.exe`; wget alone fetches it, as the release installer
+  does): the terminal runtime (dev1antdev/remuda-core), `setup.CoreVersion`
+  pinned with the five
   builds' sha256 in the script (another version needs `CORE_SHA256`), into
   `~/.local/bin` — `remuda-core` with an `rc` link when no `rc` is on PATH;
   on Windows `remuda-core.exe` and `conpty/` beside `remuda.exe`, ConPTY
@@ -2082,9 +2069,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   -9 and never taken over: a second install names it and stops); one installed already is swapped by its own `update --from`
   (its terminals keep running), one as new or newer left alone, a fresh
   one starts nothing; on Linux `loginctl enable-linger`, said when refused.
-  `remuda setup` installs it after herdr (never under `-server`; a failure
-  is said and setup goes on — CI's Windows job checks it really lands
-  there, `live_windows_test.go`); the
+  `remuda setup` installs it and nothing else (never under `-server`; a
+  failure ends setup, since a machine without its runtime is not set up and
+  no service comes up to offer it again — CI's Windows job checks it really
+  lands there, `live_windows_test.go`); the
   vitals read `remuda_core`; Updates offers `what = core` ("Install
   remuda-core" / "Update remuda-core") on every machine where it is
   missing or older and a build exists (a Mac or Linux
@@ -2108,29 +2096,19 @@ components and icons as rules for whoever changes it: @docs/design.md
   machine moved to remuda-core (`internal/restart`, `handleHerdrStop`) —
   which finds `herdr` on PATH, `~/.local/bin` or Homebrew's folders and
   exports `HERDR_SOCKET_PATH` itself. `remuda setup [-host H] [-tailscale]` (`internal/setup`:
-  `setup.sh` installs herdr with brew or its installer, starts the
-  server, installs `herdr integration` hooks for the agents present and
-  installs again every integration herdr reports outdated;
-  `install-service.sh` is the launchd / systemd service — the unit's
-  `ExecStart` and `Environment` quoted, as `install-code.sh`'s are, so a
-  HOME with a space in it runs, tested on a `uname` stand-in answering
-  Linux) is the
+  `setup.CoreInstaller` puts remuda-core there (Core 26k: no herdr is
+  installed any more, and `setup.sh` is gone), `install-service.sh` is the
+  launchd / systemd service — the unit's `ExecStart` and `Environment`
+  quoted, as `install-code.sh`'s are, so a HOME with a space in it runs,
+  tested on a `uname` stand-in answering Linux) is the
   one-command install, locally or over ssh. `internal/jobs` runs a shell script on a `shell.Host` in the background
   with its output streamed (`Host.Stream`: `sh -c` here, the master for a
   remote) for the page to poll (`GET /api/jobs/{id}`) and publishes
   `events.JobDone`, on which the vitals are re-read; `updates.Plan(what,
-  report)` is the update command for herdr (brew or `herdr update --handoff`;
-  every brew path runs `brew update` first, once per job; an install that
-  fails ends the job with its status, with no hooks step and no restart of
-  the server),
+  report)` is the update command for
   claude / codex / gemini / kimi (brew, npm or the agent's own updater, by
   where the binary lives), or every agent (`restart.Kinds("agents")` is the
-  one list of them); `what=hooks` is `herdr integration
-  install` for every agent whose hooks herdr reports outdated (the herdr
-  update runs that step itself, `hooksStep`, before the server restart —
-  0.9.5 changed what Codex's hooks are), `what=plugins` is `herdr plugin
-  update --yes` for the plugins installed from GitHub, on herdr 0.9.4 and
-  up; `GET /api/machines/{id}/updates` lists
+  one list of them); `GET /api/machines/{id}/updates` lists
   them (`updates.Service.Available`), `POST …/update {what}` starts one
   (`Service.Start`); `what=remuda` copies this very binary to a remote of
   the same OS/CPU and restarts its service; `what=remuda-release` has the
@@ -2178,14 +2156,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   calls it off) because the person is likely reading or typing right
   then. This is the one place remuda types text the person did not
   compose, and only because they pressed Run on an update or a restart.
-  `Restarter.Server` (restart/server.go) is the server onto a new binary
-  when no handoff happened: the chats with sessions noted and their panes
-  locked, `herdr server stop`, `Machine.StartServer`, a wait for the
-  restored session, then every pane that came back as a shell gets
-  `agent.start --resume`. The herdr update job ends with `herdrThen`
-  (`Machine.ServerVersions`: binary vs running server; equal → nothing,
-  else the restart); `what = restart-herdr` runs it alone and the vitals
-  probe's `herdr_server` line is what offers it. **One chat by hand**:
+  **One chat by hand**:
   `Restarter.Pane(mc, paneID, say)` is the same leave-and-resume for a
   single pane, behind `POST /api/panes/restart {machine, pane}` →
   `updates.Service.RestartPane` → a job (`GET /api/jobs/{id}`); the
@@ -2218,8 +2189,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   `Restored` on a remuda-core machine, whose shell the core gave a new
   one while remuda watched (see `internal/core`, Core 21) — and is forgotten
   when the person left the agent themselves, moved the shell elsewhere
-  or closed the pane; `Restarter.Server` pauses the memory for its
-  machine while it restarts herdr itself; a pane `Memory.Asleep` names (`sleep.Store.Holds`: a
+  or closed the pane; a pane `Memory.Asleep` names (`sleep.Store.Holds`: a
   workspace the person put to sleep, its agents left at their word and
   the sleep's to wake — neither stopped by a reboot nor closed). The
   roster carries `machine.stopped [{pane, agent, title, dir, command, from}]`
@@ -2346,8 +2316,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   anywhere — a `Closed` entry (agent, session, folder, the pane's title,
   its workspace's name and its tab's own name, read off the last
   snapshot that showed it, `paneFace`), newest first, once per session,
-  the last `ClosedKeep` (20) per machine in `<state>/closed.json`; never
-  while the memory is paused for remuda's own restart of herdr, never a
+  the last `ClosedKeep` (20) per machine in `<state>/closed.json`; never a
   pane that came back as a shell (that is the reboot's list), dropped
   with its machine. `GET /api/closed` lists every machine's, less the
   ones whose session a pane runs again; `POST /api/closed/reopen
@@ -3860,22 +3829,24 @@ components and icons as rules for whoever changes it: @docs/design.md
   popups and a stop's confirm, cancelled, and checks the phones have no bar;
   its ports flow lists the dev server on the roster, reads the real load
   and stops a server it started.
-- `internal/resources/` — **what a machine's herdr panes weigh on it**
+- `internal/resources/` — **what a machine's terminals weigh on it**
   (tested on a Mac's and a Linux's recorded tables, and on this machine's
   own): `Script` prints the cores and memory then a line per process — ps
   on a Mac (whose `pcpu` is a recent average), `/proc/[0-9]*/stat` through
   awk on Linux (whose ps tells a process's CPU over its whole life:
   cumulative ticks instead); `Parse` the `Table`; `Measure` sums each pane's
   tree from its shell (`Root`, `herdr.Client.PaneShellPID`) into its
-  workspace, each process once, then the herdr server's own processes
-  (`Usage{cores, mem_kb, total, cpu_known, workspaces, herdr, unread}`, CPU
+  workspace, each process once, then remuda-core's own processes
+  (`Usage{cores, mem_kb, total, cpu_known, workspaces, core, herdr, unread}`,
+  the same weight under `herdr` too, the name a page from before Core 26k
+  reads: a tab open across an upgrade or a rollback never finds none; CPU
   as a share of all the cores, the heaviest process of each tree as its
   `top`). `Service.Read` is one read at a time per machine, a reading
   answering every asker for `Fresh` 4 s; a Linux machine's ticks are told
   against the reading before (a process born since spent all of its own in
   between), and a read with no baseline younger than `BaselineFor` samples
-  twice `FirstGap` 1 s apart; a pane's shell is asked of herdr once, again
-  only when the table lacks it, at most every `AskAgainAfter` 30 s.
+  twice `FirstGap` 1 s apart; a pane's shell is asked of remuda-core once,
+  again only when the table lacks it, at most every `AskAgainAfter` 30 s.
   `NotOnWindows`: Git Bash's ps names no CPU or memory. Route `GET
   /api/resources?machine` (`internal/server/resources.go`, the person's: no
   viewer route, no agent key), which also hurries the ports.
@@ -3902,7 +3873,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   `/api/ports` names no `at` until a reading). `Stop(host, skip, pid,
   port)` looks afresh and sends `kill -TERM` only to that very pid on that
   very port among the listeners the person may stop — never remuda's,
-  herdr's, ssh's, Tailscale's, an agent's, a skipped port's or another user's
+  remuda-core's, ssh's, Tailscale's, an agent's, a skipped port's or another user's
   (`ErrNotListening`, a 404). Routes `GET /api/ports?machine` and `POST
   /api/ports/stop {machine, pid, port}`, the person's only, at the page's
   press after its confirm.

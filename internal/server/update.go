@@ -10,7 +10,8 @@ import (
 	"github.com/dev1antdev/remuda/internal/updates"
 )
 
-// Updates from the page: herdr, the agents and remuda itself, each a job the person first sees as a command, then watches run.
+// Updates from the page: remuda-core, the agents and remuda itself, each a job the person first sees as a command, then
+// watches run.
 
 func (s *Server) updateRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/machines/{id}/updates", s.handleMachineUpdates)

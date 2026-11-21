@@ -35,9 +35,9 @@ type Column struct {
 	Error string `json:"error,omitempty"`
 }
 
-// Section is a group of rows: the agents, herdr, remuda, Claude Code's settings, the instructions, or one repository.
+// Section is a group of rows: the agents, remuda, Claude Code's settings, the instructions, or one repository.
 type Section struct {
-	ID      string            `json:"id"`                // agents | herdr | remuda | claude | instructions | repo
+	ID      string            `json:"id"`                // agents | remuda | claude | instructions | repo
 	Name    string            `json:"name,omitempty"`    // a repository's: owner/repo, or its folder's name
 	Folders map[string]string `json:"folders,omitempty"` // a repository's main checkout on each machine, by machine id
 	Rows    []Row             `json:"rows"`
@@ -90,7 +90,7 @@ func Build(machines []Machine, at time.Time) Table {
 			live = append(live, m)
 		}
 	}
-	for _, section := range []Section{agentsSection(live), herdrSection(live), remudaSection(live), claudeSection(live), instructionsSection(live)} {
+	for _, section := range []Section{agentsSection(live), remudaSection(live), claudeSection(live), instructionsSection(live)} {
 		if len(section.Rows) > 0 {
 			table.Sections = append(table.Sections, section)
 		}
@@ -242,15 +242,6 @@ func newer(a, b string) bool {
 
 // yes ranks a flag on over off.
 func yes(a, b string) bool { return a == "yes" && b == "no" }
-
-// present ranks something there over nothing.
-func present(a, b string) bool { return a != "" && b == "" }
-
-// hookRank ranks herdr's hooks: current, then outdated, then missing.
-func hookRank(a, b string) bool {
-	rank := map[string]int{"current": 3, "outdated": 2, "missing": 1}
-	return rank[a] > rank[b]
-}
 
 // fewer ranks a checkout fewer commits behind its upstream first.
 func fewer(a, b string) bool { return len(a) < len(b) || (len(a) == len(b) && a < b) }

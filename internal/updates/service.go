@@ -55,39 +55,14 @@ func (s *Service) Available(mc *machines.Machine) []Update {
 		offered = append(offered, u)
 	}
 	offered = append(offered, restartPlans(snap)...)
-	if u, ok := serverRestartPlan(mc, report, snap); ok {
-		offered = append(offered, u)
-	}
 	if s.Machines != nil && s.Machines.Server() && mc.Local() {
 		return serverHostOnly(offered)
 	}
-	return withoutHerdr(offered)
+	return offered
 }
 
-// withoutHerdr is what a machine reached through remuda-core is offered: nothing of herdr's (herdrs)
-func withoutHerdr(offered []Update) []Update {
-	kept := []Update{}
-	for _, u := range offered {
-		if !herdrs(u.What) {
-			kept = append(kept, u)
-		}
-	}
-	return kept
-}
-
-// herdrs says the update is herdr's own — its update, its hooks, integrations and plugins, a restart of its server —
-// which a machine reached through remuda-core is not offered (withoutHerdr): herdr's agents there are
-// not the ones this remuda sees
-func herdrs(what string) bool {
-	switch what {
-	case "herdr", "hooks", "integrations", "plugins", "restart-herdr":
-		return true
-	}
-	return false
-}
-
-// serverHostOnly is what the host of a remuda serving the page only is offered: its own release alone — a herdr, its
-// hooks, an agent or the tasks' MCP there serve no workspace, and a restart of its herdr is refused (machines.ErrServerHost)
+// serverHostOnly is what the host of a remuda serving the page only is offered: its own release alone — remuda-core, an
+// agent or the tasks' MCP there serve no workspace
 func serverHostOnly(offered []Update) []Update {
 	kept := []Update{}
 	for _, u := range offered {
@@ -122,7 +97,7 @@ func (s *Service) RestartPane(mc *machines.Machine, paneID string) (jobs.Job, er
 		return jobs.Job{}, err
 	}
 	title := "Restart " + restart.Title(kind) + " in " + p.DisplayTitle()
-	command := "# in " + paneID + " on " + mc.Label() + ", through herdr:\n" + restartCommand(kind, session)
+	command := "# in " + paneID + " on " + mc.Label() + ", through remuda-core:\n" + restartCommand(kind, session)
 	return s.Jobs.Run(mc, title, command, func(say func(string)) error { return s.Restart.Pane(mc, paneID, say) }), nil
 }
 
@@ -131,22 +106,9 @@ func (s *Service) Start(mc *machines.Machine, what, command string) (jobs.Job, e
 	if command == "" { // the promise is "what was shown is what runs": a run without the shown text is refused
 		return jobs.Job{}, fmt.Errorf("the command shown must come back with the request")
 	}
-	if mc.OnCore() && herdrs(what) { // a tab opened before the move may still hold herdr's command
-		return jobs.Job{}, machines.ErrOnCore
-	}
 	report := s.Health.Report(mc.ID())
 	snap, _ := s.Watch.Snapshot(mc.ID())
 	switch {
-	case what == "restart-herdr":
-		installed, running, err := mc.ServerVersions()
-		if err != nil || running == "" {
-			return jobs.Job{}, fmt.Errorf("no herdr server runs there (%v)", err)
-		}
-		u := serverRestartUpdate(mc, running, installed, snap)
-		if command != u.Command {
-			return jobs.Job{}, &StaleError{"the versions changed since this was shown — look again"}
-		}
-		return s.Jobs.Run(mc, u.Title, u.Command, func(say func(string)) error { return s.Restart.Server(mc, say) }), nil
 	case strings.HasPrefix(what, "restart-"):
 		kind := strings.TrimPrefix(what, "restart-")
 		if restart.Kinds(kind) == nil {
@@ -187,55 +149,7 @@ func (s *Service) Start(mc *machines.Machine, what, command string) (jobs.Job, e
 		return jobs.Job{}, &StaleError{"the update changed since it was shown — look at it again"}
 	}
 	first, then := s.restartHooks(mc, what)
-	if what == "herdr" {
-		then = s.herdrThen(mc)
-	}
 	return s.Jobs.StartThen(mc, u.Title, u.run(), first, then), nil
-}
-
-// serverRestartPlan offers a restart of herdr's server when it still runs an older version than the one installed.
-func serverRestartPlan(mc *machines.Machine, rep *health.Report, snap *herdr.Snapshot) (Update, bool) {
-	if rep == nil || rep.HerdrServer == "" || rep.Herdr == "" || rep.HerdrServer == rep.Herdr {
-		return Update{}, false
-	}
-	return serverRestartUpdate(mc, rep.HerdrServer, rep.Herdr, snap), true
-}
-
-func serverRestartUpdate(mc *machines.Machine, running, installed string, snap *herdr.Snapshot) Update {
-	ready, busy := restart.Count(snap, restart.Kinds("agents"))
-	n := ready + busy
-	note := fmt.Sprintf("The server runs %s while %s is installed. A restart ends every pane process; herdr restores the workspaces, tabs and panes, and remuda starts each of the %d chat(s) again with its session resumed. Shells and other processes in panes come back as fresh shells.", running, installed, n)
-	if busy > 0 {
-		note += fmt.Sprintf(" %d chat(s) are busy right now: whatever they are doing is cut short.", busy)
-	}
-	return Update{What: "restart-herdr", Title: "Restart herdr's server", Command: "# on " + mc.Label() + ", through remuda:\nherdr server stop; herdr server   # " + running + " → " + installed + "; then every chat started again on its session", Note: note}
-}
-
-// herdrThen is the step after an install of herdr: the running server onto the new version, unless the installer's handoff already did that.
-func (s *Service) herdrThen(mc *machines.Machine) func(say func(string), failed error) error {
-	return func(say func(string), failed error) error {
-		if failed != nil { // a restart ends every pane's process: never for an update that did not go through
-			say("the update failed: the running server stays as it is")
-			return nil
-		}
-		installed, running, err := mc.ServerVersions()
-		if err != nil {
-			return fmt.Errorf("read herdr's versions: %v", err)
-		}
-		say("")
-		switch {
-		case installed == "":
-			return fmt.Errorf("cannot read the installed herdr's version")
-		case running == "":
-			say("no server runs; remuda starts " + installed)
-			return mc.StartServer()
-		case running == installed:
-			say("the server runs " + installed + " already")
-			return nil
-		}
-		say(fmt.Sprintf("== the server still runs %s; onto %s", running, installed))
-		return s.Restart.Server(mc, say)
-	}
 }
 
 // restartNote says what an agent update does to the chats afterwards.
@@ -285,7 +199,7 @@ func restartPlan(kind string, snap *herdr.Snapshot) (Update, int) {
 		note += fmt.Sprintf(", %d of them busy (those restart once they have settled for a while)", len(busy))
 	}
 	note += ". " + restartWords(kind) + fmt.Sprintf(" — for a %s that updated itself, or after `%s update` run by hand. A message half-typed in a chat's box is lost.", title, kind)
-	cmd := "# in every " + title + " pane here (" + strings.Join(ids, ", ") + "), through herdr:\n" + restartCommand(kind, "<session>")
+	cmd := "# in every " + title + " pane here (" + strings.Join(ids, ", ") + "), through remuda-core:\n" + restartCommand(kind, "<session>")
 	return Update{What: "restart-" + kind, Title: "Restart " + title + " chats", Command: cmd, Note: note}, n
 }
 
@@ -417,7 +331,7 @@ func (s *Service) deployPlan(mc *machines.Machine, rep *health.Report) (Update, 
 		have = "not deployed"
 	}
 	return Update{What: "remuda", Title: "Deploy this remuda there", Command: "# this remuda binary → " + mc.Cfg.Host + ":~/.local/bin/remuda.new over the ssh connection, then there:\n" + deployScript,
-		Note: have + " → " + me + ". The binary this page is served by is copied over your SSH and its service restarted; the peer relay reconnects by itself."}, true
+		Note: have + " → " + me + ". The binary this page is served by is copied over your SSH and its service restarted; the page reconnects by itself."}, true
 }
 
 // deployScript installs the copied binary and restarts the service: the two steps a release download ends with too.
@@ -461,7 +375,7 @@ func (s *Service) deploySelf(mc *machines.Machine, say func(string)) error {
 	if err != nil {
 		return err
 	}
-	// the job ends only once the new remuda answers, so the vitals read that follows finds the peer again
+	// the job ends only once the new remuda answers, so the vitals read that follows finds the machine there
 	say("waiting for remuda there…")
 	for i := 0; i < 30; i++ {
 		time.Sleep(time.Second)

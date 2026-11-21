@@ -1,22 +1,6 @@
 package machines
 
-import (
-	"errors"
-	"regexp"
-	"strings"
-	"time"
-
-	"github.com/dev1antdev/remuda/internal/herdr"
-	"github.com/dev1antdev/remuda/internal/script"
-)
-
-// herdr on the machine: its binary and socket, the server started, stopped and asked for its version.
-// HerdrBin is herdr's binary on the machine, "" before a remote's first connect.
-func (mc *Machine) HerdrBin() string {
-	mc.mu.Lock()
-	defer mc.mu.Unlock()
-	return mc.herdrBin
-}
+import "time"
 
 // MovedHerdr is the herdr remuda reached on this machine before the move to remuda-core: this one's -herdr-bin and
 // -socket; a remote's herdr_bin, and the socket remuda dials there (herdrSocket: its remote_socket, else herdr's
@@ -29,66 +13,6 @@ func (mc *Machine) MovedHerdr() (bin, socket string) {
 		return mc.Cfg.HerdrBin, mc.socket
 	}
 	return mc.herdrBin, mc.socket
-}
-
-// ServerVersions reads the installed herdr's version and the running server's ("" when none runs), freshly.
-func (mc *Machine) ServerVersions() (installed, running string, err error) {
-	bin, sock := mc.herdrPaths()
-	out, err := mc.text(`LC_ALL=C; `+script.Quote(bin)+` --version 2>/dev/null | head -1; HERDR_SOCKET_PATH=`+script.Quote(sock)+` `+script.Quote(bin)+` status server 2>/dev/null | sed -n 's/^version: //p' | head -1`, 20*time.Second)
-	if err != nil && strings.TrimSpace(out) == "" {
-		return "", "", err
-	}
-	lines := strings.Split(strings.TrimSpace(out), "\n")
-	installed = herdrSemver.FindString(lines[0])
-	if len(lines) > 1 {
-		running = herdrSemver.FindString(lines[1])
-	}
-	return installed, running, nil
-}
-
-var herdrSemver = regexp.MustCompile(`\d+\.\d+\.\d+`)
-
-// ErrOnCore refuses herdr's server on a machine this remuda reaches through remuda-core: herdr's agents there are not
-// the ones it sees, and a stop would end them all.
-var ErrOnCore = errors.New("this machine is reached through remuda-core: herdr there is not this remuda's to update, stop or start")
-
-// StopServer stops herdr's server on the machine, and every pane process with it.
-func (mc *Machine) StopServer() (string, error) {
-	if mc.speaksCore {
-		return "", ErrOnCore
-	}
-	bin, sock := mc.herdrPaths()
-	return mc.text(`HERDR_SOCKET_PATH=`+script.Quote(sock)+` `+script.Quote(bin)+` server stop 2>&1`, 30*time.Second)
-}
-
-// StartServer starts herdr's server on the machine now, without the spacing of the automatic starts.
-func (mc *Machine) StartServer() error {
-	if mc.speaksCore {
-		return ErrOnCore
-	}
-	bin, sock := mc.herdrPaths()
-	if mc.local {
-		return herdr.StartServerNow(bin, sock)
-	}
-	conn, err := mc.remoteConn()
-	if err != nil {
-		return err
-	}
-	mc.mu.Lock()
-	mc.serverStart = time.Now()
-	mc.mu.Unlock()
-	_, err = conn.Run(herdr.StartServerScriptOn(mc.OS(), bin, sock), 25*time.Second)
-	return err
-}
-
-func (mc *Machine) herdrPaths() (bin, sock string) {
-	mc.mu.Lock()
-	defer mc.mu.Unlock()
-	bin, sock = mc.herdrBin, mc.socket
-	if bin == "" {
-		bin = "herdr"
-	}
-	return bin, sock
 }
 
 // mayStartServer allows one `herdr server` start per two minutes, noting the one it allows.

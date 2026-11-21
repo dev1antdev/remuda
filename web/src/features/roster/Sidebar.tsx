@@ -35,7 +35,7 @@ export type { Current } from "./rows";
 const ORDERS: { order: RadarOrder; label: () => string }[] = [
   { order: "active", label: () => t("Grouped by activity") },
   { order: "recent", label: () => t("Flat, by activity") },
-  { order: "herdr", label: () => t("herdr's own order") },
+  { order: "herdr", label: () => t("the agents' own order") },
   { order: "priority", label: () => t("By priority") },
   { order: "prefix", label: () => t("By ticket prefix") },
 ];

@@ -25,7 +25,5 @@ export const audit3webpanels: Dictionary = {
   "This remuda cannot be deployed there: that needs a remote machine of the same OS and CPU, and a released build here.":
     "Этот remuda туда не развернуть: нужна удалённая машина с той же ОС и процессором и выпущенная сборка здесь.",
   "No newer release of remuda is known for this machine.": "Более нового выпуска remuda для этой машины не известно.",
-  "herdr's hooks there are current.": "Хуки herdr там свежие.",
-  "No herdr plugin from GitHub is installed there, or herdr there is older than 0.9.4.": "Там не установлено ни одного плагина herdr с GitHub, или herdr там старше 0.9.4.",
   "Done. remuda is restarting here; the page offers a reload once the new version answers.": "Готово. remuda здесь перезапускается; страница предложит перезагрузку, когда новая версия ответит.",
 };

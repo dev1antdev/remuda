@@ -4,6 +4,10 @@
 import type { Dictionary } from "../../i18n";
 
 export const statusbar: Dictionary = {
+  "What the machine's terminals weigh on {machine}": "Сколько терминалы машины нагружают {machine}",
+  "No terminal runs anything on this machine now.": "Сейчас на этой машине не работает ни один терминал.",
+  "the terminal runtime itself": "сама среда терминалов",
+  "the terminals on {machine}: CPU {cpu} of {cores} cores · {mem} of {total}": "терминалы на {machine}: CPU {cpu} из {cores} ядер · {mem} из {total}",
   "Status bar": "Строка состояния",
   "the plan limits, the pane's branch, its machine's load and ports along the foot of the page": "лимиты плана, ветка панели, нагрузка и порты её машины внизу страницы",
   "on a screen wider than a phone's, with a mouse": "на экране шире телефонного, с мышью",
@@ -48,15 +52,11 @@ export const statusbar: Dictionary = {
   "CPU {cpu}": "ЦП {cpu}",
   "CPU {cpu} · {mem} of {total}": "ЦП {cpu} · {mem} из {total}",
   "CPU is a share of all {cores} cores · {mem}": "ЦП — доля всех ядер, их {cores} · {mem}",
-  "herdr's panes on {machine}: CPU {cpu} of {cores} cores · {mem} of {total}": "Панели herdr на {machine}: ЦП {cpu} от {cores} ядер · {mem} из {total}",
   "The load on {machine}": "Нагрузка на {machine}",
-  "What herdr's panes weigh on {machine}": "Чем панели herdr нагружают {machine}",
   "Measuring…": "Измеряем…",
-  "No pane of herdr's runs anything on this machine now.": "Ни в одной панели herdr на этой машине сейчас ничего не запущено.",
   "Show its terminals": "Показать его терминалы",
   "Hide its terminals": "Скрыть его терминалы",
   "{n} terminals": ["{n} терминал", "{n} терминала", "{n} терминалов"],
-  "the server itself and its attaches": "сам сервер и его подключения",
   "remuda's own": "собственные remuda",
   "Not on Windows yet: Git Bash's ps says nothing of a process's CPU or memory": "На Windows пока нет: ps из Git Bash ничего не говорит о процессоре и памяти процесса",
   "not on Windows yet": "на Windows пока нет",
