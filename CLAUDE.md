@@ -2382,8 +2382,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   `os.ErrNotExist` apart from a machine that could not be asked and from
   a path behind a folder the user may not search — the remote stat
   script's `unreadable`, a link followed to its target's way, and links
-  more than eight deep or unread, a loop of links, any failure but "No
-  such file or directory" too, `missing` kept for a path known not there,
+  more than eight deep or unread, a loop of links, any failure whose
+  message does not end ": No such file or directory" too, `missing` kept
+  for a path known not there,
   tested in
   `machines/stat_test.go` — and
   `sessionFileExists`) wraps `ErrUnasked` for a look that failed, and the

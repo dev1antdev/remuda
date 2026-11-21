@@ -200,7 +200,7 @@ func statScript(p string) string {
 		`else p=` + q + `; i=0; while [ -L "$p" ] && [ $i -lt 8 ]; do t=$(readlink -- "$p") && [ -n "$t" ] || break; case "$t" in /*) p=$t ;; *) p=$(dirname -- "$p")/$t ;; esac; i=$((i+1)); done; ` +
 		`err=$(LC_ALL=C ls -d -- "$p" 2>&1 >/dev/null); ` +
 		`if [ -L "$p" ]; then echo unreadable; elif [ -z "$err" ]; then echo missing; ` +
-		`else case "$err" in *"No such file or directory"*) echo missing ;; *) echo unreadable ;; esac; fi; fi`
+		`else case "$err" in *": No such file or directory") echo missing ;; *) echo unreadable ;; esac; fi; fi`
 }
 
 // readStat reads statScript's answer.

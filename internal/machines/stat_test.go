@@ -23,6 +23,9 @@ func TestTheRemoteStatTellsAPathNotThereFromOneNotReadable(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(locked, "api"), 0o700); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.MkdirAll(filepath.Join(locked, "No such file or directory"), 0o700); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.Chmod(locked, 0); err != nil {
 		t.Fatal(err)
 	}
@@ -42,6 +45,9 @@ func TestTheRemoteStatTellsAPathNotThereFromOneNotReadable(t *testing.T) {
 	}
 	if _, err := stat(filepath.Join(locked, "api")); err == nil || errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("a folder behind one not searchable: %v", err)
+	}
+	if _, err := stat(filepath.Join(locked, "No such file or directory")); err == nil || errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("a folder named as the error, behind one not searchable: %v", err)
 	}
 	link := filepath.Join(here, "link")
 	if err := os.Symlink(filepath.Join(locked, "api"), link); err != nil {
