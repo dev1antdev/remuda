@@ -63,7 +63,9 @@ func TestOnWindowsRemudaCoreIsReachedOverSSH(t *testing.T) {
 	// state folders, so a socket the person's config names, or an RC_* a desktop shell carries, can reach no core of theirs
 	session := fmt.Sprintf("remuda-wintest-%d", os.Getpid())
 	conf, state := t.TempDir(), t.TempDir()
-	own := []string{"RC_SESSION=" + session, "XDG_CONFIG_HOME=" + conf, "XDG_STATE_HOME=" + state}
+	// RC_SOCKET empty, said by a shell that inherits one for a core of its own: the core ignores an empty value and takes
+	// the pipe its session names
+	own := []string{"RC_SESSION=" + session, "RC_SOCKET=", "XDG_CONFIG_HOME=" + conf, "XDG_STATE_HOME=" + state}
 	envWords := func(env []string) string {
 		words := "exec env"
 		for _, kv := range env {
