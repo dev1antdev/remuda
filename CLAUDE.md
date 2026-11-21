@@ -514,7 +514,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   adapter as on herdr; a sleep and an agent update's restart type the
   agent's own `/exit` or `/restart`, a prompt, so on a machine they need a
   core with `send_foreground`, 0.2.1, which the pin has — a core older
-  refuses them (a sleep ends "did not stop"); `lifecycle_test.go` runs both
+  refuses them (a sleep ends "did not stop"), and so does a pane kept across
+  the core's own update from a holder older than that (`needs_update`, its
+  words naming the fresh pane that takes it); `lifecycle_test.go` runs both
   on a throwaway core with the gate lifted; an exit or a kill stays final; a
   pane remuda started before it kept them, one carrying a workspace's
   label, is kept as the mirror fills, `keepOlder` through `Client.Keep`,
