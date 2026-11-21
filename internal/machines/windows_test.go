@@ -71,7 +71,12 @@ func TestOnWindowsRemudaCoreIsReachedOverSSH(t *testing.T) {
 		// runs: it is started here the way its app does, and the ssh connection then follows it as it would on a PC whose
 		// sshd is the person's own
 		t.Logf("the runner's ssh is elevated; starting the core in this session first: %v", err)
-		starting := exec.Command(found.core, "server", "start")
+		// Go needs Windows' own spelling of the binary, Git Bash's /c/... spelling is not an executable path to it
+		winPath, pathErr := remote.Raw("cygpath -w \"$(command -v remuda-core)\"")
+		if pathErr != nil || strings.TrimSpace(winPath) == "" {
+			t.Fatalf("remuda-core's Windows path: %v %q", pathErr, winPath)
+		}
+		starting := exec.Command(strings.TrimSpace(winPath), "server", "start")
 		if err := starting.Start(); err != nil {
 			t.Fatalf("start the core in this session: %v", err)
 		}
