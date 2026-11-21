@@ -9,50 +9,16 @@ export const SCROLLBACK_ROWS = 5000;
 // (attachHistory in internal/core/viewers.go), so the find reads the terminal's own rows.
 export const XTERM_SCROLLBACK = 2000;
 
-export type Scroll = { offset_from_bottom: number; max_offset_from_bottom: number; viewport_rows: number };
 export type ScrollbackMatch = { row: number; col: number; len: number };
-export type Found = { matches: ScrollbackMatch[]; rows: number; truncated: boolean; scroll: Scroll | null };
+export type Found = { matches: ScrollbackMatch[]; rows: number; truncated: boolean };
 
 // blankTail counts the screen's blank rows under the last row read: herdr's read ends at the last row with text,
-// while the offsets count the whole viewport; a truncated read means the screen is full, so none.
-export function blankTail(rows: number, truncated: boolean, scroll: Scroll | null): number {
-  if (truncated || !scroll) return 0;
-  return Math.max(0, scroll.max_offset_from_bottom + scroll.viewport_rows - rows);
-}
 
-// fromBottom is how many rows a match sits above the bottom of the screen when nothing is scrolled.
-export function fromBottom(row: number, rows: number, tail: number): number {
-  return rows - 1 - row + tail;
-}
 
-// viewportRow is the screen row (0 = top) a match shows on at an offset, past the screen's edges when off it.
-export function viewportRow(fromBottomRows: number, offset: number, viewportRows: number): number {
-  return viewportRows - 1 - (fromBottomRows - offset);
-}
 
-// onScreen says whether that row is one of the screen's.
-export function onScreen(row: number, viewportRows: number): boolean {
-  return row >= 0 && row < viewportRows;
-}
 
-// offsetFor is the offset that puts a match a third of the screen above its bottom, never below the bottom.
-export function offsetFor(fromBottomRows: number, viewportRows: number): number {
-  return Math.max(0, fromBottomRows - Math.floor(viewportRows / 3));
-}
 
-// nearest picks the occurrence whose row is closest to the one expected, the later one on a tie; -1 for none.
-export function nearest(rows: number[], expected: number): number {
-  let best = -1;
-  for (let i = 0; i < rows.length; i++) {
-    if (best < 0 || Math.abs(rows[i]! - expected) <= Math.abs(rows[best]! - expected)) best = i;
-  }
-  return best;
-}
 
-// clampAt keeps the current match inside a list that may have changed under it.
-export function clampAt(at: number, total: number): number {
-  return total <= 0 ? 0 : Math.min(Math.max(at, 0), total - 1);
-}
 
 // OlderRead is the one read, for a pane and query, of the rows older than a terminal on remuda-core holds for its
 // screen: every step of the query awaits it rather than reading again or skipping it, and it is told once.
@@ -67,4 +33,13 @@ export function olderRead(held: OlderRead | null, key: string, read: () => Promi
 // been told, the older rows hold the query, and the terminal's own rows still hold none.
 export function tellsOlder(current: boolean, read: OlderRead, older: number, counted: number): boolean {
   return current && !read.told && older > 0 && counted === 0;
+}
+
+// nearest takes the expected row, the column nearest the one asked (the later on a tie).
+export function nearest(rows: number[], expected: number): number {
+  let best = -1;
+  for (let i = 0; i < rows.length; i++) {
+    if (best < 0 || Math.abs(rows[i]! - expected) <= Math.abs(rows[best]! - expected)) best = i;
+  }
+  return best;
 }

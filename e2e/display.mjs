@@ -282,12 +282,8 @@ const CHECKS = `(() => {
 })()`;
 
 let shots = 0;
-// the screens a remuda on remuda-core has not yet: no screen terminal (a Windows PC's pane is attached there too) —
-// Core 26g
-const NOT_ON_CORE = ["screen-terminal"];
 // screen opens one screen, waits for its landmarks, checks it, shoots it and closes it again; a failure is noted, never thrown
 async function screen(name, { open, expect = [], close = closeAll, settle = 350 }) {
-  if (onCore && NOT_ON_CORE.includes(name)) return say(`${pass.name} › ${name}: left out on remuda-core`);
   where = `${pass.name} › ${name}`;
   consoleErrors = [];
   const began = Date.now();
@@ -390,7 +386,7 @@ const made = [];
 const now = Date.now();
 const iso = (ms) => new Date(ms).toISOString();
 const sessions = async () => (await api("GET", "/api/roster")).machines.find((m) => m.id === "local")?.sessions ?? [];
-let app, tree, notes, inbox, drawTask, paneA1, paneA2, paneB, paneN, paneTree, morningScene, eveningScene, onCore;
+let app, tree, notes, inbox, drawTask, paneA1, paneA2, paneB, paneN, paneTree, morningScene, eveningScene;
 let DRESS = {};
 const NOTE_TEXT = "Waiting on the API team for the new endpoint.\nDon't merge before Friday's release.";
 // the morning's first step lays its tab out as two panes, the agent on the left and a dev server on the right
@@ -399,7 +395,6 @@ const SCENE_LAYOUT = { agent: 0, root: { type: "split", direction: "right", rati
 // seed makes the workspaces the screens draw — the repository with two tabs and a linked worktree, a plain folder —
 // a task, a Jira site nobody answers at, and the agents the browser's roster will wear
 async function seed() {
-  onCore = (await api("GET", "/api/roster")).machines.find((m) => m.id === "local")?.core === true;
   app = await api("POST", "/api/sessions", { machine: "local", dir: appDir, name: "app", agent: "shell" });
   made.push(app.id);
   await api("POST", "/api/tabs", { machine: "local", workspace: app.id, name: "", agent: "shell" });
@@ -1052,8 +1047,6 @@ async function fakeUsageYear({ requestId }) {
   };
   await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(body)).toString("base64") });
 }
-// windowsLocal plays the local machine as a Windows PC in the dressed roster, for the screen terminal's screen alone
-let windowsLocal = false;
 function fakeUndoTurn() {
   const file = (path, was, extra = {}) => ({ path, was, dirty_at: false, dirty_to: true, ...extra });
   return {
@@ -1181,7 +1174,6 @@ async function dressRoster({ requestId, responseStatusCode, responseHeaders = []
   }
   for (const machine of roster.machines ?? []) {
     if (machine.id !== "local") continue;
-    if (windowsLocal) machine.os = "windows"; // the screen terminal's screen: this machine played as a Windows PC
     // Claude Code's sign-in there ends in a day and a half at the latest, so it may end at any time: a red concern with a shell to sign in again from;
     // its settings keep fast mode on Opus 4.8 as the default, so every dialog that starts Claude Code on its default model says it goes on 30 Nov
     const health = machine.health ?? { at: iso(now), disk_free_gb: 120, disk_used_pct: 30, load1: 0.4 };
@@ -2693,28 +2685,6 @@ async function runPass() {
     close: async () => {
       await send("Page.navigate", { url: `${base}/?machine=local&pane=${encodeURIComponent(paneA1)}&lens=terminal` });
       if (!(await until(() => present(".pane-area .tab"), 15))) failed("the Agents page did not come back");
-    },
-  });
-  // a Windows PC's pane: herdr has no terminal attach there, so the lens is the pane's screen read again and typed into —
-  // the notes shell played as a Windows machine's by the dressed roster, its screen and its typing the throwaway remuda-core's own
-  await screen("screen-terminal", {
-    open: async () => {
-      windowsLocal = true;
-      await send("Page.navigate", { url: `${base}/?machine=local&pane=${encodeURIComponent(paneN)}&lens=terminal` });
-      if (!(await until(() => present(".lens-pane:not([hidden]) .screen-term .screen-line"), 15))) throw new Error("the screen terminal did not come up");
-      check(!(await present(".xterm")), "a Windows machine's pane attached a live terminal");
-      const word = `screen-${pass.name}`;
-      await tap(".lens-pane:not([hidden]) .screen-term-screen");
-      await send("Input.insertText", { text: `echo ${word}` });
-      await key("Enter", "Enter");
-      const typed = () => evaluate(`[...document.querySelectorAll(".lens-pane:not([hidden]) .screen-term .screen-line")].some((line) => line.textContent.trim() === ${JSON.stringify(word)})`);
-      if (!(await until(typed, 10))) failed("what was typed into the screen terminal did not come back on its screen");
-    },
-    expect: [".lens-pane:not([hidden]) .screen-term-note"],
-    close: async () => {
-      windowsLocal = false;
-      await send("Page.navigate", { url: `${base}/?machine=local&pane=${encodeURIComponent(paneA1)}&lens=terminal` });
-      if (!(await until(() => present(".lens-pane:not([hidden]) .xterm-screen"), 15))) failed("the live terminal did not come back");
     },
   });
   // an agent appearing in a pane: started at a shell's prompt, the terminal stays; an agent's pane a restart passed

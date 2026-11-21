@@ -11,7 +11,6 @@ import { basename } from "@/lib/text";
 import { closeTab, createTab, renameTab } from "@/features/roster/api";
 import { offerReopen } from "@/features/reopen/offer";
 import { NO_MACHINES, startOn } from "@/features/roster/server";
-import { onWindows, screenOnly } from "@/features/roster/system";
 import { useRoster } from "@/features/roster/useRoster";
 import { useSharing } from "@/features/roster/useSharing";
 import { ChatTools, useChatViewItems } from "@/features/chat/ChatTools";
@@ -24,9 +23,9 @@ import Chat from "@/features/chat/Chat";
 import FilesRail from "./FilesRail";
 import Review from "@/features/review/Review";
 import { GitLens } from "@/features/git/GitLens";
+import { onWindows } from "@/features/roster/system";
 import { TerminalLens, TerminalTools, useTerminalViewItems } from "@/features/terminal/TerminalLens";
 import { timelapseRows } from "@/features/terminal/timelapse/row";
-import { Screen } from "@/features/terminal/Screen";
 import { LimitNotice } from "@/features/usage/LimitNotice";
 import { accountWindows } from "@/features/usage/limits";
 import { Empty, Icon, Notice, PANELS, Resizer } from "@/ui";
@@ -103,7 +102,7 @@ export default function PaneArea({ current }: { current: Located | null }) {
       ? { machineId: current.machine.id, paneId: current.pane.id, session: chatSession, dir: folderOf(current), agent: current.pane.agent, workspace: current.session.name, machine: current.machine.label, model: current.pane.usage?.name }
       : { machineId: "", paneId: "", session: null, dir: "", agent: "", workspace: "", machine: "" };
   const chatItems = useChatViewItems(place);
-  const terminalItems = [...useTerminalViewItems(current?.pane ?? { cols: 0, rows: 0 } as Located["pane"], screenOnly(current?.machine)), ...timelapseRows(place)];
+  const terminalItems = [...useTerminalViewItems(current?.pane ?? { cols: 0, rows: 0 } as Located["pane"]), ...timelapseRows(place)];
 
   if (viewer) {
     const sub = viewer.subagent;
@@ -185,7 +184,7 @@ export default function PaneArea({ current }: { current: Located | null }) {
         masked={share.sessionHidden(machine.id, session)}
         tools={
           <>
-            {lens === "terminal" && !viewOnly && <FindTool what={tr("in the scrollback")} shortcut={isMac ? "⌘F" : "Ctrl+Shift+F"} note={machine.core ? tr("A full-screen program keeps its own history: only its screen is found.") : ""} />}
+            {lens === "terminal" && !viewOnly && <FindTool what={tr("in the scrollback")} shortcut={isMac ? "⌘F" : "Ctrl+Shift+F"} note={tr("A full-screen program keeps its own history: only its screen is found.")} />}
             {lens === "terminal" && !viewOnly && <TerminalTools />}
             {lens === "chat" && <ChatTools />}
             {!viewOnly && (session.worktree || session.branch) && session.folder && <RunButton machineId={machine.id} workspace={session.id} pane={pane.id} root={session.folder} masked={share.sessionHidden(machine.id, session)} />}
@@ -238,14 +237,9 @@ export default function PaneArea({ current }: { current: Located | null }) {
           </div>
         )}
         {split && <Resizer spec={PANELS.split} edge="right" label={tr("Chat width in the split")} />}
-        {seen("terminal") && viewOnly && !machine.core && (
-          <div className={`lens-pane screen-lens${split ? " split-terminal" : ""}`} hidden={!shown("terminal")} onFocusCapture={() => focusSide("terminal")} onPointerDownCapture={() => focusSide("terminal")}>
-            <Screen key={`${machine.id}|${pane.id}`} machineId={machine.id} paneId={pane.id} cols={pane.cols} busy={pane.status === "run" || pane.status === "input"} active={shown("terminal")} />
-          </div>
-        )}
-        {seen("terminal") && (!viewOnly || machine.core) && (
+        {seen("terminal") && (
           <div className={`lens-pane${split ? " split-terminal" : ""}`} hidden={!shown("terminal")} onFocusCapture={() => focusSide("terminal")} onPointerDownCapture={() => focusSide("terminal")}>
-            <TerminalLens key={`${machine.id}|${pane.id}`} machineId={machine.id} paneId={pane.id} cols={pane.cols} rows={pane.rows} agent={pane.agent !== ""} active={shown("terminal")} focused={lens === "terminal"} screen={screenOnly(machine)} core={!!machine.core} readOnly={viewOnly} host={machine.host ?? machine.label} />
+            <TerminalLens key={`${machine.id}|${pane.id}`} machineId={machine.id} paneId={pane.id} cols={pane.cols} rows={pane.rows} agent={pane.agent !== ""} active={shown("terminal")} focused={lens === "terminal"} readOnly={viewOnly} />
           </div>
         )}
         {footprint && pane.agent && <Resizer spec={PANELS.rail} edge="left" label={tr("Files rail width")} />}

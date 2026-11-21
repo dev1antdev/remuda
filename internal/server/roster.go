@@ -121,8 +121,8 @@ type rosterMachine struct {
 	Label    string            `json:"label"`
 	Host     string            `json:"host,omitempty"`
 	Source   string            `json:"source,omitempty"`
-	OS       string            `json:"os"`             // darwin | linux | windows as its connection read it, "" before a remote's first; a Windows machine has no live attach
-	Core     bool              `json:"core,omitempty"` // reached through remuda-core: every machine is, since Core 26e
+	OS       string            `json:"os"`             // darwin | linux | windows as its connection read it, "" before a remote's first
+	Core     bool              `json:"core,omitempty"` // always true: a tab of the release before Core 26g still reads it, and must not fall back to the screen terminal and `POST /api/input` or `POST /api/scroll` (405 now); the page stopped reading it in 26g
 	State    string            `json:"state"`          // connected | connecting | error
 	Error    string            `json:"error,omitempty"`
 	Reached  bool              `json:"reached,omitempty"` // its ssh master is up, though its herdr or remuda-core may not answer: nothing to wake

@@ -161,13 +161,10 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
 - **Roster** — workspaces, tabs and panes from `session.snapshot`, with
   herdr's own agent statuses: `RUN` (working), `NEEDS YOU` (blocked),
   `READY` (idle), `DONE`.
-- **Terminal lens** — xterm.js fed by a shared `herdr terminal attach` PTY
-  per pane (all viewers share one attach; replay buffer for late joiners).
-  On a Windows PC, where herdr has no terminal attach, the lens is a screen
-  terminal instead: the pane's screen read a few times a second and typed
-  into (Enter, the arrows, Ctrl and the key bar too, a paste as a paste),
-  its text selectable; `herdr --remote <pc>` in a terminal on your Mac
-  gives a live one.
+- **Terminal lens** — xterm.js fed by a live attach of remuda-core per pane
+  (every viewer its own; the screen painted on attach, so a late joiner has it).
+  A Windows PC's lens is the same live attach, there as everywhere else,
+  its text selectable.
 - **Chat lens** — the transcript herdr names via `agent_session`, parsed
   into turns (text, thinking, tool calls with outputs), polled with ETags.
   Claude Code's session files, Codex's rollouts and Gemini CLI's chats
@@ -855,8 +852,8 @@ Devices under a name — "the office TV", a colleague's — and open it where
 the viewing happens: that browser gets the sidebar, the chats,
 the screens and their timelapses, the usage and Activity, and nothing that types or
 changes — no composer, no keys, no question buttons, no Changes lens, no
-tasks; the Git lens draws its graph and opens no menu; the terminal lens shows the pane's screen, without
-attaching, and the file viewer opens only files inside the machines'
+tasks; the Git lens draws its graph and opens no menu; the terminal lens is a live attach of its own, which only
+watches, and the file viewer opens only files inside the machines'
 workspace folders — none at the home folder or above it, none of remuda's
 own, and never `~/.ssh` or remuda's state folder. Every call past that is refused with "this link is for
 viewing only", a viewer's look marks nothing as seen, and the header says
@@ -903,25 +900,19 @@ Once, on the PC:
 5. **A way to reach it**: Tailscale on the PC is the easy one; add it to the
    cockpit's `~/.ssh/config` as a `Host pc` with its address and user.
 
-Then, from the cockpit: `remuda setup -host pc`. It installs herdr for
-Windows through herdr's own PowerShell installer when it is missing,
-starts herdr's server hidden (it outlives the ssh session and your
-logout), installs herdr's hooks for the agents it finds, and puts
-`remuda.exe` at `~\.local\bin\remuda.exe` — no service: there is nothing
-on Windows for it to serve. Add the PC in herdr (`herdr machine add`) or
-with **+ PC** in the sidebar, and it connects like the others.
+Then, from the cockpit, two steps: `remuda setup -host pc` puts remuda-core and
+`remuda.exe` there (`~\.local\bin\remuda.exe`) — no service: there is nothing on Windows for it to serve — and **+ PC**
+in the sidebar, with that ssh host, adds it to the roster and connects it like the others (herdr's own list is not read).
+A PC added before remuda-core reached it offers **Install remuda-core** in its Updates.
 `remuda mcp install -host pc` connects its agents to your tasks, and the
-Updates panel offers herdr's update, the agents', and a newer
-`remuda.exe` from the release.
+Updates panel offers the agents' updates and a newer `remuda.exe` from the release.
 
 What works on a Windows PC: its agents in the sidebar, the chat with its composer and question card, the Changes lens and
 the review, the file viewer and uploads, the vitals (memory, disk, load,
 the Windows edition), keep-awake while agents work, the search and the
 usage report, its agents' door to your tasks, the restarts after an
-update, the worktrees and their leftovers. What does not: **no live
-terminal** — herdr has no terminal attach on Windows, so the terminal lens
-is the pane's screen with a key bar, refreshed as it changes; for a live
-one, `herdr --remote pc` from the Mac's terminal. **No Code mode**
+update, the worktrees and their leftovers. Its terminal is live like any
+machine's — remuda-core attaches there. **No Code mode**
 (code-server has no Windows build: open the folder in VS Code there),
 **no previews** yet (Windows does not say which folder a listening
 process runs in), and the work is not moved to or from a Windows machine
@@ -993,7 +984,7 @@ memory, temperature, the CPU's clock and a Raspberry Pi's throttling
 is readable, the under-voltage alarm alone where it needs root) with the
 day's sparklines — and the icon turns amber or red when the box is
 warm, throttled or full. Add the machines the agents run on with the +
-beside Machines, or `herdr machine add` on the server.
+beside Machines.
 
 A box that already runs remuda keeps its binary through setup, so update
 it first — *Download & install* in its Updates — to a release that knows
@@ -1705,11 +1696,10 @@ selection turns into whole rows the moment a drag leaves the cell.
 every place a word occurs in the conversation shown and says "3 of 12";
 Enter and Shift+Enter walk them, the current one brought into view, Esc
 closes. It works on a transcript opened from the search too, and on the
-terminal lens over the pane's scrollback — the last five thousand rows
-herdr keeps, whatever this browser has seen of them — with ⌘F there as
+terminal lens over the terminal's own rows, with the notice that says when
+a match is only in older rows this terminal no longer shows — with ⌘F there as
 well on a Mac and Ctrl+Shift+F elsewhere, since Ctrl+F belongs to the
-shell: the pane scrolls to each match (for every viewer, as the wheel
-does), the match is marked on the screen, Esc gives the terminal the
+shell: this browser's terminal scrolls to each match, alone, the match is marked on the screen, Esc gives it the
 focus back, and on a phone the key bar has a search key.
 **The timeline** (View › Timeline, on by default with a mouse) is a
 thin bar over the conversation: every prompt and its answer laid out in

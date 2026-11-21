@@ -194,9 +194,6 @@ func TestReadsAnswerInHerdrsWords(t *testing.T) {
 	if err := adapter.AgentPrompt(printer.Address, "hi"); !herdr.IsCode(err, "agent_not_found") {
 		t.Fatalf("a prompt to a terminal with no agent: %v", err)
 	}
-	if _, err := adapter.PaneScroll(printer.Address, 1); !herdr.IsCode(err, "invalid_request") {
-		t.Fatalf("a request not on core yet: %v", err)
-	}
 }
 
 // breakable dials the core and lets the test cut the connection it holds.

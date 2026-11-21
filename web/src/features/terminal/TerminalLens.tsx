@@ -10,7 +10,6 @@ import type { Pane } from "@/features/roster/api";
 import { Icon, type MenuItem, Tip } from "@/ui";
 import KeyBar from "./KeyBar";
 import TerminalView from "./Terminal";
-import { ScreenTerminal } from "./screen/ScreenTerminal";
 import type { SizeMode } from "./engine/types";
 import { terminal } from "./state";
 import { useTerminalFind } from "./useTerminalFind";
@@ -19,10 +18,9 @@ import { t, tn } from "@/lib/i18n";
 // minimum terminal widths on offer, in columns (0 = fit the screen)
 const MIN_WIDTHS = [0, 120, 160, 200, 240, 320];
 
-// focused: in the split view, whether this side has the find bar; the chat beside it has it otherwise. screen: the pane's
-// machine has no terminal attach (a Windows PC on herdr, `host` as herdr --remote reaches it), so the lens is the screen
-// terminal. core: the machine is on remuda-core. readOnly: a viewer link, which only watches, at the pane's own grid.
-export function TerminalLens({ machineId, paneId, cols, rows, agent, active, focused = true, screen = false, core = false, readOnly = false, host = "" }: { machineId: string; paneId: string; cols: number; rows: number; agent: boolean; active: boolean; focused?: boolean; screen?: boolean; core?: boolean; readOnly?: boolean; host?: string }) {
+// focused: in the split view, whether this side has the find bar; the chat beside it has it otherwise. readOnly: a
+// viewer link, which only watches, at the pane's own grid.
+export function TerminalLens({ machineId, paneId, cols, rows, agent, active, focused = true, readOnly = false }: { machineId: string; paneId: string; cols: number; rows: number; agent: boolean; active: boolean; focused?: boolean; readOnly?: boolean }) {
   const [keybar] = usePref("keybar", isTouch);
   // a phone keeps the pane's own grid: resizing the shared pane to it would squeeze the desktop's view too
   const [sizeMode] = usePref<SizeMode>("sizeMode", isTouch ? "keep" : "fit");
@@ -31,29 +29,11 @@ export function TerminalLens({ machineId, paneId, cols, rows, agent, active, foc
   const modifier = terminal.use((s) => s.modifier);
   const selectMode = terminal.use((s) => s.selectMode);
   const api = terminal.use((s) => s.api);
-  useTerminalFind(api, active && focused, machineId, paneId, core);
+  useTerminalFind(api, active && focused, machineId, paneId);
   const flavor = useFlavor();
   const mono = useMono();
   const onOpenFile = useCallback((target: { path: string; line?: number; prefer?: "file" | "changes" }) => actions.openFile(machineId, paneId, target), [machineId, paneId]);
   const onCopied = useCallback((n: number) => actions.notify(tn(n, "Copied {n} character", "Copied {n} characters"), { brief: true }), []);
-  if (screen) {
-    return (
-      <>
-        <ScreenTerminal
-          machineId={machineId}
-          paneId={paneId}
-          cols={cols}
-          host={host}
-          active={active}
-          fontSize={fontSize}
-          modifier={modifier}
-          onModifierUsed={() => terminal.set({ modifier: null })}
-          onReady={(api) => terminal.set({ api })}
-        />
-        {keybar && <KeyBar term={api} modifier={modifier} setModifier={(modifier) => terminal.set({ modifier })} />}
-      </>
-    );
-  }
   return (
     <>
       <TerminalView
@@ -64,7 +44,6 @@ export function TerminalLens({ machineId, paneId, cols, rows, agent, active, foc
         agent={agent}
         mode={readOnly ? "keep" : sizeMode}
         minCols={minCols}
-        core={core}
         readOnly={readOnly}
         flavor={flavor}
         fontFamily={monoStack(mono)}

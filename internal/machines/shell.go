@@ -17,9 +17,6 @@ func (mc *Machine) ID() string { return mc.Cfg.ID }
 // Local reports whether this is the machine remuda runs on.
 func (mc *Machine) Local() bool { return mc.local }
 
-// NoAttachOnWindows is why a Windows machine's terminal is never attached: herdr has no terminal attach there.
-const NoAttachOnWindows = "herdr has no terminal attach on Windows; the screen terminal stands in"
-
 // OS is the machine's system: darwin, linux or windows, "" for a remote before its first connect.
 func (mc *Machine) OS() string {
 	if mc.local {

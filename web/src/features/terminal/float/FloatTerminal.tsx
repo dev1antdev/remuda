@@ -15,8 +15,6 @@ import { errMsg } from "@/lib/text";
 import { Icon, Notice, PANELS, Resizer, Select, Tip } from "@/ui";
 import type { TermApi } from "../engine/types";
 import TerminalView from "../Terminal";
-import { ScreenTerminal } from "../screen/ScreenTerminal";
-import { screenOnly } from "@/features/roster/system";
 import { closeScratch, openScratch } from "./api";
 import { keyWords, shellView } from "./float";
 import { t, tn } from "@/lib/i18n";
@@ -48,7 +46,6 @@ function Drawer({ machineId, open }: { machineId: string; open: boolean }) {
   const machine = named.find((m) => m.id === machineId)?.label ?? machineId;
   const connected = machines.some((m) => m.id === machineId && m.state === "connected");
   const here = machines.find((m) => m.id === machineId);
-  const windows = screenOnly(here); // a Windows PC on herdr has no terminal attach: the drawer's shell is the screen terminal
   const section = useRef<HTMLElement>(null);
   const back = useRef<Element | null>(null); // what had the focus before the drawer took it, given back when it hides
   const key = keyWords(isMac);
@@ -136,18 +133,6 @@ function Drawer({ machineId, open }: { machineId: string; open: boolean }) {
               {t("Open a new one")}
             </button>
           </div>
-        ) : mounted && windows ? (
-          <ScreenTerminal
-            machineId={machineId}
-            paneId={pane}
-            cols={here?.sessions.flatMap((s) => s.tabs.flatMap((tab) => tab.panes)).find((p) => p.id === pane)?.cols ?? 0}
-            host={here?.host ?? machine}
-            active={open}
-            fontSize={fontSize}
-            modifier={null}
-            onModifierUsed={() => {}}
-            onReady={setApi}
-          />
         ) : mounted ? (
           <TerminalView
             machineId={machineId}

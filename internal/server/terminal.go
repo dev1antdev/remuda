@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"log"
 	"net/http"
 	"strconv"
@@ -64,12 +63,8 @@ func (s *Server) handlePaneWS(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 404, err)
 		return
 	}
-	// a viewer link only watches, which remuda-core alone lets a viewer do (viewerOwnGuard keeps it to its roster's panes)
+	// a viewer link only watches, and a live attach of its own is a viewer's (viewerOwnGuard keeps it to its roster's panes)
 	watching := auth.IsViewer(r.Context())
-	if watching && !mc.OnCore() {
-		httpErr(w, http.StatusForbidden, errors.New("this link is for viewing only"))
-		return
-	}
 	// the client's proxy probe is a plain GET of this URL and must cost no attach, here or on a peer
 	if !strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
 		http.Error(w, "upgrade required", http.StatusUpgradeRequired)

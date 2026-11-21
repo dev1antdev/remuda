@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { editorOption, onWindows, screenOnly, screenTerminalWords, systemWords } from "./system";
+import { editorOption, onWindows, systemWords } from "./system";
 import { encodePath } from "@/features/search/api";
 
 describe("system", () => {
@@ -8,12 +8,6 @@ describe("system", () => {
     expect(onWindows({ os: "darwin" })).toBe(false);
     expect(onWindows({})).toBe(false);
     expect(onWindows(null)).toBe(false);
-  });
-  it("gives a Windows PC the screen terminal on herdr alone: remuda-core attaches there too", () => {
-    expect(screenOnly({ os: "windows" })).toBe(true);
-    expect(screenOnly({ os: "windows", core: true })).toBe(false);
-    expect(screenOnly({ os: "linux" })).toBe(false);
-    expect(screenOnly(null)).toBe(false);
   });
   it("names the system", () => {
     expect(systemWords("windows")).toBe("Windows");
@@ -25,10 +19,6 @@ describe("system", () => {
     const option = { value: "pc", label: "PC" };
     expect(editorOption(option, { os: "windows", host: "pc" })).toMatchObject({ disabled: true, hint: "no code-server for Windows" });
     expect(editorOption(option, { os: "linux", host: "gog" })).toEqual({ value: "pc", label: "PC", hint: "gog" });
-  });
-  it("says where a live terminal is", () => {
-    expect(screenTerminalWords("pc")).toContain("herdr --remote pc");
-    expect(screenTerminalWords("")).toContain("herdr --remote <pc>");
   });
   it("matches a search hit's project to a Windows folder as Claude Code names it", () => {
     expect(encodePath("C:\\Users\\me\\app")).toBe("C--Users-me-app");

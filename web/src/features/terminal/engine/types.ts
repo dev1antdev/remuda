@@ -15,7 +15,6 @@ export type SizeMode = "fit" | "keep";
 // it is of how many, then again whenever output arriving changes the count, until the next find or the marks clear.
 export type FoundCount = Pick<Find, "total" | "at">;
 export type SearchApi = {
-  show: (query: string, expectedRow: number, col: number) => void;
   find?: (query: string, step: 0 | 1 | -1, hear: (found: FoundCount) => void) => void;
   clear: () => void;
 };
