@@ -180,8 +180,8 @@ func TestParseReadsTheStatusLineWrapper(t *testing.T) {
 }
 
 func TestParseReadsRemudaCore(t *testing.T) {
-	r, _ := Parse("os=macOS 26\nremuda_core=rc 0.2.0\n")
-	if r.RemudaCore != "0.2.0" {
+	r, _ := Parse("os=macOS 26\nremuda_core=rc 0.2.3\n")
+	if r.RemudaCore != "0.2.3" {
 		t.Fatalf("remuda_core = %q", r.RemudaCore)
 	}
 	if !strings.Contains(Script(), `echo "remuda_core=$("$c" --version`) {

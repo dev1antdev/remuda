@@ -26,7 +26,7 @@ func split(a, b string) *herdr.LayoutNode {
 }
 
 func TestTheSnapshotLaysTheDocumentOutAndPlacesEveryLiveTerminal(t *testing.T) {
-	m := mirror{version: "0.2.0", terminals: map[string]*Terminal{
+	m := mirror{version: "0.2.3", terminals: map[string]*Terminal{
 		"t1": term("t1", 1, placedIn("w1", "a")),
 		"t2": term("t2", 2, nil),
 		"t3": term("t3", 3, placedIn("w1", "b")),
@@ -67,7 +67,7 @@ func TestTheSnapshotLaysTheDocumentOutAndPlacesEveryLiveTerminal(t *testing.T) {
 	if cols, rows := snap.PaneSize("t1"); cols != 80 || rows != 24 {
 		t.Fatalf("t1 is %dx%d", cols, rows)
 	}
-	if snap.Version != "remuda-core 0.2.0" {
+	if snap.Version != "remuda-core 0.2.3" {
 		t.Fatalf("version %q", snap.Version)
 	}
 }
@@ -229,7 +229,7 @@ func TestAShellTheCoreGaveANewOneIsRestoredUntilAnAgentTakesIt(t *testing.T) {
 		{Address: "t2", State: "live", Pid: 100},
 		{Address: "t3", State: "live", Reason: "host_shutdown"},
 		{Address: "t4", State: "live", Pid: 100},
-	}, Document{}, "0.2.0")
+	}, Document{}, "0.2.3")
 	for address, want := range map[string]bool{"t1": true, "t2": false, "t3": true, "t4": false} {
 		if got := restored(&a.state, address); got != want {
 			t.Errorf("%s restored %v after a fill, want %v", address, got, want)

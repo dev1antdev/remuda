@@ -354,7 +354,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   and an output watch, a severed connection — and on a fake over a pipe
   (events before the reply, a cut line, missed, a core that stops reading, a
   hello nobody answers, a cancel racing its reply, a slow encoder). CI's check job installs
-  release remuda-v0.2.0 against its `checksums.txt`. Never start a core for a
+  release remuda-v0.2.3 against its `checksums.txt`. Never start a core for a
   test any other way: one without its own `RC_SOCKET` and XDG folders reaches
   the person's. **A screen with its colours** (`screen.go`, tested on a
   recorded pair in `testdata/` and on a throwaway core): `Read` with format
@@ -440,10 +440,11 @@ components and icons as rules for whoever changes it: @docs/design.md
   which that process must have — remuda-core 0.2.2 (#12) — and `SinceBoot`,
   its start since boot on Linux as one advertising `foreground_since_boot`
   tells it (`Foreground.SinceBoot`: boot id, time namespace, ticks), which no
-  step of the clock moves — remuda-core 0.2.3 (remuda-core #13, task #359) — so the binding takes
-  effect once the pin moves to them; until then every machine reads with the
-  sighting bound, which a step of the machine's clock on macOS or Windows can
-  fool; nil,
+  step of the clock moves — remuda-core 0.2.3 (remuda-core #13, task #359),
+  the pin, so the binding takes effect on every machine of the fleet; a core
+  that tells neither leaves nil, and the binding falls back on the sighting
+  bound, which a step of the machine's clock on macOS or Windows can fool;
+  nil,
   none), which a machine gives as its `processSessions`
   (`internal/machines/sessions.go`, tested on paper and on a throwaway core
   with a stand-in Claude Code keeping its session file in a temp HOME):
@@ -511,10 +512,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   folder, as herdr restores its panes, its agent the restart memory's to
   bring back: "Resume after restart" and a wake start agents through the
   adapter as on herdr; a sleep and an agent update's restart type the
-  agent's own `/exit` or `/restart`, a prompt, so on a machine they wait for
-  a core with `send_foreground`, 0.2.1 — the pinned 0.2.0 refuses them (a
-  sleep ends "did not stop"), while `lifecycle_test.go` runs both on a
-  throwaway core with the gate lifted; an exit or a kill stays final; a
+  agent's own `/exit` or `/restart`, a prompt, so on a machine they need a
+  core with `send_foreground`, 0.2.1, which the pin has — a core older
+  refuses them (a sleep ends "did not stop"); `lifecycle_test.go` runs both
+  on a throwaway core with the gate lifted; an exit or a kill stays final; a
   pane remuda started before it kept them, one carrying a workspace's
   label, is kept as the mirror fills, `keepOlder` through `Client.Keep`,
   one by one, a refused one asked again `keepTries` 10 times 250 ms → 5 s
@@ -1093,7 +1094,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   Code writes as it starts, corrects the disk, while remuda goes on naming
   what it read until a read succeeds again (`sessionsFresh`, 30 s, longer
   while the reads fail): known limits, task #360),
-  nor, from a core that tells none (0.2.1 and before: the pin today), one that
+  nor, from a core that tells none (0.2.1 and before), one that
   began after the agent was seen running (`Running.Seen`: a later process
   took the pid before it was read), the sighting placed on the machine's
   clock by the monotonic time since it, the clock read in a call of its own
