@@ -21,3 +21,17 @@ func TestARemudaOnCoreHoldsEveryCheckoutWriteBack(t *testing.T) {
 		t.Fatal("a pull goes through")
 	}
 }
+
+// The herdr a host ran before the move: the one found, else a path the person gave that is gone since — kept, so its
+// server's look cannot read as none running — else herdr's own lookup.
+func TestTheMovedHerdrKeepsAPathTheFlagGave(t *testing.T) {
+	if got := movedHerdrBin("/usr/local/bin/herdr", "herdr"); got != "/usr/local/bin/herdr" {
+		t.Fatalf("found: %q", got)
+	}
+	if got := movedHerdrBin("", "/opt/old/herdr"); got != "/opt/old/herdr" {
+		t.Fatalf("a path given and gone: %q", got)
+	}
+	if got := movedHerdrBin("", "herdr"); got != "" {
+		t.Fatalf("no herdr anywhere: %q", got)
+	}
+}

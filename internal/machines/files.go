@@ -88,6 +88,12 @@ func (mc *Machine) ResolvePath(cwd, raw string) (FileInfo, error) {
 	return FileInfo{Path: p, Kind: "missing"}, nil
 }
 
+// Stat is what the path is on the machine, ~ read as its home: os.ErrNotExist when nothing is there, any other error
+// when the machine could not be asked — a dropped connection never reads as a folder gone.
+func (mc *Machine) Stat(p string) (FileInfo, error) {
+	return mc.stat(mc.EffectivePath("", p))
+}
+
 // LookAt is what the path, taken exactly as given, is: nothing cleaned, nothing searched.
 func (mc *Machine) LookAt(p string) FileInfo {
 	if info, err := mc.stat(p); err == nil {
@@ -183,12 +189,18 @@ func (mc *Machine) stat(p string) (FileInfo, error) {
 	return readStat(p, out)
 }
 
-// statScript prints dir, missing, or "file <size> <NULs in the first 8 KB>".
+// statScript prints dir, "file <size> <NULs in the first 8 KB>", missing — a path known not there, or something there
+// that is neither — else unreadable: a folder on the way the user may not search, a link's target's way too, a loop of
+// links, links followed eight deep or unread; whether it is there is not known.
 func statScript(p string) string {
 	q := script.Quote(p)
 	return `if [ -d ` + q + ` ]; then echo dir; elif [ -f ` + q + ` ]; then ` +
 		`printf 'file %s ' "$(` + script.Stat(q, "%s", "%z") + `)"; ` +
-		`head -c 8192 ` + q + ` | tr -d -c '\000' | wc -c; else echo missing; fi`
+		`head -c 8192 ` + q + ` | tr -d -c '\000' | wc -c; ` +
+		`else p=` + q + `; i=0; while [ -L "$p" ] && [ $i -lt 8 ]; do t=$(readlink -- "$p") && [ -n "$t" ] || break; case "$t" in /*) p=$t ;; *) p=$(dirname -- "$p")/$t ;; esac; i=$((i+1)); done; ` +
+		`err=$(LC_ALL=C ls -d -- "$p" 2>&1 >/dev/null); ` +
+		`if [ -L "$p" ]; then echo unreadable; elif [ -z "$err" ]; then echo missing; ` +
+		`else case "$err" in *": No such file or directory") echo missing ;; *) echo unreadable ;; esac; fi; fi`
 }
 
 // readStat reads statScript's answer.
@@ -197,6 +209,8 @@ func readStat(p, out string) (FileInfo, error) {
 	switch {
 	case len(f) == 0 || f[0] == "missing":
 		return FileInfo{}, os.ErrNotExist
+	case f[0] == "unreadable":
+		return FileInfo{}, fmt.Errorf("%s: permission denied on the way there", p)
 	case f[0] == "dir":
 		return FileInfo{Path: p, Kind: "dir"}, nil
 	}

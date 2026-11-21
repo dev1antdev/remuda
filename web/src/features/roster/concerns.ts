@@ -5,7 +5,7 @@ import { newer } from "@/lib/version";
 import { VENDOR_NAME } from "@/ui/brand";
 import type { Health, Latest, StoppedChat } from "./api";
 import { bodyConcerns } from "./body";
-import { stoppedNames, stoppedWords } from "./stopped";
+import { concernWords } from "./stopped";
 import { signinConcern } from "./signin";
 import { retiringConcerns, type Retirement, type RetiringHit } from "@/features/usage/retired";
 import { t } from "@/lib/i18n";
@@ -34,7 +34,7 @@ export const CORE_STATUS_CLAUDE = "2.1.325";
 function found(h: Health | undefined, latest: Latest | undefined, serverVersion: string | undefined, remote: boolean, stopped: StoppedChat[], more: More = {}): Concern[] {
   const out: Concern[] = [];
   const now = more.now ?? Date.now();
-  if (stopped.length) out.push({ key: "stopped", text: `${stoppedWords(stopped.length)}: ${stoppedNames(stopped)}`, update: "recover" });
+  if (stopped.length) out.push({ key: "stopped", text: concernWords(stopped, more.machine ?? ""), update: "recover" });
   const signin = signinConcern(h?.claude_login, more.machine ?? "", now);
   if (signin) out.push({ key: "signin", ...signin, update: "signin" });
   out.push(...retiringConcerns(more.retiring, more.retirements ?? [], now));

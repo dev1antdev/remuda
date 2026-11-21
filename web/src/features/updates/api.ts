@@ -1,6 +1,6 @@
 // Updates on a machine: what it can run, a run started, the jobs that ran.
 
-import { getJSON, sendJSON } from "@/lib/http";
+import { getJSON, postJSONOr409, sendJSON } from "@/lib/http";
 
 // an update the machine can run: the command the person sees before saying yes
 export type Update = { what: string; title: string; command: string; note?: string };
@@ -15,8 +15,13 @@ export const listJobs = (machineId: string): Promise<{ jobs: Job[]; pending: num
 export const fetchJob = (id: string): Promise<Job> => getJSON(`/api/jobs/${encodeURIComponent(id)}`);
 // one chat started again on its session, by hand: a job, or the refusal (a shell, no session, a question open, still working)
 export const restartPane = (machineId: string, paneId: string): Promise<{ job: string }> => sendJSON("POST", "/api/panes/restart", { machine: machineId, pane: paneId });
-// the chats a reboot stopped on the machine in the panes picked (every one for none) started again on their sessions: a job, or the refusal when none is stopped
-export const recoverChats = (machineId: string, panes?: string[]): Promise<{ job: string }> => sendJSON("POST", "/api/panes/recover", { machine: machineId, panes });
+// the chats a reboot stopped on the machine in the panes picked (every one for none) started again on their sessions: a job,
+// the refusal when none is stopped, or herdr when its server still runs there and herdr's agents are picked
+export const recoverChats = (machineId: string, panes?: string[]) =>
+  postJSONOr409<{ job?: string; herdr?: boolean }>("/api/panes/recover", { machine: machineId, panes }, (conflict) => !!conflict.herdr);
+
+// herdr's server stopped on a machine moved to remuda-core, every agent still running in it there with it
+export const stopHerdr = (machineId: string): Promise<{ stopped: boolean }> => sendJSON("POST", `/api/machines/${encodeURIComponent(machineId)}/herdr/stop`);
 
 // Update everywhere: one step per pending update of a connected machine, the page's own host last
 export type Step = { machine: string; label: string; what: string; title: string; command: string };

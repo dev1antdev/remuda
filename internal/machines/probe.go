@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/rpath"
 	"github.com/dev1antdev/remuda/internal/script"
 )
@@ -44,7 +45,7 @@ esac
 	if !findHerdr {
 		return s + "true\n"
 	}
-	return s + `h=$(command -v herdr 2>/dev/null) || for p in "$HOME/.local/bin/herdr" /opt/homebrew/bin/herdr /usr/local/bin/herdr /usr/bin/herdr; do [ -x "$p" ] && { h=$p; break; }; done
+	return s + script.HerdrBin("h") + `
 [ -n "$h" ] && printf 'herdr=%s\n' "$h"
 true
 `
@@ -129,6 +130,18 @@ func (e *NoCoreError) Unwrap() error { return e.Reason }
 // errNoCore is the connection's word for a machine without remuda-core, to a remuda that speaks it (-core).
 func errNoCore(host string) error {
 	return fmt.Errorf("remuda-core is not installed on %s: Install remuda-core in its Updates, or run `remuda core -host %s install` from here", host, host)
+}
+
+// herdrSocket is herdr's socket on a remote as remuda dials it: the machine's remote_socket, else herdr's default there
+// — under %APPDATA% on Windows, wherever the profile keeps it, under the home elsewhere.
+func herdrSocket(cfg Config, found probe) string {
+	switch {
+	case cfg.RemoteSocket != "":
+		return cfg.RemoteSocket
+	case found.os == "windows":
+		return windowsSocket(found.appData)
+	}
+	return herdr.DefaultSocket(found.home)
 }
 
 // windowsSocket is herdr's default socket on a Windows machine: %APPDATA%\herdr\herdr.sock, a named pipe of that name.

@@ -82,6 +82,17 @@ func (m *Manager) SetServer(on bool) {
 	local.mu.Unlock()
 }
 
+// SetMovedHerdr is the herdr this host ran before the move to remuda-core, as remuda reached it: its binary and socket,
+// "" for herdr's own lookup and socket (MovedHerdr).
+func (m *Manager) SetMovedHerdr(bin, socket string) {
+	m.mu.Lock()
+	local := m.machines[LocalID]
+	m.mu.Unlock()
+	local.mu.Lock()
+	local.herdrBin, local.socket = bin, socket
+	local.mu.Unlock()
+}
+
 // Server says whether the host serves the page only.
 func (m *Manager) Server() bool {
 	m.mu.Lock()

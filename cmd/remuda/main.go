@@ -86,6 +86,7 @@ func main() {
 		Record:       recordsHere(*withRecord, os.Getenv("REMUDA_STATE_DIR") != ""),
 		Server:       *serverOnly,
 		Core:         *useCore,
+		HerdrStops:   herdrStops(os.Getenv("REMUDA_STATE_DIR") != ""),
 	})
 	if err != nil {
 		log.Print(err)
@@ -119,6 +120,10 @@ const windowsServes = "remuda on Windows does not serve the page: it is the help
 func recordsHere(withRecord, scratch bool) bool {
 	return !scratch || withRecord
 }
+
+// herdrStops says whether this instance stops herdr's server on a machine moved to remuda-core at the person's press:
+// not a scratch instance (REMUDA_STATE_DIR set), whose herdr may be the real one's, with every agent of the person's in it.
+func herdrStops(scratch bool) bool { return !scratch }
 
 // help is `remuda -h`: the server's flags, and the commands a person with nothing but the binary needs to know are there.
 func help() {

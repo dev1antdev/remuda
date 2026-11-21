@@ -6,11 +6,13 @@
 package sleep
 
 import (
+	"cmp"
 	"log"
 	"sync"
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/events"
+	"github.com/dev1antdev/remuda/internal/restart"
 	"github.com/dev1antdev/remuda/internal/state"
 )
 
@@ -36,6 +38,8 @@ type Workspace struct {
 	Dir    string    `json:"dir"`
 	At     time.Time `json:"at"`
 	Agents []Agent   `json:"agents"`
+	// Core marks a workspace put to sleep on remuda-core; one without it, on a fleet moved to the core, slept in herdr
+	Core bool `json:"core,omitempty"`
 }
 
 // Status is what the roster says of a workspace asleep: since when, and how many agents wait to be woken.
@@ -54,6 +58,9 @@ type Settings struct {
 // Store keeps the workspaces asleep, by machine and workspace id, and the settings.
 type Store struct {
 	dir string
+	// Core says the fleet is reached through remuda-core: a workspace asleep in herdr is then kept for Resume after
+	// restart to carry its agents on (SleptInHerdr, Woke), whatever the core's snapshot shows.
+	Core func() bool
 
 	mu       sync.Mutex
 	asleep   map[string]map[string]Workspace
@@ -111,6 +118,7 @@ func (s *Store) Holds(machineID, workspaceID, paneID string) bool {
 
 // put records a workspace asleep; the agents a record of it held already stay, the newer word for a pane winning.
 func (s *Store) put(machineID, workspaceID string, w Workspace) {
+	w.Core = s.Core != nil && s.Core()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if old, ok := s.asleep[machineID][workspaceID]; ok {
@@ -160,6 +168,10 @@ func (s *Store) keep(machineID, workspaceID string, agents []Agent) {
 func (s *Store) awake(machineID, workspaceID string, panes map[string]bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.awakeLocked(machineID, workspaceID, panes)
+}
+
+func (s *Store) awakeLocked(machineID, workspaceID string, panes map[string]bool) {
 	w, ok := s.asleep[machineID][workspaceID]
 	if !ok {
 		return
@@ -187,16 +199,18 @@ func (s *Store) dropLocked(machineID, workspaceID string) {
 }
 
 // Observe forgets a workspace asleep that a watched snapshot no longer shows: it was closed. A machine's first
-// snapshot after it was away decides nothing, since herdr may still be restoring what it had.
+// snapshot after it was away decides nothing, since herdr may still be restoring what it had. On a fleet moved to
+// remuda-core a workspace that slept in herdr is no snapshot's to forget: its agents wait in Resume after restart.
 func (s *Store) Observe(e events.Snapshot) bool {
 	if e.Snap == nil || e.First {
 		return false
 	}
+	onCore := s.Core != nil && s.Core()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	changed := false
-	for workspaceID := range s.asleep[e.Machine] {
-		if e.Snap.Workspace(workspaceID) == nil {
+	for workspaceID, w := range s.asleep[e.Machine] {
+		if e.Snap.Workspace(workspaceID) == nil && (w.Core || !onCore) {
 			s.dropLocked(e.Machine, workspaceID)
 			changed = true
 		}
@@ -205,6 +219,38 @@ func (s *Store) Observe(e events.Snapshot) bool {
 		s.saveLocked()
 	}
 	return changed
+}
+
+// SleptInHerdr is, by pane, the agents of the machine's workspaces put to sleep in herdr — the records without the
+// core mark — for Resume after restart to carry on once the fleet is on remuda-core (restart.Memory.Sleepers).
+func (s *Store) SleptInHerdr(machineID string) map[string]restart.Chat {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	chats := map[string]restart.Chat{}
+	for _, w := range s.asleep[machineID] {
+		if w.Core {
+			continue
+		}
+		for _, a := range w.Agents {
+			chats[a.Pane] = restart.Chat{Kind: a.Kind, Session: a.Session, Dir: a.Dir, Title: cmp.Or(w.Name, a.Title)}
+		}
+	}
+	return chats
+}
+
+// Woke takes a pane off the machine's records once its agent is back, or can never come back; its workspace wakes with
+// its last agent (restart.Memory.Woken).
+func (s *Store) Woke(machineID, paneID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for workspaceID, w := range s.asleep[machineID] {
+		for _, a := range w.Agents {
+			if a.Pane == paneID {
+				s.awakeLocked(machineID, workspaceID, map[string]bool{paneID: true})
+				return
+			}
+		}
+	}
 }
 
 // Forget drops a machine's workspaces asleep (it left the registry).

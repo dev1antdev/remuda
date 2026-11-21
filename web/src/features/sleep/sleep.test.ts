@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Pane, Session, StoppedChat } from "@/features/roster/api";
 import { asleepTip, busyOf, canSleep, sleepAsk, sleptWords, wakeKey, wokeWords } from "./sleep";
-import { chatName, chatWhere, commandLine, someLabel, stillPicked, toggled } from "./resume";
+import { chatName, chatWhere, commandLine, firstPicks, someLabel, stillPicked, toggled, unseen } from "./resume";
 
 const pane = (over: Partial<Pane>): Pane => ({ id: "w1:p1", title: "", agent: "", cwd: "/work/api", focused: false, status: "shell", cols: 80, rows: 24, ...over });
 const session = (panes: Pane[], over: Partial<Session> = {}): Session => ({ id: "w1", name: "api", status: "idle", active_tab_id: "w1:t1", tabs: [{ id: "w1:t1", label: "1", number: 1, named: false, status: "idle", panes }], ...over });
@@ -57,6 +57,15 @@ describe("resume after restart", () => {
     expect(toggled(["w1:p1"], "w1:p2")).toEqual(["w1:p1", "w1:p2"]);
     expect(toggled(["w1:p1", "w1:p2"], "w1:p1")).toEqual(["w1:p2"]);
     expect(stillPicked(["w1:p1", "w1:p9"], [chat({})])).toEqual(["w1:p1"]);
+  });
+
+  it("leaves unticked herdr's agents whose session remuda-core does not name", () => {
+    const gemini = chat({ pane: "w2:p1", agent: "gemini", from: "herdr" });
+    const kimi = chat({ pane: "w2:p2", agent: "kimi", from: "herdr" });
+    const codex = chat({ pane: "w2:p3", agent: "codex", from: "herdr" });
+    expect(unseen(gemini) && unseen(kimi)).toBe(true);
+    expect(unseen(codex) || unseen(chat({ agent: "gemini" }))).toBe(false);
+    expect(firstPicks([chat({}), gemini, kimi, codex])).toEqual(["w1:p1", "w2:p3"]);
   });
 
   it("offers Resume N only for some, never for none or every one", () => {

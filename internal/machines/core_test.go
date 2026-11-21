@@ -180,3 +180,38 @@ func TestTheLocalMachineOnCoreMakesAWorktreeWithItsShell(t *testing.T) {
 		t.Fatalf("the worktree is %+v in %+v, want it at %s", created.Worktree, created.Workspace.Worktree, want)
 	}
 }
+
+func TestTheHerdrBeforeTheMoveIsTheOneRemudaReached(t *testing.T) {
+	m := NewCoreManager(t.TempDir(), "", nil, true)
+	t.Cleanup(m.Close)
+	m.SetMovedHerdr("/opt/herdr/bin/herdr", "/run/me/herdr.sock")
+	local, _ := m.Get(LocalID)
+	if bin, socket := local.MovedHerdr(); bin != "/opt/herdr/bin/herdr" || socket != "/run/me/herdr.sock" {
+		t.Fatalf("this machine's: %q %q", bin, socket)
+	}
+}
+
+// A remote's herdr socket is the one remuda dials there, before the move and after it: its remote_socket, else herdr's
+// default under the home, or under %APPDATA% on Windows wherever the profile keeps it — never one the ssh environment
+// names; nothing before the machine's first connect.
+func TestTheMovedHerdrOfARemoteIsTheSocketRemudaDials(t *testing.T) {
+	posix := probe{os: "linux", home: "/home/me"}
+	if got := herdrSocket(Config{}, posix); got != "/home/me/.config/herdr/herdr.sock" {
+		t.Fatalf("a Mac or Linux: %q", got)
+	}
+	if got := herdrSocket(Config{RemoteSocket: "/run/h.sock"}, posix); got != "/run/h.sock" {
+		t.Fatalf("remote_socket: %q", got)
+	}
+	redirected := probe{os: "windows", home: `C:\Users\me`, appData: `D:\Profiles\me\AppData\Roaming`}
+	if got := herdrSocket(Config{}, redirected); got != `D:\Profiles\me\AppData\Roaming\herdr\herdr.sock` {
+		t.Fatalf("a Windows profile kept on another drive: %q", got)
+	}
+	gog := &Machine{Cfg: Config{ID: "gog", HerdrBin: "/usr/local/bin/herdr"}}
+	if bin, socket := gog.MovedHerdr(); bin != "/usr/local/bin/herdr" || socket != "" {
+		t.Fatalf("before its first connect: %q %q", bin, socket)
+	}
+	gog.socket = herdrSocket(gog.Cfg, posix)
+	if _, socket := gog.MovedHerdr(); socket != "/home/me/.config/herdr/herdr.sock" {
+		t.Fatalf("once connected: %q", socket)
+	}
+}

@@ -4,7 +4,7 @@
 import { actions } from "@/app/store";
 import type { Entry } from "@/features/palette/rank";
 import type { Machine } from "@/features/roster/api";
-import { stoppedWords } from "@/features/roster/stopped";
+import { countWords } from "@/features/roster/stopped";
 import { t, tn } from "@/lib/i18n";
 import { wake } from "./flows";
 
@@ -26,7 +26,7 @@ export function sleepCommands(machines: Machine[]): Command[] {
         id: `resume-after-restart:${m.id}`,
         title: t("Resume after restart on {machine}…", { machine: m.label }),
         run: () => actions.openDialog({ kind: "resume-after-restart", machineId: m.id }),
-        more: { hint: stoppedWords(m.stopped.length), icon: "refresh-cw", keywords: ["resume", "reboot", "restart", "stopped", "chats", "recover", m.label] },
+        more: { hint: countWords(m.stopped, m.label), icon: "refresh-cw", keywords: ["resume", "reboot", "restart", "stopped", "chats", "recover", m.label] },
       });
   }
   return out;

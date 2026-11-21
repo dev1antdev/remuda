@@ -158,6 +158,8 @@ type Restarter struct {
 	Memory *Memory
 	// Typed hears every command this restarter types into a pane (an agent's exit or restart), for the activity; nil hears none.
 	Typed func(machineID, paneID, text string)
+	// Serving says whether herdr's server answers on a machine moved to remuda-core (herdr.Serving over its shell).
+	Serving func(mc *machines.Machine) (bool, error)
 
 	mu         sync.Mutex
 	pending    map[string]*booking  // machine|pane
@@ -175,7 +177,11 @@ func (r *Restarter) typed(key, paneID, text string) {
 }
 
 func New(m *machines.Manager) *Restarter {
-	return &Restarter{machines: m, pending: map[string]*booking{}, last: map[string]time.Time{}}
+	serving := func(mc *machines.Machine) (bool, error) {
+		bin, socket := mc.MovedHerdr()
+		return herdr.Serving(mc, bin, socket)
+	}
+	return &Restarter{machines: m, Serving: serving, pending: map[string]*booking{}, last: map[string]time.Time{}}
 }
 
 // Now restarts the machine's ready chats of these kinds and books the busy ones for when they settle.

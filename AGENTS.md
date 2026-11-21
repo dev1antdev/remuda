@@ -65,7 +65,12 @@ not style.
 
 - **herdr owns every process and status.** remuda keeps no session state
   and must keep working across its own restart while agents run. Never
-  spawn, kill or track an agent yourself; ask herdr over its RPC.
+  spawn, kill or track an agent yourself; ask herdr over its RPC. The one
+  exception: on a machine moved to remuda-core, herdr's server is stopped
+  (`herdr server stop`; herdr stays installed) only when the person
+  presses it, behind a confirm naming what stops — never from a schedule,
+  a queue, a trigger, an agent's key, a viewer link (403) or a scratch
+  instance.
 - **`~/.claude` is read-only.** Transcripts are parsed, never written; the
   one write is `remuda statusline install`, which puts the wrapper before
   the status line in `settings.json` only when the person runs it or

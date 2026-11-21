@@ -166,6 +166,9 @@ func (mc *Machine) connect() {
 		return
 	}
 	if mc.speaksCore {
+		mc.mu.Lock()
+		mc.socket = herdrSocket(mc.Cfg, found) // herdr's, as remuda dialled it before the move: MovedHerdr
+		mc.mu.Unlock()
 		link, err := mc.reachCore(conn, found)
 		if err != nil { // the master stays, so the vitals and Updates' Install remuda-core reach the machine
 			mc.connected(conn, found, nil, nil, nil, err)
@@ -188,14 +191,7 @@ func (mc *Machine) connect() {
 		return
 	}
 
-	sock := mc.Cfg.RemoteSocket
-	switch {
-	case sock != "":
-	case windows:
-		sock = windowsSocket(found.appData)
-	default:
-		sock = herdr.DefaultSocket(home)
-	}
+	sock := herdrSocket(mc.Cfg, found)
 	connectRPC := func() (*herdr.Client, error) {
 		if windows {
 			return bridgeClient(conn, found.remuda, sock)

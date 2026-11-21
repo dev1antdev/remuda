@@ -1224,11 +1224,13 @@ async function dressRoster({ requestId, responseStatusCode, responseHeaders = []
 }
 
 // STOPPED is what a reboot stopped on this machine while dressStopped is on: two chats in panes herdr does not have,
-// each with the folder and the command that brings it back; nothing is ever resumed (the dialog is left by Not now)
+// each with the folder and the command that brings it back, and an agent herdr ran before a move to remuda-core;
+// nothing is ever resumed (the dialog is left by Not now)
 let dressStopped = false;
 const STOPPED = [
   { pane: "w90:p1", agent: "claude", title: "api", dir: "/srv/api", command: "claude --resume 0e2e0000-aaaa-4bbb-8ccc-0123456789ab" },
   { pane: "w91:p1", agent: "codex", title: "web", dir: "/srv/web app", command: "codex resume 0e2e0000-dddd-4eee-8fff-0123456789ab" },
+  { pane: "w92:p1", agent: "claude", title: "notes", dir: "/srv/notes", command: "claude --resume 0e2e0000-1111-4222-8333-0123456789ab", from: "herdr" },
 ];
 
 // sleepScreens: the sleeping card and its Wake, the confirm a sleep of busy agents asks first (cancelled, so nothing
@@ -1289,7 +1291,8 @@ async function sleepScreens() {
     open: async () => {
       if (await present('[data-toast="recover-local"] .btn.primary')) await tap('[data-toast="recover-local"] .btn.primary');
       else await palette("resume-after-restart:local");
-      if (!(await until(async () => (await count(".resume-dialog .resume-row")) === 2, 6))) return failed(`Resume after restart lists ${await count(".resume-dialog .resume-row")} chats, not the two stopped`);
+      if (!(await until(async () => (await count(".resume-dialog .resume-row")) === 3, 6))) return failed(`Resume after restart lists ${await count(".resume-dialog .resume-row")} chats, not the three stopped`);
+      check((await count(".resume-dialog .resume-row .badge")) === 1, "the agent herdr ran is not marked from herdr, or another one is");
       check(await evaluate(`[...document.querySelectorAll(".resume-dialog .resume-command")].some((c) => c.textContent === "cd '/srv/web app' && codex resume 0e2e0000-dddd-4eee-8fff-0123456789ab")`), "a row does not show the exact command, in its folder");
       check((await count(".resume-dialog .modal-actions .btn")) === 2, "with every chat ticked the dialog offers more than Not now and Resume all");
       await tap(".resume-dialog li:first-child .resume-row input");

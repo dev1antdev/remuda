@@ -6,7 +6,6 @@ package restart
 
 import (
 	"errors"
-	"fmt"
 	"log"
 	"sort"
 	"strconv"
@@ -147,11 +146,8 @@ func (r *Restarter) Reopen(mc *machines.Machine, id string) (sessions.Place, err
 	if !ok {
 		return sessions.Place{}, ErrNoSuchClosed
 	}
-	if info, err := mc.ResolvePath("", c.Dir); err != nil || info.Kind != "dir" {
-		return sessions.Place{}, fmt.Errorf("its folder %s is gone — nothing to reopen into", c.Dir)
-	}
-	if c.Agent == "claude" && !sessionFileExists(mc, Chat{Kind: c.Agent, Session: c.Session, Dir: c.Dir}) {
-		return sessions.Place{}, errors.New("its session file is gone — nothing to resume")
+	if err := CanResume(mc, c.Agent, c.Session, c.Dir); err != nil {
+		return sessions.Place{}, err
 	}
 	client, _, err := mc.Ready()
 	if err != nil {
@@ -194,22 +190,38 @@ func (r *Restarter) reopenWith(client placer, machineID string, c Closed) (sessi
 	if _, ok := r.Memory.closedEntry(machineID, c.ID); !ok {
 		return sessions.Place{}, ErrNoSuchClosed
 	}
-	snap, err := client.SessionSnapshot()
-	if err != nil {
-		return sessions.Place{}, err
+	place, open, err := startOnSession(client, c.Dir, "", c.Tab, c.Agent, c.Session)
+	if open != nil {
+		r.Memory.dropClosed(machineID, c.ID)
+		return sessions.Place{Pane: open.PaneID, Workspace: open.WorkspaceID}, &OpenAlready{Pane: open.PaneID}
 	}
-	for i := range snap.Panes {
-		if p := &snap.Panes[i]; sessionOf(p) == c.Session {
-			r.Memory.dropClosed(machineID, c.ID)
-			return sessions.Place{Pane: p.PaneID, Workspace: p.WorkspaceID}, &OpenAlready{Pane: p.PaneID}
-		}
-	}
-	place, err := sessions.StartIn(client, snap, c.Dir, c.Tab, c.Agent, sessions.Start{Resume: c.Session})
 	if err != nil {
 		return place, err
 	}
 	r.Memory.dropClosed(machineID, c.ID)
 	return place, nil
+}
+
+// startOnSession starts the agent on its session in a tab of the folder's workspace, else a new workspace named
+// workspace, unless a pane runs that session already — the agents' sessions read again first (Reread), since a
+// /resume moves one under the same process, after a look that makes an agent started a moment ago one of those read —
+// that pane comes back instead, and nothing starts.
+func startOnSession(client placer, dir, workspace, tab, kind, session string) (sessions.Place, *herdr.PaneInfo, error) {
+	if _, err := client.SessionSnapshot(); err != nil {
+		return sessions.Place{}, nil, err
+	}
+	if err := Reread(client); err != nil {
+		return sessions.Place{}, nil, err
+	}
+	snap, err := client.SessionSnapshot()
+	if err != nil {
+		return sessions.Place{}, nil, err
+	}
+	if p := paneOnSession(snap, session); p != nil {
+		return sessions.Place{}, p, nil
+	}
+	place, err := sessions.StartIn(client, snap, dir, workspace, tab, kind, sessions.Start{Resume: session})
+	return place, nil, err
 }
 
 // OpenAlready is a reopen of a session some pane runs already: that pane is the one to open.

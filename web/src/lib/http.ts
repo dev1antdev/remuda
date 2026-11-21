@@ -36,6 +36,21 @@ export async function sendJSON<T = unknown>(method: "POST" | "PUT" | "DELETE" | 
   return (text ? JSON.parse(text) : undefined) as T;
 }
 
+// postJSONOr409 is a POST of JSON whose 409 the page answers itself when its body claims it (a field of its own), the
+// body then the answer; any other refusal throws as check does
+export async function postJSONOr409<T>(url: string, body: unknown, claims: (conflict: Partial<T>) => boolean): Promise<T> {
+  const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  if (res.status === 409) {
+    const conflict = (await res
+      .clone()
+      .json()
+      .catch(() => null)) as Partial<T> | null;
+    if (conflict && claims(conflict)) return conflict as T;
+  }
+  await check(res);
+  return (await res.json()) as T;
+}
+
 export function withMachine(path: string, machineId: string): string {
   return `${path}${path.includes("?") ? "&" : "?"}machine=${encodeURIComponent(machineId)}`;
 }

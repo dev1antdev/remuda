@@ -1,6 +1,7 @@
 package sleep
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -17,6 +18,9 @@ func (s *Service) Wake(mc *machines.Machine, workspaceID string) (Started, error
 	w, ok := s.Store.Of(mc.ID(), workspaceID)
 	if !ok {
 		return Started{}, ErrNotAsleep
+	}
+	if !w.Core && s.Store.Core != nil && s.Store.Core() {
+		return Started{}, ErrSleptInHerdr
 	}
 	client, _, err := mc.Ready()
 	if err != nil {
@@ -107,7 +111,10 @@ func (s *Service) wakeOne(client Client, machineID, workspaceID string, a Agent,
 		say(fmt.Sprintf("· %s (%s): its shell is in %s now, not %s", title, a.Pane, p.Dir(), a.Dir))
 		return keep("its shell is in another folder now", a)
 	}
-	if err := checks(a); err != nil {
+	if err := checks(a); errors.Is(err, restart.ErrUnasked) {
+		say(fmt.Sprintf("· %s (%s): %v", title, a.Pane, err))
+		return keep(err.Error(), a)
+	} else if err != nil {
 		say(fmt.Sprintf("· %s (%s): %v", title, a.Pane, err))
 		return outcome{why: err.Error()}
 	}
@@ -139,7 +146,7 @@ func (s *Service) wakeInTab(client Client, snap *herdr.Snapshot, workspaceID str
 		a.Pane, a.Tab = res.RootPane.PaneID, res.Tab.TabID
 		return start(client, a, say, keep)
 	}
-	place, err := sessions.StartIn(client, snap, a.Dir, a.TabName, a.Kind, sessions.Start{Resume: a.Session})
+	place, err := sessions.StartIn(client, snap, a.Dir, "", a.TabName, a.Kind, sessions.Start{Resume: a.Session})
 	if place.Pane != "" {
 		a.Pane, a.Tab = place.Pane, place.Tab
 	}

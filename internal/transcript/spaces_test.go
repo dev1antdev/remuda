@@ -1,6 +1,7 @@
 package transcript
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -71,5 +72,25 @@ func TestASessionIsFoundForEachFolderApart(t *testing.T) {
 		if got, err := reader.ResolveSession("claude", cwd, "id", id); err != nil || got != paths[cwd] {
 			t.Errorf("%s: %q, %v, want its own copy %q", cwd, got, err, paths[cwd])
 		}
+	}
+}
+
+// A lookup the machine did not answer is no miss: asked again at once, the session is found.
+func TestAnUnansweredLookupIsNoMiss(t *testing.T) {
+	const id = "66666666-6666-4666-8666-666666666666"
+	answered := false
+	host := &shell.Fake{Name: "gog", Dir: "/home/me", Remote: true, Answer: func(string) (string, error) {
+		if !answered {
+			answered = true
+			return "", errors.New("ssh: connection lost")
+		}
+		return "/home/me/.claude/projects/-work-api/" + id + ".jsonl\n", nil
+	}}
+	reader := NewReader(host)
+	if _, err := reader.ResolveSession("claude", "/work/api", "id", id); err == nil || errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("the lost connection: %v", err)
+	}
+	if got, err := reader.ResolveSession("claude", "/work/api", "id", id); err != nil || !strings.HasSuffix(got, id+".jsonl") {
+		t.Fatalf("asked again: %q, %v", got, err)
 	}
 }

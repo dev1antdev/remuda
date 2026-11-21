@@ -99,6 +99,12 @@ func CoreBin(variable string) string {
 	return variable + `="$HOME/.local/bin/remuda-core"; [ -x "$` + variable + `" ] || { ` + variable + `="$` + variable + `.exe"; [ -x "$` + variable + `" ] && [ -f "$HOME/.local/bin/conpty/conpty.dll" ] && [ -f "$HOME/.local/bin/conpty/x64/OpenConsole.exe" ] || ` + variable + `=; }`
 }
 
+// HerdrBin sets the shell variable to herdr's binary on the machine, "" when none is found: on PATH, else where its
+// installers put it.
+func HerdrBin(variable string) string {
+	return variable + `=$(command -v herdr 2>/dev/null) || for p in "$HOME/.local/bin/herdr" /opt/homebrew/bin/herdr /usr/local/bin/herdr /usr/bin/herdr; do [ -x "$p" ] && { ` + variable + `=$p; break; }; done`
+}
+
 // RemudaPath is where remuda lives on a machine with this home: ~/.local/bin/remuda, or remuda.exe there on Windows,
 // spelled with forward slashes (C:/Users/me/.local/bin/remuda.exe), which Git Bash and Windows both read.
 func RemudaPath(home string) string {

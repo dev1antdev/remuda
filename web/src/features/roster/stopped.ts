@@ -1,5 +1,6 @@
-// The chats a reboot stopped on a machine, as the roster lists them: the words for the ⓘ and the toast, and the
-// key of one episode, so a toast dismissed stays dismissed until the list changes.
+// The chats a reboot stopped on a machine, as the roster lists them, and herdr's agents that can carry on there once it
+// moved to remuda-core: the words for the ⓘ and the toast, and the key of one episode, so a toast dismissed stays
+// dismissed until the list changes.
 
 import { t, tn } from "@/lib/i18n";
 import { VENDOR_NAME } from "@/ui/brand";
@@ -17,6 +18,30 @@ export const stoppedWords = (n: number): string => tn(n, "{n} chat stopped with 
 
 // stoppedNames lists what stopped: "Claude Code in api, Codex in web"
 export const stoppedNames = (stopped: StoppedChat[]): string => stopped.map((s) => t("{agent} in {title}", { agent: VENDOR_NAME[s.agent] ?? s.agent, title: s.title || s.pane })).join(", ");
+
+// fromHerdr is an agent that ran in herdr before the machine moved to remuda-core
+export const fromHerdr = (chat: StoppedChat): boolean => chat.from === "herdr";
+
+// herdrWords is the count of herdr's agents as a sentence: "2 agents from herdr on GOG can carry on"
+export const herdrWords = (n: number, machine: string): string => tn(n, "{n} agent from herdr on {machine} can carry on", "{n} agents from herdr on {machine} can carry on", { machine });
+
+// concernWords is the ⓘ's line: what a reboot stopped and what herdr left, each with its names
+export function concernWords(stopped: StoppedChat[], machine: string): string {
+  const herdr = stopped.filter(fromHerdr);
+  const rebooted = stopped.filter((chat) => !fromHerdr(chat));
+  const parts = [rebooted.length ? `${stoppedWords(rebooted.length)}: ${stoppedNames(rebooted)}` : "", herdr.length ? `${herdrWords(herdr.length, machine)}: ${stoppedNames(herdr)}` : ""];
+  return parts.filter(Boolean).join(" · ");
+}
+
+// countWords is what waits on a machine, counted: "1 chat stopped with the reboot · 2 agents from herdr on GOG can carry on"
+export function countWords(stopped: StoppedChat[], machine: string): string {
+  const herdr = stopped.filter(fromHerdr).length;
+  const rebooted = stopped.length - herdr;
+  return [rebooted ? stoppedWords(rebooted) : "", herdr ? herdrWords(herdr, machine) : ""].filter(Boolean).join(" · ");
+}
+
+// toastWords is the toast's line, the machine named before a reboot's count: "GOG: 3 chats stopped with the reboot"
+export const toastWords = (stopped: StoppedChat[], machine: string): string => (stopped.every(fromHerdr) ? countWords(stopped, machine) : `${machine}: ${countWords(stopped, machine)}`);
 
 // MAX_SEEN is how many dismissed episodes the device keeps
 export const MAX_SEEN = 8;

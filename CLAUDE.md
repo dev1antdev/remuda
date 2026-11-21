@@ -36,7 +36,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   scratch instance only when it asks, so a look beside the real one never
   reads the person's screens or work into a folder of its own;
   `app.Options.Record` → `timelapse.Recorder.Scratch` and
-  `undo.Tracker.Scratch`), `-server`
+  `undo.Tracker.Scratch`; and, with no flag of its own, `herdrStops`,
+  tested: a scratch instance never stops herdr's server, which may be the
+  real one's — `app.Options.HerdrStops`, see `internal/restart`), `-server`
   (also `REMUDA_SERVER=1`; `app.Options.Server`, see "Server mode"
   below; without it the host is a machine of its own, there is no
   `-client` flag), `-core` (also `REMUDA_CORE=1`; `app.Options.Core`,
@@ -986,7 +988,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   8 MB of a file, 128 MB of tails in all and 64 MB of subagents', the
   ones read longest ago going first, never one read in the last minute
   for a file not cached yet: a fleet of agents reads every file in turn);
-  `Reader.ResolveSession` finds `<uuid>.jsonl` and caches the hit on both sides.
+  `Reader.ResolveSession` finds `<uuid>.jsonl` and caches the hit on both sides,
+  and a miss for half a minute only when the file is known not there — a
+  machine that did not answer is no miss.
   `Machine.Ready()` reconnects a dead remote at most every 15s; a removed
   machine never reconnects and its watcher loop exits. **A sleeping
   machine is woken** with the magic packet (`internal/wake`, tested:
@@ -2292,7 +2296,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   machine while it restarts herdr itself; a pane `Memory.Asleep` names (`sleep.Store.Holds`: a
   workspace the person put to sleep, its agents left at their word and
   the sleep's to wake — neither stopped by a reboot nor closed). The
-  roster carries `machine.stopped [{pane, agent, title, dir, command}]`
+  roster carries `machine.stopped [{pane, agent, title, dir, command, from}]`
   (`stoppedOf`: the folder and `Resume(kind, session)`) and
   `machine.resuming` while a recovery runs there (`Restarter.Recovering`,
   one at a time per machine, `claimRecovery`): the ⓘ's first concern
@@ -2330,6 +2334,86 @@ components and icons as rules for whoever changes it: @docs/design.md
   gains a pane, starts `updates.Service.AutoRecoverChats` →
   `Restarter.AutoRecover` by itself (wired in `internal/app/sleep.go`),
   its feed row "N chats resumed by itself after the reboot on X".
+  **herdr's agents carry on in remuda-core** (restart/recover.go,
+  `fromherdr_test.go`; Core 26d): `Memory.Core` (`fleet.Core`) says the
+  fleet is on remuda-core, and every chat remembered there is marked
+  `core` in chats.json; one without the mark whose pane the core's
+  snapshot lacks — herdr's, from before the move — goes into the
+  machine's stopped list `from: "herdr"` (`herdrStopped`), never into
+  closed.json, once by its key however often remuda restarts, until an
+  agent of the core is on its session (then forgotten); `gained` leaves it
+  out, so neither `OnStopped` nor "Resume automatically next time" ever
+  starts one (`Rebooted`, which `AutoRecoverChats` and `AutoRecover` keep
+  to). A workspace that slept in herdr stays in asleep.json — so a remuda
+  put back on herdr finds it asleep — and its agents are listed the same
+  way (`Memory.Sleepers` = `sleep.Store.SleptInHerdr`, the records without
+  the sleep's own `core` mark), each taken off there once dealt with or
+  found on its session in the core (`Memory.Woken` = `sleep.Store.Woke`).
+  Resume of one is refused while herdr's server answers on the machine
+  (`Restarter.MayCarryOn` → `*HerdrRunning`, a 409 `{herdr: true}` from
+  `POST /api/panes/recover`, asked again inside the job; `Restarter.Serving`
+  is `herdr.Serving` over the machine's shell, through the herdr remuda
+  reached there, `Machine.MovedHerdr` — this machine's `-herdr-bin` and
+  `-socket`, which the app hands `Manager.SetMovedHerdr` — a `-herdr-bin`
+  path gone since kept as given (`movedHerdrBin`), so the look cannot
+  read as no server — a remote's `herdr_bin` and
+  `remote_socket`, else the socket remuda dials there (`herdrSocket`, which
+  the herdr connect shares, kept at every connect on the core too: herdr's
+  default under `%APPDATA%` on a Windows PC, wherever the profile keeps
+  it, else under the home), so the ssh environment's `HERDR_SOCKET_PATH`
+  never picks another herdr —
+  else herdr found as the probe finds it
+  (`script.HerdrBin`) on its own socket, `internal/herdr/serving.go`,
+  tested on `shell.Fake` and in sh on a stand-in at an explicit path:
+  only herdr's own "status: running" or "status: not running" counts, a
+  binary that would not run or any other answer being an error, never a
+  server stopped); else `carryOn`: a session this run started already
+  counts as back, then `CanResume` in the folder the agent ran in
+  (`Ran`, else its pane's), then `startOnSession` (which the reopen of a
+  closed agent shares: a look, so an agent started a moment ago is one of
+  those read, the agents' sessions read again, `Reread`, a fresh
+  snapshot, a pane already on the session answered as back, else
+  `sessions.StartIn` with the kind's resume arguments), a tab of the
+  workspace on the folder, else a new workspace named as herdr's was, so
+  the agents of one herdr workspace in one folder become tabs of one; the
+  record is forgotten once dealt with, a start that failed — or sessions
+  that could not be read again — keeps it listed. **What the machine could
+  not say forgets nothing**: `CanResume` (`Machine.Stat`, which keeps
+  `os.ErrNotExist` apart from a machine that could not be asked and from
+  a path behind a folder the user may not search — the remote stat
+  script's `unreadable`, a link followed to its target's way, and links
+  more than eight deep or unread, a loop of links, any failure whose
+  message does not end ": No such file or directory" too, `missing` kept
+  for a path known not there,
+  tested in
+  `machines/stat_test.go` — and
+  `sessionFileExists`) wraps `ErrUnasked` for a look that failed, and the
+  reboot's resume, the carry-on and the wake keep that chat listed or
+  asleep instead of forgetting it; every chat a run did not bring back —
+  failed or forgotten — is named in the job's error (`notBack`).
+  `POST /api/machines/{id}/herdr/stop` (`internal/server/recover.go`, the
+  person's only — a viewer link and an agent key get a 403,
+  `internal/auth/herdrstop_test.go`; refused on a scratch instance,
+  `app.Options.HerdrStops`, on a machine still on herdr, and on the page's
+  own host under `-server`, whose `Ready` says so) is `herdr.StopServing`:
+  herdr's own `server stop` on that same herdr, then herdr's word that it
+  is down waited for — anything short of it an error — herdr left
+  installed. The page: the ⓘ and the toast
+  say "2 agents from herdr on GOG can carry on" (`herdrWords`,
+  `concernWords`, `countWords` — the palette row's hint too — and
+  `toastWords` in `features/roster/stopped.ts`, tested; the job's title
+  and command say it as well, `updates.recoverChats`);
+  Resume after restart marks each such row "from herdr" and says where
+  they come back, and leaves a Gemini CLI or Kimi Code from herdr
+  unticked, saying why (`unseen`, `firstPicks` in
+  `features/sleep/resume.ts`, tested): on remuda-core only Claude Code's
+  and Codex's sessions are read off their process, so remuda cannot see
+  one of theirs resumed by hand — the memory keeps it listed and Resume
+  all would start it twice. A refusal keeps the dialog open with a warn notice and
+  **Stop herdr's server on X…**, whose confirm says all agents still
+  running in herdr there stop and herdr stays installed (`askStopHerdr` in
+  `features/updates/recover.ts`); Resume is pressed again after it. The
+  e2e display suite dresses one such agent among the stopped chats.
   **The agents whose panes went away** (restart/closed.go, tested): the
   same memory notes, when a remembered agent pane is gone from its
   machine's snapshot — its tab or workspace closed, through remuda or
@@ -2409,7 +2493,16 @@ components and icons as rules for whoever changes it: @docs/design.md
   in its shell)". One sleep or wake per workspace at a time (`claim`).
   `Store.Observe` (every snapshot, `internal/app/sleep.go`) forgets a
   workspace a watched snapshot no longer shows (never on a machine's
-  first), `Forget` a removed machine's. **The switches**
+  first), `Forget` a removed machine's; on a fleet moved to remuda-core
+  (`Store.Core`) a workspace that slept in herdr — a record without the
+  `core` mark a sleep on the core gives — is no core snapshot's to forget:
+  `SleptInHerdr` offers its agents to Resume after restart
+  (`restart.Memory.Sleepers`) and `Woke` takes each off once it is back or
+  can never come back, the workspace waking with its last (tested in
+  `store_test.go`), and a wake of one is refused (`ErrSleptInHerdr`, a
+  409: a wake would start its agents with herdr's server perhaps still
+  running them); a look the machine could not answer in a wake
+  (`restart.ErrUnasked`) keeps the agent asleep. **The switches**
   (`sleep-settings.json`, `Settings{wake_on_open, resume_automatically}`,
   both off): routes `GET/PUT /api/sleep/settings`; `POST
   /api/sessions/{id}/sleep {machine, anyway}` and `…/wake {machine}`
@@ -7525,10 +7618,11 @@ components and icons as rules for whoever changes it: @docs/design.md
   `ErrNoAgent`, never typed into its shell — the schedules, a booked
   continue, a tidy's `/compact`: on remuda-core never into a turn), `SubmitToFolder` (the
   scheduler's door, through it); `WorkspaceIn(snap, dir)` the first
-  workspace on a folder; `StartIn(client, snap, dir,
-  label, kind, start)` (place.go, tested) starts an agent in a folder —
+  workspace on a folder; `StartIn(client, snap, dir, workspace,
+  tab, kind, start)` (place.go, tested) starts an agent in a folder —
   a new tab of the folder's workspace when the snapshot has one, else a
-  new workspace on the folder — and answers a `Place` (pane, tab,
+  new workspace on the folder, named `workspace` ("" names it after the
+  folder) — and answers a `Place` (pane, tab,
   workspace, whether the workspace was made), and `Launcher` (`Machines`,
   `Watch`, `Input`, `Notify`) does that on a machine (`StartInFolder`,
   the first prompt handed over in the background, a push when it was
@@ -7863,7 +7957,12 @@ components and icons as rules for whoever changes it: @docs/design.md
 ## Invariants
 
 - **herdr owns every process and status.** remuda holds no session state;
-  it must keep working after a restart while agents run.
+  it must keep working after a restart while agents run. On a machine moved
+  to remuda-core, herdr's server is stopped (`herdr server stop`, herdr
+  left installed) only when the person presses Stop herdr's server on X…
+  and confirms what stops — every agent still running in herdr there —
+  never from a schedule, a queue, a trigger, an agent's key or a viewer
+  link (403), nor by a scratch instance (`internal/restart`, Core 26d).
 - **The transcript is read-only**; input goes through herdr: `agent.prompt`
   preferred (refuses with `agent_blocked` while a menu is open — surface
   that as 409, never type into the menu), and for a message that

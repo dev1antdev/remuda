@@ -168,3 +168,76 @@ func TestAChatOnACoreRestartsOntoAnUpdateOnItsSession(t *testing.T) {
 		t.Fatalf("the restart did not try /restart before leaving:\n%s", said)
 	}
 }
+
+// Agents that slept in herdr before the move carry on on a throwaway core: a workspace on their folder named as
+// herdr's was, each agent of it a tab there, on its own session, and the sleep told each is back.
+func TestHerdrsAgentsCarryOnOnACore(t *testing.T) {
+	const second = "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d"
+	coretest.StandInClaude(t, lifeSession)
+	coretest.Server(t).Use(t)
+	fleet := machines.NewCoreManager(t.TempDir(), "", nil, false)
+	t.Cleanup(fleet.Close)
+	mc, err := fleet.Get(machines.LocalID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client, _, err := mc.Ready()
+	if err != nil {
+		t.Fatal(err)
+	}
+	folder, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, session := range []string{lifeSession, second} {
+		conversation := filepath.Join(mc.Home(), ".claude", "projects", transcript.EncodePath(folder), session+".jsonl")
+		if err := os.MkdirAll(filepath.Dir(conversation), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(conversation, nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	r := restart.New(fleet)
+	r.Serving = func(*machines.Machine) (bool, error) { return false, nil }
+	r.Memory = restart.OpenMemory("")
+	r.Memory.Core = func() bool { return true }
+	slept := map[string]restart.Chat{
+		"w1:p1": {Kind: "claude", Session: lifeSession, Dir: folder, Title: "api"},
+		"w1:p2": {Kind: "claude", Session: second, Dir: folder, Title: "api"},
+	}
+	var woken []string
+	r.Memory.Sleepers = func(string) map[string]restart.Chat { return slept }
+	r.Memory.Woken = func(_, pane string) { woken = append(woken, pane) }
+	before, err := client.SessionSnapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.Memory.Observe(events.Snapshot{Machine: mc.ID(), Snap: before, At: time.Now()})
+	var log []string
+	if err := r.Recover(mc, nil, func(line string) { log = append(log, line) }); err != nil {
+		t.Fatalf("recover: %v\n%s", err, strings.Join(log, "\n"))
+	}
+	snap, err := client.SessionSnapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snap.Workspaces) != 1 || snap.Workspaces[0].Label != "api" || snap.WorkspaceDir(&snap.Workspaces[0]) != folder || len(snap.Tabs) != 2 {
+		t.Fatalf("one workspace named as herdr's, a tab an agent: %+v %+v", snap.Workspaces, snap.Tabs)
+	}
+	for i, session := range []string{lifeSession, second} {
+		pane := snap.Panes[i].PaneID
+		for start := time.Now(); ; time.Sleep(100 * time.Millisecond) {
+			screen, _ := client.PaneRead(pane)
+			if strings.Contains(screen, "args: --resume "+session) {
+				break
+			}
+			if time.Since(start) > 20*time.Second {
+				t.Fatalf("Claude Code did not carry on on %s in %s:\n%s", session, pane, screen)
+			}
+		}
+	}
+	if len(r.Memory.Stopped(mc.ID())) != 0 || len(woken) != 2 {
+		t.Fatalf("still listed: %+v, the sleep told of %v", r.Memory.Stopped(mc.ID()), woken)
+	}
+}
