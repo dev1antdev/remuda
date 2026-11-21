@@ -2071,9 +2071,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   -9 and never taken over: a second install names it and stops); one installed already is swapped by its own `update --from`
   (its terminals keep running), one as new or newer left alone, a fresh
   one starts nothing; on Linux `loginctl enable-linger`, said when refused.
-  `remuda setup` installs it and nothing else (never under `-server`; a
-  failure is said and setup goes on, and the page's ⓘ then says what is
-  missing with an Install — CI's Windows job checks it really lands there,
+  `remuda setup` installs it and nothing else (never under `-server`; with a
+  service a failure is said and setup goes on, the page's ⓘ then saying
+  what is missing with an Install, while `-no-service` has nothing to come
+  up and fails — CI's Windows job checks it really lands there,
   `live_windows_test.go`); the
   vitals read `remuda_core`; Updates offers `what = core` ("Install
   remuda-core" / "Update remuda-core") on every machine where it is
