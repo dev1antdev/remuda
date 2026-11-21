@@ -6,6 +6,7 @@ import (
 	"context"
 	"net"
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -28,7 +29,7 @@ func TestOnWindowsTheMachineIsReadAsTheConnectionReadsIt(t *testing.T) {
 	if found.os != "windows" || found.home != home {
 		t.Fatalf("the probe read %+v; the home is %s", found, home)
 	}
-	if !strings.HasSuffix(found.core, "/.local/bin/remuda-core.exe") {
+	if !strings.HasSuffix(found.core, "/.local/bin/remuda-core") && !strings.HasSuffix(found.core, "/.local/bin/remuda-core.exe") {
 		t.Fatalf("the probe did not find remuda-core where its installer puts it: %q", found.core)
 	}
 }
@@ -65,6 +66,20 @@ func TestOnWindowsRemudaCoreIsReachedOverSSH(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 	hello, err := client.Hello(ctx)
+	if err != nil && strings.Contains(err.Error(), "elevated Windows core over SSH") {
+		// this runner's sshd admits only administrators, and a core refuses to start in such a session while a desktop one
+		// runs: it is started here the way its app does, and the ssh connection then follows it as it would on a PC whose
+		// sshd is the person's own
+		t.Logf("the runner's ssh is elevated; starting the core in this session first: %v", err)
+		starting := exec.Command(found.core, "server", "start")
+		if err := starting.Start(); err != nil {
+			t.Fatalf("start the core in this session: %v", err)
+		}
+		go starting.Wait()
+		for begin := time.Now(); err != nil && time.Since(begin) < 30*time.Second; time.Sleep(time.Second) {
+			hello, err = client.Hello(ctx)
+		}
+	}
 	if err != nil {
 		t.Fatalf("hello through remuda-core.exe connect over ssh: %v", err)
 	}

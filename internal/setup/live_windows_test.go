@@ -28,7 +28,8 @@ func TestOnWindowsSetupOfThisPCRunsAsFromACockpit(t *testing.T) {
 		t.Fatalf("setup -host: %v\n%s", err, out.String())
 	}
 	wintest.Record(t, "setup.txt", out.String())
-	for _, want := range []string{"remuda-core on " + os.Getenv("REMUDA_SSH_HOST"), "rc " + CoreVersion} {
+	// a fresh install ends with the binary's version; one already there says so and stops
+	for _, want := range []string{"remuda-core on " + os.Getenv("REMUDA_SSH_HOST"), CoreVersion} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("setup did not say %q:\n%s", want, out.String())
 		}
