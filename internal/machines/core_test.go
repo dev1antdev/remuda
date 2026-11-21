@@ -194,3 +194,19 @@ func TestTheHerdrBeforeTheMoveIsTheOneRemudaReached(t *testing.T) {
 		t.Fatalf("a remote's: %q %q", bin, socket)
 	}
 }
+
+// A remote with no remote_socket: the socket remuda dialled there, herdr's default under its home, never whatever the
+// ssh environment names.
+func TestTheMovedHerdrOfARemoteIsTheSocketUnderItsHome(t *testing.T) {
+	posix := &Machine{Cfg: Config{ID: "gog"}, home: "/home/me"}
+	if bin, socket := posix.MovedHerdr(); bin != "" || socket != "/home/me/.config/herdr/herdr.sock" {
+		t.Fatalf("a Mac or Linux: %q %q", bin, socket)
+	}
+	windows := &Machine{Cfg: Config{ID: "win"}, home: `C:\Users\me`}
+	if _, socket := windows.MovedHerdr(); socket != `C:\Users\me\AppData\Roaming\herdr\herdr.sock` {
+		t.Fatalf("a Windows PC: %q", socket)
+	}
+	if _, socket := (&Machine{Cfg: Config{ID: "new"}}).MovedHerdr(); socket != "" {
+		t.Fatalf("before its first connect: %q", socket)
+	}
+}

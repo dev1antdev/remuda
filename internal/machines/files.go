@@ -189,12 +189,14 @@ func (mc *Machine) stat(p string) (FileInfo, error) {
 	return readStat(p, out)
 }
 
-// statScript prints dir, missing, or "file <size> <NULs in the first 8 KB>".
+// statScript prints dir, missing, unreadable (a folder on the way the user may not search, so whether it is there is
+// not known), or "file <size> <NULs in the first 8 KB>".
 func statScript(p string) string {
 	q := script.Quote(p)
 	return `if [ -d ` + q + ` ]; then echo dir; elif [ -f ` + q + ` ]; then ` +
 		`printf 'file %s ' "$(` + script.Stat(q, "%s", "%z") + `)"; ` +
-		`head -c 8192 ` + q + ` | tr -d -c '\000' | wc -c; else echo missing; fi`
+		`head -c 8192 ` + q + ` | tr -d -c '\000' | wc -c; ` +
+		`elif LC_ALL=C ls -d -- ` + q + ` 2>&1 >/dev/null | grep -q 'Permission denied'; then echo unreadable; else echo missing; fi`
 }
 
 // readStat reads statScript's answer.
@@ -203,6 +205,8 @@ func readStat(p, out string) (FileInfo, error) {
 	switch {
 	case len(f) == 0 || f[0] == "missing":
 		return FileInfo{}, os.ErrNotExist
+	case f[0] == "unreadable":
+		return FileInfo{}, fmt.Errorf("%s: permission denied on the way there", p)
 	case f[0] == "dir":
 		return FileInfo{Path: p, Kind: "dir"}, nil
 	}

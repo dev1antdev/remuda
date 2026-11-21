@@ -2354,7 +2354,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   `-socket`, which the app hands `Manager.SetMovedHerdr` — a `-herdr-bin`
   path gone since kept as given (`movedHerdrBin`), so the look cannot
   read as no server — a remote's `herdr_bin` and
-  `remote_socket` — else herdr found as the probe finds it
+  `remote_socket`, else the socket remuda dialled there, herdr's default
+  under the machine's home (a Windows PC's in `AppData\Roaming\herdr`), so
+  the ssh environment's `HERDR_SOCKET_PATH` never picks another herdr —
+  else herdr found as the probe finds it
   (`script.HerdrBin`) on its own socket, `internal/herdr/serving.go`,
   tested on `shell.Fake` and in sh on a stand-in at an explicit path:
   only herdr's own "status: running" or "status: not running" counts, a
@@ -2371,7 +2374,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   record is forgotten once dealt with, a start that failed — or sessions
   that could not be read again — keeps it listed. **What the machine could
   not say forgets nothing**: `CanResume` (`Machine.Stat`, which keeps
-  `os.ErrNotExist` apart from a machine that could not be asked, and
+  `os.ErrNotExist` apart from a machine that could not be asked and from
+  a path behind a folder the user may not search — the remote stat
+  script's `unreadable`, tested in `machines/stat_test.go` — and
   `sessionFileExists`) wraps `ErrUnasked` for a look that failed, and the
   reboot's resume, the carry-on and the wake keep that chat listed or
   asleep instead of forgetting it; every chat a run did not bring back —

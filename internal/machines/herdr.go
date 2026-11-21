@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/rpath"
 	"github.com/dev1antdev/remuda/internal/script"
 )
 
@@ -19,10 +20,19 @@ func (mc *Machine) HerdrBin() string {
 }
 
 // MovedHerdr is the herdr remuda reached on this machine before the move to remuda-core: this one's -herdr-bin and
-// -socket, a remote's herdr_bin and remote_socket; "" where it had none, for herdr's own lookup and socket.
+// -socket; a remote's herdr_bin and remote_socket, else the socket remuda dialled there, herdr's default under its home
+// (never one the ssh environment names); "" where it had none, for herdr's own lookup and socket.
 func (mc *Machine) MovedHerdr() (bin, socket string) {
 	if !mc.local {
-		return mc.Cfg.HerdrBin, mc.Cfg.RemoteSocket
+		socket = mc.Cfg.RemoteSocket
+		if home := mc.Home(); socket == "" && home != "" {
+			if style := rpath.For(home); style.Windows {
+				socket = style.Join(home, "AppData", "Roaming", "herdr", "herdr.sock")
+			} else {
+				socket = herdr.DefaultSocket(home)
+			}
+		}
+		return mc.Cfg.HerdrBin, socket
 	}
 	mc.mu.Lock()
 	defer mc.mu.Unlock()

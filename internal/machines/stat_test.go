@@ -1,0 +1,44 @@
+package machines
+
+import (
+	"errors"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/dev1antdev/remuda/internal/shell"
+)
+
+// The stat a remote runs, run here in sh: a folder that is not there is missing, one behind a folder the user may not
+// search is unreadable — not known gone — and a folder is a folder.
+func TestTheRemoteStatTellsAPathNotThereFromOneNotReadable(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root searches a folder whatever its mode")
+	}
+	here := t.TempDir()
+	locked := filepath.Join(here, "locked")
+	if err := os.MkdirAll(filepath.Join(locked, "api"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(locked, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(locked, 0o700) })
+	stat := func(p string) (FileInfo, error) {
+		out, err := shell.Text(shell.Local{}, statScript(p), 10*time.Second)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return readStat(p, out)
+	}
+	if info, err := stat(here); err != nil || info.Kind != "dir" {
+		t.Fatalf("a folder: %+v %v", info, err)
+	}
+	if _, err := stat(filepath.Join(here, "gone")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("a folder not there: %v", err)
+	}
+	if _, err := stat(filepath.Join(locked, "api")); err == nil || errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("a folder behind one not searchable: %v", err)
+	}
+}
