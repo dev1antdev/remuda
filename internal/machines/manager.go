@@ -82,6 +82,17 @@ func (m *Manager) SetServer(on bool) {
 	local.mu.Unlock()
 }
 
+// SetMovedHerdr is the herdr this host ran before the move to remuda-core, as remuda reached it: its binary and socket,
+// "" for herdr's own lookup and socket (MovedHerdr).
+func (m *Manager) SetMovedHerdr(bin, socket string) {
+	m.mu.Lock()
+	local := m.machines[LocalID]
+	m.mu.Unlock()
+	local.mu.Lock()
+	local.herdrBin, local.socket = bin, socket
+	local.mu.Unlock()
+}
+
 // Server says whether the host serves the page only.
 func (m *Manager) Server() bool {
 	m.mu.Lock()
@@ -193,13 +204,11 @@ func NewManager(dir, localSocket, localHerdrBin string, door *Door) *Manager {
 }
 
 // NewCoreManager is NewManager for a remuda that reaches every machine through remuda-core instead of herdr (-core),
-// while the move off herdr is built. herdrBin, when herdr is still here, only reads herdr's list of machines; it and
-// localSocket are also the herdr this machine ran before the move (MovedHerdr). A host serving the page only (server)
-// reaches no core of its own: none is started there.
-func NewCoreManager(dir, localSocket, herdrBin string, door *Door, server bool) *Manager {
+// while the move off herdr is built. herdrBin, when herdr is still here, only reads herdr's list of machines. A host
+// serving the page only (server) reaches no core of its own: none is started there.
+func NewCoreManager(dir, herdrBin string, door *Door, server bool) *Manager {
 	local := localMachine(dir)
 	local.speaksCore = true
-	local.herdrBin, local.socket = herdrBin, localSocket
 	if !server {
 		local.link = newCoreLink(local, core.New(dialLocalCore), nil)
 		local.client, local.attach = local.link.adapter, local.link.terminals

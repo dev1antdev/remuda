@@ -985,7 +985,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   8 MB of a file, 128 MB of tails in all and 64 MB of subagents', the
   ones read longest ago going first, never one read in the last minute
   for a file not cached yet: a fleet of agents reads every file in turn);
-  `Reader.ResolveSession` finds `<uuid>.jsonl` and caches the hit on both sides.
+  `Reader.ResolveSession` finds `<uuid>.jsonl` and caches the hit on both sides,
+  and a miss for half a minute only when the file is known not there — a
+  machine that did not answer is no miss.
   `Machine.Ready()` reconnects a dead remote at most every 15s; a removed
   machine never reconnects and its watcher loop exits. **A sleeping
   machine is woken** with the magic packet (`internal/wake`, tested:
@@ -2349,7 +2351,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   `POST /api/panes/recover`, asked again inside the job; `Restarter.Serving`
   is `herdr.Serving` over the machine's shell, through the herdr remuda
   reached there, `Machine.MovedHerdr` — this machine's `-herdr-bin` and
-  `-socket`, which `NewCoreManager` keeps, a remote's `herdr_bin` and
+  `-socket`, which the app hands `Manager.SetMovedHerdr` — a `-herdr-bin`
+  path gone since kept as given (`movedHerdrBin`), so the look cannot
+  read as no server — a remote's `herdr_bin` and
   `remote_socket` — else herdr found as the probe finds it
   (`script.HerdrBin`) on its own socket, `internal/herdr/serving.go`,
   tested on `shell.Fake` and in sh on a stand-in at an explicit path:
@@ -2358,7 +2362,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   server stopped); else `carryOn`: a session this run started already
   counts as back, then `CanResume` in the folder the agent ran in
   (`Ran`, else its pane's), then `startOnSession` (which the reopen of a
-  closed agent shares: the agents' sessions read again, `Reread`, a fresh
+  closed agent shares: a look, so an agent started a moment ago is one of
+  those read, the agents' sessions read again, `Reread`, a fresh
   snapshot, a pane already on the session answered as back, else
   `sessions.StartIn` with the kind's resume arguments), a tab of the
   workspace on the folder, else a new workspace named as herdr's was, so
@@ -2479,7 +2484,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   `SleptInHerdr` offers its agents to Resume after restart
   (`restart.Memory.Sleepers`) and `Woke` takes each off once it is back or
   can never come back, the workspace waking with its last (tested in
-  `store_test.go`); a look the machine could not answer in a wake
+  `store_test.go`), and a wake of one is refused (`ErrSleptInHerdr`, a
+  409: a wake would start its agents with herdr's server perhaps still
+  running them); a look the machine could not answer in a wake
   (`restart.ErrUnasked`) keeps the agent asleep. **The switches**
   (`sleep-settings.json`, `Settings{wake_on_open, resume_automatically}`,
   both off): routes `GET/PUT /api/sleep/settings`; `POST

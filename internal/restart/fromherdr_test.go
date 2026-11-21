@@ -142,6 +142,7 @@ type fakeCore struct {
 	started []string
 	named   []string     // the workspaces made, by name
 	reread  func() error // what reading the agents' sessions again does, nil for nothing
+	looks   int          // the snapshots asked for
 }
 
 func (f *fakeCore) RereadSessions() error {
@@ -151,7 +152,10 @@ func (f *fakeCore) RereadSessions() error {
 	return f.reread()
 }
 
-func (f *fakeCore) SessionSnapshot() (*herdr.Snapshot, error) { return f.snap, nil }
+func (f *fakeCore) SessionSnapshot() (*herdr.Snapshot, error) {
+	f.looks++
+	return f.snap, nil
+}
 func (f *fakeCore) AgentStart(paneID, kind string) error {
 	return f.AgentStartWith(paneID, kind, kind, nil, 0)
 }
@@ -235,7 +239,7 @@ func TestCarryOnMakesHerdrsWorkspaceAgainWithItsAgentsAsTabs(t *testing.T) {
 // TestHerdrsAgentsWaitForItsServer: while herdr's server answers, Resume of its agents is refused before anything
 // starts; the chats a reboot stopped are not held by it, and never resume herdr's by themselves.
 func TestHerdrsAgentsWaitForItsServer(t *testing.T) {
-	fleet := machines.NewCoreManager(t.TempDir(), "", "", nil, true)
+	fleet := machines.NewCoreManager(t.TempDir(), "", nil, true)
 	t.Cleanup(fleet.Close)
 	mc, err := fleet.Get(machines.LocalID)
 	if err != nil {
@@ -281,8 +285,8 @@ func TestCarryOnStartsWhereTheAgentRan(t *testing.T) {
 }
 
 // TestCarryOnForgetsNothingTheMachineCouldNotSay: a check the machine could not answer, or sessions it could not read
-// again, keep the agent listed and the run failed, nothing started; a /resume that moved an agent of the core onto the
-// session, seen once the sessions are read again, counts as back.
+// again, keep the agent listed and the run failed, nothing started; an agent of the core resumed onto the session a
+// moment before — seen by a look, then its session read again — counts as back.
 func TestCarryOnForgetsNothingTheMachineCouldNotSay(t *testing.T) {
 	m := onCore(OpenMemory(""))
 	r := New(nil)
@@ -299,7 +303,11 @@ func TestCarryOnForgetsNothingTheMachineCouldNotSay(t *testing.T) {
 		t.Fatalf("sessions unread: %+v %+v %v", out, m.Stopped("gog"), client.started)
 	}
 	resumed := agentPane("t7", "claude", "/work/api")
+	client.looks = 0
 	client.reread = func() error {
+		if client.looks == 0 { // an agent started a moment ago is read only once a look has seen it
+			return nil
+		}
 		resumed.AgentSession = &herdr.AgentSession{Kind: "id", Value: sid}
 		client.snap.Panes = []herdr.PaneInfo{resumed}
 		return nil
@@ -315,7 +323,7 @@ func TestCanResumeTellsAFolderGoneFromOneNotAsked(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("root reads a folder whatever its mode")
 	}
-	fleet := machines.NewCoreManager(t.TempDir(), "", "", nil, true)
+	fleet := machines.NewCoreManager(t.TempDir(), "", nil, true)
 	t.Cleanup(fleet.Close)
 	mc, _ := fleet.Get(machines.LocalID)
 	here := t.TempDir()

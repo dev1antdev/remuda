@@ -204,8 +204,12 @@ func (r *Restarter) reopenWith(client placer, machineID string, c Closed) (sessi
 
 // startOnSession starts the agent on its session in a tab of the folder's workspace, else a new workspace named
 // workspace, unless a pane runs that session already — the agents' sessions read again first (Reread), since a
-// /resume moves one under the same process — that pane comes back instead, and nothing starts.
+// /resume moves one under the same process, after a look that makes an agent started a moment ago one of those read —
+// that pane comes back instead, and nothing starts.
 func startOnSession(client placer, dir, workspace, tab, kind, session string) (sessions.Place, *herdr.PaneInfo, error) {
+	if _, err := client.SessionSnapshot(); err != nil {
+		return sessions.Place{}, nil, err
+	}
 	if err := Reread(client); err != nil {
 		return sessions.Place{}, nil, err
 	}

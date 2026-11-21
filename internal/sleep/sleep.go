@@ -44,6 +44,10 @@ type Service struct {
 // ErrNotAsleep is a wake of a workspace that is awake.
 var ErrNotAsleep = errors.New("this workspace is not asleep")
 
+// ErrSleptInHerdr is a wake, on a fleet moved to remuda-core, of a workspace put to sleep in herdr: its agents carry on
+// through Resume after restart, which waits for herdr's server to be stopped, as a wake does not.
+var ErrSleptInHerdr = errors.New("this workspace slept in herdr, before the move to remuda-core: its agents carry on from Resume after restart")
+
 // ErrNoWorkspace is a sleep or wake of a workspace the machine does not have.
 var ErrNoWorkspace = errors.New("no such workspace there")
 

@@ -47,7 +47,7 @@ func TestAMachineWithoutItsCoreRunsNoAgents(t *testing.T) {
 	}
 	t.Setenv("PATH", stand+string(os.PathListSeparator)+os.Getenv("PATH"))
 	t.Setenv("HOME", t.TempDir())
-	fleet := machines.NewCoreManager(t.TempDir(), "", "", nil, true)
+	fleet := machines.NewCoreManager(t.TempDir(), "", nil, true)
 	defer fleet.Close()
 	mc, err := fleet.Add("Studio", "queue-test-"+filepath.Base(stand))
 	if err != nil {

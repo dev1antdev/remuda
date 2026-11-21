@@ -19,6 +19,9 @@ func (s *Service) Wake(mc *machines.Machine, workspaceID string) (Started, error
 	if !ok {
 		return Started{}, ErrNotAsleep
 	}
+	if !w.Core && s.Store.Core != nil && s.Store.Core() {
+		return Started{}, ErrSleptInHerdr
+	}
 	client, _, err := mc.Ready()
 	if err != nil {
 		return Started{}, err

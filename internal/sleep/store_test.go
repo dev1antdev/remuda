@@ -1,6 +1,7 @@
 package sleep
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/machines"
 )
 
 func TestTheRecordOutlivesARestartAndMergesASecondSleep(t *testing.T) {
@@ -109,5 +111,22 @@ func TestAWorkspaceThatSleptInHerdrWaitsForTheCoresResume(t *testing.T) {
 	store.Woke("gog", "w9:p9")
 	if _, ok := store.Of("gog", "w1"); ok || len(store.SleptInHerdr("gog")) != 0 {
 		t.Fatal("its last agent dealt with, herdr's workspace wakes")
+	}
+}
+
+// A workspace that slept in herdr is not woken on the core, where a wake would start its agents with herdr's server
+// perhaps still running them: Resume after restart is its way back.
+func TestAWorkspaceThatSleptInHerdrIsNotWokenOnTheCore(t *testing.T) {
+	fleet := machines.NewCoreManager(t.TempDir(), "", nil, true)
+	t.Cleanup(fleet.Close)
+	mc, _ := fleet.Get(machines.LocalID)
+	store := Open("")
+	store.put(mc.ID(), "w1", asleep(sleeper("w1:p1", "w1:t1", "claude", sidA)))
+	store.Core = func() bool { return true }
+	if _, err := (&Service{Store: store}).Wake(mc, "w1"); !errors.Is(err, ErrSleptInHerdr) {
+		t.Fatalf("woken: %v", err)
+	}
+	if _, ok := store.Of(mc.ID(), "w1"); !ok {
+		t.Fatal("still asleep, for Resume after restart")
 	}
 }

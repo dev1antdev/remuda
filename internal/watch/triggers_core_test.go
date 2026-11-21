@@ -11,7 +11,7 @@ import (
 // reaches its machine: through `remuda-core connect` under the core's environment.
 func TestATriggerFiresOnceOnRemudaCore(t *testing.T) {
 	coretest.Server(t).Use(t)
-	fleet := machines.NewCoreManager(t.TempDir(), "", "", nil, false)
+	fleet := machines.NewCoreManager(t.TempDir(), "", nil, false)
 	t.Cleanup(fleet.Close)
 	firesOnce(t, fleet)
 }

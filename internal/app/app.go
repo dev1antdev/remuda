@@ -146,7 +146,8 @@ func Run(ctx context.Context, o Options) error {
 	}
 	var fleet *machines.Manager
 	if o.Core {
-		fleet = machines.NewCoreManager(o.Dir, o.Socket, bin, door, o.Server)
+		fleet = machines.NewCoreManager(o.Dir, bin, door, o.Server)
+		fleet.SetMovedHerdr(movedHerdrBin(bin, o.HerdrBin), o.Socket)
 	} else {
 		fleet = machines.NewManager(o.Dir, o.Socket, bin, door)
 	}
@@ -913,4 +914,14 @@ func tailnetPreviews(node func() *tsnetx.Node) func(port int, host string) (net.
 		}
 		return ln, url, err
 	}
+}
+
+// movedHerdrBin is the binary of the herdr this host ran before the move to remuda-core: the one found, else a path
+// the person gave with -herdr-bin, kept although it is not there any more, so the look at its server says it cannot
+// tell rather than that none runs; "" lets the look find herdr where it would be.
+func movedHerdrBin(found, asked string) string {
+	if found == "" && strings.ContainsAny(asked, `/\`) {
+		return asked
+	}
+	return found
 }

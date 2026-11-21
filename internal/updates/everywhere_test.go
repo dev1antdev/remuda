@@ -139,7 +139,7 @@ func TestAMachineOnRemudaCoreIsOfferedNothingOfHerdrsAndRunsNone(t *testing.T) {
 		t.Fatalf("a machine on remuda-core is offered %+v", kept)
 	}
 	bus := events.NewBus()
-	fleet := machines.NewCoreManager(t.TempDir(), "", "", nil, true) // a page-only host: no core of its own is started
+	fleet := machines.NewCoreManager(t.TempDir(), "", nil, true) // a page-only host: no core of its own is started
 	defer fleet.Close()
 	host, err := fleet.Get(machines.LocalID)
 	if err != nil {

@@ -31,7 +31,7 @@ func TestHerdrsServerIsStoppedOnlyWhereTheFleetLeftIt(t *testing.T) {
 	if code, body := stop(&Server{Machines: onHerdr, HerdrStops: true}, "nowhere"); code != 404 {
 		t.Fatalf("a machine the fleet lacks: %d %s", code, body)
 	}
-	pageOnly := machines.NewCoreManager(t.TempDir(), "", "", nil, true)
+	pageOnly := machines.NewCoreManager(t.TempDir(), "", nil, true)
 	t.Cleanup(pageOnly.Close)
 	if code, body := stop(&Server{Machines: pageOnly, HerdrStops: true}, "local"); code != 409 || !strings.Contains(body, "runs as a server") {
 		t.Fatalf("the page's own host under -server: %d %s", code, body)

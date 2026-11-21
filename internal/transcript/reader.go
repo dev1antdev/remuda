@@ -1,6 +1,7 @@
 package transcript
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -267,9 +268,11 @@ func (r *Reader) ResolveSession(agent, cwd, kind, value string) (string, error) 
 
 	var path string
 	miss := func(err error) (string, error) {
-		r.mu.Lock()
-		r.sessionMiss[key] = time.Now()
-		r.mu.Unlock()
+		if errors.Is(err, os.ErrNotExist) { // only a file known not there is remembered: a machine not answering is no miss
+			r.mu.Lock()
+			r.sessionMiss[key] = time.Now()
+			r.mu.Unlock()
+		}
 		return "", err
 	}
 	if r.host.Local() {
