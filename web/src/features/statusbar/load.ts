@@ -10,8 +10,12 @@ export type Weight = { cpu: number; rss_kb: number; top?: { name: string; rss_kb
 export type Terminal = Weight & { pane: string };
 export type WorkspaceLoad = Weight & { id: string; terminals: Terminal[] };
 
-// Usage is what GET /api/resources answers: the machine's panes by workspace, remuda-core's own beside them, the sum
-export type Usage = { at: string; cores: number; mem_kb: number; total: Weight; cpu_known: boolean; workspaces: WorkspaceLoad[]; core: Weight; unread?: number };
+// Usage is what GET /api/resources answers: the machine's panes by workspace, remuda-core's own beside them, the sum;
+// a server from before Core 26k names the runtime `herdr`, and this page reads either, as an old page reads `herdr`
+export type Usage = { at: string; cores: number; mem_kb: number; total: Weight; cpu_known: boolean; workspaces: WorkspaceLoad[]; core?: Weight; herdr?: Weight; unread?: number };
+
+// runtimeOf is remuda-core's own weight, however the server of the moment names it
+export const runtimeOf = (u: Usage): Weight => u.core ?? u.herdr ?? { cpu: 0, rss_kb: 0 };
 
 export type Level = "" | "amber" | "red";
 

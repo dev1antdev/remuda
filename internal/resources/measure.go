@@ -58,6 +58,7 @@ type Usage struct {
 	CPUKnown   bool        `json:"cpu_known"` // false when a Linux machine's ticks had no reading before to be told against
 	Workspaces []Workspace `json:"workspaces"`
 	Core       Weight      `json:"core"`             // remuda-core, the terminal runtime, past the panes
+	Herdr      Weight      `json:"herdr"`            // Core under the name a page from before Core 26k reads: a tab open across an upgrade or a rollback
 	Unread     int         `json:"unread,omitempty"` // panes whose shell remuda-core did not name, or is gone
 }
 
@@ -112,6 +113,7 @@ func Measure(table Table, cpu func(Proc) float64, roots []Root, cpuKnown bool, a
 		usage.Total.add(Weight{CPU: ws.CPU, RSSKB: ws.RSSKB})
 	}
 	usage.Total.add(Weight{CPU: usage.Core.CPU, RSSKB: usage.Core.RSSKB})
+	usage.Herdr = usage.Core
 	sort.SliceStable(usage.Workspaces, func(i, j int) bool { return usage.Workspaces[i].RSSKB > usage.Workspaces[j].RSSKB })
 	return usage
 }

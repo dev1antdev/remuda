@@ -36,6 +36,9 @@ func TestMeasureSumsEachPanesTreeIntoItsWorkspace(t *testing.T) {
 	if usage.Core.RSSKB != 40960 || !near(usage.Core.CPU, 1.5/8) {
 		t.Fatalf("remuda-core's own, past the panes it holds: %+v", usage.Core)
 	}
+	if usage.Herdr.RSSKB != usage.Core.RSSKB || usage.Herdr.CPU != usage.Core.CPU {
+		t.Fatalf("a page from before Core 26k reads the runtime as herdr: %+v", usage.Herdr)
+	}
 	// Chrome runs outside the panes and counts for nothing
 	if usage.Total.RSSKB != claude.RSSKB+app.RSSKB+40960 || !near(usage.Total.CPU, (60+27+1.5)/8) {
 		t.Fatalf("the total %+v", usage.Total)

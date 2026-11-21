@@ -12,7 +12,7 @@ import { t } from "@/lib/i18n";
 import { useQuery } from "@/lib/query";
 import { Icon, Popover, Tip } from "@/ui";
 import { fetchLoad } from "./api";
-import { cpuBarWords, cpuLevel, cpuWords, footWords, graver, loadTip, memLevel, memWords, paneToOpen, terminalName, workspaceLine, type Usage, type WorkspaceLoad } from "./load";
+import { cpuBarWords, cpuLevel, cpuWords, footWords, graver, loadTip, memLevel, memWords, paneToOpen, runtimeOf, terminalName, workspaceLine, type Usage, type WorkspaceLoad } from "./load";
 import { useFocused } from "./useFocused";
 
 export default function Load({ machine, windows }: { machine: Machine; windows: boolean }) {
@@ -119,7 +119,7 @@ function LoadList({ usage, machine, onPick }: { usage: Usage; machine: Machine; 
           <span className="load-ws-title">remuda-core</span>
           <span className="load-ws-line">{t("the terminal runtime itself")}</span>
         </span>
-        <Numbers cpu={usage.core.cpu} kb={usage.core.rss_kb} known={usage.cpu_known} total={usage.mem_kb} />
+        <Numbers cpu={runtimeOf(usage).cpu} kb={runtimeOf(usage).rss_kb} known={usage.cpu_known} total={usage.mem_kb} />
       </div>
       <div className="load-foot">{footWords(usage)}</div>
     </div>

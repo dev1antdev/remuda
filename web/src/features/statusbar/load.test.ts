@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Session } from "@/features/roster/api";
-import { cpuBarWords, cpuLevel, cpuWords, footWords, graver, memLevel, memWords, paneToOpen, terminalName, workspaceLine, type Usage } from "./load";
+import { cpuBarWords, cpuLevel, cpuWords, footWords, graver, memLevel, memWords, paneToOpen, runtimeOf, terminalName, workspaceLine, type Usage } from "./load";
 
 const now = Date.parse("2026-11-13T12:00:00Z");
 
@@ -15,6 +15,11 @@ const usage: Usage = {
 };
 
 describe("the machine's load", () => {
+  it("reads the runtime's weight under either name: a tab open across an upgrade or a rollback", () => {
+    expect(runtimeOf({ ...usage, core: undefined, herdr: { cpu: 0.2, rss_kb: 40960 } })).toEqual({ cpu: 0.2, rss_kb: 40960 });
+    expect(runtimeOf({ ...usage, core: { cpu: 1.5, rss_kb: 4096 }, herdr: { cpu: 0.2, rss_kb: 40960 } })).toEqual({ cpu: 1.5, rss_kb: 4096 });
+    expect(runtimeOf({ ...usage, core: undefined, herdr: undefined })).toEqual({ cpu: 0, rss_kb: 0 });
+  });
   it("turns amber and red where Orca does", () => {
     expect([cpuLevel(29), cpuLevel(30), cpuLevel(60)]).toEqual(["", "amber", "red"]);
     expect([memLevel(29, 100), memLevel(30, 100), memLevel(50, 100), memLevel(99, 0)]).toEqual(["", "amber", "red", ""]);

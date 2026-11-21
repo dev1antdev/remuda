@@ -2054,8 +2054,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   `install-code.sh` (`setup.Code`). **remuda-core** (`remuda core [-host H]
   [install|status]`, `install-core.sh`, `setup.Core`, tested in
   `core_test.go` on stand-ins for uname, curl, loginctl, cygpath and
-  Windows' own `tar.exe`): the terminal runtime the machines move to from
-  herdr (dev1antdev/remuda-core), `setup.CoreVersion` pinned with the five
+  Windows' own `tar.exe`; wget alone fetches it, as the release installer
+  does): the terminal runtime (dev1antdev/remuda-core), `setup.CoreVersion`
+  pinned with the five
   builds' sha256 in the script (another version needs `CORE_SHA256`), into
   `~/.local/bin` — `remuda-core` with an `rc` link when no `rc` is on PATH;
   on Windows `remuda-core.exe` and `conpty/` beside `remuda.exe`, ConPTY
@@ -2071,7 +2072,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   (its terminals keep running), one as new or newer left alone, a fresh
   one starts nothing; on Linux `loginctl enable-linger`, said when refused.
   `remuda setup` installs it and nothing else (never under `-server`; a
-  failure ends setup — CI's Windows job checks it really lands there,
+  failure is said and setup goes on, and the page's ⓘ then says what is
+  missing with an Install — CI's Windows job checks it really lands there,
   `live_windows_test.go`); the
   vitals read `remuda_core`; Updates offers `what = core` ("Install
   remuda-core" / "Update remuda-core") on every machine where it is
@@ -3839,7 +3841,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   cumulative ticks instead); `Parse` the `Table`; `Measure` sums each pane's
   tree from its shell (`Root`, `herdr.Client.PaneShellPID`) into its
   workspace, each process once, then remuda-core's own processes
-  (`Usage{cores, mem_kb, total, cpu_known, workspaces, core, unread}`, CPU
+  (`Usage{cores, mem_kb, total, cpu_known, workspaces, core, herdr, unread}`,
+  the same weight under `herdr` too, the name a page from before Core 26k
+  reads: a tab open across an upgrade or a rollback never finds none; CPU
   as a share of all the cores, the heaviest process of each tree as its
   `top`). `Service.Read` is one read at a time per machine, a reading
   answering every asker for `Fresh` 4 s; a Linux machine's ticks are told
