@@ -420,3 +420,33 @@ func TestTidyKeepsNewFilesThatGitStatusIsToldToHide(t *testing.T) {
 		t.Fatalf("the new file is gone: %v", err)
 	}
 }
+
+// herdrUp is this machine with herdr's server answering; herdrDown with it stopped.
+type herdrUp struct{ homeAt }
+
+func (herdrUp) MovedHerdr() (string, string) { return "", "" }
+func (herdrUp) Run(string, time.Duration) ([]byte, error) {
+	return []byte("running\n"), nil
+}
+
+type herdrDown struct{ homeAt }
+
+func (herdrDown) MovedHerdr() (string, string) { return "", "" }
+func (herdrDown) Run(string, time.Duration) ([]byte, error) {
+	return []byte("none\n"), nil
+}
+
+// A removal asks herdr itself, at the removal: a server still answering keeps the worktree, and a discard — an arena's
+// losing lane — refuses too, since its agents there are not the ones this remuda sees.
+func TestARemovalWaitsWhileHerdrsServerRunsThere(t *testing.T) {
+	up := herdrUp{homeAt{machine: shell.Local{}, home: t.TempDir()}}
+	if why := Hold(up); !strings.Contains(why, "herdr") {
+		t.Fatalf("Hold with herdr's server up = %q", why)
+	}
+	if err := Discard(up, Info{Path: "/w/tree"}); err == nil || !strings.Contains(err.Error(), "herdr") {
+		t.Fatalf("Discard with herdr's server up = %v", err)
+	}
+	if why := Hold(herdrDown{homeAt{machine: shell.Local{}, home: t.TempDir()}}); why != "" {
+		t.Fatalf("Hold with herdr's server stopped = %q", why)
+	}
+}

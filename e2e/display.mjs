@@ -1,5 +1,5 @@
 // The display checks scripts/e2e.sh runs after the smoke: every screen of the page drawn at a desk's width and a
-// phone's, in English and in Russian, against a remuda of its own on a throwaway herdr. A few workspaces are made
+// phone's, in English and in Russian, against a remuda of its own on a throwaway remuda-core. A few workspaces are made
 // through the API — a repository with a linked worktree, a second tab, a plain folder — and the browser's copy of
 // the roster is dressed with agents (Fetch interception, nothing changes on the server) so the cards and the plan limits
 // have something to draw. Each screen is opened the way a person opens it (the palette by its
@@ -282,9 +282,9 @@ const CHECKS = `(() => {
 })()`;
 
 let shots = 0;
-// the screens a remuda started with -core has not: no screen terminal (a Windows PC's pane is attached there too), no
-// herdr, and no write on a checkout, held back there while herdr's agents, which it cannot see, may work in it
-const NOT_ON_CORE = ["screen-terminal", "settings-herdr", "changes-stage", "changes-commit"];
+// the screens a remuda on remuda-core has not yet: no screen terminal (a Windows PC's pane is attached there too), no
+// herdr — both go with Core 26f and 26g
+const NOT_ON_CORE = ["screen-terminal", "settings-herdr"];
 // screen opens one screen, waits for its landmarks, checks it, shoots it and closes it again; a failure is noted, never thrown
 async function screen(name, { open, expect = [], close = closeAll, settle = 350 }) {
   if (onCore && NOT_ON_CORE.includes(name)) return say(`${pass.name} › ${name}: left out on remuda-core`);
@@ -2395,11 +2395,9 @@ async function newWorktreeFlow() {
   writeFileSync(`${created.path}/draft.txt`, "not committed\n");
   const look = await api("GET", `/api/worktrees/${encodeURIComponent(created.id)}/removal?machine=local`);
   check(look.dirty === 1 && look.branch === "e2e-made", `the look is ${JSON.stringify(look)}`);
-  if (!onCore) {
-    const gone = await api("POST", `/api/worktrees/${encodeURIComponent(created.id)}/remove`, { machine: "local", delete_branch: true, stamp: look.stamp, keep_folder: false });
-    check(gone.worktree?.removed === true && !existsSync(created.path), `the removal answered ${JSON.stringify(gone)}`);
-    made.splice(made.indexOf(created.id), 1);
-  }
+  const gone = await api("POST", `/api/worktrees/${encodeURIComponent(created.id)}/remove`, { machine: "local", delete_branch: true, stamp: look.stamp, keep_folder: false });
+  check(gone.worktree?.removed === true && !existsSync(created.path), `the removal answered ${JSON.stringify(gone)}`);
+  made.splice(made.indexOf(created.id), 1);
   await api("PUT", "/api/repos/settings", { machine: "local", root: appDir, settings: {} });
 }
 
@@ -2698,7 +2696,7 @@ async function runPass() {
     },
   });
   // a Windows PC's pane: herdr has no terminal attach there, so the lens is the pane's screen read again and typed into —
-  // the notes shell played as a Windows machine's by the dressed roster, its screen and its typing the throwaway herdr's own
+  // the notes shell played as a Windows machine's by the dressed roster, its screen and its typing the throwaway remuda-core's own
   await screen("screen-terminal", {
     open: async () => {
       windowsLocal = true;
@@ -3082,7 +3080,7 @@ async function runPass() {
       check(await evaluate(`document.querySelector('.mirror-settings .config-snippet')?.textContent.includes("$remuda_cost")`), "Inside herdr shows no snippet naming remuda's tokens");
       await tap(".mirror-settings .backup-actions .btn:not(.sm)");
       if (!(await until(async () => (await count(".mirror-settings .mirror-outcomes li")) >= 1, 8))) failed("the test toast says nothing of how it went on the machine");
-      check(await evaluate(`document.querySelector('.mirror-settings .mirror-outcomes')?.textContent.includes("ui.toast.delivery")`), "the test toast does not say that the throwaway herdr keeps its toasts off");
+      check(await evaluate(`document.querySelector('.mirror-settings .mirror-outcomes')?.textContent.includes("ui.toast.delivery")`), "the test toast does not say that the throwaway remuda-core keeps its toasts off");
     },
     expect: [".mirror-settings .config-snippet"],
     close: async () => {},
@@ -3211,10 +3209,7 @@ try {
   for (pass of PASSES) await runPass();
   await changesFlow().catch((error) => failed(`stopped: ${error.message}`));
   await newWorktreeFlow().catch((error) => failed(`stopped: ${error.message}`));
-  // on remuda-core no worktree is tidied away with its workspace nor listed as left over: the checkout's writes hold back
-  // there, a worktree's removal in the new worktree flow too
-  if (onCore) say("worktree flow: left out on remuda-core");
-  else await worktreeFlow().catch((error) => failed(`stopped: ${error.message}`));
+  await worktreeFlow().catch((error) => failed(`stopped: ${error.message}`));
   await previewFlow().catch((error) => failed(`stopped: ${error.message}`));
   await portsFlow().catch((error) => failed(`stopped: ${error.message}`));
   say(`${shots} screens in ${Math.round((Date.now() - started) / 1000)} s, screenshots in ${out}/display`);

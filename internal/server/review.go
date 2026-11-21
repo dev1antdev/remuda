@@ -58,8 +58,14 @@ func (s *Server) handleReview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	summary := s.Review.Summary(mc, dir)
-	if s.Stage != nil && s.Stage.Busy != nil && summary.Repo != "" {
-		summary.Busy = s.Stage.Busy(mc.ID(), dir, rpath.For(mc.Home()).Clean(summary.Repo))
+	if s.Stage != nil && summary.Repo != "" {
+		busy := s.Stage.Advisory
+		if busy == nil {
+			busy = s.Stage.Busy
+		}
+		if busy != nil {
+			summary.Busy = busy(mc.ID(), dir, rpath.For(mc.Home()).Clean(summary.Repo))
+		}
 	}
 	writeJSON(w, summary)
 }

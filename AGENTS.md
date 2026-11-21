@@ -22,7 +22,7 @@ once after cloning and after every change under `web/`.
 | TypeScript check | `make typecheck` (`tsc --noEmit` + `go vet`) |
 | The page's unit tests (Vitest on the pure modules) | `make webtest` (`npm test` in `web/`; `make test` runs it too) |
 | Everything, as CI does (`.github/workflows/ci.yml`) | `make test && make typecheck`, or `docker build --target test .` |
-| The end-to-end smoke and the display checks: a throwaway herdr, a remuda of its own, headless Chrome, every screen at a desk's and a phone's width in English and Russian (`scripts/e2e.sh`, `e2e/smoke.mjs`, `e2e/display.mjs`) | `make e2e` (needs herdr (or remuda-core with `E2E_BACKEND=core`), node and Chrome; nothing of yours is touched; `E2E_DISPLAY_PASSES=desk-en` for one pass, `E2E_SMOKE_ONLY=1` for the smoke alone, `E2E_BACKEND=core` on a throwaway remuda-core instead of herdr) |
+| The end-to-end smoke and the display checks: a throwaway remuda-core, a remuda of its own, headless Chrome, every screen at a desk's and a phone's width in English and Russian (`scripts/e2e.sh`, `e2e/smoke.mjs`, `e2e/display.mjs`) | `make e2e` (needs remuda-core, node and Chrome; nothing of yours is touched; `E2E_DISPLAY_PASSES=desk-en` for one pass, `E2E_SMOKE_ONLY=1` for the smoke alone) |
 | A pull request | against `release`: `gh pr create --base release` |
 | A release | `git checkout main && git merge --ff-only release && git tag -a vX.Y.Z -m 'remuda X.Y.Z' && make publish` — the Release workflow builds and publishes it |
 | Binaries for every host | `make release`; `make deploy HOST=<ssh host>` |
@@ -97,8 +97,8 @@ not style.
   stealing the slot is the person's call only. A refusal is surfaced
   (`RefusedError`, 409 on HTTP, the WebSocket close reason), never retried
   with the flag.
-- **A test remuda-core is `coretest.Server`'s or `scripts/e2e.sh`'s
-  (`E2E_BACKEND=core`), each with its own `RC_SESSION`, `RC_SOCKET`, XDG
+- **A test remuda-core is `coretest.Server`'s or `scripts/e2e.sh`'s,
+  each with its own `RC_SESSION`, `RC_SOCKET`, XDG
   folders, `HOME` and `RC_LAUNCHD_DIRECT`; never started another way**: a
   core started without them reaches the person's.
 - **A test herdr needs `HERDR_SOCKET_PATH`, never a changed `HOME`

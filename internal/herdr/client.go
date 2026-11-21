@@ -46,7 +46,7 @@ func SocketPath() string {
 	if p := os.Getenv("HERDR_SOCKET"); p != "" {
 		return p
 	}
-	return localSocket()
+	return OwnSocket() // herdr's own CLI order: HERDR_SOCKET_PATH before the default session's
 }
 
 // OwnSocket is the socket herdr's own CLI would reach on this machine: $HERDR_SOCKET_PATH, else the default session's.

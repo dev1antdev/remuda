@@ -79,6 +79,9 @@ func (s *Server) handleHerdrStop(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 502, err)
 		return
 	}
+	if s.Health != nil {
+		s.Health.Refresh(mc) // the ⓘ and the checkout guard read it at once: writes lift with the server
+	}
 	log.Printf("herdr's server on %s stopped at the person's press", mc.Label())
 	writeJSON(w, map[string]any{"stopped": true})
 }

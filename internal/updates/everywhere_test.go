@@ -146,6 +146,7 @@ func TestAMachineOnRemudaCoreIsOfferedNothingOfHerdrsAndRunsNone(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := &Service{Health: health.New("", fleet, "dev", false), Jobs: jobs.New(bus), Restart: restart.New(fleet), Watch: watch.New(fleet, bus), Machines: fleet}
+	// a tab opened before the move may still send herdr's own command back: it runs nothing
 	for _, what := range []string{"herdr", "hooks", "integrations", "plugins", "restart-herdr"} {
 		if _, err := s.Start(host, what, "brew upgrade herdr"); !errors.Is(err, machines.ErrOnCore) {
 			t.Errorf("Start(%q) on remuda-core = %v, want ErrOnCore before anything runs", what, err)

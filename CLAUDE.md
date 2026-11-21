@@ -19,18 +19,13 @@ components and icons as rules for whoever changes it: @docs/design.md
 
 ## Layout
 
-- `cmd/remuda/` — main; flags `-addr` (default `127.0.0.1:7317`), `-socket`,
-  `-herdr-bin`, `-print-token`, `-version`, `-tailscale` /
-  `-tailscale-hostname`, `-no-version-check`, `-code-port`, `-no-door` /
-  `-door` (`doorOpen`, tested: the agents' door files are placed by the
+- `cmd/remuda/` — main; flags `-addr` (default `127.0.0.1:7317`), `-print-token`,
+  `-version`, `-tailscale` / `-tailscale-hostname`, `-no-version-check`,
+  `-code-port`, `-no-door` / `-door` (`doorOpen`, tested: the agents' door files are placed by the
   real service only — never with `-no-door`, and not by a scratch
   instance with `REMUDA_STATE_DIR` set unless `-door` asks, so a look or
   the e2e beside the real one never overwrites its door on a remote;
-  `app.Options.Door`, one log line when it stays closed), `-mirror`
-  (`mirrorClosed`, tested: a scratch instance with `REMUDA_STATE_DIR` set
-  writes nothing into herdr — no tokens, no toasts — unless `-mirror`
-  asks, which the e2e does on its throwaway herdr; `app.Options.MirrorClosed`
-  is the reason, a log line and the Settings section say it), `-record`
+  `app.Options.Door`, one log line when it stays closed), `-record`
   (`recordsHere`, tested: the agents' timelapses are recorded, and their
   turns' checkpoints taken to be undone, by the real service, and by a
   scratch instance only when it asks, so a look beside the real one never
@@ -41,12 +36,13 @@ components and icons as rules for whoever changes it: @docs/design.md
   real one's — `app.Options.HerdrStops`, see `internal/restart`), `-server`
   (also `REMUDA_SERVER=1`; `app.Options.Server`, see "Server mode"
   below; without it the host is a machine of its own, there is no
-  `-client` flag), `-core` (also `REMUDA_CORE=1`; `app.Options.Core`,
-  for the move off herdr while it is built: every machine is reached
-  through remuda-core instead — `machines.NewCoreManager`, see "On
-  remuda-core" under `internal/machines/` — herdr neither found nor kept,
-  its list of machines still read when it is there, the mirror closed;
-  the release that makes the move takes the flag away with herdr); subcommands
+  `-client` flag). A remuda speaks remuda-core on every machine —
+  `machines.NewCoreManager`, see "On remuda-core" under `internal/machines/`
+  — herdr neither found nor kept, its list of machines neither read nor
+  written, and nothing of remuda's written into its sidebar
+  (`app.Options.MirrorClosed`, always the reason now); `-core` and
+  `REMUDA_CORE`, with `-herdr-bin`, `-socket` and `-mirror`, went with the
+  move (Core 26e); subcommands
   `search` and `usage` for the deployed binary on a remote machine,
   `bridge` (hidden: `bridge.go`, stdin to the herdr server on this machine
   and its answers to stdout — a Windows machine's herdr is a named pipe the
@@ -303,7 +299,7 @@ components and icons as rules for whoever changes it: @docs/design.md
 - `internal/core/` — **the client of remuda-core** (dev1antdev/remuda-core,
   our clone of herdr-core; its protocol in its `schema/README.md`, generation
   1), which is to take herdr's place on the machines; a remuda started with
-  `-core` reaches every machine through it (`machines.NewCoreManager`, "On
+  every machine is reached through it (`machines.NewCoreManager`, "On
   remuda-core" under `internal/machines/`). `core.New(dial)` is one
   core: a `Dialer` gives a fresh `net.Conn` (the socket here, `ssh host
   remuda-core connect` over a master there), dialled when first needed and
@@ -350,7 +346,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   the same state, `StandInClaude(t, session)` a `claude` first on its PATH
   that keeps its session file, reports through OSC 7501, answers
   `/restart` as a build without it and leaves on `/exit`; `Core.Use(t)` sets that environment on the test process,
-  the core's binary first on PATH, for a `-core` fleet's `remuda-core
+  the core's binary first on PATH, for the fleet's `remuda-core
   connect`) — calls side by side, a refusal's kind, documents, an
   attach's echo and exit code, a stream nobody reads beside a live one, events
   and an output watch, a severed connection — and on a fake over a pipe
@@ -828,7 +824,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   nor warned of (`readLogin`, `signinWarnings` in `internal/app`) —
   while `All` (the vitals collector, `Close`) still has it; its
   `Ready()` is `ErrServerHost`, so a route naming it says why; the app
-  neither needs nor starts its herdr (`herdr.FindBinary` may fail),
+  neither needs nor starts its herdr (it never looks for one now),
   places no door for its own agents (the remotes still get theirs), and
   `/api/health` answers `server: true` with no herdr, which the vitals'
   peer probe reads as no peer to relay terminals through. The roster
@@ -851,11 +847,11 @@ components and icons as rules for whoever changes it: @docs/design.md
   meet `ErrServerHost`; the Server place lists the release, the disk
   and the body alone (`hostConcerns`, tested) and says a herdr still
   installed there is not used.
-  **Remotes come from herdr itself**: `SyncHerdr` reads `herdr machine list
-  --json` (the watcher calls it every 30s, with a 5s timeout) and adds
-  enabled machines under **herdr's own id** with `Source: "herdr"` (not
-  persisted, not removable here — `herdr machine remove` is the way).
-  Manually added ones live in `machines.json`. A name of the user's own
+  **Remotes are the ones setup added**: `SyncHerdr` used to read `herdr machine
+  list --json` and add them under herdr's own id, and that read is gone with
+  herdr (Core 26e: no herdr binary is found, so the watcher's call returns
+  without running anything). The machines live in `machines.json`, added by
+  `remuda setup -host` or **+ PC**, and are removed from the page. A name of the user's own
   for any machine (the local one too) lives in `labels.json` and shows
   through `Machine.Label()` everywhere (`Cfg.Label` stays what the
   registry said); `PATCH /api/machines/{id} {label}` sets it, empty goes
@@ -881,13 +877,13 @@ components and icons as rules for whoever changes it: @docs/design.md
   the accent showing where, the dragged block dimmed; the new order shows
   at once and stands until the roster lists it; a finger and the keyboard
   have the menu's Move up and Move down; with one machine, or for a
-  viewer, nothing drags. **On remuda-core** (`core.go`, `-core`,
-  tested on a throwaway core): `NewCoreManager` reaches every machine
+  viewer, nothing drags. **On remuda-core** (tested on a throwaway core):
+  `NewCoreManager` reaches every machine
   through remuda-core instead of herdr — the local one through a
-  `remuda-core connect` of this remuda's own (`dialLocalCore`: the binary
-  `herdr.FindBinary` finds, PATH first, under this process's environment, so
-  `RC_SESSION`, `RC_SOCKET` and the XDG folders aim a scratch instance at a
-  throwaway core), a remote one through the same over its master
+  `remuda-core connect` of this remuda's own (`dialLocalCore`: `remuda-core`,
+  PATH first, under this process's environment, so `RC_SESSION`, `RC_SOCKET`
+  and the XDG folders aim a scratch instance at a throwaway core), a remote
+  one through the same over its master
   (`remoteCoreDialer`: `DialExec`, one connection that stays, one of the
   master's places for RPC) once the probe found the binary (`coreLookup`
   over `script.CoreBin`, the lookup the vitals share: `~/.local/bin/
@@ -926,17 +922,31 @@ components and icons as rules for whoever changes it: @docs/design.md
   is offered there — its update, hooks, integrations, plugins and server
   restart (`updates.withoutHerdr`, the ⓘ's herdr concerns) — and
   `StopServer` / `StartServer` refuse (`ErrOnCore`): herdr's agents there
-  are not the ones this remuda sees, and a stop would end them all (an
-  update of herdr's on such a machine is refused in `Start` too). For the
+  are not the ones this remuda sees, and a stop would end them all. For the
   same reason every checkout write holds back as while an agent works
   there — the Git and Changes lenses, a pull, an undo, a worktree removed
-  (`holdCheckoutWrites` in `internal/app/core.go`), no leftover worktree
-  is listed or removed there (`heldOnCore`, a 409), no work is moved
-  onto such a machine (a 400 before the move writes a checkout), all by
-  the fleet's own `Manager.Core`, whichever machine a request names; a new
-  worktree is made there by the core adapter (Core 20) beside herdr's agents,
-  as herdr's worktree.create made one — and a page-only host
-  (`-server -core`) starts no core of its own. An exec connection keeps
+  the writes into a checkout the Git and Changes lenses, a pull and an undo
+  make wait while herdr's server still runs on that very machine
+  (`holdCheckoutWrites` in `internal/app/core.go`; the `heldByHerdr` refusal
+  on leftovers, a move and a worktree's tidy on close) — its agents there
+  are not the ones this remuda sees, and the move is pressed machine by
+  machine (Stop herdr's server), after which the reason goes with the
+  server (Core 26e). The wait is asked at the moment of the write, not read
+  from a cache: `herdr.Serving` on that machine, on the endpoint the stop
+  uses (`Machine.MovedHerdr`, so `HERDR_SOCKET_PATH` before the default
+  session's, and a remote's `remote_socket`), answered running, stopped or
+  none — anything else holds, and a herdr started again holds anew, since
+  nothing is remembered; the removal itself asks — `worktrees.Tidy` holds a
+  worktree on a machine whose herdr still runs, so a workspace's close, a
+  leftover and a schedule's tidy are all held alike, and a server started
+  mid-scan loses nothing already taken down; a move asks once at its
+  acceptance and again before each landing, the full-bundle retry too
+  (`teleport.Move.BeforeLand`); a lens's look says only what the agents this
+  remuda sees are doing (`gitstage.Advisory`); leftover
+  worktrees are listed and removed, and work is moved; a new
+  worktree is made there by the core adapter (Core 20), as herdr's
+  worktree.create made one — and a page-only host (`-server`) starts no
+  core of its own. An exec connection keeps
   its stdin and asks for no terminal whatever the host's ssh config says
   (`DialExec` is a script's session). `OnCore` is the
   roster's machine `core`, where the ⓘ says a Claude Code older than
@@ -1672,12 +1682,12 @@ components and icons as rules for whoever changes it: @docs/design.md
   release, 2026-11-18, came only through vite and vitest) and gitleaks on every push to main or
   release and every pull request, and on `release` (and by hand,
   `workflow_dispatch`) the end-to-end smoke too: `make e2e` is
-  `scripts/e2e.sh` — a throwaway herdr server on a socket and HOME of its
-  own (`HERDR_SOCKET_PATH`, stopped the same way), the agents' CLIs (`claude`, `codex`, `gemini`, `kimi`) stand-ins
-  first on its PATH — the vitals probe runs `claude --version` and `claude
-  auth status`, and the person's real Claude Code would reach their account
-  through the macOS keychain, which no throwaway HOME hides, a remuda on it with its
-  own state dir and `-mirror` (it writes its figures into that herdr),
+  `scripts/e2e.sh` — a throwaway remuda-core on a socket and HOME of its
+  own (Core 26e: the only backend), the agents' CLIs (`claude`, `codex`,
+  `gemini`, `kimi`) stand-ins first on its PATH — the vitals probe runs
+  `claude --version` and `claude auth status`, and the person's real Claude
+  Code would reach their account through the macOS keychain, which no
+  throwaway HOME hides — and a remuda on it with its own state dir,
   headless Chrome — driving `e2e/smoke.mjs` over the
   DevTools protocol with no dependency: sign in, a scratch shell
   workspace through the API, a command typed into the terminal lens and
@@ -1720,32 +1730,26 @@ components and icons as rules for whoever changes it: @docs/design.md
   the run. The e2e remuda gets `-code-port` 7439, so the Code mode
   never reaches the person's own code-server; `E2E_SMOKE_ONLY` runs the
   smoke alone. The temp folder stays on a failure, with the screenshots
-  (an artifact in CI, kept after a green run too). **`E2E_BACKEND=core`**
-  (herdr unless it says so) runs the same on a throwaway remuda-core in
-  herdr's place (`E2E_CORE`, else `remuda-core` on PATH, linked as
+  (an artifact in CI, kept after a green run too). The run is on a
+  **throwaway remuda-core** (`E2E_CORE`, else `remuda-core` on PATH, linked as
   `remuda-core` first on the run's PATH, so the core served, remuda's
-  `connect` and the stop are one binary): `serve` started
+  `connect` and the stop are one binary) — the backend there is now (Core
+  26e): `serve` started
   as the script's own child under the environment `coretest.Server` gives
   one — `RC_SESSION`, `RC_SOCKET` (`<tmp>/rc.sock`), the XDG state, config
   and runtime folders and `RC_LAUNCHD_DIRECT` naming the script's shell
   exported for the whole run, `HOME` the run's own set on every core and
-  remuda command as for herdr (coretest's `SHELL=/bin/sh` and
-  `RC_HEARTBEAT_MS` left out: the terminals get the shell herdr's would) —
-  so remuda's own `remuda-core connect` reaches it and no command reaches
-  the person's core; remuda started with `-core`; at the end remuda is
-  stopped and waited for first,
+  remuda command — so remuda's own `remuda-core connect` reaches it and no
+  command reaches the person's core; remuda started with no flag of a
+  backend; at the end remuda is stopped and waited for first,
   then `remuda-core server stop` (a remuda still up would start a core
   again through `connect`). The smoke and the display checks read the
-  roster's machine `core` and there leave out what a core has not: the
-  screen terminal (a Windows PC's pane is attached there too), Inside
-  herdr, and what a checkout's writes held back there (`holdCheckoutWrites`)
-  stop — the Changes lens's stage and commit, the new worktree's removal
-  and the worktree flow (the close that takes a worktree, the leftovers).
-  CI's `e2e-core` job (on `release` and by hand) installs
-  remuda-core by its checksums, as the check job does, and runs it
-  `continue-on-error`: a report of where the core falls short, not a gate. Pull
-  requests target `release`; `main` is what is out (AGENTS.md, "Build and
-  check").
+  roster's machine `core` and there leave out what a core has not yet: the
+  screen terminal (a Windows PC's pane is attached there too) and Inside
+  herdr (Core 26f and 26g). CI's `e2e` job (on `release` and by hand)
+  installs remuda-core by its checksums, as the check job does, and is the
+  gate; pull requests target `release`; `main` is what is out (AGENTS.md,
+  "Build and check").
   The roster carries `health` per machine and `latest`; the sidebar's ⓘ
   (`features/roster/HealthButton.tsx`; the rules in `concerns.ts`) turns amber on an update, a lagging
   remote remuda, a nearly full disk, Claude Code's sign-in running out (`internal/signin`) or a
@@ -2178,12 +2182,13 @@ components and icons as rules for whoever changes it: @docs/design.md
   remuda release (`remoteOrder`), on the page's own host before it. An
   agent's update on a machine connected without its core moves no chat
   and stands done (`chatsMoved`: `Ready`'s `machines.NoCoreError`).
-- **herdr is remuda's to run.** `herdr.EnsureServer(bin, socket)` pings
-  and, when nothing answers, starts `herdr server` (the headless server)
-  detached, at most once per two minutes — at startup and whenever the
-  watcher's local poll fails (`events.LocalHerdrDown` → `herdr.Keeper.Revive`);
-  a remote machine's `connect()` does the same over ssh
-  (`herdr.StartServerScript`) before giving up. `remuda setup [-host H] [-tailscale]` (`internal/setup`:
+- **herdr is not remuda's to run any more** (Core 26e). `herdr.EnsureServer`,
+  `Ping`, `Keeper` and `LocalHerdrDown` have no caller: remuda never finds,
+  starts or pings herdr's binary or server. The one herdr touch left is the
+  move at the person's press — `herdr.Serving` / `herdr.StopServing` on a
+  machine moved to remuda-core (`internal/restart`, `handleHerdrStop`) —
+  which finds `herdr` on PATH, `~/.local/bin` or Homebrew's folders and
+  exports `HERDR_SOCKET_PATH` itself. `remuda setup [-host H] [-tailscale]` (`internal/setup`:
   `setup.sh` installs herdr with brew or its installer, starts the
   server, installs `herdr integration` hooks for the agents present and
   installs again every integration herdr reports outdated;
@@ -2355,10 +2360,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   (`Restarter.MayCarryOn` → `*HerdrRunning`, a 409 `{herdr: true}` from
   `POST /api/panes/recover`, asked again inside the job; `Restarter.Serving`
   is `herdr.Serving` over the machine's shell, through the herdr remuda
-  reached there, `Machine.MovedHerdr` — this machine's `-herdr-bin` and
-  `-socket`, which the app hands `Manager.SetMovedHerdr` — a `-herdr-bin`
-  path gone since kept as given (`movedHerdrBin`), so the look cannot
-  read as no server — a remote's `herdr_bin` and
+  reached there, `Machine.MovedHerdr` — this machine's, which the app hands
+  `Manager.SetMovedHerdr("", herdr.SocketPath())`: no binary of its own (the
+  look falls back to `herdr` on PATH) and herdr's default socket — a
+  remote's `herdr_bin` and
   `remote_socket`, else the socket remuda dials there (`herdrSocket`, which
   the herdr connect shares, kept at every connect on the core too: herdr's
   default under `%APPDATA%` on a Windows PC, wherever the profile keeps
@@ -5880,9 +5885,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   `mirror.json` in the state dir): `Settings{figures, toasts, quiet}`, the
   figures on and the toasts off for a new cockpit, one for every machine
   (herdr's own `ui.toast.delivery` is already per machine); `Put` wakes
-  every writer, so off clears what remuda wrote at once. A scratch
-  instance (`closed`, `-mirror` in `cmd/remuda`) starts no writer and pops
-  nothing. Routes (`internal/server/mirror.go`, the person's only): `GET
+  every writer, so off clears what remuda wrote at once. A remuda that
+  writes nothing (`closed`: this build speaks remuda-core, whose sidebar
+  herdr does not have) starts no writer and pops nothing, and Settings ›
+  Inside herdr shows that reason with its switches disabled until Core 26f. Routes (`internal/server/mirror.go`, the person's only): `GET
   /api/mirror` (the switches, `closed`, the token names, `Snippet` and
   `ToastSnippet` — the rows for herdr's `config.toml`, each fitting its
   default 26-column sidebar, in place of the person's own

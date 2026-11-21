@@ -59,7 +59,7 @@ export default function MirrorSection() {
   return (
     <section className="settings-section mirror-settings">
       <h3>{t("Inside herdr")}</h3>
-      {status.closed && <Notice tone="info">{t("This remuda is a scratch instance beside the real one: it writes nothing into herdr, so the two never fight over the same panes.")}</Notice>}
+      {status.closed && <Notice tone="info">{status.closed}</Notice>}
       {(status.elsewhere ?? []).map((where) => (
         <Notice key={where.machine} tone="info">
           {elsewhereWords(where)}
@@ -74,7 +74,7 @@ export default function MirrorSection() {
             )}
           </small>
         </span>
-        <input type="checkbox" checked={settings.figures} onChange={(e) => void save({ ...settings, figures: e.target.checked })} />
+        <input type="checkbox" checked={settings.figures} disabled={!!status.closed} onChange={(e) => void save({ ...settings, figures: e.target.checked })} />
       </label>
       <p className="backup-hint">
         {t(
@@ -97,23 +97,23 @@ export default function MirrorSection() {
             )}
           </small>
         </span>
-        <input type="checkbox" checked={settings.toasts} onChange={(e) => void save({ ...settings, toasts: e.target.checked })} />
+        <input type="checkbox" checked={settings.toasts} disabled={!!status.closed} onChange={(e) => void save({ ...settings, toasts: e.target.checked })} />
       </label>
       <p className="backup-hint">
         {t("Set delivery under the [ui.toast] its config.toml may already have — a second one makes herdr ignore the whole file — or add the table where there is none:")}
       </p>
       <pre className="config-snippet">{status.toast_snippet}</pre>
       <label className="alerts-opt">
-        <input type="checkbox" checked={!!settings.quiet} onChange={(e) => void save(withQuiet(settings, e.target.checked, quietWindow, zone))} />
+        <input type="checkbox" checked={!!settings.quiet} disabled={!!status.closed} onChange={(e) => void save(withQuiet(settings, e.target.checked, quietWindow, zone))} />
         <span>
           <b>{t("Quiet hours")}</b>
           <small>{t("No toast pops up between the two times, by the clock of {zone}.", { zone })}</small>
         </span>
       </label>
       <div className="alerts-quiet">
-        <input type="time" className="sm" value={quietWindow.from} disabled={!settings.quiet} aria-label={t("Quiet from")} onChange={(e) => changeWindow("from", e.target.value)} />
+        <input type="time" className="sm" value={quietWindow.from} disabled={!settings.quiet || !!status.closed} aria-label={t("Quiet from")} onChange={(e) => changeWindow("from", e.target.value)} />
         <span>{t("to")}</span>
-        <input type="time" className="sm" value={quietWindow.to} disabled={!settings.quiet} aria-label={t("Quiet until")} onChange={(e) => changeWindow("to", e.target.value)} />
+        <input type="time" className="sm" value={quietWindow.to} disabled={!settings.quiet || !!status.closed} aria-label={t("Quiet until")} onChange={(e) => changeWindow("to", e.target.value)} />
       </div>
       <div className="backup-actions">
         <button type="button" className="btn" disabled={testing || !!status.closed} onClick={() => void test()}>

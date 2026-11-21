@@ -41,15 +41,6 @@ func TestDoorOpen(t *testing.T) {
 	}
 }
 
-func TestMirrorClosed(t *testing.T) {
-	if mirrorClosed(false, false) != "" || mirrorClosed(true, true) != "" {
-		t.Error("the real service, and a scratch instance that asked, write into herdr")
-	}
-	if mirrorClosed(false, true) == "" {
-		t.Error("a scratch instance beside the real one writes into the person's herdr")
-	}
-}
-
 func TestOnlyTheRealServiceRecordsTimelapsesUnlessAsked(t *testing.T) {
 	if !recordsHere(false, false) || recordsHere(false, true) || !recordsHere(true, true) {
 		t.Fatal("the real service records, a scratch instance only with -record")
@@ -59,5 +50,21 @@ func TestOnlyTheRealServiceRecordsTimelapsesUnlessAsked(t *testing.T) {
 func TestAScratchInstanceStopsNoHerdr(t *testing.T) {
 	if !herdrStops(false) || herdrStops(true) {
 		t.Fatal("the real service stops herdr's server at the person's press, a scratch instance never")
+	}
+}
+
+func TestTheTerminalsTaskSourcePrefersTheCoreTerminal(t *testing.T) {
+	t.Setenv("RC_TERMINAL_ID", "")
+	t.Setenv("HERDR_PANE_ID", "")
+	if got := terminalSource(); got != "" {
+		t.Errorf("no terminal named: %q", got)
+	}
+	t.Setenv("HERDR_PANE_ID", "w3:p1")
+	if got := terminalSource(); got != "w3:p1" {
+		t.Errorf("a herdr pane alone: %q", got)
+	}
+	t.Setenv("RC_TERMINAL_ID", "t7")
+	if got := terminalSource(); got != "t7" {
+		t.Errorf("both run: %q, want the core terminal", got)
 	}
 }

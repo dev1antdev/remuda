@@ -79,65 +79,66 @@ import (
 
 // Server holds the services the routes answer from; the app fills it in and hands out Handler.
 type Server struct {
-	Machines   *machines.Manager
-	Watch      *watch.Watcher
-	Input      *sessions.Input
-	Chat       *chat.Service
-	Updates    *updates.Service
-	Tasks      *tasks.Store
-	Launcher   *tasks.Launcher
-	Push       *push.Service
-	Feed       *feed.Service
-	Radar      *radar.Tracker
-	Said       *said.Tracker
-	PRs        *prstatus.Tracker
-	Recap      *recap.Service
-	Usage      *usage.Tracker
-	UsageDays  *usage.Book // the year's days for the heatmap, each read once
-	Budgets    *budget.Service
-	Health     *health.Collector
-	Review     *review.Store
-	Schedules  *schedule.Store
-	Quick      *quick.Store
-	Recipes    *recipes.Store
-	Prefs      *prefs.Store
-	Code       *code.Service
-	Complete   *complete.Service // what the composer offers at a slash or an @
-	Tailscale  func() tsnetx.Status
-	Guard      *auth.Guard
-	Keys       *auth.Keys // the agents' tasks-only keys, listed and revoked in Settings
-	UI         fs.FS
-	Live       *live.Hub           // the page's event stream, nil without one
-	Awake      *awake.Service      // the machines kept awake while their agents work
-	Icons      *icons.Store        // the icon the person gave each folder of the sidebar
-	Notes      *notes.Store        // the note the person keeps on each checkout
-	Arena      *arena.Service      // one prompt to several agents side by side
-	Limits     *limits.Service     // the agents' subscription windows, the hits and the bookings to continue after a reset
-	Scratch    *scratch.Store      // the floating terminal's shell on each machine
-	Jira       *jira.Service       // the person's Jira site and the issues their agents' work names
-	Backup     *backup.Service     // the cockpit's state dir copied to another machine, nightly and on demand
-	Previews   *preview.Service    // the machines' dev servers opened on the cockpit, nil without
-	SelfPort   int                 // the port of -addr, never offered as a preview
-	HerdrStops bool                // stops herdr's server on a machine moved to remuda-core at the person's press; never a scratch instance
-	Opinions   *opinion.Service    // the second opinions another agent gave on a folder's changes
-	Subagents  *subagents.Tracker  // how many subagents each Claude Code pane's conversation runs, for the sidebar's tree
-	Retire     *retire.Service     // what is set to a model or mode being retired, nil without
-	Scorecard  *scorecard.Service  // which model does the work best, from the runs, reviews, requests and arenas
-	Mirror     *mirror.Service     // remuda's figures and alerts inside herdr itself
-	Timelapse  *timelapse.Recorder // what the agents' screens did while they worked
-	Triggers   *triggers.Service   // the person's rules on what a pane prints, and the dev servers offered as previews
-	Drift      *drift.Service      // how every machine is set up, side by side
-	Collisions *collisions.Service // the workspaces of one repository changing the same files, nil without
-	Undo       *undo.Service       // the agents' turns kept to be undone, and the undo at the person's word
-	Scenes     *scenes.Service     // the morning set-ups and the evening tidies, run at the person's press
-	GitOps     *gitops.Service     // git's writes on a checkout at the person's press, refused while an agent works there
-	Stage      *gitstage.Service   // the Changes lens's git writes, each at the person's press; nil writes nothing
-	Repos      *repos.Store        // each repository's project settings: worktree defaults, the setup script, the run actions
-	Ports      *ports.Tracker      // the ports the machines' processes listen on, matched to their workspaces
-	Resources  *resources.Service  // what the machines' herdr panes weigh on them, for the status bar
-	Sleep      *sleep.Service      // the workspaces put to sleep and woken at the person's press, and the resume switches
-	Issues     *ghissues.Service   // a GitHub repository's issues, read and written through gh on the machine as the person
-	Sync       *gitsync.Service    // every repository at a glance, fetched, pulled and pushed at the person's press
+	Machines    *machines.Manager
+	Watch       *watch.Watcher
+	Input       *sessions.Input
+	Chat        *chat.Service
+	Updates     *updates.Service
+	Tasks       *tasks.Store
+	Launcher    *tasks.Launcher
+	Push        *push.Service
+	Feed        *feed.Service
+	Radar       *radar.Tracker
+	Said        *said.Tracker
+	PRs         *prstatus.Tracker
+	Recap       *recap.Service
+	Usage       *usage.Tracker
+	UsageDays   *usage.Book // the year's days for the heatmap, each read once
+	Budgets     *budget.Service
+	Health      *health.Collector
+	HerdrMayRun func(machineID string) string // why a write must wait there (herdr's server may still run), "" when it surely does not
+	Review      *review.Store
+	Schedules   *schedule.Store
+	Quick       *quick.Store
+	Recipes     *recipes.Store
+	Prefs       *prefs.Store
+	Code        *code.Service
+	Complete    *complete.Service // what the composer offers at a slash or an @
+	Tailscale   func() tsnetx.Status
+	Guard       *auth.Guard
+	Keys        *auth.Keys // the agents' tasks-only keys, listed and revoked in Settings
+	UI          fs.FS
+	Live        *live.Hub           // the page's event stream, nil without one
+	Awake       *awake.Service      // the machines kept awake while their agents work
+	Icons       *icons.Store        // the icon the person gave each folder of the sidebar
+	Notes       *notes.Store        // the note the person keeps on each checkout
+	Arena       *arena.Service      // one prompt to several agents side by side
+	Limits      *limits.Service     // the agents' subscription windows, the hits and the bookings to continue after a reset
+	Scratch     *scratch.Store      // the floating terminal's shell on each machine
+	Jira        *jira.Service       // the person's Jira site and the issues their agents' work names
+	Backup      *backup.Service     // the cockpit's state dir copied to another machine, nightly and on demand
+	Previews    *preview.Service    // the machines' dev servers opened on the cockpit, nil without
+	SelfPort    int                 // the port of -addr, never offered as a preview
+	HerdrStops  bool                // stops herdr's server on a machine moved to remuda-core at the person's press; never a scratch instance
+	Opinions    *opinion.Service    // the second opinions another agent gave on a folder's changes
+	Subagents   *subagents.Tracker  // how many subagents each Claude Code pane's conversation runs, for the sidebar's tree
+	Retire      *retire.Service     // what is set to a model or mode being retired, nil without
+	Scorecard   *scorecard.Service  // which model does the work best, from the runs, reviews, requests and arenas
+	Mirror      *mirror.Service     // remuda's figures and alerts inside herdr itself
+	Timelapse   *timelapse.Recorder // what the agents' screens did while they worked
+	Triggers    *triggers.Service   // the person's rules on what a pane prints, and the dev servers offered as previews
+	Drift       *drift.Service      // how every machine is set up, side by side
+	Collisions  *collisions.Service // the workspaces of one repository changing the same files, nil without
+	Undo        *undo.Service       // the agents' turns kept to be undone, and the undo at the person's word
+	Scenes      *scenes.Service     // the morning set-ups and the evening tidies, run at the person's press
+	GitOps      *gitops.Service     // git's writes on a checkout at the person's press, refused while an agent works there
+	Stage       *gitstage.Service   // the Changes lens's git writes, each at the person's press; nil writes nothing
+	Repos       *repos.Store        // each repository's project settings: worktree defaults, the setup script, the run actions
+	Ports       *ports.Tracker      // the ports the machines' processes listen on, matched to their workspaces
+	Resources   *resources.Service  // what the machines' herdr panes weigh on them, for the status bar
+	Sleep       *sleep.Service      // the workspaces put to sleep and woken at the person's press, and the resume switches
+	Issues      *ghissues.Service   // a GitHub repository's issues, read and written through gh on the machine as the person
+	Sync        *gitsync.Service    // every repository at a glance, fetched, pulled and pushed at the person's press
 
 	streams   termStreams
 	relayed   relays           // the terminals piped to a machine's own remuda, which holds their attach

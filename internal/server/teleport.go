@@ -160,12 +160,11 @@ func (s *Server) handleTeleport(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 503, errors.New("no job runner"))
 		return
 	}
-	if s.Machines.Core() { // every target is then on remuda-core: refused before the move writes a checkout there
-		httpErr(w, 400, errors.New("moving the work to a machine reached through remuda-core is not in this remuda yet"))
-		return
-	}
 	mc, _, _, ok := s.ready(w, r, req.Machine)
 	if !ok {
+		return
+	}
+	if s.heldByHerdr(w, mc.ID()) { // its herdr agents may still be in the checkout this would close
 		return
 	}
 	pane, dir, err := s.teleportSource(mc, req.Pane)
@@ -176,6 +175,9 @@ func (s *Server) handleTeleport(w http.ResponseWriter, r *http.Request) {
 	target, err := s.Machines.Get(req.Target)
 	if err != nil {
 		httpErr(w, 404, err)
+		return
+	}
+	if s.heldByHerdr(w, target.ID()) { // the move writes a checkout there
 		return
 	}
 	if mc.Windows() || target.Windows() {
@@ -194,23 +196,32 @@ func (s *Server) handleTeleport(w http.ResponseWriter, r *http.Request) {
 	gist := s.teleportGist(mc, pane, lastN)
 	to := agentLabel(req.Agent)
 	result := &teleported{Machine: target.ID()}
-	move := teleport.Move{Source: mc, SourceDir: dir, Target: target, TargetDir: req.Folder, Start: func(landed teleport.Landed, src teleport.Source) error {
-		snap, _ := s.Watch.Snapshot(target.ID())
-		place, err := sessions.StartIn(client, snap, landed.Dir, "", to, req.Agent, start)
-		s.Watch.Refresh(target)
-		if err != nil {
-			return err
-		}
-		result.mu.Lock()
-		result.Pane = place.Pane
-		result.mu.Unlock()
-		prompt := teleport.Preamble(mc.Label(), dir, src, landed, target.Label())
-		if gist != "" {
-			prompt += "\n" + gist
-		}
-		go s.firstPrompt(client, events.PaneRef{Machine: target.ID(), Pane: place.Pane}, prompt, landed.Branch)
-		return nil
-	}}
+	move := teleport.Move{Source: mc, SourceDir: dir, Target: target, TargetDir: req.Folder,
+		BeforeLand: func() error { // herdr started there while the work was on its way: nothing lands
+			if s.HerdrMayRun != nil {
+				if reason := s.HerdrMayRun(target.ID()); reason != "" {
+					return errors.New(reason)
+				}
+			}
+			return nil
+		},
+		Start: func(landed teleport.Landed, src teleport.Source) error {
+			snap, _ := s.Watch.Snapshot(target.ID())
+			place, err := sessions.StartIn(client, snap, landed.Dir, "", to, req.Agent, start)
+			s.Watch.Refresh(target)
+			if err != nil {
+				return err
+			}
+			result.mu.Lock()
+			result.Pane = place.Pane
+			result.mu.Unlock()
+			prompt := teleport.Preamble(mc.Label(), dir, src, landed, target.Label())
+			if gist != "" {
+				prompt += "\n" + gist
+			}
+			go s.firstPrompt(client, events.PaneRef{Machine: target.ID(), Pane: place.Pane}, prompt, landed.Branch)
+			return nil
+		}}
 	title := fmt.Sprintf("Move the work in %s to %s", path.Base(dir), target.Label())
 	command := fmt.Sprintf("# from %s (%s) to %s (%s):\n# the branch, its commits and the uncommitted work into a new worktree there, then %s with the handover", mc.Label(), dir, target.Label(), req.Folder, to)
 	job := s.Updates.Jobs.Run(target, title, command, func(say func(string)) error {

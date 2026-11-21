@@ -60,7 +60,7 @@ func home(t *testing.T) string {
 	}
 	dir := t.TempDir()
 	t.Setenv("HOME", dir)
-	for _, k := range []string{"XDG_CONFIG_HOME", "REMUDA_STATE_DIR", "REMUDA_INSTALL_VERSION", "REMUDA_INSTALL_BASE", "REMUDA_INSTALL_ONLY", "REMUDA_INSTALL_MISSING", "HERDR_PANE_ID"} {
+	for _, k := range []string{"XDG_CONFIG_HOME", "REMUDA_STATE_DIR", "REMUDA_INSTALL_VERSION", "REMUDA_INSTALL_BASE", "REMUDA_INSTALL_ONLY", "REMUDA_INSTALL_MISSING", "HERDR_PANE_ID", "RC_TERMINAL_ID"} {
 		t.Setenv(k, "")
 	}
 	t.Setenv("HERDR_SOCKET_PATH", filepath.Join(dir, "no-herdr.sock"))

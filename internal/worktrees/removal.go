@@ -154,6 +154,12 @@ func ForceScript(look Look, deleteBranch bool) string {
 // RemoveAsShown takes the worktree down as the look says, its branch with it when asked; what stays is in the outcome.
 func RemoveAsShown(host shell.Shell, look Look, deleteBranch bool) Outcome {
 	out := Outcome{Path: look.Path, Branch: look.Branch}
+	// Asked here, at the removal: the workspace's close and the roster's refresh took a moment, and herdr may have
+	// started in it, its agents there not the ones this remuda sees.
+	if why := Hold(host); why != "" {
+		out.Kept = why
+		return out
+	}
 	said, err := shell.Text(host, ForceScript(look, deleteBranch), RemoveTimeout)
 	var exit *shell.ExitError
 	switch {

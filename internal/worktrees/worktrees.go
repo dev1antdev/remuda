@@ -141,7 +141,11 @@ func DiscardScript(info Info) string {
 }
 
 // Discard takes down a worktree whose work the caller saved first (an arena's lane the person did not keep); git's line on a refusal.
+// A machine whose herdr server still runs keeps it: its agents there are not the ones this remuda sees.
 func Discard(host shell.Shell, info Info) error {
+	if why := Hold(host); why != "" {
+		return errors.New(why)
+	}
 	out, err := shell.Text(host, DiscardScript(info), Timeout)
 	if err == nil {
 		return nil
