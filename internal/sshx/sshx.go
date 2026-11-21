@@ -119,12 +119,13 @@ func (s *sessionCount) leave(kind sessionKind) {
 
 const sessionRefused = "Session open refused"
 
-// SessionRefused reads ssh's words for a machine that will not open one more session, and says it plainly.
+// SessionRefused reads ssh's words for a machine that will not open one more session, and says it plainly; the cause
+// comes first, so a message cut for a WebSocket close reason keeps it and loses only the machine's name.
 func SessionRefused(host, said string) (string, bool) {
 	if !strings.Contains(said, sessionRefused) {
 		return "", false
 	}
-	return fmt.Sprintf("%s refused one more ssh session: too many are open on the connection (sshd's MaxSessions)", host), true
+	return fmt.Sprintf("too many ssh sessions are open (sshd's MaxSessions): %s refused one more", host), true
 }
 
 // enter waits for a place within timeout; it answers how to leave and how much of the timeout is left.
