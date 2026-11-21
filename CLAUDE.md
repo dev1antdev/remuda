@@ -441,10 +441,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   its start since boot on Linux as one advertising `foreground_since_boot`
   tells it (`Foreground.SinceBoot`: boot id, time namespace, ticks), which no
   step of the clock moves — remuda-core 0.2.3 (remuda-core #13, task #359),
-  the pin, so the binding takes effect on every machine of the fleet; a core
-  that tells neither leaves nil, and the binding falls back on the sighting
-  bound, which a step of the machine's clock on macOS or Windows can fool;
-  nil,
+  which the pin now carries, so a machine that takes it binds by the process's
+  creation; a core that tells neither leaves 0 and nil, and the binding falls
+  back on the sighting bound, which a step of the machine's clock on macOS or
+  Windows can fool; nil,
   none), which a machine gives as its `processSessions`
   (`internal/machines/sessions.go`, tested on paper and on a throwaway core
   with a stand-in Claude Code keeping its session file in a temp HOME):
@@ -513,7 +513,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   bring back: "Resume after restart" and a wake start agents through the
   adapter as on herdr; a sleep and an agent update's restart type the
   agent's own `/exit` or `/restart`, a prompt, so on a machine they need a
-  core with `send_foreground`, 0.2.1, which the pin has — a core older
+  core with `send_foreground`, 0.2.1, which the pin has — an older core
   refuses them (a sleep ends "did not stop"), and so does a pane kept across
   the core's own update from a holder older than that (`needs_update`, its
   words naming the fresh pane that takes it); `lifecycle_test.go` runs both

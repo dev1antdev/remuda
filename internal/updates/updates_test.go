@@ -258,7 +258,7 @@ func TestOfferedIncludesTheStatusLineWrapperWhereClaudeAndRemudaAre(t *testing.T
 }
 
 func TestCoreIsOfferedWhereItIsMissingOrOlder(t *testing.T) {
-	health.PinnedCore = "0.2.0"
+	health.PinnedCore = setup.CoreVersion
 	t.Cleanup(func() { health.PinnedCore = "" })
 	find := func(r *health.Report) *Update {
 		for _, u := range Offered(r, health.Latest{}) {
@@ -269,7 +269,7 @@ func TestCoreIsOfferedWhereItIsMissingOrOlder(t *testing.T) {
 		return nil
 	}
 	mac := health.Report{Remuda: "v0.16.0", OS: "macOS 26.1", Arch: "arm64"}
-	if u := find(&mac); u == nil || u.Title != "Install remuda-core" || !strings.Contains(u.Command, "remuda-core 0.2.0") || !strings.HasSuffix(u.run(), "\n"+setup.CoreInstaller()) {
+	if u := find(&mac); u == nil || u.Title != "Install remuda-core" || !strings.Contains(u.Command, "remuda-core "+setup.CoreVersion) || !strings.HasSuffix(u.run(), "\n"+setup.CoreInstaller()) {
 		t.Fatalf("a Mac without remuda-core: %+v", u)
 	}
 	if u := find(&health.Report{OS: "Linux 6.12", Arch: "amd64"}); u == nil || !strings.HasSuffix(u.run(), setup.CoreInstaller()) {
@@ -278,7 +278,7 @@ func TestCoreIsOfferedWhereItIsMissingOrOlder(t *testing.T) {
 	if sum := sha256.Sum256([]byte(find(&mac).run())); !strings.Contains(find(&mac).Command, hex.EncodeToString(sum[:8])) {
 		t.Fatal("the command shown does not name the installer's digest")
 	}
-	if naming("# remuda-core 0.2.0", "one installer") == naming("# remuda-core 0.2.0", "another installer") {
+	if naming("# remuda-core "+setup.CoreVersion, "one installer") == naming("# remuda-core "+setup.CoreVersion, "another installer") {
 		t.Fatal("an installer changed under the same version leaves the command shown as it was: a stale Run would pass")
 	}
 	// Update everywhere sends every step's command back on Run, under the server's 1 MB a request: a fleet's worth of
@@ -293,11 +293,11 @@ func TestCoreIsOfferedWhereItIsMissingOrOlder(t *testing.T) {
 	}
 	older := mac
 	older.RemudaCore = "0.1.9"
-	if u := find(&older); u == nil || u.Title != "Update remuda-core" || !strings.Contains(u.Note, "0.1.9 → 0.2.0") {
+	if u := find(&older); u == nil || u.Title != "Update remuda-core" || !strings.Contains(u.Note, "0.1.9 → "+setup.CoreVersion) {
 		t.Fatalf("an older remuda-core: %+v", u)
 	}
 	for name, r := range map[string]health.Report{
-		"current":         {Remuda: "v0.16.0", OS: "Linux 6.12", Arch: "arm64", RemudaCore: "0.2.0"},
+		"current":         {Remuda: "v0.16.0", OS: "Linux 6.12", Arch: "arm64", RemudaCore: setup.CoreVersion},
 		"newer":           {Remuda: "v0.16.0", OS: "Linux 6.12", Arch: "amd64", RemudaCore: "0.3.0"},
 		"Windows on arm":  {Remuda: "v0.16.0", OS: "Windows 11 Pro", Arch: "arm64"},
 		"a 32-bit Linux":  {Remuda: "v0.16.0", OS: "Linux 6.1", Arch: "armv7l"},

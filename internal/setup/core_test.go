@@ -17,6 +17,13 @@ func TestCoreVersionMatchesTheScript(t *testing.T) {
 	if !strings.Contains(coreScript, `CORE_VERSION:-`+CoreVersion+`}`) || !strings.Contains(coreScript, `[ "$VERSION" = "`+CoreVersion+`" ]`) {
 		t.Fatalf("install-core.sh does not default to remuda-core %s, or pins its sums to another version", CoreVersion)
 	}
+	ci, err := os.ReadFile(filepath.Join("..", "..", ".github", "workflows", "ci.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(ci), "remuda-v"+CoreVersion+"\n") {
+		t.Fatalf("CI installs another remuda-core release than the %s this binary pins", CoreVersion)
+	}
 }
 
 // coreRelease is a release archive holding a remuda-core at version that logs every call but --version.
