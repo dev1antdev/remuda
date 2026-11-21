@@ -9397,7 +9397,7 @@ body:has(.status-bar) .toasts {
   background: var(--bg-raised);
 }
 
-.load-row.is-herdr {
+.load-row.is-core {
   padding-left: 36px;
   background: var(--bg-raised);
 }

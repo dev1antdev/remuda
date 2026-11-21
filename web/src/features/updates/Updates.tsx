@@ -1,4 +1,4 @@
-// Updates on a machine, from the page: what can be updated (herdr, the agents,
+// Updates on a machine, from the page: what can be updated (the agents, remuda-core,
 // remuda itself), each shown as the command it would run; a chosen one runs as
 // a job whose output streams in. Run sends the command shown back: the server runs that or refuses.
 
@@ -20,12 +20,6 @@ function missingText(what: string): string {
       return tr("This remuda cannot be deployed there: that needs a remote machine of the same OS and CPU, and a released build here.");
     case "remuda-release":
       return tr("No newer release of remuda is known for this machine.");
-    case "hooks":
-      return tr("herdr's hooks there are current.");
-    case "integrations":
-      return tr("Every agent there has herdr's hooks.");
-    case "plugins":
-      return tr("No herdr plugin from GitHub is installed there, or herdr there is older than 0.9.4.");
     case "core":
       return tr("remuda-core is there already, or it has no build for this machine.");
   }
@@ -158,7 +152,7 @@ export default function UpdatesDialog({ machine, what, onClose, onDone }: {
           <p className="updates-note">{picked.note && redact(picked.note)}</p>
           <p className="dim">
             {picked.what.startsWith("restart-")
-              ? tr("This goes through herdr on {machine}, pane by pane:", { machine: label })
+              ? tr("This goes through remuda-core on {machine}, pane by pane:", { machine: label })
               : picked.what === "remuda-release"
                 ? tr("This runs on {machine}, as you: the download from GitHub, the check, the install, the restart of remuda there:", { machine: label })
                 : tr("This runs on {machine}, as you, through the shell remuda already uses there:", { machine: label })}
@@ -181,7 +175,7 @@ export default function UpdatesDialog({ machine, what, onClose, onDone }: {
           <div className="updates-list">
             {data?.map((u) => (
               <button key={u.what} type="button" className="updates-row" onClick={() => setPicked(u)}>
-                <Icon name={u.what.startsWith("restart-") ? "play" : u.what === "code" ? "code" : u.what === "mcp" ? "plug" : u.what === "statusline" ? "chart" : u.what === "herdr" || u.what === "core" || u.what === "hooks" || u.what === "integrations" || u.what === "plugins" || u.what.startsWith("remuda") ? "refresh-cw" : "sparkles"} size={14} />
+                <Icon name={u.what.startsWith("restart-") ? "play" : u.what === "code" ? "code" : u.what === "mcp" ? "plug" : u.what === "statusline" ? "chart" : u.what === "core" || u.what.startsWith("remuda") ? "refresh-cw" : "sparkles"} size={14} />
                 <span className="updates-row-text">
                   <span>{redact(u.title)}</span>
                   <span className="dim">{redact(u.note?.split(". ")[0] ?? "")}</span>

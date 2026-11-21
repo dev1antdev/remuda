@@ -45,7 +45,7 @@ The contexts are the bounded contexts of the product, in its own words:
 | Live | the page's one event stream: the roster moved, a transcript grew | `live` |
 | Transcripts | what an agent said, read-only | `transcript`, `chat`, `search`, `usage` |
 | Review | a folder's uncommitted work since the last look, its risk, the secret check before its commit, and the checkouts of one repository changing the same files | `review`, `secrets`, `collisions` |
-| Updates | updating herdr, the agents, remuda; the restarts after | `updates`, `jobs`, `restart` |
+| Updates | updating remuda-core, the agents, remuda; the restarts after | `updates`, `jobs`, `restart` |
 | Tasks | remuda's own list, and an agent started on a task | `tasks` |
 | Alerts | pushes to the phone | `push` |
 | Schedules | prompts on a timetable | `schedule` |

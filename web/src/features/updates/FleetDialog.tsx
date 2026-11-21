@@ -1,4 +1,4 @@
-// Fleet setup: how every machine is set up, side by side — the agents and how they were installed, herdr and its hooks
+// Fleet setup: how every machine is set up, side by side — the agents and how they were installed, remuda-core,
 // and plugins, remuda and its MCP server and status line, Claude Code's settings, the global instruction files, and every
 // repository checked out on two machines or more. The value most machines share is the norm and one that differs is
 // marked; an update remuda already has brings it in line through the Updates dialog, the command shown before Run, and

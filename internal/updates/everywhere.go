@@ -1,6 +1,6 @@
 package updates
 
-// Update everywhere: every update a connected machine has pending — herdr, its hooks, the agents, code-server, a newer
+// Update everywhere: every update a connected machine has pending — the agents, code-server, remuda-core, a newer
 // release of remuda — listed as steps whose commands are shown before Run, then run one after another here, each
 // waiting for the job before it, the page's own host last, since its remuda restarts once its job ends. A step is run
 // only as it was shown: the plan is read again at Run and a step that moved is a StaleError, nothing started.
@@ -43,12 +43,12 @@ type Batch struct {
 	Steps   []StepRun `json:"steps"`
 }
 
-// everywhereOrder is the order of a machine's steps: herdr first, then the hooks it writes, the agents, code-server,
-// remuda-core, and remuda's own release last, since installing it restarts the page's own remuda; remoteOrder puts
-// remuda-core after a remote's release, whose remuda is the one that knows `remuda core`
+// everywhereOrder is the order of a machine's steps: the agents, code-server, remuda-core, and remuda's own release
+// last, since installing it restarts the page's own remuda; remoteOrder puts remuda-core after a remote's release, whose
+// remuda is the one that knows `remuda core`
 var (
-	everywhereOrder = []string{"herdr", "hooks", "claude", "codex", "gemini", "kimi", "code", "core", "remuda-release"}
-	remoteOrder     = []string{"herdr", "hooks", "claude", "codex", "gemini", "kimi", "code", "remuda-release", "core"}
+	everywhereOrder = []string{"claude", "codex", "gemini", "kimi", "code", "core", "remuda-release"}
+	remoteOrder     = []string{"claude", "codex", "gemini", "kimi", "code", "remuda-release", "core"}
 )
 
 // StepTimeout is how long a step's job may run before the next one starts anyway.
@@ -57,18 +57,13 @@ var StepTimeout = 30 * time.Minute
 // stepPoll is how often a running step's job is looked at.
 var stepPoll = time.Second
 
-// pendingUpdate says whether an offer installs something newer than the machine has: a tool's newer version known,
-// hooks behind the installed herdr, a code-server older than the one remuda installs; a release and remuda-core are
-// offered only when needed
+// pendingUpdate says whether an offer installs something newer than the machine has: a tool's newer version known, a
+// code-server older than the one remuda installs; a release and remuda-core are offered only when needed
 func pendingUpdate(what string, r *health.Report, l health.Latest) bool {
 	switch what {
-	case "herdr":
-		return r.Herdr != "" && l.Herdr != "" && health.Newer(r.Herdr, l.Herdr)
 	case "claude", "codex", "gemini", "kimi":
 		have, latest := agentVersion(r, what), agentVersion(&health.Report{Claude: l.Claude, Codex: l.Codex, Gemini: l.Gemini, Kimi: l.Kimi}, what)
 		return have != "" && latest != "" && health.Newer(have, latest)
-	case "hooks":
-		return len(r.OutdatedHooks) > 0
 	case "code":
 		return r.CodeServer != "" && l.Code != "" && health.Newer(r.CodeServer, l.Code)
 	case "remuda-release", "core": // offered only when newer, or missing for remuda-core
@@ -260,8 +255,8 @@ func (s *Service) runBatch(batch *Batch) {
 	s.runs.mu.Unlock()
 }
 
-// stillPending says why a step shown at Run is not to run now — an earlier step of the run already saw to it (the herdr
-// update installs the hooks itself), or its command moved: a skip, not a failure; nil when it stands as it was shown
+// stillPending says why a step shown at Run is not to run now — an earlier step of the run already saw to it, or its
+// command moved: a skip, not a failure; nil when it stands as it was shown
 func (s *Service) stillPending(mc *machines.Machine, step Step) error {
 	for _, now := range s.machineSteps(mc) {
 		if now.What != step.What {

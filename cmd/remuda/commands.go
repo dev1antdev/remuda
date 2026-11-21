@@ -102,7 +102,7 @@ func setupCmd(args []string) {
 	ts := fs.Bool("tailscale", false, "the service joins your tailnet by itself (see -tailscale on the server)")
 	tsName := fs.String("tailscale-hostname", "remuda", "the node's name on the tailnet")
 	addr := fs.String("addr", "127.0.0.1:7317", "the service's loopback address")
-	noService := fs.Bool("no-service", false, "herdr and its server only; no remuda service")
+	noService := fs.Bool("no-service", false, "remuda-core only; no remuda service")
 	open := fs.Bool("open", false, "open the page in the browser once the service answers (a Mac at the desk only)")
 	serverOnly := fs.Bool("server", false, "the service serves the page only (-server): no herdr installed or started there, the machine none of the cockpit's")
 	fs.Parse(args)

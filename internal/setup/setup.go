@@ -20,9 +20,6 @@ import (
 	"github.com/dev1antdev/remuda/internal/script"
 )
 
-//go:embed scripts/setup.sh
-var setupScript string
-
 //go:embed scripts/install-service.sh
 var serviceScript string
 
@@ -60,17 +57,14 @@ type Options struct {
 	TSName    string
 	AuthKey   string
 	Addr      string
-	NoService bool   // herdr and its server only
-	Server    bool   // the service serves the page only: no herdr there, the flag -server in its unit
+	NoService bool   // remuda-core alone: no remuda service
+	Server    bool   // the service serves the page only: no remuda-core there, the flag -server in its unit
 	Version   string // this build's: a remote without remuda gets the same release when it is one
 }
 
 // Run does the setup, writing what happens to out.
 func Run(o Options, out io.Writer) error {
 	env := []string{}
-	if v := os.Getenv("HERDR_INSTALL"); v != "" {
-		env = append(env, "HERDR_INSTALL="+v)
-	}
 	if o.Addr != "" {
 		env = append(env, "REMUDA_ADDR="+o.Addr)
 	}
@@ -99,15 +93,11 @@ func Run(o Options, out io.Writer) error {
 	}
 	if o.Server {
 		env = append(env, "REMUDA_SERVER=1")
-		fmt.Fprintf(out, "— no herdr%s: a server serves the page only, the agents run on its machines\n", where(o.Host))
+		fmt.Fprintf(out, "— no remuda-core%s: a server serves the page only, the agents run on its machines\n", where(o.Host))
 	} else {
-		fmt.Fprintf(out, "— herdr and its server%s\n", where(o.Host))
-		if err := run(o.Host, env, setupScript, nil, out); err != nil {
-			return fmt.Errorf("setup: %w", err)
-		}
 		fmt.Fprintf(out, "— remuda-core%s\n", where(o.Host))
 		if err := Core(o.Host, "install", out); err != nil {
-			fmt.Fprintf(out, "remuda-core was not installed (%v): the rest goes on, and the page's Updates offers it again\n", err)
+			return fmt.Errorf("remuda-core: %w", err)
 		}
 	}
 	if o.NoService {

@@ -33,10 +33,10 @@ func TestMeasureSumsEachPanesTreeIntoItsWorkspace(t *testing.T) {
 	if len(app.Terminals) != 2 || app.Terminals[0].Pane != "w1:p1" || app.Terminals[1].Top.Name != "zsh" {
 		t.Fatalf("its terminals, the heaviest first: %+v", app.Terminals)
 	}
-	if usage.Herdr.RSSKB != 40960 || !near(usage.Herdr.CPU, 1.5/8) {
-		t.Fatalf("herdr's own, past the panes it holds: %+v", usage.Herdr)
+	if usage.Core.RSSKB != 40960 || !near(usage.Core.CPU, 1.5/8) {
+		t.Fatalf("remuda-core's own, past the panes it holds: %+v", usage.Core)
 	}
-	// Chrome runs outside herdr and counts for nothing
+	// Chrome runs outside the panes and counts for nothing
 	if usage.Total.RSSKB != claude.RSSKB+app.RSSKB+40960 || !near(usage.Total.CPU, (60+27+1.5)/8) {
 		t.Fatalf("the total %+v", usage.Total)
 	}
@@ -97,13 +97,13 @@ func TestALinuxMachinesCPUIsToldAgainstTheReadingBefore(t *testing.T) {
 		t.Fatal(err)
 	}
 	// the reading before was taken at 1002 s, this one at 1008 s: node spent 400 ticks of 600, two thirds of a core —
-	// a sixth of four — and herdr 20
-	node, herdr := 400.0/600*100/4, 20.0/600*100/4
-	if !near(next.Workspaces[0].CPU, node) || !near(next.Herdr.CPU, herdr) || !near(next.Total.CPU, node+herdr) {
-		t.Fatalf("the CPU told against the reading before: %+v, herdr %+v", next.Workspaces[0], next.Herdr)
+	// a sixth of four — and remuda-core 20
+	node, core := 400.0/600*100/4, 20.0/600*100/4
+	if !near(next.Workspaces[0].CPU, node) || !near(next.Core.CPU, core) || !near(next.Total.CPU, node+core) {
+		t.Fatalf("the CPU told against the reading before: %+v, remuda-core %+v", next.Workspaces[0], next.Core)
 	}
 	if asked != 2 {
-		t.Fatalf("herdr asked %d times for two panes' shells", asked)
+		t.Fatalf("the core was asked %d times for two panes' shells", asked)
 	}
 }
 
@@ -130,12 +130,12 @@ func TestAPaneWhoseShellIsGoneIsAskedAgainNowAndThen(t *testing.T) {
 			t.Fatal(err)
 		}
 		if usage.Unread != 1 {
-			t.Fatalf("a pane herdr names no shell for is unread: %+v", usage)
+			t.Fatalf("a pane remuda-core names no shell for is unread: %+v", usage)
 		}
 		clock = clock.Add(5 * time.Second)
 	}
 	if asked != 1 {
-		t.Fatalf("herdr asked %d times within %s", asked, AskAgainAfter)
+		t.Fatalf("the core was asked %d times within %s", asked, AskAgainAfter)
 	}
 	pid = 410
 	clock = clock.Add(AskAgainAfter)

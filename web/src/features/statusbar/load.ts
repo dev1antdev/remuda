@@ -1,4 +1,4 @@
-// The machine's load as the status bar says it: "CPU 12 % · 3.8 GB", what its herdr panes weigh on it, amber and red
+// The machine's load as the status bar says it: "CPU 12 % · 3.8 GB", what its terminals weigh on it, amber and red
 // where Orca's resources mod puts them — CPU from 30 and 60 % of all the cores, memory from 30 and 50 % of the RAM —
 // and each workspace's line in the popup. The pure part.
 
@@ -10,8 +10,8 @@ export type Weight = { cpu: number; rss_kb: number; top?: { name: string; rss_kb
 export type Terminal = Weight & { pane: string };
 export type WorkspaceLoad = Weight & { id: string; terminals: Terminal[] };
 
-// Usage is what GET /api/resources answers: the machine's panes by workspace, herdr's own beside them, the sum
-export type Usage = { at: string; cores: number; mem_kb: number; total: Weight; cpu_known: boolean; workspaces: WorkspaceLoad[]; herdr: Weight; unread?: number };
+// Usage is what GET /api/resources answers: the machine's panes by workspace, remuda-core's own beside them, the sum
+export type Usage = { at: string; cores: number; mem_kb: number; total: Weight; cpu_known: boolean; workspaces: WorkspaceLoad[]; core: Weight; unread?: number };
 
 export type Level = "" | "amber" | "red";
 
@@ -59,7 +59,7 @@ export const footWords = (u: Usage): string => t("CPU is a share of all {cores} 
 // loadTip is the segment's tooltip: whose load it is and against what
 export function loadTip(u: Usage, machine: string): string {
   const cpu = u.cpu_known ? cpuWords(u.total.cpu) : "…";
-  return t("herdr's panes on {machine}: CPU {cpu} of {cores} cores · {mem} of {total}", { machine, cpu, cores: u.cores, mem: memWords(u.total.rss_kb), total: memWords(u.mem_kb) });
+  return t("the terminals on {machine}: CPU {cpu} of {cores} cores · {mem} of {total}", { machine, cpu, cores: u.cores, mem: memWords(u.total.rss_kb), total: memWords(u.mem_kb) });
 }
 
 // terminalName is a terminal's line in the popup: what runs in the pane — its agent, else a shell — and its heaviest

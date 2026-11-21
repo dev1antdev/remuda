@@ -580,7 +580,7 @@ const PLAN_OFFER = { id: "e2e-offer-1", kind: "task", project: 1, task: 12, ref:
 let planOfferRuns = 0;
 
 // the status bar's machine as the browser is told it: the repository's agents at a third of the cores, the notes'
-// shell quiet, herdr's own beside them; the ports of the repository and its worktree, and a server outside both
+// shell quiet, remuda-core's own beside them; the ports of the repository and its worktree, and a server outside both
 const MiB = 1024;
 const GiB = 1024 * 1024;
 const fakeLoad = () => ({
@@ -594,7 +594,7 @@ const fakeLoad = () => ({
     { id: tree.id, cpu: 2.4, rss_kb: 520 * MiB, top: { name: "claude", rss_kb: 380 * MiB }, terminals: [{ pane: paneB, cpu: 2.4, rss_kb: 520 * MiB, top: { name: "claude", rss_kb: 380 * MiB } }] },
     { id: notes.id, cpu: 0, rss_kb: 6 * MiB, top: { name: "zsh", rss_kb: 6 * MiB }, terminals: [{ pane: paneN, cpu: 0, rss_kb: 6 * MiB, top: { name: "zsh", rss_kb: 6 * MiB } }] },
   ],
-  herdr: { cpu: 0.3, rss_kb: 42 * MiB },
+  core: { cpu: 0.3, rss_kb: 42 * MiB },
 });
 const portsOfApp = () => [
   { port: devPort, process: "python3", label: "http.server", pid: 4242, address: `localhost:${devPort}` },
@@ -659,7 +659,7 @@ async function statusBarScreens() {
       if (!(await until(() => present(".load-pop .load-row.is-terminal"), 4))) failed("a workspace's terminals do not unfold");
       check((await count(".load-pop .load-ws .load-sleep")) === (await count(".load-pop .load-ws")), "a workspace of the popup has no room for Sleep or Wake");
     },
-    expect: [".load-pop .load-row.is-herdr", ".load-pop .load-foot"],
+    expect: [".load-pop .load-row.is-core", ".load-pop .load-foot"],
   });
   await screen("status-ports", {
     open: async () => {
@@ -920,7 +920,6 @@ async function fakeFleet({ requestId }) {
           { id: "agent.version", arg: "codex", kind: "version", state: "odd", norm: "0.80.0", cells: { local: { value: "0.80.0" }, gog: { value: "0.80.0" }, pi: { value: "", mark: "odd" } }, hand: ["pi"] },
         ],
       },
-      { id: "herdr", rows: [{ id: "herdr.hooks", arg: "claude", kind: "hook", state: "same", norm: "current", cells: { local: { value: "current" }, gog: { value: "current" }, pi: { value: "current" } } }] },
       { id: "remuda", rows: [{ id: "mcp", arg: "claude", kind: "flag", state: "odd", norm: "yes", cells: { local: { value: "yes" }, gog: { value: "no", mark: "odd", action: update("mcp", "Connect the agents to your tasks (MCP)") }, pi: { value: "yes" } } }] },
       { id: "claude", rows: [{ id: "claude.model", kind: "model", state: "odd", norm: "claude-opus-4-8", cells: { local: { value: "claude-opus-4-8" }, gog: { value: "claude-opus-4-8" }, pi: { value: "default", mark: "odd" } }, hand: ["pi"] }] },
       { id: "instructions", rows: [{ id: "instructions", arg: "claude", kind: "hash", state: "odd", norm: hash("a"), cells: { local: { value: hash("a"), at: at - 86400 }, gog: { value: hash("b"), mark: "odd", at: at - 7200 }, pi: { value: hash("a"), at: at - 3 * 86400 } }, hand: ["gog"] }] },
@@ -2254,7 +2253,7 @@ async function previewFlow() {
   const listed = await api("GET", "/api/previews?machine=local");
   const mine = listed.listeners.find((l) => l.port === devPort);
   check(mine?.workspace === app.id && mine?.label === "http.server", `the dev server is listed as ${JSON.stringify(mine)}`);
-  check(!listed.listeners.some((l) => ["remuda", "herdr"].includes(l.command) || l.port === Number(new URL(base).port)), "remuda's or herdr's own port is offered as a preview");
+  check(!listed.listeners.some((l) => ["remuda", "remuda-core", "herdr"].includes(l.command) || l.port === Number(new URL(base).port)), "remuda's or remuda-core's own port is offered as a preview");
   const opened = await api("POST", "/api/previews/open", { machine: "local", port: devPort });
   check(opened.local !== devPort && opened.url.endsWith(`:${opened.local}`), `the preview opened as ${JSON.stringify(opened)}`);
   const served = await fetch(`${opened.url}/`, { headers: { Authorization: `Bearer ${token}`, Cookie: "remuda_token=never-forwarded" } });
@@ -2981,7 +2980,7 @@ async function runPass() {
       if (!(await until(() => present(".fleet-setup .fleet-table"), 6))) return failed("Fleet setup draws no table");
       const shown = await count(".fleet-setup tbody tr:not(.fleet-section)");
       await tap(".fleet-setup .modal-actions .btn[aria-pressed]");
-      if (!(await until(async () => (await count(".fleet-setup tbody tr:not(.fleet-section)")) === shown + 3, 4))) failed("Show every fact does not add the three rows in line");
+      if (!(await until(async () => (await count(".fleet-setup tbody tr:not(.fleet-section)")) === shown + 2, 4))) failed("Show every fact does not add the rows in line");
     },
     expect: [".fleet-setup .fleet-table"],
   });

@@ -1,4 +1,4 @@
-// Update everywhere: every connected machine's pending updates — herdr, its hooks, the agents, code-server, remuda's
+// Update everywhere: every connected machine's pending updates — the agents, code-server, remuda-core, remuda's
 // release — each with the command it runs, shown before Run; then the run, one step after another on the server, the
 // page's own host last, with how each went and one summary. Closing the dialog keeps the run going.
 

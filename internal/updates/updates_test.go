@@ -15,15 +15,12 @@ import (
 )
 
 func TestPlan(t *testing.T) {
-	r := &health.Report{Claude: "2.1.285", ClaudeVia: "brew", Codex: "0.160.0", CodexVia: "npm", Herdr: "0.9.1", HerdrVia: "installer"}
+	r := &health.Report{Claude: "2.1.285", ClaudeVia: "brew", Codex: "0.160.0", CodexVia: "npm"}
 	if u, err := Plan("claude", r); err != nil || !strings.Contains(u.Command, "brew update && brew upgrade claude-code") {
 		t.Fatalf("claude: %+v %v", u, err)
 	}
 	if u, err := Plan("codex", r); err != nil || !strings.Contains(u.Command, "@openai/codex@latest") {
 		t.Fatalf("codex: %+v %v", u, err)
-	}
-	if u, err := Plan("herdr", r); err != nil || !strings.Contains(u.Command, "herdr update --handoff") {
-		t.Fatalf("herdr: %+v %v", u, err)
 	}
 	if _, err := Plan("gemini", r); err == nil {
 		t.Fatal("gemini is not installed")
@@ -43,70 +40,9 @@ func TestPlan(t *testing.T) {
 	if u, _ := Plan("agents", r); strings.Count(u.Command, "brew update ||") != 1 || strings.Contains(u.Command, "brew update && brew upgrade") {
 		t.Fatalf("agents: brew update once, up front: %s", u.Command)
 	}
-	if u, _ := Plan("herdr", &health.Report{Herdr: "0.9.3", HerdrVia: "brew"}); !strings.Contains(u.Command, "brew update && brew upgrade herdr && herdr --version &&\nfor a in $(herdr integration status") || !strings.Contains(u.Command, `do herdr integration install "$a"`) || !strings.Contains(u.Command, "done\n#") {
-		t.Fatalf("herdr brew: %s", u.Command)
-	}
-	if ups := Offered(&health.Report{Herdr: "0.9.3", HerdrVia: "installer", HerdrServer: "0.9.1"}, health.Latest{}); len(ups) != 1 || !strings.HasPrefix(ups[0].Note, "The server runs 0.9.1 while 0.9.3 is installed.") {
-		t.Fatalf("server note: %+v", ups)
-	}
-	ups := Offered(r, health.Latest{Claude: "2.1.296", Herdr: "0.9.3"})
-	if len(ups) != 3 || !strings.Contains(ups[0].Note, "0.9.1 → 0.9.3") || !strings.Contains(ups[1].Note, "→ 2.1.296") {
+	ups := Offered(r, health.Latest{Claude: "2.1.296"})
+	if len(ups) != 2 || !strings.Contains(ups[0].Note, "→ 2.1.296") {
 		t.Fatalf("updates: %+v", ups)
-	}
-}
-
-func TestHooksAndPluginsPlans(t *testing.T) {
-	r := &health.Report{Herdr: "0.9.5", HerdrVia: "brew", OutdatedHooks: []health.Hook{{Agent: "claude", Have: "v10", Want: "v11"}, {Agent: "codex", Have: "v8", Want: "v10"}}, Plugins: []health.Plugin{{ID: "herdr.push", Source: "dcolinmorgan/herdr-push"}}}
-	u, err := Plan("hooks", r)
-	if err != nil || !strings.HasSuffix(u.Command, "herdr integration install claude && herdr integration install codex") || !strings.HasPrefix(u.Note, "claude v10 → v11, codex v8 → v10. ") {
-		t.Fatalf("hooks: %+v %v", u, err)
-	}
-	if u, _ := Plan("hooks", &health.Report{OutdatedHooks: []health.Hook{{Agent: "copilot"}}}); !strings.HasPrefix(u.Note, "copilot. ") {
-		t.Fatalf("hooks without versions: %+v", u)
-	}
-	if _, err := Plan("hooks", &health.Report{Herdr: "0.9.5"}); err == nil {
-		t.Fatal("current hooks were offered an update")
-	}
-	p, err := Plan("plugins", r)
-	if err != nil || !strings.HasSuffix(p.Command, "herdr plugin update --yes") || !strings.HasPrefix(p.Note, "herdr.push (dcolinmorgan/herdr-push). ") {
-		t.Fatalf("plugins: %+v %v", p, err)
-	}
-	if _, err := Plan("plugins", &health.Report{Herdr: "0.9.3", Plugins: r.Plugins}); err == nil {
-		t.Fatal("herdr 0.9.3 has no plugin update, yet one was planned")
-	}
-	if _, err := Plan("plugins", &health.Report{Herdr: "0.9.5"}); err == nil {
-		t.Fatal("no plugin, yet an update was planned")
-	}
-	var whats []string
-	for _, u := range Offered(r, health.Latest{}) {
-		whats = append(whats, u.What)
-	}
-	if strings.Join(whats, " ") != "herdr hooks plugins" {
-		t.Fatalf("offered: %v", whats)
-	}
-}
-
-func TestMissingIntegrationsArePlannedForTheAgentsInstalled(t *testing.T) {
-	r := &health.Report{Herdr: "0.9.5", Claude: "2.1.300", Gemini: "0.9.0", Integrations: map[string]string{"claude": "missing", "codex": "missing", "gemini": "current", "pi": "missing"}}
-	u, err := Plan("integrations", r)
-	if err != nil || !strings.HasSuffix(u.Command, "; herdr integration install claude") || !strings.HasPrefix(u.Note, "claude: installed there without") {
-		t.Fatalf("integrations: %+v %v", u, err)
-	}
-	r.Codex = "0.80.0"
-	if u, _ := Plan("integrations", r); !strings.HasSuffix(u.Command, "herdr integration install claude && herdr integration install codex") {
-		t.Fatalf("an installed Codex without its hooks is not planned: %s", u.Command)
-	}
-	for _, none := range []*health.Report{nil, {Claude: "2.1.300", Integrations: map[string]string{"claude": "missing"}}, {Herdr: "0.9.5", Integrations: map[string]string{"claude": "missing"}}, {Herdr: "0.9.5", Claude: "2.1.300"}} {
-		if _, err := Plan("integrations", none); err == nil {
-			t.Fatalf("hooks were planned with no herdr, no agent or nothing missing: %+v", none)
-		}
-	}
-	var whats []string
-	for _, u := range Offered(r, health.Latest{}) {
-		whats = append(whats, u.What)
-	}
-	if strings.Join(whats, " ") != "herdr claude codex gemini integrations" {
-		t.Fatalf("offered: %v", whats)
 	}
 }
 

@@ -83,46 +83,6 @@ func agentsSection(machines []Machine) Section {
 	return Section{ID: "agents", Rows: rows(machines, specs)}
 }
 
-func herdrSection(machines []Machine) Section {
-	specs := []spec{
-		{id: "herdr.version", kind: "version", better: newer, cell: reported(func(r *health.Report) (string, bool) { return r.Herdr, true }),
-			action: func(Machine, string) string { return "herdr" }},
-		{id: "herdr.server", kind: "version", better: newer, cell: reported(func(r *health.Report) (string, bool) { return r.HerdrServer, r.Herdr != "" }),
-			action: func(Machine, string) string { return "restart-herdr" }},
-	}
-	for _, agent := range agents {
-		specs = append(specs, spec{id: "herdr.hooks", arg: agent, kind: "hook", better: hookRank,
-			cell: reported(func(r *health.Report) (string, bool) {
-				state, ok := r.Integrations[agent]
-				return state, ok && r.Herdr != "" && installed(r, agent)
-			}),
-			action: func(_ Machine, value string) string {
-				if value == "missing" {
-					return "integrations"
-				}
-				return "hooks"
-			}})
-	}
-	plugins := map[string]bool{}
-	for _, m := range machines {
-		if m.Facts != nil {
-			for id := range m.Facts.Plugins {
-				plugins[id] = true
-			}
-		}
-	}
-	for _, id := range sortedKeys(plugins) {
-		specs = append(specs, spec{id: "herdr.plugin", arg: id, kind: "plugin", better: present,
-			cell: func(m Machine) (Cell, bool) {
-				if m.Facts == nil || m.Report == nil || m.Report.Herdr == "" {
-					return Cell{}, false
-				}
-				return Cell{Value: m.Facts.Plugins[id]}, true
-			}})
-	}
-	return Section{ID: "herdr", Rows: rows(machines, specs)}
-}
-
 func remudaSection(machines []Machine) Section {
 	specs := []spec{
 		{id: "remuda.version", kind: "version", better: newer, cell: reported(func(r *health.Report) (string, bool) { return r.Remuda, true }),

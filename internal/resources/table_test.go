@@ -12,7 +12,7 @@ import (
 const macAnswer = "kind\x1fps\ncores\x1f8\nmem\x1f16777216\n\x1e\n" +
 	"    1     0   0.0  12096\x1f/sbin/launchd\n" +
 	"1\x1f0\x1f0.0\x1f12096\x1f/sbin/launchd\n" +
-	"400\x1f1\x1f1.5\x1f40960\x1f/Users/me/.local/bin/herdr\n" +
+	"400\x1f1\x1f1.5\x1f40960\x1f/Users/me/.local/bin/remuda-core\n" +
 	"410\x1f400\x1f0.0\x1f4096\x1f/bin/zsh\n" +
 	"411\x1f410\x1f24.0\x1f524288\x1f/opt/homebrew/Cellar/node/24.1.0/bin/node\n" +
 	"412\x1f411\x1f3.0\x1f102400\x1f/opt/homebrew/Cellar/node/24.1.0/bin/node\n" +
@@ -24,7 +24,7 @@ const macAnswer = "kind\x1fps\ncores\x1f8\nmem\x1f16777216\n\x1e\n" +
 // a Linux answer: cumulative ticks, the name alone
 const linuxAnswer = "kind\x1flinux\ncores\x1f4\nticks\x1f100\nmem\x1f8000000\n\x1e\n" +
 	"1\x1f0\x1f1200\x1f9000\x1fsystemd\n" +
-	"700\x1f1\x1f5000\x1f30000\x1fherdr\n" +
+	"700\x1f1\x1f5000\x1f30000\x1fremuda-core\n" +
 	"710\x1f700\x1f10\x1f5000\x1fbash\n" +
 	"711\x1f710\x1f90000\x1f700000\x1fnode\n" +
 	"720\x1f700\x1f10\x1f5000\x1fbash\n" +
@@ -42,7 +42,7 @@ func TestParseReadsAMacsAndALinuxTable(t *testing.T) {
 		t.Fatalf("mac processes %+v %+v", mac.Procs[411], mac.Procs[500])
 	}
 	if got := mac.Kids[400]; len(got) != 3 {
-		t.Fatalf("herdr's children %v", got)
+		t.Fatalf("the core's children %v", got)
 	}
 	linux, err := Parse(linuxAnswer)
 	if err != nil {

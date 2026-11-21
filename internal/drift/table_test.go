@@ -25,22 +25,19 @@ func checkout(behind int, claudeMD string) Checkout {
 // fleet is three machines alike but for GOG, which lags in every way the table can tell, and one away.
 func fleet() []Machine {
 	report := func(claude string) *health.Report {
-		return &health.Report{Claude: claude, ClaudeVia: "native", Codex: "0.80.0", CodexVia: "npm", Herdr: "0.9.6", HerdrServer: "0.9.6", Remuda: "v0.13.0", Statusline: true, ClaudeModel: "claude-opus-4-8",
-			Integrations: map[string]string{"claude": "current", "codex": "current", "pi": "missing"}}
+		return &health.Report{Claude: claude, ClaudeVia: "native", Codex: "0.80.0", CodexVia: "npm", Remuda: "v0.13.0", Statusline: true, ClaudeModel: "claude-opus-4-8"}
 	}
 	facts := func() *Facts {
-		return &Facts{MCP: map[string]bool{"claude": true, "codex": true}, Instructions: map[string]File{"claude": {Present: true, Hash: sha("a"), Modified: 1}, "codex": {}}, Plugins: map[string]string{"herdr.push": "github:x/herdr-push"},
+		return &Facts{MCP: map[string]bool{"claude": true, "codex": true}, Instructions: map[string]File{"claude": {Present: true, Hash: sha("a"), Modified: 1}, "codex": {}},
 			Checkouts: []Checkout{checkout(0, "tests")}}
 	}
-	mac := Machine{ID: "local", Label: "This Mac", Report: report("2.1.320"), Facts: facts(), Offered: offers("herdr", "claude", "codex", "mcp")}
-	gog := Machine{ID: "gog", Label: "GOG", Report: report("2.1.310"), Facts: facts(), Offered: offers("herdr", "claude", "codex", "hooks", "integrations", "mcp")}
-	gog.Report.Integrations = map[string]string{"claude": "outdated", "codex": "missing"}
+	mac := Machine{ID: "local", Label: "This Mac", Report: report("2.1.320"), Facts: facts(), Offered: offers("core", "claude", "codex", "mcp")}
+	gog := Machine{ID: "gog", Label: "GOG", Report: report("2.1.310"), Facts: facts(), Offered: offers("claude", "codex", "mcp")}
 	gog.Report.ClaudeModel = ""
 	gog.Facts.MCP["claude"] = false
 	gog.Facts.Instructions["claude"] = File{Present: true, Hash: sha("b"), Modified: 2}
-	gog.Facts.Plugins = map[string]string{}
 	gog.Facts.Checkouts = []Checkout{checkout(3, "other tests")}
-	pi := Machine{ID: "pi", Label: "Pi", Report: report("2.1.320"), Facts: facts(), Offered: offers("herdr", "claude", "mcp")}
+	pi := Machine{ID: "pi", Label: "Pi", Report: report("2.1.320"), Facts: facts(), Offered: offers("core", "claude", "mcp")}
 	pi.Report.Codex, pi.Report.CodexVia = "", ""
 	pi.Facts.Checkouts = []Checkout{{Root: "/home/x/notes", Origin: "https://github.com/owner/notes", Branch: "main", Files: map[string]File{}}}
 	return []Machine{mac, gog, pi, {ID: "box", Label: "Box", Away: true}}
@@ -98,20 +95,6 @@ func TestTheOddOneOutIsMarkedAndOfferedWhatBringsItInLine(t *testing.T) {
 	if has(table, "agents", "agent.version", "kimi") {
 		t.Fatal("an agent on no machine has a row")
 	}
-	hooks := find(t, table, "herdr", "herdr.hooks", "claude")
-	if hooks.Cells["gog"].Mark != "odd" || hooks.Cells["gog"].Action == nil || hooks.Cells["gog"].Action.What != "hooks" {
-		t.Fatalf("outdated hooks: %+v", hooks)
-	}
-	missing := find(t, table, "herdr", "herdr.hooks", "codex")
-	if missing.Cells["gog"].Value != "missing" || missing.Cells["gog"].Action == nil || missing.Cells["gog"].Action.What != "integrations" || len(missing.Cells) != 2 {
-		t.Fatalf("missing hooks, and none for a machine without Codex: %+v", missing)
-	}
-	if has(table, "herdr", "herdr.hooks", "pi") {
-		t.Fatal("an integration for an agent remuda does not compare has a row")
-	}
-	if plugin := find(t, table, "herdr", "herdr.plugin", "herdr.push"); plugin.Cells["gog"].Mark != "odd" || plugin.Cells["gog"].Action != nil {
-		t.Fatalf("a plugin missing on one machine: %+v", plugin)
-	}
 	mcp := find(t, table, "remuda", "mcp", "claude")
 	if mcp.Norm != "yes" || mcp.Cells["gog"].Value != "no" || mcp.Cells["gog"].Action == nil || mcp.Cells["gog"].Action.What != "mcp" {
 		t.Fatalf("remuda's MCP server: %+v", mcp)
@@ -128,9 +111,6 @@ func TestTheOddOneOutIsMarkedAndOfferedWhatBringsItInLine(t *testing.T) {
 	if has(table, "instructions", "instructions", "codex") {
 		t.Fatal("an instruction file absent everywhere has a row")
 	}
-	if same := find(t, table, "herdr", "herdr.version", ""); same.State != "same" || same.Norm != "0.9.6" || same.Cells["gog"].Mark != "" || same.Cells["gog"].Action != nil || len(same.Hand) != 0 {
-		t.Fatalf("a row in line marks and offers nothing: %+v", same)
-	}
 	for _, c := range []struct {
 		section, id, arg string
 		hand             []string
@@ -140,7 +120,6 @@ func TestTheOddOneOutIsMarkedAndOfferedWhatBringsItInLine(t *testing.T) {
 		{"remuda", "mcp", "claude", nil},
 		{"claude", "claude.model", "", []string{"gog"}},
 		{"instructions", "instructions", "claude", []string{"gog"}},
-		{"herdr", "herdr.plugin", "herdr.push", []string{"gog"}},
 		{"owner/app", "repo.behind", "", []string{"gog"}},
 		{"owner/app", "repo.file", "CLAUDE.md", []string{"local", "gog"}},
 	} {

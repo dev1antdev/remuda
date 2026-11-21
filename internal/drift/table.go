@@ -90,7 +90,7 @@ func Build(machines []Machine, at time.Time) Table {
 			live = append(live, m)
 		}
 	}
-	for _, section := range []Section{agentsSection(live), herdrSection(live), remudaSection(live), claudeSection(live), instructionsSection(live)} {
+	for _, section := range []Section{agentsSection(live), remudaSection(live), claudeSection(live), instructionsSection(live)} {
 		if len(section.Rows) > 0 {
 			table.Sections = append(table.Sections, section)
 		}
@@ -245,12 +245,6 @@ func yes(a, b string) bool { return a == "yes" && b == "no" }
 
 // present ranks something there over nothing.
 func present(a, b string) bool { return a != "" && b == "" }
-
-// hookRank ranks herdr's hooks: current, then outdated, then missing.
-func hookRank(a, b string) bool {
-	rank := map[string]int{"current": 3, "outdated": 2, "missing": 1}
-	return rank[a] > rank[b]
-}
 
 // fewer ranks a checkout fewer commits behind its upstream first.
 func fewer(a, b string) bool { return len(a) < len(b) || (len(a) == len(b) && a < b) }

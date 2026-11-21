@@ -17,14 +17,14 @@ var (
 	BaselineFor = 2 * time.Minute
 	// FirstGap is the wait between the two samples of a read with no baseline.
 	FirstGap = time.Second
-	// AskAgainAfter is how long a pane whose shell herdr named but the table lacks waits before herdr is asked again.
+	// AskAgainAfter is how long a pane whose shell remuda-core named but the table lacks waits before remuda-core is asked again.
 	AskAgainAfter = 30 * time.Second
 )
 
-// Pane is a herdr pane of the machine as its last snapshot shows it.
+// Pane is a pane of the machine as its last snapshot shows it.
 type Pane struct{ ID, Workspace string }
 
-// Inputs are the service's ways into the machines: their panes as the watcher last saw them, and herdr's word on a
+// Inputs are the service's ways into the machines: their panes as the watcher last saw them, and remuda-core's word on a
 // pane's shell.
 type Inputs struct {
 	Panes    func(machineID string) []Pane
@@ -40,7 +40,7 @@ type Service struct {
 	machines map[string]*machine
 }
 
-// machine is one machine's last reading, its last ticks on Linux, and its panes' shells as herdr named them
+// machine is one machine's last reading, its last ticks on Linux, and its panes' shells as remuda-core named them
 type machine struct {
 	mu      sync.Mutex // held for a whole read: a second asker waits for its answer
 	last    *Usage
@@ -49,7 +49,7 @@ type machine struct {
 	shells  map[string]shellOf
 }
 
-// shellOf is a pane's shell as herdr named it, and when it was asked
+// shellOf is a pane's shell as remuda-core named it, and when it was asked
 type shellOf struct {
 	pid   int
 	asked time.Time
@@ -145,8 +145,8 @@ func (m *machine) cpuOf(table Table, at time.Time) (func(Proc) float64, bool) {
 	}, true
 }
 
-// roots is every pane of the machine with its shell: the one herdr named before while the table still holds it, else
-// herdr asked again — a pane whose shell the table lacks at most every AskAgainAfter; panes gone are forgotten
+// roots is every pane of the machine with its shell: the one remuda-core named before while the table still holds it, else
+// remuda-core asked again — a pane whose shell the table lacks at most every AskAgainAfter; panes gone are forgotten
 func (m *machine) roots(s *Service, machineID string, table Table, at time.Time) []Root {
 	panes := s.in.Panes(machineID)
 	live := map[string]bool{}

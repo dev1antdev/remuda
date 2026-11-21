@@ -1,5 +1,5 @@
-// Package health reads each machine's vitals and the newest agent, herdr
-// and remuda versions: the only requests remuda makes by itself.
+// Package health reads each machine's vitals and the newest agent and remuda
+// versions: the only requests remuda makes by itself.
 package health
 
 import (
@@ -23,69 +23,41 @@ type Report struct {
 	At time.Time `json:"at"`
 	OS string    `json:"os,omitempty"` // "macOS 26.6.2", "Linux 6.8.0"
 
-	Claude        string            `json:"claude,omitempty"`
-	ClaudeVia     string            `json:"claude_via,omitempty"` // brew | npm | native | "" — how to update it
-	Codex         string            `json:"codex,omitempty"`
-	CodexVia      string            `json:"codex_via,omitempty"`
-	Gemini        string            `json:"gemini,omitempty"`
-	GeminiVia     string            `json:"gemini_via,omitempty"`
-	Kimi          string            `json:"kimi,omitempty"`
-	KimiVia       string            `json:"kimi_via,omitempty"`
-	HerdrVia      string            `json:"herdr_via,omitempty"` // brew | installer | "" — how herdr is updated
-	Arch          string            `json:"arch,omitempty"`      // arm64 | amd64
-	Herdr         string            `json:"herdr,omitempty"`
-	HerdrServer   string            `json:"herdr_server,omitempty"`
-	Remuda        string            `json:"remuda,omitempty"`
-	CodeServer    string            `json:"code_server,omitempty"`  // the release under ~/.local/opt/code-server, as the installer links it
-	RemudaCore    string            `json:"remuda_core,omitempty"`  // ~/.local/bin/remuda-core's version (remuda-core.exe on Windows)
-	Statusline    bool              `json:"statusline,omitempty"`   // remuda's wrapper stands before Claude Code's status line there, keeping its plan limits
-	ClaudeLogin   *Login            `json:"claude_login,omitempty"` // when Claude Code's stored sign-in there ends (claude.go), as last read
-	ClaudeModel   string            `json:"claude_model,omitempty"` // the default model Claude Code's user settings keep there
-	ClaudeFast    bool              `json:"claude_fast,omitempty"`  // fast mode saved on in those settings: every session there starts in it
-	DiskFreeGB    float64           `json:"disk_free_gb"`
-	DiskUsedPct   int               `json:"disk_used_pct"`
-	Load1         float64           `json:"load1"`
-	Cores         int               `json:"cores,omitempty"` // what a load of 1.0 per core means
-	Uptime        string            `json:"uptime,omitempty"`
-	Model         string            `json:"model,omitempty"`         // the board or the computer: "Raspberry Pi 4 Model B Rev 1.5", "Mac15,6"
-	MemTotalMB    int               `json:"mem_total_mb,omitempty"`  // host.go: /proc/meminfo, or a Mac's hw.memsize
-	MemAvailMB    int               `json:"mem_avail_mb,omitempty"`  // what a new program could have without swapping
-	SwapTotalMB   int               `json:"swap_total_mb,omitempty"` // 0: no swap
-	SwapUsedMB    int               `json:"swap_used_mb,omitempty"`
-	TempC         float64           `json:"temp_c,omitempty"`      // the CPU's thermal zone, where one is readable without sudo (none on a Mac)
-	TempCritC     float64           `json:"temp_crit_c,omitempty"` // that zone's critical trip point
-	FreqMHz       int               `json:"freq_mhz,omitempty"`    // the CPU's clock now and its top: a Pi held back runs below it
-	FreqMaxMHz    int               `json:"freq_max_mhz,omitempty"`
-	Throttle      *Throttle         `json:"throttle,omitempty"`       // a Raspberry Pi's firmware word, or its under-voltage alarm alone
-	Battery       *Battery          `json:"battery,omitempty"`        // the machine's own battery (battery.go), none on a desktop
-	OutdatedHooks []Hook            `json:"outdated_hooks,omitempty"` // herdr's agent integrations behind what the installed herdr writes
-	Integrations  map[string]string `json:"integrations,omitempty"`   // every agent integration herdr reports, by agent: current | outdated | missing
-	Plugins       []Plugin          `json:"plugins,omitempty"`        // herdr plugins installed from GitHub, the ones `herdr plugin update` refreshes
-	Error         string            `json:"error,omitempty"`
-	History       []Sample          `json:"history,omitempty"` // the day's samples, oldest first (Collector.Report attaches them)
+	Claude      string    `json:"claude,omitempty"`
+	ClaudeVia   string    `json:"claude_via,omitempty"` // brew | npm | native | "" — how to update it
+	Codex       string    `json:"codex,omitempty"`
+	CodexVia    string    `json:"codex_via,omitempty"`
+	Gemini      string    `json:"gemini,omitempty"`
+	GeminiVia   string    `json:"gemini_via,omitempty"`
+	Kimi        string    `json:"kimi,omitempty"`
+	KimiVia     string    `json:"kimi_via,omitempty"`
+	Arch        string    `json:"arch,omitempty"` // arm64 | amd64
+	Remuda      string    `json:"remuda,omitempty"`
+	CodeServer  string    `json:"code_server,omitempty"`  // the release under ~/.local/opt/code-server, as the installer links it
+	RemudaCore  string    `json:"remuda_core,omitempty"`  // ~/.local/bin/remuda-core's version (remuda-core.exe on Windows)
+	Statusline  bool      `json:"statusline,omitempty"`   // remuda's wrapper stands before Claude Code's status line there, keeping its plan limits
+	ClaudeLogin *Login    `json:"claude_login,omitempty"` // when Claude Code's stored sign-in there ends (claude.go), as last read
+	ClaudeModel string    `json:"claude_model,omitempty"` // the default model Claude Code's user settings keep there
+	ClaudeFast  bool      `json:"claude_fast,omitempty"`  // fast mode saved on in those settings: every session there starts in it
+	DiskFreeGB  float64   `json:"disk_free_gb"`
+	DiskUsedPct int       `json:"disk_used_pct"`
+	Load1       float64   `json:"load1"`
+	Cores       int       `json:"cores,omitempty"` // what a load of 1.0 per core means
+	Uptime      string    `json:"uptime,omitempty"`
+	Model       string    `json:"model,omitempty"`         // the board or the computer: "Raspberry Pi 4 Model B Rev 1.5", "Mac15,6"
+	MemTotalMB  int       `json:"mem_total_mb,omitempty"`  // host.go: /proc/meminfo, or a Mac's hw.memsize
+	MemAvailMB  int       `json:"mem_avail_mb,omitempty"`  // what a new program could have without swapping
+	SwapTotalMB int       `json:"swap_total_mb,omitempty"` // 0: no swap
+	SwapUsedMB  int       `json:"swap_used_mb,omitempty"`
+	TempC       float64   `json:"temp_c,omitempty"`      // the CPU's thermal zone, where one is readable without sudo (none on a Mac)
+	TempCritC   float64   `json:"temp_crit_c,omitempty"` // that zone's critical trip point
+	FreqMHz     int       `json:"freq_mhz,omitempty"`    // the CPU's clock now and its top: a Pi held back runs below it
+	FreqMaxMHz  int       `json:"freq_max_mhz,omitempty"`
+	Throttle    *Throttle `json:"throttle,omitempty"` // a Raspberry Pi's firmware word, or its under-voltage alarm alone
+	Battery     *Battery  `json:"battery,omitempty"`  // the machine's own battery (battery.go), none on a desktop
+	Error       string    `json:"error,omitempty"`
+	History     []Sample  `json:"history,omitempty"` // the day's samples, oldest first (Collector.Report attaches them)
 }
-
-// Hook is one of herdr's agent integrations as `herdr integration status` reports it outdated: the version on the machine and the one the installed herdr writes.
-type Hook struct {
-	Agent string `json:"agent"`
-	Have  string `json:"have,omitempty"`
-	Want  string `json:"want,omitempty"`
-}
-
-// Plugin is a herdr plugin installed from GitHub, which `herdr plugin update` refreshes.
-type Plugin struct {
-	ID     string `json:"id"`
-	Source string `json:"source"` // owner/repo[/subdir]
-}
-
-// OutdatedHooks lists herdr's agent integrations behind the installed herdr, one "agent have < want" per line; nothing when all are current.
-const OutdatedHooks = `herdr integration status 2>/dev/null | sed -n 's/^\([a-z0-9-]*\)[^:]*: outdated (\([^)]*\)).*/\1 \2/p'`
-
-// Integrations lists every agent integration herdr reports, one "agent state" per line: current, outdated or not installed.
-const Integrations = `herdr integration status 2>/dev/null | sed -n -E 's/^([a-z0-9-]+)[^:]*: (current|outdated|not installed).*/\1 \2/p'`
-
-// GitHubPlugins lists herdr's plugins installed from GitHub, one "id owner/repo" per line.
-const GitHubPlugins = `herdr plugin list 2>/dev/null | sed -n 's/^- \([^ ]*\) .*\[github:\([^@]*\)@.*/\1 \2/p'`
 
 // Latest is what the world offers right now.
 type Latest struct {
@@ -94,7 +66,6 @@ type Latest struct {
 	Codex  string    `json:"codex,omitempty"`
 	Gemini string    `json:"gemini,omitempty"`
 	Kimi   string    `json:"kimi,omitempty"`
-	Herdr  string    `json:"herdr,omitempty"`
 	Remuda string    `json:"remuda,omitempty"`
 	Code   string    `json:"code,omitempty"` // the code-server this remuda installs (PinnedCode), not a check
 }
@@ -173,7 +144,7 @@ func (c *Collector) Report(id string) *Report {
 	return &cp
 }
 
-// Latest is the newest known Claude Code, herdr and remuda.
+// Latest is the newest known Claude Code and remuda.
 func (c *Collector) Latest() Latest {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -221,7 +192,7 @@ func (c *Collector) read(mc *machines.Machine, forceLogin bool) {
 	out, err := shell.Text(mc, Script(), 30*time.Second)
 	r := Parse(out)
 	r.At = time.Now()
-	if err != nil && r.Claude == "" && r.Herdr == "" {
+	if err != nil && r.Claude == "" {
 		r.Error = err.Error()
 	}
 	switch {
@@ -246,8 +217,6 @@ func Script() string {
 LC_ALL=C; export LC_ALL
 if command -v sw_vers >/dev/null 2>&1; then echo "os=macOS $(sw_vers -productVersion 2>/dev/null)"; else echo "os=$(uname -s) $(uname -r)"; fi
 for a in claude codex gemini kimi; do c=$(command -v "$a" 2>/dev/null); if [ -n "$c" ]; then echo "$a=$("$a" --version 2>/dev/null | head -1)"; echo "${a}_path=$(readlink "$c" 2>/dev/null || printf %s "$c")"; fi; done
-h=$(command -v herdr 2>/dev/null); if [ -n "$h" ]; then echo "herdr=$(herdr --version 2>/dev/null | head -1)"; echo "herdr_path=$(readlink "$h" 2>/dev/null || printf %s "$h")"; echo "herdr_server=$(herdr status server 2>/dev/null | sed -n 's/^version: //p' | head -1)"; fi
-if [ -n "$h" ]; then ` + OutdatedHooks + ` | sed 's/^/hook=/'; ` + GitHubPlugins + ` | sed 's/^/plugin=/'; ` + Integrations + ` | sed 's/^/integration=/'; fi
 echo "arch=$(uname -m)"
 echo "cores=$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null)"
 r="$HOME/.local/bin/remuda"; [ -x "$r" ] || r="$r.exe"; if [ -x "$r" ]; then echo "remuda=$("$r" -version 2>/dev/null)"; fi
@@ -264,7 +233,6 @@ var (
 	loadRe   = regexp.MustCompile(`load averages?: *([\d.]+)`)
 	upRe     = regexp.MustCompile(`up (.*?),\s+\d+ users?`)
 	fieldsRe = regexp.MustCompile(`\s+`)
-	agentRe  = regexp.MustCompile(`^[a-z0-9-]+$`)
 )
 
 // Parse reads the script's output.
@@ -302,26 +270,6 @@ func Parse(out string) Report {
 			r.Kimi = semver.FindString(v)
 		case "kimi_path":
 			r.KimiVia = installedVia(v)
-		case "herdr":
-			r.Herdr = semver.FindString(v)
-		case "herdr_server":
-			r.HerdrServer = semver.FindString(v)
-		case "herdr_path":
-			if installedVia(v) == "brew" {
-				r.HerdrVia = "brew"
-			} else {
-				r.HerdrVia = "installer"
-			}
-		case "hook":
-			if hook, ok := parseHook(v); ok {
-				r.OutdatedHooks = append(r.OutdatedHooks, hook)
-			}
-		case "integration":
-			parseIntegration(&r, v)
-		case "plugin":
-			if id, source, ok := strings.Cut(v, " "); ok && id != "" && source != "" {
-				r.Plugins = append(r.Plugins, Plugin{ID: id, Source: source})
-			}
 		case "arch":
 			switch v {
 			case "arm64", "aarch64":
@@ -363,35 +311,6 @@ func Parse(out string) Report {
 	}
 	host.finish(&r)
 	return r
-}
-
-// parseHook reads a probe line "claude v10 < v11": the integration's name, and the versions when herdr said them.
-func parseHook(v string) (Hook, bool) {
-	agent, rest, _ := strings.Cut(v, " ")
-	if !agentRe.MatchString(agent) {
-		return Hook{}, false
-	}
-	have, want, _ := strings.Cut(rest, " < ")
-	return Hook{Agent: agent, Have: strings.TrimSpace(have), Want: strings.TrimSpace(want)}, true
-}
-
-// parseIntegration reads a probe line "claude current" or "pi not installed" into the report's integrations.
-func parseIntegration(r *Report, v string) {
-	agent, state, _ := strings.Cut(v, " ")
-	if !agentRe.MatchString(agent) {
-		return
-	}
-	switch state {
-	case "current", "outdated":
-	case "not installed":
-		state = "missing"
-	default:
-		return
-	}
-	if r.Integrations == nil {
-		r.Integrations = map[string]string{}
-	}
-	r.Integrations[agent] = state
 }
 
 // installedVia guesses the package manager from where the binary really lives (the symlink read).
@@ -438,11 +357,6 @@ func (c *Collector) fetchLatest() {
 			log.Printf("health: %s latest: %v", a.pkg, err)
 		}
 	}
-	if v, err := fetchJSON(ctx, "https://api.github.com/repos/herdrdev/herdr/releases/latest", "tag_name"); err == nil {
-		l.Herdr = semver.FindString(v)
-	} else {
-		log.Printf("health: herdr latest: %v", err)
-	}
 	var rel Release
 	if r, err := fetchRelease(ctx, releasesURL); err == nil {
 		rel, l.Remuda = r, r.Version
@@ -452,9 +366,6 @@ func (c *Collector) fetchLatest() {
 	c.mu.Lock()
 	if l.Claude == "" {
 		l.Claude = c.latest.Claude
-	}
-	if l.Herdr == "" {
-		l.Herdr = c.latest.Herdr
 	}
 	if l.Codex == "" {
 		l.Codex = c.latest.Codex

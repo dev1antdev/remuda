@@ -1,6 +1,6 @@
 // Package drift is how every machine is set up, side by side: what the vitals already know (the agents, herdr, its
 // hooks, remuda, Claude Code's settings) and what one read-only script reads beside them — remuda's MCP server in each
-// agent's own config file, the agents' global instruction files, herdr's plugins and every repository checkout behind
+// agent's own config file, the agents' global instruction files and every repository checkout behind
 // the machine's workspaces — laid out as a table whose norm is what most machines share, the odd one out marked, with
 // the update remuda already has that brings it in line where there is one. Nothing is written and no agent is run:
 // the config files are read with grep and awk, and only names, versions, hashes and flags leave the machine.
@@ -20,7 +20,7 @@ var RepoFiles = []string{"CLAUDE.md", "AGENTS.md", ".claude/settings.json"}
 
 // Script reads the machine's setup beyond the vitals: remuda's MCP server in Claude Code's ~/.claude.json, Codex's
 // config.toml, Gemini CLI's settings.json and Kimi's ~/.kimi/mcp.json when there is one; the global instruction files
-// and every RepoFiles of a checkout as sha256 and mtime; herdr's plugins; and the main checkout of each folder given,
+// and every RepoFiles of a checkout as sha256 and mtime; and the main checkout of each folder given,
 // its remote, branch, how far it is behind its upstream as of the last fetch. One line a fact, its fields cut by US.
 func Script(dirs []string) string {
 	var quoted []string
@@ -51,7 +51,6 @@ mcpjson gemini "$HOME/.gemini/settings.json"
 fact "global${u}claude" "$HOME/.claude/CLAUDE.md"
 fact "global${u}codex" "${CODEX_HOME:-$HOME/.codex}/AGENTS.md"
 fact "global${u}gemini" "$HOME/.gemini/GEMINI.md"
-if command -v herdr >/dev/null 2>&1; then herdr plugin list 2>/dev/null | sed -n -E 's/^- ([^ ]+) .*\[([a-z]+):([^]@]*)[]@].*$/plugin \1 \2:\3/p'; fi
 repo() {
   origin=$(git config --get remote.origin.url 2>/dev/null | sed -E 's#^([a-z+]+://)[^@/]*@#\1#')
   first=""; [ -n "$origin" ] || first=$(git rev-list --max-parents=0 HEAD 2>/dev/null | tail -1)
@@ -112,36 +111,21 @@ type Checkout struct {
 
 // Facts is what the script read on one machine.
 type Facts struct {
-	MCP          map[string]bool   // by agent, whether remuda's server is registered; an agent whose config was not read is absent
-	Instructions map[string]File   // the agents' global instruction files, by agent
-	Plugins      map[string]string // herdr's plugins by id, each its source: github:owner/repo, or the kind of a local one
+	MCP          map[string]bool // by agent, whether remuda's server is registered; an agent whose config was not read is absent
+	Instructions map[string]File // the agents' global instruction files, by agent
 	Checkouts    []Checkout
 }
 
 var (
 	hashRe     = regexp.MustCompile(`^[0-9a-f]{64}$`)
-	pluginIDRe = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
 	knownAgent = map[string]bool{"claude": true, "codex": true, "gemini": true, "kimi": true}
 )
 
 // Parse reads the script's answer; a line it does not know is left out.
 func Parse(out string) Facts {
-	facts := Facts{MCP: map[string]bool{}, Instructions: map[string]File{}, Plugins: map[string]string{}}
+	facts := Facts{MCP: map[string]bool{}, Instructions: map[string]File{}}
 	byRoot := map[string]int{}
 	for _, line := range script.Lines(out) {
-		if rest, ok := strings.CutPrefix(line, "plugin "); ok {
-			id, source, _ := strings.Cut(rest, " ")
-			kind, where, _ := strings.Cut(source, ":")
-			if !pluginIDRe.MatchString(id) || kind == "" {
-				continue
-			}
-			if kind == "github" && where != "" {
-				facts.Plugins[id] = "github:" + where
-			} else {
-				facts.Plugins[id] = kind // a local plugin's path is the machine's own, never the same elsewhere
-			}
-			continue
-		}
 		fields := script.Fields(line)
 		switch {
 		case fields[0] == "mcp" && len(fields) == 3 && knownAgent[fields[1]]:

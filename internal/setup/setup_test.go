@@ -17,7 +17,7 @@ import (
 )
 
 func TestScriptsParse(t *testing.T) {
-	for name, script := range map[string]string{"setup": setupScript, "install-service": serviceScript, "install": installScript, "uninstall": uninstallScript, "install-code": codeScript, "install-mcp": mcpScript, "install-core": coreScript} {
+	for name, script := range map[string]string{"install-service": serviceScript, "install": installScript, "uninstall": uninstallScript, "install-code": codeScript, "install-mcp": mcpScript, "install-core": coreScript} {
 		cmd := exec.Command("sh", "-n")
 		cmd.Stdin = strings.NewReader(script)
 		if out, err := cmd.CombinedOutput(); err != nil {

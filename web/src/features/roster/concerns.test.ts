@@ -13,11 +13,11 @@ describe("concerns", () => {
   });
   it("offers an update per agent", () => {
     const h = health({ claude: "2.1.0", codex: "0.40.0", kimi: "2.0.0" });
-    const list = concerns(h, { at: "", claude: "2.2.0", codex: "0.41.0", kimi: "2.1.1", herdr: "0.9.1" }, "v0.5.0", false);
+    const list = concerns(h, { at: "", claude: "2.2.0", codex: "0.41.0", kimi: "2.1.1" }, "v0.5.0", false);
     expect(keys(list)).toEqual(["claude", "codex", "kimi"]);
     expect(list.map((c) => c.update)).toEqual(["claude", "codex", "kimi"]);
   });
-  it("says that a Claude Code older than 2.1.325 tells remuda-core no status, its update the same button, and shows nothing of herdr's", () => {
+  it("says that a Claude Code older than 2.1.325 tells remuda-core no status, its update the same button", () => {
     const old = health({ claude: "2.1.323", remuda_core: "rc 0.2.0" });
     const latest = { at: "", claude: "2.1.330" };
     expect(concerns(old, latest, "v0.9.0", false, [], false)).toEqual([
@@ -25,8 +25,6 @@ describe("concerns", () => {
     ]);
     expect(concerns(health({ claude: "2.1.325", remuda_core: "rc 0.2.4" }), latest, "v0.9.0", false)[0]?.text).toBe("Claude Code 2.1.330 is out (2.1.325 here)");
     expect(concerns(health({ claude: "2.1.325", remuda_core: "rc 0.2.0" }), { at: "", claude: "2.1.325" }, "v0.9.0", false, [], false)).toEqual([]);
-    const herdrBehind = health({ claude: "2.1.325", remuda_core: "rc 0.2.0", herdr: "0.9.4", herdr_server: "0.9.3", outdated_hooks: [{ agent: "claude" }] });
-    expect(concerns(herdrBehind, { at: "", claude: "2.1.325", herdr: "0.9.5" }, "v0.9.0", false, [], false)).toEqual([]);
   });
   it("says first, on a remote whose vitals find no remuda-core, that it is not installed, its button the Install row", () => {
     const list = concerns(health({ claude: "2.1.325" }), { at: "", claude: "2.1.325" }, "v0.9.0", true, [], false);
@@ -73,7 +71,7 @@ describe("concerns", () => {
     expect(updateLabel("claude")).toBe("Update");
     expect(updateLabel("remuda")).toBe("Deploy");
     expect(updateLabel("remuda-release")).toBe("Download & install");
-    expect(updateLabel("restart-herdr")).toBe("Restart");
+    expect(updateLabel("restart-claude")).toBe("Restart");
   });
   describe("in Russian", () => {
     afterEach(() => setLang("en"));
@@ -81,7 +79,7 @@ describe("concerns", () => {
       setLang("ru");
       const list = concerns(health({ claude: "2.1.325", code_server: "4.90.0" }), { at: "", claude: "2.2.0", code: "4.99.0" }, "v0.5.0", false);
       expect(list.map((c) => c.text)).toEqual(["Вышел Claude Code 2.2.0 (здесь 2.1.325)", "remuda теперь ставит code-server 4.99.0 (здесь 4.90.0)"]);
-      expect(["claude", "remuda", "restart-herdr"].map(updateLabel)).toEqual(["Обновить", "Развернуть", "Перезапустить"]);
+      expect(["claude", "remuda", "restart-claude"].map(updateLabel)).toEqual(["Обновить", "Развернуть", "Перезапустить"]);
       expect(concerns(health({}), undefined, undefined, true, [], false)[0]?.text).toBe("remuda-core не установлен");
       expect(updateLabel("core")).toBe("Установить");
     });

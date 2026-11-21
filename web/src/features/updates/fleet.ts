@@ -15,8 +15,6 @@ export function sectionTitle(section: FleetSection): string {
   switch (section.id) {
     case "agents":
       return t("Agents");
-    case "herdr":
-      return "herdr";
     case "remuda":
       return "remuda";
     case "claude":
@@ -34,14 +32,6 @@ export function rowLabel(row: FleetRow): string {
       return agent;
     case "agent.via":
       return t("{agent}: installed with", { agent });
-    case "herdr.version":
-      return t("herdr installed");
-    case "herdr.server":
-      return t("herdr's running server");
-    case "herdr.hooks":
-      return t("{agent} hooks", { agent });
-    case "herdr.plugin":
-      return t("Plugin {id}", { id: row.arg ?? "" });
     case "remuda.version":
       return "remuda";
     case "code.version":
@@ -74,20 +64,12 @@ export function rowExplain(row: FleetRow): string {
       return t("The {agent} version on each machine, as the vitals last read it.", { agent });
     case "agent.via":
       return t("How {agent} was installed there — Homebrew, npm or its own installer — which decides how it is updated.", { agent });
-    case "herdr.version":
-      return t("The herdr installed on each machine.");
-    case "herdr.server":
-      return t("The herdr server running on each machine: one still on an older version than the herdr installed is restarted onto it.");
-    case "herdr.hooks":
-      return t("herdr's {agent} hooks, which tell herdr, and so remuda, what the agent is doing: current, outdated or missing.", { agent });
-    case "herdr.plugin":
-      return t("Whether herdr's plugin {id} is installed there, and where from.", { id: row.arg ?? "" });
     case "remuda.version":
       return t("The remuda on each machine: it keeps the agents' door to your tasks there.");
     case "code.version":
       return t("The code-server the Code mode opens on each machine.");
     case "core.version":
-      return t("The remuda-core on each machine: the terminal runtime remuda moves its machines to from herdr.");
+      return t("The remuda-core on each machine: the terminal runtime remuda's agents run in.");
     case "mcp":
       return t("Whether remuda's MCP server — your task list for the agents — is registered in {agent}'s own config there.", { agent });
     case "statusline":
@@ -113,15 +95,11 @@ export function valueWords(row: FleetRow, cell: FleetCell): string {
   const value = cell.value;
   switch (row.kind) {
     case "version":
-      return value || (row.id === "herdr.server" ? t("not running") : t("not installed"));
+      return value || t("not installed");
     case "via":
       return value === "other" ? t("another way") : value;
     case "flag":
       return value === "yes" ? (row.id === "claude.fast" ? t("on") : t("yes")) : row.id === "claude.fast" ? t("off") : t("no");
-    case "hook":
-      return value === "current" ? t("current") : value === "outdated" ? t("outdated") : value === "missing" ? t("missing") : value;
-    case "plugin":
-      return !value ? t("not installed") : value.startsWith("github:") ? value.slice("github:".length) : t("local");
     case "model":
       return value === "default" ? t("Claude Code's default") : value;
     case "hash":
@@ -137,7 +115,6 @@ export function cellTip(row: FleetRow, cell: FleetCell, now = Date.now()): strin
   const when = cell.at ? ago(cell.at * 1000, now) : "";
   if (row.kind === "hash" && cell.value && cell.value !== "present") return when ? t("sha256 {hash}, changed {when}", { hash: cell.value, when }) : cell.value;
   if (row.kind === "behind") return when ? t("against {upstream}, fetched {when}", { upstream: cell.note ?? "", when }) : t("against {upstream}, never fetched there", { upstream: cell.note ?? "" });
-  if (row.kind === "plugin" && cell.value) return cell.value;
   return "";
 }
 
@@ -210,17 +187,10 @@ export function handWords(row: FleetRow, hand: string[], others: string[], missi
   switch (row.id) {
     case "agent.version":
       return missing
-        ? t("Install {agent} on {machines} with its own installer, then run remuda setup there for herdr's hooks — or leave it, if it is not wanted there.", { agent, machines })
+        ? t("Install {agent} on {machines} with its own installer — or leave it, if it is not wanted there.", { agent, machines })
         : t("Update {agent} on {machines} by hand: remuda has no update for it there.", { agent, machines });
     case "agent.via":
       return t("{agent} is installed another way on {machines}; remuda updates each the way it was installed. To match, reinstall it there by hand.", { agent, machines });
-    case "herdr.version":
-    case "herdr.server":
-      return t("Bring herdr on {machines} in line by hand: remuda setup there installs it and starts its server.", { machines });
-    case "herdr.hooks":
-      return t("Run herdr integration install {agent} on {machines}.", { agent: row.arg ?? "", machines });
-    case "herdr.plugin":
-      return missing ? t("Install the plugin on {machines} as it is on {others}, or remove it where it is not wanted.", { machines, others: others.join(", ") }) : t("The plugin comes from another place on {machines}: install it from the same one everywhere.", { machines });
     case "remuda.version":
       return t("Install the same remuda on {machines}: the installer's one line there, or Updates once a newer release is out.", { machines });
     case "code.version":

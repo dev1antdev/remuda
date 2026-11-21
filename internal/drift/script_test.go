@@ -62,9 +62,6 @@ args = ["mcp"]
 [mcp_servers.remuda.env]
 `
 
-// herdrStub answers `herdr plugin list` with one plugin from GitHub and one linked from a folder.
-const herdrStub = "#!/bin/sh\n[ \"$1 $2\" = \"plugin list\" ] && printf '2 plugins installed:\\n- herdr.push (Herdr Push) enabled [github:someone/herdr-push@f4fdb06d5413]\\n  config: /c\\n- local.one (Local) enabled [linked:/home/someone/plugins/one]\\n'\nexit 0\n"
-
 func write(t *testing.T, path, text string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -92,7 +89,6 @@ func TestScriptReadsTheConfigsAndCheckoutsOfATempHome(t *testing.T) {
 	write(t, filepath.Join(home, ".gemini/settings.json"), geminiJSON)
 	write(t, filepath.Join(home, ".codex/config.toml"), codexTOML)
 	write(t, filepath.Join(home, ".claude/CLAUDE.md"), "Be brief.\n")
-	write(t, filepath.Join(home, ".local/bin/herdr"), herdrStub)
 	git := func(dir string, args ...string) {
 		t.Helper()
 		cmd := exec.Command("git", append([]string{"-c", "user.email=e2e@remuda.invalid", "-c", "user.name=e2e", "-c", "init.defaultBranch=main"}, args...)...)
@@ -142,9 +138,6 @@ func TestScriptReadsTheConfigsAndCheckoutsOfATempHome(t *testing.T) {
 	if !claude.Present || claude.Hash != sha("Be brief.\n") || claude.Modified == 0 || facts.Instructions["codex"].Present || facts.Instructions["gemini"].Present {
 		t.Fatalf("instructions: %+v", facts.Instructions)
 	}
-	if len(facts.Plugins) != 2 || facts.Plugins["herdr.push"] != "github:someone/herdr-push" || facts.Plugins["local.one"] != "linked" {
-		t.Fatalf("plugins: %v", facts.Plugins)
-	}
 	if len(facts.Checkouts) != 1 {
 		t.Fatalf("one repository behind two folders, none for a plain one: %+v", facts.Checkouts)
 	}
@@ -169,8 +162,6 @@ func TestParseKeepsOnlyWhatItKnows(t *testing.T) {
 		"mcp" + us + "codex",
 		"global" + us + "codex" + us + us,
 		"global" + us + "gemini" + us + "nothex" + us + "1700000000",
-		"plugin bad/id github:x/y",
-		"plugin ok.one",
 		"repo" + us + "relative" + us + us + us + "main" + us + us + us + us,
 		"repo" + us + "/r" + us + us + "abc123" + us + "main" + us + us + us + us,
 		"repo" + us + "/r" + us + "dup" + us + us + "dev" + us + us + us + us,
@@ -184,9 +175,6 @@ func TestParseKeepsOnlyWhatItKnows(t *testing.T) {
 	}
 	if facts.Instructions["codex"].Present || !facts.Instructions["gemini"].Present || facts.Instructions["gemini"].Hash != "" || facts.Instructions["gemini"].value() != "present" {
 		t.Fatalf("instructions: %+v", facts.Instructions)
-	}
-	if len(facts.Plugins) != 0 {
-		t.Fatalf("plugins: %v", facts.Plugins)
 	}
 	if len(facts.Checkouts) != 1 || facts.Checkouts[0].Branch != "main" || facts.Checkouts[0].First != "abc123" || len(facts.Checkouts[0].Files) != 1 || facts.Checkouts[0].Files["AGENTS.md"].Hash != sha("x") {
 		t.Fatalf("checkouts: %+v", facts.Checkouts)

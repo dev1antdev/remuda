@@ -11,7 +11,7 @@ const usage: Usage = {
   total: { cpu: 12.4, rss_kb: 3.8 * 1024 * 1024 },
   cpu_known: true,
   workspaces: [{ id: "w1", cpu: 9, rss_kb: 3 * 1024 * 1024, top: { name: "node", rss_kb: 512 * 1024 }, terminals: [{ pane: "w1:p1", cpu: 9, rss_kb: 1 }, { pane: "w1:p2", cpu: 0, rss_kb: 1 }, { pane: "w1:p3", cpu: 0, rss_kb: 1 }] }],
-  herdr: { cpu: 0.2, rss_kb: 40960 },
+  core: { cpu: 0.2, rss_kb: 40960 },
 };
 
 describe("the machine's load", () => {
