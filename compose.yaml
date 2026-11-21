@@ -1,7 +1,8 @@
 # remuda in Docker / Portainer.
 #
-# herdr keeps running on the host; the container only bridges it to the
-# browser. Set these in Portainer's stack environment (or a .env file):
+# The container serves the page only (-server): it reaches each machine in
+# your machines.json over ssh, as a page-only host does, and speaks
+# remuda-core there. Set these in Portainer's stack environment (or a .env file):
 #
 #   HOST_HOME      the host user's home (herdr socket, ~/.claude, ~/.ssh live there)
 #   UID / GID      that user's ids, so mounted files keep their ownership
@@ -22,11 +23,11 @@ services:
     environment:
       HOME: ${HOST_HOME:-/home/herdr}
       REMUDA_TOKEN: ${REMUDA_TOKEN:-}
-    command: ["-addr", "0.0.0.0:7317", "-socket", "${HOST_HOME:-/home/herdr}/.config/herdr/herdr.sock"]
+    command: ["-addr", "0.0.0.0:7317", "-server"]
     ports:
       - "127.0.0.1:7317:7317"
     volumes:
-      # herdr's socket + remuda's own state (token, machines, push keys)
+      # remuda's own state (token, machines.json, push keys) and the ssh config beside it
       - ${HOST_HOME:-/home/herdr}/.config:${HOST_HOME:-/home/herdr}/.config
       # Claude Code transcripts for the chat lens (read-only)
       - ${HOST_HOME:-/home/herdr}/.claude:${HOST_HOME:-/home/herdr}/.claude:ro
@@ -59,11 +60,12 @@ services:
       npm_config_cache: /tmp/npm
     command: >
       sh -c "apk add --no-cache nodejs npm git openssh-client curl >/dev/null
-             && (HERDR_INSTALL_DIR=/tmp/bin sh -c 'curl -fsSL https://herdr.dev/install.sh | sh' || true)
+             && (curl -fsSL -o /tmp/bin/remuda-core https://github.com/dev1antdev/remuda-core/releases/latest/download/remuda-core-linux-x86_64 || true)
+             && mkdir -p /tmp/bin && chmod +x /tmp/bin/remuda-core 2>/dev/null || true
              && export PATH=/tmp/bin:$$PATH
              && (cd web && npm ci --no-audit --no-fund && npm run dev -- --host 0.0.0.0 &)
              && mkdir -p web/dist && touch web/dist/index.html
-             && go run ./cmd/remuda -addr 0.0.0.0:7317 -socket ${HOST_HOME:-/home/herdr}/.config/herdr/herdr.sock"
+             && go run ./cmd/remuda -addr 0.0.0.0:7317 -server"
     ports:
       - "127.0.0.1:7317:7317"
       - "127.0.0.1:5173:5173"

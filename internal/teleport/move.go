@@ -151,6 +151,9 @@ type Move struct {
 	Target    Host
 	TargetDir string                                // a checkout of the same repository on the target
 	Start     func(landed Landed, src Source) error // the agent started in the landed worktree
+	// BeforeLand is asked once the work has been copied and before it lands, on the full-bundle retry too:
+	// nil lands without asking.
+	BeforeLand func() error
 }
 
 // Run carries the work over, answering where it landed.
@@ -207,6 +210,12 @@ func (m Move) carry(src Source, targetRoot, worktrees, suffix string, full bool,
 		return Landed{}, fmt.Errorf("the work could not be copied to %s: %w", m.Target.Label(), err)
 	}
 	say("landing it in a new worktree")
+	if m.BeforeLand != nil {
+		if err := m.BeforeLand(); err != nil {
+			_, _ = shell.Text(m.Target, "rm -f "+script.Quote(pack), 30*time.Second) // nothing lands: the pack goes
+			return Landed{}, err
+		}
+	}
 	return Land(m.Target, targetRoot, pack, worktrees, suffix, say)
 }
 

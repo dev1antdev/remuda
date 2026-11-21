@@ -42,7 +42,7 @@ func mcpCmd(args []string) {
 // the person, and the first one placed serves.
 func serveMCP() {
 	door, _ := tasksapi.FindDoor()
-	tools := mcp.Tools{Client: tasksapi.Following(door), Source: os.Getenv("HERDR_PANE_ID")}
+	tools := mcp.Tools{Client: tasksapi.Following(door), Source: terminalSource()}
 	if err := mcp.New(&tools, version).Serve(os.Stdin, os.Stdout); err != nil {
 		fmt.Fprintln(os.Stderr, "mcp:", err)
 		os.Exit(1)

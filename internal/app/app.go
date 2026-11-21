@@ -90,30 +90,18 @@ type Options struct {
 	VersionCheck  bool
 	Version       string
 	Door          bool   // place the agents' door files here and on every remote (off for a scratch instance)
-	Server        bool   // serve the page only: the host is no machine of the fleet, its herdr neither needed nor kept
-	MirrorClosed  string // why this remuda writes nothing into herdr (a scratch instance beside the real one); "" writes
+	Server        bool   // serve the page only: the host is no machine of the fleet, its remuda-core neither needed nor kept
+	MirrorClosed  string // why this remuda writes nothing into herdr: always a reason now (remuda-core's sidebar is not herdr's)
 	Record        bool   // record the agents' timelapses (off for a scratch instance: the real one records)
-	Core          bool   // reach every machine through remuda-core instead of herdr (-core), while the move off herdr is built
 	HerdrStops    bool   // stop herdr's server on a machine moved to remuda-core at the person's press (never a scratch instance: herdr there is the real one's)
 }
 
 // Run builds remuda and serves until ctx ends.
 func Run(ctx context.Context, o Options) error {
-	bin, err := herdr.FindBinary(o.HerdrBin)
-	if err != nil && !o.Server && !o.Core {
-		return fmt.Errorf("herdr: %w", err)
-	}
-	if o.Core && o.MirrorClosed == "" {
-		o.MirrorClosed = "this remuda speaks remuda-core (-core), which has no herdr sidebar to write into"
-	}
 	if o.Server {
-		log.Print("serving the page only (-server): this machine is none of the cockpit's; its herdr is neither asked nor kept")
-	} else if o.Core {
-		log.Print("speaking remuda-core on every machine (-core): herdr is neither asked nor kept, its list of machines aside")
-	} else if err := herdr.EnsureServer(bin, o.Socket); err != nil {
-		log.Printf("WARNING: herdr is not answering at %s (%v); remuda will keep trying", o.Socket, err)
-	} else if version, protocol, err := herdr.NewClient(o.Socket).Ping(); err == nil {
-		log.Printf("connected to herdr %s (protocol %d) at %s", version, protocol, o.Socket)
+		log.Print("serving the page only (-server): this machine is none of the cockpit's; its remuda-core is neither asked nor kept")
+	} else {
+		log.Print("speaking remuda-core on every machine: herdr is neither asked nor kept")
 	}
 	ui, err := web.Assets()
 	if err != nil {
@@ -144,13 +132,8 @@ func Run(ctx context.Context, o Options) error {
 	} else {
 		log.Print("the agents' door stays closed: no agent-key / agent-url files are placed here or on a remote machine (-door opens it)")
 	}
-	var fleet *machines.Manager
-	if o.Core {
-		fleet = machines.NewCoreManager(o.Dir, bin, door, o.Server)
-		fleet.SetMovedHerdr(movedHerdrBin(bin, o.HerdrBin), o.Socket)
-	} else {
-		fleet = machines.NewManager(o.Dir, o.Socket, bin, door)
-	}
+	fleet := machines.NewCoreManager(o.Dir, "", door, o.Server) // no herdr binary: its list of machines is not read
+	fleet.SetMovedHerdr("", o.Socket)                           // herdr, on PATH, stays for the move off it at the person's press
 	fleet.SetServer(o.Server)
 	defer fleet.Close()
 	if local, err := fleet.Get(machines.LocalID); err == nil && o.Door && !o.Server {
@@ -455,7 +438,6 @@ func Run(ctx context.Context, o Options) error {
 		activity.Add(sent.Entry(sent.Remuda, text, false, machineID, paneID, place.Workspace))
 		return nil
 	}
-	keeper := &herdr.Keeper{Bin: bin, Socket: o.Socket}
 	// the machines kept awake while their agents work: the hold is let go before the fleet's masters close
 	hostname, _ := os.Hostname()
 	keepAwake := awake.New(o.Dir, func(id string) (shell.Host, bool) {
@@ -630,9 +612,6 @@ func Run(ctx context.Context, o Options) error {
 		}
 		hub.RosterChanged()
 	})
-	if !o.Server && !o.Core {
-		events.Subscribe(bus, func(e events.LocalHerdrDown) { keeper.Revive(e.Err) })
-	}
 	events.Subscribe(bus, func(e events.Snapshot) { keepAwake.Observe(e.Machine, awake.Working(e.Snap)) })
 	events.Subscribe(bus, func(e events.MachineRemoved) { keepAwake.Forget(e.Machine) })
 	events.Subscribe(bus, func(e events.MachineRemoved) { shells.Forget(e.Machine) })
@@ -780,9 +759,7 @@ func Run(ctx context.Context, o Options) error {
 	events.Subscribe(bus, func(e events.MachineRemoved) { projectSettings.Forget(e.Machine) })
 	repoSync := repositories(o.Dir, fleet, watcher, reviews, turns.Tracker, ownWorkspace)
 	gitOps, stage := gitWrites(watcher, turns.Tracker), stageWrites(fleet, watcher, turns)
-	if o.Core {
-		holdCheckoutWrites(gitOps, stage, repoSync, turns)
-	}
+	holdCheckoutWrites(gitOps, stage, repoSync, turns, herdrStillThere(fleet))
 	events.Subscribe(bus, func(e events.MachineRemoved) { repoSync.Forget(e.Machine, true) })
 	arenas := &arena.Service{Store: arena.Open(o.Dir), Machines: fleet, Watch: watcher, Input: input, Tasks: taskStore, Notify: pushSvc.Notify, Dir: o.Dir,
 		ModelOf: func(machineID, paneID string) string {
@@ -790,51 +767,52 @@ func Run(ctx context.Context, o Options) error {
 			return d.Name
 		}}
 	srv = &server.Server{
-		Machines:  fleet,
-		Watch:     watcher,
-		Input:     input,
-		Chat:      chats,
-		Updates:   updater,
-		Tasks:     taskStore,
-		Launcher:  launcher,
-		Push:      pushSvc,
-		Feed:      activity,
-		Said:      sayings,
-		PRs:       requests,
-		Recap:     recaps,
-		Radar:     tracker,
-		Usage:     meter,
-		UsageDays: usageDays,
-		Budgets:   budgets,
-		Health:    vitals,
-		Review:    reviews,
-		Schedules: schedules,
-		Quick:     quick.New(o.Dir),
-		Recipes:   cookbook,
-		Retire:    retiring,
-		Prefs:     prefs.New(o.Dir),
-		Code:      code.New(o.CodePort),
-		Complete:  complete.New(),
-		Guard:     auth.NewGuard(o.Token, devices, keys),
-		Keys:      keys,
-		UI:        ui,
-		Live:      hub,
-		Awake:     keepAwake,
-		Icons:     icons.New(o.Dir),
-		Notes:     notes.Open(o.Dir),
-		Arena:     arenas,
-		Limits:    planLimits,
-		Scratch:   shells,
-		Jira:      issues,
-		Backup:    backups,
-		SelfPort:  auth.PortOf(o.Addr),
-		Opinions:  opinions,
-		Subagents: subagentCounts,
-		Scorecard: &scorecard.Service{Tasks: taskStore, Review: reviews, Arenas: arenas.Store},
-		Mirror:    mirrored,
-		Timelapse: recorder,
-		Triggers:  paneTriggers,
-		Drift:     fleetSetup,
+		Machines:    fleet,
+		Watch:       watcher,
+		Input:       input,
+		Chat:        chats,
+		Updates:     updater,
+		Tasks:       taskStore,
+		Launcher:    launcher,
+		Push:        pushSvc,
+		Feed:        activity,
+		Said:        sayings,
+		PRs:         requests,
+		Recap:       recaps,
+		Radar:       tracker,
+		Usage:       meter,
+		UsageDays:   usageDays,
+		Budgets:     budgets,
+		Health:      vitals,
+		HerdrMayRun: herdrStillThere(fleet),
+		Review:      reviews,
+		Schedules:   schedules,
+		Quick:       quick.New(o.Dir),
+		Recipes:     cookbook,
+		Retire:      retiring,
+		Prefs:       prefs.New(o.Dir),
+		Code:        code.New(o.CodePort),
+		Complete:    complete.New(),
+		Guard:       auth.NewGuard(o.Token, devices, keys),
+		Keys:        keys,
+		UI:          ui,
+		Live:        hub,
+		Awake:       keepAwake,
+		Icons:       icons.New(o.Dir),
+		Notes:       notes.Open(o.Dir),
+		Arena:       arenas,
+		Limits:      planLimits,
+		Scratch:     shells,
+		Jira:        issues,
+		Backup:      backups,
+		SelfPort:    auth.PortOf(o.Addr),
+		Opinions:    opinions,
+		Subagents:   subagentCounts,
+		Scorecard:   &scorecard.Service{Tasks: taskStore, Review: reviews, Arenas: arenas.Store},
+		Mirror:      mirrored,
+		Timelapse:   recorder,
+		Triggers:    paneTriggers,
+		Drift:       fleetSetup,
 
 		Collisions: radarOfCollisions,
 		Undo:       turns,
@@ -916,12 +894,21 @@ func tailnetPreviews(node func() *tsnetx.Node) func(port int, host string) (net.
 	}
 }
 
-// movedHerdrBin is the binary of the herdr this host ran before the move to remuda-core: the one found, else a path
-// the person gave with -herdr-bin, kept although it is not there any more, so the look at its server says it cannot
-// tell rather than that none runs; "" lets the look find herdr where it would be.
-func movedHerdrBin(found, asked string) string {
-	if found == "" && strings.ContainsAny(asked, `/\`) {
-		return asked
+// herdrStillThere asks herdr's own status on the machine at this very moment, on the endpoint its stop and the move's
+// recovery use: its agents may hold a checkout there until its server is stopped at the person's press, and a check
+// that cannot tell holds too. The vitals say the same for the page, but a probe a quarter of an hour old is no proof
+// at the moment a write is pressed.
+func herdrStillThere(fleet *machines.Manager) func(machineID string) string {
+	return func(machineID string) string {
+		mc, err := fleet.Get(machineID)
+		if err != nil {
+			return herdrUnseen
+		}
+		bin, socket := mc.MovedHerdr()
+		running, err := herdr.Serving(mc, bin, socket)
+		if err != nil || running {
+			return herdrUnseen
+		}
+		return ""
 	}
-	return found
 }

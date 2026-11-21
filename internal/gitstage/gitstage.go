@@ -26,6 +26,9 @@ const writeGit = `git --literal-pathspecs -c core.quotepath=off`
 // shows, and its top folder as git names it in the machine's own spelling — "" when none: a write would land under it.
 type Service struct {
 	Busy func(machineID, dir, top string) string
+	// Advisory says the same for a look at the lens, cheaply: a reader says who is at work, never asks another
+	// runtime, and nil reads Busy.
+	Advisory func(machineID, dir, top string) string
 
 	mu    sync.Mutex
 	locks map[string]*sync.Mutex

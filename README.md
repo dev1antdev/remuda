@@ -13,19 +13,19 @@ A from-scratch, auditable replacement for
 
 - **One Go binary.** The UI is embedded; `go build` from this repo is the
   whole supply chain. No Bun, no npm at runtime, nothing phoning home.
-- **herdr owns the agents.** remuda is only a bridge to herdr's local RPC
-  socket — your workspaces, tabs, panes, worktrees and agent statuses are
-  herdr's own, and nothing breaks if remuda restarts.
+- **remuda-core owns the agents.** Your workspaces, tabs, panes, worktrees
+  and agent statuses are remuda-core's own, and nothing breaks if remuda
+  restarts. herdr is neither asked nor kept.
 - **Every PC you SSH to.** Add a remote machine by its ssh host; remuda
-  reaches its herdr over one OpenSSH ControlMaster (your keys, your
+  reaches its remuda-core over one OpenSSH ControlMaster (your keys, your
   ~/.ssh/config, your tunnels) and shows its workspaces, terminals and chat
-  beside the local ones. No daemon to install on the remote.
+  beside the local ones. Nothing runs there but remuda-core.
 - **Read-only on your data.** The chat view reads Claude Code's own session
-  files under `~/.claude/projects/` (resolved through herdr's exact session
-  id); remuda never writes them. Sending a message goes through herdr's
-  `agent.prompt`, exactly like typing into the pane.
+  files under `~/.claude/projects/` (resolved through the agent's process);
+  remuda never writes them. Sending a message goes through remuda-core's
+  `terminal.send`, exactly like typing into the pane.
 - **No telemetry, no third-party services.** The server talks to your
-  browser, to herdr, and to the SSH hosts you add. That's the complete list.
+  browser, to remuda-core, and to the SSH hosts you add. That's the complete list.
 
 ## How it works
 
@@ -791,7 +791,7 @@ fast-forwards it into `main` — so `main` is always what is out — and
 check, `govulncheck`, `npm audit` (the page's own dependencies must be
 clean; the build and test tools' advisories are reported, not fatal) and a secret scan of the whole history
 on every push to `main` or `release` and every pull request, and on
-`release` the end-to-end smoke as well: a throwaway herdr, a remuda of
+`release` the end-to-end smoke as well: a throwaway remuda-core, a remuda of
 its own and headless Chrome, a scratch workspace typed into and read
 back, then every screen drawn at a desk's width and a phone's in English
 and Russian and checked for its place on the screen — nothing past an
@@ -807,28 +807,27 @@ door, keep-awake, the Changes lens, the file viewer, the search,
 
 The long way, piece by piece:
 
-Requirements: Go 1.22+, Node 18+ (build only), herdr 0.9+ installed (its
-server need not be running: remuda starts it).
+Requirements: Go 1.22+, Node 18+ (build only), remuda-core 0.2.4+ installed
+(its core need not be running: `rc connect` starts one where remuda reaches).
 
 ```bash
 make build        # builds web UI + go binary into bin/remuda
 ./bin/remuda      # listens on http://127.0.0.1:7317
 ```
 
-Flags: `-addr`, `-socket` (herdr socket path), `-herdr-bin`.
+Flags: `-addr`, `-code-port`, `-server`, `-tailscale` and `-h` for the rest. It speaks remuda-core to every machine: herdr is neither asked nor kept.
 
 ### Remote machines
 
-Every machine saved in herdr (`herdr machine list`) appears automatically —
-add a PC in herdr and remuda picks it up within 30s. **+ PC**
-in the sidebar adds an extra one by any ssh destination your OpenSSH reaches
-with keys. Either way remuda brings up one `ControlMaster` to it, autodetects
-the remote herdr binary (incl. `~/.local/bin/herdr`) and socket, reaches its
-RPC through a forwarded unix socket — or through `nc -U` over the same
-connection when that sshd refuses socket forwarding, as Dropbear does; every
+**+ PC**
+in the sidebar adds a machine by any ssh destination your OpenSSH reaches
+with keys. remuda brings up one `ControlMaster` to it, looks for
+`remuda-core` (`~/.local/bin`, `/opt/homebrew/bin`, `/usr/local/bin`,
+`/usr/bin`), and speaks its protocol through a `remuda-core connect` over the
+master — one connection, one place for RPC and the terminals — or says
+`remuda core -host H` when none is installed there. Every
 script goes over the session's stdin, so a machine whose login shell is
-fish or tcsh, or whose sshd is Dropbear, runs it as written — and runs
-`herdr terminal attach` over the master for live terminals. Nothing is
+fish or tcsh, or whose sshd is Dropbear, runs it as written. Nothing is
 installed on the remote (when no herdr server answers there, remuda starts
 one, as the user); removing a machine tears the SSH connection down and
 touches nothing there.
@@ -1384,7 +1383,7 @@ places no agent door of its own, here or on your other machines, so the
 agents keep talking to the real one (`-door` opens it anyway, `-no-door`
 closes it for any instance). It also writes nothing into herdr — no
 figures in its sidebar, no toasts, so the two never fight over the same
-panes (`-mirror` writes anyway) — and records no timelapses of your
+panes — and records no timelapses of your
 screens and keeps none of the agents' turns to undo (`-record` does both
 anyway).
 
@@ -1395,7 +1394,7 @@ make server    # go run, API on :7317
 make dev       # vite dev server on :5173, proxies /api and /ws
 make typecheck # tsc + go vet
 make webtest   # vitest on the page's pure modules
-make e2e       # the end-to-end smoke and the display checks: throwaway herdr + remuda + headless Chrome
+make e2e       # the end-to-end smoke and the display checks: throwaway remuda-core + remuda + headless Chrome
 ```
 
 When the page stalls — nothing clickable for a moment — the browser

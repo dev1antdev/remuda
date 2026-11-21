@@ -194,3 +194,12 @@ func coreCmd(args []string) {
 		os.Exit(1)
 	}
 }
+
+// terminalSource is what a task an agent makes here is marked with: the core terminal it runs in, else the herdr
+// pane, so a task list read while both run still names the right one.
+func terminalSource() string {
+	if id := os.Getenv("RC_TERMINAL_ID"); id != "" {
+		return id
+	}
+	return os.Getenv("HERDR_PANE_ID")
+}

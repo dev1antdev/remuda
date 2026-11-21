@@ -48,7 +48,24 @@ type Outcome struct {
 	BranchKept    string `json:"branch_kept,omitempty"` // why the branch stays, the folder gone: git's line, not merged
 }
 
-// Tidy takes a worktree down once nothing in it would be lost; what stays, and why, is in the outcome.
+// Hold is why a worktree must be left as it is: herdr's server still answers on its machine, or a check that cannot
+// tell, so its agents there — not the ones this remuda sees — may hold it. "" when there is no endpoint to ask or
+// herdr's own status says its server is stopped.
+func Hold(host shell.Shell) string {
+	moved, ok := host.(interface{ MovedHerdr() (string, string) })
+	if !ok {
+		return ""
+	}
+	bin, socket := moved.MovedHerdr()
+	if running, err := herdr.Serving(host, bin, socket); running || err != nil {
+		return "herdr's server may still run there, and its agents are not the ones remuda sees"
+	}
+	return ""
+}
+
+// Tidy takes a worktree down once nothing in it would be lost; what stays, and why, is in the outcome. A machine
+// whose herdr server still runs keeps it: herdr's agents there are not the ones this remuda sees, and may hold it —
+// asked here, at the removal, so a close, a leftover and a scene's tidy are all held alike.
 func Tidy(host shell.Shell, folder string, landed []Landed) Outcome {
 	out := Outcome{Path: folder}
 	info, err := Inspect(host, folder)
@@ -59,6 +76,11 @@ func Tidy(host shell.Shell, folder string, landed []Landed) Outcome {
 	out.Branch = info.Branch
 	if info.Dirty != "" {
 		out.Kept = "uncommitted changes (" + info.Dirty + ")"
+		return out
+	}
+	// Asked here, at the removal itself: the inspection above can take half a minute, and herdr may have started in it.
+	if why := Hold(host); why != "" {
+		out.Kept = why
 		return out
 	}
 	said, err := shell.Text(host, RemoveScript(info, landed), Timeout)

@@ -34,8 +34,6 @@ func main() {
 		}
 	}
 	addr := flag.String("addr", "127.0.0.1:7317", "listen address (keep it loopback; use tailscale serve or an SSH tunnel for remote access)")
-	herdrBin := flag.String("herdr-bin", "herdr", "herdr binary used for `terminal attach`")
-	socket := flag.String("socket", herdr.SocketPath(), "herdr server socket")
 	codePort := flag.Int("code-port", code.DefaultPort, "port each machine's code-server listens on (127.0.0.1, auth none; `remuda code` installs it)")
 	printToken := flag.Bool("print-token", false, "print the access token and exit")
 	showVersion := flag.Bool("version", false, "print the version and exit")
@@ -44,10 +42,8 @@ func main() {
 	noCheck := flag.Bool("no-version-check", false, "never ask npm and GitHub what the newest Claude Code, herdr and remuda are")
 	noDoor := flag.Bool("no-door", false, "keep the agents' door closed: no agent-key / agent-url files here or on a remote machine (a scratch instance beside the real one must not overwrite the real one's)")
 	withDoor := flag.Bool("door", false, "open the agents' door although REMUDA_STATE_DIR is set, which closes it by itself")
-	withMirror := flag.Bool("mirror", false, "write remuda's figures and alerts into herdr although REMUDA_STATE_DIR is set, which keeps them out by itself")
 	withRecord := flag.Bool("record", false, "record the agents' timelapses and keep their turns to undo although REMUDA_STATE_DIR is set, which leaves both to the real instance")
 	serverOnly := flag.Bool("server", os.Getenv("REMUDA_SERVER") == "1", "serve the page only (also REMUDA_SERVER=1): this machine is no machine of the cockpit — no workspaces here, its herdr neither needed nor kept — and its vitals stand behind the Server place on the rail; without it (the default, a client of its own herdr) the machine remuda runs on is one of the cockpit's machines")
-	useCore := flag.Bool("core", os.Getenv("REMUDA_CORE") == "1", "reach every machine through remuda-core instead of herdr (also REMUDA_CORE=1): for trying the move off herdr in a scratch instance beside the real one, gone once the move is made")
 	flag.Usage = help
 	flag.Parse()
 
@@ -78,14 +74,13 @@ func main() {
 	defer stop()
 	err = app.Run(ctx, app.Options{
 		Dir: dir, Token: token, ShowSignIn: created || interactive(),
-		Addr: *addr, HerdrBin: *herdrBin, Socket: *socket, CodePort: *codePort,
+		Addr: *addr, HerdrBin: "herdr", Socket: herdr.SocketPath(), CodePort: *codePort,
 		Tailscale: *tailscale, TailscaleName: *tsName, AuthKey: os.Getenv("TS_AUTHKEY"),
 		VersionCheck: !*noCheck, Version: version,
 		Door:         doorOpen(*noDoor, *withDoor, os.Getenv("REMUDA_STATE_DIR") != ""),
-		MirrorClosed: mirrorClosed(*withMirror, os.Getenv("REMUDA_STATE_DIR") != ""),
+		MirrorClosed: mirrorReason,
 		Record:       recordsHere(*withRecord, os.Getenv("REMUDA_STATE_DIR") != ""),
 		Server:       *serverOnly,
-		Core:         *useCore,
 		HerdrStops:   herdrStops(os.Getenv("REMUDA_STATE_DIR") != ""),
 	})
 	if err != nil {
@@ -103,14 +98,9 @@ func doorOpen(noDoor, withDoor, scratch bool) bool {
 	return !scratch || withDoor
 }
 
-// mirrorClosed says why this instance writes nothing into herdr, "" when it does: a scratch instance (REMUDA_STATE_DIR
-// set) beside the real one would fight it over the same panes and pop every toast twice, unless -mirror asks.
-func mirrorClosed(withMirror, scratch bool) string {
-	if scratch && !withMirror {
-		return "a scratch instance (REMUDA_STATE_DIR) leaves herdr to the real remuda; -mirror lets it write"
-	}
-	return ""
-}
+// mirrorReason is why remuda writes nothing into herdr any more: it speaks remuda-core everywhere, and herdr's
+// sidebar has nothing of that (Core 26f takes the mirror away).
+const mirrorReason = "this remuda speaks remuda-core, whose sidebar herdr does not have"
 
 // windowsServes is what remuda on Windows says when asked to serve the page: there it is the helper a cockpit reaches.
 const windowsServes = "remuda on Windows does not serve the page: it is the helper a cockpit on a Mac or Linux reaches over ssh (remuda setup -host <this PC> there). Its commands here: remuda tasks, remuda mcp, remuda statusline, remuda core, remuda -version."
@@ -128,10 +118,10 @@ func herdrStops(scratch bool) bool { return !scratch }
 // help is `remuda -h`: the server's flags, and the commands a person with nothing but the binary needs to know are there.
 func help() {
 	w := flag.CommandLine.Output()
-	fmt.Fprint(w, `remuda — a browser and phone cockpit for the coding agents herdr runs
+	fmt.Fprint(w, `remuda — a browser and phone cockpit for the coding agents remuda-core runs
 
   remuda [flags]       the server (the background service runs this); -server for a host that only serves the page
-  remuda setup         herdr, its server, the agent hooks, remuda-core and the service, here or -host H
+  remuda setup         remuda-core, the agent hooks and the service, here or -host H
   remuda code          code-server for the Code mode, here or -host H
   remuda core          remuda-core, the terminal runtime remuda moves to, here or -host H
   remuda mcp           your task list for the coding agents, over MCP; mcp install registers it with each agent, here or -host H

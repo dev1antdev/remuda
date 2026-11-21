@@ -79,7 +79,7 @@ func withoutHerdr(offered []Update) []Update {
 }
 
 // herdrs says the update is herdr's own — its update, its hooks, integrations and plugins, a restart of its server —
-// which a machine reached through remuda-core is neither offered nor run (machines.ErrOnCore): herdr's agents there are
+// which a machine reached through remuda-core is not offered (withoutHerdr): herdr's agents there are
 // not the ones this remuda sees
 func herdrs(what string) bool {
 	switch what {
@@ -134,7 +134,7 @@ func (s *Service) Start(mc *machines.Machine, what, command string) (jobs.Job, e
 	if command == "" { // the promise is "what was shown is what runs": a run without the shown text is refused
 		return jobs.Job{}, fmt.Errorf("the command shown must come back with the request")
 	}
-	if mc.OnCore() && herdrs(what) {
+	if mc.OnCore() && herdrs(what) { // a tab opened before the move may still hold herdr's command
 		return jobs.Job{}, machines.ErrOnCore
 	}
 	report := s.Health.Report(mc.ID())

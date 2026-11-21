@@ -1,5 +1,5 @@
 // The end-to-end smoke scripts/e2e.sh runs: headless Chrome over the DevTools protocol against a remuda of
-// its own on a throwaway herdr. Sign in, a scratch workspace through the API, the terminal typed into and
+// its own on a throwaway remuda-core. Sign in, a scratch workspace through the API, the terminal typed into and
 // read back, the chat, Review, Activity and the palette, then the workspace closed. One line per
 // step; the first failure ends the run with a non-zero exit. Node's own fetch and WebSocket, no dependency.
 import { writeFileSync } from "node:fs";
@@ -61,7 +61,7 @@ socket.onmessage = (message) => {
   if (msg.method === "Fetch.requestPaused") void dressWindows(msg.params);
 };
 // dressWindows plays the local machine as a Windows PC in the browser's copy of the roster: herdr has no terminal attach
-// there, so the page shows the screen terminal; the screen and the typing stay the throwaway herdr's own
+// there, so the page shows the screen terminal; the screen and the typing stay the throwaway remuda-core's own
 async function dressWindows({ requestId, responseStatusCode, responseHeaders = [] }) {
   const reply = await send("Fetch.getResponseBody", { requestId });
   if (responseStatusCode !== 200 || !reply.result) return send("Fetch.continueRequest", { requestId });

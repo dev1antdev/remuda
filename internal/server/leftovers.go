@@ -10,16 +10,14 @@ import (
 // Leftover worktrees: the ones under a machine's ~/.herdr/worktrees no workspace has open — closed in herdr itself, or
 // before closes took their worktrees down — listed, and the clean ones removed at the person's word.
 
-// errLeftoversOnCore is why a machine reached through remuda-core lists and removes no leftover worktree: herdr's
-// agents there, which this remuda does not see, may have one open.
-var errLeftoversOnCore = errors.New("leftover worktrees are not read on a machine reached through remuda-core: herdr's agents there, which this remuda does not see, may have them open")
-
-// heldOnCore answers the refusal when the fleet is reached through remuda-core, and says so: every machine then is,
-// whichever one the request names.
-func (s *Server) heldOnCore(w http.ResponseWriter) bool {
-	if s.Machines.Core() {
-		httpErr(w, http.StatusConflict, errLeftoversOnCore)
-		return true
+// heldByHerdr answers the refusal for a machine whose herdr server may still run — its agents are not the ones remuda
+// sees and may hold the checkout — and says why. The check is asked again as each leftover is taken down.
+func (s *Server) heldByHerdr(w http.ResponseWriter, machineID string) bool {
+	if s.HerdrMayRun != nil {
+		if reason := s.HerdrMayRun(machineID); reason != "" {
+			httpErr(w, http.StatusConflict, errors.New(reason))
+			return true
+		}
 	}
 	return false
 }
@@ -44,11 +42,11 @@ func (s *Server) openFolders(machineID string) ([]string, error) {
 // handleLeftovers is GET /api/machines/{id}/leftovers: the worktrees no workspace has open, each with its branch, its
 // first uncommitted change and its size.
 func (s *Server) handleLeftovers(w http.ResponseWriter, r *http.Request) {
-	if s.heldOnCore(w) {
-		return
-	}
 	mc, _, _, ok := s.ready(w, r, r.PathValue("id"))
 	if !ok {
+		return
+	}
+	if s.heldByHerdr(w, mc.ID()) {
 		return
 	}
 	open, err := s.openFolders(mc.ID())
@@ -66,15 +64,20 @@ func (s *Server) handleLeftovers(w http.ResponseWriter, r *http.Request) {
 
 // handleLeftoversRemove is POST /api/machines/{id}/leftovers/remove {paths}: each path still a leftover is taken down
 // as a close takes one down; a path that is no leftover now — opened again, or never one — is left alone and said so.
+// Each eligible removal asks herdr's own status first: a server started while the scan ran leaves the rest withheld,
+// with what went still told.
 func (s *Server) handleLeftoversRemove(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Paths []string `json:"paths"`
 	}
-	if !decode(w, r, &req) || s.heldOnCore(w) {
+	if !decode(w, r, &req) {
 		return
 	}
 	mc, _, _, ok := s.ready(w, r, r.PathValue("id"))
 	if !ok {
+		return
+	}
+	if s.heldByHerdr(w, mc.ID()) {
 		return
 	}
 	open, err := s.openFolders(mc.ID())

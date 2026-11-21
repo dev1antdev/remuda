@@ -45,6 +45,7 @@ type Config struct {
 	RemoteSocket string `json:"remote_socket,omitempty"` // default: herdr's socket under the remote home
 	HerdrBin     string `json:"herdr_bin,omitempty"`     // default: autodetected
 	Source       string `json:"source,omitempty"`        // SourceHerdr, or "" when added here
+	HerdrStopped bool   `json:"herdr_stopped,omitempty"` // its herdr server was stopped at the person's press: this remuda writes checkouts there
 }
 
 type Manager struct {
@@ -52,7 +53,7 @@ type Manager struct {
 	machines map[string]*Machine
 	order    []string
 	path     string // machines.json
-	dir      string // the state dir, where labels.json lives
+	dir      string // the state dir, where labels.json and herdr-stopped.json live
 	names    map[string]string
 	macs     map[string]string // the MAC addresses, for the magic packet that wakes a sleeping machine
 	placed   []string          // the person's order of the machines, by id (order.json); order is the arrival's

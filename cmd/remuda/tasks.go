@@ -39,7 +39,7 @@ func tasksCmd(args []string) {
 		os.Exit(1)
 	}
 	client := tasksapi.New(door)
-	tools := &mcp.Tools{Client: client, Source: os.Getenv("HERDR_PANE_ID")}
+	tools := &mcp.Tools{Client: client, Source: terminalSource()}
 	var text string
 	var answer any
 	switch args[0] {

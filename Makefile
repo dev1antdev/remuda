@@ -36,7 +36,7 @@ typecheck: web/node_modules
 	cd web && npm run typecheck
 	go vet ./...
 
-# The end-to-end smoke (scripts/e2e.sh): a throwaway herdr server, a remuda of its own and
+# The end-to-end smoke (scripts/e2e.sh): a throwaway remuda-core, a remuda of its own and
 # headless Chrome driven by e2e/smoke.mjs; nothing of the person's is touched.
 e2e: build
 	E2E_BIN=$(CURDIR)/bin/remuda sh scripts/e2e.sh

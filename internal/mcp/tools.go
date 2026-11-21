@@ -23,7 +23,7 @@ var priorities = []string{"none", "low", "medium", "high", "urgent", "do now"}
 // Tools is the task list as the tools see it.
 type Tools struct {
 	Client *tasksapi.Client
-	Source string           // what a task made here is marked with: the agent's pane, from HERDR_PANE_ID
+	Source string           // what a task made here is marked with: its terminal, from RC_TERMINAL_ID else HERDR_PANE_ID
 	Now    func() time.Time // the clock, for the spans agents_list says; nil is time.Now
 }
 

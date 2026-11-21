@@ -224,6 +224,9 @@ func (s *Server) handleWorkspaceClose(w http.ResponseWriter, r *http.Request) {
 // other folder, which stays for Leftover worktrees, and
 // the requests its agents named that were read as merged — from the snapshot before the close
 func (s *Server) madeWorktree(mc *machines.Machine, id string) (string, []worktrees.Landed) {
+	if s.HerdrMayRun != nil && s.HerdrMayRun(mc.ID()) != "" {
+		return "", nil // herdr's agents may still hold it: the close takes the workspace alone
+	}
 	snap, _ := s.Watch.Snapshot(mc.ID())
 	if snap == nil {
 		return "", nil

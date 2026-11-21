@@ -122,7 +122,7 @@ type rosterMachine struct {
 	Host     string            `json:"host,omitempty"`
 	Source   string            `json:"source,omitempty"`
 	OS       string            `json:"os"`             // darwin | linux | windows as its connection read it, "" before a remote's first; a Windows machine has no live attach
-	Core     bool              `json:"core,omitempty"` // reached through remuda-core instead of herdr (-core)
+	Core     bool              `json:"core,omitempty"` // reached through remuda-core: every machine is, since Core 26e
 	State    string            `json:"state"`          // connected | connecting | error
 	Error    string            `json:"error,omitempty"`
 	Reached  bool              `json:"reached,omitempty"` // its ssh master is up, though its herdr or remuda-core may not answer: nothing to wake

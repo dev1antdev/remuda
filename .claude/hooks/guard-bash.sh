@@ -1,7 +1,7 @@
 #!/bin/sh
 # Claude Code PreToolUse hook for Bash: refuses the few commands that would
 # reach the person's real herdr or steal their attach. The rules are the
-# ones CLAUDE.md spells out under Invariants and "A throwaway herdr server
+# ones CLAUDE.md spells out under Invariants and "A throwaway remuda-core
 # for a test"; the rest of Bash is left alone. Exit 2 refuses and hands
 # stderr to the agent as the reason.
 . "$(dirname "$0")/common.sh"
@@ -47,7 +47,7 @@ fi
 # between the words).
 core='(^|[^[:alnum:]_.-])(remuda-core|rc)([[:space:]]+-[^[:space:]]+)*[[:space:]]+(server([[:space:]]+-[^[:space:]]+)*[[:space:]]+stop|serve)([^[:alnum:]_-]|$)'
 if printf '%s' "$cmd" | tr -d "\"'" | grep -Eq -e "$core"; then
-  refuse "'remuda-core server stop' and 'remuda-core serve' may reach the person's own core and every agent in it, whatever socket the command names. A throwaway core is started and stopped by scripts/e2e.sh (E2E_BACKEND=core) or internal/core/coretest; the person stops their own core themselves."
+  refuse "'remuda-core server stop' and 'remuda-core serve' may reach the person's own core and every agent in it, whatever socket the command names. A throwaway core is started and stopped by scripts/e2e.sh or internal/core/coretest; the person stops their own core themselves."
 fi
 
 exit 0
