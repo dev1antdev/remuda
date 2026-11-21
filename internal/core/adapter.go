@@ -9,6 +9,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/herdr"
@@ -50,9 +51,26 @@ type AdapterHooks struct {
 	Reread func() error
 }
 
-// SessionLookup names the conversation of the agent of a kind running as the process pid in the folder cwd; nil
-// while it is not known.
-type SessionLookup func(agent string, pid int, cwd string) *herdr.AgentSession
+// SessionLookup names the conversation of an agent's process; nil while it is not known.
+type SessionLookup func(AgentProcess) *herdr.AgentSession
+
+// AgentProcess is an agent's process as the mirror sees it, with what tells it from a later one given its pid.
+type AgentProcess struct {
+	Agent, Cwd string
+	PID        int
+	Terminal   string
+	Held       uint64
+	Seen       time.Time
+	Started    int64
+	SinceBoot  SinceBoot
+}
+
+// handedOver counts a moment the terminal's foreground changed hands, or the mirror took it in.
+func (t *Terminal) handedOver() { t.held, t.heldAt = handovers.Add(1), time.Now() }
+
+// handovers counts every moment a terminal's foreground changed hands or a terminal was taken in, across every mirror
+// and fill, so a later process always counts higher than an earlier one under any pid.
+var handovers atomic.Uint64
 
 // How long a snapshot asked for before the first fill waits for it, and how the subscription is tried again.
 const (
@@ -309,6 +327,7 @@ func (a *Adapter) fill(terminals []Terminal, doc Document, version string) (unke
 			continue
 		}
 		followShell(t)
+		t.handedOver()
 		was := before[t.Address]
 		t.restored = agentOf(t) == "" && (t.Reason != "" || was != nil && (was.restored || was.Pid != t.Pid))
 		a.state.terminals[t.Address] = t
@@ -463,6 +482,9 @@ func (m *mirror) apply(ev Event) (herdr.Event, bool) {
 		if json.Unmarshal(ev.Data, &fg) != nil {
 			return told, false
 		}
+		if fg == nil || t.Foreground == nil || fg.Pid != t.Foreground.Pid {
+			t.handedOver()
+		}
 		t.Foreground = fg
 		followShell(t)
 	case "lost":
@@ -472,6 +494,7 @@ func (m *mirror) apply(ev Event) (herdr.Event, bool) {
 			Signal   **int   `json:"signal"`
 		}{&t.Reason, &t.ExitCode, &t.Signal})
 		t.Pid, t.Foreground, t.restored = 0, nil, true
+		t.handedOver()
 		told.Kind = "pane.exited"
 	case "keep":
 		json.Unmarshal(ev.Data, &struct {
@@ -508,6 +531,7 @@ func (m *mirror) went(address string) {
 // add puts a live terminal in the mirror, its folder its shell's, and answers it as herdr's news of a pane made.
 func (m *mirror) add(record Terminal) herdr.Event {
 	followShell(&record)
+	record.handedOver()
 	m.terminals[record.Address] = &record
 	return herdr.Event{Kind: "pane.created", PaneID: record.Address}
 }

@@ -20,6 +20,22 @@ func Quote(s string) string {
 // npm's global bin; elsewhere those two are folders that are not there.
 const PATH = `PATH="$HOME/.local/bin:$HOME/.kimi-code/bin:/opt/homebrew/bin:/usr/local/bin:$HOME/AppData/Local/Programs/Herdr/bin:$PATH:$HOME/AppData/Roaming/npm"; export PATH`
 
+// CwdOf defines the shell function `cwd_of PID`, which sets $cwd to the folder that process stands in, whole (a line
+// break at its end too), or to nothing: /proc's link on Linux, else lsof's in a UTF-8 locale (in C's it writes a byte
+// past ASCII as \xNN) with its escapes (\\, \t, \n) read back by printf.
+const CwdOf = `cwd_of() {
+  if [ -d "/proc/$1" ]; then
+    cwd=$(readlink "/proc/$1/cwd" 2>/dev/null; printf x)
+    cwd=${cwd%x}
+    cwd=${cwd%'
+'}
+  else
+    cwd=$(printf '%bx' "$(LC_ALL=en_US.UTF-8 lsof -a -nP -p "$1" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -n 1)")
+    cwd=${cwd%x}
+  fi
+}
+`
+
 // InDir enters the folder, or ends the script quietly: a folder that is gone answers nothing, not an error.
 func InDir(dir string) string {
 	return "cd " + Quote(dir) + " 2>/dev/null || exit 0; "
@@ -96,6 +112,7 @@ func RemudaPath(home string) string {
 // The separators a script's answer is cut by, bytes no path or line of text holds.
 // A script prints them as octal escapes: printf '\036\n' ends a section.
 const (
+	FS = "\x1c" // between files, whose names may hold any of the others or a line break
 	GS = "\x1d" // between records
 	RS = "\x1e" // between sections
 	US = "\x1f" // between fields

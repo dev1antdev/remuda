@@ -237,6 +237,51 @@ func TestAShellTheCoreGaveANewOneIsRestoredUntilAnAgentTakesIt(t *testing.T) {
 	}
 }
 
+// The session lookup tells one process from a later one under the same pid by when it was seen take its terminal:
+// every fill sees the agents it finds anew, and every handover of the foreground counts, back to the shell too — though
+// the replacement's agentAt borrows a status the one before reported a moment ago.
+func TestEachProcessSeenTakingATerminalIsAnotherForItsSession(t *testing.T) {
+	a := &Adapter{answered: make(chan struct{}), streams: map[*eventStream]struct{}{}, state: mirror{terminals: map[string]*Terminal{}}}
+	since := SinceBoot{BootID: "6f1c0d2e-4b7a-4c1e-9a1b-2f3e4d5c6b7a", TimeNS: "time:[4026531834]", Ticks: 216940}
+	running := []Terminal{{Address: "t1", State: "live", Pid: 100, Cwd: "/work/api", Foreground: &Foreground{Pid: 300, Name: "claude", Cwd: "/work/api", StartedMS: 1795048570123, SinceBoot: &since}}}
+	var asked []AgentProcess
+	lookup := func(p AgentProcess) *herdr.AgentSession { asked = append(asked, p); return nil }
+	later := func(what string) {
+		t.Helper()
+		a.state.snapshot(lookup)
+		if n := len(asked); n < 2 || asked[n-1].PID != 300 || asked[n-1].Terminal != "t1" || asked[n-1].Held <= asked[n-2].Held || asked[n-1].Seen.IsZero() {
+			t.Fatalf("%s: asked %+v", what, asked)
+		}
+	}
+	a.fill(slices.Clone(running), Document{}, "0.2.1")
+	a.state.snapshot(lookup)
+	if asked[0].Started != 1795048570123 || asked[0].SinceBoot != since {
+		t.Fatalf("the creation the core told was not passed on: %+v", asked[0])
+	}
+	a.fill(slices.Clone(running), Document{}, "0.2.1")
+	later("a second fill")
+
+	shell := Foreground{Pid: 100, Name: "zsh", Cwd: "/work/api"}
+	agent := Foreground{Pid: 300, Name: "claude", Cwd: "/work/api"}
+	a.state.apply(coreEvent("foreground", "t1", shell))
+	a.state.apply(coreEvent("status", "t1", map[string]any{"status": Status{State: "idle", App: "claude-code"}}))
+	a.state.apply(coreEvent("foreground", "t1", agent)) // its agentAt the status it reported a moment before
+	later("an agent that took the terminal from the shell")
+	took := a.state.terminals["t1"].agentAt
+	a.state.apply(coreEvent("foreground", "t1", shell))
+	a.state.apply(coreEvent("foreground", "t1", agent))
+	if a.state.terminals["t1"].agentAt != took {
+		t.Fatal("the replacement did not borrow the status: the case this guards is not made")
+	}
+	later("the next agent under the same pid, its agentAt the one before's")
+
+	a.state.apply(coreEvent("foreground", "t1", Foreground{Pid: 300, Name: "claude", Cwd: "/work/api"}))
+	a.state.snapshot(lookup)
+	if n := len(asked); asked[n-1].Held != asked[n-2].Held {
+		t.Fatalf("the same foreground told again counted as a handover: %+v", asked)
+	}
+}
+
 // One older pane the core refuses to keep (busy a moment) holds no other back, and is asked again until it is kept,
 // on the same subscription; a terminal that is not remuda's, or kept already, is never asked about.
 func TestOlderPanesAreKeptOneByOneAndARefusedOneAgain(t *testing.T) {

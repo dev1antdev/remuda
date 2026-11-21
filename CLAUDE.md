@@ -75,8 +75,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   Application Support, `%APPDATA%\remuda` through `cygpath`, XDG — the door,
   the limits, the backups' target and keep-awake use it),
   `WindowsDefaultShell` (the one PowerShell line that makes Git Bash the
-  PC's ssh shell), and the separators `GS` / `RS`
-  / `US` with `Sections` / `Lines` / `Fields` for reading an answer.
+  PC's ssh shell), `CwdOf` (the shell function `cwd_of PID`: a process's
+  folder whole, `/proc/<pid>/cwd` or lsof under a UTF-8 locale), and the
+  separators `GS` / `RS` / `US` / `FS` with `Sections` / `Lines` / `Fields`
+  for reading an answer.
 - `internal/rpath/` — **a path on a machine of the fleet in that machine's
   spelling** (tested): `Style{Windows}`, `For(home)` (a Windows machine's
   home is `C:\Users\me`, so a home tells the spelling), `Clean` (Windows:
@@ -427,12 +429,31 @@ components and icons as rules for whoever changes it: @docs/design.md
   (`claude-code` → claude, `codex`, `gemini-cli` → gemini, `kimi`, any other
   app by its own name);
   `statusOf` takes the program's own word, `error` read as done; the session
-  comes through `SessionOf` (a `SessionLookup`: kind, the foreground's pid,
-  its folder; nil, none), which a machine gives as its `processSessions`
+  comes through `SessionOf` (a `SessionLookup` of an `AgentProcess`: kind,
+  the foreground's pid, its folder, and the terminal with `held`, the count
+  of the moment its foreground last changed hands — back to the shell too —
+  or the mirror took it in (a fill, a terminal made or given a new shell), one
+  counter for every mirror, so a later process always counts higher, and
+  `heldAt`, when that was here, which the process holding the pid when it is
+  read must have begun by, and `Started`, the process's creation as a core
+  advertising `foreground_started` tells it (`Foreground.StartedMS`, unix ms),
+  which that process must have — remuda-core 0.2.2 (#12) — and `SinceBoot`,
+  its start since boot on Linux as one advertising `foreground_since_boot`
+  tells it (`Foreground.SinceBoot`: boot id, time namespace, ticks), which no
+  step of the clock moves — remuda-core 0.2.3 (remuda-core #13, task #359) — so the binding takes
+  effect once the pin moves to them; until then every machine reads with the
+  sighting bound, which a step of the machine's clock on macOS or Windows can
+  fool; nil,
+  none), which a machine gives as its `processSessions`
   (`internal/machines/sessions.go`, tested on paper and on a throwaway core
   with a stand-in Claude Code keeping its session file in a temp HOME):
   `transcript.Reader.SessionsOf` for every Claude Code and Codex process the
-  snapshots asked about, one script for all of them, a process new to it read
+  snapshots asked about, kept by the process, not its pid (`processKey`: the
+  terminal, `held`, the pid — a pid given out again, in another
+  terminal, to the agent that took the terminal next or found by another
+  fill, never answers the session of the process before it; a pid is read
+  only for its holder, the process counted later, and an answer is
+  dropped when another took the pid while it was read), one script for all of them, a process new to it read
   at once and every answer again once `sessionsFresh` 30 s old (a `/clear` or
   `/resume` changes the session under the same pid), a failed read keeping
   the last answer (logged once an hour), a process nobody asked about for
@@ -443,7 +464,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   background reads), for what is
   about to stop an agent and resume it (`restart.Reread`, under the pane's
   lock: a sleep's plan and each agent's exit, an update's restart), a read
-  that fails refusing the step. Output watches go
+  that fails refusing the step — and so does one that leaves any agent on the
+  machine unverified (a clock or a boot that could not be read), whichever
+  agent the step is about. Output watches go
   in **feeds** (`feeds.go`, tested on a fake: shared, closed with the last
   stream, opened again after, a rule edited leaving the other watches'
   feeds standing, and 120 feeds' 4,800 standing rows told as they open, all
@@ -1018,26 +1041,100 @@ components and icons as rules for whoever changes it: @docs/design.md
   locally and by `findScript` over ssh. **A session found by the agent's
   process** (`bypid.go`, tested on real processes in a temp HOME and on
   `shell.Fake`), for a machine whose runtime names no session (remuda-core,
-  Core 12): `Reader.SessionsOf([]Running{pid, agent, cwd})` is one script
+  Core 12): `Reader.SessionsOf([]Running{pid, agent, cwd, seen, started, sinceBoot})` is one script
   on the machine, here or over ssh, answering pid → session id — Claude
   Code's from `<config dir>/sessions/<pid>.json` (`CLAUDE_CONFIG_DIR` read
   off the process's environment, `/proc/<pid>/environ` or `ps -E`, whose
   run-together text gives candidate folders, a relative one taken from the
-  agent's folder, then the default one; a process gone is no record; every
-  candidate's file is sent and Go weighs them, a start-verified one before
-  one matched by its folder alone; only
-  regular files are read, a FIFO never holds the script; a file
+  agent's folder, then the default one; a process gone, or one whose start
+  neither `ps` nor, on Git Bash, PowerShell tells, has no session, nothing
+  telling it from another given its pid, nor does one whose start is not the
+  creation the runtime told: on Linux first its start since boot
+  (`Running.SinceBoot`, remuda-core 0.2.3's `started_since_boot`: the boot id,
+  the core's time namespace and `/proc/<pid>/stat`'s starttime ticks), which
+  the script reads too (`since`: the machine's boot id and its own
+  `/proc/self/ns/time`, then each process's ticks) and `SinceBoot.same`
+  compares whole — the same boot, namespace and ticks is that very process
+  whatever the clocks say, another boot or other ticks another process, no
+  clock read; only a lookup in another time namespace (whose boot-time offset
+  shifts the ticks) or in one either side could not name, a core older than
+  0.2.3 or one off Linux falls back on
+  `Running.Started`: on Linux its birth to the millisecond, read as
+  remuda-core reads it (`/proc/<pid>/stat`'s ticks after the boot the script
+  tells first: `/proc/stat`'s whole second with the real clock less
+  `/proc/uptime`, the real clock read before and after it, the tightest of
+  three tries with the clock not stepped back between, its ps second the
+  core's or the one before (`sameCreation`: ps counts the boot in whole
+  seconds), `linuxBoot.mayBe`, within `coreBootSlack` 10 ms of the core's own
+  reading), so a later process given the pid in the same second is another —
+  unless the machine's clock stepped between the core's look and the lookup:
+  `started_ms` moves with a step, as ps's start does, so a process born as
+  much later as the clock went back carries the very value the one before had
+  (what `started_since_boot` closes); a reading wider than `maxBootSpan`
+  20 ms, or none (a `date` telling no milliseconds), leaves the processes the
+  second cannot settle out of the answer, as a clock not read does (below); a
+  FILETIME's millisecond on Windows; on macOS, where ps tells no millisecond,
+  `ps -o lstart`'s second alone — a later process given the pid within that
+  very second passes there, until the core's next look (half a second) tells
+  the foreground's new creation; on macOS and Windows the creation is the one
+  the OS stored, which no later step moves, but a step back between two births
+  gives both one `started_ms`, and nothing there tells them apart (a known
+  limit, said in remuda-core's `schema/README.md`), and a Claude Code file then
+  counts only with a `startedAt` no earlier than that creation and a
+  `procStart` that is ps's start (a second alone does not tell two processes
+  given the pid within it apart; the file holds wall-clock times alone, so
+  the start since boot tells the process but not that the file is its own —
+  after a step of a Linux machine's clock, the file keeps the times before it
+  while ps's start and `started_ms` moved, so a live Claude Code's file no
+  longer matches and its session goes unnamed until it starts again, and after
+  a step back of about the gap between two births, a file a crashed Claude
+  Code left under the pid matches the later one's every time, so the later
+  process is named the earlier one's session — its own file, which Claude
+  Code writes as it starts, corrects the disk, while remuda goes on naming
+  what it read until a read succeeds again (`sessionsFresh`, 30 s, longer
+  while the reads fail): known limits, task #360),
+  nor, from a core that tells none (0.2.1 and before: the pin today), one that
+  began after the agent was seen running (`Running.Seen`: a later process
+  took the pid before it was read), the sighting placed on the machine's
+  clock by the monotonic time since it, the clock read in a call of its own
+  (`date +%s`, `Reader.machineClock`) whose span bounds the doubt, a reading
+  that took over `maxClockSpan` 2 s refused as no reading, and then only those
+  agents are left out of the answer (`needsClock`), keeping the session read
+  before, the read failing with why — so a restart's fresh read refuses — and
+  the ones whose creation the runtime told still answered; the answer names
+  every process it told, "" for one with none, so the cache tells a confirmed
+  none from one not read (the clock asked at all only for a Claude Code or
+  Codex lacking a creation; 2 s is an assumption, unmeasured for Git Bash over
+  a Windows PC's sshd) — safe across a step of the machine's clock on Linux,
+  whose ps moves lstart with it, not on macOS or Windows, where a forward
+  step between the sighting and the read can let a later process through;
+  every
+  candidate's file is sent and Go weighs them; only
+  regular files are read, a FIFO never holds the script; a process that
+  stands in another folder than the pane was seen in now (`/proc/<pid>/cwd`,
+  else `lsof -d cwd` in a UTF-8 locale, since in C's lsof writes a byte past
+  ASCII as `\xNN`, its `\\` and `\t` read back by `printf %b`, as the
+  rollouts' paths are, each one whole, a path may hold a line break, at its
+  end too; not read
+  for a native Windows process) has no session,
+  whatever else matches, since the pid went to another process, and neither
+  does one whose start, read again once its files were, is another (the pid
+  changed hands while it was read); a file
   counts only when its `procStart` is the process's `LC_ALL=C TZ=UTC ps -o
-  lstart`; else, while the process's start is known — to the second from
-  `ps`, to the millisecond for a native Windows process, which Git Bash's own
-  tools do not see, through PowerShell's `Get-Process`, asked on Git Bash
-  alone (a Linux under WSL reaches Windows' own by other numbers) — when its folder is
-  the pane's and its `startedAt` is no older than that start (CI's Windows job
+  lstart`; for a native Windows process, which Git Bash's own tools do not
+  see, only when its folder is the pane's and its `procStartFt` is the process's creation as
+  PowerShell's `Get-Process` tells it, a FILETIME, within a millisecond
+  (asked on Git Bash alone: a Linux under WSL reaches Windows' own by other
+  numbers; a value from 3e17 up, which Claude Code itself reads as another
+  unit, falls to the next rule); else when its folder is the pane's and,
+  while the process's start is known, its `startedAt` is no older than that
+  start (CI's Windows job
   proves it; a native process's `CLAUDE_CONFIG_DIR` is out of reach there, so
-  `~\.claude` alone is read); else, where either side lacks the start, when
-  its folder is the pane's), Codex's thread id from the
+  `~\.claude` alone is read); a file nothing ties to the process, never), Codex's thread id from the
   `rollout-*.jsonl` of the person's thread (its first line a `session_meta`
-  naming no subagent: a file still empty is none) the process, else a child of it, holds open (`/proc/<pid>/fd`,
+  naming no subagent: a file still empty is none; its folder is where the
+  thread began, which a resume keeping the current folder leaves) the
+  process, else a child of it, holds open (`/proc/<pid>/fd`,
   else `lsof -nP`; none on Windows), none when two are, the id the one its
   `session_meta` names (a revert's replacement file,
   `rollout-<time>-<id>_<rollout id>.jsonl`, keeps the thread's); an id found under a

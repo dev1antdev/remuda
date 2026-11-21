@@ -2,6 +2,10 @@ package transcript
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
+	"math"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -12,40 +16,120 @@ import (
 	"github.com/dev1antdev/remuda/internal/text"
 )
 
-// Running is an agent process whose session is looked up: its pid, its kind (claude, codex) and its folder.
+// Running is an agent process whose session is looked up, with what tells it from a later process given its pid.
 type Running struct {
-	PID   int
-	Agent string
-	CWD   string
+	PID       int
+	Agent     string
+	CWD       string
+	Seen      time.Time
+	Started   int64
+	SinceBoot SinceBoot
 }
 
-// SessionsOf answers, pid by pid, the session each running Claude Code or Codex is in, read off its process.
+// SinceBoot is a Linux process's start as its boot counts it, as the runtime told it: that boot, the time namespace it
+// was read in and the clock ticks from the boot to the start; zero, untold.
+type SinceBoot struct {
+	BootID, TimeNS string
+	Ticks          uint64
+}
+
+// same says whether the process the machine tells by its boot, the lookup's time namespace and its start in ticks is
+// the one told, and whether that can be known: not untold, nor read in another time namespace, whose boot-time offset
+// shifts the ticks, or in one either side could not name.
+func (s SinceBoot) same(bootID, timeNS, ticks string) (same, known bool) {
+	if s.BootID == "" || bootID == "" {
+		return false, false
+	}
+	if bootID != s.BootID {
+		return false, true
+	}
+	read, err := strconv.ParseUint(strings.TrimSpace(ticks), 10, 64)
+	if s.TimeNS == "" || timeNS != s.TimeNS || err != nil {
+		return false, false
+	}
+	return read == s.Ticks, true
+}
+
+// SessionsOf answers, pid by pid, the session each running Claude Code or Codex is in, read off its process ("" for
+// none). A process it could not tell from a later one given its pid — the machine's clock not read — is left out, and
+// the error beside what was read says why.
 func (r *Reader) SessionsOf(procs []Running) (map[int]string, error) {
-	lookup := sessionsByPIDScript(procs)
-	if lookup == "" {
-		return map[int]string{}, nil
+	var clock machineClock
+	var clockErr error
+	if slices.ContainsFunc(procs, needsClock) {
+		clock, clockErr = r.machineClock()
 	}
-	out, err := shell.Text(r.host, lookup, 15*time.Second)
-	if err != nil {
-		return nil, err
+	found, unsure := map[int]string{}, map[int]bool{}
+	if lookup := sessionsByPIDScript(procs); lookup != "" {
+		out, err := shell.Text(r.host, lookup, 15*time.Second)
+		if err != nil {
+			return nil, err
+		}
+		found, unsure = parseSessionsByPID(out, procs, rpath.For(r.host.Home()), clock)
 	}
-	return parseSessionsByPID(out, procs, rpath.For(r.host.Home())), nil
+	answer := map[int]string{}
+	for _, p := range procs {
+		if (clockErr == nil || !needsClock(p)) && !unsure[p.PID] {
+			answer[p.PID] = found[p.PID]
+		}
+	}
+	if len(unsure) > 0 {
+		return answer, errors.Join(clockErr, errors.New("the machine was too slow telling its boot to tell its processes apart"))
+	}
+	return answer, clockErr
 }
 
-// sessionsByPIDScript prints a record per process, split by US:
-//   - its pid and agent;
-//   - its start as Claude Code records it: `ps -o lstart` in UTC, "" for a live process ps does not tell of,
-//     "ms:<unix ms>" from PowerShell's Get-Process for a native Windows process (asked on Git Bash alone), "-" for
-//     one gone;
-//   - for Claude Code, every candidate sessions/<pid>.json, each ended by GS: under the CLAUDE_CONFIG_DIR its
-//     environment names (macOS's `ps -E` runs the entries together, so each reading is a candidate; a relative one
-//     from the process's folder), then the default ~/.claude;
-//   - for Codex, a line per rollout the process or a child holds open: the pid holding it, its path and its first
-//     line whole, split by GS.
+// needsClock says whether a process is told from a later one given its pid by the machine's clock alone: the runtime
+// told no creation, only when it was seen.
+func needsClock(p Running) bool { return lookedUp(p) && p.Started == 0 && !p.Seen.IsZero() }
+
+// maxClockSpan is the longest a reading of the machine's clock may take (an assumption, unmeasured on a Windows PC).
+var maxClockSpan = 2 * time.Second
+
+// machineClock is the machine's clock read in a call of its own: asked here, no later than latest there; zero, none.
+type machineClock struct {
+	asked, latest time.Time
+}
+
+// machineClock reads the machine's clock, refusing a reading whose call took over maxClockSpan.
+func (r *Reader) machineClock() (machineClock, error) {
+	asked := time.Now()
+	out, err := shell.Text(r.host, "date +%s", 10*time.Second)
+	if err != nil {
+		return machineClock{}, err
+	}
+	if took := time.Since(asked); took > maxClockSpan {
+		return machineClock{}, fmt.Errorf("the machine took %s to tell its time, too long to tell its processes apart", took.Round(time.Millisecond))
+	}
+	secs, err := strconv.ParseInt(strings.TrimSpace(out), 10, 64)
+	if err != nil {
+		return machineClock{}, fmt.Errorf("the machine tells its time as %q", strings.TrimSpace(out))
+	}
+	return machineClock{asked: asked, latest: time.Unix(secs+1, 0)}, nil
+}
+
+// begunBy says whether a process with that start can be the one seen running here at seen: it began by then. Placed by
+// monotonic time, a step of this clock moves nothing; a step of the machine's moves ps's lstart with it on Linux
+// alone, so on macOS and Windows a forward step between the sighting and the read can let a later process through.
+func (c machineClock) begunBy(start string, seen time.Time) bool {
+	if seen.IsZero() {
+		return true
+	}
+	if c.asked.IsZero() {
+		return false
+	}
+	began, known := startedMS(start)
+	return known && !time.UnixMilli(began).After(c.latest.Add(-c.asked.Sub(seen)))
+}
+
+// lookedUp says whether a process is one whose session is looked up here: a Claude Code or a Codex.
+func lookedUp(p Running) bool { return p.PID > 1 && (p.Agent == "claude" || p.Agent == "codex") }
+
+// sessionsByPIDScript prints the system, then per process its pid, agent, start, folder, session files and start again.
 func sessionsByPIDScript(procs []Running) string {
 	var b strings.Builder
 	for _, p := range procs {
-		if p.PID <= 1 || (p.Agent != "claude" && p.Agent != "codex") {
+		if !lookedUp(p) {
 			continue
 		}
 		b.WriteString("s " + strconv.Itoa(p.PID) + " " + p.Agent + " " + script.Quote(p.CWD) + "\n")
@@ -53,18 +137,38 @@ func sessionsByPIDScript(procs []Running) string {
 	if b.Len() == 0 {
 		return ""
 	}
-	return script.PATH + `
-case "$(uname -s 2>/dev/null)" in MINGW* | MSYS* | CYGWIN*) windows=1 ;; *) windows= ;; esac
+	return script.PATH + "\n" + script.CwdOf + `system=$(uname -s 2>/dev/null)
+if [ "$system" = Linux ]; then
+  span= before= up= after=
+  for try in 1 2 3; do
+    early=$(date +%s%3N)
+    read -r uptime rest < /proc/uptime
+    late=$(date +%s%3N)
+    case "$early$late" in *[!0-9]*) break ;; esac
+    [ "$late" -ge "$early" ] || continue
+    if [ -z "$span" ] || [ $((late - early)) -lt "$span" ]; then
+      span=$((late - early)) before=$early up=$uptime after=$late
+    fi
+  done
+  printf 'system\037Linux\037%s\037%s\037%s\037%s\037%s\036\n' "$(sed -n 's/^btime //p' /proc/stat)" "$up" "$before" "$after" "$(getconf CLK_TCK)"
+  printf 'since\037%s\037%s\036\n' "$(cat /proc/sys/kernel/random/boot_id 2>/dev/null)" "$(readlink /proc/self/ns/time 2>/dev/null)"
+else
+  printf 'system\037%s\036\n' "$system"
+fi
+case "$system" in MINGW* | MSYS* | CYGWIN*) windows=1 ;; *) windows= ;; esac
+lstart() { LC_ALL=C TZ=UTC ps -o lstart= -p "$1" 2>/dev/null; }
 s() {
-  start=$(LC_ALL=C TZ=UTC ps -o lstart= -p "$1" 2>/dev/null)
-  if [ -z "$start" ] && ! kill -0 "$1" 2>/dev/null; then
+  start=$(lstart "$1")
+  if [ -z "$start" ]; then
     start=-
     if [ -n "$windows" ]; then
-      ms=$(powershell.exe -NoProfile -NonInteractive -Command "[DateTimeOffset]::new((Get-Process -Id $1 -ErrorAction Stop).StartTime).ToUnixTimeMilliseconds()" 2>/dev/null | tr -d '\r')
-      case "$ms" in [0-9]*) start="ms:$ms" ;; esac
+      ft=$(powershell.exe -NoProfile -NonInteractive -Command "(Get-Process -Id $1 -ErrorAction Stop).StartTime.ToFileTimeUtc()" 2>/dev/null | tr -d '\r')
+      case "$ft" in [0-9]*) start="ft:$ft" ;; esac
     fi
   fi
-  printf '%s\037%s\037%s\037' "$1" "$2" "$start"
+  cwd=
+  case "$start" in -|ft:*) ;; *) cwd_of "$1" ;; esac
+  printf '%s\037%s\037%s\037%s\037' "$1" "$2" "$start" "$cwd"
   if [ "$2" = claude ]; then
     {
       if [ -r "/proc/$1/environ" ]; then
@@ -90,41 +194,58 @@ s() {
   else
     for p in $1 $(pgrep -P "$1" 2>/dev/null); do
       if [ -d "/proc/$p/fd" ]; then
-        for fd in /proc/$p/fd/*; do readlink "$fd" 2>/dev/null; done
+        for fd in /proc/$p/fd/*; do
+          f=$(readlink "$fd" 2>/dev/null) && case "${f##*/}" in rollout-*.jsonl) rollout "$p" "$f" ;; esac
+        done
       else
-        lsof -nP -p "$p" -Fn 2>/dev/null | sed -n 's/^n//p'
-      fi | grep '/rollout-[^/]*\.jsonl$' | sort -u | while IFS= read -r f; do
-        [ -f "$f" ] || continue
-        printf '%s\035%s\035' "$p" "$f"
-        head -n 1 "$f" 2>/dev/null | tr -d '\n'
-        printf '\n'
-      done
+        LC_ALL=en_US.UTF-8 lsof -nP -p "$p" -Fn 2>/dev/null | sed -n 's/^n//p' | grep '/rollout-[^/]*\.jsonl$' | sort -u |
+          while IFS= read -r n; do rollout "$p" "$(printf '%b' "$n")"; done
+      fi
     done
   fi
-  printf '\036\n'
+  ticks=
+  [ "$system" = Linux ] && ticks=$(sed 's/.*) //' "/proc/$1/stat" 2>/dev/null | cut -d' ' -f20)
+  printf '\037%s\037%s\036\n' "$(lstart "$1")" "$ticks"
+}
+rollout() {
+  [ -f "$2" ] || return 0
+  printf '%s\035%s\035' "$1" "$2"
+  head -n 1 "$2" 2>/dev/null | tr -d '\n'
+  printf '\034'
 }
 ` + b.String()
 }
 
 // claudeSessionFile is what Claude Code keeps per running process in <config dir>/sessions/<pid>.json.
 type claudeSessionFile struct {
-	PID       int    `json:"pid"`
-	SessionID string `json:"sessionId"`
-	CWD       string `json:"cwd"`
-	ProcStart string `json:"procStart"`
-	StartedAt int64  `json:"startedAt"` // unix ms, when Claude Code began: never before its process was created
+	PID         int    `json:"pid"`
+	SessionID   string `json:"sessionId"`
+	CWD         string `json:"cwd"`
+	ProcStart   string `json:"procStart"`
+	ProcStartFt string `json:"procStartFt"` // a native Windows process's creation, a FILETIME, in place of procStart
+	StartedAt   int64  `json:"startedAt"`   // unix ms, when Claude Code began: never before its process was created
 }
 
-// parseSessionsByPID reads sessionsByPIDScript's answer.
-func parseSessionsByPID(out string, procs []Running, style rpath.Style) map[int]string {
-	cwds := map[int]string{}
+// parseSessionsByPID reads sessionsByPIDScript's answer, and names the processes it could not tell from a later one
+// given their pid: a reading of the boot too slow to place them.
+func parseSessionsByPID(out string, procs []Running, style rpath.Style, clock machineClock) (map[int]string, map[int]bool) {
+	cwds, seen, started, sinceBoot := map[int]string{}, map[int]time.Time{}, map[int]int64{}, map[int]SinceBoot{}
 	for _, p := range procs {
-		cwds[p.PID] = p.CWD
+		cwds[p.PID], seen[p.PID], started[p.PID], sinceBoot[p.PID] = p.CWD, p.Seen, p.Started, p.SinceBoot
 	}
-	found := map[int]string{}
+	found, unsure, boot := map[int]string{}, map[int]bool{}, linuxBoot{}
+	var bootID, timeNS string // the machine's boot and the lookup's time namespace, on Linux
 	for _, record := range script.Sections(out) {
-		fields := strings.SplitN(record, script.US, 4)
-		if len(fields) < 4 {
+		if system, ok := strings.CutPrefix(strings.TrimSpace(record), "system"+script.US); ok {
+			boot = bootOf(system)
+			continue
+		}
+		if since, ok := strings.CutPrefix(strings.TrimSpace(record), "since"+script.US); ok {
+			bootID, timeNS, _ = strings.Cut(since, script.US)
+			continue
+		}
+		fields := strings.SplitN(record, script.US, 7)
+		if len(fields) < 6 {
 			continue
 		}
 		pid, err := strconv.Atoi(strings.TrimSpace(fields[0]))
@@ -135,14 +256,39 @@ func parseSessionsByPID(out string, procs []Running, style rpath.Style) map[int]
 		if !asked {
 			continue
 		}
-		start, payload := strings.TrimSpace(fields[2]), strings.TrimSpace(fields[3])
-		if start == "-" {
+		start, standing, payload, after := strings.TrimSpace(fields[2]), fields[3], strings.TrimSpace(fields[4]), strings.TrimSpace(fields[5])
+		switch {
+		case start == "-" || start == "":
+			continue // gone, or nothing tells it from another process given its pid
+		case standing != "" && cwd != "" && !style.Equal(standing, cwd):
+			continue // the pid went to a process elsewhere since the pane was seen
+		case !strings.HasPrefix(start, "ft:") && after != start:
+			continue // another process took the pid while it was read, or it ended
+		}
+		ticks := ""
+		if len(fields) == 7 {
+			ticks = fields[6]
+		}
+		if same, known := sinceBoot[pid].same(bootID, timeNS, ticks); known {
+			if !same {
+				continue // another process than the one seen, whatever the clocks say
+			}
+		} else if told := started[pid]; told != 0 {
+			fits, sure := boot.mayBe(ticks, told)
+			if !sameCreation(start, told, boot.linux) || sure && !fits {
+				continue // another process than the one seen: the pid changed hands before it was read
+			}
+			if !sure {
+				unsure[pid] = true
+				continue
+			}
+		} else if !clock.begunBy(start, seen[pid]) {
 			continue
 		}
 		var id string
 		switch fields[1] {
 		case "claude":
-			id = claudeSession(payload, pid, start, cwd, style)
+			id = claudeSession(payload, pid, start, cwd, style, started[pid])
 		case "codex":
 			id = heldThread(payload, pid)
 		}
@@ -150,51 +296,132 @@ func parseSessionsByPID(out string, procs []Running, style rpath.Style) map[int]
 			found[pid] = id
 		}
 	}
-	return found
+	return found, unsure
 }
 
-// claudeSession is the session of a candidate file that is this very process's, its pid's: one whose procStart is
-// the process's start when both sides know it; else, when the process's start is known (to the millisecond on
-// Windows, to the second from ps), one of its folder that began no earlier; else one of its folder. A file left by an
-// ended process whose pid was given to another is not.
-func claudeSession(payload string, pid int, start, cwd string, style rpath.Style) string {
+// claudeSession is the session of the candidate file that is this very process's, none for one nothing ties to it.
+func claudeSession(payload string, pid int, start, cwd string, style rpath.Style, told int64) string {
 	began, known := startedMS(start)
-	var byFolder string
+	creation, native := strings.CutPrefix(start, "ft:")
+	created, _ := filetimeOf(creation)
 	for _, doc := range strings.Split(payload, script.GS) {
 		var file claudeSessionFile
-		if json.Unmarshal([]byte(doc), &file) != nil || file.PID != pid {
+		if json.Unmarshal([]byte(doc), &file) != nil || file.PID != pid || told != 0 && file.StartedAt < told {
 			continue
 		}
 		inFolder := cwd == "" || file.CWD == "" || style.Equal(file.CWD, cwd)
+		recorded, ft := filetimeOf(file.ProcStartFt)
 		switch {
-		case file.ProcStart != "" && start != "" && !strings.HasPrefix(start, "ms:"):
+		case file.ProcStart != "" && !native:
 			if strings.TrimSpace(file.ProcStart) == start {
+				return file.SessionID
+			}
+		case native && ft:
+			if max(created-recorded, recorded-created) < filetimeMS && inFolder {
 				return file.SessionID
 			}
 		case known && file.StartedAt > 0:
 			if file.StartedAt >= began && inFolder {
 				return file.SessionID
 			}
-		case !strings.HasPrefix(start, "ms:") && byFolder == "" && inFolder:
-			byFolder = file.SessionID
 		}
 	}
-	return byFolder
+	return ""
 }
 
-// startedMS is the process's creation the script told, in unix ms: PowerShell's for a native Windows process, else
-// ps's lstart read in UTC, a second's floor that the true creation is never before.
+// FILETIME counts 100 ns from 1601: a millisecond of it, and the Unix epoch in it.
+const (
+	filetimeMS    = 10_000
+	filetimeEpoch = 116_444_736_000_000_000
+)
+
+// filetimeOf reads a FILETIME as PowerShell and Claude Code write it; false for anything else, a value from 3e17 up
+// among it, which Claude Code itself reads as another unit.
+func filetimeOf(s string) (int64, bool) {
+	v, err := strconv.ParseInt(strings.TrimSpace(s), 10, 64)
+	return v, err == nil && v > filetimeEpoch && v < 3e17
+}
+
+// coreBootSlack is how far remuda-core's own reading of the boot may stand from the truth: its bracket of a
+// millisecond and the 5 ms it keeps a reading across.
+const coreBootSlack = 10
+
+// maxBootSpan is the widest a Linux machine's reading of its boot may be and still tell two processes born in one
+// second apart: the real clock read this far apart around /proc/uptime, at the tightest of three tries.
+const maxBootSpan = 20
+
+// linuxBoot is what a Linux machine told of its boot: /proc/stat's whole second (ps's), the earliest and latest moment
+// it can have been in ms (the real clock read before and after /proc/uptime, which counts hundredths), how far apart
+// those readings were, and the clock ticks a second; zero but linux where it told none that can be used.
+type linuxBoot struct {
+	linux                             bool
+	whole, earliest, latest, span, hz int64
+}
+
+// bootOf reads the system line's boot facts: "Linux", btime, uptime, the real clock in ms before and after it, the
+// ticks a second.
+func bootOf(system string) linuxBoot {
+	fields := strings.Split(system, script.US)
+	if fields[0] != "Linux" {
+		return linuxBoot{}
+	}
+	if len(fields) != 6 {
+		return linuxBoot{linux: true}
+	}
+	whole, errWhole := strconv.ParseInt(fields[1], 10, 64)
+	up, errUp := strconv.ParseFloat(fields[2], 64)
+	before, errBefore := strconv.ParseInt(fields[3], 10, 64)
+	after, errAfter := strconv.ParseInt(fields[4], 10, 64)
+	hz, errHz := strconv.ParseInt(fields[5], 10, 64)
+	if errWhole != nil || errUp != nil || errBefore != nil || errAfter != nil || errHz != nil || hz <= 0 || after < before || before < whole*1000 {
+		return linuxBoot{linux: true} // a `date` telling no milliseconds reads as seconds, before the boot
+	}
+	upMS := int64(math.Round(up * 1000))
+	inSecond := func(ms int64) int64 { return min(max(ms, whole*1000), whole*1000+999) }
+	return linuxBoot{linux: true, whole: whole, earliest: inSecond(before - upMS - 10), latest: inSecond(after + 1 - upMS), span: after - before, hz: hz}
+}
+
+// mayBe says whether a Linux process started that many ticks after the boot fits the one remuda-core saw born at told
+// (unix ms), reckoned as the core reckons it: the boot held to ps's whole second, plus the ticks — and whether the
+// reading of the boot and the start was good enough to tell. Off Linux it has nothing to say: anything fits. Told is
+// wall-clock time, moved by a step of the clock as the core moves it: a process born as much later as the clock went
+// back between the core's look and this one fits too.
+func (b linuxBoot) mayBe(ticks string, told int64) (fits, sure bool) {
+	if !b.linux {
+		return true, true
+	}
+	since, err := strconv.ParseInt(strings.TrimSpace(ticks), 10, 64)
+	if b.hz == 0 || err != nil {
+		return false, false
+	}
+	offset := since * 1000 / b.hz
+	return told >= b.earliest+offset-coreBootSlack && told <= b.latest+offset+coreBootSlack, b.span <= maxBootSpan
+}
+
+// sameCreation says whether the script's start is the creation the runtime told (unix ms), reading no clock.
+func sameCreation(start string, told int64, linux bool) bool {
+	read, known := startedMS(start)
+	if strings.HasPrefix(start, "ft:") {
+		return known && read == told
+	}
+	second := told - told%1000 // Linux's ps counts the boot time in whole seconds, remuda-core does not: one behind
+	return known && (read == second || linux && read == second-1000)
+}
+
+// startedMS is the process's creation the script told, in unix ms: PowerShell's FILETIME for a native Windows
+// process, else ps's lstart read in UTC, a second's floor that the true creation is never before.
 func startedMS(start string) (int64, bool) {
-	if created, native := strings.CutPrefix(start, "ms:"); native {
-		ms, err := strconv.ParseInt(created, 10, 64)
-		return ms, err == nil
+	if created, native := strings.CutPrefix(start, "ft:"); native {
+		ft, ok := filetimeOf(created)
+		return (ft - filetimeEpoch) / filetimeMS, ok
 	}
 	at, err := time.Parse(time.ANSIC, start)
 	return at.UnixMilli(), err == nil
 }
 
 // personsThread reads a rollout's first line: whether it is the session_meta of the person's thread (no subagent's
-// source, a thread_source of "user" or none), and the thread id it names.
+// source, a thread_source of "user" or none), and the thread id it names. Its folder is where the thread began, which
+// a resume may leave: the process holding the rollout open is what tells.
 func personsThread(head string) (string, bool) {
 	var record codexRecord
 	var meta struct {
@@ -217,8 +444,8 @@ func personsThread(head string) (string, bool) {
 // since enumeration order says nothing about which one is on screen.
 func heldThread(payload string, pid int) string {
 	own, children := map[string]bool{}, map[string]bool{}
-	for _, line := range script.Lines(payload) {
-		fields := strings.SplitN(line, script.GS, 3)
+	for _, entry := range strings.Split(payload, script.FS) {
+		fields := strings.SplitN(entry, script.GS, 3)
 		if len(fields) < 3 {
 			continue
 		}
