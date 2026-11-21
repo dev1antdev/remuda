@@ -1010,9 +1010,9 @@ docker compose up -d     # http://127.0.0.1:7317
 ```
 
 In Portainer: add the repository as a stack, set the same variables in the
-stack environment. The image carries `remuda`, `herdr` (for `terminal
-attach`), `ssh` and `git`; it mounts the host user's `~/.config` (herdr's
-socket + remuda's state), `~/.claude` (transcripts), `~/.ssh` (remote
+stack environment. The image carries `remuda`, `herdr`, `ssh` and
+`git`; it mounts the host user's `~/.config` (herdr's socket + remuda's
+state), `~/.claude` (transcripts), `~/.ssh` (remote
 machines) and the projects root (file viewer), all at the same paths as on
 the host, running as that user's uid.
 
@@ -1396,7 +1396,7 @@ issue and the cause is half found.
 
 Working today (verified against herdr 0.9.1, protocol 22, local + a real
 remote machine): multi-machine roster with herdr's agent statuses, live
-terminal (shared attach, replay, input, resize, find, touch key bar) on local **and
+terminal (one attach per viewer, input, resize, find, touch key bar) on local **and
 remote** panes, chat (exact session via `agent_session`, remote transcripts
 fetched by delta over SSH, thinking/tool folding, submit via `agent.prompt`,
 approval nudge), workspace create/close with `agent.start`, add/remove remote

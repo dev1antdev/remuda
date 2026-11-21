@@ -1,5 +1,5 @@
-// Package herdr speaks herdr's newline-JSON RPC over its Unix socket and owns
-// the `herdr terminal attach` PTYs.
+// Package herdr speaks herdr's newline-JSON RPC over its Unix socket, and holds
+// the model remuda asks every machine through.
 package herdr
 
 import (

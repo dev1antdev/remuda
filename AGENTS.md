@@ -270,7 +270,7 @@ not style.
 | Who hears what | `internal/events/`, the subscriptions in `internal/app/app.go` |
 | The page's own state: the selected pane, the mode, the lens, the URL | `web/src/app/store.ts`, `url.ts`, `current.ts` |
 | How a screen reads the server | `web/src/lib/query.ts` (`useQuery`), the feature's `api.ts`; the roster through `web/src/features/roster/useRoster.tsx` |
-| herdr RPC, the attach PTY, starting herdr | `internal/herdr/` |
+| herdr RPC, the model of a machine, starting herdr | `internal/herdr/` |
 | Remote machines, SSH, remote files | `internal/machines/`, `internal/sshx/` |
 | A Windows PC of the fleet: the probe, the bridge to herdr's named pipe, its paths | `internal/machines/probe.go`, `transport.go`, `cmd/remuda/bridge.go`, `internal/rpath/`; the tests on a real Windows: `internal/wintest/` and the `windows` job in ci.yml |
 | What the sidebar says about an agent | `internal/radar/`, `web/src/features/roster/` (`radar.ts` the model, `Sidebar.tsx`, `rows.tsx`) |

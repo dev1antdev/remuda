@@ -25,8 +25,8 @@ Three rings, and a dependency may only point inwards.
 │  schedule · search · usage · quick · recipes · scenes · code         │
 ├─ the floor ──────────────────────────────────────────────────────────┤
 │  machines   the registry; a Machine is a shell.Host with herdr on it │
-│  herdr      herdr.API / Terminals; the RPC client, the attach PTYs   │
-│  core       remuda-core's client and its herdr.API adapter           │
+│  herdr      herdr.API / Terminals and the model; the RPC client      │
+│  core       remuda-core's client, its herdr.API adapter, its terminals│
 │  transcript the session file parser and the per-machine Reader       │
 │  shell      the port: Run / Stream, Host, Fake                       │
 │  script     building POSIX scripts, reading their answers            │

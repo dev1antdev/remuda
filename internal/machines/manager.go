@@ -1,6 +1,6 @@
-// Package machines gives remuda its multi-PC view: the local herdr plus remote
+// Package machines gives remuda its multi-PC view: the local machine plus remote
 // ones reached over the user's own SSH, each with one ControlMaster, one RPC
-// transport, shared terminal attaches and a transcript cache fetched by delta.
+// transport, one remuda-core link and a transcript cache fetched by delta.
 package machines
 
 import (

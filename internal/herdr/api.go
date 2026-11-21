@@ -52,7 +52,7 @@ type Terminals interface {
 }
 
 // View is how one viewer opens a terminal: its grid, and whether it leaves the size to the others (Keep) or only
-// watches (Observe). herdr follows its smallest client whatever is asked, and watches nothing without typing.
+// watches (Observe).
 type View struct {
 	Cols, Rows int
 	Keep       bool

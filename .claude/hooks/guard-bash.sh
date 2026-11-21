@@ -18,11 +18,11 @@ refuse() {
   exit 2
 }
 
-# herdr's attach slot is the person's to take, never ours (CLAUDE.md, Peers):
-# the flag is refused on a line that could run it (herdr or attach beside
-# it); prose that only names it goes through the Write / Edit tools.
+# herdr's attach slot is the person's to take, never ours (AGENTS.md, hard
+# rules): the flag is refused on a line that could run it (herdr or attach
+# beside it); prose that only names it goes through the Write / Edit tools.
 if has '(herdr|attach).*--takeover'; then
-  refuse "never pass --takeover: a second attach is refused by herdr and the refusal is surfaced (RefusedError / 409); stealing the slot is the person's call only. To write the flag into a file use the Write or Edit tool; to search for it use Grep."
+  refuse "never pass --takeover: herdr allows one attached client per terminal, and stealing the slot is the person's call only. To write the flag into a file use the Write or Edit tool; to search for it use Grep."
 fi
 
 scoped() { has 'HERDR_SOCKET_PATH='; }

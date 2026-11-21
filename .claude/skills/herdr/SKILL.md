@@ -59,11 +59,12 @@ act on the person's agents. By hand, only on a pane you created
 
 ## The terminal
 
-`herdr terminal attach <terminal id>` is a PTY remuda shares between all
-viewers of a pane (`attach.go`). herdr allows one attached client per
-terminal: a second attach prints "already has an attached client; retry
-with --takeover" into the PTY and exits — remuda surfaces that
-(`RefusedError`), it never passes the flag, and neither do you.
+`herdr terminal attach <terminal id>` is a PTY of your own (`herdr
+terminal attach`), and herdr allows one attached client per terminal: a
+second attach prints "already has an attached client; retry with
+--takeover" into the PTY and exits. remuda does not attach to herdr at all
+any more (its terminals are remuda-core's), and it never passes the flag;
+neither do you.
 
 ## A herdr of your own, for a test
 

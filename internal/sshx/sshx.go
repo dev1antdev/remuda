@@ -117,6 +117,16 @@ func (s *sessionCount) leave(kind sessionKind) {
 	}
 }
 
+const sessionRefused = "Session open refused"
+
+// SessionRefused reads ssh's words for a machine that will not open one more session, and says it plainly.
+func SessionRefused(host, said string) (string, bool) {
+	if !strings.Contains(said, sessionRefused) {
+		return "", false
+	}
+	return fmt.Sprintf("%s refused one more ssh session: too many are open on the connection (sshd's MaxSessions)", host), true
+}
+
 // enter waits for a place within timeout; it answers how to leave and how much of the timeout is left.
 func (c *Conn) enter(kind sessionKind, timeout time.Duration) (leave func(), left time.Duration, err error) {
 	began := time.Now()
@@ -415,7 +425,11 @@ func (c *Conn) run(command string, timeout time.Duration, stdin io.Reader) ([]by
 		if err != nil {
 			var ee *exec.ExitError
 			if errors.As(err, &ee) {
-				return out.Bytes(), &shell.ExitError{Code: ee.ExitCode(), Stderr: strings.TrimSpace(errb.String())}
+				said := strings.TrimSpace(errb.String())
+				if words, refused := SessionRefused(c.Host, said); refused {
+					said = words
+				}
+				return out.Bytes(), &shell.ExitError{Code: ee.ExitCode(), Stderr: said}
 			}
 			return out.Bytes(), fmt.Errorf("ssh %s: %w", c.Host, err)
 		}
@@ -474,7 +488,11 @@ func (c *Conn) Stream(command string, timeout time.Duration, sink func([]byte)) 
 		if err != nil {
 			var ee *exec.ExitError
 			if errors.As(err, &ee) {
-				return &shell.ExitError{Code: ee.ExitCode(), Stderr: strings.TrimSpace(stderr.String())}
+				exit := &shell.ExitError{Code: ee.ExitCode()}
+				if words, refused := SessionRefused(c.Host, stderr.String()); refused {
+					exit.Stderr = words
+				}
+				return exit
 			}
 			return fmt.Errorf("ssh %s: %w", c.Host, err)
 		}
@@ -683,6 +701,9 @@ func (c *cmdConn) wrap(n int, err error) (int, error) {
 		return n, os.ErrDeadlineExceeded
 	}
 	msg := c.saidBy()
+	if words, refused := SessionRefused(c.host, msg); refused {
+		return n, errors.New(words) // no EOF: a caller must not take it for herdr hanging up
+	}
 	if msg != "" {
 		return n, fmt.Errorf("%w (%s)", err, msg)
 	}
@@ -697,7 +718,7 @@ func (c *cmdConn) saidBy() string {
 		c.mu.Lock()
 		closed := c.closed
 		c.mu.Unlock()
-		if closed || c.host == "" {
+		if _, refused := SessionRefused(c.host, msg); refused || closed || c.host == "" {
 			return msg
 		}
 		time.Sleep(20 * time.Millisecond)

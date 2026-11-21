@@ -708,7 +708,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   never prompt; sshd's MaxSessions is 10 by default, so every session takes
   one of 9 places first (`Conn.enter`, `sessionCount`), waiting within its
   own timeout: at most 5 scripts, 3 of them over a minute long, the last
-  place left to short scripts and the last two to herdr's RPC), with socket and port forwarding (`-O forward -L`; a
+  place left to short scripts and the last two to herdr's RPC; a session
+  sshd refuses anyway is said plainly, `SessionRefused` — the host refused
+  one more ssh session, too many are open on the connection), with socket and port forwarding (`-O forward -L`; a
   socket forward the master already holds is cancelled first, since
   asked for the same one again the master keeps its listener and binds
   nothing, so the file unlinked before the ask would be gone for good),
@@ -746,9 +748,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   `run` and `Stream` go through them (`stdin_test.go` on an `ssh` stand-in
   refusing as Dropbear does and on tcsh and fish as the login shell where
   there is one; `TestOnWindowsALongScriptTravelsOnStdin` on the runner,
-  whose `wintest.SSH` goes through `Remote` too); an attach and an RPC
-  exec keep a line of their own, one line whose only escapes stand outside
-  its quotes, their stdin being the terminal's or herdr's; `remuda setup
+  whose `wintest.SSH` goes through `Remote` too); an RPC exec keeps a line
+  of its own, one line whose only escapes stand outside
+  its quotes, their stdin being herdr's; `remuda setup
   -host` (`internal/setup`) still puts its script on the line; `CommandConn` is an exec as a `net.Conn`
   (the `nc -U` and `remuda bridge` transports, and the Windows tests);
   `Put` cuts a Windows path at its own separator (`rpath.For`).
@@ -1377,12 +1379,12 @@ components and icons as rules for whoever changes it: @docs/design.md
   (`model` in `~/.claude/settings.json`, its own doing), which the hint
   says; a probe of it must put the person's default back the same way.
 - Terminal size modes (`web/src/features/terminal/engine/geometry.ts`): **fit** resizes the shared
-  pane to this screen (herdr follows the smallest attached client — a phone
-  would squeeze the desktop's view), **keep** attaches at the pane's own
+  pane to this screen (the terminal takes the size of the viewer last active, so a phone
+  claiming it would squeeze the desktop's view), **keep** attaches at the pane's own
   grid (`cols`/`rows` from the snapshot layouts, in the roster) and shrinks
   the font to fit the width, scrolling when it can't. Touch defaults to
-  keep. On a machine on remuda-core the terminal takes the size of the
-  viewer last active (attached, typed, resized or focused), so **fit** there
+  keep. The terminal takes the size of the viewer last active on the
+  machine (attached, typed, resized or focused), so **fit** there
   claims it back whenever the xterm gets the focus (a resize sent again);
   the connect request says keep (`&keep=1`), a `keep_size` attach that
   types but never sizes the terminal, so the engine attaches again when the
@@ -1393,10 +1395,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   lens's too, `validGrid` refusing what no terminal holds; a window-size
   request the program prints stays xterm's to swallow; tested with xterm
   itself) rather than the roster's; two fit viewers of different sizes share the
-  terminal's one grid, its last active viewer's, as herdr's one attach PTY
-  shared its last resize; a viewer link is
+  terminal's one grid, its last active viewer's; a viewer link is
   keep and `wsOnly` (no HTTP fallback, a line saying the network drops
-  WebSockets). herdr reads none of it. Agent status lines (ccstatusline etc.) only fit in keep mode on a
+  WebSockets). The core reads none of it. Agent status lines (ccstatusline etc.) only fit in keep mode on a
   phone. A grid wider than the screen (keep, or fit with a minimum width),
   or a keep-mode one taller than it, scrolls under the wheel and under a
   finger alike (`gridScrolls` / `panOf` in `engine/pointer.ts`, tested): a

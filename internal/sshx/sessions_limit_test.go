@@ -27,6 +27,7 @@ func limitedSSH(t *testing.T) (peak func() int) {
 		"trap 'rm -f \"$me\"' EXIT\n" +
 		"what=\"$*\"; case \"$what\" in *eval*) what=\"$what $(cat)\" ;; esac\n" + // a script comes on stdin, a request on the line
 		"case \"$what\" in\n" +
+		"*refuse*) echo 'debug1: asking the master' >&2; exec 1>&-; sleep 0.05; echo 'mux_client_request_session: session request failed: Session open refused by peer' >&2; exit 255 ;;\n" +
 		"*quick*) echo done ;;\n" +
 		"*hold*) rm -f \"$me\"; exec sleep 30 ;;\n" +
 		"*) sleep 0.6 ;;\nesac\n"
@@ -156,6 +157,27 @@ func TestTheWaitComesOutOfTheTimeout(t *testing.T) {
 	}
 	if took := time.Since(began); took > 2*time.Second {
 		t.Errorf("a 600ms call took %s", took)
+	}
+}
+
+func TestARefusedSessionIsSaidInWords(t *testing.T) {
+	limitedSSH(t)
+	c := limited()
+	_, err := c.Run("refuse", 5*time.Second)
+	if err == nil || !strings.Contains(err.Error(), "MaxSessions") {
+		t.Errorf("a script: %v", err)
+	}
+	if err := c.Stream("refuse", 5*time.Second, func([]byte) {}); err == nil || !strings.Contains(err.Error(), "MaxSessions") {
+		t.Errorf("a stream: %v", err)
+	}
+	conn, err := c.DialExec("refuse", 5*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	_, err = conn.Read(make([]byte, 8))
+	if err == nil || !strings.Contains(err.Error(), "MaxSessions") || errors.Is(err, io.EOF) {
+		t.Errorf("a request, at its first failure: %v", err)
 	}
 }
 

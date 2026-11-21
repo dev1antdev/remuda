@@ -83,7 +83,7 @@ export function rowExplain(row: FleetRow): string {
     case "herdr.plugin":
       return t("Whether herdr's plugin {id} is installed there, and where from.", { id: row.arg ?? "" });
     case "remuda.version":
-      return t("The remuda on each machine: it keeps the agents' door to your tasks there and relays its terminals.");
+      return t("The remuda on each machine: it keeps the agents' door to your tasks there.");
     case "code.version":
       return t("The code-server the Code mode opens on each machine.");
     case "core.version":
