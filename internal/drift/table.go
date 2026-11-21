@@ -243,8 +243,5 @@ func newer(a, b string) bool {
 // yes ranks a flag on over off.
 func yes(a, b string) bool { return a == "yes" && b == "no" }
 
-// present ranks something there over nothing.
-func present(a, b string) bool { return a != "" && b == "" }
-
 // fewer ranks a checkout fewer commits behind its upstream first.
 func fewer(a, b string) bool { return len(a) < len(b) || (len(a) == len(b) && a < b) }
