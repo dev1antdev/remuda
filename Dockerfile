@@ -48,10 +48,11 @@ COPY --from=build /out/remuda /usr/local/bin/remuda
 # Runs as the uid you pass (compose: `user: "${UID}:${GID}"`) so files under
 # the mounted home keep your ownership; HOME must match the mount point.
 # Without one it still is not root: an unprivileged uid, and the home open
-# to it.
-ENV HOME=/home/remuda
-RUN mkdir -p /home/remuda && chmod 777 /home/remuda
-WORKDIR /home/remuda
+# to it. The home keeps the name it has always had: a stack that leaves
+# HOST_HOME unset mounts its state and its keys here.
+ENV HOME=/home/herdr
+RUN mkdir -p /home/herdr && chmod 777 /home/herdr
+WORKDIR /home/herdr
 USER 1000:1000
 EXPOSE 7317
 # Loopback-only is the binary's default; inside a container the port mapping

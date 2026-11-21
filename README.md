@@ -995,7 +995,8 @@ docker compose up -d     # http://127.0.0.1:7317
 ```
 
 In Portainer: add the repository as a stack, set the same variables in the
-stack environment. The image carries `remuda`, `ssh` and `git`; it mounts
+stack environment. The image carries `remuda`, `ssh` and `git` (its home is
+still `/home/herdr`, so a stack already running keeps its state and keys); it mounts
 the host user's `~/.config` (remuda's state), `~/.claude` (transcripts),
 `~/.ssh` (remote machines) and the projects root (file viewer), all at the
 same paths as on the host, running as that user's uid.
