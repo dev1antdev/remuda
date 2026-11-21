@@ -105,24 +105,3 @@ func cleanEnv() []string {
 	}
 	return out
 }
-
-// StartServerScriptOn is StartServerScript for a machine's system: on Windows the server is started outside the ssh
-// session (StartWindowsServerScript), elsewhere as StartServerScript does.
-func StartServerScriptOn(system, bin, socket string) string {
-	if system == "windows" {
-		return StartWindowsServerScript(bin, socket)
-	}
-	return StartServerScript(bin, socket)
-}
-
-// StartServerScript is the same start as a POSIX script over ssh: unless a server runs, start one and wait for it.
-func StartServerScript(bin, socket string) string {
-	q := script.Quote(bin)
-	s := script.Quote(socket)
-	up := `HERDR_SOCKET_PATH=` + s + ` ` + q + ` status server 2>/dev/null | grep -q "status: running"`
-	return `if ` + up + `; then exit 0; fi; ` +
-		`mkdir -p "$(dirname ` + s + `)"; cd "$HOME" 2>/dev/null; export HERDR_SOCKET=` + s + ` HERDR_SOCKET_PATH=` + s + `; unset HERDR_ENV HERDR_PANE_ID TS_AUTHKEY; ` +
-		`if [ -n "${SHELL:-}" ] && [ -x "$SHELL" ]; then nohup "$SHELL" -l -c ` + script.Quote("exec "+q+" server") + ` >> "$(dirname ` + s + `)/herdr-server.out" 2>&1 < /dev/null & ` +
-		`else nohup ` + q + ` server >> "$(dirname ` + s + `)/herdr-server.out" 2>&1 < /dev/null & fi; ` +
-		`i=0; while [ $i -lt 30 ]; do if ` + up + `; then exit 0; fi; sleep 0.5; i=$((i+1)); done; exit 1`
-}
