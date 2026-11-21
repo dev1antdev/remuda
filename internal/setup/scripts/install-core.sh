@@ -16,7 +16,7 @@
 set -eu
 
 ACTION="${1:-install}"
-VERSION="${CORE_VERSION:-0.2.3}"
+VERSION="${CORE_VERSION:-0.2.4}"
 BIN="$HOME/.local/bin"
 EXE="remuda-core"
 EXT="tar.gz"
@@ -24,14 +24,14 @@ EXT="tar.gz"
 # checksums of the release assets this script knows (sha256, as the release's
 # checksums.txt lists them); another version needs CORE_SHA256 set by hand
 case "$(uname -s)-$(uname -m)" in
-MINGW*-x86_64 | MSYS*-x86_64 | CYGWIN*-x86_64) TARGET="windows-x86_64"; EXE="remuda-core.exe"; EXT="zip"; KNOWN="393914aff1a4863bb14502b8984d76a16465961f9c411201a6ca926a6172c91d" ;;
-Darwin-arm64) TARGET="macos-aarch64"; KNOWN="151317ec12a536412c72f8781d0629f31168fa71d7ccc6fe6722709eb7a2e39e" ;;
-Darwin-x86_64) TARGET="macos-x86_64"; KNOWN="a4d7a930cd859f48356b88e83accf3056c03b37528976b305053d4955d05b862" ;;
-Linux-aarch64 | Linux-arm64) TARGET="linux-aarch64"; KNOWN="2ddf9b7f031e691d953a78ca3a84df7e37c21dee40fac738b10e55f0a2ce5dcb" ;;
-Linux-x86_64) TARGET="linux-x86_64"; KNOWN="a0edfb5d609a52d19f369c218db1ec8ce9bb15135b59fb06456d2129804edb1a" ;;
+MINGW*-x86_64 | MSYS*-x86_64 | CYGWIN*-x86_64) TARGET="windows-x86_64"; EXE="remuda-core.exe"; EXT="zip"; KNOWN="558cedec3347b82e809c05ae3d4ea66b3bf160b4fe9759341c606855403d2031" ;;
+Darwin-arm64) TARGET="macos-aarch64"; KNOWN="34c45aa4c12128cb0865c07c9b79a67131b778d5ac737e5919dd50327159e615" ;;
+Darwin-x86_64) TARGET="macos-x86_64"; KNOWN="3f32148105f0eb10e198c039d7ad0d8eed8b6fdd55a19b3425ec771e66b2cfb1" ;;
+Linux-aarch64 | Linux-arm64) TARGET="linux-aarch64"; KNOWN="986c5d00ab07e6eece022f9839ae5c8942ecc9be9a5f3ccad1215b37ec2f0124" ;;
+Linux-x86_64) TARGET="linux-x86_64"; KNOWN="bd3453b6e3fbbc9b70c9aec9c75154cda86456a679bfd67ca93f061674964428" ;;
 *) echo "remuda-core has no build for $(uname -s) $(uname -m)"; exit 1 ;;
 esac
-[ "$VERSION" = "0.2.3" ] || KNOWN=""
+[ "$VERSION" = "0.2.4" ] || KNOWN=""
 SHA="${CORE_SHA256:-$KNOWN}"
 CORE="$BIN/$EXE"
 

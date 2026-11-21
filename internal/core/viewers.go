@@ -23,10 +23,12 @@ const viewerChunk = 32 << 10
 // the terminal's own rows.
 const attachHistory = 2000
 
-// firstPaintWithin is how long a viewer that asked for history waits for its first paint. The core sends it at once
-// but drops it whole past its 4 MiB stream queue (remuda-core 0.2.0: a richly coloured history can weigh that), and
-// the viewer would stay blank for good, or be handed the program's next output with no screen under it; it attaches
-// again with its screen alone.
+// firstPaintWithin is how long a viewer that asked for history waits for its first paint. A core on 0.2.4 cuts its
+// history to the newest rows that fit its 4 MiB stream queue, and the screen and the state arrive with it; a screen
+// alone past that queue is dropped whole, as an older core drops any paint that size (a richly coloured history can
+// weigh that), and the viewer would stay blank for good, or be handed the program's next output with no screen under
+// it; it attaches again with its screen alone, which helps every paint but one: a screen alone past the queue is
+// dropped again, and the viewer stays blank until the program's own output.
 const firstPaintWithin = 3 * time.Second
 
 // paintStart is the byte a core's first paint begins with (CAN, ending whatever sequence a backlog was cut in): a
@@ -49,8 +51,9 @@ func NewTerminals(client *Client) *Terminals {
 
 // Open attaches one viewer: Keep types but leaves the size to the others, Observe only watches. A viewer of either
 // kind is handed the terminal's grid in order with the bytes, an Out of its own ahead of the paint the core sends at
-// that grid — never a sequence in the bytes, which the program itself could print. It is painted attachHistory rows of
-// history first, or its screen alone when that paint never comes (firstPaintWithin).
+// that grid — never a sequence in the bytes, which the program itself could print. It is painted up to attachHistory
+// rows of history first — fewer when the core cuts the paint to its queue — or its screen alone when that paint never
+// comes (firstPaintWithin).
 func (t *Terminals) Open(termID string, view herdr.View) (herdr.Viewer, error) {
 	v, err := t.attach(termID, view, attachHistory)
 	if err != nil {
