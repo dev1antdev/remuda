@@ -11,8 +11,7 @@ import (
 
 // TestOnWindowsSetupOfThisPCRunsAsFromACockpit is `remuda setup -host pc -no-service` and `remuda mcp install -host
 // pc` against the runner itself over its OpenSSH, Git Bash its shell: remuda-core's release really installed beside
-// remuda.exe, herdr there already, its server running, a
-// stand-in claude whose calls are kept, so the registration's words are what Claude Code would be told.
+// remuda.exe, and a stand-in claude whose calls are kept, so the registration's words are what Claude Code would be told.
 func TestOnWindowsSetupOfThisPCRunsAsFromACockpit(t *testing.T) {
 	wintest.Live(t)
 	home, _ := os.UserHomeDir()
@@ -29,7 +28,7 @@ func TestOnWindowsSetupOfThisPCRunsAsFromACockpit(t *testing.T) {
 		t.Fatalf("setup -host: %v\n%s", err, out.String())
 	}
 	wintest.Record(t, "setup.txt", out.String())
-	for _, want := range []string{"herdr: herdr 0.9.", "herdr server: running", "setup: done", "rc " + CoreVersion} {
+	for _, want := range []string{"remuda-core on " + os.Getenv("REMUDA_SSH_HOST"), "rc " + CoreVersion} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("setup did not say %q:\n%s", want, out.String())
 		}

@@ -599,6 +599,18 @@ func TestTheServiceUnitsRunFromAHomeWithASpace(t *testing.T) {
 	}
 }
 
+// TestSetupWithOnlyTheCoreToInstallSaysWhenItFailed: -no-service has nothing after the core, and no page would come up
+// to offer it again, so a core that did not install is the command's error.
+func TestSetupWithOnlyTheCoreToInstallSaysWhenItFailed(t *testing.T) {
+	dir := home(t)
+	write(t, filepath.Join(dir, ".local", "bin", "curl"), "#!/bin/sh\nexit 22\n", 0o755)
+	t.Setenv("PATH", filepath.Join(dir, ".local", "bin")+":/usr/bin:/bin")
+	var out strings.Builder
+	if err := Run(Options{NoService: true}, &out); err == nil || !strings.Contains(err.Error(), "remuda-core") {
+		t.Fatalf("a -no-service setup that installed no core = %v\n%s", err, out.String())
+	}
+}
+
 func TestAServerServiceRunsWithTheFlag(t *testing.T) {
 	dir := linuxHome(t)
 	var out strings.Builder
