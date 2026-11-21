@@ -72,7 +72,7 @@ func TestOnWindowsRemudaCoreIsReachedOverSSH(t *testing.T) {
 		// sshd is the person's own
 		t.Logf("the runner's ssh is elevated; starting the core in this session first: %v", err)
 		// Go needs Windows' own spelling of the binary, Git Bash's /c/... spelling is not an executable path to it
-		winPath, pathErr := remote.Raw("cygpath -w \"$(command -v remuda-core)\"")
+		winPath, pathErr := remote.Raw("cygpath -w " + script.Quote(found.core))
 		if pathErr != nil || strings.TrimSpace(winPath) == "" {
 			t.Fatalf("remuda-core's Windows path: %v %q", pathErr, winPath)
 		}
