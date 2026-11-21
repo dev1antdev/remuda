@@ -16,7 +16,7 @@ export const FIELDS = "input, textarea, select, [contenteditable]";
 
 export function nextKeyAsked(press: KeyPress, dialogOpen: boolean, mac: boolean): boolean {
   if (press.code !== "KeyN" || !press.altKey || press.metaKey || press.ctrlKey || press.shiftKey) return false;
-  if (dialogOpen || press.target?.closest?.(".xterm, .screen-term")) return false;
+  if (dialogOpen || press.target?.closest?.(".xterm")) return false;
   return !(mac && press.target?.closest?.(FIELDS));
 }
 
@@ -25,6 +25,6 @@ export function nextKeyAsked(press: KeyPress, dialogOpen: boolean, mac: boolean)
 export function walkKeyAsked(press: KeyPress, dialogOpen: boolean, mac: boolean): 1 | -1 | 0 {
   const step = press.code === "BracketRight" ? 1 : press.code === "BracketLeft" ? -1 : 0;
   if (!step || !press.altKey || press.metaKey || press.ctrlKey || press.shiftKey) return 0;
-  if (dialogOpen || press.target?.closest?.(".xterm, .screen-term")) return 0;
+  if (dialogOpen || press.target?.closest?.(".xterm")) return 0;
   return mac && press.target?.closest?.(FIELDS) ? 0 : step;
 }

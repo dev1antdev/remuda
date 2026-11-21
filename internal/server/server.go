@@ -61,7 +61,6 @@ import (
 	"github.com/dev1antdev/remuda/internal/schedule"
 	"github.com/dev1antdev/remuda/internal/scorecard"
 	"github.com/dev1antdev/remuda/internal/scratch"
-	"github.com/dev1antdev/remuda/internal/sent"
 	"github.com/dev1antdev/remuda/internal/sessions"
 	"github.com/dev1antdev/remuda/internal/sleep"
 	"github.com/dev1antdev/remuda/internal/subagents"
@@ -140,7 +139,6 @@ type Server struct {
 
 	streams   termStreams
 	relayed   relays           // the terminals piped to a machine's own remuda, which holds their attach
-	typed     sent.Lines       // the screen terminal's lines being typed, a row of the activity once Enter sends one
 	trees     filetree.Service // the project tree's folders, each checkout's git status read once for a few seconds
 	teleports sync.Map         // the moves of work to another machine, by job id: where the agent carrying on is
 }

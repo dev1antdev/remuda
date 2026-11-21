@@ -407,35 +407,12 @@ func (c *Client) PaneRecent(paneID string, n int) (text string, truncated bool, 
 }
 
 // PaneScroll moves the pane's viewport, every viewer's, to offset rows above the bottom (herdr keeps it within what
-// there is) and answers where it stands.
-func (c *Client) PaneScroll(paneID string, offset int) (Scroll, error) {
-	var out struct {
-		Pane struct {
-			Scroll Scroll `json:"scroll"`
-		} `json:"pane"`
-	}
-	if err := c.Call("pane.scroll", map[string]any{"pane_id": paneID, "offset_from_bottom": offset}, &out); err != nil {
-		return Scroll{}, err
-	}
-	return out.Pane.Scroll, nil
-}
 
 func (c *Client) PaneSendKeys(paneID string, keys []string) error {
 	return c.Call("pane.send_keys", map[string]any{"pane_id": paneID, "keys": keys}, nil)
 }
 
 // PaneSendInput types text and then presses keys in one call (pane.send_input), either may be empty: the screen
-// terminal's way into a pane with no attach (a Windows machine's); the keys are in herdr's key-combo grammar.
-func (c *Client) PaneSendInput(paneID, text string, keys []string) error {
-	params := map[string]any{"pane_id": paneID}
-	if text != "" {
-		params["text"] = text
-	}
-	if len(keys) > 0 {
-		params["keys"] = keys
-	}
-	return c.Call("pane.send_input", params, nil)
-}
 
 // AgentInfo is what herdr says of the agent in a pane: its kind and how it stands.
 type AgentInfo struct {

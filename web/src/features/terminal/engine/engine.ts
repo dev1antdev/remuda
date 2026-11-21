@@ -37,7 +37,6 @@ export type EngineProps = Geometry & {
   onReady: (api: TermApi | null) => void;
   onOpenFile: OpenFile;
   onCopied: (chars: number) => void;
-  core?: boolean; // the machine is on remuda-core: whether this viewer keeps the size is its attach's, so a mode change attaches again
   readOnly?: boolean; // a viewer link: watches, never types or sizes the terminal (read once, at the start)
 };
 
@@ -101,20 +100,20 @@ export function createEngine(mount: HTMLElement, machineId: string, paneId: stri
       term.options.fontFamily = fontNow;
     }
     if (applyGeometry(term, fit, mount, grid ? { ...props(), ...grid } : props())) sendResize();
-    if (props().core && transport && keeps() !== keptAt) reattach();
+    if (transport && keeps() !== keptAt) reattach();
   };
   apply();
 
   const onGrid = (cols: number, rows: number) => {
-    if (!props().core || props().mode !== "keep") return;
+    if (props().mode !== "keep") return;
     atGrid(term, cols, rows, () => {
       grid = { cols, rows };
       apply(); // the font that fits it, once the lens is on screen
     });
   };
-  // On remuda-core the terminal takes the size of the viewer last active: a desk turned to claims it back.
+  // The terminal takes the size of the viewer last active: a desk turned to claims it back.
   const claimSize = () => {
-    if (!props().core || readOnly || props().mode === "keep") return;
+    if (readOnly || props().mode === "keep") return;
     lastSize = "";
     sendResize();
   };
@@ -187,7 +186,7 @@ export function createEngine(mount: HTMLElement, machineId: string, paneId: stri
     note,
     inputLost: () => actions.notify(t("What you typed may not have gone through. It will not be sent again."), { error: true }),
     wsOnly: readOnly,
-    freshOnLoss: !!props().core,
+    freshOnLoss: true,
   };
   const reattach = () => {
     keptAt = keeps();

@@ -1,61 +1,11 @@
-// Screen is a pane's terminal as it is — the visible rows with their colours, read from herdr every few seconds — drawn
-// at the size that fits the width it is given, the bottom rows kept when the height runs out (the prompt and the
-// status live there). A viewer link's terminal lens: no attach, nothing typed.
+// The screen's rows with their colours — what a timelapse draws, and the find's marks over them.
 
-import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
-import { useFlavor } from "@/app/theme";
-import { useQuery } from "@/lib/query";
-import { ansiPalette } from "@/lib/theme";
-import { Notice } from "@/ui";
+import { useLayoutEffect, useState, type RefObject } from "react";
 import { parseAnsi, type Line, type Span } from "./ansi";
-import { fetchScreen } from "./api";
 import { thumbFont } from "./engine/geometry";
-import { t } from "@/lib/i18n";
 
 const BASE_FONT = 13;
 
-export const Screen = memo(function Screen({ machineId, paneId, cols, busy, active }: {
-  machineId: string;
-  paneId: string;
-  cols: number; // the pane's own grid, 0 when unknown
-  busy: boolean; // the agent works or asks: the faster pace
-  active: boolean; // on screen: a hidden screen keeps its rows and waits
-}) {
-  const etag = useRef<string | null>(null);
-  useEffect(() => {
-    etag.current = null;
-  }, [machineId, paneId]);
-  const { data: text, error } = useQuery<string>(
-    async () => {
-      const res = await fetchScreen(machineId, paneId, etag.current);
-      if (!res) return undefined;
-      etag.current = res.etag;
-      return res.text;
-    },
-    [machineId, paneId],
-    { every: busy ? 3000 : 15000, enabled: active },
-  );
-  const flavor = useFlavor();
-  const palette = useMemo(() => ansiPalette(flavor), [flavor]);
-  const lines = useMemo(() => (text === null ? [] : parseAnsi(text, palette)), [text, palette]);
-  // the pane's grid, or the longest row when the roster has none or a row runs past it (a remote's grid can lag)
-  const width = widthOf(cols, lines);
-  const box = useRef<HTMLDivElement>(null);
-  const fontSize = useFitFont(box, width);
-  return (
-    <div className="screen" ref={box} style={{ fontSize }}>
-      {text === null && !error && <div className="empty chat-empty">{t("Loading…")}</div>}
-      {error && (
-        <Notice tone="error" className="chat-notice">
-          {error}
-        </Notice>
-      )}
-      <ScreenLines lines={lines} />
-    </div>
-  );
-});
-
-// ScreenLines draws a screen's parsed rows, each span in its colours and weight; the timelapse player draws with it too
 // ScreenLines draws the rows; current is the row a search stepped to, drawn apart
 export function ScreenLines({ lines, current = -1 }: { lines: Line[]; current?: number }) {
   return lines.map((line, i) => (

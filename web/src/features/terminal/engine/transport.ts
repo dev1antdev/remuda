@@ -1,7 +1,7 @@
 // The pane's byte stream: a WebSocket, or HTTP long-polling once WebSockets prove unusable on this page
 // (a proxy that drops them). Bytes come in, keystrokes and resizes go back; a dropped connection retries.
 
-import { createSender } from "../screen/sender";
+import { createSender } from "./sender";
 
 export type Transport = {
   input(data: string): void;

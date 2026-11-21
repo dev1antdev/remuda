@@ -41,7 +41,6 @@ describe("reopenKeyAsked", () => {
       expect(reopenKeyAsked(press({ metaKey: true }), false, mac)).toBe(false);
       expect(reopenKeyAsked(press(), true, mac)).toBe(false);
       expect(reopenKeyAsked(press({ target: inside(".xterm") }), false, mac)).toBe(false);
-      expect(reopenKeyAsked(press({ target: inside(".screen-term") }), false, mac)).toBe(false); // the screen terminal of a Windows PC
     }
   });
 

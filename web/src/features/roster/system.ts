@@ -1,17 +1,13 @@
-// What a machine's system means for the page: a Windows PC's panes on herdr have no live terminal (herdr has no terminal
-// attach there, so the lens is the screen terminal; remuda-core attaches everywhere) and a Windows PC has no
-// code-server, so no Code mode and no "Open in the editor". Pure.
+// What a machine's system means for the page: a Windows PC has no code-server, so no Code mode and no "Open in the
+// editor". Pure.
 
 import { t } from "@/lib/i18n";
 import type { Option } from "@/ui/Select";
 
-type Located = { os?: string; host?: string; core?: boolean } | null | undefined;
+type Located = { os?: string; host?: string } | null | undefined;
 
 // onWindows says the machine is a Windows PC, by the roster's os
 export const onWindows = (machine: Located): boolean => machine?.os === "windows";
-
-// screenOnly says the machine's panes get the screen terminal rather than a live one: a Windows PC on herdr
-export const screenOnly = (machine: Located): boolean => onWindows(machine) && !machine?.core;
 
 // systemWords names the system as a person reads it; "" while the roster does not know it
 export function systemWords(os: string | undefined): string {
@@ -35,7 +31,3 @@ export const noEditorWords = () => t("no code-server for Windows");
 export function editorOption(option: Option<string>, machine: Located): Option<string> {
   return onWindows(machine) ? { ...option, hint: noEditorWords(), disabled: true } : { ...option, hint: machine?.host };
 }
-
-// screenTerminalWords is why a Windows machine's terminal is a screen read again and again, and where a live one is
-export const screenTerminalWords = (host: string) =>
-  t("herdr on Windows has no terminal attach, so this is the pane's screen read a few times a second and typed into. For a live terminal, run herdr --remote {host} in a terminal on your Mac.", { host: host || "<pc>" });

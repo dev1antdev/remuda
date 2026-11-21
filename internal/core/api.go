@@ -246,7 +246,3 @@ func agentIn(t *Terminal, target string) (string, error) {
 	}
 	return agent, nil
 }
-
-func (a *Adapter) PaneScroll(paneID string, offset int) (herdr.Scroll, error) {
-	return herdr.Scroll{}, notOnCore("pane.scroll")
-}

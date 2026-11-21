@@ -8,7 +8,7 @@ import { createEngine, type Engine } from "./engine/engine";
 import type { Flavor } from "@/lib/theme";
 import type { Modifier, SizeMode, TermApi } from "./engine/types";
 
-export default function TerminalView({ machineId, paneId, agent, cols, rows, mode, minCols, core = false, readOnly = false, flavor, fontFamily, fontSize, modifier, selectMode, onModifierUsed, onReady, onOpenFile, onCopied, active = true }: {
+export default function TerminalView({ machineId, paneId, agent, cols, rows, mode, minCols, readOnly = false, flavor, fontFamily, fontSize, modifier, selectMode, onModifierUsed, onReady, onOpenFile, onCopied, active = true }: {
   machineId: string;
   paneId: string;
   cols: number; // the pane's own grid, 0 when unknown
@@ -16,7 +16,6 @@ export default function TerminalView({ machineId, paneId, agent, cols, rows, mod
   agent: boolean; // an agent's pane: file paths and URLs are links; in a shell's pane only a Cmd/Ctrl-click opens a URL
   mode: SizeMode;
   minCols: number; // fit mode: never narrower than this many columns (0 = off)
-  core?: boolean; // the machine is on remuda-core: every viewer its own attach, which a change of the size mode opens again
   readOnly?: boolean; // a viewer link: watches the terminal, never types or sizes it (fixed for the mount's life)
   flavor: Flavor; // the page's flavour: the terminal's colours follow it
   fontFamily: string; // the page's monospace stack
@@ -30,8 +29,8 @@ export default function TerminalView({ machineId, paneId, agent, cols, rows, mod
   active?: boolean; // the lens on screen; hidden, the attach stays and output keeps arriving
 }) {
   const mountRef = useRef<HTMLDivElement>(null);
-  const live = useRef({ flavor, fontFamily, agent, cols, rows, mode, minCols, core, readOnly, fontSize, modifier, onModifierUsed, onReady, onOpenFile, onCopied });
-  live.current = { flavor, fontFamily, agent, cols, rows, mode, minCols, core, readOnly, fontSize, modifier, onModifierUsed, onReady, onOpenFile, onCopied };
+  const live = useRef({ flavor, fontFamily, agent, cols, rows, mode, minCols, readOnly, fontSize, modifier, onModifierUsed, onReady, onOpenFile, onCopied });
+  live.current = { flavor, fontFamily, agent, cols, rows, mode, minCols, readOnly, fontSize, modifier, onModifierUsed, onReady, onOpenFile, onCopied };
   const engine = useRef<Engine | null>(null);
 
   useEffect(() => {

@@ -79,7 +79,7 @@ export default function Shell() {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as Element | null;
       if (e.code === "Slash" && e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
-        if (target?.closest?.("input, textarea, select, [contenteditable], .xterm, .screen-term")) return;
+        if (target?.closest?.("input, textarea, select, [contenteditable], .xterm")) return;
         const { dialog, panel } = app.get();
         if (dialog?.kind === "keys") {
           e.preventDefault();
@@ -91,7 +91,7 @@ export default function Shell() {
         return;
       }
       if (e.code !== "KeyK" || e.altKey || e.shiftKey || (isMac ? !e.metaKey : !e.ctrlKey)) return;
-      if (!isMac && target?.closest?.(".xterm, .screen-term")) return;
+      if (!isMac && target?.closest?.(".xterm")) return;
       e.preventDefault();
       actions.togglePanel("palette");
     };

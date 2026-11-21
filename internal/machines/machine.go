@@ -216,9 +216,6 @@ func (mc *Machine) connect() {
 	})
 	attach.Hold = conn.HoldTerminal
 	attach.ReadRefusal = func(first string) (string, bool) { return sshx.SessionRefused(conn.Host, first) }
-	if windows {
-		attach.Unavailable = NoAttachOnWindows
-	}
 	mc.mu.Lock()
 	mc.herdrBin, mc.socket = bin, sock
 	mc.mu.Unlock()

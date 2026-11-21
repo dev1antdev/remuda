@@ -61,10 +61,7 @@ func (s *Service) Available(mc *machines.Machine) []Update {
 	if s.Machines != nil && s.Machines.Server() && mc.Local() {
 		return serverHostOnly(offered)
 	}
-	if mc.OnCore() {
-		return withoutHerdr(offered)
-	}
-	return offered
+	return withoutHerdr(offered)
 }
 
 // withoutHerdr is what a machine reached through remuda-core is offered: nothing of herdr's (herdrs)

@@ -268,13 +268,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   call only. `Client.OnTransportError` fires for failures to *reach* herdr
   (not for herdr's own `*Error` refusals); a remote machine hooks it to
   mark itself dead, so handlers never call MarkDead. `Client.PaneScreen` is `pane.read` with the
-  colours kept (the screen view); `PaneRecent` is the pane's last n
-  rows, the screen and herdr's scrollback above it (source `recent`),
-  `PaneScroll` moves its viewport (`pane.scroll`, every viewer's) and
-  `PaneInfo.Scroll` is where it stands; `PaneSendInput` is `pane.send_input`
-  (text, then keys, in one call — herdr brackets its text as a paste while
-  the app asked for bracketed paste, where `pane.send_text` stays raw:
-  seen on a throwaway 0.9.5), the screen terminal's way in. `PaneInfo` has
+  colours kept (the chat's screen read); `PaneRecent` is the pane's last n
+  rows, the screen and herdr's scrollback above it (source `recent`).
+  `PaneInfo` has
   `Dir()`, `AgentName()`, `DisplayTitle()`; status vocabularies are the
   `Status*`/`UI*` constants with `UIStatus(status, hasAgent)` as the one
   mapping.
@@ -600,9 +596,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   and remuda's own would go ahead of the agent's next prompt); the bytes
   sessions sends for home, end,
   pageup, pagedown and delete (herdr 0.9.5 names none) go as the core's
-  named keys, encoded for the program's keyboard modes (`keyBytes`);
-  `PaneSendInput` refuses a paste of several lines (typed raw, each would
-  run). **Worktrees** (Core 20, `worktree.go`, tested on coretest with
+  named keys, encoded for the program's keyboard modes (`keyBytes`).
+  **Worktrees** (Core 20, `worktree.go`, tested on coretest with
   `shell.Local` in a HOME of the test's own and on paper,
   `worktree_parse_test.go`): the core knows no git, so the adapter runs it
   through the machine's shell (`NewAdapter`'s required `shell`, the machine
@@ -683,8 +678,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   write, every terminal still labelled for what they closed, so a layout or
   a tab made meanwhile goes with it. The document keeps no pane's
   environment; the tree is taken as scenes' `checkLayout` passed it, only one
-  with no pane refused (`invalid_request`). Still answering `invalid_request` "… is not on
-  remuda-core yet": `PaneScroll` (Core 25). `Bridged` is false: a stream costs the core nothing. The
+  with no pane refused (`invalid_request`). `Bridged` is false: a stream costs the core nothing. The
   watcher still paces the snapshots an event asks for (`internal/watch`,
   150 ms debounce, 500 ms / 1 s apart): the mirror makes each one free, not
   sooner.
@@ -1671,9 +1665,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   headless Chrome — driving `e2e/smoke.mjs` over the
   DevTools protocol with no dependency: sign in, a scratch shell
   workspace through the API, a command typed into the terminal lens and
-  read back through `/api/screen` and once more through the screen terminal
-  with the browser's roster saying the machine is a Windows PC (`os`
-  dressed through CDP's `Fetch`), the shell's lens switch vacant (a
+  read back through `/api/screen`, the shell's lens switch vacant (a
   shell has its terminal alone), Review, Activity,
   the palette, the workspace closed, no console errors — then
   `e2e/display.mjs`, **the display checks**: a repository with two tabs
@@ -1693,9 +1685,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   view, the files rail's Project tab on the repository (its marks, a link, an
   ignored folder, a folder opened, a row's menu, Send to agent unsent, the
   light theme's icons at a desk) and the file viewer's changed lines with the
-  old ones shown in place, the screen terminal (the notes shell played as a Windows PC's,
-  a command typed into it and its answer read off it), the floating
-  terminal, the screen-sharing chip, the icon
+  old ones shown in place, the floating terminal, the screen-sharing chip, the icon
   dialog's four tabs, the status bar with its limits card and its load's
   and ports' popups, the Tasks board, list and detail, Review, Code, every panel, each
   section of Settings, the palette, the keys sheet and the dialogs (new
@@ -1723,9 +1713,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   command reaches the person's core; remuda started with no flag of a
   backend; at the end remuda is stopped and waited for first,
   then `remuda-core server stop` (a remuda still up would start a core
-  again through `connect`). The smoke and the display checks read the
-  roster's machine `core` and there leave out what a core has not yet: the
-  screen terminal (a Windows PC's pane is attached there too; Core 26g).
+  again through `connect`). The smoke and the display checks run every
+  screen: no screen is left out on a core now (Core 26g took the last one,
+  the screen terminal).
   CI's `e2e` job (on `release` and by hand)
   installs remuda-core by its checksums, as the check job does, and is the
   gate; pull requests target `release`; `main` is what is out (AGENTS.md,
@@ -1995,10 +1985,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   proxy probe) is 426 before anything attaches. A peer's requests carry
   the bearer token and no Origin, so csrfGuard lets them through. Never
   `--takeover`.
-- **A Windows PC of the fleet** (the remote side; the page's screen
-  terminal and `POST /api/input` are the page's): a Windows machine is a
-  remote reached over ssh like any other, the cockpit itself always a Mac
-  or Linux. Its ssh shell is **Git Bash** — the person sets Windows'
+- **A Windows PC of the fleet** (the remote side): a Windows machine is a
+  remote reached over ssh like any other — its terminal is live, an attach
+  of remuda-core like any machine's — the cockpit itself always a Mac or
+  Linux. Its ssh shell is **Git Bash** — the person sets Windows'
   OpenSSH `DefaultShell` once (`script.WindowsDefaultShell`, which remuda
   never writes and never elevates for) — so every POSIX script runs there
   under MSYS2 as it is. The connection's probe (`machines/probe.go`,
@@ -3997,58 +3987,6 @@ components and icons as rules for whoever changes it: @docs/design.md
   release within 4px) as a press+release report at its cell, sent after
   xterm's mouseup so a click that opened a link is not also an app click.
   Drags never reach the app.
-- **The screen terminal** (`web/src/features/terminal/screen/`;
-  `internal/server/screen.go`): herdr has **no `herdr terminal attach` on
-  Windows**, so a pane of a machine on herdr whose roster `os` is `windows`
-  (`screenOnly` in `features/roster/system.ts`: a Windows PC on remuda-core,
-  roster `core`, gets the live terminal like any other) never gets the live
-  terminal: the terminal lens (`TerminalLens`'s `screen`), the split view's
-  terminal side and the floating terminal's drawer show `ScreenTerminal`
-  instead — never a WebSocket attach, never a resize of the pane.
-  `useLiveScreen` reads `GET /api/screen`
-  (ANSI, an ETag 304 when unchanged) every `FAST_MS` 400 ms while its field
-  has the focus, `SLOW_MS` 1.5 s while it is only on screen, nothing while
-  hidden or while a selection lies on it (`useSelectionHeld`: the rows stay
-  put while they are copied), and at once and `ECHO_MS` 150 ms after every
-  send; the rows are `features/terminal/ansi.ts`'s `parseAnsi` (SGR colours
-  in xterm's palette, 256 and true colour, bold / dim / italic / underline /
-  inverse, every other escape dropped; tested) drawn by `Screen.tsx`'s
-  `ScreenLines`, at the font
-  that fits the pane's columns up to the text size picked and never under
-  `MIN_FONT` 8 (`screenFont` in `engine/geometry.ts`, through `useFitFont`'s
-  fit rule), drawn from the top and kept at the bottom while followed,
-  scrolling either way when the grid is larger. No cursor: `pane.read`
-  names none. `useTyping` is the keyboard: a hidden `textarea` takes what is
-  typed — characters as text, through an input method (composition) and a
-  phone's keyboard (`beforeinput` for its Backspace and Enter) too, a paste
-  as a paste — and a keydown on it or on the screen the keys herdr names
-  (`keyOf` in `strokes.ts`, tested: Enter with Shift, Alt or Ctrl, Esc,
-  Tab and Shift+Tab, Backspace, Delete, the arrows with their modifiers,
-  Home / End / PageUp / PageDown, Ctrl and a letter or digit by key code,
-  Ctrl+[ as Esc, Alt and a letter off a Mac — a Mac's Option types its
-  character; never ⌘, Ctrl+V off a Mac, Ctrl+Shift+…, the find key, nor
-  Ctrl/⌘+C over a selection, which copies); the key bar types through the
-  same path (`strokeOf` reads its sequences, `withModifier` spends its
-  one-shot Ctrl or Alt); `createSender` (`sender.ts`, tested) sends the
-  first stroke at once and coalesces what is typed while a request is out
-  (`takeBatch`: typed text then the keys after it, a paste alone, at most
-  `MAX_TEXT` 4096 characters and `MAX_KEYS` 64), never two requests in
-  flight, a refusal a toast that drops what was queued behind it. `POST
-  /api/input {machine, pane, text?, paste?, keys?}` (`handleInput`, the
-  person's only — neither a viewer link's GET routes nor an agent key's,
-  tested in `internal/auth`) is `sessions.Input.SendInput` under the pane's
-  lock, and a row of the activity per line (`sent.Lines`). The find over
-  the scrollback works as on the live terminal: `useTerminalFind` moves
-  herdr's viewport, the screen read again shows it, `markLines` marks the
-  query and the row asked for; the find closed scrolls the pane back to
-  the bottom, the screen terminal having no wheel of its own. The View
-  menu keeps the text size and the key bar alone (`useTerminalViewItems`'s
-  `screen`); a quiet line under the screen, with a `Tip`, says why it is a
-  screen and that `herdr --remote <pc>` gives a live terminal. `.screen-term`
-  counts as a terminal for the page's keys (Ctrl+K and Esc stay the pane's,
-  Alt+N / Alt+H / Alt+Z pass it by, `app/escape.ts`). Measured on a throwaway
-  herdr here: a keystroke on the screen in about 15 ms, a command's output
-  about 50 ms after Enter.
 - **The floating terminal** (`internal/scratch`, tested;
   `internal/server/scratch.go`; `web/src/features/terminal/float/`): a
   shell on a key over every mode. `scratch.Store` keeps, per machine in
@@ -4786,13 +4724,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   «yes» to api · w3:p1", the device's name from `auth.Devices.Name`, an
   agent key's name, else "an API client"; the text one line cut at 80
   runes, keys by their names (a combination by its parts, "Ctrl+A",
-  "Alt+Enter") — and the screen terminal's `/api/input` one per line it
-  sends, not per keystroke (`sent.Lines`, tested: per device and pane, the
-  text typed since the last row when Enter ends it, a backspace taking a
-  character off and Ctrl+U the line, else the keys pressed before the Enter
-  — "↓ ↓ Enter", a menu answered — and Ctrl+C as a row of its own; the
-  last 512 runes of a line kept, at most 256 lines, the one typed into
-  longest ago going first) — that `feed.LastID` skips, so the bell stays
+  "Alt+Enter")) — that `feed.LastID` skips, so the bell stays
   dark and `feed.seen` does not move for it; the panel draws it in the quiet
   colour. `features/activity/Activity.tsx` is the panel behind
   the bell (store panel `activity`): by day (`group.ts`, tested), a row
@@ -7490,12 +7422,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   `SendKeys`
   (herdr 0.9.5 refuses `home`, `end`, `pageup`, `pagedown` and `delete` as
   `invalid_key`, so those go as a terminal's bytes through `send_text`:
-  `ESC O H`, `ESC O F`, `ESC [5~`, `ESC [6~`, `ESC [3~`), `SendInput` (the
-  screen terminal's typing, a `Typed{Text, Paste, Keys}` checked by
-  `NewTyped` — some text or keys, the text `MaxTypedText` 64 KB at most,
-  any characters: typed text goes raw through `send_text`, keystroke for
-  keystroke, a paste through `send_input` with the keys after it, which
-  herdr brackets while the app asked for it; tested on a throwaway herdr),
+  `ESC O H`, `ESC O F`, `ESC [5~`, `ESC [6~`, `ESC [3~`)),
   `SubmitToAgent` (`agent.prompt` alone: a pane whose agent left is
   `ErrNoAgent`, never typed into its shell — the schedules, a booked
   continue, a tidy's `/compact`: on remuda-core never into a turn), `SubmitToFolder` (the
@@ -7944,9 +7871,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   `esc`, `up`, `down`, `tab`, `shift+tab`, `backspace`, `ctrl+c`… (verified
   live on 0.9.1; the server lowercases and checks it, `sessions.Keys`; 0.9.5
   has no word for home, end, the page keys and delete, which go as their
-  bytes). The REST `/api/keys`
-  path is for the chat lens only, `/api/input` for the screen terminal's
-  typing. The live terminal lens's key bar never uses either:
+  bytes). The REST `/api/keys` path is for the chat lens only. The live
+  terminal lens's key bar never uses it:
   it types raw sequences through the live terminal's own input path
   (`TermApi.input`), so ⏎ = `ESC CR` (Alt+Enter → newline in Claude Code,
   verified), arrows follow DECCKM, and Ctrl/Alt are one-shot modifiers.

@@ -1,7 +1,6 @@
 package sessions
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
@@ -109,64 +108,4 @@ type Typed struct {
 	Text  string
 	Paste bool
 	Keys  []string
-}
-
-// NewTyped checks a request of the screen terminal: some text or keys, the text within MaxTypedText, the keys in the grammar.
-func NewTyped(text string, paste bool, keys []string) (Typed, error) {
-	if text == "" && len(keys) == 0 {
-		return Typed{}, errors.New("text or keys required")
-	}
-	if len(text) > MaxTypedText {
-		return Typed{}, fmt.Errorf("at most %d KB of text at once", MaxTypedText>>10)
-	}
-	named, err := Keys(keys)
-	if err != nil {
-		return Typed{}, err
-	}
-	return Typed{Text: text, Paste: paste, Keys: named}, nil
-}
-
-// Typist is what the screen terminal's typing needs of herdr's client.
-type Typist interface {
-	PaneSendText(paneID, text string) error
-	PaneSendInput(paneID, text string, keys []string) error
-}
-
-// SendInput types into a pane with no attach (a Windows machine's), under the pane's lock: typed text as raw keystrokes
-// (pane.send_text), a paste through pane.send_input with the keys that follow it, then the keys, those herdr has no
-// word for as their bytes.
-func (in *Input) SendInput(client Typist, ref events.PaneRef, typed Typed) error {
-	lock := in.lock(ref)
-	lock.Lock()
-	defer lock.Unlock()
-	paste := ""
-	if typed.Paste {
-		paste = typed.Text
-	} else if typed.Text != "" {
-		if err := client.PaneSendText(ref.Pane, typed.Text); err != nil {
-			return err
-		}
-	}
-	for _, run := range keyRuns(typed.Keys) {
-		if run.bytes == "" {
-			if err := client.PaneSendInput(ref.Pane, paste, run.named); err != nil {
-				return err
-			}
-			paste = ""
-			continue
-		}
-		if paste != "" {
-			if err := client.PaneSendInput(ref.Pane, paste, nil); err != nil {
-				return err
-			}
-			paste = ""
-		}
-		if err := client.PaneSendText(ref.Pane, run.bytes); err != nil {
-			return err
-		}
-	}
-	if paste != "" {
-		return client.PaneSendInput(ref.Pane, paste, nil)
-	}
-	return nil
 }

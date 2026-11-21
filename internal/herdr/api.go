@@ -27,10 +27,8 @@ type API interface {
 	PaneRead(paneID string) (string, error)
 	PaneRecent(paneID string, n int) (text string, truncated bool, err error)
 	PaneScreen(paneID string) (Screen, error)
-	PaneScroll(paneID string, offset int) (Scroll, error)
 	PaneSendText(paneID, text string) error
 	PaneSendKeys(paneID string, keys []string) error
-	PaneSendInput(paneID, text string, keys []string) error
 	PaneAtPrompt(paneID string) (bool, error)
 	PaneShellPID(paneID string) (int, error)
 

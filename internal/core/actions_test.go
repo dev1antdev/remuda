@@ -305,9 +305,6 @@ func TestAnAgentStartsInTheShellAndTakesPromptsAndKeys(t *testing.T) {
 	if err := adapter.AgentPrompt(pane, "echo typed into the shell"); err == nil {
 		t.Fatal("a prompt went to an agent that cleared its status, as one leaving does")
 	}
-	if err := adapter.PaneSendInput(pane, "two\nlines", nil); err == nil {
-		t.Fatal("a paste of several lines typed raw")
-	}
 	if pid, err := adapter.PaneShellPID(pane); err != nil || pid == 0 {
 		t.Fatalf("shell pid %d %v", pid, err)
 	}

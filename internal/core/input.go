@@ -346,20 +346,3 @@ func (a *Adapter) PaneSendText(paneID, text string) error {
 	_, err = stream.WriteAutomatic([]byte(text))
 	return a.refusal(err, "pane_not_found")
 }
-
-// PaneSendInput is the screen terminal's typing: the text, then the keys. A paste of several lines is refused, since
-// typed raw every line would run; the live terminal brackets a paste for the program that asked.
-func (a *Adapter) PaneSendInput(paneID, text string, keys []string) error {
-	if strings.ContainsAny(text, "\r\n") {
-		return notOnCore("a paste of several lines from the screen terminal")
-	}
-	if text != "" {
-		if err := a.PaneSendText(paneID, text); err != nil {
-			return err
-		}
-	}
-	if len(keys) == 0 {
-		return nil
-	}
-	return a.PaneSendKeys(paneID, keys)
-}
