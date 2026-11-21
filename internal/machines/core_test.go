@@ -189,24 +189,29 @@ func TestTheHerdrBeforeTheMoveIsTheOneRemudaReached(t *testing.T) {
 	if bin, socket := local.MovedHerdr(); bin != "/opt/herdr/bin/herdr" || socket != "/run/me/herdr.sock" {
 		t.Fatalf("this machine's: %q %q", bin, socket)
 	}
-	remote := &Machine{Cfg: Config{ID: "gog", HerdrBin: "/usr/local/bin/herdr", RemoteSocket: "/home/me/h.sock"}}
-	if bin, socket := remote.MovedHerdr(); bin != "/usr/local/bin/herdr" || socket != "/home/me/h.sock" {
-		t.Fatalf("a remote's: %q %q", bin, socket)
-	}
 }
 
-// A remote with no remote_socket: the socket remuda dialled there, herdr's default under its home, never whatever the
-// ssh environment names.
-func TestTheMovedHerdrOfARemoteIsTheSocketUnderItsHome(t *testing.T) {
-	posix := &Machine{Cfg: Config{ID: "gog"}, home: "/home/me"}
-	if bin, socket := posix.MovedHerdr(); bin != "" || socket != "/home/me/.config/herdr/herdr.sock" {
-		t.Fatalf("a Mac or Linux: %q %q", bin, socket)
+// A remote's herdr socket is the one remuda dials there, before the move and after it: its remote_socket, else herdr's
+// default under the home, or under %APPDATA% on Windows wherever the profile keeps it — never one the ssh environment
+// names; nothing before the machine's first connect.
+func TestTheMovedHerdrOfARemoteIsTheSocketRemudaDials(t *testing.T) {
+	posix := probe{os: "linux", home: "/home/me"}
+	if got := herdrSocket(Config{}, posix); got != "/home/me/.config/herdr/herdr.sock" {
+		t.Fatalf("a Mac or Linux: %q", got)
 	}
-	windows := &Machine{Cfg: Config{ID: "win"}, home: `C:\Users\me`}
-	if _, socket := windows.MovedHerdr(); socket != `C:\Users\me\AppData\Roaming\herdr\herdr.sock` {
-		t.Fatalf("a Windows PC: %q", socket)
+	if got := herdrSocket(Config{RemoteSocket: "/run/h.sock"}, posix); got != "/run/h.sock" {
+		t.Fatalf("remote_socket: %q", got)
 	}
-	if _, socket := (&Machine{Cfg: Config{ID: "new"}}).MovedHerdr(); socket != "" {
-		t.Fatalf("before its first connect: %q", socket)
+	redirected := probe{os: "windows", home: `C:\Users\me`, appData: `D:\Profiles\me\AppData\Roaming`}
+	if got := herdrSocket(Config{}, redirected); got != `D:\Profiles\me\AppData\Roaming\herdr\herdr.sock` {
+		t.Fatalf("a Windows profile kept on another drive: %q", got)
+	}
+	gog := &Machine{Cfg: Config{ID: "gog", HerdrBin: "/usr/local/bin/herdr"}}
+	if bin, socket := gog.MovedHerdr(); bin != "/usr/local/bin/herdr" || socket != "" {
+		t.Fatalf("before its first connect: %q %q", bin, socket)
+	}
+	gog.socket = herdrSocket(gog.Cfg, posix)
+	if _, socket := gog.MovedHerdr(); socket != "/home/me/.config/herdr/herdr.sock" {
+		t.Fatalf("once connected: %q", socket)
 	}
 }

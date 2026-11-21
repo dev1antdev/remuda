@@ -10,8 +10,9 @@ import (
 	"github.com/dev1antdev/remuda/internal/shell"
 )
 
-// The stat a remote runs, run here in sh: a folder that is not there is missing, one behind a folder the user may not
-// search is unreadable — not known gone — and a folder is a folder.
+// The stat a remote runs, run here in sh: a folder that is not there is missing, and so is a link to nothing; one
+// behind a folder the user may not search, directly or through a link, is unreadable — not known gone — and a folder
+// is a folder.
 func TestTheRemoteStatTellsAPathNotThereFromOneNotReadable(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("root searches a folder whatever its mode")
@@ -40,5 +41,19 @@ func TestTheRemoteStatTellsAPathNotThereFromOneNotReadable(t *testing.T) {
 	}
 	if _, err := stat(filepath.Join(locked, "api")); err == nil || errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("a folder behind one not searchable: %v", err)
+	}
+	link := filepath.Join(here, "link")
+	if err := os.Symlink(filepath.Join(locked, "api"), link); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := stat(link); err == nil || errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("a link into a folder not searchable: %v", err)
+	}
+	dangling := filepath.Join(here, "dangling")
+	if err := os.Symlink(filepath.Join(here, "nowhere"), dangling); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := stat(dangling); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("a link to nothing: %v", err)
 	}
 }
