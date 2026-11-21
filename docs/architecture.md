@@ -48,7 +48,6 @@ The contexts are the bounded contexts of the product, in its own words:
 | Updates | updating herdr, the agents, remuda; the restarts after | `updates`, `jobs`, `restart` |
 | Tasks | remuda's own list, and an agent started on a task | `tasks` |
 | Alerts | pushes to the phone | `push` |
-| Inside herdr | remuda's figures as herdr's sidebar tokens, its alerts as herdr's toasts | `mirror` |
 | Schedules | prompts on a timetable | `schedule` |
 | Recipes | the saved ways to start an agent | `recipes` |
 | Scenes | the morning set-up in one press, the evening tidy in another | `scenes` |

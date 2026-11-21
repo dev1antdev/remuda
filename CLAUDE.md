@@ -39,8 +39,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   `-client` flag). A remuda speaks remuda-core on every machine —
   `machines.NewCoreManager`, see "On remuda-core" under `internal/machines/`
   — herdr neither found nor kept, its list of machines neither read nor
-  written, and nothing of remuda's written into its sidebar
-  (`app.Options.MirrorClosed`, always the reason now); `-core` and
+  written, and nothing of remuda's written into its sidebar (the mirror
+  that did was Core 26f); `-core` and
   `REMUDA_CORE`, with `-herdr-bin`, `-socket` and `-mirror`, went with the
   move (Core 26e); subcommands
   `search` and `usage` for the deployed binary on a remote machine,
@@ -277,25 +277,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   seen on a throwaway 0.9.5), the screen terminal's way in. `PaneInfo` has
   `Dir()`, `AgentName()`, `DisplayTitle()`; status vocabularies are the
   `Status*`/`UI*` constants with `UIStatus(status, hasAgent)` as the one
-  mapping. **What a client writes into herdr's own UI** (`metadata.go`,
-  protocol 22, tested on a throwaway server in `metadata_test.go`: written,
-  read back off the snapshot, cleared, a TTL lapsed, a toast herdr's
-  default config refuses): `PaneReportMetadata(PaneMetadata{Pane, Source,
-  Tokens, Labels, ClearLabels, TTL})` is `pane.report_metadata` — a token
-  set by name, a nil value clears it, a name left out stays; `Labels`
-  replace the source's whole set of state labels (herdr keeps one per
-  source, the newest source's label of a state wins, and refuses a set and
-  a clear in one call), `ClearLabels` drops them; a report with nothing to
-  set or clear is refused — `WorkspaceReportMetadata` the same for a
-  workspace's tokens, `NotificationShow(Toast{Title, Body, Sound})` is
-  `notification.show`, answered `Shown{Shown, Reason}` (`disabled` while
-  `ui.toast.delivery` is off, herdr's default, `no_foreground_client`,
-  `rate_limited`, `busy`); `DisplayText(s, n)` is a value as herdr stores
-  it (control characters gone, trimmed, `MaxValueRunes` 80), so what was
-  written reads back the same. The snapshot carries them back:
-  `PaneInfo.Tokens` / `StateLabels`, `WorkspaceInfo.Tokens` (every
-  source's, the newest per name) and `Snapshot.FocusedTabID`. Never
-  `title` or `display_agent`: remuda reads both back as the pane's own.
+  mapping.
 - `internal/core/` — **the client of remuda-core** (dev1antdev/remuda-core,
   our clone of herdr-core; its protocol in its `schema/README.md`, generation
   1), which is to take herdr's place on the machines; a remuda started with
@@ -702,9 +684,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   a tab made meanwhile goes with it. The document keeps no pane's
   environment; the tree is taken as scenes' `checkLayout` passed it, only one
   with no pane refused (`invalid_request`). Still answering `invalid_request` "… is not on
-  remuda-core yet":
-  `PaneScroll` (Core 25), and the writes into herdr's own UI
-  (`*ReportMetadata`, `NotificationShow`). `Bridged` is false: a stream costs the core nothing. The
+  remuda-core yet": `PaneScroll` (Core 25). `Bridged` is false: a stream costs the core nothing. The
   watcher still paces the snapshots an event asks for (`internal/watch`,
   150 ms debounce, 500 ms / 1 s apart): the mirror makes each one free, not
   sooner.
@@ -1745,8 +1725,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   then `remuda-core server stop` (a remuda still up would start a core
   again through `connect`). The smoke and the display checks read the
   roster's machine `core` and there leave out what a core has not yet: the
-  screen terminal (a Windows PC's pane is attached there too) and Inside
-  herdr (Core 26f and 26g). CI's `e2e` job (on `release` and by hand)
+  screen terminal (a Windows PC's pane is attached there too; Core 26g).
+  CI's `e2e` job (on `release` and by hand)
   installs remuda-core by its checksums, as the check job does, and is the
   gate; pull requests target `release`; `main` is what is out (AGENTS.md,
   "Build and check").
@@ -4503,8 +4483,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   (remuda's own start reports nothing), a removed machine is forgotten;
   `Words` is the push's text.
 - `internal/push/` — Web Push (RFC 8291/8292 via webpush-go); `OnAlert` hands
-  every alert to the activity feed as it fires, and to the herdr toasts
-  of `internal/mirror` (wired in `internal/app`). VAPID keys at
+  every alert to the activity feed as it fires. VAPID keys at
   `<config>/remuda/vapid.json` (a damaged file is an error, never a silent
   rotation — rotating orphans every device); subscriptions in
   `push-subscriptions.json`, 404/410 from the push service drops one. The
@@ -5067,7 +5046,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   dark and the light theme, the accent; the text size and the monospace font; the density, the panels' widths,
   the status bar's two switches; the switch that syncs those between devices, `internal/prefs`), Sidebar, General
   (`GeneralSection.tsx`: the language, `lib/i18n`, the way to the alerts and the keys, the version) — and
-  **This cockpit**, never for a viewer — Sleep and resume, Inside herdr (`internal/mirror`), Jira, Backups,
+  **This cockpit**, never for a viewer — Sleep and resume, Jira, Backups,
   Timelapse, and Devices (the signed-in devices and, under them, the agents' tasks-only keys and the viewer
   links, a soft-red Revoke each);
   one spinner clock for
@@ -5803,108 +5782,6 @@ components and icons as rules for whoever changes it: @docs/design.md
   full; then the job's log, Open it there and Close the agent here…;
   `teleport.ts` the pure part, tested: `firstTarget`, `folderChoices`,
   `firstFolder`, `folderOf`, `whyNot`, `targetHint`).
-- `internal/mirror/` — **what remuda knows, shown inside herdr itself**,
-  so the terminal at the desk says what the phone says (tested on a fake
-  herdr and clock; `snippet_test.go` runs the config through `herdr config
-  check`). **The figures**: per agent pane, under the source `remuda`,
-  the tokens `remuda_cost` ("$4.20", the page's `usd`), `remuda_context`
-  ("62%"), `remuda_model`, `remuda_pr` ("PR #15 ✓", ✗ a failed check, …
-  some running, then draft / conflicts / changes requested / approved,
-  merged or closed alone), `remuda_task` ("#42", `tasks.Store.LiveTasks`),
-  `remuda_alert` ("! " and the watchdog's note in its `watchdog.Brief`,
-  else "! plan limit"), `remuda_said` (the last answer's first line,
-  `said.Cut` to 80, never while the agent works); the watchdog's note is
-  also the label of the herdr state it is about (`state_text` reads
-  "stuck 25 min"), a plan limit the idle and done labels; per workspace
-  `remuda_review` ("3 files to review", "ready for review"), `remuda_cost`
-  (its agents summed) and `remuda_pr` (its first agent's) — `words.go`,
-  `PaneFigures` / `WorkspaceFigures`, from `facts.go`'s `Inputs` (the
-  radar, the meter, the said tracker, the requests, the limits, the review
-  badges, the tasks; wired in `internal/app`). **The writer** (`writer.go`):
-  every `events.Snapshot` is offered to its machine's own goroutine, which
-  takes the newest one waiting (off the watcher's path, one writer per
-  machine, every write paced to `WritesPerSecond` 5); a place is written
-  only when its figures moved (`due`) or are `Refresh` (3 min) old, every
-  token with `TTL` (5 min), so what remuda wrote lapses by itself within
-  five minutes once it stops; a name no longer wanted is cleared, a shell
-  or a pane whose agent left gets its tokens cleared, a pane or workspace
-  gone is forgotten; a snapshot read `staleAfter` after a write that lacks
-  one of its tokens (herdr restarted, a TTL ran out) writes it again, and a
-  place first seen in a run starts from the `remuda_*` tokens herdr still
-  holds, so an earlier run's leftovers are cleared — once: a place is
-  remembered from its first look, nothing to show and all, since herdr's
-  tokens are one value per name whoever wrote it, and a second remuda on
-  the same herdr (a machine's own beside a cockpit) cleared on every
-  snapshot would rewrite, raise `pane_updated`, and be cleared again; a
-  writer just made waits `warmUp` (30 s) before its first sync, while
-  herdr still holds what the run before wrote and the meter, the said
-  tracker and the rest have read nothing yet, so a restart blanks no row;
-  every write raises herdr's `pane_updated` (a label's
-  `pane.agent_status_changed`), which the watcher's stream turns into a
-  snapshot, so a write is due only on a move or the refresh — never on
-  a snapshot alone; `pane_not_found` / `workspace_not_found` drops the
-  place, a refusal of one place's values (`metadata_token_limit`: another
-  reporter filled the pane's 32 tokens; an `invalid_metadata_*`,
-  `invalid_state_label`) leaves that place alone until its figures move or
-  the refresh, any other refusal (`invalid_request`: one too old for the
-  method) holds the machine off `refusedPause` (10 min); an ended writer
-  (its machine removed, remuda stopping) writes nothing more, mid-sync
-  too; a failure is logged once an hour per machine. The `-server` host
-  has no snapshots, so no writer. **One herdr, one writer** (`claim.go`,
-  tested on fakes): a machine running its own remuda beside a cockpit
-  that reaches it over ssh (a `Machine.Peer()`) would get two mirrors
-  under one source, the tasks, reviews and notes each instance's own,
-  the values flipping and every toast popped twice; so a remuda that
-  mirrors anything (figures or toasts on) claims the herdr with the token
-  `remuda_by` on each workspace — `remote <host:port>` from a cockpit
-  reaching the machine, `local <host:port>` from the machine's own
-  (`Inputs.Self` / `Local`, set by the app), written as herdr stores it
-  (`claimOf`), no snippet row names it — and reads the claims back
-  before every sync: a remote one outranks a local one (the cockpit
-  knows the person's tasks), two of a kind go by name (`outranks`); the
-  remuda outranked yields there (`yieldTo`: no write, no toast, what it
-  wrote left for the other to overwrite or lapse), says so once in the
-  log and in the section (`Status.Elsewhere`), and takes the herdr back
-  once the other's claim lapses with its TTL; a claim not its own is
-  never seeded as a leftover nor cleared, and a held claim that is not
-  its own makes its own due again. A peer too old for the mirror writes
-  nothing and claims nothing.
-  **The toasts** (`toasts.go`): `Service.Alert` hears what `push.Service`
-  records (`OnAlert`, beside the feed: past its delay, called off when
-  answered at the desk, never for a muted folder) and, with the switch on,
-  pops a question (`input`, sound request), a finish of a turn of a minute
-  or more (sound done) and the watchdog's stuck / loop / waiting (sound
-  request) as `notification.show` on the agent's machine — never inside
-  the toasts' own quiet hours (`push.Quiet`, set by the device that set
-  them, in its zone), never for a pane in the tab herdr has in front
-  (`FocusedTabID`, herdr's own rule for its toasts), never where another
-  remuda's claim outranks this one's in the machine's latest snapshot
-  (`outranked`: from the first read, a warm-up or not); the newest outcome per
-  machine is kept for the section; `Test` pops one on every connected
-  machine at once whatever the switches. **The switches** (`service.go`,
-  `mirror.json` in the state dir): `Settings{figures, toasts, quiet}`, the
-  figures on and the toasts off for a new cockpit, one for every machine
-  (herdr's own `ui.toast.delivery` is already per machine); `Put` wakes
-  every writer, so off clears what remuda wrote at once. A remuda that
-  writes nothing (`closed`: this build speaks remuda-core, whose sidebar
-  herdr does not have) starts no writer and pops nothing, and Settings ›
-  Inside herdr shows that reason with its switches disabled until Core 26f. Routes (`internal/server/mirror.go`, the person's only): `GET
-  /api/mirror` (the switches, `closed`, the token names, `Snippet` and
-  `ToastSnippet` — the rows for herdr's `config.toml`, each fitting its
-  default 26-column sidebar, in place of the person's own
-  `[ui.sidebar.agents]` / `[ui.sidebar.spaces]` and the key under their
-  own `[ui.toast]`, since herdr reads a config with a table written twice
-  as no config at all, which the section says and `snippet_test.go`
-  checks — and the last toasts), `PUT /api/mirror`,
-  `POST /api/mirror/test` (409 from a scratch instance). The page:
-  Settings › Inside herdr (`features/settings/MirrorSection.tsx`,
-  `mirrorApi.ts`, `mirror.ts` tested: `outcomeWords` in plain words of
-  herdr's reasons, `outcomesTone`, `withQuiet`, `quietZone`,
-  `elsewhereWords`) — which remuda writes on a machine where this one
-  stays out, the two switches, the snippet in a `.config-snippet` with Copy, the toast one,
-  the quiet hours, Send a test toast and how it went on each machine;
-  never for a viewer. The display suite opens it (`settings-herdr`) and
-  presses the test against the e2e's own herdr, whose toasts are off.
 - `internal/placement/` — **the machine with room** for a project whose
   queue may use any (`tasks.Automation.Anywhere`; tested). `Choose`
   (pure) takes the candidates — each a connected machine of the fleet,
@@ -5942,10 +5819,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   the service worker posts to `/api/keys` itself — refused or unreachable,
   it opens the page on the pane instead, as a choice does
   (`app/serviceWorker.test.ts` runs `sw.js` on stand-ins) — (a question's push
-  carries its choices the same way, see `internal/push`). `Brief(note)` is
-  a note in a few words for a narrow place, herdr's sidebar
-  (`internal/mirror`): "stuck 25 min", "loop: Bash", "waiting 20 min",
-  tested on the notes a sweep writes.
+  carries its choices the same way, see `internal/push`).
 - `internal/schedule/` (cron as in Vixie: a restricted day-of-month and day-of-week fire on either, a day field that starts with `*` — `*/2` too — is unrestricted; a minute the hour a clock falls back repeats does not run again, `wallMinute`, and `Next` says so) — things on a timetable, four **kinds**
   (`Kind`, `prompt` for a record from before the field). A **scene**
   schedule (`scene.go`, tested) names one of the person's scenes

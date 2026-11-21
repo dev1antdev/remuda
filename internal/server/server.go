@@ -41,7 +41,6 @@ import (
 	"github.com/dev1antdev/remuda/internal/limits"
 	"github.com/dev1antdev/remuda/internal/live"
 	"github.com/dev1antdev/remuda/internal/machines"
-	"github.com/dev1antdev/remuda/internal/mirror"
 	"github.com/dev1antdev/remuda/internal/notes"
 	"github.com/dev1antdev/remuda/internal/opinion"
 	"github.com/dev1antdev/remuda/internal/ports"
@@ -124,7 +123,6 @@ type Server struct {
 	Subagents   *subagents.Tracker  // how many subagents each Claude Code pane's conversation runs, for the sidebar's tree
 	Retire      *retire.Service     // what is set to a model or mode being retired, nil without
 	Scorecard   *scorecard.Service  // which model does the work best, from the runs, reviews, requests and arenas
-	Mirror      *mirror.Service     // remuda's figures and alerts inside herdr itself
 	Timelapse   *timelapse.Recorder // what the agents' screens did while they worked
 	Triggers    *triggers.Service   // the person's rules on what a pane prints, and the dev servers offered as previews
 	Drift       *drift.Service      // how every machine is set up, side by side
@@ -201,7 +199,6 @@ func (s *Server) Handler() http.Handler {
 	s.previewRoutes(api)
 	s.opinionRoutes(api)
 	s.scorecardRoutes(api)
-	s.mirrorRoutes(api)
 	s.timelapseRoutes(api)
 	s.triggerRoutes(api)
 	s.driftRoutes(api)

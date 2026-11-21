@@ -1,6 +1,6 @@
 // Settings, in two panes: the list of sections and the one picked beside it. This device keeps how the page looks, how
-// the sidebar reads and the page's language; the cockpit keeps, for every device, the sleep and resume switches, what
-// it shows inside herdr, the Jira site, the backups, the agents' timelapses and who is signed in. The dialog opens on
+// the sidebar reads and the page's language; the cockpit keeps, for every device, the sleep and resume switches, the
+// Jira site, the backups, the agents' timelapses and who is signed in. The dialog opens on
 // the section it was asked for, else on the one this device showed last.
 
 import { useState } from "react";
@@ -8,7 +8,6 @@ import BackupSection from "./BackupSection";
 import DevicesSection from "./DevicesSection";
 import GeneralSection from "./GeneralSection";
 import LookSection from "./LookSection";
-import MirrorSection from "./MirrorSection";
 import SettingsNav, { tabId } from "./SettingsNav";
 import TimelapseSection from "./TimelapseSection";
 import { FIRST_SECTION, SECTION_PREF, sectionGroups, shownSection, type SectionId } from "./sections";
@@ -53,8 +52,6 @@ function Pane({ shown, onClose }: { shown: SectionId; onClose: () => void }) {
       return <GeneralSection onClose={onClose} />;
     case "sleep":
       return <SleepSection />;
-    case "herdr":
-      return <MirrorSection />;
     case "jira":
       return <JiraSection />;
     case "backups":

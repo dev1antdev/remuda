@@ -45,10 +45,7 @@ Methods remuda uses: `ping`, `session.snapshot`, `events.subscribe`, `agent.star
 `agent.prompt`, `pane.read`, `pane.send_text`, `pane.send_keys`,
 `workspace.create`, `workspace.close`, `workspace.rename`,
 `tab.create`, `tab.close`, `tab.rename`, `worktree.create`, `layout.export`,
-`layout.apply`, `pane.close`, `pane.process_info` (the scenes), and the
-writes into herdr's own UI (`internal/mirror`, source `remuda`):
-`pane.report_metadata`, `workspace.report_metadata`,
-`notification.show`. The pane
+`layout.apply`, `pane.close`, `pane.process_info` (the scenes). The pane
 fields that matter are in `herdr.PaneInfo` (`agent_status`:
 blocked | done | idle | unknown | working; `agent_session` for the
 transcript). Error codes remuda handles by name: `agent_blocked` (a menu

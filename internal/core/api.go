@@ -247,15 +247,6 @@ func agentIn(t *Terminal, target string) (string, error) {
 	return agent, nil
 }
 
-func (a *Adapter) WorkspaceReportMetadata(m herdr.WorkspaceMetadata) error {
-	return notOnCore("workspace.report_metadata")
-}
 func (a *Adapter) PaneScroll(paneID string, offset int) (herdr.Scroll, error) {
 	return herdr.Scroll{}, notOnCore("pane.scroll")
-}
-func (a *Adapter) PaneReportMetadata(m herdr.PaneMetadata) error {
-	return notOnCore("pane.report_metadata")
-}
-func (a *Adapter) NotificationShow(t herdr.Toast) (herdr.Shown, error) {
-	return herdr.Shown{}, notOnCore("notification.show")
 }
