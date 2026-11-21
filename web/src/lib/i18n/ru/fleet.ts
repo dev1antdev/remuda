@@ -47,8 +47,8 @@ export const fleet: Dictionary = {
   "herdr's {agent} hooks, which tell herdr, and so remuda, what the agent is doing: current, outdated or missing.":
     "Хуки herdr для {agent}, через которые herdr, а значит и remuda, знает, что делает агент: актуальные, устаревшие или отсутствуют.",
   "Whether herdr's plugin {id} is installed there, and where from.": "Установлен ли там плагин herdr {id} и откуда.",
-  "The remuda on each machine: it keeps the agents' door to your tasks there and relays its terminals.":
-    "remuda на каждой машине: она держит там дверь агентов к вашим задачам и передаёт её терминалы.",
+  "The remuda on each machine: it keeps the agents' door to your tasks there.":
+    "remuda на каждой машине: она держит там дверь агентов к вашим задачам.",
   "The code-server the Code mode opens on each machine.": "code-server, который режим «Код» открывает на каждой машине.",
   "The remuda-core on each machine: the terminal runtime remuda moves its machines to from herdr.": "remuda-core на каждой машине: среда терминалов, на которую remuda переводит машины с herdr.",
   "Whether remuda's MCP server — your task list for the agents — is registered in {agent}'s own config there.":

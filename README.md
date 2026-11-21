@@ -30,13 +30,11 @@ A from-scratch, auditable replacement for
 ## How it works
 
 ```
-browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock (RPC)
-                                        │          ├─ `herdr terminal attach` PTY
+browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ remuda-core: its RPC and one attach per viewer
                                         │          └─ reads ~/.claude/projects/…
                                         │
                                         └─ per remote machine: one ssh ControlMaster
-                                             ├─ -L forward of the remote herdr.sock (RPC)
-                                             ├─ `ssh -tt host herdr terminal attach` (PTY)
+                                             ├─ `remuda-core connect` there: RPC and attaches
                                              └─ `ssh host tail -c …` of the transcript
 ```
 
@@ -1012,9 +1010,9 @@ docker compose up -d     # http://127.0.0.1:7317
 ```
 
 In Portainer: add the repository as a stack, set the same variables in the
-stack environment. The image carries `remuda`, `herdr` (for `terminal
-attach`), `ssh` and `git`; it mounts the host user's `~/.config` (herdr's
-socket + remuda's state), `~/.claude` (transcripts), `~/.ssh` (remote
+stack environment. The image carries `remuda`, `herdr`, `ssh` and
+`git`; it mounts the host user's `~/.config` (herdr's socket + remuda's
+state), `~/.claude` (transcripts), `~/.ssh` (remote
 machines) and the projects root (file viewer), all at the same paths as on
 the host, running as that user's uid.
 
@@ -1398,7 +1396,7 @@ issue and the cause is half found.
 
 Working today (verified against herdr 0.9.1, protocol 22, local + a real
 remote machine): multi-machine roster with herdr's agent statuses, live
-terminal (shared attach, replay, input, resize, find, touch key bar) on local **and
+terminal (one attach per viewer, input, resize, find, touch key bar) on local **and
 remote** panes, chat (exact session via `agent_session`, remote transcripts
 fetched by delta over SSH, thinking/tool folding, submit via `agent.prompt`,
 approval nudge), workspace create/close with `agent.start`, add/remove remote
@@ -1824,15 +1822,6 @@ sidebar's + menu, each one as "Scene: Morning…" too, and a schedule of
 the "Run a scene" kind runs one on a timetable: a set-up as you saved
 it, a tidy only while nobody's agent on its machines works or asks (else
 the run is skipped and noted). Kept on this remuda like the recipes.
-
-**Several remuda at once:** each machine may run its own (the phone on
-the studio Mac's, the desk on its own). herdr lets one client attach to a terminal
-at a time, so when a remote machine's own remuda is running (and
-reachable on its loopback port 7317), this one reaches that machine's
-terminals through it instead of attaching directly — both sides can look
-at the same pane, and nobody gets "already has an attached client". The
-vitals probe finds it and reads its token over your SSH; without it the
-direct attach stays.
 
 **Machine vitals:** the ⓘ next to each machine shows which Claude Code,
 herdr and remuda run there, disk and load — and the day they had: a small

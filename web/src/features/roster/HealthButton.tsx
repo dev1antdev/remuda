@@ -180,7 +180,6 @@ export function HealthButton({ machine: m, latest, serverVersion, viewOnly = fal
             <dt>remuda</dt>
             <dd>
               {h.remuda ?? (m.id === "local" ? serverVersion : t("not deployed"))}
-              {m.id !== "local" && h.remuda ? <span className="dim"> · {h.remuda_running ? t("running, terminals go through it") : t("not running")}</span> : null}
               {remudaHave && l?.remuda && newer(remudaHave, l.remuda) ? <span className="health-new"> → {l.remuda}</span> : null}
             </dd>
             <dt>{t("Disk")}</dt>

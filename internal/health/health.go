@@ -38,7 +38,6 @@ type Report struct {
 	Remuda        string            `json:"remuda,omitempty"`
 	CodeServer    string            `json:"code_server,omitempty"`  // the release under ~/.local/opt/code-server, as the installer links it
 	RemudaCore    string            `json:"remuda_core,omitempty"`  // ~/.local/bin/remuda-core's version (remuda-core.exe on Windows)
-	Running       bool              `json:"remuda_running"`         // a remuda answers on the machine's own port: terminals go through it
 	Statusline    bool              `json:"statusline,omitempty"`   // remuda's wrapper stands before Claude Code's status line there, keeping its plan limits
 	ClaudeLogin   *Login            `json:"claude_login,omitempty"` // when Claude Code's stored sign-in there ends (claude.go), as last read
 	ClaudeModel   string            `json:"claude_model,omitempty"` // the default model Claude Code's user settings keep there
@@ -220,16 +219,10 @@ func (c *Collector) read(mc *machines.Machine, forceLogin bool) {
 	l.Lock()
 	defer l.Unlock()
 	out, err := shell.Text(mc, Script(), 30*time.Second)
-	r, peer := Parse(out)
+	r := Parse(out)
 	r.At = time.Now()
 	if err != nil && r.Claude == "" && r.Herdr == "" {
 		r.Error = err.Error()
-	}
-	if peer != nil {
-		peer.At = r.At
-	}
-	if err == nil || peer != nil {
-		mc.SetPeer(peer) // a probe that failed outright says nothing about the peer
 	}
 	switch {
 	case r.Claude != "":
@@ -263,9 +256,7 @@ cs=$(readlink "$HOME/.local/opt/code-server" 2>/dev/null); case "$cs" in *code-s
 grep -q 'remuda[^"]*statusline' "$HOME/.claude/settings.json" 2>/dev/null && echo "statusline=wrapped"
 ` + SettingsScript + `echo "df=$(df -kP "$HOME" 2>/dev/null | tail -1)"
 echo "uptime=$(uptime 2>/dev/null)"
-` + HostScript + WindowsHostScript + `tf=""; for f in "$HOME/Library/Application Support/remuda/token" "$HOME/.config/remuda/token"; do [ -r "$f" ] && { tf="$f"; break; }; done
-if [ -n "$tf" ] && command -v curl >/dev/null 2>&1; then ph=$(` + script.Health("http://127.0.0.1:7317") + `); case "$ph" in *'"ok":true'*) echo "peer=$ph"; echo "peer_token=$(cat "$tf")";; esac; fi
-`
+` + HostScript + WindowsHostScript
 }
 
 var (
@@ -276,10 +267,9 @@ var (
 	agentRe  = regexp.MustCompile(`^[a-z0-9-]+$`)
 )
 
-// Parse reads the script's output: the report and, when one answered, the peer remuda.
-func Parse(out string) (Report, *machines.Peer) {
+// Parse reads the script's output.
+func Parse(out string) Report {
 	var r Report
-	var peer *machines.Peer
 	var host body
 	for _, line := range strings.Split(out, "\n") {
 		k, v, ok := strings.Cut(strings.TrimSpace(line), "=")
@@ -369,31 +359,10 @@ func Parse(out string) (Report, *machines.Peer) {
 			if m := upRe.FindStringSubmatch(v); m != nil {
 				r.Uptime = strings.TrimSpace(m[1])
 			}
-		case "peer":
-			var ph struct {
-				OK      bool   `json:"ok"`
-				Server  bool   `json:"server"` // a remuda serving the page only has no herdr to relay terminals to
-				Version string `json:"version"`
-			}
-			if json.Unmarshal([]byte(v), &ph) == nil && ph.OK && !ph.Server {
-				r.Running = true
-				if peer == nil {
-					peer = &machines.Peer{Port: 7317}
-				}
-				peer.Version = ph.Version
-			}
-		case "peer_token":
-			if peer == nil {
-				peer = &machines.Peer{Port: 7317}
-			}
-			peer.Token = v
 		}
 	}
 	host.finish(&r)
-	if peer != nil && (peer.Token == "" || !r.Running) {
-		peer = nil
-	}
-	return r, peer
+	return r
 }
 
 // parseHook reads a probe line "claude v10 < v11": the integration's name, and the versions when herdr said them.

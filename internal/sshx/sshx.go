@@ -1,5 +1,5 @@
 // Package sshx drives OpenSSH for remote machines: one ControlMaster per
-// machine, with socket forwarding, remote execs and the terminal attach over it.
+// machine, with socket forwarding and remote execs over it.
 // remuda implements no SSH itself; BatchMode makes it fail instead of prompting.
 package sshx
 
@@ -37,15 +37,14 @@ type Conn struct {
 
 // A connection carries a limited number of sessions: OpenSSH's MaxSessions is 10 by default, and past it the next one
 // is refused. So what opens one takes a place first, and each kind stops short of the last places: herdr's requests can
-// always get one, a short script can get one past the long ones and the terminals. Nine in all, as a script killed at its
-// timeout is still counted by sshd until it exits on the machine.
+// always get one, and a short script can get one past the long ones. Nine in all, as a script killed at its timeout is
+// still counted by sshd until it exits on the machine.
 const (
 	maxSessions    = 9
 	rpcReserve     = 2 // places only herdr's requests reach
-	shortReserve   = 1 // and one more that long scripts and terminals leave to short scripts
+	shortReserve   = 1 // and one more that long scripts leave to short scripts
 	maxScripts     = 5
 	maxLongScripts = 3
-	maxTerminals   = 5
 	longRun        = time.Minute // a script given more than this is a long one
 )
 
@@ -55,7 +54,6 @@ const (
 	kindRPC sessionKind = iota
 	kindShort
 	kindLong
-	kindTerminal
 )
 
 func scriptKind(timeout time.Duration) sessionKind {
@@ -67,9 +65,9 @@ func scriptKind(timeout time.Duration) sessionKind {
 
 // sessionCount is what is open on a connection, by kind.
 type sessionCount struct {
-	mu                                   sync.Mutex
-	total, rpc, scripts, long, terminals int
-	freed                                chan struct{} // closed when a place comes free
+	mu                        sync.Mutex
+	total, rpc, scripts, long int
+	freed                     chan struct{} // closed when a place comes free
 }
 
 func (s *sessionCount) add(kind sessionKind, by int) {
@@ -82,8 +80,6 @@ func (s *sessionCount) add(kind sessionKind, by int) {
 	case kindLong:
 		s.scripts += by
 		s.long += by
-	case kindTerminal:
-		s.terminals += by
 	}
 }
 
@@ -100,8 +96,6 @@ func (s *sessionCount) admit(kind sessionKind) (bool, <-chan struct{}) {
 		room = s.scripts < maxScripts && others < maxSessions-rpcReserve
 	case kindLong:
 		room = s.long < maxLongScripts && s.scripts < maxScripts && others < maxSessions-rpcReserve-shortReserve
-	case kindTerminal:
-		room = s.terminals < maxTerminals && others < maxSessions-rpcReserve-shortReserve
 	}
 	if room {
 		s.add(kind, 1)
@@ -125,12 +119,13 @@ func (s *sessionCount) leave(kind sessionKind) {
 
 const sessionRefused = "Session open refused"
 
-// SessionRefused reads ssh's words for a machine that will not open one more session, and says it plainly.
+// SessionRefused reads ssh's words for a machine that will not open one more session, and says it plainly; the cause
+// comes first, so a message cut for a WebSocket close reason keeps it and loses only the machine's name.
 func SessionRefused(host, said string) (string, bool) {
 	if !strings.Contains(said, sessionRefused) {
 		return "", false
 	}
-	return fmt.Sprintf("%s refused one more ssh session: too many are open on the connection (sshd's MaxSessions)", host), true
+	return fmt.Sprintf("too many ssh sessions are open (sshd's MaxSessions): %s refused one more", host), true
 }
 
 // enter waits for a place within timeout; it answers how to leave and how much of the timeout is left.
@@ -155,15 +150,6 @@ func (c *Conn) enter(kind sessionKind, timeout time.Duration) (leave func(), lef
 			return nil, 0, busy
 		}
 	}
-}
-
-// HoldTerminal takes a terminal's place for as long as it stands, waiting at most wait; what it answers gives it back.
-func (c *Conn) HoldTerminal(wait time.Duration) (release func(), err error) {
-	release, _, err = c.enter(kindTerminal, wait)
-	if err != nil {
-		return nil, fmt.Errorf("%s has too many ssh sessions open for one more terminal: close one and try again", c.Host)
-	}
-	return release, nil
 }
 
 // masterErrMax is how much of the master's stderr is kept: its first lines say why it could not connect, and over a
@@ -805,19 +791,6 @@ type sshAddr string
 
 func (a sshAddr) Network() string { return "ssh" }
 func (a sshAddr) String() string  { return string(a) }
-
-// AttachCmd builds the remote `herdr terminal attach` to run under a local PTY; ssh -tt carries window-size changes.
-// The machine's herdr socket travels as HERDR_SOCKET_PATH, as the local attach's does, so a herdr listening off its
-// default path is reached; through sh, since the remote login shell may be anything.
-func (c *Conn) AttachCmd(herdrBin, socket, terminalID string) *exec.Cmd {
-	remote := "exec " + script.Quote(herdrBin) + " terminal attach " + script.Quote(terminalID)
-	if socket != "" {
-		remote = "HERDR_SOCKET=" + script.Quote(socket) + " HERDR_SOCKET_PATH=" + script.Quote(socket) + " " + remote
-	}
-	cmd := c.session("-tt", c.Host, "sh -c "+script.Quote(remote))
-	cmd.Env = append(os.Environ(), "TERM=xterm-256color")
-	return cmd
-}
 
 // Close stops the master (and with it every forwarded socket and attach).
 func (c *Conn) Close() {

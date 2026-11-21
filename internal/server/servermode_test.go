@@ -64,10 +64,6 @@ func TestAServersHealthSaysItIsOne(t *testing.T) {
 	if got["ok"] != true || got["server"] != true || got["herdr"] != false || got["version"] == nil {
 		t.Fatalf("health %v", got)
 	}
-	r, peer := health.Parse(`peer={"ok":true,"server":true,"version":"v1"}` + "\npeer_token=t\n")
-	if r.Running || peer != nil {
-		t.Fatal("another cockpit would relay terminals through a server, which has no herdr")
-	}
 }
 
 func TestAServerIsNoTargetForItsOwnBackup(t *testing.T) {

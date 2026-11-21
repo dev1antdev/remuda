@@ -15,7 +15,7 @@ func TestOnWindowsTheVitalsAreReadAsACockpitReadsThem(t *testing.T) {
 	wintest.Live(t)
 	answer := wintest.Text(t, wintest.Remote(t), Script())
 	wintest.Record(t, "vitals.txt", answer)
-	r, peer := Parse(answer)
+	r := Parse(answer)
 	t.Logf("%+v", r)
 	if !strings.HasPrefix(r.OS, "Windows 10.0.") || !strings.Contains(r.Model, "Windows") || !strings.Contains(r.Model, "(build ") {
 		t.Errorf("the system and its edition: %q, %q", r.OS, r.Model)
@@ -28,8 +28,5 @@ func TestOnWindowsTheVitalsAreReadAsACockpitReadsThem(t *testing.T) {
 	}
 	if r.Herdr == "" || r.HerdrServer == "" || r.Remuda == "" {
 		t.Errorf("herdr %q, its server %q, remuda %q", r.Herdr, r.HerdrServer, r.Remuda)
-	}
-	if peer != nil || r.Running {
-		t.Error("remuda.exe serves nothing, so there is no peer to relay through")
 	}
 }

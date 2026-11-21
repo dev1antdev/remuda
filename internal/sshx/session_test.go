@@ -42,7 +42,7 @@ func TestASessionRidesTheMasterOrFails(t *testing.T) {
 }
 
 // TestOnlyTheMasterConnectsByItself: the master is the one connection to the host, made as the person's ssh config
-// says (a jump host too); everything else asks it, the scripts, the bridge and the attach alike.
+// says (a jump host too); everything else asks it, the scripts and the bridge alike.
 func TestOnlyTheMasterConnectsByItself(t *testing.T) {
 	calls := fakeSSH(t)
 	c := &Conn{Host: "gog.remote", ctl: "/tmp/remuda-ssh-test.ctl"}
@@ -62,7 +62,6 @@ func TestOnlyTheMasterConnectsByItself(t *testing.T) {
 	if len(sessions) != 3 {
 		t.Fatalf("%d sessions recorded, want the script, the stream and the bridge:\n%s", len(sessions), strings.Join(sessions, "\n"))
 	}
-	sessions = append(sessions, strings.Join(c.AttachCmd("herdr", "", "term_1").Args[1:], " "))
 	for _, line := range sessions {
 		if !strings.Contains(line, "-o ProxyCommand=false") {
 			t.Errorf("a session may connect by itself: %s", line)

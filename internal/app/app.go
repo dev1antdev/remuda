@@ -597,12 +597,8 @@ func Run(ctx context.Context, o Options) error {
 		}
 		return "Task " + moved.Task.Identifier + " → " + moved.To.Title, true, nil
 	}
-	// someone looking at a pane's terminal through this remuda, or through the machine's own one it relays to, sees its
-	// tests fail: no push for it
+	// someone looking at a pane's terminal through this remuda sees its tests fail: no push for it
 	paneTriggers.Viewed = func(machineID, paneID string) bool {
-		if srv.Relaying(machineID, paneID) {
-			return true
-		}
 		mc, err := fleet.Get(machineID)
 		if err != nil {
 			return false

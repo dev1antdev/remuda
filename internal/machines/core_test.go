@@ -71,8 +71,8 @@ func TestTheLocalMachineOnCoreShowsTheCoresTerminals(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !mc.OnCore() || mc.Peer() != nil {
-		t.Fatal("the local machine of a -core remuda is on remuda-core, with no peer to relay through")
+	if !mc.OnCore() {
+		t.Fatal("the local machine of a -core remuda is on remuda-core")
 	}
 	if _, err := mc.StopServer(); !errors.Is(err, ErrOnCore) {
 		t.Fatalf("herdr's server stop on remuda-core = %v, want ErrOnCore", err)
@@ -126,10 +126,6 @@ func TestTheLocalMachineOnCoreSaysHowToInstallIt(t *testing.T) {
 	_, err := dialLocalCore(context.Background())
 	if err == nil || !strings.Contains(err.Error(), "remuda core install") {
 		t.Fatalf("dial without remuda-core = %v", err)
-	}
-	var refused *herdr.RefusedError
-	if errors.As(err, &refused) {
-		t.Fatal("a missing core is no refusal of herdr's")
 	}
 }
 

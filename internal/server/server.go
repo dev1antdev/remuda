@@ -138,7 +138,6 @@ type Server struct {
 	Sync        *gitsync.Service    // every repository at a glance, fetched, pulled and pushed at the person's press
 
 	streams   termStreams
-	relayed   relays           // the terminals piped to a machine's own remuda, which holds their attach
 	trees     filetree.Service // the project tree's folders, each checkout's git status read once for a few seconds
 	teleports sync.Map         // the moves of work to another machine, by job id: where the agent carrying on is
 }

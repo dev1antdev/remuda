@@ -181,7 +181,7 @@ func TestARefusedSessionIsSaidInWords(t *testing.T) {
 	}
 }
 
-// TestEachKindLeavesTheLastPlacesToTheNext: terminals and long scripts stop first, then short scripts, then requests.
+// TestEachKindLeavesTheLastPlacesToTheNext: long scripts stop first, then short scripts, then requests.
 func TestEachKindLeavesTheLastPlacesToTheNext(t *testing.T) {
 	c := limited()
 	var leave []func()
@@ -198,17 +198,13 @@ func TestEachKindLeavesTheLastPlacesToTheNext(t *testing.T) {
 			t.Fatalf("one %s too many went in", what)
 		}
 	}
-	take("terminal", kindTerminal, maxTerminals)
-	take("long script", kindLong, maxSessions-rpcReserve-shortReserve-maxTerminals)
-	take("short script", kindShort, shortReserve)
-	take("request", kindRPC, rpcReserve)
-	if _, err := c.HoldTerminal(10 * time.Millisecond); err == nil || !strings.Contains(err.Error(), "one more terminal") {
-		t.Errorf("a terminal past the limit: %v", err)
-	}
+	take("long script", kindLong, maxLongScripts)
+	take("short script", kindShort, maxScripts-maxLongScripts)
+	take("request", kindRPC, maxSessions-maxScripts)
 	for _, out := range leave {
 		out()
 	}
-	if s := &c.sessions; s.total != 0 || s.scripts != 0 || s.long != 0 || s.terminals != 0 {
+	if s := &c.sessions; s.total != 0 || s.scripts != 0 || s.long != 0 {
 		t.Errorf("places left taken: %+v", s)
 	}
 }
@@ -222,7 +218,7 @@ func TestNothingStartsOnceItsTimeIsGone(t *testing.T) {
 	if c.sessions.total != 0 {
 		t.Fatalf("%d places kept by what did not start", c.sessions.total)
 	}
-	release, err := c.HoldTerminal(0)
+	release, _, err := c.enter(kindShort, 0)
 	if err != nil {
 		t.Fatalf("a place asked for with no wait: %v", err)
 	}
@@ -255,24 +251,24 @@ func TestNothingIsWrittenPastTheDeadline(t *testing.T) {
 	}
 }
 
-// TestRequestsSitInTheirOwnPlacesFirst: the event stream of a bridged machine takes nothing from a short script.
+// TestRequestsSitInTheirOwnPlacesFirst: the event stream of a bridged machine takes nothing from a short script, and
+// scripts leave the requests every place they do not use.
 func TestRequestsSitInTheirOwnPlacesFirst(t *testing.T) {
 	c := limited()
-	for _, step := range []struct {
-		what string
-		kind sessionKind
-		n    int
-	}{{"request", kindRPC, rpcReserve}, {"terminal", kindTerminal, maxTerminals}, {"long script", kindLong, 1}, {"short script", kindShort, shortReserve}} {
-		for range step.n {
-			if _, _, err := c.enter(step.kind, 10*time.Millisecond); err != nil {
-				t.Fatalf("%s: %v", step.what, err)
-			}
+	for range maxScripts {
+		if _, _, err := c.enter(kindShort, 10*time.Millisecond); err != nil {
+			t.Fatalf("a short script: %v", err)
+		}
+	}
+	for range maxSessions - maxScripts {
+		if _, _, err := c.enter(kindRPC, 10*time.Millisecond); err != nil {
+			t.Fatalf("a request beside %d scripts: %v", maxScripts, err)
 		}
 	}
 	if c.sessions.total != maxSessions {
 		t.Fatalf("%d open", c.sessions.total)
 	}
-	for _, kind := range []sessionKind{kindRPC, kindShort, kindLong, kindTerminal} {
+	for _, kind := range []sessionKind{kindRPC, kindShort, kindLong} {
 		if _, _, err := c.enter(kind, 10*time.Millisecond); err == nil {
 			t.Errorf("kind %d went past the limit of the connection", kind)
 		}

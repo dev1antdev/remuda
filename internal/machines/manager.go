@@ -1,6 +1,6 @@
-// Package machines gives remuda its multi-PC view: the local herdr plus remote
+// Package machines gives remuda its multi-PC view: the local machine plus remote
 // ones reached over the user's own SSH, each with one ControlMaster, one RPC
-// transport, shared terminal attaches and a transcript cache fetched by delta.
+// transport, one remuda-core link and a transcript cache fetched by delta.
 package machines
 
 import (
@@ -200,7 +200,6 @@ func NewManager(dir, localSocket, localHerdrBin string, door *Door) *Manager {
 	local := localMachine(dir)
 	local.herdrBin, local.socket = localHerdrBin, localSocket
 	local.client = herdr.NewClient(localSocket)
-	local.attach = herdr.NewAttachManager(herdr.LocalAttachCommand(localHerdrBin, localSocket))
 	return newManager(dir, localHerdrBin, door, local, false)
 }
 

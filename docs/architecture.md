@@ -25,8 +25,8 @@ Three rings, and a dependency may only point inwards.
 │  schedule · search · usage · quick · recipes · scenes · code         │
 ├─ the floor ──────────────────────────────────────────────────────────┤
 │  machines   the registry; a Machine is a shell.Host with herdr on it │
-│  herdr      herdr.API / Terminals; the RPC client, the attach PTYs   │
-│  core       remuda-core's client and its herdr.API adapter           │
+│  herdr      herdr.API / Terminals and the model; the RPC client      │
+│  core       remuda-core's client, its herdr.API adapter, its terminals│
 │  transcript the session file parser and the per-machine Reader       │
 │  shell      the port: Run / Stream, Host, Fake                       │
 │  script     building POSIX scripts, reading their answers            │
@@ -68,9 +68,9 @@ The contexts are the bounded contexts of the product, in its own words:
    cut by. `review`, `jobs`, `search` and `usage` are written this way;
    their tests run on a `shell.Fake` with a recorded answer. A package
    that asks a machine's herdr takes `herdr.API` and `herdr.Terminals`
-   from `Machine.Ready()`, never `*herdr.Client` or
-   `*herdr.AttachManager`: remuda-core's adapter (`core.Adapter`) stands
-   behind `herdr.API`, its terminals (`core.Terminals`) behind `herdr.Terminals`.
+   from `Machine.Ready()`, never `*herdr.Client`: remuda-core's adapter
+   (`core.Adapter`) stands behind `herdr.API`, its terminals
+   (`core.Terminals`) behind `herdr.Terminals`.
 3. **Packages hear each other through the bus.** `watch` publishes
    `events.Snapshot`, `events.PaneStatus` and, off herdr's event stream,
    `events.OutputMatched`; `jobs` publishes

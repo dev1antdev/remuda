@@ -9,38 +9,38 @@ import (
 )
 
 func TestAMacOnItsChargerChargesItsBattery(t *testing.T) {
-	r, _ := Parse("batt=Now drawing from 'AC Power'\nbatt= -InternalBattery-0 (id=1234567)\t92%; charging; 0:28 remaining present: true\n")
+	r := Parse("batt=Now drawing from 'AC Power'\nbatt= -InternalBattery-0 (id=1234567)\t92%; charging; 0:28 remaining present: true\n")
 	if r.Battery == nil || r.Battery.Percent != 92 || r.Battery.Discharging || !r.Battery.Charging {
 		t.Fatalf("%+v", r.Battery)
 	}
 }
 
 func TestAMacDrawingFromItsBatteryIsOnBattery(t *testing.T) {
-	r, _ := Parse("batt=Now drawing from 'Battery Power'\nbatt= -InternalBattery-0 (id=1234567)\t15%; discharging; 0:41 remaining present: true\n")
+	r := Parse("batt=Now drawing from 'Battery Power'\nbatt= -InternalBattery-0 (id=1234567)\t15%; discharging; 0:41 remaining present: true\n")
 	if r.Battery == nil || r.Battery.Percent != 15 || !r.Battery.Discharging || r.Battery.Charging {
 		t.Fatalf("%+v", r.Battery)
 	}
-	r, _ = Parse("batt=Now drawing from 'Battery Power'\nbatt= -InternalBattery-0 (id=1234567)\t100%; charged; 0:00 remaining present: true\n")
+	r = Parse("batt=Now drawing from 'Battery Power'\nbatt= -InternalBattery-0 (id=1234567)\t100%; charged; 0:00 remaining present: true\n")
 	if r.Battery == nil || !r.Battery.Discharging {
 		t.Fatalf("a full battery the Mac draws from: %+v", r.Battery)
 	}
 }
 
 func TestAMacMiniHasNoBattery(t *testing.T) {
-	if r, _ := Parse("batt=Now drawing from 'AC Power'\n"); r.Battery != nil {
+	if r := Parse("batt=Now drawing from 'AC Power'\n"); r.Battery != nil {
 		t.Fatalf("%+v", r.Battery)
 	}
 }
 
 func TestALinuxLaptopReadsItsOwnBatteryNotItsMouses(t *testing.T) {
-	r, _ := Parse("psu=Mains System 0 - -\npsu=Battery Device - 40 Discharging\npsu=Battery System - 63 Discharging\n")
+	r := Parse("psu=Mains System 0 - -\npsu=Battery Device - 40 Discharging\npsu=Battery System - 63 Discharging\n")
 	if r.Battery == nil || r.Battery.Percent != 63 || !r.Battery.Discharging {
 		t.Fatalf("%+v", r.Battery)
 	}
-	if r, _ := Parse("psu=Mains System 1 - -\npsu=Battery System - 80 Not_charging\n"); r.Battery == nil || r.Battery.Discharging || r.Battery.Charging {
+	if r := Parse("psu=Mains System 1 - -\npsu=Battery System - 80 Not_charging\n"); r.Battery == nil || r.Battery.Discharging || r.Battery.Charging {
 		t.Fatalf("a battery held on the charger: %+v", r.Battery)
 	}
-	if r, _ := Parse("psu=USB System 1 - -\n"); r.Battery != nil {
+	if r := Parse("psu=USB System 1 - -\n"); r.Battery != nil {
 		t.Fatalf("a Pi's supply read as a battery: %+v", r.Battery)
 	}
 }
@@ -68,7 +68,7 @@ func TestTheBatteryScriptReadsAPowerSupplyFolder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, _ := Parse(string(out))
+	r := Parse(string(out))
 	if r.Battery == nil || r.Battery.Percent != 57 || !r.Battery.Discharging {
 		t.Fatalf("%q read as %+v", out, r.Battery)
 	}

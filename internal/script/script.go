@@ -64,8 +64,8 @@ const ReadGitAll = `git() { command ` + ReadGit + ` "$@"; }` + "\n"
 // reads its lines: no colour, no external driver or textconv, a moved submodule as a plain hunk, paths under a/ and b/.
 const PatchForm = `--no-color --no-ext-diff --no-textconv --submodule=short --src-prefix=a/ --dst-prefix=b/`
 
-// Health asks the remuda at url how it is, past ~/.curlrc and any proxy, every door and peer being on the loopback; a
-// live one's answer holds "ok":true. url is a shell word already, without its path.
+// Health asks the remuda at url how it is, past ~/.curlrc and any proxy, every door being on the loopback; a live one's
+// answer holds "ok":true. url is a shell word already, without its path.
 func Health(url string) string {
 	return "curl -q -s -m 2 --noproxy 127.0.0.1 " + url + "/api/health 2>/dev/null"
 }

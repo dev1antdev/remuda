@@ -45,13 +45,14 @@ type EventStream interface {
 }
 
 // Terminals is a machine's live terminals: a viewer opening one, and how many of this remuda's viewers watch it.
+// remuda-core's Terminals (internal/core) is the one implementation: a machine's own attach for each viewer.
 type Terminals interface {
 	Open(termID string, view View) (Viewer, error)
 	Viewers(termID string) int
 }
 
 // View is how one viewer opens a terminal: its grid, and whether it leaves the size to the others (Keep) or only
-// watches (Observe). herdr follows its smallest client whatever is asked, and watches nothing without typing.
+// watches (Observe).
 type View struct {
 	Cols, Rows int
 	Keep       bool
@@ -76,7 +77,9 @@ type Out struct {
 // Grid says the Out is a grid rather than bytes.
 func (o Out) Grid() bool { return o.Cols > 0 && o.Rows > 0 }
 
-var (
-	_ API       = (*Client)(nil)
-	_ Terminals = (*AttachManager)(nil)
-)
+// ValidSize says a viewer's grid is one to give a terminal: a collapsed or hidden mount measures nonsense.
+func ValidSize(cols, rows int) bool {
+	return cols >= 20 && rows >= 5 && cols <= 500 && rows <= 300
+}
+
+var _ API = (*Client)(nil)

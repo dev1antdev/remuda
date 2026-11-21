@@ -173,7 +173,6 @@ export type Health = {
   herdr_server?: string; // the version the running server is on, when one runs
   arch?: string;
   remuda?: string;
-  remuda_running?: boolean; // and it answers on the machine's own port: terminals there go through it
   disk_free_gb: number;
   disk_used_pct: number;
   load1: number;

@@ -157,7 +157,6 @@ export const agents: Dictionary = {
   "only in {folder}": "только в {folder}",
   "optional: the recipe belongs to this folder": "необязательно: рецепт привязан к этой папке",
   "remuda there is {there}; this one is {here}": "Там remuda {there}; здесь {here}",
-  "running, terminals go through it": "запущен, терминалы идут через него",
   "sent once the agent is up": "отправится, как только агент поднимется",
   "server {version}": "сервер {version}",
   "state unknown": "состояние неизвестно",

@@ -15,8 +15,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/herdr"
 )
 
-// The terminal lens: bytes over a WebSocket, or over plain HTTP for a viewer behind a proxy (termhttp.go),
-// both relayed to the machine's own remuda when one holds the attach (peer.go).
+// The terminal lens: bytes over a WebSocket, or over plain HTTP for a viewer behind a proxy (termhttp.go).
 
 func (s *Server) terminalRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /ws/pane", s.handlePaneWS)
@@ -37,6 +36,16 @@ const maxFrame = 256 << 10
 // viewerStands says the viewer link of a request is not revoked since it came in.
 func (s *Server) viewerStands(r *http.Request) bool {
 	return s.Guard != nil && s.Guard.StillViewer(r)
+}
+
+// attachRefused is the message for a viewer when no terminal could be attached. It travels as a WebSocket close reason,
+// which holds 123 bytes.
+func attachRefused(err error) string {
+	msg := "attach failed: " + err.Error()
+	if len(msg) > 120 {
+		msg = cutBetweenLetters(msg, 117) + "…"
+	}
+	return msg
 }
 
 // gridFrame is a grid as the socket tells it, a text frame between the binary ones: {"type":"grid","cols":…,"rows":…}.
@@ -65,7 +74,7 @@ func (s *Server) handlePaneWS(w http.ResponseWriter, r *http.Request) {
 	}
 	// a viewer link only watches, and a live attach of its own is a viewer's (viewerOwnGuard keeps it to its roster's panes)
 	watching := auth.IsViewer(r.Context())
-	// the client's proxy probe is a plain GET of this URL and must cost no attach, here or on a peer
+	// the client's proxy probe is a plain GET of this URL and must cost no attach
 	if !strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
 		http.Error(w, "upgrade required", http.StatusUpgradeRequired)
 		return
@@ -76,22 +85,8 @@ func (s *Server) handlePaneWS(w http.ResponseWriter, r *http.Request) {
 	cols, _ := strconv.Atoi(r.URL.Query().Get("cols"))
 	rows, _ := strconv.Atoi(r.URL.Query().Get("rows"))
 
-	// never a viewer's: remuda-core has no peer, and a refusal of its is none of herdr's
-	if pc, err := s.peerFor(mc); err != nil {
-		httpErr(w, 502, err)
-		return
-	} else if pc != nil {
-		s.relayPaneWS(w, r, pc, mc.ID(), pane.PaneID, cols, rows)
-		return
-	}
 	view := herdr.View{Cols: cols, Rows: rows, Keep: r.URL.Query().Get("keep") == "1", Observe: watching}
 	viewer, err := attach.Open(pane.TerminalID, view)
-	if err != nil {
-		if pc := s.peerAfterRefusal(mc, err); pc != nil {
-			s.relayPaneWS(w, r, pc, mc.ID(), pane.PaneID, cols, rows)
-			return
-		}
-	}
 
 	c, err2 := websocket.Accept(w, r, &websocket.AcceptOptions{CompressionMode: websocket.CompressionNoContextTakeover})
 	if err2 != nil {
@@ -104,7 +99,7 @@ func (s *Server) handlePaneWS(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	c.SetReadLimit(1 << 20)
 	if err != nil {
-		c.Close(websocket.StatusInternalError, attachRefused(mc, err))
+		c.Close(websocket.StatusInternalError, attachRefused(err))
 		return
 	}
 	defer viewer.Close()
