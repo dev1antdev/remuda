@@ -13,10 +13,11 @@ import (
 
 // probe is the machine as the connection first reads it.
 type probe struct {
-	home  string // as scripts read paths there: /home/me, or C:\Users\me on Windows
-	os    string // darwin | linux | windows, or the system's own name lowercased
-	state string // the folder remuda keeps there
-	core  string // remuda-core's binary, "" when none was found
+	home    string // as scripts read paths there: /home/me, or C:\Users\me on Windows
+	os      string // darwin | linux | windows, or the system's own name lowercased
+	appData string // %APPDATA% on Windows, where herdr keeps its socket
+	state   string // the folder remuda keeps there
+	core    string // remuda-core's binary, "" when none was found
 }
 
 // coreLookup prints remuda-core's binary as `core=`, where the vitals and the Updates row look for it.
@@ -26,14 +27,14 @@ true
 `
 
 // probeScript prints the machine's home and its system, a key=value a line; on Windows, where Git Bash is the ssh shell,
-// Windows' own spelling of the home too. Every lookup is quiet and the script ends true, so a missing value is an empty
-// line, not a failed exec.
+// Windows' own spelling of the home and %APPDATA% too, where herdr keeps its named pipe. Every lookup is quiet and the
+// script ends true, so a missing value is an empty line, not a failed exec.
 func probeScript() string {
 	return script.StateDir("d") + `
 printf 'state=%s\n' "${REMUDA_STATE_DIR:-$d}"
 printf 'home=%s\n' "$HOME"; o=$(uname -s 2>/dev/null); printf 'os=%s\n' "$o"
 case "$o" in MINGW*|MSYS*|CYGWIN*)
-  printf 'winhome=%s\n' "$(cygpath -w "$HOME" 2>/dev/null)" ;;
+  printf 'winhome=%s\n' "$(cygpath -w "$HOME" 2>/dev/null)"; printf 'appdata=%s\n' "$APPDATA" ;;
 esac
 true
 `
@@ -55,6 +56,8 @@ func parseProbe(out string) probe {
 			p.os = osOf(strings.TrimSpace(value))
 		case "winhome":
 			winHome = strings.TrimSpace(value)
+		case "appdata":
+			p.appData = strings.TrimSpace(value)
 		case "state":
 			p.state = strings.TrimSpace(value)
 		case "core":
@@ -108,14 +111,20 @@ func errNoCore(host string) error {
 }
 
 // herdrSocket is the herdr remuda reached on a machine before the move, as MovedHerdr names it: the machine's
-// remote_socket, else "" — herdr's own default, which a Windows PC keeps as a named pipe under %APPDATA% and which only
-// herdr can name there (Core 26i took the probe's %APPDATA%): the scripts that ask it export no HERDR_SOCKET_PATH then.
+// remote_socket, else herdr's default — under %APPDATA% on Windows, wherever the profile keeps it, under the home
+// elsewhere. It is named here, not left to herdr, so a HERDR_SESSION the ssh environment exports cannot point the check
+// at another session's server.
 func herdrSocket(cfg Config, found probe) string {
-	if cfg.RemoteSocket != "" {
+	switch {
+	case cfg.RemoteSocket != "":
 		return cfg.RemoteSocket
-	}
-	if found.os == "windows" {
-		return ""
+	case found.os == "windows":
+		return windowsSocket(found.appData)
 	}
 	return herdr.DefaultSocket(found.home)
+}
+
+// windowsSocket is herdr's default socket on a Windows machine: %APPDATA%\herdr\herdr.sock, a named pipe of that name.
+func windowsSocket(appData string) string {
+	return rpath.Style{Windows: true}.Join(appData, "herdr", "herdr.sock")
 }

@@ -191,8 +191,9 @@ func TestTheMovedHerdrOfARemoteIsTheSocketRemudaDials(t *testing.T) {
 	if got := herdrSocket(Config{RemoteSocket: "/run/h.sock"}, posix); got != "/run/h.sock" {
 		t.Fatalf("remote_socket: %q", got)
 	}
-	if got := herdrSocket(Config{}, probe{os: "windows", home: `C:\Users\me`}); got != "" {
-		t.Fatalf("a Windows machine's herdr socket is its own named pipe, which only herdr names: %q", got)
+	redirected := probe{os: "windows", home: `C:\Users\me`, appData: `D:\Profiles\me\AppData\Roaming`}
+	if got := herdrSocket(Config{}, redirected); got != `D:\Profiles\me\AppData\Roaming\herdr\herdr.sock` {
+		t.Fatalf("a Windows profile kept on another drive: %q", got)
 	}
 	gog := &Machine{Cfg: Config{ID: "gog", HerdrBin: "/usr/local/bin/herdr"}}
 	if bin, socket := gog.MovedHerdr(); bin != "/usr/local/bin/herdr" || socket != "" {

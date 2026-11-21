@@ -1924,8 +1924,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   `probeScript` / `parseProbe`, tested on the runner's recorded answer in
   `machines/testdata/windows-probe.txt`) prints `home`, `os` (uname:
   MINGW*/MSYS*/CYGWIN* is `windows`) and on Windows `winhome` (`cygpath
-  -w "$HOME"`, the machine's `Home()`), and `coreLookup` prints
-  remuda-core.exe where its installer puts it; a `cmd.exe` or PowerShell
+  -w "$HOME"`, the machine's `Home()`), `%APPDATA%` (herdr's named pipe lives
+  there, and `MovedHerdr` names it so the stop at the person's press is not
+  sent to another session by a `HERDR_SESSION` the ssh environment exports),
+  and `coreLookup` prints remuda-core.exe where its installer puts it; a `cmd.exe` or PowerShell
   answer ("is not recognized as") fails the connection naming the line to
   run. Nothing of herdr's is looked for there any more (Core 26i): the PC
   is reached by `remuda-core.exe connect` over the ssh, as every machine
@@ -1962,9 +1964,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   fixtures, uploaded as the job's artifact) — setup first, which installs
   remuda-core.exe and its ConPTY on the clean runner with the shipped
   installer and its pinned checksum, then the probe, a terminal run in the
-  core through `remuda-core.exe connect` over ssh (in a session of its own;
-  the runner's elevated sshd refuses to start a core, so the test starts it
-  with `server start` in the job's session first), the snapshot read through
+  core through `remuda-core.exe connect` over ssh (its own `RC_SESSION` and
+  `RC_SOCKET` under a temp folder, stopped again at the test's end; the
+  runner's elevated sshd refuses to start a core, so the test starts it with
+  `server start` in the job's session first), the snapshot read through
   the adapter and the terminal attached as a viewer, the door's files and its
   reverse forward, the vitals, keep-awake, the file viewer's scripts, the
   Changes lens with the secret check, a session found, read and searched
