@@ -2,6 +2,7 @@ package machines
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -11,8 +12,8 @@ import (
 )
 
 // The stat a remote runs, run here in sh: a folder that is not there is missing, and so is a link to nothing; one
-// behind a folder the user may not search, directly or through a link, is unreadable — not known gone — and a folder
-// is a folder.
+// behind a folder the user may not search, directly, through a link or through more links than are followed, is
+// unreadable — not known gone — and a folder is a folder.
 func TestTheRemoteStatTellsAPathNotThereFromOneNotReadable(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("root searches a folder whatever its mode")
@@ -48,6 +49,17 @@ func TestTheRemoteStatTellsAPathNotThereFromOneNotReadable(t *testing.T) {
 	}
 	if _, err := stat(link); err == nil || errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("a link into a folder not searchable: %v", err)
+	}
+	chain := filepath.Join(locked, "api")
+	for i := range 9 {
+		next := filepath.Join(here, fmt.Sprintf("hop%d", i))
+		if err := os.Symlink(chain, next); err != nil {
+			t.Fatal(err)
+		}
+		chain = next
+	}
+	if _, err := stat(chain); err == nil || errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("links past the hops followed, into a folder not searchable: %v", err)
 	}
 	dangling := filepath.Join(here, "dangling")
 	if err := os.Symlink(filepath.Join(here, "nowhere"), dangling); err != nil {

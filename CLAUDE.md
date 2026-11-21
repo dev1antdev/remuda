@@ -2381,7 +2381,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   not say forgets nothing**: `CanResume` (`Machine.Stat`, which keeps
   `os.ErrNotExist` apart from a machine that could not be asked and from
   a path behind a folder the user may not search — the remote stat
-  script's `unreadable`, a link followed to its target's way, tested in
+  script's `unreadable`, a link followed to its target's way, and links
+  more than eight deep or unread too, `missing` kept for a path known not
+  there, tested in
   `machines/stat_test.go` — and
   `sessionFileExists`) wraps `ErrUnasked` for a look that failed, and the
   reboot's resume, the carry-on and the wake keep that chat listed or

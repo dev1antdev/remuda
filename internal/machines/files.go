@@ -190,14 +190,15 @@ func (mc *Machine) stat(p string) (FileInfo, error) {
 }
 
 // statScript prints dir, missing, unreadable (a folder on the way the user may not search, a link's target's way
-// too, so whether it is there is not known), or "file <size> <NULs in the first 8 KB>".
+// too, or links followed eight deep or unread, so whether it is there is not known), or "file <size> <NULs in the
+// first 8 KB>": missing only for a path known not there.
 func statScript(p string) string {
 	q := script.Quote(p)
 	return `if [ -d ` + q + ` ]; then echo dir; elif [ -f ` + q + ` ]; then ` +
 		`printf 'file %s ' "$(` + script.Stat(q, "%s", "%z") + `)"; ` +
 		`head -c 8192 ` + q + ` | tr -d -c '\000' | wc -c; ` +
-		`else p=` + q + `; i=0; while [ -L "$p" ] && [ $i -lt 8 ]; do t=$(readlink -- "$p"); case "$t" in /*) p=$t ;; *) p=$(dirname -- "$p")/$t ;; esac; i=$((i+1)); done; ` +
-		`if LC_ALL=C ls -d -- "$p" 2>&1 >/dev/null | grep -q 'Permission denied'; then echo unreadable; else echo missing; fi; fi`
+		`else p=` + q + `; i=0; while [ -L "$p" ] && [ $i -lt 8 ]; do t=$(readlink -- "$p") && [ -n "$t" ] || break; case "$t" in /*) p=$t ;; *) p=$(dirname -- "$p")/$t ;; esac; i=$((i+1)); done; ` +
+		`if [ -L "$p" ] || LC_ALL=C ls -d -- "$p" 2>&1 >/dev/null | grep -q 'Permission denied'; then echo unreadable; else echo missing; fi; fi`
 }
 
 // readStat reads statScript's answer.
