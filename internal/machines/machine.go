@@ -36,7 +36,7 @@ type Machine struct {
 	attach herdr.Terminals // remuda-core's terminals, the adapter over the machine's own core
 	home   string
 
-	speaksCore bool      // reached through remuda-core instead of herdr (-core, NewCoreManager)
+	speaksCore bool      // reached through remuda-core: a label now (Core 26i made it every machine), gone with the herdr client
 	link       *coreLink // the remuda-core it follows, while connected
 	noCore     error     // why a remote connected on remuda-core follows no core: none installed there, or none answering
 

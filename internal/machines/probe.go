@@ -108,10 +108,14 @@ func errNoCore(host string) error {
 }
 
 // herdrSocket is the herdr remuda reached on a machine before the move, as MovedHerdr names it: the machine's
-// remote_socket, else herdr's default under its home.
+// remote_socket, else "" — herdr's own default, which a Windows PC keeps as a named pipe under %APPDATA% and which only
+// herdr can name there (Core 26i took the probe's %APPDATA%): the scripts that ask it export no HERDR_SOCKET_PATH then.
 func herdrSocket(cfg Config, found probe) string {
 	if cfg.RemoteSocket != "" {
 		return cfg.RemoteSocket
+	}
+	if found.os == "windows" {
+		return ""
 	}
 	return herdr.DefaultSocket(found.home)
 }

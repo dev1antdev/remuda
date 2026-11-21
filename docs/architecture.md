@@ -24,7 +24,7 @@ Three rings, and a dependency may only point inwards.
 │  health · jobs · restart · watch · radar · watchdog · push ·         │
 │  schedule · search · usage · quick · recipes · scenes · code         │
 ├─ the floor ──────────────────────────────────────────────────────────┤
-│  machines   the registry; a Machine is a shell.Host with herdr on it │
+│  machines   the registry; a Machine is a shell.Host with a core on it │
 │  herdr      herdr.API / Terminals and the model; the RPC client      │
 │  core       remuda-core's client, its herdr.API adapter, its terminals│
 │  transcript the session file parser and the per-machine Reader       │

@@ -4,6 +4,7 @@ package machines
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"os"
 	"os/exec"
@@ -58,7 +59,9 @@ func TestOnWindowsRemudaCoreIsReachedOverSSH(t *testing.T) {
 		t.Fatal("remuda-core is not installed: run remuda core install there")
 	}
 	t.Logf("remuda-core at %s", found.core)
-	command := sshx.RemoteCommand("exec " + script.Quote(found.core) + " connect")
+	// a session of its own, as coretest.Server gives a test core: nothing of a core already running here
+	session := fmt.Sprintf("remuda-wintest-%d", os.Getpid())
+	command := sshx.RemoteCommand("exec env RC_SESSION=" + script.Quote(session) + " " + script.Quote(found.core) + " connect")
 	client := core.New(func(context.Context) (net.Conn, error) {
 		return remote.Dial(command, 20*time.Second)
 	})
@@ -76,13 +79,26 @@ func TestOnWindowsRemudaCoreIsReachedOverSSH(t *testing.T) {
 		if pathErr != nil || strings.TrimSpace(winPath) == "" {
 			t.Fatalf("remuda-core's Windows path: %v %q", pathErr, winPath)
 		}
-		starting := exec.Command(strings.TrimSpace(winPath), "server", "start")
+		core := strings.TrimSpace(winPath)
+		stop := func() {
+			stopping := exec.Command(core, "server", "stop")
+			stopping.Env = append(os.Environ(), "RC_SESSION="+session)
+			_ = stopping.Run()
+		}
+		defer stop()
+		var said strings.Builder
+		starting := exec.Command(core, "server", "start")
+		starting.Env = append(os.Environ(), "RC_SESSION="+session)
+		starting.Stdout, starting.Stderr = &said, &said
 		if err := starting.Start(); err != nil {
 			t.Fatalf("start the core in this session: %v", err)
 		}
 		go starting.Wait()
 		for begin := time.Now(); err != nil && time.Since(begin) < 30*time.Second; time.Sleep(time.Second) {
 			hello, err = client.Hello(ctx)
+		}
+		if err != nil {
+			t.Fatalf("the core started in this session did not answer over ssh: %v\n%s", err, said.String())
 		}
 	}
 	if err != nil {

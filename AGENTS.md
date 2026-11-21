@@ -95,9 +95,11 @@ not style.
   same agent under the same pid (`core.Adapter.sendTo`).
 - **Never `--takeover`.** herdr allows one attached client per terminal;
   stealing the slot is the person's call only, never remuda's.
-- **A test remuda-core is `coretest.Server`'s or `scripts/e2e.sh`'s,
-  each with its own `RC_SESSION`, `RC_SOCKET`, XDG
-  folders, `HOME` and `RC_LAUNCHD_DIRECT`; never started another way**: a
+- **A test remuda-core is `coretest.Server`'s, `scripts/e2e.sh`'s or the
+  Windows job's own session's, each with its own `RC_SESSION`, `RC_SOCKET`, XDG
+  folders, `HOME` and `RC_LAUNCHD_DIRECT` — the last for a core started with
+  `server start` in the runner's session, where an elevated sshd would refuse
+  to start one; never started another way**: a
   core started without them reaches the person's.
 - **A test herdr needs `HERDR_SOCKET_PATH`, never a changed `HOME`
   alone.** herdr ignores `HOME` for its socket: `HOME=/tmp/x herdr server

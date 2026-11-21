@@ -50,7 +50,7 @@ docker-test:
 # Binaries for every host you run herdr on (the SPA is embedded, so one file
 # each), and their sha256 sums — what a machine checks a release download
 # against (internal/health/release.go). The two Windows ones are remuda.exe,
-# the helper a cockpit reaches on a Windows PC (herdr's named pipe there).
+# the helper a cockpit reaches on a Windows PC.
 RELEASE_ASSETS = remuda-darwin-arm64 remuda-darwin-amd64 remuda-linux-amd64 remuda-linux-arm64 remuda-windows-amd64.exe remuda-windows-arm64.exe
 release: web
 	@for t in darwin/arm64 darwin/amd64 linux/amd64 linux/arm64 windows/amd64 windows/arm64; do \

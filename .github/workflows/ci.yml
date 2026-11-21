@@ -95,21 +95,6 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: remuda-core for Windows, with its ConPTY
-        shell: bash
-        run: |
-          # the release remuda pins (internal/setup/setup.go), its checksum verified as remuda's own installer does
-          base=https://github.com/dev1antdev/remuda-core/releases/download/remuda-v0.2.4
-          curl -fsSLO "$base/remuda-core-windows-x86_64.zip"
-          curl -fsSLO "$base/checksums.txt"
-          grep ' remuda-core-windows-x86_64.zip$' checksums.txt | sha256sum -c -
-          # the zip's ConPTY put beside the exe, as install-core.sh stages it: without it a terminal cannot start there
-          tmp="$RUNNER_TEMP/core" && mkdir -p "$tmp" "$HOME/.local/bin"
-          "$SYSTEMROOT/System32/tar.exe" -xf remuda-core-windows-x86_64.zip -C "$tmp"
-          cp "$tmp/remuda-core.exe" "$HOME/.local/bin/remuda-core.exe"
-          rm -rf "$HOME/.local/bin/conpty" && cp -R "$tmp/conpty" "$HOME/.local/bin/conpty"
-          test -f "$HOME/.local/bin/conpty/conpty.dll" && test -f "$HOME/.local/bin/conpty/x64/OpenConsole.exe"
-          "$HOME/.local/bin/remuda-core.exe" --version
       - name: remuda.exe where remuda setup puts it
         shell: bash
         run: |
@@ -137,12 +122,15 @@ jobs:
           New-Item -ItemType Directory -Force "$HOME\.ssh" | Out-Null
           (Get-Content $env:REMUDA_SSH_CONFIG) -replace '\\', '/' | Set-Content -Encoding ascii "$HOME\.ssh\config"
       - name: go test on Windows
-        # one package at a time, machines' first: its test starts a terminal in the core the way a cockpit does
+        # setup first: `remuda setup -host pc` installs remuda-core.exe and its ConPTY on this clean runner with the
+        # shipped installer, and the tests after it reach that very core; then one package at a time
         shell: bash
         run: |
           export PATH="/c/Windows/System32/OpenSSH:$PATH" # Windows' own ssh for remuda setup -host: Git's would refuse the key's permissions
           go test -count=1 ./internal/rpath/
-          go test -p 1 -count=1 -v -run '^TestOnWindows' ./internal/machines/ ./internal/health/ ./internal/awake/ ./internal/setup/ ./internal/updates/ ./internal/review/ ./internal/search/ ./internal/filetree/ ./internal/transcript/
+          go test -p 1 -count=1 -v -run '^TestOnWindows' ./internal/setup/
+          test -f "$HOME/.local/bin/remuda-core.exe" && test -f "$HOME/.local/bin/conpty/conpty.dll"
+          go test -p 1 -count=1 -v -run '^TestOnWindows' ./internal/machines/ ./internal/health/ ./internal/awake/ ./internal/updates/ ./internal/review/ ./internal/search/ ./internal/filetree/ ./internal/transcript/
       - uses: actions/upload-artifact@v7
         # the answers this Windows gave, the unit tests' fixtures
         if: always()
