@@ -21,7 +21,7 @@ func (s *Server) screenRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/scrollback", s.handleScrollback)
 }
 
-// handleScrollback is GET /api/scrollback?pane&q&lines: the finds in the rows older than the terminal holds.
+// handleScrollback is GET /api/scrollback?pane&q&lines: the finds in the core's recent rows, the screen and the history above it.
 func (s *Server) handleScrollback(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	paneID := q.Get("pane")
