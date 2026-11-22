@@ -40,13 +40,13 @@ func TestAnInMemorySnapshotDoesNotWaitThePace(t *testing.T) {
 			right := time.Now()
 			f.push(status)
 			waitFor(t, "a snapshot right after one", func() bool { return f.polls(right) == 1 })
-			after := f.polledAt(right).Sub(right)
-			t.Logf("an event right after a snapshot: %s", after)
-			if request && after < localGap-eventDebounce {
-				t.Fatalf("a request's snapshot keeps the gap: %s", after)
+			polled := f.polledAt(right)
+			t.Logf("an event right after a snapshot: %s", polled.Sub(right))
+			if request && polled.Sub(f.polledAt(asked)) < localGap-eventDebounce {
+				t.Fatalf("a request's snapshots keep the gap: %s apart", polled.Sub(f.polledAt(asked)))
 			}
-			if !request && after >= eventDebounce {
-				t.Fatalf("an in-memory snapshot keeps a gap: %s", after)
+			if !request && polled.Sub(right) >= eventDebounce {
+				t.Fatalf("an in-memory snapshot keeps a gap: %s", polled.Sub(right))
 			}
 
 			burst := time.Now()

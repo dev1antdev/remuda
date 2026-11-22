@@ -6,6 +6,7 @@ package watch
 import (
 	"encoding/json"
 	"sort"
+	"time"
 
 	"github.com/dev1antdev/remuda/internal/herdr"
 )
@@ -87,8 +88,11 @@ func fingerprint[T any](values []T) string {
 	return string(b)
 }
 
-// noteWanted works out the subscriptions for the snapshot just applied and tells the stream when they moved.
-func (w *Watcher) noteWanted(machineID string, snap *herdr.Snapshot) {
+// noteWanted works out the subscriptions for the snapshot just applied and tells the stream when they moved. A move
+// the snapshot asked for — a pane that appeared or went, the watches that follow the panes — waits for the churn's
+// rest (`eventDebounce`), so a pane that appears and goes within it swaps no stream at all; a move the person asked
+// for (`now`: a rule edited, a refusal taken again) is told at once, and so is the first set.
+func (w *Watcher) noteWanted(machineID string, snap *herdr.Snapshot, now bool) {
 	var outputs []Output
 	if w.Outputs != nil {
 		outputs = w.Outputs(machineID, snap)
@@ -96,12 +100,21 @@ func (w *Watcher) noteWanted(machineID string, snap *herdr.Snapshot) {
 	w.mu.Lock()
 	st := w.stateFor(machineID)
 	set := buildSet(snap, outputs, st.refused)
-	moved := st.wanted == nil || st.wanted.key != set.key
-	if moved {
-		st.wanted = set
+	if st.wanted != nil && st.wanted.key == set.key {
+		w.mu.Unlock()
+		return
+	}
+	first := st.wanted == nil
+	st.wanted = set
+	if st.settling != nil { // a swap stood booked for the rest of the churn: the move re-arms it on the set as it is now
+		st.settling.Stop()
+		st.settling = nil
+	}
+	if !first && !now {
+		st.settling = time.AfterFunc(eventDebounce, func() { signal(st.changed) })
 	}
 	w.mu.Unlock()
-	if moved {
+	if first || now {
 		signal(st.changed)
 	}
 }
@@ -117,6 +130,6 @@ func (w *Watcher) Resubscribe() {
 	}
 	w.mu.Unlock()
 	for id, snap := range snaps {
-		w.noteWanted(id, snap)
+		w.noteWanted(id, snap, true)
 	}
 }

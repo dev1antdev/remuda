@@ -119,6 +119,31 @@ func TestTheStreamSlowsThePollAndAnEventSnapshotsAtOnce(t *testing.T) {
 	}
 }
 
+// TestAPaneThatComesAndGoesSwapsNoStream: the subscriptions a snapshot asks for wait for the churn's rest, so a pane
+// that appears and goes within it — a one-off command, a scene's pane — costs no stream, and the watches of the panes
+// that stand are never pushed past a cap for it.
+func TestAPaneThatComesAndGoesSwapsNoStream(t *testing.T) {
+	quickPace(t)
+	f := newFakeHerdr(t, "w1:p1")
+	f.memory = true // the snapshot is the mirror's: the churn's rest, not the poll, is what a move waits for
+	watching(t, f, nil)
+	f.subscribed(t)
+	waitFor(t, "the stream to stand", func() bool { return f.open() == 1 })
+	time.Sleep(eventDebounce) // the snapshot a new stream asks for
+
+	appeared := time.Now()
+	f.setPanes("w1:p1", "w1:p2")
+	f.push(`{"data":{"type":"pane_created","pane":{"pane_id":"w1:p2"}},"event":"pane_created"}`)
+	waitFor(t, "the snapshot with the momentary pane", func() bool { return f.polls(appeared) == 1 })
+	f.setPanes("w1:p1")
+	f.push(`{"data":{"type":"pane_closed","pane":{"pane_id":"w1:p2"}},"event":"pane_closed"}`)
+	time.Sleep(3 * eventDebounce)
+
+	if n := f.subscribes(); n != 1 {
+		t.Fatalf("a pane that came and went within the churn's rest swapped the stream: %d subscribes", n)
+	}
+}
+
 func TestAStreamThatEndsGoesBackToThePollAndOpensAgain(t *testing.T) {
 	quickPace(t)
 	streamRetry = 300 * time.Millisecond

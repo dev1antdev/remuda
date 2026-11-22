@@ -47,6 +47,7 @@ type machineState struct {
 	memory    atomic.Bool   // the client answers the snapshot from memory: an event waits for no gap
 	polled    time.Time     // when the last poll of the loop began
 	wanted    *streamSet    // the subscriptions for the latest snapshot
+	settling  *time.Timer   // a swap booked for the rest of the churn the snapshot asked for
 	refused   string        // the person's watches herdr refused, by their fingerprint: left out until they change
 
 	noStreamUntil time.Time // herdr refused the stream itself (one too old for it): the next try waits till then
@@ -221,7 +222,7 @@ func (w *Watcher) apply(machineID string, snap *herdr.Snapshot) {
 		}
 		events.Publish(w.bus, change)
 	}
-	w.noteWanted(machineID, snap)
+	w.noteWanted(machineID, snap, false)
 }
 
 // Snapshot returns the machine's latest snapshot, or the error its last poll hit.
