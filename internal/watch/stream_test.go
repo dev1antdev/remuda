@@ -425,14 +425,20 @@ func TestASubscriptionTheCoreIsSlowToTakeKeepsTheStandingWatches(t *testing.T) {
 	f := newFakeHerdr(t, "w1:p1")
 	f.memory = true
 	reached, release := make(chan struct{}), make(chan struct{})
+	defer close(release)
+	var once sync.Once
 	var mu sync.Mutex
 	var last []Output
 	watching(t, f, func(w *Watcher) {
-		w.Outputs = func(_ string, _ *herdr.Snapshot, standing []Output) []Output {
+		w.Outputs = func(_ string, snap *herdr.Snapshot, standing []Output) []Output {
 			mu.Lock()
 			last = append([]Output(nil), standing...)
 			mu.Unlock()
-			return nil
+			watches := make([]Output, 0, len(snap.Panes)) // one rule on every pane the snapshot shows
+			for i := range snap.Panes {
+				watches = append(watches, Output{Key: "rule:all", Pane: snap.Panes[i].PaneID, Person: true})
+			}
+			return watches
 		}
 	})
 	f.subscribed(t)
@@ -441,7 +447,7 @@ func TestASubscriptionTheCoreIsSlowToTakeKeepsTheStandingWatches(t *testing.T) {
 
 	f.mu.Lock()
 	f.hold = func() error {
-		close(reached)
+		once.Do(func() { close(reached) })
 		<-release
 		return errors.New("the core did not take the set")
 	}
@@ -454,14 +460,19 @@ func TestASubscriptionTheCoreIsSlowToTakeKeepsTheStandingWatches(t *testing.T) {
 	f.push(`{"data":{"agent":"claude","agent_status":"blocked","pane_id":"w1:p1","workspace_id":"w1"},"event":"pane_agent_status_changed"}`)
 	time.Sleep(3 * eventDebounce)
 	mu.Lock()
+	defer mu.Unlock()
+	a, b := false, false
 	for _, o := range last {
+		if o.Pane == "w1:p1" {
+			a = true
+		}
 		if o.Pane == "w1:p2" {
-			mu.Unlock()
-			t.Fatalf("a pane the core has not taken counts as standing: %+v", last)
+			b = true
 		}
 	}
-	mu.Unlock()
-	close(release)
+	if !a || b {
+		t.Fatalf("the standing watches are not the ones the stream took: %+v", last)
+	}
 }
 
 // TestARecheckWorksOutItsOwnTopology: a set worked out again before it is installed is ranked on the snapshot it was
@@ -499,5 +510,64 @@ func TestARecheckWorksOutItsOwnTopology(t *testing.T) {
 	defer mu.Unlock()
 	if asked != mine {
 		t.Fatalf("a set worked out again was ranked on another topology: %+v", asked)
+	}
+}
+
+// TestARefusalForASupersededSetIsDropped: a core refusing a set that the watcher has replaced meanwhile answers a
+// question nobody asks any more — the newer set is the next attempt, and the refusal is not tried against it.
+func TestARefusalForASupersededSetIsDropped(t *testing.T) {
+	quickPace(t)
+	f := newFakeHerdr(t, "w1:p1")
+	f.memory = true
+	reached, release := make(chan struct{}), make(chan struct{})
+	var closed sync.Once
+	var once sync.Once
+	var mu sync.Mutex
+	refused := 0
+	watching(t, f, func(w *Watcher) {
+		w.Outputs = func(_ string, snap *herdr.Snapshot, _ []Output) []Output {
+			watches := make([]Output, 0, len(snap.Panes))
+			for i := range snap.Panes {
+				watches = append(watches, Output{Key: "rule:all", Pane: snap.Panes[i].PaneID, Person: true})
+			}
+			return watches
+		}
+		w.Refused = func(_ string, err error) {
+			if err == nil {
+				return // taken again: the watcher says so too
+			}
+			mu.Lock()
+			refused++
+			mu.Unlock()
+		}
+	})
+	f.subscribed(t)
+	waitFor(t, "the stream to stand", func() bool { return f.open() == 1 })
+	time.Sleep(eventDebounce)
+
+	f.mu.Lock()
+	f.refuse = func([]herdr.Subscription) string { return "invalid_regex" }
+	f.hold = func() error {
+		once.Do(func() { close(reached) })
+		<-release
+		return &herdr.Error{Code: "invalid_regex", Message: "refused"}
+	}
+	f.mu.Unlock()
+	f.setPanes("w1:p1", "w1:p2")
+	f.push(`{"data":{"type":"pane_created","pane":{"pane_id":"w1:p2"}},"event":"pane_created"}`)
+	<-reached           // the set with the second pane is in the core's hands
+	f.setPanes("w1:p1") // and gone again: the set that asks for it is superseded
+	f.push(`{"data":{"type":"pane_closed","pane":{"pane_id":"w1:p2"}},"event":"pane_closed"}`)
+	time.Sleep(3 * eventDebounce)
+	closed.Do(func() { close(release) }) // the core answers the attempt it was given, at last
+	time.Sleep(3 * eventDebounce)
+
+	mu.Lock()
+	defer mu.Unlock()
+	if refused != 0 {
+		t.Fatalf("a refusal for a set nobody asks for any more was taken: %d", refused)
+	}
+	if n := f.subscribes(); n != 1 {
+		t.Fatalf("the superseded set was tried again: %d subscribes", n)
 	}
 }

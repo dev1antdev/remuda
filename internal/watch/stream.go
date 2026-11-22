@@ -151,6 +151,7 @@ func (w *Watcher) connect(mc *machines.Machine, st *machineState, prev *liveStre
 	set := st.wanted
 	wait := time.Until(st.noStreamUntil)
 	w.mu.Unlock()
+	queued := set.key // the candidate this attempt stands for, before a recheck works it out again
 	set = w.recheck(mc, st, set)
 	if set == nil {
 		return nil, streamRetry // no snapshot yet: the first one tells the set
@@ -168,9 +169,8 @@ func (w *Watcher) connect(mc *machines.Machine, st *machineState, prev *liveStre
 			log.Printf("%s: herdr refused the triggers' watches: %v", mc.ID(), err)
 		}
 		w.mu.Lock()
-		failed := set.key
 		st.refused = set.person
-		if st.wanted == nil || st.wanted.key != failed {
+		if st.wanted == nil || st.wanted.key != queued {
 			w.mu.Unlock()
 			signal(st.changed) // superseded while the core was answering: the newer set is the next attempt
 			return nil, streamRetry
