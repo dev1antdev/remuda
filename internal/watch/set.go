@@ -167,6 +167,17 @@ func (st *machineState) dropSettling() {
 	}
 }
 
+// reworked works the wanted set out again on the watches the machine's stream now holds: a set still settling keeps
+// its rest and takes the new one in its place, and a set whose rest is over is replaced before the swap that would
+// install it — a stream that stood may be about to install a candidate worked out for watches it no longer needs.
+func (w *Watcher) reworked(machineID string, snap *herdr.Snapshot) {
+	w.mu.Lock()
+	st := w.states[machineID]
+	settling := st != nil && st.pending != nil
+	w.mu.Unlock()
+	w.noteWanted(machineID, snap, !settling)
+}
+
 // Resubscribe works the subscriptions out again on every machine: the watches asked for moved.
 func (w *Watcher) Resubscribe() {
 	w.mu.Lock()
