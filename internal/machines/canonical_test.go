@@ -32,6 +32,17 @@ func TestCanonicalIsTheMachinesOwnSpellingOfAFolder(t *testing.T) {
 	if got, ok := mc.Canonical("/no/such/folder/."); ok || got != "/no/such/folder/." {
 		t.Fatalf("a folder that is not there is kept as given (resolved %v): %q", ok, got)
 	}
+	odd := filepath.Join(t.TempDir(), "plain\n") // a folder whose name ends in what pwd ends its line with
+	if err := os.Mkdir(odd, 0o755); err != nil {
+		t.Skip("a folder's name cannot end in a newline here")
+	}
+	oddPhysical, err := filepath.EvalSymlinks(odd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := mc.Canonical(odd); !ok || got != oddPhysical {
+		t.Fatalf("a folder named with a trailing newline is named %q (resolved %v), not %q", got, ok, oddPhysical)
+	}
 	if got, ok := mc.Canonical(""); ok || got != "" {
 		t.Fatalf("no folder is named %q (resolved %v)", got, ok)
 	}

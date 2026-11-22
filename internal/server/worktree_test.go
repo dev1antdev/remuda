@@ -181,3 +181,42 @@ func TestSettingsSavedUnderAnOldSpellingAreStillFound(t *testing.T) {
 		t.Fatalf("a folder whose .. names another is saved anyway: %d %s", rec.Code, rec.Body)
 	}
 }
+
+// TestClearingSettingsThroughAnOldSpellingClearsThem: a repository's settings saved under a link move to the machine's
+// spelling when they are next saved, and a clear takes them away — never leaving the old record to be found again.
+func TestClearingSettingsThroughAnOldSpellingClearsThem(t *testing.T) {
+	dir := t.TempDir()
+	store := repos.Open(dir)
+	s := &Server{Machines: herdrfake.Manager(dir), Repos: store}
+	api := http.NewServeMux()
+	s.repoRoutes(api)
+	link := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(t.TempDir(), link); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Put("local", link, repos.Settings{Base: "legacy"}); err != nil {
+		t.Fatal(err)
+	}
+	put := func(settings string) {
+		t.Helper()
+		body := fmt.Sprintf(`{"machine":"local","root":%q,"settings":%s}`, link, settings)
+		if rec := ask(api, "PUT", "/api/repos/settings", body); rec.Code != 200 {
+			t.Fatalf("put %s: %d %s", settings, rec.Code, rec.Body)
+		}
+	}
+	put(`{"base":"main"}`) // saved through the link: the record moves to the machine's spelling
+	if store.Has("local", link) {
+		t.Fatal("the old spelling kept its record after a save")
+	}
+	put(`{}`) // cleared through the link
+	rec := ask(api, "GET", "/api/repos/settings?machine=local&root="+link+"&quick=1", "")
+	var got struct {
+		Settings repos.Settings `json:"settings"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Settings.Base != "" {
+		t.Fatalf("settings cleared through a link came back: %+v", got)
+	}
+}

@@ -113,8 +113,11 @@ func (st *Store) Action(machine, root, id string) (Action, bool) {
 	return Action{}, false
 }
 
-// Put keeps the repository's settings whole, checked and trimmed; actions without an id get one.
-func (st *Store) Put(machine, root string, s Settings) (Settings, error) {
+// Put keeps the repository's settings whole, checked and trimmed; actions without an id get one. An older spelling
+// of the same folder, when named, is retired in the same write: settings saved before remuda named folders the
+// machine's way move to the machine's spelling, and a clear takes them away rather than leaving the old record to be
+// found again.
+func (st *Store) Put(machine, root string, s Settings, older ...string) (Settings, error) {
 	s, err := Check(root, s)
 	if err != nil {
 		return Settings{}, err
@@ -129,6 +132,11 @@ func (st *Store) Put(machine, root string, s Settings) (Settings, error) {
 		delete(next, key(machine, root))
 	} else {
 		next[key(machine, root)] = s
+	}
+	for _, was := range older {
+		if was != "" && was != root {
+			delete(next, key(machine, was))
+		}
 	}
 	if err := state.SaveJSON(st.dir, file, next); err != nil {
 		return Settings{}, err

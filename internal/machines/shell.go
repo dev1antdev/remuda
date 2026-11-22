@@ -58,12 +58,17 @@ func (mc *Machine) Canonical(dir string) (string, bool) {
 		return "", false
 	}
 	style := mc.Paths()
-	here := `$(pwd -P)`
+	said := "pwd -P"
 	if style.Windows { // Git Bash answers /cygdrive/c/…, which is Windows' own spelling only through cygpath
-		here = `$(cygpath -w "$(pwd -P)")`
+		said = `cygpath -w "$PWD"`
 	}
-	out, err := shell.Text(mc, "cd -P -- "+script.Quote(style.Slash(dir))+` 2>/dev/null && printf '%s\n' "`+here+`"`, canonicalWithin)
-	if said := strings.TrimSuffix(strings.TrimSuffix(out, "\n"), "\r"); err == nil && strings.TrimSpace(said) != "" {
+	out, err := shell.Text(mc, "cd -P -- "+script.Quote(style.Slash(dir))+" 2>/dev/null && "+said, canonicalWithin)
+	// the one line terminator pwd ends on, and no other: a folder's name may end in one
+	said = strings.TrimSuffix(out, "\n")
+	if style.Windows {
+		said = strings.TrimSuffix(said, "\r")
+	}
+	if err == nil && said != "" {
 		return style.Clean(said), true
 	}
 	return dir, false
