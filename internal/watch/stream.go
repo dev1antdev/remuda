@@ -168,13 +168,16 @@ func (w *Watcher) connect(mc *machines.Machine, st *machineState, prev *liveStre
 			log.Printf("%s: herdr refused the triggers' watches: %v", mc.ID(), err)
 		}
 		w.mu.Lock()
-		st.refused = set.person
 		failed := set.key
+		st.refused = set.person
+		if st.wanted == nil || st.wanted.key != failed {
+			w.mu.Unlock()
+			signal(st.changed) // superseded while the core was answering: the newer set is the next attempt
+			return nil, streamRetry
+		}
 		set = buildSet(set.snap, set.all, st.refused)
 		set.basis = fingerprint(st.accepted.heldWatches())
-		if st.wanted != nil && st.wanted.key == failed {
-			st.wanted = set // the attempt is still what the stream should hold: the refusal is its answer
-		}
+		st.wanted = set // the attempt is still what the stream should hold: the refusal is its answer
 		w.mu.Unlock()
 		if w.Refused != nil {
 			w.Refused(mc.ID(), err)

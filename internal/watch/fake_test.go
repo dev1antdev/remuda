@@ -27,6 +27,7 @@ type fakeHerdr struct {
 	asked       chan []herdr.Subscription
 	refuse      func([]herdr.Subscription) string // a refusal's code for a subscription set, "" to take it
 	unreachable error                             // Subscribe answers this, as a core that cannot be reached
+	hold        func() error                      // a Subscribe waits for this before answering: a core slow to take a set
 }
 
 func newFakeHerdr(t *testing.T, panes ...string) *fakeHerdr {
@@ -59,6 +60,14 @@ func (f *fakeHerdr) snapshot() (*herdr.Snapshot, error) {
 }
 
 func (f *fakeHerdr) subscribe(subs []herdr.Subscription) (herdr.EventStream, error) {
+	f.mu.Lock()
+	hold := f.hold
+	f.mu.Unlock()
+	if hold != nil {
+		if err := hold(); err != nil {
+			return nil, err
+		}
+	}
 	select {
 	case f.asked <- subs:
 	default: // a test that reads none of them
