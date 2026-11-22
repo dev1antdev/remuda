@@ -3911,13 +3911,16 @@ components and icons as rules for whoever changes it: @docs/design.md
   `Watcher.Outputs` names (`internal/triggers`); a stream's subscriptions
   are fixed, so a pane made or gone, or a rule changed (`Resubscribe`), is
   a new stream — opened before the old one closes — never more than two.
-  A move the snapshot asked for is kept pending until the churn's rest
-  (`eventDebounce`) is over, so a pane that appears and goes within it swaps
-  no stream at all and no standing pane's watches are displaced for it
-  (`TestAPaneThatComesAndGoesSwapsNoStream`), and a stream that opens
-  meanwhile subscribes to the set that stands
-  (`TestAStreamOpeningWhileASetSettlesHoldsTheOneThatStands`); a rule
-  changed, or a refusal taken again, is promoted at once
+  A move the snapshot asked for is kept pending for the gap a snapshot
+  moved at before the mirror made one free (`localGap` / `remoteGap`), so
+  the watches asked of a machine move no faster than they did then, a pane
+  that appears and goes within it swaps no stream at all, and a stream that
+  opens meanwhile subscribes to the set that stands
+  (`TestAPaneThatComesAndGoesSwapsNoStream`,
+  `TestAStreamOpeningWhileASetSettlesHoldsTheOneThatStands`); a set
+  standing pending is not re-armed by the same set seen again
+  (`TestASettlingSetIsNotPushedOutByTheSameSetAgain`); a rule changed, or a
+  refusal taken again, is promoted at once
   (`TestARuleEditPromotesASettlingSetAtOnce`);
   every stream
   that opens is followed by a snapshot, so what moved before it stood —

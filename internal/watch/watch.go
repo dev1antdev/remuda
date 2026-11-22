@@ -49,6 +49,7 @@ type machineState struct {
 	wanted    *streamSet    // the subscriptions for the latest snapshot
 	pending   *streamSet    // the set the churn's rest has not promoted yet: a pane that comes and goes is no swap
 	gen       uint64        // which rest is the one that fired
+	rest      time.Duration // how long a move the snapshot asked for settles: the gap the poll kept before
 	settling  *time.Timer   // the rest booked for the pending set
 	refused   string        // the person's watches herdr refused, by their fingerprint: left out until they change
 
@@ -150,6 +151,12 @@ func (w *Watcher) poll(mc *machines.Machine) (*herdr.Snapshot, error) {
 	defer st.pollMu.Unlock()
 	client, _, err := mc.Ready()
 	st.memory.Store(err == nil && client != nil && client.SnapshotFromMemory())
+	w.mu.Lock()
+	st.rest = remoteGap
+	if mc.Local() {
+		st.rest = localGap
+	}
+	w.mu.Unlock()
 	if err == nil {
 		var snap *herdr.Snapshot
 		if snap, err = client.SessionSnapshot(); err == nil {

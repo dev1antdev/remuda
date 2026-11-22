@@ -126,7 +126,7 @@ func TestTheStreamSlowsThePollAndAnEventSnapshotsAtOnce(t *testing.T) {
 func TestAPaneThatComesAndGoesSwapsNoStream(t *testing.T) {
 	quickPace(t)
 	f := newFakeHerdr(t, "w1:p1")
-	f.memory = true // the snapshot is the mirror's: the churn's rest, not the poll, is what a move waits for
+	f.memory = true // the snapshot is the mirror's: the rest a move waits for, not the poll, is what slows it
 	watching(t, f, nil)
 	f.subscribed(t)
 	waitFor(t, "the stream to stand", func() bool { return f.open() == 1 })
@@ -138,19 +138,19 @@ func TestAPaneThatComesAndGoesSwapsNoStream(t *testing.T) {
 	waitFor(t, "the snapshot with the momentary pane", func() bool { return f.polls(appeared) == 1 })
 	f.setPanes("w1:p1")
 	f.push(`{"data":{"type":"pane_closed","pane":{"pane_id":"w1:p2"}},"event":"pane_closed"}`)
-	time.Sleep(3 * eventDebounce)
+	time.Sleep(3 * localGap)
 
 	if n := f.subscribes(); n != 1 {
-		t.Fatalf("a pane that came and went within the churn's rest swapped the stream: %d subscribes", n)
+		t.Fatalf("a pane that came and went within the rest swapped the stream: %d subscribes", n)
 	}
 }
 
-// TestAStreamOpeningWhileASetSettlesHoldsTheOneThatStands: a set the snapshot moved waits for the churn's rest, and
+// TestAStreamOpeningWhileASetSettlesHoldsTheOneThatStands: a set the snapshot moved waits for the rest, and
 // a stream that opens meanwhile — an ended one, a swap that failed — subscribes to the set that stands, never to the
 // one still settling: a momentary pane can cost no stream, nor place a watch of the panes that stand past a cap.
 func TestAStreamOpeningWhileASetSettlesHoldsTheOneThatStands(t *testing.T) {
 	quickPace(t)
-	eventDebounce = 300 * time.Millisecond // the rest is long enough to open a stream inside it
+	localGap = 300 * time.Millisecond // the rest is long enough to open a stream inside it
 	f := newFakeHerdr(t, "w1:p1")
 	f.memory = true
 	watching(t, f, nil)
@@ -169,11 +169,11 @@ func TestAStreamOpeningWhileASetSettlesHoldsTheOneThatStands(t *testing.T) {
 	}
 }
 
-// TestARuleEditPromotesASettlingSetAtOnce: a rule edited is the person's move, not the churn's: a poll that read the
+// TestARuleEditPromotesASettlingSetAtOnce: a rule edited is the person's move, not the snapshot's: a poll that read the
 // new rule and booked it waits for no rest once Resubscribe says so.
 func TestARuleEditPromotesASettlingSetAtOnce(t *testing.T) {
 	quickPace(t)
-	eventDebounce = 300 * time.Millisecond // a rest long enough to tell an immediate move from a settled one
+	localGap = 10 * time.Second // a rest no test would sit through: only the person's word promotes the set
 	f := newFakeHerdr(t, "w1:p1")
 	f.memory = true
 	var rules atomic.Pointer[[]Output]
@@ -194,14 +194,44 @@ func TestARuleEditPromotesASettlingSetAtOnce(t *testing.T) {
 	f.push(`{"data":{"type":"layout_updated"},"event":"layout_updated"}`)
 	waitFor(t, "the snapshot with the new rule", func() bool { return f.polls(seen) == 1 })
 
-	edited := time.Now()
 	watcher.Resubscribe()
-	subs := f.subscribed(t)
-	if took := time.Since(edited); took >= eventDebounce/2 {
-		t.Fatalf("the person's rule waited for the churn's rest: %s", took)
-	}
+	subs := f.subscribed(t) // a rest of ten seconds: the stream that arrives is the person's word, not the timer's
 	if got := fingerprint(subs); !strings.Contains(got, herdr.EventOutputMatched) || !strings.Contains(got, "DEPLOYED") {
 		t.Fatalf("the rule's watch is not in the stream: %s", got)
+	}
+}
+
+// TestASettlingSetIsNotPushedOutByTheSameSetAgain: an agent working asks for a snapshot every few milliseconds, and
+// each one works out the same pending set — that must not re-arm the rest, or a new pane's watches would never open
+// while the agents around it move.
+func TestASettlingSetIsNotPushedOutByTheSameSetAgain(t *testing.T) {
+	quickPace(t)
+	f := newFakeHerdr(t, "w1:p1")
+	f.memory = true
+	watching(t, f, nil)
+	f.subscribed(t)
+	waitFor(t, "the stream to stand", func() bool { return f.open() == 1 })
+	time.Sleep(eventDebounce) // the snapshot a new stream asks for
+
+	f.setPanes("w1:p1", "w1:p2")
+	f.push(`{"data":{"type":"pane_created","pane":{"pane_id":"w1:p2"}},"event":"pane_created"}`)
+	waitFor(t, "the snapshot that books the new pane", func() bool { return f.open() == 1 })
+
+	working, ended := make(chan struct{}), make(chan struct{})
+	go func() { // an agent's statuses, a snapshot each, all of them the set already standing pending
+		defer close(ended)
+		for {
+			select {
+			case <-working:
+				return
+			case <-time.After(localGap / 4):
+				f.push(`{"data":{"agent":"claude","agent_status":"working","pane_id":"w1:p1","workspace_id":"w1"},"event":"pane.agent_status_changed"}`)
+			}
+		}
+	}()
+	defer func() { close(working); <-ended }() // the goroutine stops before a cleanup restores the pace it reads
+	if got := statusPanes(f.subscribed(t)); got != "w1:p1,w1:p2" {
+		t.Fatalf("the new pane's watches never opened while the agents moved: %s", got)
 	}
 }
 

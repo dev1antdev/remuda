@@ -89,10 +89,11 @@ func fingerprint[T any](values []T) string {
 }
 
 // noteWanted works out the subscriptions for the snapshot just applied and tells the stream when they moved. A move
-// the snapshot asked for — a pane that appeared or went, the watches that follow the panes — is kept pending until
-// the churn's rest (`eventDebounce`) is over, and only then becomes the set the stream subscribes to, so a pane that
-// appears and goes within it swaps no stream at all and a stream opening meanwhile holds the set that stands. A move
-// the person asked for (`now`: a rule edited, a refusal taken again) is promoted and told at once, and so is the first
+// the snapshot asked for — a pane that appeared or went, the watches that follow the panes — is kept pending for the
+// gap a snapshot moved at before the mirror made one free (`localGap` / `remoteGap`), and only then becomes the set
+// the stream subscribes to: a pane that appears and goes within it swaps no stream at all, a stream opening meanwhile
+// holds the set that stands, and the watches asked of a machine move no faster than they did before. A move the
+// person asked for (`now`: a rule edited, a refusal taken again) is promoted and told at once, and so is the first
 // set.
 func (w *Watcher) noteWanted(machineID string, snap *herdr.Snapshot, now bool) {
 	var outputs []Output
@@ -114,10 +115,10 @@ func (w *Watcher) noteWanted(machineID string, snap *herdr.Snapshot, now bool) {
 	case st.wanted.key == set.key:
 		if st.pending != nil { // back where the stream stands: the settling move is dropped
 			st.dropSettling()
-			w.mu.Unlock()
-			return
 		}
 		w.mu.Unlock()
+	case st.pending != nil && st.pending.key == set.key:
+		w.mu.Unlock() // the same move, still settling: its own rest stands, a status event does not push it out
 	default:
 		st.pending = set
 		st.gen++
@@ -125,7 +126,8 @@ func (w *Watcher) noteWanted(machineID string, snap *herdr.Snapshot, now bool) {
 		if st.settling != nil {
 			st.settling.Stop()
 		}
-		st.settling = time.AfterFunc(eventDebounce, func() { w.settle(st, gen) })
+		rest := st.rest
+		st.settling = time.AfterFunc(rest, func() { w.settle(st, gen) })
 		w.mu.Unlock()
 	}
 }
