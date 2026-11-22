@@ -39,7 +39,7 @@ type Service struct {
 	acted    map[string]time.Time            // "machine|pane|watch" → the last action, for the quiet spells
 	offers   map[string]Offer                // "machine|pane"
 	refused  map[string]string               // machine → why herdr refused the person's watches
-	watched  map[string]map[string]bool      // machine → the panes its last set of watches was worked out for
+	watched  map[string]map[string]bool      // machine → the watches its last set kept, by pane and key
 }
 
 type paneView struct {
@@ -125,6 +125,7 @@ func (s *Service) Forget(machine string) {
 	}
 	delete(s.machines, machine)
 	delete(s.refused, machine)
+	delete(s.watched, machine)
 }
 
 // OnMatch hears a match. herdr says a match once as it appears, and again for one standing on the screen whenever a

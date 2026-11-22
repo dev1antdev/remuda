@@ -296,8 +296,10 @@ func TestANewPaneTakesNoWatchFromAPaneThatStands(t *testing.T) {
 		t.Fatalf("a set of %d watches", len(stood))
 	}
 
-	// a pane appears before them all: its watches come first in the list a cut would take the tail of the old set for
+	// a pane appears before them all, and a second snapshot comes before the stream swaps: not one watch of a pane
+	// that stands may go for it
 	grown := herdr.Snapshot{Panes: append([]herdr.PaneInfo{{PaneID: "w1:new"}}, snap.Panes...)}
+	s.Watches("gog", &grown)
 	then := s.Watches("gog", &grown)
 	have := map[string]bool{}
 	own := 0

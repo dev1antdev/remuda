@@ -50,19 +50,19 @@ func (s *Service) Watches(machine string, snap *herdr.Snapshot) []watch.Output {
 		overMu.Unlock()
 		all = s.watchedBefore(machine, all)
 	}
-	s.rememberWatched(machine, snap)
+	s.rememberWatched(machine, all) // only what was kept: a pane that got no room is no pane the machine had
 	return all
 }
 
-// watchedBefore cuts the set to MaxWatches keeping first the watches of the panes the machine had the time before: a
-// pane that just appeared is served with what is left, so it never displaces a watch of a pane that stands.
+// watchedBefore cuts the set to MaxWatches keeping first the very watches the last set kept — a watch that stands is
+// never taken for a pane that just appeared, which is served with what is left of the cap.
 func (s *Service) watchedBefore(machine string, all []watch.Output) []watch.Output {
 	s.mu.Lock()
 	before := s.watched[machine]
 	s.mu.Unlock()
 	var kept, fresh []watch.Output
 	for _, o := range all {
-		if before[o.Pane] {
+		if before[watchKey(o)] {
 			kept = append(kept, o)
 		} else {
 			fresh = append(fresh, o)
@@ -75,13 +75,16 @@ func (s *Service) watchedBefore(machine string, all []watch.Output) []watch.Outp
 	return kept
 }
 
-// rememberWatched keeps which panes the machine had, so the next set knows the ones that just appeared.
-func (s *Service) rememberWatched(machine string, snap *herdr.Snapshot) {
-	panes := make(map[string]bool, len(snap.Panes))
-	for i := range snap.Panes {
-		panes[snap.Panes[i].PaneID] = true
+// rememberWatched keeps the watches the set kept, so the next one knows which of them stand.
+func (s *Service) rememberWatched(machine string, kept []watch.Output) {
+	watches := make(map[string]bool, len(kept))
+	for _, o := range kept {
+		watches[watchKey(o)] = true
 	}
 	s.mu.Lock()
-	s.watched[machine] = panes
+	s.watched[machine] = watches
 	s.mu.Unlock()
 }
+
+// watchKey names one watch: a pane's watch of one key.
+func watchKey(o watch.Output) string { return o.Pane + "|" + o.Key }
