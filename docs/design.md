@@ -20,7 +20,7 @@ that stands out.
 - A button says exactly what it does, with a verb: "Commit staged", "Push without hooks", "Resume all", "Wake up". One
   that opens a dialog ends in "…": "Scan a folder…", "Commit anyway…".
 - A toast says what came of it: "Committed 4728a00c: …", "Link copied". No "successfully", no "please".
-- An error says what went wrong and what to do, in git's or herdr's own words when there are some. No apologies, no
+- An error says what went wrong and what to do, in git's or the core's own words when there are some. No apologies, no
   "something went wrong".
 - A confirm names what is lost or rewritten, and its button repeats the act ("Discard", "Commit anyway"), never "OK".
 - Sentence case everywhere. No exclamation marks, no emoji.

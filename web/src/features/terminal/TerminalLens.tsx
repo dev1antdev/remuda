@@ -88,7 +88,7 @@ export function useTerminalViewItems(pane: Pane, screen = false): MenuItem[] {
   if (screen) return [...textSize, { sep: true }, keys];
   return [
     { heading: t("Size") },
-    { label: t("Resize the pane to this screen"), hint: t("herdr follows the smallest attached client"), checked: sizeMode === "fit", onSelect: () => setSizeMode("fit") },
+    { label: t("Resize the pane to this screen"), hint: t("the pane takes the size of the viewer that last acted"), checked: sizeMode === "fit", onSelect: () => setSizeMode("fit") },
     { label: `Keep the pane's own size (${pane.cols}×${pane.rows})`, hint: t("a smaller font to fit the width, scrolling when it cannot"), checked: sizeMode === "keep", onSelect: () => setSizeMode("keep") },
     { heading: t("Minimum width") },
     ...MIN_WIDTHS.map((n) => ({ label: n ? t("At least {n} columns", { n }) : t("Fit the screen"), hint: n ? (n === minCols ? t("a narrower screen scrolls sideways") : undefined) : undefined, checked: n === minCols, disabled: sizeMode !== "fit", onSelect: () => setMinCols(n) })),

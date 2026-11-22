@@ -241,7 +241,7 @@ export function NewTabDialog({ session, machine, agents, onCreate, onClose }: {
   const submit = useSubmit(() => onCreate(name.trim(), agent, options()));
   const { redact } = useSharing(); // under the screen-sharing mode the workspace by its neutral name
   return (
-    <FormDialog title={t("New tab in {workspace}", { workspace: redact(session.name) })} icon="plus" hint={t("Opens in the workspace's folder, like herdr's prefix+c.")} onClose={onClose} submit={submit} submitLabel={t("Create tab")}>
+    <FormDialog title={t("New tab in {workspace}", { workspace: redact(session.name) })} icon="plus" hint={t("Opens in the workspace's folder.")} onClose={onClose} submit={submit} submitLabel={t("Create tab")}>
       <label>
         {t("Name (optional)")}
         <input autoFocus value={name} placeholder="tests" onChange={(e) => setName(e.target.value)} />

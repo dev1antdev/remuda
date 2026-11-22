@@ -74,12 +74,12 @@ export default function TriggersDialog({ machineId, dir, workspace, name, onClos
       }}
     >
       <p className="modal-hint">
-        {t("herdr watches what each pane prints. Built in, on every pane: a dev server saying where it serves is offered in the corner as a preview once its port listens, and tests that failed send one push per pane — never while its agent is at work or its terminal is open here, then not again for half an hour.")}
+        {t("remuda-core watches what each pane prints. Built in, on every pane: a dev server saying where it serves is offered in the corner as a preview once its port listens, and tests that failed send one push per pane — never while its agent is at work or its terminal is open here, then not again for half an hour.")}
       </p>
       <p className="modal-hint">{t("Your own triggers look for a line — text as written, or a regular expression — everywhere or in one folder, and push, note it in the activity, offer a preview or move the task whose agent runs there. Shared by every device that uses this remuda.")}</p>
       {refused.map(([machine, why]) => (
         <Notice key={machine} tone="warn">
-          {t("herdr on {machine} refused your triggers, so they are left out there until you change them: {why}", { machine: machineLabel(machine), why })}
+          {t("remuda-core on {machine} refused your triggers, so they are left out there until you change them: {why}", { machine: machineLabel(machine), why })}
         </Notice>
       ))}
       {!list && !loaded.error && <Notice tone="hint">{t("Loading…")}</Notice>}

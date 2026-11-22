@@ -1,4 +1,4 @@
-// The roster: every machine with herdr's hierarchy, and what changes it — workspaces, tabs and worktrees made and closed, machines added and named.
+// The roster: every machine with the dictionary's hierarchy, and what changes it — workspaces, tabs and worktrees made and closed, machines added and named.
 
 import type { BudgetStatus } from "@/features/usage/api";
 import type { Retirement, RetiringHit } from "@/features/usage/retired";

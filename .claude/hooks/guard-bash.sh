@@ -1,6 +1,7 @@
 #!/bin/sh
 # Claude Code PreToolUse hook for Bash: refuses the few commands that would
-# reach the person's real herdr or steal their attach. The rules are the
+# reach the person's real herdr or steal their attach (a check of the command
+# text, so a spelling it does not know is beyond it). The rules are the
 # ones CLAUDE.md spells out under Invariants and "A throwaway remuda-core
 # for a test"; the rest of Bash is left alone. Exit 2 refuses and hands
 # stderr to the agent as the reason.
@@ -25,19 +26,19 @@ if has '(herdr|attach).*--takeover'; then
   refuse "never pass --takeover: herdr allows one attached client per terminal, and stealing the slot is the person's call only. To write the flag into a file use the Write or Edit tool; to search for it use Grep."
 fi
 
-scoped() { has 'HERDR_SOCKET_PATH='; }
-
-# `herdr server stop` on the default socket stops the person's server and
-# every agent in it. A throwaway server is addressed by its socket.
-if has 'herdr[[:space:]]+server[[:space:]]+stop' && ! scoped; then
-  refuse "'herdr server stop' without HERDR_SOCKET_PATH=... stops the person's real herdr server and every agent in it. Address a throwaway server by its socket in the same command: HERDR_SOCKET_PATH=/tmp/hs/herdr.sock herdr server stop (see internal/herdr/server_test.go)."
+# herdr stays on the machines for the rollback alone, and it is the person's: a stop, a restart or a start ends or
+# replaces every agent in it. No test starts one by hand any more (a test of remuda starts coretest.Server), so no
+# herdr server command that changes it passes here; reading its state does. This is a check of the command text, not a
+# shell: quotes are read away, but a path or a variable that spells the command is beyond it.
+herdr=$(printf '%s' "$cmd" | tr -d "\"'")
+if printf '%s' "$herdr" | grep -Eq -e '(^|[^[:alnum:]_.-])herdr([[:space:]]+-[^[:space:]]+)*[[:space:]]+(server([[:space:]]+-[^[:space:]]+)*[[:space:]]+(stop|restart)|server[[:space:]]*($|[;&|<>)]))'; then
+  refuse "herdr is kept for the rollback and belongs to the person: starting, stopping or restarting its server ends or replaces every agent in it. A test starts internal/core/coretest.Server, never a herdr (AGENTS.md, hard rules)."
 fi
 
-# herdr ignores HOME for its socket, so a changed HOME still talks to the
-# real server — a test that leans on HOME alone is the mistake that
-# happened once.
-if has '(^|[[:space:];&|(])HOME=[^[:space:]]*[[:space:]]+([^[:space:]]*/)?herdr([[:space:]]|$)' && ! scoped; then
-  refuse "herdr ignores HOME for its socket: with HOME changed it still reaches the person's real server. Set HERDR_SOCKET_PATH=<your socket> in the same command (HOME may stay changed beside it)."
+# herdr ignores HOME for its socket, so a changed HOME still reaches the person's real server: a herdr started under
+# one, or pointed at it, is never safe from here.
+if printf '%s' "$herdr" | grep -Eq -e '(^|[[:space:];&|(])HOME=[^[:space:]]*[[:space:]].*herdr([[:space:]]|$)'; then
+  refuse "herdr ignores HOME for its socket: with HOME changed it still reaches the person's real server. A test of remuda starts coretest.Server; a herdr is the person's."
 fi
 
 # remuda-core holds the person's agents once they moved off herdr: `server stop` ends every terminal in it, and a

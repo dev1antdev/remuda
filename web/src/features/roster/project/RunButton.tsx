@@ -1,5 +1,5 @@
 // The run button, after T3 Code's: "▶ Dev | ▾" in the tab strip — the main part runs the action used last in a shell
-// herdr makes for it, the menu lists every action of the repository, Add action… and Edit actions…; "▶ Add action" while
+// the core makes for it, the menu lists every action of the repository, Add action… and Edit actions…; "▶ Add action" while
 // there is none. On a phone the words go and the two icons keep their room.
 
 import { useState } from "react";

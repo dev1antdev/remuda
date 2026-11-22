@@ -178,7 +178,7 @@ func (s *Service) Sleep(mc *machines.Machine, workspaceID string, anyway bool) (
 	for _, a := range w.Agents {
 		lines = append(lines, fmt.Sprintf("%s in %s   (%s)", restart.Title(a.Kind), a.Pane, restart.Resume(a.Kind, a.Session)))
 	}
-	command := "# on " + mc.Label() + ", through herdr: each agent asked to leave with its own exit, its shell, pane and tab kept\n" + strings.Join(lines, "\n")
+	command := "# on " + mc.Label() + ", through remuda-core: each agent asked to leave with its own exit, its shell, pane and tab kept\n" + strings.Join(lines, "\n")
 	job := s.Jobs.Run(mc, "Sleep "+w.Name, command, func(say func(string)) error {
 		defer s.release(mc.ID(), workspaceID)
 		defer s.refresh(mc)

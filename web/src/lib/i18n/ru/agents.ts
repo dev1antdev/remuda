@@ -76,7 +76,7 @@ export const agents: Dictionary = {
   "pick|None": "Никого",
   "Not read yet.": "Ещё не прочитано.",
   "One text, to each of them in turn — /compact, a question, a nudge": "Один текст каждому по очереди — /compact, вопрос, напоминание",
-  "Opens in the workspace's folder, like herdr's prefix+c.": "Откроется в папке пространства, как prefix+c в herdr.",
+  "Opens in the workspace's folder.": "Откроется в папке пространства.",
   Order: "Порядок",
   Path: "Путь",
   "Pick a workspace": "Выберите пространство",

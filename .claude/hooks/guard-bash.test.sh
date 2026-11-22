@@ -13,8 +13,15 @@ while IFS='	' read -r want cmd; do
   [ "$got" = "$want" ] || { echo "guard-bash.test: wanted $want, got $got: $cmd"; bad=1; }
 done <<'CASES'
 refuse	herdr server stop
+refuse	herdr server restart
+refuse	"herdr" "server" stop
+refuse	'herdr' server restart
+refuse	herdr server >log
+refuse	herdr --json server stop
+refuse	HOME=/tmp/x HERDR_SOCKET_PATH=/tmp/hs/herdr.sock herdr status server
 refuse	HOME=/tmp/x herdr server stop
-allow	HERDR_SOCKET_PATH=/tmp/hs/herdr.sock herdr server stop
+refuse	HOME=/tmp/isolated herdr status server
+refuse	HERDR_SOCKET_PATH=/tmp/hs/herdr.sock herdr server stop
 refuse	herdr terminal attach w1:p1 --takeover
 refuse	herdr server \\n  stop
 refuse	remuda-core \\n  server stop
@@ -64,6 +71,9 @@ allow	remuda-core --version
 allow	remuda-core serve-docs
 allow	src server stop
 allow	herdr-rc server stop
+allow	herdr status server
+allow	herdr -v status server
+allow	herdr api snapshot
 allow	echo rc serves
 allow	go test ./internal/core/...
 allow	git status; ls *.go

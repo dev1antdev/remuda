@@ -20,7 +20,14 @@
       "Bash(herdr status:*)",
       "Bash(herdr machine list:*)",
       "Bash(herdr api snapshot:*)",
-      "Bash(herdr api schema:*)"
+      "Bash(herdr api schema:*)",
+      "Bash(rc --version)",
+      "Bash(rc server status:*)",
+      "Bash(rc ls:*)",
+      "Bash(rc get:*)",
+      "Bash(rc read:*)",
+      "Bash(rc templates:*)",
+      "Bash(rc events:*)"
     ],
     "deny": [
       "Edit(~/.claude/projects/**/*.jsonl)"

@@ -37,6 +37,6 @@ export const terminal: Dictionary = {
   "a narrower screen scrolls sideways": "экран уже — прокрутка вбок",
   "a smaller font to fit the width, scrolling when it cannot": "шрифт мельче, чтобы войти по ширине; прокрутка, когда не входит",
   "drag selects and copies; off gives the mouse back to the agent": "перетаскивание выделяет и копирует; выключено — мышь снова у агента",
-  "herdr follows the smallest attached client": "herdr подстраивается под самого маленького подключённого клиента",
+  "the pane takes the size of the viewer that last acted": "панель принимает размер зрителя, который действовал последним",
   "{n} px": "{n} px",
 };

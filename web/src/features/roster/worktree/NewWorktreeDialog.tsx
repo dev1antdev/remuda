@@ -1,7 +1,7 @@
 // The New worktree dialog, after Orca's Create worktree: a project of the machine, a source — a branch (checked out
 // already, local, or only on origin), an open issue, a pull request, or a new branch from a base — and the Details it
 // fills, with a sentence saying exactly what Create will do. Create (⌘↵ / Ctrl+↵) asks the server, which works the plan
-// out again from a fresh read: herdr makes the worktree, git fetches and tracks around it, the setup script and the agent
+// out again from a fresh read: remuda makes the worktree, git fetches and tracks around it, the setup script and the agent
 // start as the project says.
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";

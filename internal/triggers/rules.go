@@ -62,7 +62,7 @@ func Check(r *Rule) error {
 	case len(r.Pattern) > MaxPattern:
 		return fmt.Errorf("trigger %q: a pattern is %d bytes at most", r.Name, MaxPattern)
 	case strings.ContainsAny(r.Pattern, "\r\n"):
-		return fmt.Errorf("trigger %q: herdr matches one line at a time, so a pattern holds no line break", r.Name)
+		return fmt.Errorf("trigger %q: a pattern matches one line at a time, so it holds no line break", r.Name)
 	}
 	switch r.Match {
 	case "substring":

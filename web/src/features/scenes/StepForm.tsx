@@ -120,11 +120,11 @@ export default function StepForm({ step, recipes, onChange, onDone }: { step: St
         <span>
           {t("Tab name")} <small>{t("optional")}</small>
         </span>
-        <input value={step.tab ?? ""} maxLength={40} placeholder={t("herdr's own")} onChange={(e) => set({ tab: e.target.value || undefined })} />
+        <input value={step.tab ?? ""} maxLength={40} placeholder={t("the core's own")} onChange={(e) => set({ tab: e.target.value || undefined })} />
       </label>
       <div className="scene-layout">
         <Icon name="columns" size={14} />
-        <span className="scene-words">{step.layout ? layoutWords(step.layout, sourceOf(step) !== SHELL) : t("One pane, as herdr opens a tab")}</span>
+        <span className="scene-words">{step.layout ? layoutWords(step.layout, sourceOf(step) !== SHELL) : t("One pane, as a new tab opens")}</span>
         {step.layout ? (
           <button type="button" className="linkish" onClick={() => set({ layout: undefined })}>
             {t("Remove the layout")}
@@ -135,7 +135,7 @@ export default function StepForm({ step, recipes, onChange, onDone }: { step: St
           </button>
         )}
       </div>
-      {!step.layout && !open && step.dir && <p className="modal-hint">{t("Open a workspace on this folder and lay its tab out in herdr, then capture it here.")}</p>}
+      {!step.layout && !open && step.dir && <p className="modal-hint">{t("Open a workspace on this folder and lay its tab out, then capture it here.")}</p>}
       {err && <Notice tone="error">{err}</Notice>}
       <div className="recipe-form-actions">
         <button type="button" className="btn sm" onClick={onDone}>
