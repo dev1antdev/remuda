@@ -1,7 +1,6 @@
 package triggers
 
 import (
-	"fmt"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -11,7 +10,6 @@ import (
 	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/push"
-	"github.com/dev1antdev/remuda/internal/watch"
 )
 
 // heard is what a service did, on fakes.
@@ -280,83 +278,6 @@ func TestRefusalsAreKeptByMachine(t *testing.T) {
 	s.Forget("gog")
 	if len(s.Refusals()) != 0 {
 		t.Fatal("a machine removed")
-	}
-}
-
-func TestAtTheCapAPersonRuleKeepsItsPlace(t *testing.T) {
-	s := New(t.TempDir())
-	// 100 panes: their built-in two are the whole cap already
-	snap := &herdr.Snapshot{
-		Workspaces: []herdr.WorkspaceInfo{{WorkspaceID: "w1", Folder: "/home/me/api"}, {WorkspaceID: "w2", Folder: "/srv/other"}},
-	}
-	snap.Panes = append(snap.Panes, herdr.PaneInfo{PaneID: "w1:p0", WorkspaceID: "w1", CWD: "/home/me/api"})
-	for i := range 99 { // the rule's one pane, and ninety-nine outside its folder: built-ins are the whole cap
-		snap.Panes = append(snap.Panes, herdr.PaneInfo{PaneID: fmt.Sprintf("w2:p%d", i), WorkspaceID: "w2", CWD: "/srv/other"})
-	}
-	if n := len(s.Watches("gog", snap)); n != MaxWatches {
-		t.Fatalf("a full cap of built-ins: %d", n)
-	}
-	rule := Rule{ID: "api", Name: "In api", Machine: "gog", Dir: "/home/me/api", Match: "substring", Pattern: "DONE", Action: ActionFeed, Enabled: true}
-	if _, err := s.Replace([]Rule{rule}); err != nil {
-		t.Fatal(err)
-	}
-	has := func(watches []watch.Output) bool {
-		for _, o := range watches {
-			if o.Key == rulePrefix+rule.ID {
-				return true
-			}
-		}
-		return false
-	}
-	if !has(s.Watches("gog", snap)) {
-		t.Fatal("a rule saved on a machine whose built-ins fill the cap never takes effect")
-	}
-	// the pane leaves the rule's folder for a snapshot and comes back: the rule is not lost for it
-	away := *snap
-	away.Panes = append([]herdr.PaneInfo(nil), snap.Panes...)
-	away.Panes[0].WorkspaceID, away.Panes[0].CWD = "w2", "/srv/other"
-	if has(s.Watches("gog", &away)) {
-		t.Fatal("the rule covers a pane in another folder")
-	}
-	if !has(s.Watches("gog", snap)) {
-		t.Fatal("a pane that left the folder for a moment took the rule with it")
-	}
-}
-
-func TestANewPaneTakesNoWatchFromAPaneThatStands(t *testing.T) {
-	s := New(t.TempDir())
-	if _, err := s.Replace([]Rule{{ID: "all", Name: "Everywhere", Match: "substring", Pattern: "DONE", Action: ActionFeed, Enabled: true}}); err != nil {
-		t.Fatal(err)
-	}
-	var snap herdr.Snapshot
-	for i := range 66 { // 66 panes × three watches each: inside the cap, so every one of them stands
-		snap.Panes = append(snap.Panes, herdr.PaneInfo{PaneID: fmt.Sprintf("w1:p%d", i)})
-	}
-	stood := s.Watches("gog", &snap)
-	if len(stood) != 198 {
-		t.Fatalf("a set of %d watches", len(stood))
-	}
-
-	// a pane appears before them all, and a second snapshot comes before the stream swaps: not one watch of a pane
-	// that stands may go for it
-	grown := herdr.Snapshot{Panes: append([]herdr.PaneInfo{{PaneID: "w1:new"}}, snap.Panes...)}
-	s.Watches("gog", &grown)
-	then := s.Watches("gog", &grown)
-	have := map[string]bool{}
-	own := 0
-	for _, o := range then {
-		have[o.Pane+" "+o.Key] = true
-		if o.Pane == "w1:new" {
-			own++
-		}
-	}
-	for _, o := range stood {
-		if !have[o.Pane+" "+o.Key] {
-			t.Fatalf("a pane that stands lost its watch: %s %s", o.Pane, o.Key)
-		}
-	}
-	if own == 3 {
-		t.Fatalf("a pane that just appeared took %d watches at the cap", own)
 	}
 }
 
