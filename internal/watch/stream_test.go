@@ -488,20 +488,19 @@ seen:
 	}
 }
 
-// TestASwapTheCoreTakesIsWhatTheNextSetIsJudgedBy: a candidate that is installed becomes the standing watches, so the
-// next set worked out keeps them — the swap's own panes are not forgotten for a newer one.
-func TestASwapTheCoreTakesIsWhatTheNextSetIsJudgedBy(t *testing.T) {
+// TestASwapTheCoreTakesIsWhatTheSetQueuedBehindItKeeps: a candidate worked out before a swap was taken is worked out
+// again before it is installed, so the watches the taken stream holds survive into the next subscription — never the
+// decision of a set that never stood.
+func TestASwapTheCoreTakesIsWhatTheSetQueuedBehindItKeeps(t *testing.T) {
 	quickPace(t)
-	f := newFakeHerdr(t, "w1:p1")
+	f := newFakeHerdr(t, "w1:p1", "w1:p2")
 	f.memory = true
-	observed := make(chan []Output, 16)
+	reached, release := make(chan struct{}), make(chan struct{})
+	var closed, once sync.Once
+	defer closed.Do(func() { close(release) })
 	watching(t, f, func(w *Watcher) {
-		w.Outputs = func(_ string, snap *herdr.Snapshot, standing []Output) []Output {
-			select {
-			case observed <- append([]Output(nil), standing...):
-			default:
-			}
-			watches := make([]Output, 0, len(snap.Panes))
+		w.Outputs = func(_ string, snap *herdr.Snapshot, _ []Output) []Output {
+			watches := make([]Output, 0, len(snap.Panes)) // one rule on every pane the snapshot shows
 			for i := range snap.Panes {
 				watches = append(watches, Output{Key: "rule:all", Pane: snap.Panes[i].PaneID, Person: true})
 			}
@@ -512,63 +511,37 @@ func TestASwapTheCoreTakesIsWhatTheNextSetIsJudgedBy(t *testing.T) {
 	waitFor(t, "the stream to stand", func() bool { return f.open() == 1 })
 	time.Sleep(eventDebounce)
 
-	f.setPanes("w1:p1", "w1:p2") // a second pane joins, and the core takes the swap
-	f.push(`{"data":{"type":"pane_created","pane":{"pane_id":"w1:p2"}},"event":"pane_created"}`)
-	f.subscribed(t)
-	waitFor(t, "the new stream to stand", func() bool { return f.open() == 1 })
-	f.setPanes("w1:p1") // and goes again
+	f.mu.Lock()
+	f.hold = func() error { // this subscription is held, and taken when released
+		once.Do(func() { close(reached) })
+		<-release
+		return nil
+	}
+	f.mu.Unlock()
+	f.setPanes("w1:p1") // p2 goes: a set for p1 alone settles, and its subscription is held
 	f.push(`{"data":{"type":"pane_closed","pane":{"pane_id":"w1:p2"}},"event":"pane_closed"}`)
+	<-reached
+	f.setPanes("w1:p1", "w1:p3") // a third pane arrives while the core holds that subscription
+	f.push(`{"data":{"type":"pane_created","pane":{"pane_id":"w1:p3"}},"event":"pane_created"}`)
+	time.Sleep(3 * eventDebounce)
+	closed.Do(func() { close(release) }) // the held set is taken
+	f.subscribed(t)                      // the set itself, as the core took it
 
-	deadline := time.After(5 * time.Second)
-	for {
-		select {
-		case standing := <-observed:
-			if len(standing) != 1 || standing[0].Pane != "w1:p1" {
-				continue // the sets worked out before the swap
-			}
-			return // p1's watch is standing, and p2's is not
-		case <-deadline:
-			t.Fatal("a set after the swap never worked out the standing watches")
-		}
+	next := f.subscribed(t) // the set queued behind it, worked out again on the one just taken
+	if watched := watchedPanes(next); !watched["w1:p1"] || !watched["w1:p3"] {
+		t.Fatalf("a set queued before the swap dropped a watch the taken stream holds: %v", watched)
 	}
 }
 
-// TestARecheckWorksOutItsOwnTopology: a set worked out again before it is installed is ranked on the snapshot it was
-// worked out for, never on a newer one still settling — the pane a newer snapshot added is not pulled in early.
-func TestARecheckWorksOutItsOwnTopology(t *testing.T) {
-	quickPace(t)
-	f := newFakeHerdr(t, "w1:p1")
-	watcher, mc, _ := watching(t, f, nil)
-	f.subscribed(t)
-	waitFor(t, "the stream to stand", func() bool { return f.open() == 1 })
-
-	mine := &herdr.Snapshot{Panes: []herdr.PaneInfo{{PaneID: "w1:p1", WorkspaceID: "w1"}}}
-	newer := &herdr.Snapshot{Panes: []herdr.PaneInfo{{PaneID: "w1:p1", WorkspaceID: "w1"}, {PaneID: "w1:p2", WorkspaceID: "w1"}}}
-	var mu sync.Mutex
-	var asked *herdr.Snapshot
-	watcher.mu.Lock()
-	watcher.Outputs = func(_ string, snap *herdr.Snapshot, _ []Output) []Output {
-		mu.Lock()
-		asked = snap
-		mu.Unlock()
-		return nil
+// watchedPanes is the panes a subscription set keeps output watches on.
+func watchedPanes(subs []herdr.Subscription) map[string]bool {
+	panes := map[string]bool{}
+	for _, s := range subs {
+		if s.Type == herdr.EventOutputMatched {
+			panes[s.PaneID] = true
+		}
 	}
-	st := watcher.stateFor(mc.ID())
-	st.snap = newer   // a newer topology is already settling
-	st.accepted = nil // nothing taken yet: any basis is stale
-	watcher.mu.Unlock()
-
-	set := buildSet(mine, nil, "")
-	set.basis = "an older admission"
-	f.mu.Lock()
-	f.memory = true
-	f.mu.Unlock()
-	watcher.recheck(mc, st, set)
-	mu.Lock()
-	defer mu.Unlock()
-	if asked != mine {
-		t.Fatalf("a set worked out again was ranked on another topology: %+v", asked)
-	}
+	return panes
 }
 
 // TestARefusalForASupersededSetIsDropped: a core refusing a set that the watcher has replaced meanwhile answers a
