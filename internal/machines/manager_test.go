@@ -1,6 +1,7 @@
 package machines
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -220,9 +221,16 @@ func TestTwoRemovalsBothStayRemoved(t *testing.T) {
 	if ids := idsOf(m.List()); ids != "local" {
 		t.Fatalf("the fleet after both removals: %s", ids)
 	}
-	reloaded := NewManager(dir, nil, true) // a restart: the file is all it has
-	defer reloaded.Close()
-	if ids := idsOf(reloaded.All()); ids != "local" {
-		t.Fatalf("the fleet a restart reads: %s", ids)
+	// the file a restart reads, decoded as it stands: no manager, so a regression here reaches no ssh and no core
+	saved, err := os.ReadFile(filepath.Join(dir, "machines.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var remotes []Config
+	if err := json.Unmarshal(saved, &remotes); err != nil {
+		t.Fatalf("machines.json: %v\n%s", err, saved)
+	}
+	if len(remotes) != 0 {
+		t.Fatalf("a restart brings back %+v", remotes)
 	}
 }

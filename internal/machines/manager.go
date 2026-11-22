@@ -318,7 +318,18 @@ func (m *Manager) Gone(id string) bool {
 
 // drop takes a machine out of the registry and ends its connection; its watcher loop and pollers stop on their own.
 func (m *Manager) drop(id string) *Machine {
+	if mc := m.take(id); mc != nil {
+		m.retire(mc)
+		return mc
+	}
+	return nil
+}
+
+// take takes a machine out of the registry, and nothing more: what ends its connection is retire's, outside any lock a
+// caller holds — an ssh master that stopped answering can take a while to let go.
+func (m *Manager) take(id string) *Machine {
 	m.mu.Lock()
+	defer m.mu.Unlock()
 	mc := m.machines[id]
 	delete(m.machines, id)
 	for i, oid := range m.order {
@@ -327,14 +338,15 @@ func (m *Manager) drop(id string) *Machine {
 			break
 		}
 	}
-	m.mu.Unlock()
-	if mc != nil {
-		mc.mu.Lock()
-		mc.removed = true
-		mc.mu.Unlock()
-		mc.fail(fmt.Errorf("removed"))
-	}
 	return mc
+}
+
+// retire marks a machine taken out of the registry as removed and ends its connection.
+func (m *Manager) retire(mc *Machine) {
+	mc.mu.Lock()
+	mc.removed = true
+	mc.mu.Unlock()
+	mc.fail(fmt.Errorf("removed"))
 }
 
 func (m *Manager) has(id string) bool {
@@ -390,7 +402,6 @@ func (m *Manager) Remove(id string) error {
 	// one removal at a time, through its write and the machine's going: a second one's list is built after the first
 	// machine left, so it can never write a removed machine back
 	m.saveMu.Lock()
-	defer m.saveMu.Unlock()
 	m.mu.Lock()
 	if m.machines[id] == nil {
 		m.mu.Unlock()
@@ -406,9 +417,14 @@ func (m *Manager) Remove(id string) error {
 	}
 	m.mu.Unlock()
 	if err := m.writeMachines(cfgs); err != nil {
+		m.saveMu.Unlock()
 		return err
 	}
-	m.drop(id)
+	gone := m.take(id) // out of the fleet before the lock is let go: no later writer can put it back
+	m.saveMu.Unlock()  // and its connection ended outside it: a master that stopped answering may take a while
+	if gone != nil {
+		m.retire(gone)
+	}
 	return nil
 }
 
