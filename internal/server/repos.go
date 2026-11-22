@@ -60,8 +60,7 @@ func (s *Server) handleRepoSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	root, named := s.repoRoot(mc, r.URL.Query().Get("root"))
-	settings := s.repoSettings(mc.ID(), root)
-	version := s.Repos.Version(mc.ID(), root)
+	settings, version := s.Repos.GetVersion(mc.ID(), root)
 	if !named {
 		settings, version = repos.Settings{}, "" // the machine cannot name the folder: what is kept there is not shown
 	}
@@ -118,13 +117,12 @@ func (s *Server) handleRepoSettingsPut(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, http.StatusBadGateway, fmt.Errorf("%s cannot name %s just now, so its settings are not replaced", mc.Label(), req.Root))
 		return
 	}
-	if req.Version != nil {
-		if *req.Version != s.Repos.Version(mc.ID(), req.Root) {
-			httpErr(w, http.StatusConflict, errors.New("the settings changed since they were read: open them again"))
-			return
-		}
+	root, _ := s.repoRoot(mc, req.Root) // the record the read named: the machine's spelling, or the one kept
+	saved, err := s.Repos.Commit(mc.ID(), root, req.Settings, req.Version, olderSpelling(mc, given, root))
+	if errors.Is(err, repos.ErrStale) {
+		httpErr(w, http.StatusConflict, err)
+		return
 	}
-	saved, err := s.Repos.Put(mc.ID(), req.Root, req.Settings, olderSpelling(mc, given, req.Root))
 	if err != nil {
 		httpErr(w, 400, err)
 		return

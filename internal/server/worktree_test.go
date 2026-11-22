@@ -361,7 +361,8 @@ func TestSettingsTheMachineCannotNameAreNotReplaced(t *testing.T) {
 		t.Fatalf("a stale draft erased the record: %+v", got)
 	}
 	// a draft read with it does
-	fresh := fmt.Sprintf(`{"machine":"local","root":%q,"settings":{"base":"main","setup":"pnpm i","location":"/Users/me/worktrees"},"version":%q}`, physical, store.Version("local", physical))
+	_, version := store.GetVersion("local", physical)
+	fresh := fmt.Sprintf(`{"machine":"local","root":%q,"settings":{"base":"main","setup":"pnpm i","location":"/Users/me/worktrees"},"version":%q}`, physical, version)
 	if rec := ask(api, "PUT", "/api/repos/settings", fresh); rec.Code != 200 {
 		t.Fatalf("a draft read with the record was refused: %d %s", rec.Code, rec.Body)
 	}
