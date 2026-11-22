@@ -489,22 +489,30 @@ seen:
 }
 
 // TestASwapTheCoreTakesIsWhatTheSetQueuedBehindItKeeps: a candidate worked out before a swap was taken is worked out
-// again before it is installed, so the watches the taken stream holds survive into the next subscription — never the
-// decision of a set that never stood.
+// again before it is installed, so the one watch the taken stream holds survives into the next subscription instead of
+// the watch an older decision would pick. The fake keeps one slot: a pane the standing watches name, else the first.
 func TestASwapTheCoreTakesIsWhatTheSetQueuedBehindItKeeps(t *testing.T) {
 	quickPace(t)
-	f := newFakeHerdr(t, "w1:p1", "w1:p2")
+	f := newFakeHerdr(t, "w1:p1")
 	f.memory = true
 	reached, release := make(chan struct{}), make(chan struct{})
 	var closed, once sync.Once
 	defer closed.Do(func() { close(release) })
 	watching(t, f, func(w *Watcher) {
-		w.Outputs = func(_ string, snap *herdr.Snapshot, _ []Output) []Output {
-			watches := make([]Output, 0, len(snap.Panes)) // one rule on every pane the snapshot shows
-			for i := range snap.Panes {
-				watches = append(watches, Output{Key: "rule:all", Pane: snap.Panes[i].PaneID, Person: true})
+		w.Outputs = func(_ string, snap *herdr.Snapshot, standing []Output) []Output {
+			held := map[string]bool{}
+			for _, o := range standing {
+				held[o.Pane] = true
 			}
-			return watches
+			for i := range snap.Panes { // one slot: the pane the standing watches name, if it is there
+				if held[snap.Panes[i].PaneID] {
+					return []Output{{Key: "rule:all", Pane: snap.Panes[i].PaneID, Person: true}}
+				}
+			}
+			if len(snap.Panes) == 0 {
+				return nil
+			}
+			return []Output{{Key: "rule:all", Pane: snap.Panes[0].PaneID, Person: true}}
 		}
 	})
 	f.subscribed(t)
@@ -512,24 +520,24 @@ func TestASwapTheCoreTakesIsWhatTheSetQueuedBehindItKeeps(t *testing.T) {
 	time.Sleep(eventDebounce)
 
 	f.mu.Lock()
-	f.hold = func() error { // this subscription is held, and taken when released
+	f.hold = func() error { // held, and taken when released
 		once.Do(func() { close(reached) })
 		<-release
 		return nil
 	}
 	f.mu.Unlock()
-	f.setPanes("w1:p1") // p2 goes: a set for p1 alone settles, and its subscription is held
-	f.push(`{"data":{"type":"pane_closed","pane":{"pane_id":"w1:p2"}},"event":"pane_closed"}`)
+	f.setPanes("w1:p2") // p1 goes: the one slot moves to p2, and that subscription is held
+	f.push(`{"data":{"type":"pane_closed","pane":{"pane_id":"w1:p1"}},"event":"pane_closed"}`)
 	<-reached
-	f.setPanes("w1:p1", "w1:p3") // a third pane arrives while the core holds that subscription
-	f.push(`{"data":{"type":"pane_created","pane":{"pane_id":"w1:p3"}},"event":"pane_created"}`)
+	f.setPanes("w1:p1", "w1:p2") // p1 comes back while the core holds it: a candidate for p1 settles behind
+	f.push(`{"data":{"type":"pane_created","pane":{"pane_id":"w1:p1"}},"event":"pane_created"}`)
 	time.Sleep(3 * eventDebounce)
-	closed.Do(func() { close(release) }) // the held set is taken
-	f.subscribed(t)                      // the set itself, as the core took it
+	closed.Do(func() { close(release) }) // the set for p2 alone is taken
 
-	next := f.subscribed(t) // the set queued behind it, worked out again on the one just taken
-	if watched := watchedPanes(next); !watched["w1:p1"] || !watched["w1:p3"] {
-		t.Fatalf("a set queued before the swap dropped a watch the taken stream holds: %v", watched)
+	f.subscribed(t) // the set the core took
+	next := f.subscribed(t)
+	if watched := watchedPanes(next); !watched["w1:p2"] {
+		t.Fatalf("the set queued behind the swap dropped the watch the taken stream holds: %v", watched)
 	}
 }
 
