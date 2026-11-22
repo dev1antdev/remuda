@@ -22,4 +22,3 @@ describe("thumbFont", () => {
     expect(thumbFont(100, 0, 7.8, 13)).toBe(13);
   });
 });
-

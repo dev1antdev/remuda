@@ -4,8 +4,7 @@
 // buffer holds no match, useTerminalFind reads the older rows through /api/scrollback.
 
 import { SearchAddon, type ISearchDecorationOptions, type ISearchOptions } from "@xterm/addon-search";
-import type { IBufferLine, IBufferRange, Terminal as XTerm } from "@xterm/xterm";
-import { findRanges } from "@/features/chat/find";
+import type { IBufferRange, Terminal as XTerm } from "@xterm/xterm";
 import { swatches, type Flavor, type Swatches } from "@/lib/theme";
 import type { FoundCount, SearchApi } from "./types";
 
@@ -60,7 +59,6 @@ export function installSearch(term: XTerm, flavor: () => Flavor, forgetSelection
     load();
   };
   let query = "";
-  let pending: ReturnType<typeof setTimeout> | null = null;
   const options = (): ISearchOptions => ({ incremental: true, decorations: searchDecorations(swatches(flavor())) });
   // seek selects the next match, or the previous, and tells the engine the selection is not the person's
   const seek = (back = false): boolean => {
@@ -108,9 +106,8 @@ export function installSearch(term: XTerm, flavor: () => Flavor, forgetSelection
   };
   const resized = term.onResize(soon);
   const stop = () => {
-    if (pending) clearTimeout(pending);
     if (recount) clearTimeout(recount);
-    pending = recount = null;
+    recount = null;
   };
   const clear = () => {
     stop();
