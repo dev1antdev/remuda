@@ -15,11 +15,9 @@ import (
 type probe struct {
 	home    string // as scripts read paths there: /home/me, or C:\Users\me on Windows
 	os      string // darwin | linux | windows, or the system's own name lowercased
-	herdr   string // herdr's binary, "" when none was found
-	remuda  string // remuda's own binary on a Windows machine, the bridge to herdr there
 	appData string // %APPDATA% on Windows, where herdr keeps its socket
 	state   string // the folder remuda keeps there
-	core    string // remuda-core's binary, asked for by a remuda speaking it (-core), "" when none was found
+	core    string // remuda-core's binary, "" when none was found
 }
 
 // coreLookup prints remuda-core's binary as `core=`, where the vitals and the Updates row look for it.
@@ -28,30 +26,21 @@ var coreLookup = script.CoreBin("c") + `
 true
 `
 
-// probeScript prints the machine's home, its system and, when asked to find it, herdr's binary, a key=value a line; on
-// Windows, where Git Bash is the ssh shell, Windows' own spelling of the home, %APPDATA% and remuda's own binary too.
-// herdr's stable alias comes first there: an update moves the release on PATH, the alias follows it. Every lookup is
-// quiet and the script ends true, so a missing binary is an empty value, not a failed exec.
-func probeScript(findHerdr bool) string {
-	s := script.StateDir("d") + `
+// probeScript prints the machine's home and its system, a key=value a line; on Windows, where Git Bash is the ssh shell,
+// Windows' own spelling of the home and %APPDATA% too, where herdr keeps its named pipe. Every lookup is quiet and the
+// script ends true, so a missing value is an empty line, not a failed exec.
+func probeScript() string {
+	return script.StateDir("d") + `
 printf 'state=%s\n' "${REMUDA_STATE_DIR:-$d}"
 printf 'home=%s\n' "$HOME"; o=$(uname -s 2>/dev/null); printf 'os=%s\n' "$o"
 case "$o" in MINGW*|MSYS*|CYGWIN*)
-  printf 'winhome=%s\n' "$(cygpath -w "$HOME" 2>/dev/null)"; printf 'appdata=%s\n' "$APPDATA"
-  r="$HOME/.local/bin/remuda.exe"; [ -x "$r" ] && printf 'remuda=%s\n' "$r"
-  a="$(cygpath -u "$LOCALAPPDATA" 2>/dev/null)/Programs/Herdr/bin/herdr.exe"; [ -x "$a" ] && printf 'herdr=%s\n' "$a" ;;
+  printf 'winhome=%s\n' "$(cygpath -w "$HOME" 2>/dev/null)"; printf 'appdata=%s\n' "$APPDATA" ;;
 esac
-`
-	if !findHerdr {
-		return s + "true\n"
-	}
-	return s + script.HerdrBin("h") + `
-[ -n "$h" ] && printf 'herdr=%s\n' "$h"
 true
 `
 }
 
-// parseProbe reads the probe's answer; the first herdr named wins.
+// parseProbe reads the probe's answer.
 func parseProbe(out string) probe {
 	var p probe
 	var winHome string
@@ -71,14 +60,8 @@ func parseProbe(out string) probe {
 			p.appData = strings.TrimSpace(value)
 		case "state":
 			p.state = strings.TrimSpace(value)
-		case "remuda":
-			p.remuda = strings.TrimSpace(value)
 		case "core":
 			p.core = strings.TrimSpace(value)
-		case "herdr":
-			if p.herdr == "" {
-				p.herdr = strings.TrimSpace(value)
-			}
 		}
 	}
 	if p.os == "windows" && winHome != "" {
@@ -115,11 +98,6 @@ func errWindowsShell(host string) error {
 	return fmt.Errorf("%s is Windows and its ssh runs commands in cmd.exe or PowerShell; remuda needs Git Bash there. Install Git for Windows, then in an administrator PowerShell on %s run: %s", host, host, DefaultShellLine)
 }
 
-// errNoRemuda is the connection's word for a Windows machine without remuda.exe, herdr's only door there.
-func errNoRemuda(host string) error {
-	return fmt.Errorf("remuda.exe is not on %s: it is how this cockpit reaches herdr's named pipe there. Run `remuda setup -host %s` from here", host, host)
-}
-
 // NoCoreError is Ready's answer on a remote connected without a remuda-core it can follow, its master still up: none
 // installed there (errNoCore), or none answering.
 type NoCoreError struct{ Reason error }
@@ -132,8 +110,10 @@ func errNoCore(host string) error {
 	return fmt.Errorf("remuda-core is not installed on %s: Install remuda-core in its Updates, or run `remuda core -host %s install` from here", host, host)
 }
 
-// herdrSocket is herdr's socket on a remote as remuda dials it: the machine's remote_socket, else herdr's default there
-// — under %APPDATA% on Windows, wherever the profile keeps it, under the home elsewhere.
+// herdrSocket is the herdr remuda reached on a machine before the move, as MovedHerdr names it: the machine's
+// remote_socket, else herdr's default — under %APPDATA% on Windows, wherever the profile keeps it, under the home
+// elsewhere. It is named here, not left to herdr, so a HERDR_SESSION the ssh environment exports cannot point the check
+// at another session's server.
 func herdrSocket(cfg Config, found probe) string {
 	switch {
 	case cfg.RemoteSocket != "":

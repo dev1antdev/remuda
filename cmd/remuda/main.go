@@ -1,6 +1,7 @@
-// remuda is a self-hosted browser and phone cockpit for the coding agents
-// herdr runs: one Go binary that bridges herdr and the agents' transcripts
-// to the browser over localhost, a tailnet or an SSH tunnel.
+// remuda is a self-hosted browser and phone cockpit for the coding agents on
+// the user's machines, one Go binary: the cockpit a Mac or Linux box serves to
+// the browser over localhost, a tailnet or an SSH tunnel, and on Windows the
+// helper the cockpit reaches over ssh.
 package main
 
 import (

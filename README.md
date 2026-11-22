@@ -778,11 +778,11 @@ back, then every screen drawn at a desk's width and a phone's in English
 and Russian and checked for its place on the screen — nothing past an
 edge, nothing sideways, no console error (`make e2e` runs the same thing
 on your machine, touching nothing of yours). A job on GitHub's Windows
-runner is the Windows PC of the fleet: herdr for Windows installed and its
-server started, the runner's own OpenSSH server running commands in Git
-Bash, and the cockpit's side driven against it — herdr reached through
-`remuda.exe bridge` over ssh, the connection's probe, the vitals, the
-door, keep-awake, the Changes lens, the file viewer, the search,
+runner is the Windows PC of the fleet: remuda-core.exe and its ConPTY
+installed by the release's checksum, the runner's own OpenSSH server running
+commands in Git Bash, and the cockpit's side driven against it — a terminal
+in the core reached by `remuda-core.exe connect` over ssh, the connection's
+probe, the vitals, the door, keep-awake, the Changes lens, the file viewer, the search,
 `remuda setup -host` and a release's install beside a running
 `remuda.exe` — its answers kept as the unit tests' fixtures.
 
@@ -899,9 +899,9 @@ machine's — remuda-core attaches there. **No Code mode**
 (code-server has no Windows build: open the folder in VS Code there),
 **no previews** yet (Windows does not say which folder a listening
 process runs in), and the work is not moved to or from a Windows machine
-with *Move the work to another machine*. herdr's server reaches the
-cockpit through `remuda.exe bridge`, one exec over ssh per request:
-herdr listens on a named pipe there, which ssh cannot forward.
+with *Move the work to another machine*. remuda reaches the PC's
+remuda-core through `remuda-core.exe connect` over ssh, and every terminal
+there is the core's, live like any machine's.
 
 ## As a background service on a Mac or Linux box
 

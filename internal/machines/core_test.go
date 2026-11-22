@@ -22,7 +22,7 @@ func TestTheProbeFindsRemudaCoreWhereItsInstallerPutsIt(t *testing.T) {
 		t.Fatal(err)
 	}
 	run := func() probe {
-		cmd := exec.Command("sh", "-c", probeScript(false)+coreLookup)
+		cmd := exec.Command("sh", "-c", probeScript()+coreLookup)
 		cmd.Env = []string{"HOME=" + home, "PATH=/usr/bin:/bin"}
 		out, err := cmd.Output()
 		if err != nil {
@@ -182,8 +182,7 @@ func TestTheHerdrBeforeTheMoveIsTheOneRemudaReached(t *testing.T) {
 }
 
 // A remote's herdr socket is the one remuda dials there, before the move and after it: its remote_socket, else herdr's
-// default under the home, or under %APPDATA% on Windows wherever the profile keeps it — never one the ssh environment
-// names; nothing before the machine's first connect.
+// default under the home — never one the ssh environment names; nothing before the machine's first connect.
 func TestTheMovedHerdrOfARemoteIsTheSocketRemudaDials(t *testing.T) {
 	posix := probe{os: "linux", home: "/home/me"}
 	if got := herdrSocket(Config{}, posix); got != "/home/me/.config/herdr/herdr.sock" {

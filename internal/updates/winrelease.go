@@ -7,14 +7,14 @@ import (
 )
 
 // A Windows machine's remuda is ~/.local/bin/remuda.exe, run by Git Bash there: no service to restart, every bridge to
-// herdr a fresh remuda.exe, so the next request runs the new one. Windows renames a running .exe but writes over
+// runs of it a fresh remuda.exe, so the next request runs the new one. Windows renames a running .exe but writes over
 // none, so the one in place steps aside first, under a name of its own, and is cleared once nothing runs it.
 
 // windowsInstall puts ~/.local/bin/remuda.new.exe in place of remuda.exe once it has shown it runs at all.
 const windowsInstall = `b="$HOME/.local/bin"; chmod +x "$b/remuda.new.exe" && "$b/remuda.new.exe" -version && ` +
 	`{ [ ! -f "$b/remuda.exe" ] || mv -f "$b/remuda.exe" "$b/remuda.exe.old.$$"; } && mv "$b/remuda.new.exe" "$b/remuda.exe" && ` +
 	`{ rm -f "$b"/remuda.exe.old.* 2>/dev/null; true; } && ` +
-	`echo "no service on Windows: the next connection to herdr runs the new remuda.exe"`
+	`echo "no service on Windows: the next remuda.exe run uses the new one"`
 
 // windowsAsset says the asset is a Windows binary.
 func windowsAsset(asset string) bool { return strings.HasSuffix(asset, ".exe") }

@@ -394,7 +394,7 @@ func RemoteWithInput(command string, input io.Reader) (line string, stdin io.Rea
 }
 
 // CommandConn starts the command and exposes its stdin and stdout as a net.Conn that the deadline ends: the way an
-// exec over ssh (nc -U, remuda bridge) carries herdr's RPC.
+// exec over ssh (nc -U) carries herdr's RPC.
 func CommandConn(cmd *exec.Cmd, timeout time.Duration) (net.Conn, error) {
 	return newCmdConn(cmd, timeout)
 }
@@ -563,24 +563,6 @@ func (c *Conn) forwardBackCmd(remotePort, localPort int) *exec.Cmd {
 // forwardBackSpec is the -R argument: the host's loopback port leading to this side's loopback port.
 func forwardBackSpec(remotePort, localPort int) string {
 	return fmt.Sprintf("127.0.0.1:%d:127.0.0.1:%d", remotePort, localPort)
-}
-
-// ForwardSocket forwards a local unix socket to a remote one over the master and returns the local path. A forward
-// of that socket the master already holds — from an earlier connect over it, or an earlier remuda whose master lives
-// on — is cancelled first: asked for the same forward again, the master answers "found existing forwarding" and
-// binds nothing, so unlinking the old listener's file would leave no socket at all.
-func (c *Conn) ForwardSocket(remoteSock string) (string, error) {
-	local := tmpPath("remuda-fw-", c.Host+"\x00"+remoteSock, ".sock")
-	spec := local + ":" + remoteSock
-	c.cmd("-O", "cancel", "-L", spec, c.Host).Run()
-	os.Remove(local)
-	cmd := c.cmd("-O", "forward", "-L", spec, c.Host)
-	var errb bytes.Buffer
-	cmd.Stderr = &errb
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("ssh forward: %s", strings.TrimSpace(errb.String()))
-	}
-	return local, nil
 }
 
 // ForwardTCP forwards a fresh loopback port to 127.0.0.1:remotePort on the host for as long as the master lives.

@@ -81,12 +81,13 @@ jobs:
 
   windows:
     name: a Windows machine of the fleet
-    # a real Windows with herdr for Windows, its OpenSSH server running commands in Git Bash as the person sets theirs:
-    # herdr reached through remuda.exe bridge, the remote scripts run as a cockpit runs them (internal/wintest)
+    # a real Windows with remuda-core.exe and its ConPTY, its OpenSSH server running commands in Git Bash as the person
+    # sets theirs: the core reached through `remuda-core.exe connect` over that ssh, the remote scripts run as a cockpit
+    # runs them (internal/wintest)
     runs-on: windows-latest
     timeout-minutes: 20
     env:
-      REMUDA_WINDOWS_HERDR: "1"
+      REMUDA_WINDOWS_CORE: "1"
       REMUDA_SSH_HOST: pc
     steps:
       - uses: actions/checkout@v7
@@ -94,9 +95,6 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: herdr for Windows
-        shell: pwsh
-        run: powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://herdr.dev/install.ps1 | iex"
       - name: remuda.exe where remuda setup puts it
         shell: bash
         run: |
@@ -124,12 +122,15 @@ jobs:
           New-Item -ItemType Directory -Force "$HOME\.ssh" | Out-Null
           (Get-Content $env:REMUDA_SSH_CONFIG) -replace '\\', '/' | Set-Content -Encoding ascii "$HOME\.ssh\config"
       - name: go test on Windows
-        # one package at a time, herdr's first: its test starts the server the way a cockpit does
+        # setup first: `remuda setup -host pc` installs remuda-core.exe and its ConPTY on this clean runner with the
+        # shipped installer, and the tests after it reach that very core; then one package at a time
         shell: bash
         run: |
           export PATH="/c/Windows/System32/OpenSSH:$PATH" # Windows' own ssh for remuda setup -host: Git's would refuse the key's permissions
           go test -count=1 ./internal/rpath/
-          go test -p 1 -count=1 -v -run '^TestOnWindows' ./internal/herdr/ ./internal/machines/ ./internal/health/ ./internal/awake/ ./internal/setup/ ./internal/updates/ ./internal/review/ ./internal/search/ ./internal/filetree/ ./internal/transcript/
+          go test -p 1 -count=1 -v -run '^TestOnWindows' ./internal/setup/
+          test -f "$HOME/.local/bin/remuda-core.exe" && test -f "$HOME/.local/bin/conpty/conpty.dll"
+          go test -p 1 -count=1 -v -run '^TestOnWindows' ./internal/machines/ ./internal/health/ ./internal/awake/ ./internal/updates/ ./internal/review/ ./internal/search/ ./internal/filetree/ ./internal/transcript/
       - uses: actions/upload-artifact@v7
         # the answers this Windows gave, the unit tests' fixtures
         if: always()

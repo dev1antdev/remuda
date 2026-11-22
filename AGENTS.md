@@ -95,9 +95,11 @@ not style.
   same agent under the same pid (`core.Adapter.sendTo`).
 - **Never `--takeover`.** herdr allows one attached client per terminal;
   stealing the slot is the person's call only, never remuda's.
-- **A test remuda-core is `coretest.Server`'s or `scripts/e2e.sh`'s,
-  each with its own `RC_SESSION`, `RC_SOCKET`, XDG
-  folders, `HOME` and `RC_LAUNCHD_DIRECT`; never started another way**: a
+- **A test remuda-core is `coretest.Server`'s, `scripts/e2e.sh`'s or the
+  Windows job's own session's, each with its own `RC_SESSION`, `RC_SOCKET`, XDG
+  folders, `HOME` and `RC_LAUNCHD_DIRECT` — the last for a core started with
+  `server start` in the runner's session, where an elevated sshd would refuse
+  to start one; never started another way**: a
   core started without them reaches the person's.
 - **A test herdr needs `HERDR_SOCKET_PATH`, never a changed `HOME`
   alone.** herdr ignores `HOME` for its socket: `HOME=/tmp/x herdr server
@@ -272,7 +274,7 @@ not style.
 | How a screen reads the server | `web/src/lib/query.ts` (`useQuery`), the feature's `api.ts`; the roster through `web/src/features/roster/useRoster.tsx` |
 | herdr RPC, the model of a machine, starting herdr | `internal/herdr/` |
 | Remote machines, SSH, remote files | `internal/machines/`, `internal/sshx/` |
-| A Windows PC of the fleet: the probe, the bridge to herdr's named pipe, its paths | `internal/machines/probe.go`, `transport.go`, `cmd/remuda/bridge.go`, `internal/rpath/`; the tests on a real Windows: `internal/wintest/` and the `windows` job in ci.yml |
+| A Windows PC of the fleet: the probe, its paths, `remuda-core.exe connect` over ssh | `internal/machines/probe.go`, `internal/machines/core.go`, `internal/rpath/`; the tests on a real Windows: `internal/wintest/` and the `windows` job in ci.yml |
 | What the sidebar says about an agent | `internal/radar/`, `web/src/features/roster/` (`radar.ts` the model, `Sidebar.tsx`, `rows.tsx`) |
 | Pushes and their timing | `internal/push/`, `web/public/sw.js`, `web/src/features/alerts/push.ts` |
 | Transcript parsing, the conversation behind a pane | `internal/transcript/`, `internal/chat/`, `web/src/features/chat/` |

@@ -21,8 +21,8 @@ import (
 // Live skips the test unless it runs on the windows job's prepared Windows.
 func Live(t *testing.T) {
 	t.Helper()
-	if os.Getenv("REMUDA_WINDOWS_HERDR") != "1" {
-		t.Skip("REMUDA_WINDOWS_HERDR=1 runs this on a prepared Windows (the CI windows job)")
+	if os.Getenv("REMUDA_WINDOWS_CORE") != "1" {
+		t.Skip("REMUDA_WINDOWS_CORE=1 runs this on a prepared Windows (the CI windows job)")
 	}
 }
 
