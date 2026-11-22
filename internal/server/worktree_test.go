@@ -484,3 +484,27 @@ func TestADraftForOneCheckoutIsNoDraftForAnother(t *testing.T) {
 		t.Fatalf("the other checkout's settings changed: %q", got)
 	}
 }
+
+// TestSettingsForACheckoutNotThereYetAreSaved: the folder a repository will be cloned into is read as an empty draft,
+// and that draft saves — a creation, not a replacement.
+func TestSettingsForACheckoutNotThereYetAreSaved(t *testing.T) {
+	dir := t.TempDir()
+	s := &Server{Machines: herdrfake.Manager(dir), Repos: repos.Open(dir)}
+	api := http.NewServeMux()
+	s.repoRoutes(api)
+	root := filepath.Join(t.TempDir(), "not-cloned-yet")
+	rec := ask(api, "GET", "/api/repos/settings?machine=local&root="+root+"&quick=1", "")
+	var read struct {
+		Version string `json:"version"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &read); err != nil {
+		t.Fatal(err)
+	}
+	if read.Version != "" {
+		t.Fatalf("a folder the machine cannot name carries a version: %q", read.Version)
+	}
+	body := fmt.Sprintf(`{"machine":"local","root":%q,"settings":{"base":"main"},"version":""}`, root)
+	if rec := ask(api, "PUT", "/api/repos/settings", body); rec.Code != 200 {
+		t.Fatalf("a checkout not cloned yet cannot be set up: %d %s", rec.Code, rec.Body)
+	}
+}

@@ -129,7 +129,10 @@ func (s *Server) handleRepoSettingsPut(w http.ResponseWriter, r *http.Request) {
 	}
 	var version *string
 	if req.Version != nil {
-		want := s.Repos.VersionAt(mc.ID(), root) + "|" + named
+		want := "" // a folder the machine cannot name — a checkout not cloned yet — has no record to have read
+		if nameable {
+			want = s.Repos.VersionAt(mc.ID(), root) + "|" + named
+		}
 		if *req.Version != want {
 			httpErr(w, http.StatusConflict, repos.ErrStale)
 			return
