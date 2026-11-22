@@ -608,10 +608,11 @@ components and icons as rules for whoever changes it: @docs/design.md
   with no pane refused (`invalid_request`).
   The watcher paces the snapshot an event asks for (`internal/watch`):
   `eventDebounce` 150 ms for the rest of its burst, never closer than
-  `localGap` 500 ms / `remoteGap` 1 s to the last — but a client whose
-  snapshot is its own (`SnapshotFromMemory`, which the adapter answers)
-  waits only `memoryDebounce` 10 ms and no gap, the snapshot being a build
-  of the mirror rather than a request.
+  `localGap` 500 ms / `remoteGap` 1 s to the last — the pace a client that
+  must ask for one needs. A client whose snapshot is its own
+  (`SnapshotFromMemory`, which the adapter answers) waits only
+  `memoryDebounce` 10 ms and no gap: the snapshot is a build of the mirror,
+  not a request.
   **The live terminals** (`viewers.go`, tested on a throwaway core:
   `viewers_test.go`): `core.NewTerminals(client)` is a core machine's
   `herdr.Terminals`; `Open` attaches one viewer of its own (`AttachParams`:
@@ -3918,11 +3919,13 @@ components and icons as rules for whoever changes it: @docs/design.md
   the panes move once more. Any event asks
   the loop for a snapshot (`pace.go`): `eventDebounce` 150 ms for the rest
   of its burst, never closer than `localGap` 500 ms / `remoteGap` 1 s to
-  the last; a client whose snapshot is its own (`herdr.API.SnapshotFromMemory`,
-  which remuda-core's adapter answers) waits only `memoryDebounce` 10 ms
-  and never a gap, so an agent's status reaches the roster as the core says
-  it (`pace_test.go` measures both at the paces that ship); `pane.updated`, which an agent's spinner fires several times a
-  second through its title, only within `lazyGap` 5 s of the last. While
+  the last, the pace a client that must ask for a snapshot needs; a client
+  whose snapshot is its own (`herdr.API.SnapshotFromMemory`, which
+  remuda-core's adapter answers) waits only `memoryDebounce` 10 ms and
+  never a gap, so an agent's status reaches the roster as the core says it
+  (`pace_test.go` measures both at the paces that ship). `pane.updated`,
+  which an agent's spinner fires several times a second through its title,
+  only within `lazyGap` 5 s of the last. While
   the stream stands the poll is the safety net, every
   `localStreamingEvery` 15 s / `remoteStreamingEvery` 20 s; without it,
   today's 2 s local and 4 s remote, the moment it ends. A stream that

@@ -146,8 +146,8 @@ func (w *Watcher) poll(mc *machines.Machine) (*herdr.Snapshot, error) {
 	st.pollMu.Lock() // the loop and Refresh may overlap; the RPC and its apply stay in order
 	defer st.pollMu.Unlock()
 	client, _, err := mc.Ready()
+	st.memory.Store(err == nil && client != nil && client.SnapshotFromMemory())
 	if err == nil {
-		st.memory.Store(client != nil && client.SnapshotFromMemory())
 		var snap *herdr.Snapshot
 		if snap, err = client.SessionSnapshot(); err == nil {
 			w.mu.Lock()

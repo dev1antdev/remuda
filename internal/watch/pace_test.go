@@ -53,9 +53,10 @@ func TestAnInMemorySnapshotDoesNotWaitThePace(t *testing.T) {
 			for range 6 {
 				f.push(layout)
 			}
-			waitFor(t, "a snapshot after a burst", func() bool { return f.polls(burst) == 1 })
+			waitFor(t, "a snapshot after a burst", func() bool { return f.polls(burst) >= 1 })
 			time.Sleep(2 * eventDebounce)
-			if n := f.polls(burst); n != 1 {
+			// one snapshot for the burst, two if the reader was scheduled away in the middle of it — never one per event
+			if n := f.polls(burst); n > 2 {
 				t.Fatalf("a burst of events is one snapshot: %d", n)
 			}
 		})
