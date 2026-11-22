@@ -23,8 +23,7 @@ export function concerns(h: Health | undefined, latest: Latest | undefined, serv
 }
 
 // More is what the machine adds to its vitals: its name for the words, what is set there to a model being retired
-// with the roster's table of retirements its hits name, the clock the sign-in is weighed by, and whether it is
-// reached through remuda-core
+// with the roster's table of retirements its hits name, and the clock the sign-in is weighed by
 export type More = { machine?: string; retiring?: RetiringHit[]; retirements?: Retirement[]; now?: number };
 
 // CORE_STATUS_CLAUDE is the first Claude Code seen telling remuda-core its status (OSC 7501): an older one's agents

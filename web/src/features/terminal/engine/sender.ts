@@ -1,4 +1,4 @@
-// The screen terminal's typing on its way: strokes queue while a request is out and go together in the next one, so
+// The terminal's typing on its way: strokes queue while a request is out and go together in the next one, so
 // keystrokes typed quickly are one request, in order, and one pane never has two requests in flight. A refusal drops
 // what was queued behind it — nothing typed is sent again or later by itself.
 

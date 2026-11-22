@@ -45,7 +45,6 @@ function Drawer({ machineId, open }: { machineId: string; open: boolean }) {
   const named = machines.map((m) => ({ ...m, label: share.machineLabel(m) }));
   const machine = named.find((m) => m.id === machineId)?.label ?? machineId;
   const connected = machines.some((m) => m.id === machineId && m.state === "connected");
-  const here = machines.find((m) => m.id === machineId);
   const section = useRef<HTMLElement>(null);
   const back = useRef<Element | null>(null); // what had the focus before the drawer took it, given back when it hides
   const key = keyWords(isMac);

@@ -9,7 +9,6 @@ import { SearchAddon, type ISearchDecorationOptions, type ISearchOptions } from 
 import type { IBufferLine, IBufferRange, Terminal as XTerm } from "@xterm/xterm";
 import { findRanges } from "@/features/chat/find";
 import { swatches, type Flavor, type Swatches } from "@/lib/theme";
-import { nearest } from "../scrollback";
 import type { FoundCount, SearchApi } from "./types";
 
 // SETTLE_MS is how long the screen gets to repaint after a scroll before the match is looked for, a few frames at a time.

@@ -10,9 +10,8 @@ import (
 	"github.com/dev1antdev/remuda/internal/scrollback"
 )
 
-// A pane's terminal as text with its colours, read from herdr on demand: a viewer link's terminal lens.
-// The terminal lens's find over the scrollback reads the pane's rows here too, and scrolls the pane to a match. The
-// screen terminal — a pane with no attach, a Windows machine's — is that screen read again and again, typed into here.
+// A pane's screen with its colours and the rows above it, read through the machine's core on demand: the chat and a
+// viewer link read the screen, and the terminal lens's find reads the scrollback.
 
 // MaxScrollbackRows bounds one find's read; the page asks for fewer.
 const MaxScrollbackRows = 20000
@@ -22,8 +21,6 @@ func (s *Server) screenRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/scrollback", s.handleScrollback)
 }
 
-// handleInput is POST /api/input {machine, pane, text?, paste?, keys?}: the screen terminal's typing, text then keys
-// under the pane's lock; the activity gets a row per line it sends (sent.Lines), not one per keystroke.
 func (s *Server) handleScrollback(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	paneID := q.Get("pane")
@@ -53,8 +50,7 @@ func (s *Server) handleScrollback(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"matches": matches, "rows": len(rows), "truncated": truncated})
 }
 
-// handleScroll is POST /api/scroll {machine, pane, offset}: the pane's viewport moved to offset rows above the bottom —
-// every viewer's, as the wheel in the lens does — answering where it stands.
+// handleScreen is GET /api/screen?pane: the pane's screen with its colours, with an ETag over the text.
 func (s *Server) handleScreen(w http.ResponseWriter, r *http.Request) {
 	paneID := r.URL.Query().Get("pane")
 	if paneID == "" {
