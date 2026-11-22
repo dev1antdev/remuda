@@ -154,7 +154,7 @@ func (w *Watcher) connect(mc *machines.Machine, st *machineState, prev *liveStre
 	if set == nil {
 		return nil, streamRetry // no snapshot yet: the first one tells the set
 	}
-	queued := set.key // the candidate this attempt stands for, before a recheck works it out again
+	attempt := set // the candidate this attempt stands for, before a recheck works it out again
 	set = w.recheck(mc, st, set)
 	if wait > 0 {
 		return nil, wait
@@ -170,7 +170,7 @@ func (w *Watcher) connect(mc *machines.Machine, st *machineState, prev *liveStre
 		}
 		w.mu.Lock()
 		st.refused = set.person
-		if st.wanted == nil || st.wanted.key != queued {
+		if st.wanted != attempt { // a newer candidate took its place: this refusal answers nothing that is asked
 			w.mu.Unlock()
 			signal(st.changed) // superseded while the core was answering: the newer set is the next attempt
 			return nil, streamRetry

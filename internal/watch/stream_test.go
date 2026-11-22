@@ -419,21 +419,21 @@ func TestTheWatcherLeavesNothingRunning(t *testing.T) {
 
 // TestASubscriptionTheCoreIsSlowToTakeKeepsTheStandingWatches: while a swap waits on the core, the watches a standing
 // watch is judged by are the ones the stream that stands took — a pane in the set being opened does not count yet, so
-// a pane that appears meanwhile cannot take its place.
+// a pane that appears meanwhile cannot take its place. The attempt then fails, and the standing set is unchanged.
 func TestASubscriptionTheCoreIsSlowToTakeKeepsTheStandingWatches(t *testing.T) {
 	quickPace(t)
 	f := newFakeHerdr(t, "w1:p1")
 	f.memory = true
 	reached, release := make(chan struct{}), make(chan struct{})
-	defer close(release)
-	var once sync.Once
-	var mu sync.Mutex
-	var last []Output
+	closed, once := sync.Once{}, sync.Once{}
+	defer closed.Do(func() { close(release) })
+	observed := make(chan []Output, 16)
 	watching(t, f, func(w *Watcher) {
 		w.Outputs = func(_ string, snap *herdr.Snapshot, standing []Output) []Output {
-			mu.Lock()
-			last = append([]Output(nil), standing...)
-			mu.Unlock()
+			select {
+			case observed <- append([]Output(nil), standing...):
+			default:
+			}
 			watches := make([]Output, 0, len(snap.Panes)) // one rule on every pane the snapshot shows
 			for i := range snap.Panes {
 				watches = append(watches, Output{Key: "rule:all", Pane: snap.Panes[i].PaneID, Person: true})
@@ -455,14 +455,27 @@ func TestASubscriptionTheCoreIsSlowToTakeKeepsTheStandingWatches(t *testing.T) {
 	f.setPanes("w1:p1", "w1:p2")
 	f.push(`{"data":{"type":"pane_created","pane":{"pane_id":"w1:p2"}},"event":"pane_created"}`)
 	<-reached // the swap is in the core's hands, uninstalled
+	for {     // whatever was worked out before it, drained
+		select {
+		case <-observed:
+		default:
+			goto seen
+		}
+	}
+seen:
 
-	// a snapshot while the subscription is in flight: the standing watches are still the ones the stream took
+	// a snapshot while the subscription is in flight, then the answer
 	f.push(`{"data":{"agent":"claude","agent_status":"blocked","pane_id":"w1:p1","workspace_id":"w1"},"event":"pane_agent_status_changed"}`)
-	time.Sleep(3 * eventDebounce)
-	mu.Lock()
-	defer mu.Unlock()
+	var standing []Output
+	select {
+	case standing = <-observed:
+	case <-time.After(5 * time.Second):
+		t.Fatal("no standing watches were worked out while the swap waited")
+	}
+	closed.Do(func() { close(release) })
+
 	a, b := false, false
-	for _, o := range last {
+	for _, o := range standing {
 		if o.Pane == "w1:p1" {
 			a = true
 		}
@@ -471,7 +484,52 @@ func TestASubscriptionTheCoreIsSlowToTakeKeepsTheStandingWatches(t *testing.T) {
 		}
 	}
 	if !a || b {
-		t.Fatalf("the standing watches are not the ones the stream took: %+v", last)
+		t.Fatalf("the standing watches are not the ones the stream took: %+v", standing)
+	}
+}
+
+// TestASwapTheCoreTakesIsWhatTheNextSetIsJudgedBy: a candidate that is installed becomes the standing watches, so the
+// next set worked out keeps them — the swap's own panes are not forgotten for a newer one.
+func TestASwapTheCoreTakesIsWhatTheNextSetIsJudgedBy(t *testing.T) {
+	quickPace(t)
+	f := newFakeHerdr(t, "w1:p1")
+	f.memory = true
+	observed := make(chan []Output, 16)
+	watching(t, f, func(w *Watcher) {
+		w.Outputs = func(_ string, snap *herdr.Snapshot, standing []Output) []Output {
+			select {
+			case observed <- append([]Output(nil), standing...):
+			default:
+			}
+			watches := make([]Output, 0, len(snap.Panes))
+			for i := range snap.Panes {
+				watches = append(watches, Output{Key: "rule:all", Pane: snap.Panes[i].PaneID, Person: true})
+			}
+			return watches
+		}
+	})
+	f.subscribed(t)
+	waitFor(t, "the stream to stand", func() bool { return f.open() == 1 })
+	time.Sleep(eventDebounce)
+
+	f.setPanes("w1:p1", "w1:p2") // a second pane joins, and the core takes the swap
+	f.push(`{"data":{"type":"pane_created","pane":{"pane_id":"w1:p2"}},"event":"pane_created"}`)
+	f.subscribed(t)
+	waitFor(t, "the new stream to stand", func() bool { return f.open() == 1 })
+	f.setPanes("w1:p1") // and goes again
+	f.push(`{"data":{"type":"pane_closed","pane":{"pane_id":"w1:p2"}},"event":"pane_closed"}`)
+
+	deadline := time.After(5 * time.Second)
+	for {
+		select {
+		case standing := <-observed:
+			if len(standing) != 1 || standing[0].Pane != "w1:p1" {
+				continue // the sets worked out before the swap
+			}
+			return // p1's watch is standing, and p2's is not
+		case <-deadline:
+			t.Fatal("a set after the swap never worked out the standing watches")
+		}
 	}
 }
 
