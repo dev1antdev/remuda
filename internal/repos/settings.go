@@ -114,6 +114,16 @@ func (st *Store) GetVersion(machine, root string) (Settings, string) {
 	return clone(s), versionOf(s)
 }
 
+// VersionAt is what is kept under one key, as one short string, "" for nothing: the record a draft's version names.
+func (st *Store) VersionAt(machine, root string) string {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	if kept, ok := st.all[key(machine, root)]; ok {
+		return versionOf(kept)
+	}
+	return ""
+}
+
 // versionOf is a record as one short string: a clear (an empty record) has one too, so only a repository never saved is
 // the empty version, and a draft read from a clear cannot be taken for one read from nothing.
 func versionOf(s Settings) string {

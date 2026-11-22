@@ -386,8 +386,14 @@ func TestSettingsTheMachineCannotNameAreNotReplaced(t *testing.T) {
 		t.Fatalf("a stale draft erased the record: %+v", got)
 	}
 	// a draft read with it does
-	_, version := store.GetVersion("local", physical)
-	fresh := fmt.Sprintf(`{"machine":"local","root":%q,"settings":{"base":"main","setup":"pnpm i","location":"/Users/me/worktrees"},"version":%q}`, physical, version)
+	read := ask(api, "GET", "/api/repos/settings?machine=local&root="+physical+"&quick=1", "")
+	var seen struct {
+		Version string `json:"version"`
+	}
+	if err := json.Unmarshal(read.Body.Bytes(), &seen); err != nil {
+		t.Fatal(err)
+	}
+	fresh := fmt.Sprintf(`{"machine":"local","root":%q,"settings":{"base":"main","setup":"pnpm i","location":"/Users/me/worktrees"},"version":%q}`, physical, seen.Version)
 	if rec := ask(api, "PUT", "/api/repos/settings", fresh); rec.Code != 200 {
 		t.Fatalf("a draft read with the record was refused: %d %s", rec.Code, rec.Body)
 	}
@@ -436,5 +442,45 @@ func TestAClearThroughOneLinkStandsForEverySpelling(t *testing.T) {
 	}
 	if other.Settings.Base != "" {
 		t.Fatalf("a clear through one link left the other spelling's record: %+v", other.Settings)
+	}
+}
+
+// TestADraftForOneCheckoutIsNoDraftForAnother: a link is repointed while a draft is open; the draft carries the folder
+// it was read for, so it cannot save over the checkout the link now names — even one with the same settings.
+func TestADraftForOneCheckoutIsNoDraftForAnother(t *testing.T) {
+	dir := t.TempDir()
+	store := repos.Open(dir)
+	s := &Server{Machines: herdrfake.Manager(dir), Repos: store}
+	api := http.NewServeMux()
+	s.repoRoutes(api)
+	one, other := t.TempDir(), t.TempDir()
+	link := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(one, link); err != nil {
+		t.Fatal(err)
+	}
+	for _, root := range []string{one, other} {
+		if _, err := store.Put("local", root, repos.Settings{Base: "main"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rec := ask(api, "GET", "/api/repos/settings?machine=local&root="+link+"&quick=1", "")
+	var read struct {
+		Version string `json:"version"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &read); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(link); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(other, link); err != nil { // the link now names the other checkout, with the same settings
+		t.Fatal(err)
+	}
+	body := fmt.Sprintf(`{"machine":"local","root":%q,"settings":{"base":"trunk"},"version":%q}`, link, read.Version)
+	if rec := ask(api, "PUT", "/api/repos/settings", body); rec.Code != http.StatusConflict {
+		t.Fatalf("a draft for another checkout was kept: %d %s", rec.Code, rec.Body)
+	}
+	if got := store.Get("local", other).Base; got != "main" {
+		t.Fatalf("the other checkout's settings changed: %q", got)
 	}
 }
