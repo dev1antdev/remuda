@@ -39,6 +39,7 @@ type streamSet struct {
 	outputs map[string][]Output // by pane, the ones held
 	key     string              // the whole set as one string, to tell a move
 	basis   string              // the standing watches it was admitted against: a set worked out before another one was taken is worked out again
+	snap    *herdr.Snapshot     // the topology it was worked out for: a recheck re-ranks this one, not a newer one still settling
 	person  string              // the person's own watches as one string, "" for none
 	holds   bool                // the person's watches are in it: herdr has not refused them as they stand
 }
@@ -46,7 +47,7 @@ type streamSet struct {
 // buildSet is the subscriptions for a snapshot: the global kinds, each pane's agent status, the output watches but
 // the person's when they are the ones herdr refused.
 func buildSet(snap *herdr.Snapshot, outputs []Output, refused string) *streamSet {
-	set := &streamSet{all: outputs, outputs: map[string][]Output{}}
+	set := &streamSet{all: outputs, outputs: map[string][]Output{}, snap: snap}
 	for _, kind := range urgentKinds {
 		set.subs = append(set.subs, herdr.Subscription{Type: kind})
 	}

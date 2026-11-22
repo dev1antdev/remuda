@@ -169,7 +169,7 @@ func (w *Watcher) connect(mc *machines.Machine, st *machineState, prev *liveStre
 		}
 		w.mu.Lock()
 		st.refused = set.person
-		set = buildSet(st.snap, set.all, st.refused)
+		set = buildSet(set.snap, set.all, st.refused)
 		set.basis = fingerprint(st.accepted.heldWatches())
 		st.wanted = set
 		w.mu.Unlock()
@@ -232,13 +232,13 @@ func (w *Watcher) recheck(mc *machines.Machine, st *machineState, set *streamSet
 		return set
 	}
 	w.mu.Lock()
-	snap, refused := st.snap, st.refused
+	refused := st.refused
 	accepted := st.accepted.heldWatches()
 	w.mu.Unlock()
-	if snap == nil || set.basis == fingerprint(accepted) {
+	if set.snap == nil || set.basis == fingerprint(accepted) {
 		return set
 	}
-	rebuilt := buildSet(snap, w.Outputs(mc.ID(), snap, accepted), refused)
+	rebuilt := buildSet(set.snap, w.Outputs(mc.ID(), set.snap, accepted), refused)
 	rebuilt.basis = fingerprint(accepted)
 	return rebuilt
 }
