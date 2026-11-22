@@ -86,7 +86,9 @@ func (l *Launcher) StartInFolder(machineID, dir, label, kind string, start Start
 	}
 	snap, _ := l.Watch.Snapshot(machineID)
 	if WorkspaceIn(snap, dir) == "" {
-		dir = mc.Canonical(dir)
+		if named, ok := mc.Canonical(dir); ok {
+			dir = named
+		}
 	}
 	place, err := StartIn(client, snap, dir, "", label, kind, start)
 	l.Watch.Refresh(mc)

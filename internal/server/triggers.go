@@ -4,7 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
+	"strings"
 
+	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/triggers"
 )
 
@@ -69,14 +72,25 @@ func (s *Server) handleTriggersPut(w http.ResponseWriter, r *http.Request) {
 			list[i].Dir = folder
 			continue
 		}
-		list[i].Dir = mc.Canonical(rule.Dir)
-		spelled[mc.ID()+"|"+rule.Dir] = list[i].Dir
+		folder, resolved := mc.Canonical(rule.Dir)
+		if !resolved && unclear(mc, rule.Dir) {
+			httpErr(w, http.StatusBadRequest, fmt.Errorf("trigger %q: the folder %s is not on %s, and its .. names another one", rule.Name, rule.Dir, mc.Label()))
+			return
+		}
+		list[i].Dir = folder
+		spelled[mc.ID()+"|"+rule.Dir] = folder
 	}
 	if _, err := s.Triggers.Replace(list); err != nil {
 		httpErr(w, http.StatusBadRequest, err)
 		return
 	}
 	writeJSON(w, s.triggersAnswer())
+}
+
+// unclear says the machine could not name a folder, and the machine's own cleaning of what was given may be another
+// folder: a .. in it that was never resolved.
+func unclear(mc *machines.Machine, dir string) bool {
+	return slices.Contains(strings.Split(mc.Paths().Slash(dir), "/"), "..")
 }
 
 type tryReq struct {

@@ -23,6 +23,20 @@ func (s *Server) repoRoutes(api *http.ServeMux) {
 	api.HandleFunc("POST /api/run", s.handleRunAction)
 }
 
+// repoRoot is the folder a repository's settings are kept under: the machine's spelling of it, or the caller's own
+// when the machine cannot say, or when only that spelling has settings — a folder saved before remuda named folders
+// the machine's way keeps what it has until it is saved again.
+func (s *Server) repoRoot(mc *machines.Machine, root string) string {
+	named, ok := mc.Canonical(root)
+	if !ok || named == root || s.Repos == nil {
+		return root
+	}
+	if !s.Repos.Has(mc.ID(), named) && s.Repos.Has(mc.ID(), root) {
+		return root
+	}
+	return named
+}
+
 // handleRepoSettings is GET /api/repos/settings?machine&root: the settings, and what the repository says itself — its
 // name, its default base, its team's setup script — read on the machine when it is connected.
 func (s *Server) handleRepoSettings(w http.ResponseWriter, r *http.Request) {
@@ -31,7 +45,7 @@ func (s *Server) handleRepoSettings(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 404, err)
 		return
 	}
-	root := mc.Canonical(r.URL.Query().Get("root"))
+	root := s.repoRoot(mc, r.URL.Query().Get("root"))
 	answer := map[string]any{
 		"root": root, "name": rpath.For(root).Base(root), "settings": s.repoSettings(mc.ID(), root),
 		"defaults": map[string]string{"issue_branch": repos.DefaultIssueBranch, "issue_prompt": repos.DefaultIssuePrompt, "pr_prompt": repos.DefaultPRPrompt},
@@ -70,7 +84,12 @@ func (s *Server) handleRepoSettingsPut(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 400, errors.New("which repository: its main folder, as a whole path"))
 		return
 	}
-	req.Root = mc.Canonical(req.Root)
+	if named, ok := mc.Canonical(req.Root); ok {
+		req.Root = named
+	} else if unclear(mc, req.Root) {
+		httpErr(w, 400, fmt.Errorf("the folder %s is not on %s, and its .. names another one", req.Root, mc.Label()))
+		return
+	}
 	saved, err := s.Repos.Put(mc.ID(), req.Root, req.Settings)
 	if err != nil {
 		httpErr(w, 400, err)
@@ -102,7 +121,7 @@ func (s *Server) handleRunAction(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 404, errors.New("no run actions here"))
 		return
 	}
-	action, found := s.Repos.Action(mc.ID(), mc.Canonical(req.Root), req.Action)
+	action, found := s.Repos.Action(mc.ID(), s.repoRoot(mc, req.Root), req.Action)
 	if !found {
 		httpErr(w, 404, errors.New("that run action is not saved for the repository any more"))
 		return

@@ -23,16 +23,16 @@ func TestCanonicalIsTheMachinesOwnSpellingOfAFolder(t *testing.T) {
 	if err := os.Symlink(real, link); err != nil {
 		t.Fatal(err)
 	}
-	if got := mc.Canonical(link); got != physical {
-		t.Fatalf("a symlinked folder is named %q, not %q", got, physical)
+	if got, ok := mc.Canonical(link); !ok || got != physical {
+		t.Fatalf("a symlinked folder is named %q (resolved %v), not %q", got, ok, physical)
 	}
-	if got := mc.Canonical(link + "/./"); got != physical {
-		t.Fatalf("a folder with a trailing . is named %q, not %q", got, physical)
+	if got, ok := mc.Canonical(link + "/./"); !ok || got != physical {
+		t.Fatalf("a folder with a trailing . is named %q (resolved %v), not %q", got, ok, physical)
 	}
-	if got := mc.Canonical("/no/such/folder/."); got != "/no/such/folder/." {
-		t.Fatalf("a folder that is not there is kept as given, never moved elsewhere: %q", got)
+	if got, ok := mc.Canonical("/no/such/folder/."); ok || got != "/no/such/folder/." {
+		t.Fatalf("a folder that is not there is kept as given (resolved %v): %q", ok, got)
 	}
-	if got := mc.Canonical(""); got != "" {
-		t.Fatalf("no folder is named %q", got)
+	if got, ok := mc.Canonical(""); ok || got != "" {
+		t.Fatalf("no folder is named %q (resolved %v)", got, ok)
 	}
 }

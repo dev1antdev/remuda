@@ -51,11 +51,11 @@ func (mc *Machine) Home() string {
 
 // Canonical is a folder the way the machine spells it — every link resolved before a .. in the path too (`cd -P`),
 // Windows' own separators and drive letter — so two spellings of one folder meet in remuda's keys: the documents on
-// its core, the triggers and the repository settings alike. The folder as given when the machine cannot say (away, or
-// no such folder): a folder remuda cannot reach is not silently moved to another.
-func (mc *Machine) Canonical(dir string) string {
+// its core, the triggers and the repository settings alike. False with the folder as given when the machine cannot say
+// (away, or no such folder): a folder remuda cannot reach is not silently moved to another.
+func (mc *Machine) Canonical(dir string) (string, bool) {
 	if dir == "" {
-		return ""
+		return "", false
 	}
 	style := mc.Paths()
 	here := `$(pwd -P)`
@@ -64,9 +64,9 @@ func (mc *Machine) Canonical(dir string) string {
 	}
 	out, err := shell.Text(mc, "cd -P -- "+script.Quote(style.Slash(dir))+` 2>/dev/null && printf '%s\n' "`+here+`"`, canonicalWithin)
 	if said := strings.TrimSuffix(strings.TrimSuffix(out, "\n"), "\r"); err == nil && strings.TrimSpace(said) != "" {
-		return style.Clean(said)
+		return style.Clean(said), true
 	}
-	return dir
+	return dir, false
 }
 
 // StateDir is the folder remuda keeps on this machine, "" for a remote before its first connect.

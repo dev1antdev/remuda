@@ -149,3 +149,35 @@ func TestSettingsOnASymlinkedFolderAreKeptAsTheMachineNamesIt(t *testing.T) {
 		}
 	}
 }
+
+// TestSettingsSavedUnderAnOldSpellingAreStillFound: a repository's settings saved before folders were named the
+// machine's way keep their spelling, and are read through either spelling afterwards — no migration, no loss.
+func TestSettingsSavedUnderAnOldSpellingAreStillFound(t *testing.T) {
+	dir := t.TempDir()
+	store := repos.Open(dir)
+	s := &Server{Machines: herdrfake.Manager(dir), Repos: store}
+	api := http.NewServeMux()
+	s.repoRoutes(api)
+	link := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(t.TempDir(), link); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Put("local", link, repos.Settings{Base: "legacy"}); err != nil {
+		t.Fatal(err)
+	}
+	rec := ask(api, "GET", "/api/repos/settings?machine=local&root="+link+"&quick=1", "")
+	var got struct {
+		Settings repos.Settings `json:"settings"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Settings.Base != "legacy" {
+		t.Fatalf("settings saved under %q are not read through it: %+v", link, got)
+	}
+	// a folder that is not there and whose .. names another one is refused, never stored under the other one
+	body := `{"machine":"local","root":"/checkout/missing/..","settings":{"base":"main"}}`
+	if rec := ask(api, "PUT", "/api/repos/settings", body); rec.Code < 400 {
+		t.Fatalf("a folder whose .. names another is saved anyway: %d %s", rec.Code, rec.Body)
+	}
+}

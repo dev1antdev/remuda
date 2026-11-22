@@ -95,6 +95,14 @@ func (st *Store) Get(machine, root string) Settings {
 	return clone(st.all[key(machine, root)])
 }
 
+// Has says settings are kept for the repository, for a caller that looks one spelling up after another.
+func (st *Store) Has(machine, root string) bool {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	_, ok := st.all[key(machine, root)]
+	return ok
+}
+
 // Action is one of the repository's run actions by id.
 func (st *Store) Action(machine, root, id string) (Action, bool) {
 	for _, a := range st.Get(machine, root).Actions {
