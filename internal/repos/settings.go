@@ -115,8 +115,8 @@ func (st *Store) Action(machine, root, id string) (Action, bool) {
 
 // Put keeps the repository's settings whole, checked and trimmed; actions without an id get one. An older spelling
 // of the same folder, when named, is retired in the same write: settings saved before remuda named folders the
-// machine's way move to the machine's spelling, and a clear takes them away rather than leaving the old record to be
-// found again.
+// machine's way move to the machine's spelling. A clear leaves an empty record rather than nothing, so a caller
+// looking one spelling up after another stops at it and an older record never comes back.
 func (st *Store) Put(machine, root string, s Settings, older ...string) (Settings, error) {
 	s, err := Check(root, s)
 	if err != nil {
@@ -128,13 +128,9 @@ func (st *Store) Put(machine, root string, s Settings, older ...string) (Setting
 	for k, v := range st.all {
 		next[k] = v
 	}
-	if empty(s) {
-		delete(next, key(machine, root))
-	} else {
-		next[key(machine, root)] = s
-	}
+	next[key(machine, root)] = s
 	for _, was := range older {
-		if was != "" && was != root {
+		if was != "" && key(machine, was) != key(machine, root) {
 			delete(next, key(machine, was))
 		}
 	}

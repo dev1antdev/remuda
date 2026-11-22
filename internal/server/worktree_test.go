@@ -182,6 +182,33 @@ func TestSettingsSavedUnderAnOldSpellingAreStillFound(t *testing.T) {
 	}
 }
 
+// TestASaveThroughTheSameFolderInAnotherSpellingKeepsIt: a folder named a second way — . or a resolved .. that cleans
+// to the same place — is the same record, never one that retires the other.
+func TestASaveThroughTheSameFolderInAnotherSpellingKeepsIt(t *testing.T) {
+	dir := t.TempDir()
+	store := repos.Open(dir)
+	s := &Server{Machines: herdrfake.Manager(dir), Repos: store}
+	api := http.NewServeMux()
+	s.repoRoutes(api)
+	root := t.TempDir()
+	for _, spelling := range []string{root, root + "/."} {
+		body := fmt.Sprintf(`{"machine":"local","root":%q,"settings":{"base":"main"}}`, spelling)
+		if rec := ask(api, "PUT", "/api/repos/settings", body); rec.Code != 200 {
+			t.Fatalf("put %q: %d %s", spelling, rec.Code, rec.Body)
+		}
+		rec := ask(api, "GET", "/api/repos/settings?machine=local&root="+root+"&quick=1", "")
+		var got struct {
+			Settings repos.Settings `json:"settings"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+			t.Fatal(err)
+		}
+		if got.Settings.Base != "main" {
+			t.Fatalf("settings saved through %q are not there: %+v", spelling, got)
+		}
+	}
+}
+
 // TestClearingSettingsThroughAnOldSpellingClearsThem: a repository's settings saved under a link move to the machine's
 // spelling when they are next saved, and a clear takes them away — never leaving the old record to be found again.
 func TestClearingSettingsThroughAnOldSpellingClearsThem(t *testing.T) {
@@ -209,14 +236,33 @@ func TestClearingSettingsThroughAnOldSpellingClearsThem(t *testing.T) {
 		t.Fatal("the old spelling kept its record after a save")
 	}
 	put(`{}`) // cleared through the link
-	rec := ask(api, "GET", "/api/repos/settings?machine=local&root="+link+"&quick=1", "")
-	var got struct {
-		Settings repos.Settings `json:"settings"`
+	read := func(root string) repos.Settings {
+		t.Helper()
+		rec := ask(api, "GET", "/api/repos/settings?machine=local&root="+root+"&quick=1", "")
+		var got struct {
+			Settings repos.Settings `json:"settings"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+			t.Fatal(err)
+		}
+		return got.Settings
 	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+	if base := read(link).Base; base != "" {
+		t.Fatalf("settings cleared through a link came back: %q", base)
+	}
+	// the same, when the clear is made through the machine's own spelling and read through the link
+	physical, err := filepath.EvalSymlinks(link)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Settings.Base != "" {
-		t.Fatalf("settings cleared through a link came back: %+v", got)
+	if _, err := store.Put("local", link, repos.Settings{Base: "stale"}); err != nil {
+		t.Fatal(err)
+	}
+	body := fmt.Sprintf(`{"machine":"local","root":%q,"settings":{}}`, physical)
+	if rec := ask(api, "PUT", "/api/repos/settings", body); rec.Code != 200 {
+		t.Fatalf("clear through %q: %d %s", physical, rec.Code, rec.Body)
+	}
+	if base := read(link).Base; base != "" {
+		t.Fatalf("an older record came back after a clear through the machine's spelling: %q", base)
 	}
 }
