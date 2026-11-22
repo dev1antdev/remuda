@@ -125,7 +125,11 @@ func (s *Server) handleRepoSettingsPut(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, http.StatusBadGateway, fmt.Errorf("%s cannot name %s just now, so its settings are not replaced", mc.Label(), root))
 		return
 	}
-	saved, err := s.Repos.Commit(mc.ID(), root, req.Settings, req.Version, olderSpelling(mc, given, root))
+	write := root // the machine's spelling when it can name the folder, the record the read used otherwise
+	if named, ok := mc.Canonical(given); ok {
+		write = named
+	}
+	saved, err := s.Repos.Commit(mc.ID(), root, write, req.Settings, req.Version, olderSpelling(mc, given, write))
 	if errors.Is(err, repos.ErrStale) {
 		httpErr(w, http.StatusConflict, err)
 		return

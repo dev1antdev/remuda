@@ -127,7 +127,7 @@ func versionOf(s Settings) string {
 
 // Put keeps the settings without a check, for a caller that is the only writer.
 func (st *Store) Put(machine, root string, s Settings, older ...string) (Settings, error) {
-	return st.Commit(machine, root, s, nil, older...)
+	return st.Commit(machine, root, root, s, nil, older...)
 }
 
 // Has says settings are kept for the repository, for a caller that looks one spelling up after another.
@@ -148,15 +148,17 @@ func (st *Store) Action(machine, root, id string) (Action, bool) {
 	return Action{}, false
 }
 
-// Commit keeps the repository's settings whole when the record they replace is still the one the draft was read from
-// (version nil asks for no check), in the same lock that writes them, and answers what is kept. An older spelling of
+// Commit keeps the repository's settings whole when the record they replace — the one kept under from — is still the
+// one the draft was read from (version nil asks for no check), and writes them under to, in the same lock; a from other
+// than to is a record read under an older spelling of the folder, written where the machine names it, and refused when
+// a record appeared under to since the read. It answers what is kept. An older spelling of
 // the same folder, when named, takes a clear too. A clear leaves an
 // empty record rather than nothing, under the machine's spelling and under the spelling the request used when that is
 // a second key of the same folder: a caller looking one spelling up after another stops at it, even when the machine
 // can no longer name the folder, and a record kept under an older spelling never comes back. Nothing is ever deleted
 // or moved: a record saved earlier under another spelling stays where it is.
-func (st *Store) Commit(machine, root string, s Settings, version *string, older ...string) (Settings, error) {
-	s, err := Check(root, s)
+func (st *Store) Commit(machine, from, to string, s Settings, version *string, older ...string) (Settings, error) {
+	s, err := Check(to, s)
 	if err != nil {
 		return Settings{}, err
 	}
@@ -164,21 +166,26 @@ func (st *Store) Commit(machine, root string, s Settings, version *string, older
 	defer st.mu.Unlock()
 	if version != nil {
 		now := ""
-		if kept, ok := st.all[key(machine, root)]; ok {
+		if kept, ok := st.all[key(machine, from)]; ok {
 			now = versionOf(kept)
 		}
 		if *version != now {
 			return Settings{}, ErrStale
 		}
 	}
+	if from != to {
+		if _, ok := st.all[key(machine, to)]; ok {
+			return Settings{}, ErrStale // the record it would be written beside appeared since the draft was read
+		}
+	}
 	next := make(map[string]Settings, len(st.all)+1)
 	for k, v := range st.all {
 		next[k] = v
 	}
-	next[key(machine, root)] = s
+	next[key(machine, to)] = s
 	if empty(s) {
 		for _, was := range older {
-			if was != "" && key(machine, was) != key(machine, root) {
+			if was != "" && key(machine, was) != key(machine, to) {
 				next[key(machine, was)] = s
 			}
 		}

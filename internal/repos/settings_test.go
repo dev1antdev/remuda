@@ -108,23 +108,23 @@ func TestACommitKeepsOnlyTheRecordItsDraftWasReadFrom(t *testing.T) {
 	if first == "" || first != second {
 		t.Fatalf("two reads of one record gave %q and %q", first, second)
 	}
-	if _, err := st.Commit("local", "/repo/app", Settings{Base: "trunk"}, &first); err != nil {
+	if _, err := st.Commit("local", "/repo/app", "/repo/app", Settings{Base: "trunk"}, &first); err != nil {
 		t.Fatalf("the first save was refused: %v", err)
 	}
-	if _, err := st.Commit("local", "/repo/app", Settings{Base: "develop"}, &second); !errors.Is(err, ErrStale) {
+	if _, err := st.Commit("local", "/repo/app", "/repo/app", Settings{Base: "develop"}, &second); !errors.Is(err, ErrStale) {
 		t.Fatalf("the second draft of the same record was kept: %v", err)
 	}
 	if got := st.Get("local", "/repo/app").Base; got != "trunk" {
 		t.Fatalf("the kept record is %q", got)
 	}
 	// a clear is a record too: a draft read before it cannot be taken for one read from nothing
-	if _, err := st.Commit("local", "/repo/app", Settings{}, nil); err != nil {
+	if _, err := st.Commit("local", "/repo/app", "/repo/app", Settings{}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, version := st.GetVersion("local", "/repo/app"); version == "" {
 		t.Fatal("a cleared record has no version, so it looks like one never saved")
 	}
-	if _, err := st.Commit("local", "/repo/app", Settings{Base: "develop"}, &second); !errors.Is(err, ErrStale) {
+	if _, err := st.Commit("local", "/repo/app", "/repo/app", Settings{Base: "develop"}, &second); !errors.Is(err, ErrStale) {
 		t.Fatalf("a draft from before a clear was kept: %v", err)
 	}
 }

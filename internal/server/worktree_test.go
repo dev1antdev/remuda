@@ -190,8 +190,19 @@ func TestSettingsSavedUnderAnOldSpellingAreStillFound(t *testing.T) {
 	if rec := ask(api, "PUT", "/api/repos/settings", body); rec.Code != 200 {
 		t.Fatalf("a draft read through the link was refused: %d %s", rec.Code, rec.Body)
 	}
-	if got := store.Get("local", link); got.Base != "trunk" {
+	physical, err := filepath.EvalSymlinks(link)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := store.Get("local", physical); got.Base != "trunk" { // written where the machine names the folder
 		t.Fatalf("the save through the link did not land: %+v", got)
+	}
+	back := ask(api, "GET", "/api/repos/settings?machine=local&root="+link+"&quick=1", "")
+	var now struct {
+		Settings repos.Settings `json:"settings"`
+	}
+	if err := json.Unmarshal(back.Body.Bytes(), &now); err != nil || now.Settings.Base != "trunk" {
+		t.Fatalf("the save is not read back through the link: %+v %v", now, err)
 	}
 	// a folder that is not there and whose .. names another one is refused, never stored under the other one
 	odd := `{"machine":"local","root":"/checkout/missing/..","settings":{"base":"main"}}`
@@ -382,5 +393,48 @@ func TestSettingsTheMachineCannotNameAreNotReplaced(t *testing.T) {
 	}
 	if got := store.Get("local", physical); got.Location != "/Users/me/worktrees" {
 		t.Fatalf("the save did not land: %+v", got)
+	}
+}
+
+// TestAClearThroughOneLinkStandsForEverySpelling: two links name one checkout and each had settings saved through it;
+// a clear through one writes the machine's spelling, and the other link reads the clear rather than its own record.
+func TestAClearThroughOneLinkStandsForEverySpelling(t *testing.T) {
+	dir := t.TempDir()
+	store := repos.Open(dir)
+	s := &Server{Machines: herdrfake.Manager(dir), Repos: store}
+	api := http.NewServeMux()
+	s.repoRoutes(api)
+	real := t.TempDir()
+	first := filepath.Join(t.TempDir(), "first")
+	second := filepath.Join(t.TempDir(), "second")
+	for _, link := range []string{first, second} {
+		if err := os.Symlink(real, link); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := store.Put("local", link, repos.Settings{Base: "legacy-" + filepath.Base(link)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rec := ask(api, "GET", "/api/repos/settings?machine=local&root="+first+"&quick=1", "")
+	var read struct {
+		Settings repos.Settings `json:"settings"`
+		Version  string         `json:"version"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &read); err != nil {
+		t.Fatal(err)
+	}
+	body := fmt.Sprintf(`{"machine":"local","root":%q,"settings":{},"version":%q}`, first, read.Version)
+	if rec := ask(api, "PUT", "/api/repos/settings", body); rec.Code != 200 {
+		t.Fatalf("clear through the first link: %d %s", rec.Code, rec.Body)
+	}
+	rec = ask(api, "GET", "/api/repos/settings?machine=local&root="+second+"&quick=1", "")
+	var other struct {
+		Settings repos.Settings `json:"settings"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &other); err != nil {
+		t.Fatal(err)
+	}
+	if other.Settings.Base != "" {
+		t.Fatalf("a clear through one link left the other spelling's record: %+v", other.Settings)
 	}
 }
