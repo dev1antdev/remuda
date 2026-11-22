@@ -33,18 +33,22 @@ func olderSpelling(mc *machines.Machine, given, root string) string {
 	return given
 }
 
-// repoRoot is the folder a repository's settings are kept under: the machine's spelling of it, or the caller's own
-// when the machine cannot say, or when only that spelling has settings — a folder saved before remuda named folders
-// the machine's way keeps what it has until it is saved again.
-func (s *Server) repoRoot(mc *machines.Machine, root string) string {
+// repoRoot is the folder a repository's settings are read under: the machine's spelling of it, or the caller's own
+// when only that spelling has settings — a folder saved before remuda named folders the machine's way keeps what it
+// has until it is saved again. False when the machine cannot name the folder at all: its settings are then not read,
+// so a record kept under an old spelling never answers for a clear made through another.
+func (s *Server) repoRoot(mc *machines.Machine, root string) (string, bool) {
 	named, ok := mc.Canonical(root)
-	if !ok || named == root || s.Repos == nil {
-		return root
+	if !ok {
+		return root, false
+	}
+	if named == root || s.Repos == nil {
+		return named, true
 	}
 	if !s.Repos.Has(mc.ID(), named) && s.Repos.Has(mc.ID(), root) {
-		return root
+		return root, true
 	}
-	return named
+	return named, true
 }
 
 // handleRepoSettings is GET /api/repos/settings?machine&root: the settings, and what the repository says itself — its
@@ -55,9 +59,13 @@ func (s *Server) handleRepoSettings(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 404, err)
 		return
 	}
-	root := s.repoRoot(mc, r.URL.Query().Get("root"))
+	root, named := s.repoRoot(mc, r.URL.Query().Get("root"))
+	settings := s.repoSettings(mc.ID(), root)
+	if !named {
+		settings = repos.Settings{} // the machine cannot name the folder: a record under an old spelling is not its word
+	}
 	answer := map[string]any{
-		"root": root, "name": rpath.For(root).Base(root), "settings": s.repoSettings(mc.ID(), root),
+		"root": root, "name": rpath.For(root).Base(root), "settings": settings,
 		"defaults": map[string]string{"issue_branch": repos.DefaultIssueBranch, "issue_prompt": repos.DefaultIssuePrompt, "pr_prompt": repos.DefaultPRPrompt},
 		"icons":    repos.Icons, "setup": !mc.Windows(),
 	}
@@ -65,7 +73,9 @@ func (s *Server) handleRepoSettings(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, answer) // the run button's read: the settings alone, nothing run on the machine
 		return
 	}
-	if _, _, err := mc.Ready(); err != nil {
+	if !named {
+		answer["trouble"] = mc.Label() + " cannot name that folder just now: its settings are not read"
+	} else if _, _, err := mc.Ready(); err != nil {
 		answer["trouble"] = err.Error()
 	} else if src, err := repos.Read(mc, root); err != nil {
 		answer["trouble"] = err.Error()
@@ -132,7 +142,12 @@ func (s *Server) handleRunAction(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 404, errors.New("no run actions here"))
 		return
 	}
-	action, found := s.Repos.Action(mc.ID(), s.repoRoot(mc, req.Root), req.Action)
+	root, named := s.repoRoot(mc, req.Root)
+	if !named {
+		httpErr(w, http.StatusBadGateway, fmt.Errorf("%s cannot name that folder just now: its run actions are not read", mc.Label()))
+		return
+	}
+	action, found := s.Repos.Action(mc.ID(), root, req.Action)
 	if !found {
 		httpErr(w, 404, errors.New("that run action is not saved for the repository any more"))
 		return

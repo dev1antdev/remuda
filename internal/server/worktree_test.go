@@ -22,12 +22,16 @@ func TestAProjectsSettingsAreKeptAndReadBack(t *testing.T) {
 	api := http.NewServeMux()
 	s.repoRoutes(api)
 
-	body := `{"machine":"local","root":"/repo/app","settings":{"base":"main","setup":"pnpm i","setup_when":"ask","actions":[{"name":"Dev","command":"npm run dev","place":"right"}]}}`
+	folder := filepath.Join(t.TempDir(), "app") // a folder the machine can name
+	if err := os.MkdirAll(folder, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := `{"machine":"local","root":"` + folder + `","settings":{"base":"main","setup":"pnpm i","setup_when":"ask","actions":[{"name":"Dev","command":"npm run dev","place":"right"}]}}`
 	rec := ask(api, "PUT", "/api/repos/settings", body)
 	if rec.Code != 200 {
 		t.Fatalf("put: %d %s", rec.Code, rec.Body)
 	}
-	rec = ask(api, "GET", "/api/repos/settings?machine=local&root=/repo/app", "")
+	rec = ask(api, "GET", "/api/repos/settings?machine=local&root="+folder, "")
 	var got struct {
 		Name     string            `json:"name"`
 		Settings repos.Settings    `json:"settings"`
