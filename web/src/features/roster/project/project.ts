@@ -22,7 +22,7 @@ export type Settings = {
 };
 export type Defaults = { issue_branch: string; issue_prompt: string; pr_prompt: string };
 // Project is GET /api/repos/settings: the settings and what the repository says of itself, read on its machine
-export type Project = { root: string; name: string; settings: Settings; defaults: Defaults; icons: IconName[]; setup: boolean; base?: string; team?: { file: string; script: string } | null; trouble?: string };
+export type Project = { root: string; name: string; settings: Settings; defaults: Defaults; icons: IconName[]; setup: boolean; base?: string; team?: { file: string; script: string } | null; trouble?: string; version?: string };
 
 export const DEFAULTS: Defaults = {
   issue_branch: "dev/feat/{number}",

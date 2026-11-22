@@ -63,9 +63,17 @@ func newCoreLink(mc *Machine, client *core.Client, transportError func(error)) *
 	sessions := newProcessSessions(mc.Label(), mc.Transcripts.SessionsOf)
 	return &coreLink{
 		client:    client,
-		adapter:   core.NewAdapter(client, mc, core.AdapterHooks{TransportError: transportError, SessionOf: sessions.of, Reread: sessions.readNow}),
+		adapter:   core.NewAdapter(client, mc, core.AdapterHooks{TransportError: transportError, SessionOf: sessions.of, Reread: sessions.readNow, Canonical: func(dir string) string { return canonicalOf(mc, dir) }}),
 		terminals: core.NewTerminals(client),
 	}
+}
+
+// canonicalOf names a folder as the machine does, as given when it cannot say.
+func canonicalOf(mc *Machine, dir string) string {
+	if named, ok := mc.Canonical(dir); ok {
+		return named
+	}
+	return dir
 }
 
 // close stops following the core and ends the connection. The adapter tells its transport errors from its own

@@ -34,7 +34,7 @@ export default function ProjectSettingsDialog({ machineId, root, onClose, onSave
     setBusy(true);
     setError("");
     try {
-      await saveProject(machineId, root, s);
+      await saveProject(machineId, root, s, p?.version);
       onSaved?.();
       onClose();
     } catch (e) {

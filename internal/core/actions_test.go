@@ -63,6 +63,42 @@ func tabsOf(snap *herdr.Snapshot, space string) []herdr.TabInfo {
 	return tabs
 }
 
+// TestAWorkspaceOnASymlinkedFolderIsNamedAsTheCoreNamesIt: the folder is the one the core's own shell stands in — the
+// symlink resolved — so the workspace, its checkout and its panes are one spelling and the roster's dir and folder
+// meet.
+func TestAWorkspaceOnASymlinkedFolderIsNamedAsTheCoreNamesIt(t *testing.T) {
+	client := coretest.Server(t).Client(t)
+	adapter := adapterOf(t, client, core.AdapterHooks{Canonical: func(dir string) string {
+		if physical, err := filepath.EvalSymlinks(dir); err == nil {
+			return physical
+		}
+		return dir
+	}})
+	real := t.TempDir()
+	physical, err := filepath.EvalSymlinks(real)
+	if err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(real, link); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := adapter.WorkspaceCreate(link, ""); err != nil {
+		t.Fatal(err)
+	}
+	snap := eventually(t, adapter, func(s *herdr.Snapshot) bool { return len(s.Workspaces) == 1 && len(s.Panes) == 1 })
+	ws := snap.Workspaces[0]
+	if ws.Folder != physical {
+		t.Fatalf("the workspace is on %q, not the core's spelling %q", ws.Folder, physical)
+	}
+	if dir := snap.WorkspaceDir(&ws); dir != physical {
+		t.Fatalf("the workspace's folder is %q, the workspace is on %q", dir, physical)
+	}
+	if cwd := snap.Panes[0].CWD; cwd != physical {
+		t.Fatalf("the pane stands in %q, not %q", cwd, physical)
+	}
+}
+
 func TestWorkspacesTabsAndPanesAreMadeRenamedAndClosedOnACore(t *testing.T) {
 	client := coretest.Server(t).Client(t)
 	adapter := adapterOf(t, client, core.AdapterHooks{})

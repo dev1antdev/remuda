@@ -3,11 +3,16 @@ package machines
 import (
 	"os"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/rpath"
+	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/shell"
 )
+
+// canonicalWithin bounds the read of a folder's own spelling.
+const canonicalWithin = 5 * time.Second
 
 // A Machine is a shell.Host: scripts run here through sh -c, or over the ssh master.
 
@@ -42,6 +47,31 @@ func (mc *Machine) Home() string {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
 	return mc.home
+}
+
+// Canonical is a folder the way the machine spells it — every link resolved before a .. in the path too (`cd -P`),
+// Windows' own separators and drive letter — so two spellings of one folder meet in remuda's keys: the documents on
+// its core, the triggers and the repository settings alike. False with the folder as given when the machine cannot say
+// (away, or no such folder): a folder remuda cannot reach is not silently moved to another.
+func (mc *Machine) Canonical(dir string) (string, bool) {
+	if dir == "" {
+		return "", false
+	}
+	style := mc.Paths()
+	said := "pwd -P"
+	if style.Windows { // Git Bash answers /cygdrive/c/…, which is Windows' own spelling only through cygpath
+		said = `cygpath -w "$PWD"`
+	}
+	out, err := shell.Text(mc, "cd -P -- "+script.Quote(style.Slash(dir))+" 2>/dev/null && "+said, canonicalWithin)
+	// the one line terminator pwd ends on, and no other: a folder's name may end in one
+	said = strings.TrimSuffix(out, "\n")
+	if style.Windows {
+		said = strings.TrimSuffix(said, "\r")
+	}
+	if err == nil && said != "" {
+		return style.Clean(said), true
+	}
+	return dir, false
 }
 
 // StateDir is the folder remuda keeps on this machine, "" for a remote before its first connect.

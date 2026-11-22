@@ -2,7 +2,10 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/dev1antdev/remuda/internal/auth"
@@ -19,12 +22,16 @@ func TestAProjectsSettingsAreKeptAndReadBack(t *testing.T) {
 	api := http.NewServeMux()
 	s.repoRoutes(api)
 
-	body := `{"machine":"local","root":"/repo/app","settings":{"base":"main","setup":"pnpm i","setup_when":"ask","actions":[{"name":"Dev","command":"npm run dev","place":"right"}]}}`
+	folder := filepath.Join(t.TempDir(), "app") // a folder the machine can name
+	if err := os.MkdirAll(folder, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := `{"machine":"local","root":"` + folder + `","settings":{"base":"main","setup":"pnpm i","setup_when":"ask","actions":[{"name":"Dev","command":"npm run dev","place":"right"}]}}`
 	rec := ask(api, "PUT", "/api/repos/settings", body)
 	if rec.Code != 200 {
 		t.Fatalf("put: %d %s", rec.Code, rec.Body)
 	}
-	rec = ask(api, "GET", "/api/repos/settings?machine=local&root=/repo/app", "")
+	rec = ask(api, "GET", "/api/repos/settings?machine=local&root="+folder, "")
 	var got struct {
 		Name     string            `json:"name"`
 		Settings repos.Settings    `json:"settings"`
@@ -109,5 +116,395 @@ func TestAConfirmationAnswersForWhatTheDialogSaid(t *testing.T) {
 	}
 	if plain == removalStamp(look, false, true) {
 		t.Error("a branch the dialog called safe reads the same once its merged request is forgotten")
+	}
+}
+
+// TestSettingsOnASymlinkedFolderAreKeptAsTheMachineNamesIt: the repository's settings are keyed by the folder the
+// roster's sessions are named in, so saving them through a symlink is not a second repository.
+func TestSettingsOnASymlinkedFolderAreKeptAsTheMachineNamesIt(t *testing.T) {
+	dir := t.TempDir()
+	s := &Server{Machines: herdrfake.Manager(dir), Repos: repos.Open(dir)}
+	api := http.NewServeMux()
+	s.repoRoutes(api)
+	real := t.TempDir()
+	physical, err := filepath.EvalSymlinks(real)
+	if err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(real, link); err != nil {
+		t.Fatal(err)
+	}
+	body := fmt.Sprintf(`{"machine":"local","root":%q,"settings":{"base":"main"}}`, link)
+	if rec := ask(api, "PUT", "/api/repos/settings", body); rec.Code != 200 {
+		t.Fatalf("put: %d %s", rec.Code, rec.Body)
+	}
+	for _, root := range []string{link, physical} { // saved through the link, read through either spelling
+		rec := ask(api, "GET", "/api/repos/settings?machine=local&root="+root+"&quick=1", "")
+		var got struct {
+			Root     string         `json:"root"`
+			Settings repos.Settings `json:"settings"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+			t.Fatal(err)
+		}
+		if got.Settings.Base != "main" || got.Root != physical {
+			t.Fatalf("the settings saved through a symlink are not read back through %q: %+v", root, got)
+		}
+	}
+}
+
+// TestSettingsSavedUnderAnOldSpellingAreStillFound: a repository's settings saved before folders were named the
+// machine's way keep their spelling, and are read through either spelling afterwards — no migration, no loss.
+func TestSettingsSavedUnderAnOldSpellingAreStillFound(t *testing.T) {
+	dir := t.TempDir()
+	store := repos.Open(dir)
+	s := &Server{Machines: herdrfake.Manager(dir), Repos: store}
+	api := http.NewServeMux()
+	s.repoRoutes(api)
+	link := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(t.TempDir(), link); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Put("local", link, repos.Settings{Base: "legacy"}); err != nil {
+		t.Fatal(err)
+	}
+	rec := ask(api, "GET", "/api/repos/settings?machine=local&root="+link+"&quick=1", "")
+	var got struct {
+		Settings repos.Settings `json:"settings"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Settings.Base != "legacy" {
+		t.Fatalf("settings saved under %q are not read through it: %+v", link, got)
+	}
+	// a draft read through the link is saved back through it, on the version the read gave
+	var read struct {
+		Version string `json:"version"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &read); err != nil {
+		t.Fatal(err)
+	}
+	body := fmt.Sprintf(`{"machine":"local","root":%q,"settings":{"base":"trunk"},"version":%q}`, link, read.Version)
+	if rec := ask(api, "PUT", "/api/repos/settings", body); rec.Code != 200 {
+		t.Fatalf("a draft read through the link was refused: %d %s", rec.Code, rec.Body)
+	}
+	physical, err := filepath.EvalSymlinks(link)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := store.Get("local", physical); got.Base != "trunk" { // written where the machine names the folder
+		t.Fatalf("the save through the link did not land: %+v", got)
+	}
+	back := ask(api, "GET", "/api/repos/settings?machine=local&root="+link+"&quick=1", "")
+	var now struct {
+		Settings repos.Settings `json:"settings"`
+	}
+	if err := json.Unmarshal(back.Body.Bytes(), &now); err != nil || now.Settings.Base != "trunk" {
+		t.Fatalf("the save is not read back through the link: %+v %v", now, err)
+	}
+	// a folder that is not there and whose .. names another one is refused, never stored under the other one
+	odd := `{"machine":"local","root":"/checkout/missing/..","settings":{"base":"main"}}`
+	if rec := ask(api, "PUT", "/api/repos/settings", odd); rec.Code < 400 {
+		t.Fatalf("a folder whose .. names another is saved anyway: %d %s", rec.Code, rec.Body)
+	}
+}
+
+// TestASaveThroughTheSameFolderInAnotherSpellingKeepsIt: a folder named a second way — . or a resolved .. that cleans
+// to the same place — is the same record, never one that retires the other.
+func TestASaveThroughTheSameFolderInAnotherSpellingKeepsIt(t *testing.T) {
+	dir := t.TempDir()
+	store := repos.Open(dir)
+	s := &Server{Machines: herdrfake.Manager(dir), Repos: store}
+	api := http.NewServeMux()
+	s.repoRoutes(api)
+	root := t.TempDir()
+	for _, spelling := range []string{root, root + "/."} {
+		body := fmt.Sprintf(`{"machine":"local","root":%q,"settings":{"base":"main"}}`, spelling)
+		if rec := ask(api, "PUT", "/api/repos/settings", body); rec.Code != 200 {
+			t.Fatalf("put %q: %d %s", spelling, rec.Code, rec.Body)
+		}
+		rec := ask(api, "GET", "/api/repos/settings?machine=local&root="+root+"&quick=1", "")
+		var got struct {
+			Settings repos.Settings `json:"settings"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+			t.Fatal(err)
+		}
+		if got.Settings.Base != "main" {
+			t.Fatalf("settings saved through %q are not there: %+v", spelling, got)
+		}
+	}
+}
+
+// TestClearingSettingsThroughAnOldSpellingClearsThem: a repository's settings saved under a link move to the machine's
+// spelling when they are next saved, and a clear takes them away — never leaving the old record to be found again.
+func TestClearingSettingsThroughAnOldSpellingClearsThem(t *testing.T) {
+	dir := t.TempDir()
+	store := repos.Open(dir)
+	s := &Server{Machines: herdrfake.Manager(dir), Repos: store}
+	api := http.NewServeMux()
+	s.repoRoutes(api)
+	link := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(t.TempDir(), link); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Put("local", link, repos.Settings{Base: "legacy"}); err != nil {
+		t.Fatal(err)
+	}
+	put := func(settings string) {
+		t.Helper()
+		body := fmt.Sprintf(`{"machine":"local","root":%q,"settings":%s}`, link, settings)
+		if rec := ask(api, "PUT", "/api/repos/settings", body); rec.Code != 200 {
+			t.Fatalf("put %s: %d %s", settings, rec.Code, rec.Body)
+		}
+	}
+	put(`{"base":"main"}`) // saved through the link: the record is the machine's spelling's
+	put(`{}`)              // cleared through the link
+	read := func(root string) repos.Settings {
+		t.Helper()
+		rec := ask(api, "GET", "/api/repos/settings?machine=local&root="+root+"&quick=1", "")
+		var got struct {
+			Settings repos.Settings `json:"settings"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+			t.Fatal(err)
+		}
+		return got.Settings
+	}
+	if base := read(link).Base; base != "" {
+		t.Fatalf("settings cleared through a link came back: %q", base)
+	}
+	// the same, when the clear is made through the machine's own spelling and read through the link
+	physical, err := filepath.EvalSymlinks(link)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Put("local", link, repos.Settings{Base: "stale"}); err != nil {
+		t.Fatal(err)
+	}
+	body := fmt.Sprintf(`{"machine":"local","root":%q,"settings":{}}`, physical)
+	if rec := ask(api, "PUT", "/api/repos/settings", body); rec.Code != 200 {
+		t.Fatalf("clear through %q: %d %s", physical, rec.Code, rec.Body)
+	}
+	if base := read(link).Base; base != "" {
+		t.Fatalf("an older record came back after a clear through the machine's spelling: %q", base)
+	}
+	// a clear through the link stands even when the machine can no longer name the folder: the link goes away
+	if _, err := store.Put("local", link, repos.Settings{Base: "stale"}); err != nil {
+		t.Fatal(err)
+	}
+	body = fmt.Sprintf(`{"machine":"local","root":%q,"settings":{}}`, link)
+	if rec := ask(api, "PUT", "/api/repos/settings", body); rec.Code != 200 {
+		t.Fatalf("clear through %q: %d %s", link, rec.Code, rec.Body)
+	}
+	if err := os.Remove(link); err != nil {
+		t.Fatal(err)
+	}
+	if base := read(link).Base; base != "" {
+		t.Fatalf("a cleared record came back while the folder could not be resolved: %q", base)
+	}
+}
+
+// TestSavingThroughASymlinkFollowedByItsParentLeavesTheOtherCheckoutAlone: a folder named with a .. behind a link
+// resolves to the folder the link points into, and the settings of the folder it was written through are untouched —
+// nothing is ever retired for another spelling.
+func TestSavingThroughASymlinkFollowedByItsParentLeavesTheOtherCheckoutAlone(t *testing.T) {
+	dir := t.TempDir()
+	store := repos.Open(dir)
+	s := &Server{Machines: herdrfake.Manager(dir), Repos: store}
+	api := http.NewServeMux()
+	s.repoRoutes(api)
+	first, second := t.TempDir(), t.TempDir()
+	if _, err := store.Put("local", first, repos.Settings{Base: "first"}); err != nil {
+		t.Fatal(err)
+	}
+	nested := filepath.Join(second, "nested")
+	if err := os.MkdirAll(nested, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(nested, filepath.Join(first, "link")); err != nil {
+		t.Fatal(err)
+	}
+	body := fmt.Sprintf(`{"machine":"local","root":%q,"settings":{"base":"landed"}}`, first+"/link/..") // not Join: it would clean the .. away
+	if rec := ask(api, "PUT", "/api/repos/settings", body); rec.Code != 200 {
+		t.Fatalf("put: %d %s", rec.Code, rec.Body)
+	}
+	if got := store.Get("local", first).Base; got != "first" {
+		t.Fatalf("the folder the path was written through lost its settings: %q", got)
+	}
+	physical, err := filepath.EvalSymlinks(second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := store.Get("local", physical).Base; got != "landed" {
+		t.Fatalf("the folder the path resolved to has %q", got)
+	}
+}
+
+// TestSettingsTheMachineCannotNameAreNotReplaced: a record is kept for a folder the machine cannot name just now, and
+// a save read without it — the whole record, as the dialog sends it — is refused rather than erasing what it did not
+// show.
+func TestSettingsTheMachineCannotNameAreNotReplaced(t *testing.T) {
+	dir := t.TempDir()
+	store := repos.Open(dir)
+	s := &Server{Machines: herdrfake.Manager(dir), Repos: store}
+	api := http.NewServeMux()
+	s.repoRoutes(api)
+	folder := filepath.Join(t.TempDir(), "app")
+	if err := os.MkdirAll(folder, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	physical, err := filepath.EvalSymlinks(folder)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Put("local", physical, repos.Settings{Base: "main", Setup: "pnpm i"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.RemoveAll(folder); err != nil { // the checkout is not there just now
+		t.Fatal(err)
+	}
+	body := fmt.Sprintf(`{"machine":"local","root":%q,"settings":{"location":"/Users/me/worktrees"}}`, physical) // the roster's own spelling
+	if rec := ask(api, "PUT", "/api/repos/settings", body); rec.Code != http.StatusBadGateway {
+		t.Fatalf("a save read without the record replaced it: %d %s", rec.Code, rec.Body)
+	}
+	if got := store.Get("local", physical); got.Base != "main" || got.Setup != "pnpm i" {
+		t.Fatalf("the record the machine could not show was erased: %+v", got)
+	}
+	// the draft was read while the folder was missing: the folder coming back does not make its empty version the one
+	// it would replace
+	if err := os.MkdirAll(folder, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	stale := fmt.Sprintf(`{"machine":"local","root":%q,"settings":{"location":"/Users/me/worktrees"},"version":""}`, physical)
+	if rec := ask(api, "PUT", "/api/repos/settings", stale); rec.Code != http.StatusConflict {
+		t.Fatalf("a draft read without the record replaced it once the folder returned: %d %s", rec.Code, rec.Body)
+	}
+	if got := store.Get("local", physical); got.Base != "main" || got.Setup != "pnpm i" {
+		t.Fatalf("a stale draft erased the record: %+v", got)
+	}
+	// a draft read with it does
+	read := ask(api, "GET", "/api/repos/settings?machine=local&root="+physical+"&quick=1", "")
+	var seen struct {
+		Version string `json:"version"`
+	}
+	if err := json.Unmarshal(read.Body.Bytes(), &seen); err != nil {
+		t.Fatal(err)
+	}
+	fresh := fmt.Sprintf(`{"machine":"local","root":%q,"settings":{"base":"main","setup":"pnpm i","location":"/Users/me/worktrees"},"version":%q}`, physical, seen.Version)
+	if rec := ask(api, "PUT", "/api/repos/settings", fresh); rec.Code != 200 {
+		t.Fatalf("a draft read with the record was refused: %d %s", rec.Code, rec.Body)
+	}
+	if got := store.Get("local", physical); got.Location != "/Users/me/worktrees" {
+		t.Fatalf("the save did not land: %+v", got)
+	}
+}
+
+// TestAClearThroughOneLinkStandsForEverySpelling: two links name one checkout and each had settings saved through it;
+// a clear through one writes the machine's spelling, and the other link reads the clear rather than its own record.
+func TestAClearThroughOneLinkStandsForEverySpelling(t *testing.T) {
+	dir := t.TempDir()
+	store := repos.Open(dir)
+	s := &Server{Machines: herdrfake.Manager(dir), Repos: store}
+	api := http.NewServeMux()
+	s.repoRoutes(api)
+	real := t.TempDir()
+	first := filepath.Join(t.TempDir(), "first")
+	second := filepath.Join(t.TempDir(), "second")
+	for _, link := range []string{first, second} {
+		if err := os.Symlink(real, link); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := store.Put("local", link, repos.Settings{Base: "legacy-" + filepath.Base(link)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rec := ask(api, "GET", "/api/repos/settings?machine=local&root="+first+"&quick=1", "")
+	var read struct {
+		Settings repos.Settings `json:"settings"`
+		Version  string         `json:"version"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &read); err != nil {
+		t.Fatal(err)
+	}
+	body := fmt.Sprintf(`{"machine":"local","root":%q,"settings":{},"version":%q}`, first, read.Version)
+	if rec := ask(api, "PUT", "/api/repos/settings", body); rec.Code != 200 {
+		t.Fatalf("clear through the first link: %d %s", rec.Code, rec.Body)
+	}
+	rec = ask(api, "GET", "/api/repos/settings?machine=local&root="+second+"&quick=1", "")
+	var other struct {
+		Settings repos.Settings `json:"settings"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &other); err != nil {
+		t.Fatal(err)
+	}
+	if other.Settings.Base != "" {
+		t.Fatalf("a clear through one link left the other spelling's record: %+v", other.Settings)
+	}
+}
+
+// TestADraftForOneCheckoutIsNoDraftForAnother: a link is repointed while a draft is open; the draft carries the folder
+// it was read for, so it cannot save over the checkout the link now names — even one with the same settings.
+func TestADraftForOneCheckoutIsNoDraftForAnother(t *testing.T) {
+	dir := t.TempDir()
+	store := repos.Open(dir)
+	s := &Server{Machines: herdrfake.Manager(dir), Repos: store}
+	api := http.NewServeMux()
+	s.repoRoutes(api)
+	one, other := t.TempDir(), t.TempDir()
+	link := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(one, link); err != nil {
+		t.Fatal(err)
+	}
+	for _, root := range []string{one, other} {
+		if _, err := store.Put("local", root, repos.Settings{Base: "main"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rec := ask(api, "GET", "/api/repos/settings?machine=local&root="+link+"&quick=1", "")
+	var read struct {
+		Version string `json:"version"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &read); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(link); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(other, link); err != nil { // the link now names the other checkout, with the same settings
+		t.Fatal(err)
+	}
+	body := fmt.Sprintf(`{"machine":"local","root":%q,"settings":{"base":"trunk"},"version":%q}`, link, read.Version)
+	if rec := ask(api, "PUT", "/api/repos/settings", body); rec.Code != http.StatusConflict {
+		t.Fatalf("a draft for another checkout was kept: %d %s", rec.Code, rec.Body)
+	}
+	if got := store.Get("local", other).Base; got != "main" {
+		t.Fatalf("the other checkout's settings changed: %q", got)
+	}
+}
+
+// TestSettingsForACheckoutNotThereYetAreSaved: the folder a repository will be cloned into is read as an empty draft,
+// and that draft saves — a creation, not a replacement.
+func TestSettingsForACheckoutNotThereYetAreSaved(t *testing.T) {
+	dir := t.TempDir()
+	s := &Server{Machines: herdrfake.Manager(dir), Repos: repos.Open(dir)}
+	api := http.NewServeMux()
+	s.repoRoutes(api)
+	root := filepath.Join(t.TempDir(), "not-cloned-yet")
+	rec := ask(api, "GET", "/api/repos/settings?machine=local&root="+root+"&quick=1", "")
+	var read struct {
+		Version string `json:"version"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &read); err != nil {
+		t.Fatal(err)
+	}
+	if read.Version != "" {
+		t.Fatalf("a folder the machine cannot name carries a version: %q", read.Version)
+	}
+	body := fmt.Sprintf(`{"machine":"local","root":%q,"settings":{"base":"main"},"version":""}`, root)
+	if rec := ask(api, "PUT", "/api/repos/settings", body); rec.Code != 200 {
+		t.Fatalf("a checkout not cloned yet cannot be set up: %d %s", rec.Code, rec.Body)
 	}
 }

@@ -177,6 +177,9 @@ func (s *Server) handleTeleport(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 404, err)
 		return
 	}
+	if named, ok := target.Canonical(req.Folder); ok {
+		req.Folder = named
+	} // one spelling: the folder as the target machine names it
 	if s.heldByHerdr(w, target.ID()) { // the move writes a checkout there
 		return
 	}

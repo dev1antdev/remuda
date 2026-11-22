@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/dev1antdev/remuda/internal/events"
@@ -23,6 +24,38 @@ func (s *Server) repoRoutes(api *http.ServeMux) {
 	api.HandleFunc("POST /api/run", s.handleRunAction)
 }
 
+// olderSpelling is the folder as a request named it, when that spelling is a second key of the same folder and a
+// clear must stand under it too: never one with a .. in it, which may name another folder once cleaned.
+func olderSpelling(mc *machines.Machine, given, root string) string {
+	if given == root || hasUp(mc, given) {
+		return ""
+	}
+	return given
+}
+
+// hasUp says the path holds a .. — which, cleaned, may name another folder than the one the machine resolved.
+func hasUp(mc *machines.Machine, dir string) bool {
+	return slices.Contains(strings.Split(mc.Paths().Slash(dir), "/"), "..")
+}
+
+// repoRoot is the folder a repository's settings are read under: the machine's spelling of it, or the caller's own
+// when only that spelling has settings — a folder saved before remuda named folders the machine's way keeps what it
+// has until it is saved again. False when the machine cannot name the folder at all: its settings are then not read,
+// so a record kept under an old spelling never answers for a clear made through another.
+func (s *Server) repoRoot(mc *machines.Machine, root string) (record, named string, ok bool) {
+	named, ok = mc.Canonical(root)
+	if !ok {
+		return root, "", false
+	}
+	if named == root || s.Repos == nil || hasUp(mc, root) { // a .. that cleans elsewhere names no folder of its own
+		return named, named, true
+	}
+	if !s.Repos.Has(mc.ID(), named) && s.Repos.Has(mc.ID(), root) {
+		return root, named, true // a record saved before remuda named folders the machine's way
+	}
+	return named, named, true
+}
+
 // handleRepoSettings is GET /api/repos/settings?machine&root: the settings, and what the repository says itself — its
 // name, its default base, its team's setup script — read on the machine when it is connected.
 func (s *Server) handleRepoSettings(w http.ResponseWriter, r *http.Request) {
@@ -31,9 +64,14 @@ func (s *Server) handleRepoSettings(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 404, err)
 		return
 	}
-	root := r.URL.Query().Get("root")
+	root, named, nameable := s.repoRoot(mc, r.URL.Query().Get("root"))
+	settings, version := repos.Settings{}, ""
+	if nameable {
+		settings, version = s.Repos.GetVersion(mc.ID(), root)
+		version += "|" + named // the folder the draft is for too: a link pointed elsewhere is a stale draft
+	}
 	answer := map[string]any{
-		"root": root, "name": rpath.For(root).Base(root), "settings": s.repoSettings(mc.ID(), root),
+		"root": root, "name": rpath.For(root).Base(root), "settings": settings, "version": version,
 		"defaults": map[string]string{"issue_branch": repos.DefaultIssueBranch, "issue_prompt": repos.DefaultIssuePrompt, "pr_prompt": repos.DefaultPRPrompt},
 		"icons":    repos.Icons, "setup": !mc.Windows(),
 	}
@@ -41,7 +79,9 @@ func (s *Server) handleRepoSettings(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, answer) // the run button's read: the settings alone, nothing run on the machine
 		return
 	}
-	if _, _, err := mc.Ready(); err != nil {
+	if !nameable {
+		answer["trouble"] = mc.Label() + " cannot name that folder just now: its settings are not read"
+	} else if _, _, err := mc.Ready(); err != nil {
 		answer["trouble"] = err.Error()
 	} else if src, err := repos.Read(mc, root); err != nil {
 		answer["trouble"] = err.Error()
@@ -57,6 +97,7 @@ func (s *Server) handleRepoSettingsPut(w http.ResponseWriter, r *http.Request) {
 		Machine  string         `json:"machine"`
 		Root     string         `json:"root"`
 		Settings repos.Settings `json:"settings"`
+		Version  *string        `json:"version"` // what the draft was read from; absent for a request that carries none
 	}
 	if !decode(w, r, &req) {
 		return
@@ -70,7 +111,40 @@ func (s *Server) handleRepoSettingsPut(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 400, errors.New("which repository: its main folder, as a whole path"))
 		return
 	}
-	saved, err := s.Repos.Put(mc.ID(), req.Root, req.Settings)
+	given := req.Root
+	if _, ok := mc.Canonical(given); !ok && unclear(mc, given) {
+		httpErr(w, 400, fmt.Errorf("the folder %s is not on %s, and its .. names another one", given, mc.Label()))
+		return
+	}
+	root, named, nameable := s.repoRoot(mc, given) // the very record the read named: one resolution for the request
+	if !nameable && s.Repos.Has(mc.ID(), root) {
+		// a record is there and the machine cannot name its folder: the dialog's draft was read without it, so saving
+		// the whole of it would erase what it could not show (a folder that is not there, a machine that is away)
+		httpErr(w, http.StatusBadGateway, fmt.Errorf("%s cannot name %s just now, so its settings are not replaced", mc.Label(), root))
+		return
+	}
+	write := root // the machine's spelling when it can name the folder, the record the read used otherwise
+	if nameable {
+		write = named
+	}
+	var version *string
+	if req.Version != nil {
+		want := "" // a folder the machine cannot name — a checkout not cloned yet — has no record to have read
+		if nameable {
+			want = s.Repos.VersionAt(mc.ID(), root) + "|" + named
+		}
+		if *req.Version != want {
+			httpErr(w, http.StatusConflict, repos.ErrStale)
+			return
+		}
+		kept := strings.SplitN(*req.Version, "|", 2)[0]
+		version = &kept
+	}
+	saved, err := s.Repos.Commit(mc.ID(), root, write, req.Settings, version, olderSpelling(mc, given, write))
+	if errors.Is(err, repos.ErrStale) {
+		httpErr(w, http.StatusConflict, err)
+		return
+	}
 	if err != nil {
 		httpErr(w, 400, err)
 		return
@@ -101,7 +175,12 @@ func (s *Server) handleRunAction(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 404, errors.New("no run actions here"))
 		return
 	}
-	action, found := s.Repos.Action(mc.ID(), req.Root, req.Action)
+	root, _, nameable := s.repoRoot(mc, req.Root)
+	if !nameable {
+		httpErr(w, http.StatusBadGateway, fmt.Errorf("%s cannot name that folder just now: its run actions are not read", mc.Label()))
+		return
+	}
+	action, found := s.Repos.Action(mc.ID(), root, req.Action)
 	if !found {
 		httpErr(w, 404, errors.New("that run action is not saved for the repository any more"))
 		return

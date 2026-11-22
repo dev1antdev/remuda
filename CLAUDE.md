@@ -406,7 +406,11 @@ components and icons as rules for whoever changes it: @docs/design.md
   **The actions** (Core 15, tested on coretest with a stand-in `claude`
   that reports through OSC 7501, `actions_test.go`, `input_test.go`):
   `places.go` — `WorkspaceCreate`, `TabCreate` / `TabCreateIn`, the
-  renames, `WorkspaceClose`, `TabClose` — and `panes.go` — `PaneSplit`
+  renames, `WorkspaceClose`, `TabClose` — a workspace is made on the folder
+  as the machine names it (`AdapterHooks.Canonical`, the machine's
+  `pwd -P`, so a folder opened through a symlink is the same folder as its
+  checkout and panes and the roster's `dir` and `folder` meet) — and
+  `panes.go` — `PaneSplit`
   (`splitBeside`, half the room) and `PaneClose` (`withoutPane`; a tab goes
   with its last pane and a workspace with its last tab, as the core's) — run
   the machine's shell in a new terminal with the place's labels,
@@ -710,7 +714,11 @@ components and icons as rules for whoever changes it: @docs/design.md
   came from, for the stop at the person's press), `files.go` (the file
   viewer's reads and the one write), `shell.go` (a `Machine` is a
   `shell.Host`: `Run` / `Stream` here through `sh -c` or over the master,
-  and `PutFile` writes a file whole there, the way a teleport's archive arrives);
+  `PutFile` writes a file whole there, the way a teleport's archive
+  arrives, and `Canonical` names a folder the way that machine does —
+  `cd -P … && pwd -P`, `cygpath -w` on a Windows PC, the folder as given
+  when it cannot be reached — which the documents on its core, the
+  triggers, the repository settings and a schedule's folder are keyed by);
   `Machine.Transcripts` is a `transcript.Reader`. `local` is always present,
   named "This Mac · <host>" on a Mac and "This machine · <host>" on
   anything else (`localLabel`, tested) until the person renames it.
@@ -4034,7 +4042,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   `MaxRules` 50): `Rule{name, machine, dir, match substring|regex,
   pattern, action push|feed|preview|task, column, enabled}` — everywhere,
   every folder of a machine, or a folder and what is under it (`Covers`:
-  the pane's workspace folder or its shell's); `Check` refuses a pattern
+  the pane's workspace folder or its shell's). A rule's folder is named the
+  way its machine names it (`Machine.Canonical`: a symlink resolved, on the
+  machine, so it meets the sessions' own folders) when the list is saved.
+  `Check` refuses a pattern
   with a line break, a regex Go cannot read or the core's Rust one would not
   or reads otherwise (`herdr.CompileRegex`: octal escapes, `\Q…\E`, `\<`,
   nested classes and the rest), one every line matches, a task action
@@ -5278,8 +5289,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   issue_branch, agent, issue_prompt, pr_prompt, setup, setup_when ask | run
   | skip, setup_wait, actions}` in `repos.json` on the cockpit by machine
   and the repository's main folder as the sidebar names it
-  (`session.folder`), `Check` refusing what a worktree or a run could not
-  take; `GET /api/repos/settings?machine&root[&quick=1]` (with the
+  (`session.folder`, spelled as the machine does: `Machine.Canonical` when
+  the settings are saved), `Check` refusing what a worktree or a run could
+  not take; `GET /api/repos/settings?machine&root[&quick=1]` (with the
   repository's own name, base and team script unless quick), `PUT` whole;
   `Forget` on `events.MachineRemoved`. **Run actions** (after T3 Code's
   run button): `Action{id, name, command, folder, icon, place tab |
@@ -7316,8 +7328,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   folder) — and answers a `Place` (pane, tab,
   workspace, whether the workspace was made), and `Launcher` (`Machines`,
   `Watch`, `Input`, `Notify`) does that on a machine (`StartInFolder`,
-  the first prompt handed over in the background, a push when it was
-  not delivered) and takes the place down again (`Close`: the workspace
+  the folder first named as the machine names it — `Machine.Canonical`, so a
+  workspace already open on it under a symlink is found — the first prompt
+  handed over in the background, a push when it was not delivered) and takes the place down again (`Close`: the workspace
   it made, else the tab, by the last snapshot — `closePlace`, tested: the
   tab alone once the person added another to the workspace, nothing for a
   pane gone, a refusal when the tab no longer holds the pane) — the agent schedules' door; and `FirstPrompt` (the text a

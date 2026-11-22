@@ -5,6 +5,9 @@
 package repos
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -95,6 +98,56 @@ func (st *Store) Get(machine, root string) Settings {
 	return clone(st.all[key(machine, root)])
 }
 
+// ErrStale is a save of settings that another save replaced since the draft was read: the draft is not the record any
+// more, so it may not be kept.
+var ErrStale = errors.New("the settings changed since they were read: open them again")
+
+// GetVersion is the settings kept for the repository and the version a draft read from them carries, read together: a
+// version read apart could belong to another record than the settings beside it.
+func (st *Store) GetVersion(machine, root string) (Settings, string) {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	s, ok := st.all[key(machine, root)]
+	if !ok {
+		return Settings{}, ""
+	}
+	return clone(s), versionOf(s)
+}
+
+// VersionAt is what is kept under one key, as one short string, "" for nothing: the record a draft's version names.
+func (st *Store) VersionAt(machine, root string) string {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	if kept, ok := st.all[key(machine, root)]; ok {
+		return versionOf(kept)
+	}
+	return ""
+}
+
+// versionOf is a record as one short string: a clear (an empty record) has one too, so only a repository never saved is
+// the empty version, and a draft read from a clear cannot be taken for one read from nothing.
+func versionOf(s Settings) string {
+	b, err := json.Marshal(s)
+	if err != nil {
+		return ""
+	}
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:8])
+}
+
+// Put keeps the settings without a check, for a caller that is the only writer.
+func (st *Store) Put(machine, root string, s Settings, older ...string) (Settings, error) {
+	return st.Commit(machine, root, root, s, nil, older...)
+}
+
+// Has says settings are kept for the repository, for a caller that looks one spelling up after another.
+func (st *Store) Has(machine, root string) bool {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	_, ok := st.all[key(machine, root)]
+	return ok
+}
+
 // Action is one of the repository's run actions by id.
 func (st *Store) Action(machine, root, id string) (Action, bool) {
 	for _, a := range st.Get(machine, root).Actions {
@@ -105,22 +158,47 @@ func (st *Store) Action(machine, root, id string) (Action, bool) {
 	return Action{}, false
 }
 
-// Put keeps the repository's settings whole, checked and trimmed; actions without an id get one.
-func (st *Store) Put(machine, root string, s Settings) (Settings, error) {
-	s, err := Check(root, s)
+// Commit keeps the repository's settings whole when the record they replace — the one kept under from — is still the
+// one the draft was read from (version nil asks for no check), and writes them under to, in the same lock; a from other
+// than to is a record read under an older spelling of the folder, written where the machine names it, and refused when
+// a record appeared under to since the read. It answers what is kept. An older spelling of
+// the same folder, when named, takes a clear too. A clear leaves an
+// empty record rather than nothing, under the machine's spelling and under the spelling the request used when that is
+// a second key of the same folder: a caller looking one spelling up after another stops at it, even when the machine
+// can no longer name the folder, and a record kept under an older spelling never comes back. Nothing is ever deleted
+// or moved: a record saved earlier under another spelling stays where it is.
+func (st *Store) Commit(machine, from, to string, s Settings, version *string, older ...string) (Settings, error) {
+	s, err := Check(to, s)
 	if err != nil {
 		return Settings{}, err
 	}
 	st.mu.Lock()
 	defer st.mu.Unlock()
+	if version != nil {
+		now := ""
+		if kept, ok := st.all[key(machine, from)]; ok {
+			now = versionOf(kept)
+		}
+		if *version != now {
+			return Settings{}, ErrStale
+		}
+	}
+	if from != to {
+		if _, ok := st.all[key(machine, to)]; ok {
+			return Settings{}, ErrStale // the record it would be written beside appeared since the draft was read
+		}
+	}
 	next := make(map[string]Settings, len(st.all)+1)
 	for k, v := range st.all {
 		next[k] = v
 	}
+	next[key(machine, to)] = s
 	if empty(s) {
-		delete(next, key(machine, root))
-	} else {
-		next[key(machine, root)] = s
+		for _, was := range older {
+			if was != "" && key(machine, was) != key(machine, to) {
+				next[key(machine, was)] = s
+			}
+		}
 	}
 	if err := state.SaveJSON(st.dir, file, next); err != nil {
 		return Settings{}, err

@@ -1,6 +1,7 @@
 package repos
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
@@ -92,5 +93,38 @@ func TestATemplateIsFilledIn(t *testing.T) {
 	}
 	if got := TitleSlug(strings.Repeat("word ", 20)); len(got) > 40 || strings.HasSuffix(got, "-") {
 		t.Errorf("a long title made %q", got)
+	}
+}
+
+// TestACommitKeepsOnlyTheRecordItsDraftWasReadFrom: two drafts read the same record, one is kept, and the other —
+// carrying the version it read — is refused, so the second cannot silently erase the first.
+func TestACommitKeepsOnlyTheRecordItsDraftWasReadFrom(t *testing.T) {
+	st := Open(t.TempDir())
+	if _, err := st.Put("local", "/repo/app", Settings{Base: "main"}); err != nil {
+		t.Fatal(err)
+	}
+	_, first := st.GetVersion("local", "/repo/app")
+	_, second := st.GetVersion("local", "/repo/app")
+	if first == "" || first != second {
+		t.Fatalf("two reads of one record gave %q and %q", first, second)
+	}
+	if _, err := st.Commit("local", "/repo/app", "/repo/app", Settings{Base: "trunk"}, &first); err != nil {
+		t.Fatalf("the first save was refused: %v", err)
+	}
+	if _, err := st.Commit("local", "/repo/app", "/repo/app", Settings{Base: "develop"}, &second); !errors.Is(err, ErrStale) {
+		t.Fatalf("the second draft of the same record was kept: %v", err)
+	}
+	if got := st.Get("local", "/repo/app").Base; got != "trunk" {
+		t.Fatalf("the kept record is %q", got)
+	}
+	// a clear is a record too: a draft read before it cannot be taken for one read from nothing
+	if _, err := st.Commit("local", "/repo/app", "/repo/app", Settings{}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, version := st.GetVersion("local", "/repo/app"); version == "" {
+		t.Fatal("a cleared record has no version, so it looks like one never saved")
+	}
+	if _, err := st.Commit("local", "/repo/app", "/repo/app", Settings{Base: "develop"}, &second); !errors.Is(err, ErrStale) {
+		t.Fatalf("a draft from before a clear was kept: %v", err)
 	}
 }

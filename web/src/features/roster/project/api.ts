@@ -14,8 +14,9 @@ export const saved = createStore({ n: 0 });
 export const fetchProject = (machine: string, root: string, quick = false): Promise<Project> =>
   getJSON(`/api/repos/settings?machine=${q(machine)}&root=${q(root)}${quick ? "&quick=1" : ""}`);
 
-export async function saveProject(machine: string, root: string, settings: Settings): Promise<Settings> {
-  const answer = await sendJSON<{ settings: Settings }>("PUT", "/api/repos/settings", { machine, root, settings });
+export async function saveProject(machine: string, root: string, settings: Settings, version?: string): Promise<Settings> {
+  // the version the draft was read from: the server refuses a whole record read without the one it would replace
+  const answer = await sendJSON<{ settings: Settings }>("PUT", "/api/repos/settings", { machine, root, settings, version });
   saved.set((s) => ({ n: s.n + 1 }));
   return answer.settings;
 }
