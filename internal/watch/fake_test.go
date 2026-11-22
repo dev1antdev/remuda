@@ -16,6 +16,7 @@ import (
 type fakeHerdr struct {
 	mu          sync.Mutex
 	snap        herdr.Snapshot
+	memory      bool // the snapshot is the fake's own, as remuda-core's mirror holds one
 	snapshots   []time.Time
 	streams     []*watchedStream // open streams
 	closes      int              // streams the watcher closed itself, not ones an error read ended
@@ -26,6 +27,7 @@ type fakeHerdr struct {
 	asked       chan []herdr.Subscription
 	refuse      func([]herdr.Subscription) string // a refusal's code for a subscription set, "" to take it
 	unreachable error                             // Subscribe answers this, as a core that cannot be reached
+	hold        func() error                      // a Subscribe waits for this before answering: a core slow to take a set
 }
 
 func newFakeHerdr(t *testing.T, panes ...string) *fakeHerdr {
@@ -37,7 +39,7 @@ func newFakeHerdr(t *testing.T, panes ...string) *fakeHerdr {
 
 // api is the herdr.API the watcher's machine speaks.
 func (f *fakeHerdr) api() herdr.API {
-	return &herdrfake.API{Snapshot: f.snapshot, SubscribeF: f.subscribe}
+	return &herdrfake.API{Memory: f.memory, Snapshot: f.snapshot, SubscribeF: f.subscribe}
 }
 
 func (f *fakeHerdr) setPanes(panes ...string) {
@@ -58,6 +60,14 @@ func (f *fakeHerdr) snapshot() (*herdr.Snapshot, error) {
 }
 
 func (f *fakeHerdr) subscribe(subs []herdr.Subscription) (herdr.EventStream, error) {
+	f.mu.Lock()
+	hold := f.hold
+	f.mu.Unlock()
+	if hold != nil {
+		if err := hold(); err != nil {
+			return nil, err
+		}
+	}
 	select {
 	case f.asked <- subs:
 	default: // a test that reads none of them
@@ -162,6 +172,19 @@ func (f *fakeHerdr) polls(from time.Time) int {
 		}
 	}
 	return n
+}
+
+// polledAt is when the first snapshot at or after from was asked for, so a test measures the watcher's timing rather
+// than how late its own goroutine was scheduled.
+func (f *fakeHerdr) polledAt(from time.Time) time.Time {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, at := range f.snapshots {
+		if !at.Before(from) {
+			return at
+		}
+	}
+	return time.Time{}
 }
 
 // subscribed waits for the next Subscribe.

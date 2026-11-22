@@ -46,7 +46,9 @@ func firesOnce(t *testing.T, fleet *machines.Manager) {
 			mu.Unlock()
 		}
 	}
-	watcher.Outputs = service.Watches
+	watcher.Outputs = func(machine string, snap *herdr.Snapshot, standing []watch.Output) []watch.Output {
+		return service.Watches(machine, snap, standing)
+	}
 	events.Subscribe(bus, service.Observe)
 	events.Subscribe(bus, service.OnMatch)
 	counts := func() (int, int) {

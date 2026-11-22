@@ -6,6 +6,7 @@ package watch
 import (
 	"encoding/json"
 	"sort"
+	"time"
 
 	"github.com/dev1antdev/remuda/internal/herdr"
 )
@@ -34,8 +35,11 @@ const lazyKind = "pane.updated"
 type streamSet struct {
 	subs    []herdr.Subscription
 	all     []Output            // the watches asked for, as asked
+	held    []Output            // the output watches this stream holds, in subscription order
 	outputs map[string][]Output // by pane, the ones held
 	key     string              // the whole set as one string, to tell a move
+	basis   string              // the standing watches it was admitted against: a set worked out before another one was taken is worked out again
+	snap    *herdr.Snapshot     // the topology it was worked out for: a recheck re-ranks this one, not a newer one still settling
 	person  string              // the person's own watches as one string, "" for none
 	holds   bool                // the person's watches are in it: herdr has not refused them as they stand
 }
@@ -43,7 +47,7 @@ type streamSet struct {
 // buildSet is the subscriptions for a snapshot: the global kinds, each pane's agent status, the output watches but
 // the person's when they are the ones herdr refused.
 func buildSet(snap *herdr.Snapshot, outputs []Output, refused string) *streamSet {
-	set := &streamSet{all: outputs, outputs: map[string][]Output{}}
+	set := &streamSet{all: outputs, outputs: map[string][]Output{}, snap: snap}
 	for _, kind := range urgentKinds {
 		set.subs = append(set.subs, herdr.Subscription{Type: kind})
 	}
@@ -73,6 +77,7 @@ func buildSet(snap *herdr.Snapshot, outputs []Output, refused string) *streamSet
 		match := o.Match
 		set.subs = append(set.subs, herdr.Subscription{Type: herdr.EventOutputMatched, PaneID: o.Pane, Source: "recent", Lines: o.Lines, Match: &match})
 		set.outputs[o.Pane] = append(set.outputs[o.Pane], o)
+		set.held = append(set.held, o)
 	}
 	set.key = fingerprint(set.subs)
 	return set
@@ -87,23 +92,100 @@ func fingerprint[T any](values []T) string {
 	return string(b)
 }
 
-// noteWanted works out the subscriptions for the snapshot just applied and tells the stream when they moved.
-func (w *Watcher) noteWanted(machineID string, snap *herdr.Snapshot) {
+// heldWatches is the output watches a set holds, nil for none: the ones a stream subscribing to it would carry.
+func (set *streamSet) heldWatches() []Output {
+	if set == nil {
+		return nil
+	}
+	return set.held
+}
+
+// noteWanted works out the subscriptions for the snapshot just applied and tells the stream when they moved. A move
+// the snapshot asked for — a pane that appeared or went, the watches that follow the panes — is kept pending for the
+// rest of its burst (`eventDebounce`), and only then becomes the set the stream subscribes to: a pane that appears and
+// goes within it swaps no stream at all, and a stream opening meanwhile holds the set that stands. A later snapshot
+// replaces the set still settling without moving that rest, so a status event cannot push a watch out. A move the
+// person asked for (`now`: a rule edited, a refusal taken again) is promoted and told at once, and so is the first
+// set.
+func (w *Watcher) noteWanted(machineID string, snap *herdr.Snapshot, now bool) {
+	w.mu.Lock()
+	standing := w.stateFor(machineID).accepted.heldWatches() // what the stream standing took: the rules keep those
+	w.mu.Unlock()
 	var outputs []Output
 	if w.Outputs != nil {
-		outputs = w.Outputs(machineID, snap)
+		outputs = w.Outputs(machineID, snap, standing)
 	}
 	w.mu.Lock()
 	st := w.stateFor(machineID)
 	set := buildSet(snap, outputs, st.refused)
-	moved := st.wanted == nil || st.wanted.key != set.key
-	if moved {
-		st.wanted = set
-	}
-	w.mu.Unlock()
-	if moved {
+	set.basis = fingerprint(standing)
+	switch {
+	case st.wanted == nil || now:
+		if st.wanted != nil && st.wanted.key == set.key && st.pending == nil {
+			w.mu.Unlock()
+			return
+		}
+		st.promote(set)
+		w.mu.Unlock()
 		signal(st.changed)
+	case st.wanted.key == set.key:
+		if st.pending != nil { // back where the stream stands: the settling move is dropped
+			st.dropSettling()
+		}
+		w.mu.Unlock()
+	default:
+		st.pending = set
+		if st.settling != nil {
+			w.mu.Unlock() // a set is already settling: this one takes its place, the rest it was booked for stands
+			return
+		}
+		st.gen++
+		gen := st.gen
+		st.settling = time.AfterFunc(eventDebounce, func() { w.settle(st, gen) })
+		w.mu.Unlock()
 	}
+}
+
+// settle promotes the set the churn's rest left, so the stream swaps to it — once: a move booked a later rest is not
+// the one that fired.
+func (w *Watcher) settle(st *machineState, gen uint64) {
+	w.mu.Lock()
+	if st.gen != gen || st.pending == nil {
+		w.mu.Unlock()
+		return
+	}
+	st.promote(st.pending)
+	w.mu.Unlock()
+	signal(st.changed)
+}
+
+// promote makes set the one the stream subscribes to, drops any move still settling, and answers whether it is news.
+// The caller holds the lock.
+func (st *machineState) promote(set *streamSet) {
+	st.wanted, st.pending = set, nil
+	st.gen++
+	if st.settling != nil {
+		st.settling.Stop()
+		st.settling = nil
+	}
+}
+
+// dropSettling drops the move still settling, leaving the set the stream subscribes to as it is. The caller holds
+// the lock.
+func (st *machineState) dropSettling() {
+	st.pending = nil
+	st.gen++
+	if st.settling != nil {
+		st.settling.Stop()
+		st.settling = nil
+	}
+}
+
+// accept is the set the stream that stood took: the watches it holds are the ones a pane that appears may not take.
+func (w *Watcher) accept(st *machineState, set *streamSet) {
+	w.mu.Lock()
+	st.accepted = set
+	w.mu.Unlock()
 }
 
 // Resubscribe works the subscriptions out again on every machine: the watches asked for moved.
@@ -117,6 +199,6 @@ func (w *Watcher) Resubscribe() {
 	}
 	w.mu.Unlock()
 	for id, snap := range snaps {
-		w.noteWanted(id, snap)
+		w.noteWanted(id, snap, true)
 	}
 }

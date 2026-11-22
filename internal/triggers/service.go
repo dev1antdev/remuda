@@ -39,6 +39,7 @@ type Service struct {
 	acted    map[string]time.Time            // "machine|pane|watch" → the last action, for the quiet spells
 	offers   map[string]Offer                // "machine|pane"
 	refused  map[string]string               // machine → why herdr refused the person's watches
+	watched  map[string]map[string]bool      // machine → the watches the last set kept, by pane and key
 }
 
 type paneView struct {

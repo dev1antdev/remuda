@@ -44,9 +44,15 @@ type machineState struct {
 	nudge     chan struct{} // an event that may wait a few seconds (a pane's title moved)
 	changed   chan struct{} // the subscriptions the stream should hold moved
 	streaming atomic.Bool   // herdr's event stream stands for the machine
+	memory    atomic.Bool   // the client answers the snapshot from memory: an event waits for no gap
 	polled    time.Time     // when the last poll of the loop began
-	wanted    *streamSet    // the subscriptions for the latest snapshot
-	refused   string        // the person's watches herdr refused, by their fingerprint: left out until they change
+	wanted    *streamSet    // the subscriptions the stream should hold for the latest snapshot
+	accepted  *streamSet    // the subscriptions the last stream that stood took: what a standing watch is
+
+	pending  *streamSet  // the set the churn's rest has not promoted yet: a pane that comes and goes is no swap
+	gen      uint64      // which rest is the one that fired
+	settling *time.Timer // the burst's rest booked for the pending set
+	refused  string      // the person's watches herdr refused, by their fingerprint: left out until they change
 
 	noStreamUntil time.Time // herdr refused the stream itself (one too old for it): the next try waits till then
 	said          string    // the refusal the log told last, so a herdr refusing every few minutes is told once
@@ -56,8 +62,9 @@ type Watcher struct {
 	machines *machines.Manager
 	bus      *events.Bus
 
-	// Outputs names the watches herdr keeps on a machine's panes' output, for its latest snapshot; nil for none.
-	Outputs func(machine string, snap *herdr.Snapshot) []Output
+	// Outputs names the watches the core keeps on a machine's panes' output, for its latest snapshot, told the watches
+	// the stream subscribes to now so a standing watch is never taken for a pane that just appeared; nil for none.
+	Outputs func(machine string, snap *herdr.Snapshot, standing []Output) []Output
 	// Refused hears herdr refusing the person's own watches on a machine (nil once it takes them again).
 	Refused func(machine string, err error)
 
@@ -145,6 +152,7 @@ func (w *Watcher) poll(mc *machines.Machine) (*herdr.Snapshot, error) {
 	st.pollMu.Lock() // the loop and Refresh may overlap; the RPC and its apply stay in order
 	defer st.pollMu.Unlock()
 	client, _, err := mc.Ready()
+	st.memory.Store(err == nil && client != nil && client.SnapshotFromMemory())
 	if err == nil {
 		var snap *herdr.Snapshot
 		if snap, err = client.SessionSnapshot(); err == nil {
@@ -219,7 +227,7 @@ func (w *Watcher) apply(machineID string, snap *herdr.Snapshot) {
 		}
 		events.Publish(w.bus, change)
 	}
-	w.noteWanted(machineID, snap)
+	w.noteWanted(machineID, snap, false)
 }
 
 // Snapshot returns the machine's latest snapshot, or the error its last poll hit.

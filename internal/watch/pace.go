@@ -3,12 +3,14 @@ package watch
 import "time"
 
 // The stream's say over the poll: an event asks for a snapshot after a moment for the rest of its burst, never closer
-// to the last one than the gap; a title moving asks for one within the lazy gap. Vars so tests can shrink them.
+// to the last one than the gap; a title moving asks for one within the lazy gap. A client that answers the snapshot
+// from memory costs no request, so its events wait only for the burst's rest. Vars so tests can shrink them.
 var (
-	eventDebounce = 150 * time.Millisecond
-	localGap      = 500 * time.Millisecond
-	remoteGap     = time.Second
-	lazyGap       = 5 * time.Second
+	eventDebounce  = 150 * time.Millisecond
+	memoryDebounce = 10 * time.Millisecond
+	localGap       = 500 * time.Millisecond
+	remoteGap      = time.Second
+	lazyGap        = 5 * time.Second
 )
 
 // every is the poll's pace: today's without herdr's event stream, the safety net's behind it.
@@ -36,11 +38,14 @@ func (w *Watcher) wait(st *machineState, local bool, done <-chan struct{}) {
 		case <-timer.C:
 			return
 		case <-st.kick:
-			gap := remoteGap
+			debounce, gap := eventDebounce, remoteGap
 			if local {
 				gap = localGap
 			}
-			time.Sleep(max(eventDebounce, gap-time.Since(st.polled)))
+			if st.memory.Load() {
+				debounce, gap = memoryDebounce, 0 // the snapshot is the mirror's: nothing to spare the core
+			}
+			time.Sleep(max(debounce, gap-time.Since(st.polled)))
 			drain(st.kick)
 			drain(st.nudge)
 			return

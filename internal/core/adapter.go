@@ -133,6 +133,10 @@ func (a *Adapter) SessionSnapshot() (*herdr.Snapshot, error) {
 	return a.state.snapshot(a.hooks.SessionOf), nil
 }
 
+// SnapshotFromMemory says the mirror holds the machine already, so a snapshot asked for is built, never asked of the
+// core.
+func (a *Adapter) SnapshotFromMemory() bool { return true }
+
 func (a *Adapter) whyNotHeld() error {
 	if a.lost != nil {
 		return a.lost

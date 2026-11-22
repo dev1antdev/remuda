@@ -606,9 +606,13 @@ components and icons as rules for whoever changes it: @docs/design.md
   a tab made meanwhile goes with it. The document keeps no pane's
   environment; the tree is taken as scenes' `checkLayout` passed it, only one
   with no pane refused (`invalid_request`).
-  watcher still paces the snapshots an event asks for (`internal/watch`,
-  150 ms debounce, 500 ms / 1 s apart): the mirror makes each one free, not
-  sooner.
+  The watcher paces the snapshot an event asks for (`internal/watch`):
+  `eventDebounce` 150 ms for the rest of its burst, never closer than
+  `localGap` 500 ms / `remoteGap` 1 s to the last — the pace a client that
+  must ask for one needs. A client whose snapshot is its own
+  (`SnapshotFromMemory`, which the adapter answers) waits only
+  `memoryDebounce` 10 ms and no gap: the snapshot is a build of the mirror,
+  not a request.
   **The live terminals** (`viewers.go`, tested on a throwaway core:
   `viewers_test.go`): `core.NewTerminals(client)` is a core machine's
   `herdr.Terminals`; `Open` attaches one viewer of its own (`AttachParams`:
@@ -3904,9 +3908,23 @@ components and icons as rules for whoever changes it: @docs/design.md
   focused, an agent detected, a pane exited, a layout updated
   (`urgentKinds`) — every pane's `pane.agent_status_changed` (the core binds
   that one to a pane, so the set follows the panes) and the output watches
-  `Watcher.Outputs` names (`internal/triggers`); a stream's subscriptions
+  `Watcher.Outputs` names (`internal/triggers`), which is told the watches the stream subscribes to now, so at the cap
+  a standing watch is never taken for a pane that just appeared; a stream's subscriptions
   are fixed, so a pane made or gone, or a rule changed (`Resubscribe`), is
-  a new stream — opened before the old one closes — never more than two;
+  a new stream — opened before the old one closes — never more than two.
+  A move the snapshot asked for is kept pending for the rest of its burst
+  (`eventDebounce`), so the watches asked of a machine move no faster than
+  they did, at most one set per burst; a pane
+  that appears and goes within that rest swaps no stream at all, and a
+  stream that opens meanwhile subscribes to the set that stands
+  (`TestAPaneThatComesAndGoesSwapsNoStream`,
+  `TestAStreamOpeningWhileASetSettlesHoldsTheOneThatStands`); a later
+  snapshot replaces the set still settling without moving its rest, so the
+  one stream that opens holds the latest topology and a status event cannot
+  push a watch out (`TestASettlingSetTakesTheLatestTopology`,
+  `TestASettlingSetIsNotPushedOutByTheSameSetAgain`); a rule changed, or a
+  refusal taken again, is promoted at once
+  (`TestARuleEditPromotesASettlingSetAtOnce`);
   every stream
   that opens is followed by a snapshot, so what moved before it stood —
   a new pane's agent already at work, anything in the gap — is
@@ -3915,8 +3933,13 @@ components and icons as rules for whoever changes it: @docs/design.md
   the panes move once more. Any event asks
   the loop for a snapshot (`pace.go`): `eventDebounce` 150 ms for the rest
   of its burst, never closer than `localGap` 500 ms / `remoteGap` 1 s to
-  the last; `pane.updated`, which an agent's spinner fires several times a
-  second through its title, only within `lazyGap` 5 s of the last. While
+  the last, the pace a client that must ask for a snapshot needs; a client
+  whose snapshot is its own (`herdr.API.SnapshotFromMemory`, which
+  remuda-core's adapter answers) waits only `memoryDebounce` 10 ms and
+  never a gap, so an agent's status reaches the roster as the core says it
+  (`pace_test.go` measures both at the paces that ship). `pane.updated`,
+  which an agent's spinner fires several times a second through its title,
+  only within `lazyGap` 5 s of the last. While
   the stream stands the poll is the safety net, every
   `localStreamingEvery` 15 s / `remoteStreamingEvery` 20 s; without it,
   today's 2 s local and 4 s remote, the moment it ends. A stream that
@@ -3980,7 +4003,13 @@ components and icons as rules for whoever changes it: @docs/design.md
   matched before is taken for it, the text being all core tells (a row
   number that survives a resubscription is task #332); `Service.Watches` is the set for a machine's snapshot — the
   person's rules where they look, then two built-in ones on every pane, at
-  most `MaxWatches` 200 a machine (the rest left out, logged once an
+  most `MaxWatches` 200 a machine — past it the person's rules come before
+  the built-ins and, within either class, the watches the stream holds now
+  before the ones it does not (`Installed`, told by the watcher when a
+  stream stands), so a pane that just appeared takes no watch of a pane
+  that stands and a rule just saved still takes its place from a built-in
+  (`TestANewPaneTakesNoWatchFromAPaneThatStands`,
+  `TestAtTheCapAPersonRuleKeepsItsPlace`; the rest left out, logged once an
   hour). **Built in**: `ServePattern`, a dev server announcing its address
   (Vite, Next.js, CRA, Astro, webpack-dev-server, http.server, uvicorn,
   Flask, Django, Rails, Hugo, Jekyll, php -S, "listening on :3000"),

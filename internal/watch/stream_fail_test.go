@@ -44,7 +44,7 @@ func TestAHerdrWithoutStreamsCostsNothingWhileItWaits(t *testing.T) {
 	var mu sync.Mutex
 	var refusals []error
 	watching(t, f, func(w *Watcher) {
-		w.Outputs = func(string, *herdr.Snapshot) []Output {
+		w.Outputs = func(string, *herdr.Snapshot, []Output) []Output {
 			return []Output{{Key: "rule:1", Pane: "w1:p1", Match: herdr.OutputMatch{Type: "substring", Value: "DEPLOYED"}, Lines: 40, Person: true}}
 		}
 		w.Refused = func(machine string, err error) {
@@ -128,7 +128,7 @@ func TestAnEditedWatchIsNotCarried(t *testing.T) {
 	var mu sync.Mutex
 	var heard []events.OutputMatched
 	watcher, _, bus := watching(t, f, func(w *Watcher) {
-		w.Outputs = func(string, *herdr.Snapshot) []Output {
+		w.Outputs = func(string, *herdr.Snapshot, []Output) []Output {
 			return []Output{{Key: "rule:1", Pane: "w1:p1", Match: herdr.OutputMatch{Type: "substring", Value: pattern.Load().(string)}, Lines: 40, Person: true}}
 		}
 	})

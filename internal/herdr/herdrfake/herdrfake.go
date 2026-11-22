@@ -15,6 +15,7 @@ import (
 
 // API is a herdr.API whose calls are the functions given; a call with none answers nothing and no error.
 type API struct {
+	Memory     bool // the snapshot is held here, not asked of a core
 	Snapshot   func() (*herdr.Snapshot, error)
 	SubscribeF func(subs []herdr.Subscription) (herdr.EventStream, error)
 
@@ -54,6 +55,8 @@ func (a *API) SessionSnapshot() (*herdr.Snapshot, error) {
 	}
 	return a.Snapshot()
 }
+
+func (a *API) SnapshotFromMemory() bool { return a.Memory }
 
 func (a *API) Subscribe(subs []herdr.Subscription) (herdr.EventStream, error) {
 	if a.SubscribeF == nil {
