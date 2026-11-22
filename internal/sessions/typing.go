@@ -71,14 +71,3 @@ func (in *Input) SendKeys(client Prompter, ref events.PaneRef, keys []string) er
 	}
 	return nil
 }
-
-// MaxTypedText bounds one request's text: a paste of a page or two.
-const MaxTypedText = 64 << 10
-
-// Typed is one request of the screen terminal: text, then keys. A paste's text reaches the pane as a paste (herdr
-// brackets it while the app asked for bracketed paste); typed text goes as the keystrokes it was.
-type Typed struct {
-	Text  string
-	Paste bool
-	Keys  []string
-}

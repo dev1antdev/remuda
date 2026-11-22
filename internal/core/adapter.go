@@ -547,11 +547,6 @@ func followShell(t *Terminal) {
 	}
 }
 
-// notOnCore is herdr's refusal of a request remuda-core does not answer yet.
-func notOnCore(method string) error {
-	return &herdr.Error{Code: "invalid_request", Message: fmt.Sprintf("%s is not on remuda-core yet", method)}
-}
-
 // refusal is the core's refusal in herdr's words, so the callers' herdr.IsCode checks hold (notFound names what was
 // missing); a failure to reach the core is told to the machine and passed on.
 func (a *Adapter) refusal(err error, notFound string) error {

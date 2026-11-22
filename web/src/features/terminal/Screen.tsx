@@ -31,7 +31,7 @@ export const widthOf = (cols: number, lines: Line[]) => Math.max(cols, 1, ...lin
 export type FitRule = (avail: number, cols: number, cellWidth: number, baseSize: number) => number;
 
 // useFitFont is the font size at which cols columns fill the box's width, measured in the box's own document and
-// followed as the box resizes; the screen terminal fits by a rule of its own
+// followed as the box resizes
 export function useFitFont(box: RefObject<HTMLDivElement | null>, cols: number, fit: FitRule = thumbFont): number {
   const [avail, setAvail] = useState(0);
   const [cell, setCell] = useState(0);

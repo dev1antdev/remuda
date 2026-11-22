@@ -1,18 +1,13 @@
-// The find over the scrollback as the screen shows it: xterm's own search addon marks every match on the visible
-// rows in the page's amber and selects the current one. On herdr the rows are herdr's — the attach stream repaints
-// the screen, so xterm never holds a scrollback — and useTerminalFind reads them through the server and scrolls the
-// pane; what arrives here is which row of the screen to mark once the repaint has landed. On remuda-core xterm holds
-// the terminal's own rows (the attach paints the history first, the output after it is the program's), so find lets
-// the addon look through xterm's buffer itself, count, step and scroll xterm, never the pane.
+// The find over the terminal's scrollback: xterm's own search addon marks every match in the page's amber and selects
+// the current one. xterm holds the terminal's own rows — the attach paints the history first, the output after it is
+// the program's — so the find looks through xterm's buffer, counts, steps and scrolls xterm, never the pane; when the
+// buffer holds no match, useTerminalFind reads the older rows through /api/scrollback.
 
 import { SearchAddon, type ISearchDecorationOptions, type ISearchOptions } from "@xterm/addon-search";
-import type { IBufferLine, IBufferRange, Terminal as XTerm } from "@xterm/xterm";
-import { findRanges } from "@/features/chat/find";
+import type { IBufferRange, Terminal as XTerm } from "@xterm/xterm";
 import { swatches, type Flavor, type Swatches } from "@/lib/theme";
-import { nearest } from "../scrollback";
 import type { FoundCount, SearchApi } from "./types";
 
-// SETTLE_MS is how long the screen gets to repaint after a scroll before the match is looked for, a few frames at a time.
 // RECOUNT_MS is how long output rests before the core find counts its query again.
 const RECOUNT_MS = 100;
 
@@ -39,11 +34,6 @@ export function searchDecorations(c: Swatches): ISearchDecorationOptions {
   };
 }
 
-// occurrences lists where the query sits on the screen's rows, case-folded, each match's start and length in UTF-16 units
-
-
-// cellSpan is a run of a row's text as cells — from and length in UTF-16 units of the row's text, as translateToString
-
 // installSearch loads the addon into the terminal; refresh paints the current find again (a flavour change). A match
 // is selected the way the addon does it, and forgetSelection tells the engine's own selection tracker that this one
 // is not the person's — else it would carry the mark to wherever that text seems to have moved after a repaint;
@@ -61,19 +51,15 @@ export function installSearch(term: XTerm, flavor: () => Flavor, forgetSelection
     addon.onDidChangeResults((r) => heard?.({ total: Math.max(0, r.resultCount), at: Math.max(0, r.resultIndex) }));
   };
   load();
-  // fresh replaces the addon before a find: its cache of the rows cannot know that a row was rewritten in place (herdr's
-  // repaint, or a program on remuda-core redrawing a line and putting the cursor back: xterm reports no move), and a
-  // stale cache finds the screen as it was
+  // fresh replaces the addon before a find: its cache of the rows cannot know that a program rewrote a line in place
+  // and put the cursor back (xterm reports no move), and a stale cache finds the screen as it was
   const fresh = () => {
     addon.dispose();
     addon = new SearchAddon();
     load();
   };
   let query = "";
-  let pending: ReturnType<typeof setTimeout> | null = null;
   const options = (): ISearchOptions => ({ incremental: true, decorations: searchDecorations(swatches(flavor())) });
-  // mark selects the occurrence at a row of the buffer and lets a fresh addon decorate every match, the selected one
-  // current: with no term cached, the find starts at the selection's start rather than after it
   // seek selects the next match, or the previous, and tells the engine the selection is not the person's
   const seek = (back = false): boolean => {
     const hit = back ? addon.findPrevious(query, options()) : addon.findNext(query, options());
@@ -120,9 +106,8 @@ export function installSearch(term: XTerm, flavor: () => Flavor, forgetSelection
   };
   const resized = term.onResize(soon);
   const stop = () => {
-    if (pending) clearTimeout(pending);
     if (recount) clearTimeout(recount);
-    pending = recount = null;
+    recount = null;
   };
   const clear = () => {
     stop();

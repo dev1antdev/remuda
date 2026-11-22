@@ -72,9 +72,8 @@ export function TerminalTools() {
   );
 }
 
-// useTerminalViewItems is the terminal's part of the View menu: the size mode, the minimum width, selection, text size, the key bar;
-// the screen terminal keeps the text size and the key bar alone, since it never sizes the pane and its text selects as it is
-export function useTerminalViewItems(pane: Pane, screen = false): MenuItem[] {
+// useTerminalViewItems is the terminal's part of the View menu: the size mode, the minimum width, selection, text size, the key bar
+export function useTerminalViewItems(pane: Pane): MenuItem[] {
   const [keybar, setKeybar] = usePref("keybar", isTouch);
   const [sizeMode, setSizeMode] = usePref<SizeMode>("sizeMode", isTouch ? "keep" : "fit");
   const [fontSize, setFontSize] = usePref("termFont", isTouch ? 12 : 13);
@@ -85,7 +84,6 @@ export function useTerminalViewItems(pane: Pane, screen = false): MenuItem[] {
     { label: t("Larger text"), icon: "text-larger", hint: t("{n} px", { n: fontSize }), keepOpen: true, disabled: fontSize >= 20, onSelect: () => setFontSize(Math.min(20, fontSize + 1)) },
   ];
   const keys: MenuItem = { label: t("Key bar"), icon: "keyboard", hint: t("Esc, Tab, Ctrl, the arrows and more"), checked: keybar, onSelect: () => setKeybar(!keybar) };
-  if (screen) return [...textSize, { sep: true }, keys];
   return [
     { heading: t("Size") },
     { label: t("Resize the pane to this screen"), hint: t("the pane takes the size of the viewer that last acted"), checked: sizeMode === "fit", onSelect: () => setSizeMode("fit") },

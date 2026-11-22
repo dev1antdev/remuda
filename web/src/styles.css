@@ -15235,21 +15235,6 @@ button.pr-line:hover {
   text-align: center;
 }
 
-.screen-lens {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  overflow: auto;
-}
-
-.screen-lens .screen {
-  flex: 1;
-  cursor: default;
-}
-
-/* the screen terminal: a pane with no attach (a Windows PC's), its screen read again and again and typed into through a
-   field nobody sees; the rows from the top as a terminal draws them, scrolling either way when the grid is larger */
-
 .viewer-link-row {
   display: flex;
   flex-direction: column;

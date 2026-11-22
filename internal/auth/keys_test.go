@@ -104,7 +104,7 @@ func TestKeyAllowsTasksAndReadsOnly(t *testing.T) {
 			t.Errorf("a write to %s allowed", path)
 		}
 	}
-	for _, path := range []string{"/api/roster/", "/api/tasks2", "/api/keys", "/api/submit", "/api/input", "/api/recap/x", "/ws/pane", "/", "/api/health", "/api/sleep/settings"} {
+	for _, path := range []string{"/api/roster/", "/api/tasks2", "/api/keys", "/api/submit", "/api/question/answer", "/api/recap/x", "/ws/pane", "/", "/api/health", "/api/sleep/settings"} {
 		if key.Allows("GET", path) {
 			t.Errorf("%s allowed", path)
 		}
@@ -176,8 +176,8 @@ func TestGuardLetsAKeyReachTasksOnly(t *testing.T) {
 	if code, body := withKeyMethod(h, "POST", "/api/submit", key); code != 403 || body != "this key is for tasks and reading only" {
 		t.Fatalf("submit with the key: %d %q", code, body)
 	}
-	if code, body := withKeyMethod(h, "POST", "/api/input", key); code != 403 || body != "this key is for tasks and reading only" {
-		t.Fatalf("the screen terminal's typing with the key: %d %q", code, body)
+	if code, body := withKeyMethod(h, "POST", "/api/question/answer", key); code != 403 || body != "this key is for tasks and reading only" {
+		t.Fatalf("answering a question with the key: %d %q", code, body)
 	}
 	if code, _ := withKey(h, "/api/agent-keys", key); code != 403 {
 		t.Fatalf("the keys with a key: %d", code)

@@ -59,21 +59,12 @@ type PaneInfo struct {
 	Title         string        `json:"title"`
 	TitleStripped string        `json:"terminal_title_stripped"`
 	Focused       bool          `json:"focused"`
-	Scroll        Scroll        `json:"scroll"` // where the viewport stands; zero rows when herdr said nothing
 	// the display values clients reported for the pane (pane.report_metadata), every source's, the newest per name
 	Tokens      map[string]string `json:"tokens,omitempty"`
 	StateLabels map[string]string `json:"state_labels,omitempty"`
 	// Restored is remuda-core's alone: the pane's shell was lost and the core started a new one in its place, so
 	// whatever ran there did not leave at the person's word.
 	Restored bool `json:"-"`
-}
-
-// Scroll is where a pane's viewport stands in its scrollback: rows above the bottom, the most it can be, and the
-// viewport's height — herdr draws the pane, so the viewport is one for every viewer.
-type Scroll struct {
-	Offset int `json:"offset_from_bottom"`
-	Max    int `json:"max_offset_from_bottom"`
-	Rows   int `json:"viewport_rows"`
 }
 
 // Dir is the pane's folder: the shell's cwd, else the foreground process's.

@@ -114,7 +114,7 @@ func within(t *testing.T, what string, do func() error) {
 	}
 }
 
-// Keys and a screen terminal's typing pass a prompt remuda-core holds for a person's draft: the pane's lock covered its look alone.
+// Keys pass a prompt remuda-core holds for a person's draft: the pane's lock covered its look alone.
 func TestKeysPassAPromptTheCoreHolds(t *testing.T) {
 	h, in := newHolder(), NewInput(nil, nil)
 	sent := make(chan error, 1)
