@@ -10,11 +10,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/shell"
 )
 
-// line is one line of the script's answer
-func line(fields ...string) string { return strings.Join(fields, "\x1f") + "\n" }
+// line is one record of the script's answer
+func line(fields ...string) string { return strings.Join(fields, script.NUL) + script.NUL }
 
 // a Mac's answer: lsof lists a socket per fd and an IPv6 one on its own; ControlCenter runs in /
 var macAnswer = line("5000", "*", "632", "ControlCenter", "/", "/", "/System/Library/CoreServices/ControlCenter.app/Contents/MacOS/ControlCenter") +
@@ -126,9 +127,10 @@ func serveHere(t *testing.T) (port, pid int, dir string) {
 	if lsofErr != nil && ssErr != nil {
 		t.Skip("neither lsof nor ss")
 	}
-	// a folder whose name needs the laptop's own spelling: a space, and letters lsof writes as bytes past ASCII in a
-	// C locale, where the script must read them back as the folder it is
-	named := filepath.Join(t.TempDir(), `café \ dir`)
+	// a folder whose name is every trouble the script must survive: a space, letters lsof writes as bytes past ASCII
+	// in a C locale, a backslash it escapes, and a line break the record's own separator must not read as the end of it
+	named := filepath.Join(t.TempDir(), "café \\ dir\nx")
+	t.Setenv("LC_ALL", "C") // lsof writes letters past ASCII as \xNN in C's locale: the script must not leave them so
 	if err := os.MkdirAll(named, 0o755); err != nil {
 		t.Fatal(err)
 	}
