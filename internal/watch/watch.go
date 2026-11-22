@@ -64,6 +64,8 @@ type Watcher struct {
 	Outputs func(machine string, snap *herdr.Snapshot) []Output
 	// Refused hears herdr refusing the person's own watches on a machine (nil once it takes them again).
 	Refused func(machine string, err error)
+	// Installed hears the output watches a machine's stream holds, once it stands.
+	Installed func(machine string, held []Output)
 
 	mu       sync.Mutex
 	states   map[string]*machineState

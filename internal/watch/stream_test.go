@@ -411,3 +411,24 @@ func TestTheWatcherLeavesNothingRunning(t *testing.T) {
 	waitFor(t, "the stream to close with the watcher", func() bool { return f.open() == 0 })
 	waitFor(t, "the goroutines to end", func() bool { return runtime.NumGoroutine() <= before }) // the reader of a stream ends with it
 }
+
+// TestTheWatcherTellsTheWatchesItsStreamHolds: a stream that stands is the record of what a machine's rules are owed,
+// so a pane that appears later takes no watch of a pane that stands.
+func TestTheWatcherTellsTheWatchesItsStreamHolds(t *testing.T) {
+	quickPace(t)
+	f := newFakeHerdr(t, "w1:p1")
+	f.memory = true
+	var mu sync.Mutex
+	var held []Output
+	watching(t, f, func(w *Watcher) {
+		w.Outputs = func(string, *herdr.Snapshot) []Output { return []Output{{Key: "serve", Pane: "w1:p1"}} }
+		w.Installed = func(_ string, outputs []Output) { mu.Lock(); held = outputs; mu.Unlock() }
+	})
+	f.subscribed(t)
+	waitFor(t, "the watches the stream holds", func() bool { mu.Lock(); defer mu.Unlock(); return len(held) > 0 })
+	mu.Lock()
+	defer mu.Unlock()
+	if held[0].Key != "serve" || held[0].Pane != "w1:p1" {
+		t.Fatalf("the stream's watches: %+v", held)
+	}
+}

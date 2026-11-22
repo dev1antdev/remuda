@@ -4002,7 +4002,13 @@ components and icons as rules for whoever changes it: @docs/design.md
   matched before is taken for it, the text being all core tells (a row
   number that survives a resubscription is task #332); `Service.Watches` is the set for a machine's snapshot — the
   person's rules where they look, then two built-in ones on every pane, at
-  most `MaxWatches` 200 a machine (the rest left out, logged once an
+  most `MaxWatches` 200 a machine — past it the person's rules come before
+  the built-ins and, within either class, the watches the stream holds now
+  before the ones it does not (`Installed`, told by the watcher when a
+  stream stands), so a pane that just appeared takes no watch of a pane
+  that stands and a rule just saved still takes its place from a built-in
+  (`TestANewPaneTakesNoWatchFromAPaneThatStands`,
+  `TestAtTheCapAPersonRuleKeepsItsPlace`; the rest left out, logged once an
   hour). **Built in**: `ServePattern`, a dev server announcing its address
   (Vite, Next.js, CRA, Astro, webpack-dev-server, http.server, uvicorn,
   Flask, Django, Rails, Hugo, Jekyll, php -S, "listening on :3000"),
