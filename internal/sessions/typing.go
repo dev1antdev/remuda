@@ -7,25 +7,21 @@ import (
 	"github.com/dev1antdev/remuda/internal/events"
 )
 
-// The keys people press in a pane and the screen terminal's typing: herdr's key-combo grammar as remuda allows it, and
-// the few keys herdr has no word for sent as the bytes a terminal sends for them.
+// The keys people press in a pane: the key-combo grammar as remuda allows it, names the core knows.
 
-// namedKeys are the keys herdr's grammar names, which take a modifier.
+// namedKeys are the keys the core names, which take a modifier.
 var namedKeys = map[string]bool{
 	"enter": true, "esc": true, "tab": true, "space": true, "backspace": true,
 	"up": true, "down": true, "left": true, "right": true,
 }
 
-// terminalKeys are the keys herdr 0.9.5 refuses as invalid_key, with the sequence a terminal sends for each; they reach
-// the pane as text, unmodified.
-var terminalKeys = map[string]string{
-	"home": "\x1bOH", "end": "\x1bOF", "pageup": "\x1b[5~", "pagedown": "\x1b[6~", "delete": "\x1b[3~",
-}
+// aloneKeys are the keys the core names and a modifier cannot go with; they stand alone.
+var aloneKeys = map[string]bool{"home": true, "end": true, "pageup": true, "pagedown": true, "delete": true}
 
-// keyAllowed is one key in herdr's grammar: optional ctrl, alt and shift, each once, before a named key, or ctrl or alt
-// before a letter or digit (a printable key alone is text, not a key); a terminal key stands alone.
+// keyAllowed is one key in the core's grammar: optional ctrl, alt and shift, each once, before a named key, or ctrl or
+// alt before a letter or digit (a printable key alone is text, not a key); a key with no modifier stands alone.
 func keyAllowed(name string) bool {
-	if _, ok := terminalKeys[name]; ok {
+	if aloneKeys[name] {
 		return true
 	}
 	parts := strings.Split(name, "+")
@@ -44,7 +40,7 @@ func keyAllowed(name string) bool {
 	return printable && (seen["ctrl"] || seen["alt"])
 }
 
-// Keys lowercases the names and refuses one herdr's grammar has no word for.
+// Keys lowercases the names and refuses one the core's grammar has no word for.
 func Keys(names []string) ([]string, error) {
 	out := make([]string, 0, len(names))
 	for _, name := range names {
@@ -57,44 +53,21 @@ func Keys(names []string) ([]string, error) {
 	return out, nil
 }
 
-// keyRun is a stretch of keys sent in one call: herdr's own names, or the bytes of one key it has no word for.
-type keyRun struct {
-	named []string
-	bytes string
-}
+// keysPerCall bounds one keys request: the core paces its keys (30 ms each) and does not stop a batch once sent, so a
+// long one is several requests, each within a call's time, and a failure ends the rest.
+const keysPerCall = 32
 
-// keyRuns cuts the keys, in order, into runs of herdr's own names and the terminal keys between them.
-func keyRuns(keys []string) []keyRun {
-	var runs []keyRun
-	for _, key := range keys {
-		if bytes, ok := terminalKeys[key]; ok {
-			runs = append(runs, keyRun{bytes: bytes})
-			continue
-		}
-		if n := len(runs); n > 0 && runs[n-1].bytes == "" {
-			runs[n-1].named = append(runs[n-1].named, key)
-			continue
-		}
-		runs = append(runs, keyRun{named: []string{key}})
-	}
-	return runs
-}
-
-// SendKeys presses named keys in a pane; the names went through Keys.
+// SendKeys presses named keys in a pane, in batches of keysPerCall; the names went through Keys.
 func (in *Input) SendKeys(client Prompter, ref events.PaneRef, keys []string) error {
 	lock := in.lock(ref)
 	lock.Lock()
 	defer lock.Unlock()
-	for _, run := range keyRuns(keys) {
-		var err error
-		if run.bytes != "" {
-			err = client.PaneSendText(ref.Pane, run.bytes)
-		} else {
-			err = client.PaneSendKeys(ref.Pane, run.named)
-		}
-		if err != nil {
+	for len(keys) > 0 {
+		n := min(len(keys), keysPerCall)
+		if err := client.PaneSendKeys(ref.Pane, keys[:n]); err != nil {
 			return err
 		}
+		keys = keys[n:]
 	}
 	return nil
 }

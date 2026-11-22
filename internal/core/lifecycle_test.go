@@ -35,7 +35,7 @@ func claudeOnCore(t *testing.T) (*machines.Manager, *machines.Machine, string, s
 	core.LiftPromptGate(t)
 	coretest.StandInClaude(t, lifeSession)
 	coretest.Server(t).Use(t)
-	fleet := machines.NewCoreManager(t.TempDir(), "", nil, false)
+	fleet := machines.NewManager(t.TempDir(), nil, false)
 	t.Cleanup(fleet.Close)
 	mc, err := fleet.Get(machines.LocalID)
 	if err != nil {
@@ -175,7 +175,7 @@ func TestHerdrsAgentsCarryOnOnACore(t *testing.T) {
 	const second = "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d"
 	coretest.StandInClaude(t, lifeSession)
 	coretest.Server(t).Use(t)
-	fleet := machines.NewCoreManager(t.TempDir(), "", nil, false)
+	fleet := machines.NewManager(t.TempDir(), nil, false)
 	t.Cleanup(fleet.Close)
 	mc, err := fleet.Get(machines.LocalID)
 	if err != nil {

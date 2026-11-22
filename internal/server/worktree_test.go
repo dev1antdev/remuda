@@ -3,12 +3,11 @@ package server
 import (
 	"encoding/json"
 	"net/http"
-	"path/filepath"
 	"testing"
 
 	"github.com/dev1antdev/remuda/internal/auth"
 	"github.com/dev1antdev/remuda/internal/herdr"
-	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/herdr/herdrfake"
 	"github.com/dev1antdev/remuda/internal/repos"
 	"github.com/dev1antdev/remuda/internal/undo"
 	"github.com/dev1antdev/remuda/internal/worktrees"
@@ -16,7 +15,7 @@ import (
 
 func TestAProjectsSettingsAreKeptAndReadBack(t *testing.T) {
 	dir := t.TempDir()
-	s := &Server{Machines: machines.NewManager(dir, filepath.Join(dir, "no-herdr.sock"), "herdr", nil), Repos: repos.Open(dir)}
+	s := &Server{Machines: herdrfake.Manager(dir), Repos: repos.Open(dir)}
 	api := http.NewServeMux()
 	s.repoRoutes(api)
 

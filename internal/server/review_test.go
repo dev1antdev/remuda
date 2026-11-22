@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/dev1antdev/remuda/internal/auth"
-	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/herdr/herdrfake"
 	"github.com/dev1antdev/remuda/internal/review"
 )
 
@@ -47,7 +47,7 @@ func TestTheSecretCheckReadsTheFolder(t *testing.T) {
 	}
 	_ = os.WriteFile(filepath.Join(dir, "deploy.env"), []byte("REGION=eu\nAPI_TOKEN="+key.String()+"\n"), 0o644)
 
-	s := &Server{Machines: machines.NewManager(t.TempDir(), "/nowhere.sock", "herdr", nil), Review: review.New(t.TempDir())}
+	s := &Server{Machines: herdrfake.Manager(t.TempDir()), Review: review.New(t.TempDir())}
 	mux := http.NewServeMux()
 	s.reviewRoutes(mux)
 	code, out := taskCall(mux, "GET", "/api/review/secrets?machine=local&dir="+dir, "", "")

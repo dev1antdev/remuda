@@ -131,6 +131,6 @@ func (mc *Machine) RetryCore() {
 // OnCore says whether the machine is reached through remuda-core rather than herdr.
 func (mc *Machine) OnCore() bool { return mc.speaksCore }
 
-// Core says whether every machine of the fleet is reached through remuda-core (NewCoreManager): set once, so a
+// Core says whether every machine of the fleet is reached through its remuda-core (NewManager): set once, so a
 // request's guard needs no machine of its own to ask.
 func (m *Manager) Core() bool { return m.core }

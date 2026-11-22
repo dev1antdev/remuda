@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/herdr/herdrfake"
 	"github.com/dev1antdev/remuda/internal/triggers"
 )
 
@@ -16,7 +16,7 @@ func TestTriggerRoutes(t *testing.T) {
 	resubscribed := 0
 	svc := triggers.New(dir)
 	svc.Resubscribe = func() { resubscribed++ }
-	s := &Server{Triggers: svc, Machines: machines.NewManager(dir, dir+"/none.sock", "", nil)}
+	s := &Server{Triggers: svc, Machines: herdrfake.Manager(dir)}
 	mux := http.NewServeMux()
 	s.triggerRoutes(mux)
 

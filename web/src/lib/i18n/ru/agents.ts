@@ -157,7 +157,6 @@ export const agents: Dictionary = {
   "tab · title": "вкладка · заголовок",
   "the agent's own choice": "на усмотрение агента",
   "the fields as they are": "поля как есть",
-  "the name in herdr's machine list": "имя в списке машин herdr",
   "the name it was added with": "имя, с которым добавили",
   "the session's title": "заголовок сессии",
   "the tab's name": "имя вкладки",

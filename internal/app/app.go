@@ -130,8 +130,8 @@ func Run(ctx context.Context, o Options) error {
 	} else {
 		log.Print("the agents' door stays closed: no agent-key / agent-url files are placed here or on a remote machine (-door opens it)")
 	}
-	fleet := machines.NewCoreManager(o.Dir, "", door, o.Server) // no herdr binary: its list of machines is not read
-	fleet.SetMovedHerdr("", o.Socket)                           // herdr, on PATH, stays for the move off it at the person's press
+	fleet := machines.NewManager(o.Dir, door, o.Server) // every machine through its remuda-core
+	fleet.SetMovedHerdr("", o.Socket)                   // herdr, on PATH, stays for the move off it at the person's press
 	fleet.SetServer(o.Server)
 	defer fleet.Close()
 	if local, err := fleet.Get(machines.LocalID); err == nil && o.Door && !o.Server {

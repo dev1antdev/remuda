@@ -1,7 +1,6 @@
 package watch
 
 import (
-	"net"
 	"runtime"
 	"strings"
 	"sync"
@@ -10,6 +9,7 @@ import (
 
 	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/herdr/herdrfake"
 	"github.com/dev1antdev/remuda/internal/machines"
 )
 
@@ -24,10 +24,10 @@ func quickPace(t *testing.T) {
 	})
 }
 
-// watching runs the watcher on a fake herdr's local machine until the test ends.
+// watching runs the watcher on a fake machine's API until the test ends.
 func watching(t *testing.T, f *fakeHerdr, w func(*Watcher)) (*Watcher, *machines.Machine, *events.Bus) {
 	t.Helper()
-	fleet := machines.NewManager(t.TempDir(), f.sock, "", nil)
+	fleet := machines.NewManagerWith(t.TempDir(), nil, false, f.api(), &herdrfake.Terminals{})
 	mc, err := fleet.Get(machines.LocalID)
 	if err != nil {
 		t.Fatal(err)
@@ -115,7 +115,7 @@ func TestTheStreamSlowsThePollAndAnEventSnapshotsAtOnce(t *testing.T) {
 	most := f.most
 	f.mu.Unlock()
 	if most > 2 {
-		t.Fatalf("a socket's stream is swapped two at a time at most: %d", most)
+		t.Fatalf("a stream is swapped two at a time at most: %d", most)
 	}
 }
 
@@ -241,36 +241,11 @@ func TestHerdrRefusingThePersonsWatchesKeepsTheStream(t *testing.T) {
 	}
 }
 
-func TestTheBridgeHoldsOneStreamAtATime(t *testing.T) {
-	quickPace(t)
-	f := newFakeHerdr(t, "w1:p1")
-	watching(t, f, func(w *Watcher) {
-		mc, _ := w.machines.Get(machines.LocalID)
-		client, _, _ := mc.Ready()
-		client.(*herdr.Client).Dial = func(timeout time.Duration) (net.Conn, error) { return net.DialTimeout("unix", f.sock, timeout) }
-	})
-	f.subscribed(t)
-	waitFor(t, "the stream", func() bool { return f.open() == 1 })
-	for i, panes := range [][]string{{"w1:p1", "w1:p2"}, {"w1:p2"}, {"w1:p2", "w1:p3"}} {
-		f.setPanes(panes...)
-		f.push(`{"data":{"type":"pane_created"},"event":"pane_created"}`)
-		if got := statusPanes(f.subscribed(t)); got != strings.Join(panes, ",") {
-			t.Fatalf("the stream follows the panes: %s", got)
-		}
-		waitFor(t, "the stream again", func() bool { return f.answered() == i+2 && f.open() == 1 })
-	}
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if f.most != 1 {
-		t.Fatalf("through the bridge a stream is closed before the next opens: %d at once", f.most)
-	}
-}
-
 func TestTheWatcherLeavesNothingRunning(t *testing.T) {
 	quickPace(t)
 	before := runtime.NumGoroutine()
 	f := newFakeHerdr(t, "w1:p1")
-	fleet := machines.NewManager(t.TempDir(), f.sock, "", nil)
+	fleet := machines.NewManagerWith(t.TempDir(), nil, false, f.api(), &herdrfake.Terminals{})
 	mc, _ := fleet.Get(machines.LocalID)
 	watcher := New(fleet, events.NewBus())
 	done := make(chan struct{})
@@ -289,5 +264,5 @@ func TestTheWatcherLeavesNothingRunning(t *testing.T) {
 	close(done)
 	<-stopped
 	waitFor(t, "the stream to close with the watcher", func() bool { return f.open() == 0 })
-	waitFor(t, "the goroutines to end", func() bool { return runtime.NumGoroutine() <= before+2 }) // the fake's accept loop and listener
+	waitFor(t, "the goroutines to end", func() bool { return runtime.NumGoroutine() <= before }) // the reader of a stream ends with it
 }

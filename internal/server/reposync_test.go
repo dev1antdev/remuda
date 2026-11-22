@@ -4,12 +4,12 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/gitsync"
+	"github.com/dev1antdev/remuda/internal/herdr/herdrfake"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/shell"
 	"github.com/dev1antdev/remuda/internal/watch"
@@ -18,7 +18,7 @@ import (
 func reposServer(t *testing.T, answer func(string) (string, error)) *Server {
 	t.Helper()
 	dir := t.TempDir()
-	fleet := machines.NewManager(dir, filepath.Join(dir, "no-herdr.sock"), "herdr", nil)
+	fleet := herdrfake.Manager(dir)
 	host := &shell.Fake{Name: machines.LocalID, Dir: "/home/me", Answer: answer}
 	return &Server{Machines: fleet, Watch: watch.New(fleet, events.NewBus()), Sync: &gitsync.Service{
 		Fleet: func() []gitsync.Machine { return []gitsync.Machine{{Host: host}} },

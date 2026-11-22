@@ -4,19 +4,15 @@
 package machines
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"maps"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
 	"sync"
-	"time"
 	"unicode/utf8"
 
 	"github.com/dev1antdev/remuda/internal/core"
@@ -27,11 +23,9 @@ import (
 )
 
 const (
-	LocalID     = "local"
-	labelsFile  = "labels.json"  // the user's own names for machines, by id
-	macsFile    = "macs.json"    // the MAC address of a machine the person may want to wake, by id
-	removedFile = "removed.json" // the machines the person removed, by id, until one of that id comes back (Gone)
-	SourceHerdr = "herdr"        // mirrored from `herdr machine list`
+	LocalID    = "local"
+	labelsFile = "labels.json" // the user's own names for machines, by id
+	macsFile   = "macs.json"   // the MAC address of a machine the person may want to wake, by id
 
 	StateConnected  = "connected"
 	StateConnecting = "connecting"
@@ -44,7 +38,7 @@ type Config struct {
 	Host         string `json:"host"`                    // ssh destination, e.g. "studio.remote"
 	RemoteSocket string `json:"remote_socket,omitempty"` // default: herdr's socket under the remote home
 	HerdrBin     string `json:"herdr_bin,omitempty"`     // default: autodetected
-	Source       string `json:"source,omitempty"`        // SourceHerdr, or "" when added here
+	Source       string `json:"source,omitempty"`        // "" when added here: the roster's contract, which named herdr's list once
 	HerdrStopped bool   `json:"herdr_stopped,omitempty"` // its herdr server was stopped at the person's press: this remuda writes checkouts there
 }
 
@@ -55,17 +49,14 @@ type Manager struct {
 	path     string // machines.json
 	dir      string // the state dir, where labels.json and herdr-stopped.json live
 	names    map[string]string
-	macs     map[string]string // the MAC addresses, for the magic packet that wakes a sleeping machine
-	placed   []string          // the person's order of the machines, by id (order.json); order is the arrival's
-	herdrBin string
+	macs     map[string]string                     // the MAC addresses, for the magic packet that wakes a sleeping machine
+	placed   []string                              // the person's order of the machines, by id (order.json); order is the arrival's
 	door     *Door                                 // how every remote's agents reach the tasks here; nil opens none
 	saveMu   sync.Mutex                            // writes of machines.json, one at a time
 	onState  func(id, label, state, reason string) // hears every remote's connection move, set by OnState
 	server   bool                                  // the host serves the page only: no machine of the fleet (SetServer)
 	core     bool                                  // every machine is reached through remuda-core (NewCoreManager)
 	// herdr's machines, never saved, were read once since the start, or there is no herdr: the fleet is whole (Gone)
-	herdrRead bool
-	removed   map[string]bool // removed.json
 }
 
 // ErrServerHost is what a request for the host's own herdr gets when remuda runs as a server: it has no workspaces.
@@ -194,26 +185,31 @@ func localLabel(goos, host string) string {
 	return "This machine · " + host
 }
 
-// NewManager builds the registry: the local machine plus what machines.json lists; herdr's own come through SyncHerdr.
-// Every remote gets the door given once it connects (nil: none).
-func NewManager(dir, localSocket, localHerdrBin string, door *Door) *Manager {
-	local := localMachine(dir)
-	local.herdrBin, local.socket = localHerdrBin, localSocket
-	local.client = herdr.NewClient(localSocket)
-	return newManager(dir, localHerdrBin, door, local, false)
-}
-
-// NewCoreManager is NewManager for a remuda that reaches every machine through remuda-core instead of herdr (-core),
-// while the move off herdr is built. herdrBin, when herdr is still here, only reads herdr's list of machines. A host
-// serving the page only (server) reaches no core of its own: none is started there.
-func NewCoreManager(dir, herdrBin string, door *Door, server bool) *Manager {
+// NewManager builds the registry: the local machine, reached through its remuda-core, plus what machines.json lists.
+// Every remote gets the door given once it connects (nil: none). A host serving the page only (server) reaches no core
+// of its own: none is started there.
+func NewManager(dir string, door *Door, server bool) *Manager {
 	local := localMachine(dir)
 	local.speaksCore = true
 	if !server {
 		local.link = newCoreLink(local, core.New(dialLocalCore), nil)
 		local.client, local.attach = local.link.adapter, local.link.terminals
 	}
-	m := newManager(dir, herdrBin, door, local, true)
+	m := newManager(dir, door, local, true)
+	m.SetServer(server)
+	return m
+}
+
+// NewManagerWith is NewManager with the local machine reached through the API and terminals given instead of a core of
+// this remuda's: what a test puts in their place (internal/herdr/herdrfake), so no core of the person's is dialled. A
+// host serving the page only has none of either.
+func NewManagerWith(dir string, door *Door, server bool, api herdr.API, terminals herdr.Terminals) *Manager {
+	local := localMachine(dir)
+	local.speaksCore = true
+	if !server {
+		local.client, local.attach = api, terminals
+	}
+	m := newManager(dir, door, local, true)
 	m.SetServer(server)
 	return m
 }
@@ -231,14 +227,13 @@ func localMachine(dir string) *Machine {
 	return local
 }
 
-func newManager(dir, localHerdrBin string, door *Door, local *Machine, speaksCore bool) *Manager {
+func newManager(dir string, door *Door, local *Machine, speaksCore bool) *Manager {
 	m := &Manager{
 		machines: map[string]*Machine{LocalID: local},
 		order:    []string{LocalID},
 		path:     filepath.Join(dir, "machines.json"),
 		dir:      dir,
 		names:    map[string]string{},
-		herdrBin: localHerdrBin,
 		door:     door,
 		core:     speaksCore,
 	}
@@ -251,10 +246,6 @@ func newManager(dir, localHerdrBin string, door *Door, local *Machine, speaksCor
 		m.macs = map[string]string{}
 	}
 	_ = state.LoadJSON(m.dir, orderFile, &m.placed)
-	_ = state.LoadJSON(m.dir, removedFile, &m.removed)
-	if m.removed == nil {
-		m.removed = map[string]bool{}
-	}
 	local.setLabel(m.names[LocalID])
 	for _, cfg := range m.load() {
 		m.add(cfg)
@@ -274,18 +265,23 @@ func (m *Manager) load() []Config {
 	return cfgs
 }
 
-// save persists the manually added machines; herdr's own stay in herdr.
+// save persists the machines the person added.
 func (m *Manager) save() error {
 	m.saveMu.Lock() // one save at a time, in order: a later Add must not lose to an earlier write
 	defer m.saveMu.Unlock()
 	m.mu.Lock()
 	cfgs := []Config{}
 	for _, id := range m.order {
-		if mc := m.machines[id]; id != LocalID && mc != nil && mc.Cfg.Source != SourceHerdr {
+		if mc := m.machines[id]; id != LocalID && mc != nil {
 			cfgs = append(cfgs, mc.Cfg)
 		}
 	}
 	m.mu.Unlock()
+	return m.writeMachines(cfgs)
+}
+
+// writeMachines keeps the list given in machines.json, one save at a time.
+func (m *Manager) writeMachines(cfgs []Config) error {
 	b, _ := json.MarshalIndent(cfgs, "", "  ")
 	return state.WriteFile(m.path, b)
 }
@@ -299,12 +295,7 @@ func (m *Manager) add(cfg Config) *Machine {
 	mc.setLabel(m.names[cfg.ID])
 	m.machines[cfg.ID] = mc
 	m.order = append(m.order, cfg.ID)
-	back := m.removed[cfg.ID]
-	delete(m.removed, cfg.ID)
 	m.mu.Unlock()
-	if back {
-		_ = m.saveRemoved()
-	}
 	go mc.connect()
 	return mc
 }
@@ -315,87 +306,30 @@ func newRemote(cfg Config) *Machine {
 	return mc
 }
 
-// herdrMachine is one row of `herdr machine list --json`.
-type herdrMachine struct {
-	ID      string `json:"id"`
-	Label   string `json:"label"`
-	Target  string `json:"target"`
-	Enabled bool   `json:"enabled"`
-}
-
-// SyncHerdr mirrors herdr's own saved SSH machines, under herdr's ids so a rename there keeps links and preferences.
-func (m *Manager) SyncHerdr() {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if m.herdrBin == "" { // no herdr was found at the start
-		m.mu.Lock()
-		m.herdrRead = true
-		m.mu.Unlock()
-		return
-	}
-	out, err := exec.CommandContext(ctx, m.herdrBin, "machine", "list", "--json").Output()
-	if errors.Is(err, exec.ErrNotFound) || errors.Is(err, os.ErrNotExist) {
-		m.mu.Lock()
-		m.herdrRead = true
-		m.mu.Unlock()
-		return
-	}
-	if err != nil {
-		return
-	}
-	var list []herdrMachine
-	if json.Unmarshal(out, &list) != nil {
-		return
-	}
-	live := map[string]bool{}
-	for _, h := range list {
-		if !h.Enabled || h.ID == "" || !hostRe.MatchString(h.Target) {
-			continue
-		}
-		live[h.ID] = true
-		if m.has(h.ID) || m.hasHost(h.Target) {
-			continue
-		}
-		m.add(Config{ID: h.ID, Label: h.Label, Host: h.Target, Source: SourceHerdr})
-	}
-	m.mu.Lock()
-	m.herdrRead = true
-	var gone []string
-	for id, mc := range m.machines {
-		if mc.Cfg.Source == SourceHerdr && !live[id] {
-			gone = append(gone, id)
-		}
-	}
-	m.mu.Unlock()
-	for _, id := range gone {
-		m.drop(id)
-	}
-}
-
-// saveRemoved keeps the removals for a restart, while herdr's machines may still be unread (Gone).
-func (m *Manager) saveRemoved() error {
-	m.saveMu.Lock()
-	defer m.saveMu.Unlock()
-	m.mu.Lock()
-	removed := maps.Clone(m.removed)
-	m.mu.Unlock()
-	return state.SaveJSON(m.dir, removedFile, removed)
-}
-
-// Gone says the fleet has no such machine and knows it: the person removed it, or herdr's machines were read since the
-// start, so an id missing now is not waiting to be mirrored.
+// Gone says the fleet has no such machine: it was removed, or it never was there.
 func (m *Manager) Gone(id string) bool {
 	if id == "" {
 		id = LocalID
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.machines[id] == nil && (m.herdrRead || m.removed[id])
+	return m.machines[id] == nil
 }
 
 // drop takes a machine out of the registry and ends its connection; its watcher loop and pollers stop on their own.
 func (m *Manager) drop(id string) *Machine {
+	if mc := m.take(id); mc != nil {
+		m.retire(mc)
+		return mc
+	}
+	return nil
+}
+
+// take takes a machine out of the registry, and nothing more: what ends its connection is retire's, outside any lock a
+// caller holds — an ssh master that stopped answering can take a while to let go.
+func (m *Manager) take(id string) *Machine {
 	m.mu.Lock()
+	defer m.mu.Unlock()
 	mc := m.machines[id]
 	delete(m.machines, id)
 	for i, oid := range m.order {
@@ -404,14 +338,15 @@ func (m *Manager) drop(id string) *Machine {
 			break
 		}
 	}
-	m.mu.Unlock()
-	if mc != nil {
-		mc.mu.Lock()
-		mc.removed = true
-		mc.mu.Unlock()
-		mc.fail(fmt.Errorf("removed"))
-	}
 	return mc
+}
+
+// retire marks a machine taken out of the registry as removed and ends its connection.
+func (m *Manager) retire(mc *Machine) {
+	mc.mu.Lock()
+	mc.removed = true
+	mc.mu.Unlock()
+	mc.fail(fmt.Errorf("removed"))
 }
 
 func (m *Manager) has(id string) bool {
@@ -464,27 +399,40 @@ func (m *Manager) Remove(id string) error {
 	if id == LocalID {
 		return fmt.Errorf("cannot remove the local machine")
 	}
-	m.mu.Lock()
-	mc := m.machines[id]
-	if mc == nil {
-		m.mu.Unlock()
-		return fmt.Errorf("machine %q not found", id)
-	}
-	if mc.Cfg.Source == SourceHerdr {
-		m.mu.Unlock()
-		return fmt.Errorf("%s comes from herdr's machine list — remove it with `herdr machine remove`", mc.Label())
-	}
-	m.removed[id] = true
-	m.mu.Unlock()
-	// the removal is kept before the machine goes: one that could not be noted stays, and Gone never says it went
-	if err := m.saveRemoved(); err != nil {
-		m.mu.Lock()
-		delete(m.removed, id)
-		m.mu.Unlock()
+	gone, err := m.removeFromFleet(id)
+	if err != nil {
 		return err
 	}
-	m.drop(id)
-	return m.save()
+	if gone != nil {
+		m.retire(gone) // outside the lock: a master that stopped answering may take a while to let go
+	}
+	return nil
+}
+
+// removeFromFleet checks, writes the fleet without the machine and takes it out of the registry, one at a time: a
+// second removal's list is built after the first machine left, so it can never write a removed machine back. What ends
+// the connection is the caller's, outside the lock.
+func (m *Manager) removeFromFleet(id string) (*Machine, error) {
+	m.saveMu.Lock()
+	defer m.saveMu.Unlock()
+	m.mu.Lock()
+	if m.machines[id] == nil {
+		m.mu.Unlock()
+		return nil, fmt.Errorf("machine %q not found", id)
+	}
+	// the list without the machine is written before it goes: one that could not be written stays a machine of the
+	// fleet, and nothing of it — its checkpoints, its panes — is let go for a removal that did not land
+	cfgs := []Config{}
+	for _, oid := range m.order {
+		if oid != id && oid != LocalID && m.machines[oid] != nil {
+			cfgs = append(cfgs, m.machines[oid].Cfg)
+		}
+	}
+	m.mu.Unlock()
+	if err := m.writeMachines(cfgs); err != nil {
+		return nil, err
+	}
+	return m.take(id), nil
 }
 
 func (m *Manager) Get(id string) (*Machine, error) {

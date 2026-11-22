@@ -12,11 +12,11 @@ import (
 	"testing"
 
 	"github.com/dev1antdev/remuda/internal/chat"
+	"github.com/dev1antdev/remuda/internal/core/coretest"
 	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/feed"
 	"github.com/dev1antdev/remuda/internal/health"
 	"github.com/dev1antdev/remuda/internal/herdr"
-	"github.com/dev1antdev/remuda/internal/herdr/herdrtest"
 	"github.com/dev1antdev/remuda/internal/jira"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/recap"
@@ -29,14 +29,23 @@ import (
 )
 
 func TestAViewerNeverReachesRemudasOwnWorkspaces(t *testing.T) {
-	t.Setenv("HOME", t.TempDir()) // the transcript below is this test's own
-	sock := herdrtest.Server(t)
-	home, err := os.UserHomeDir() // the throwaway herdr may have set one of its own
+	coretest.Server(t).Use(t)
+	home, err := os.UserHomeDir() // the throwaway core's own: the transcript below is this test's
 	if err != nil {
 		t.Fatal(err)
 	}
-	client := herdr.NewClient(sock)
-	// herdr names a folder as the system resolves it
+	state := t.TempDir()
+	fleet := machines.NewManager(state, nil, false)
+	t.Cleanup(fleet.Close)
+	mc, err := fleet.Get(machines.LocalID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client, _, err := mc.Ready()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// a pane's folder is the one the system resolves
 	appDir, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -54,18 +63,10 @@ func TestAViewerNeverReachesRemudasOwnWorkspaces(t *testing.T) {
 		t.Fatal(err)
 	}
 	ownPane, appPane := shell.RootPane.PaneID, app.RootPane.PaneID
+	coreSays(t, client, func(snap *herdr.Snapshot) bool { return snap.Pane(ownPane) != nil && snap.Pane(appPane) != nil })
 
-	state := t.TempDir()
 	kept, _ := json.Marshal(map[string]string{machines.LocalID: shell.Workspace.WorkspaceID})
 	if err := os.WriteFile(filepath.Join(state, "scratch.json"), kept, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	fleet := machines.NewManager(state, sock, "herdr", nil)
-	mc, err := fleet.Get(machines.LocalID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, _, err := mc.Ready(); err != nil {
 		t.Fatal(err)
 	}
 	watcher := watch.New(fleet, events.NewBus())

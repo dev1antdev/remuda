@@ -6,14 +6,14 @@ import (
 	"testing"
 
 	"github.com/dev1antdev/remuda/internal/herdr"
-	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/herdr/herdrfake"
 	"github.com/dev1antdev/remuda/internal/opinion"
 	"github.com/dev1antdev/remuda/internal/review"
 )
 
 func opinionServer(t *testing.T) (*Server, *http.ServeMux) {
 	t.Helper()
-	s := &Server{Opinions: opinion.NewService(t.TempDir()), Machines: machines.NewManager(t.TempDir(), "/nowhere.sock", "herdr", nil)}
+	s := &Server{Opinions: opinion.NewService(t.TempDir()), Machines: herdrfake.Manager(t.TempDir())}
 	mux := http.NewServeMux()
 	s.opinionRoutes(mux)
 	return s, mux

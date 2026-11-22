@@ -15,7 +15,7 @@ Everything here is read-only except where said.
 herdr status server          # version, protocol, the socket path
 herdr api snapshot | jq .    # the live session.snapshot — exactly what the watcher polls
 herdr api schema | jq .      # every RPC method, its params and result
-herdr machine list --json    # the remotes remuda mirrors (SyncHerdr, Source "herdr")
+herdr machine list --json    # herdr's own saved remotes (remuda does not read them since Core 26e)
 ```
 
 The default socket is `~/.config/herdr/herdr.sock`; `HERDR_SOCKET`
@@ -24,8 +24,8 @@ overrides it for remuda, `HERDR_SOCKET_PATH` for herdr's own commands.
 ## One request over the socket
 
 Newline-delimited JSON, **one request per connection**: herdr closes the
-socket after its reply, so nothing is ever pooled (`internal/herdr/
-client.go`).
+socket after its reply, so nothing is ever pooled. remuda's own client is
+gone (Core 26j): this file is how to ask herdr by hand, for the move off it.
 
 ```sh
 printf '{"id":"x","method":"session.snapshot","params":{}}\n' \
@@ -37,9 +37,7 @@ The reply is `{"id":…,"result":{"type":"session_snapshot","snapshot":{…}}}`;
 the snapshot holds `workspaces`, `tabs`, `panes`, `layouts`, `agents`,
 the focused ids, `version` and `protocol`.
 
-A refusal comes back as `{"error":{"code":"…","message":"…"}}` — a
-`*herdr.Error` in Go; a failure to reach the socket is a transport error
-(`Client.OnTransportError`, which marks a remote machine dead).
+A refusal comes back as `{"error":{"code":"…","message":"…"}}`.
 
 Methods remuda uses: `ping`, `session.snapshot`, `events.subscribe`, `agent.start`,
 `agent.prompt`, `pane.read`, `pane.send_text`, `pane.send_keys`,
@@ -73,9 +71,7 @@ herdr ignores `HOME` for its socket. A throwaway server is addressed by
 stop — or the stop lands on the person's real server. It needs a `HOME`
 of its own too: herdr restores the saved session of the `HOME` it runs
 under (`~/.config/herdr/session.json` — the person's workspaces, their
-agents started again with `--resume`) and saves its own over it. remuda
-on it gets the same `HOME`, or it mirrors the person's saved remote
-machines (`herdr machine list`) and dials them.
+agents started again with `--resume`) and saves its own over it.
 
 ```sh
 D=$(mktemp -d /tmp/hs.XXXX)                          # short: a unix socket path has ~100 bytes
@@ -101,9 +97,8 @@ whole request (`pane_not_found`), so does an unreadable regex
 (`invalid_regex`); a slow reader gets `events_lost` or a closed
 connection. The watcher holds one per machine (`internal/watch/stream.go`).
 
-In Go, `herdr.EnsureServer(bin, socket)` does the start and
-`internal/herdr/server_test.go` is the whole pattern, including the stop
-that waits for the socket to go quiet.
+The shell above is the whole pattern, including the stop that waits for
+the socket to go quiet.
 
 ## herdr's own documentation
 

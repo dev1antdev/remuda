@@ -11,7 +11,7 @@ import (
 
 	"github.com/dev1antdev/remuda/internal/auth"
 	"github.com/dev1antdev/remuda/internal/gitstage"
-	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/herdr/herdrfake"
 	"github.com/dev1antdev/remuda/internal/review"
 )
 
@@ -61,7 +61,7 @@ func TestTheLensStagesCommitsAndSaysWhyNot(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(dir, "a.go"), []byte("a2\n"), 0o644)
 
 	busy := ""
-	s := &Server{Machines: machines.NewManager(t.TempDir(), "/nowhere.sock", "herdr", nil), Review: review.New(t.TempDir()),
+	s := &Server{Machines: herdrfake.Manager(t.TempDir()), Review: review.New(t.TempDir()),
 		Stage: &gitstage.Service{Busy: func(string, string, string) string { return busy }}}
 	mux := http.NewServeMux()
 	s.reviewRoutes(mux)

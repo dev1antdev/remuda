@@ -25,7 +25,7 @@ Three rings, and a dependency may only point inwards.
 │  schedule · search · usage · quick · recipes · scenes · code         │
 ├─ the floor ──────────────────────────────────────────────────────────┤
 │  machines   the registry; a Machine is a shell.Host with a core on it │
-│  herdr      herdr.API / Terminals and the model; the RPC client      │
+│  herdr      the dictionary of a machine: model, API / Terminals       │
 │  core       remuda-core's client, its herdr.API adapter, its terminals│
 │  transcript the session file parser and the per-machine Reader       │
 │  shell      the port: Run / Stream, Host, Fake                       │
@@ -67,13 +67,13 @@ The contexts are the bounded contexts of the product, in its own words:
    exit 0` preludes, the portable `stat`, the separators an answer is
    cut by. `review`, `jobs`, `search` and `usage` are written this way;
    their tests run on a `shell.Fake` with a recorded answer. A package
-   that asks a machine's herdr takes `herdr.API` and `herdr.Terminals`
-   from `Machine.Ready()`, never `*herdr.Client`: remuda-core's adapter
-   (`core.Adapter`) stands behind `herdr.API`, its terminals
+   that asks a machine takes `herdr.API` and `herdr.Terminals` from
+   `Machine.Ready()`, never a client: remuda-core's adapter
+   (`core.Adapter`) is their one implementation, its terminals
    (`core.Terminals`) behind `herdr.Terminals`.
 3. **Packages hear each other through the bus.** `watch` publishes
-   `events.Snapshot`, `events.PaneStatus` and, off herdr's event stream,
-   `events.OutputMatched`; `jobs` publishes
+   `events.Snapshot`, `events.PaneStatus` and, off the machine's event
+   stream, `events.OutputMatched`; `jobs` publishes
    `events.JobDone`; the rest subscribe. Nothing holds a reference to
    its listeners, and the full list of subscriptions is in
    `internal/app/app.go`, so "who reacts to a pane going done" is one
@@ -81,9 +81,9 @@ The contexts are the bounded contexts of the product, in its own words:
 4. **The transcript is read through one reader.** `transcript.Reader`,
    one per machine, is the only code that stats, tails and parses
    session files, locally or over ssh; it follows compactions and
-   resolves herdr's session ids. `chat.Service` answers the questions
+   resolves the machine's session ids. `chat.Service` answers the questions
    the other contexts have of a pane's conversation.
-5. **herdr owns every process and status; remuda keeps no session
+5. **remuda-core owns every process and status; remuda keeps no session
    state.** The hard rules in `AGENTS.md` stand above all of this.
 
 ## What goes where
@@ -147,14 +147,14 @@ down through, and one folder per lens.
 
 ## Why it is cut this way
 
-The product is a set of lenses on herdr and the transcripts: the roster,
+The product is a set of lenses on remuda-core and the transcripts: the roster,
 the chat, the terminal, the Changes lens, the updates, the tasks. Each
 lens is a context with a vocabulary of its own, and the code uses that
 vocabulary (`Input.Submit`, `Conversation`, `Baseline`, `Update`,
-`Launcher`). The domain is thin — the state lives in herdr, git and the
+`Launcher`). The domain is thin — the state lives in remuda-core, git and the
 session files — so there are no aggregates, repositories or command
 buses: a service with methods, ports for the two things every context
-needs (a shell on a machine, and its herdr), and a bus for the few things they tell
+needs (a shell on a machine, and its core), and a bus for the few things they tell
 each other. Hexagonal in shape, light in weight. The page mirrors it:
 no global state manager, no router library — one small store, one
 query hook, folders named after the lenses.

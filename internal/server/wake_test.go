@@ -5,12 +5,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/herdr/herdrfake"
 )
 
 // The wake route refuses what it cannot do: an unknown machine, one without an address, one that is awake already.
 func TestWakeRefusesWhatItCannotDo(t *testing.T) {
-	s := &Server{Machines: machines.NewManager(t.TempDir(), "", "", nil)}
+	s := &Server{Machines: herdrfake.Manager(t.TempDir())}
 	mux := http.NewServeMux()
 	s.machineRoutes(mux) // registers the wake route too
 
@@ -44,7 +44,7 @@ func TestWakeRefusesWhatItCannotDo(t *testing.T) {
 
 // A PATCH that names only the address leaves the machine's name alone, and one that names only the name leaves the address.
 func TestMachinePatchIsPartial(t *testing.T) {
-	s := &Server{Machines: machines.NewManager(t.TempDir(), "", "", nil)}
+	s := &Server{Machines: herdrfake.Manager(t.TempDir())}
 	mux := http.NewServeMux()
 	s.machineRoutes(mux)
 	if code, _ := taskCall(mux, "PATCH", "/api/machines/local", "", `{"label":"Desk"}`); code != 200 {
@@ -67,7 +67,7 @@ func TestMachinePatchIsPartial(t *testing.T) {
 
 // The order of the machines is the person's to set: ids the registry has, each once.
 func TestMachineOrderTakesKnownMachinesOnce(t *testing.T) {
-	s := &Server{Machines: machines.NewManager(t.TempDir(), "", "", nil)}
+	s := &Server{Machines: herdrfake.Manager(t.TempDir())}
 	mux := http.NewServeMux()
 	s.machineRoutes(mux)
 	code, body := taskCall(mux, "PUT", "/api/machines/order", "", `{"ids":["local"]}`)

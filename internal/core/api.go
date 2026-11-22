@@ -117,9 +117,6 @@ func (s *eventStream) end(err error) {
 	s.wake.ring()
 }
 
-// Bridged is false: a stream costs the machine nothing, the mirror's changes are fanned out here.
-func (a *Adapter) Bridged() bool { return false }
-
 // read reads a terminal the mirror holds, on a connection whose core passed the check (`checked`) itself: one
 // dialled since, to a core rolled back, is refused before anything is sent.
 func (a *Adapter) read(paneID string, lines int, format string) (ReadResult, error) {

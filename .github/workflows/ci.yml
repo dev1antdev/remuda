@@ -67,6 +67,15 @@ jobs:
           "$HOME/.local/bin/remuda-core" --version
       - name: go test
         run: go test ./...
+      - name: go test with no core of anyone's to reach
+        # a stub `remuda-core` first on PATH fails the moment a test dials one; the cores a test starts itself come from
+        # coretest (RC_BIN), never from PATH, so a green run here means no test reached a core it did not start
+        run: |
+          stub="$(mktemp -d)"
+          printf '#!/bin/sh\necho "$*" >> "%s/calls"\nexit 1\n' "$stub" > "$stub/remuda-core"
+          chmod +x "$stub/remuda-core"
+          RC_BIN="$(command -v remuda-core)" PATH="$stub:$PATH" go test ./internal/machines/ ./internal/server/ ./internal/watch/ ./internal/app/ ./internal/restart/ ./internal/sleep/ ./internal/code/ ./internal/updates/ ./internal/triggers/ ./internal/core/
+          if [ -s "$stub/calls" ]; then echo "a test dialled a core it did not start:"; cat "$stub/calls"; exit 1; fi
       - name: govulncheck
         run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
       - name: npm audit (what ships)

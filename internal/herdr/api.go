@@ -2,12 +2,11 @@ package herdr
 
 import "time"
 
-// API is a machine's herdr as remuda asks it: its snapshot, its event stream and every request remuda sends. *Client
-// is herdr's own; remuda-core's adapter is the other, so the packages that ask a machine never name either.
+// API is a machine's herdr as remuda asks it: its snapshot, its event stream and every request remuda sends.
+// remuda-core's adapter (internal/core) is the one implementation, so the packages that ask a machine never name it.
 type API interface {
 	SessionSnapshot() (*Snapshot, error)
 	Subscribe(subs []Subscription) (EventStream, error)
-	Bridged() bool
 
 	WorkspaceCreate(cwd, label string) (*WorkspaceCreateResult, error)
 	WorkspaceRename(workspaceID, label string) error
@@ -81,5 +80,3 @@ func (o Out) Grid() bool { return o.Cols > 0 && o.Rows > 0 }
 func ValidSize(cols, rows int) bool {
 	return cols >= 20 && rows >= 5 && cols <= 500 && rows <= 300
 }
-
-var _ API = (*Client)(nil)

@@ -239,7 +239,7 @@ func TestCarryOnMakesHerdrsWorkspaceAgainWithItsAgentsAsTabs(t *testing.T) {
 // TestHerdrsAgentsWaitForItsServer: while herdr's server answers, Resume of its agents is refused before anything
 // starts; the chats a reboot stopped are not held by it, and never resume herdr's by themselves.
 func TestHerdrsAgentsWaitForItsServer(t *testing.T) {
-	fleet := machines.NewCoreManager(t.TempDir(), "", nil, true)
+	fleet := machines.NewManager(t.TempDir(), nil, true)
 	t.Cleanup(fleet.Close)
 	mc, err := fleet.Get(machines.LocalID)
 	if err != nil {
@@ -323,7 +323,7 @@ func TestCanResumeTellsAFolderGoneFromOneNotAsked(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("root reads a folder whatever its mode")
 	}
-	fleet := machines.NewCoreManager(t.TempDir(), "", nil, true)
+	fleet := machines.NewManager(t.TempDir(), nil, true)
 	t.Cleanup(fleet.Close)
 	mc, _ := fleet.Get(machines.LocalID)
 	here := t.TempDir()

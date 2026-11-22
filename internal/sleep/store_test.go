@@ -117,7 +117,7 @@ func TestAWorkspaceThatSleptInHerdrWaitsForTheCoresResume(t *testing.T) {
 // A workspace that slept in herdr is not woken on the core, where a wake would start its agents with herdr's server
 // perhaps still running them: Resume after restart is its way back.
 func TestAWorkspaceThatSleptInHerdrIsNotWokenOnTheCore(t *testing.T) {
-	fleet := machines.NewCoreManager(t.TempDir(), "", nil, true)
+	fleet := machines.NewManager(t.TempDir(), nil, true)
 	t.Cleanup(fleet.Close)
 	mc, _ := fleet.Get(machines.LocalID)
 	store := Open("")

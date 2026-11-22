@@ -1,63 +1,43 @@
 package watch
 
 import (
-	"bufio"
 	"encoding/json"
-	"net"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/herdr/herdrfake"
 )
 
-// fakeHerdr is a unix socket answering session.snapshot from a snapshot the test sets, and events.subscribe with a
-// stream the test writes events into, the way herdr does: one request a connection, a stream kept open.
+// fakeHerdr is a machine's herdr as the watcher asks it: a snapshot the test sets, and one event stream a Subscribe,
+// every open stream hearing the events the test pushes — the way remuda-core answers a machine.
 type fakeHerdr struct {
-	sock string
-
-	mu        sync.Mutex
-	snap      herdr.Snapshot
-	snapshots []time.Time
-	streams   []net.Conn // open streams
-	most      int        // the most streams open at once, once the watcher had a moment to close the one before
-	started   int        // streams answered
-	answers   []time.Time
-	asks      int // events.subscribe requests, refused or not
-	asked     chan []herdr.Subscription
-	refuse    func([]herdr.Subscription) string // a refusal's code for a subscription set, "" to take it
+	mu          sync.Mutex
+	snap        herdr.Snapshot
+	snapshots   []time.Time
+	streams     []*watchedStream // open streams
+	closes      int              // streams the watcher closed itself, not ones an error read ended
+	most        int              // the most streams open at once
+	started     int              // streams answered
+	answers     []time.Time
+	asks        int // Subscribe calls, refused or not
+	asked       chan []herdr.Subscription
+	refuse      func([]herdr.Subscription) string // a refusal's code for a subscription set, "" to take it
+	unreachable error                             // Subscribe answers this, as a core that cannot be reached
 }
 
 func newFakeHerdr(t *testing.T, panes ...string) *fakeHerdr {
 	t.Helper()
-	dir, err := os.MkdirTemp("", "hw") // short: a unix socket path has ~100 bytes
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { os.RemoveAll(dir) })
-	f := &fakeHerdr{sock: filepath.Join(dir, "herdr.sock"), asked: make(chan []herdr.Subscription, 32)}
+	f := &fakeHerdr{asked: make(chan []herdr.Subscription, 32)}
 	f.setPanes(panes...)
-	ln, err := net.Listen("unix", f.sock)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		ln.Close()
-		f.closeStreams()
-	})
-	go func() {
-		for {
-			conn, err := ln.Accept()
-			if err != nil {
-				return
-			}
-			go f.serve(conn)
-		}
-	}()
 	return f
+}
+
+// api is the herdr.API the watcher's machine speaks.
+func (f *fakeHerdr) api() herdr.API {
+	return &herdrfake.API{Snapshot: f.snapshot, SubscribeF: f.subscribe}
 }
 
 func (f *fakeHerdr) setPanes(panes ...string) {
@@ -69,92 +49,75 @@ func (f *fakeHerdr) setPanes(panes ...string) {
 	}
 }
 
-func (f *fakeHerdr) serve(conn net.Conn) {
-	reader := bufio.NewReader(conn)
-	line, err := reader.ReadBytes('\n')
-	if err != nil {
-		conn.Close()
-		return
+func (f *fakeHerdr) snapshot() (*herdr.Snapshot, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.snapshots = append(f.snapshots, time.Now())
+	snap := f.snap
+	return &snap, nil
+}
+
+func (f *fakeHerdr) subscribe(subs []herdr.Subscription) (herdr.EventStream, error) {
+	select {
+	case f.asked <- subs:
+	default: // a test that reads none of them
 	}
-	var req struct {
-		ID     string `json:"id"`
-		Method string `json:"method"`
-		Params struct {
-			Subscriptions []herdr.Subscription `json:"subscriptions"`
-		} `json:"params"`
+	f.mu.Lock()
+	f.asks++
+	refuse, unreachable := f.refuse, f.unreachable
+	f.mu.Unlock()
+	if unreachable != nil {
+		return nil, unreachable
 	}
-	json.Unmarshal(line, &req)
-	answer := func(v any) {
-		b, _ := json.Marshal(v)
-		conn.Write(append(b, '\n'))
+	if refuse != nil {
+		if code := refuse(subs); code != "" {
+			return nil, &herdr.Error{Code: code, Message: "refused"}
+		}
 	}
-	switch req.Method {
-	case "session.snapshot":
-		f.mu.Lock()
-		f.snapshots = append(f.snapshots, time.Now())
-		snap := f.snap
-		f.mu.Unlock()
-		answer(map[string]any{"id": req.ID, "result": map[string]any{"type": "session_snapshot", "snapshot": snap}})
-		conn.Close()
-	case "events.subscribe":
-		select {
-		case f.asked <- req.Params.Subscriptions:
-		default: // a test that reads none of them
+	stream := &watchedStream{Stream: herdrfake.NewStream(256), f: f}
+	f.mu.Lock()
+	f.most = max(f.most, len(f.streams)+1)
+	f.streams = append(f.streams, stream)
+	f.started++
+	f.answers = append(f.answers, time.Now())
+	f.mu.Unlock()
+	return stream, nil
+}
+
+// push hands one line to every open stream: an event as herdr sends it, or the error that ends the stream, as
+// events_lost does.
+func (f *fakeHerdr) push(line string) {
+	event, err := parseEvent(line)
+	f.mu.Lock()
+	streams := append([]*watchedStream(nil), f.streams...)
+	f.mu.Unlock()
+	for _, s := range streams {
+		if err != nil {
+			s.End(err)
+			continue
 		}
-		f.mu.Lock()
-		f.asks++
-		refuse := f.refuse
-		f.mu.Unlock()
-		if refuse != nil {
-			if code := refuse(req.Params.Subscriptions); code != "" {
-				answer(map[string]any{"id": req.ID, "error": map[string]string{"code": code, "message": "refused"}})
-				conn.Close()
-				return
-			}
-		}
-		for settle := time.Now().Add(100 * time.Millisecond); f.open() > 0 && time.Now().Before(settle); {
-			time.Sleep(5 * time.Millisecond) // a stream the watcher closed is gone here a moment later
-		}
-		f.mu.Lock()
-		f.most = max(f.most, len(f.streams)+1)
-		f.mu.Unlock()
-		answer(map[string]any{"id": req.ID, "result": map[string]string{"type": "subscription_started"}})
-		f.mu.Lock()
-		f.streams = append(f.streams, conn)
-		f.started++
-		f.answers = append(f.answers, time.Now())
-		f.mu.Unlock()
-		reader.ReadBytes('\n') // until the watcher closes it
-		f.mu.Lock()
-		for i, c := range f.streams {
-			if c == conn {
-				f.streams = append(f.streams[:i], f.streams[i+1:]...)
-				break
-			}
-		}
-		f.mu.Unlock()
-		conn.Close()
-	default:
-		answer(map[string]any{"id": req.ID, "result": map[string]any{"type": "ok"}})
-		conn.Close()
+		s.Push(event)
 	}
 }
 
-// push writes one line to every open stream.
-func (f *fakeHerdr) push(line string) {
+// closed takes a stream out of the open ones, the first time its end is seen.
+func (f *fakeHerdr) closed(s *watchedStream) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	for _, c := range f.streams {
-		c.Write([]byte(line + "\n"))
+	for i, o := range f.streams {
+		if o == s {
+			f.streams = append(f.streams[:i], f.streams[i+1:]...)
+			return
+		}
 	}
 }
 
 func (f *fakeHerdr) closeStreams() {
 	f.mu.Lock()
-	streams := f.streams
+	streams := append([]*watchedStream(nil), f.streams...)
 	f.mu.Unlock()
-	for _, c := range streams {
-		c.Close()
+	for _, s := range streams {
+		s.End(nil)
 	}
 }
 
@@ -175,7 +138,7 @@ func (f *fakeHerdr) lastAnswer() time.Time {
 	return f.answers[len(f.answers)-1]
 }
 
-// subscribes is how many events.subscribe came, refused or not.
+// subscribes is how many Subscribe calls came, refused or not.
 func (f *fakeHerdr) subscribes() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -201,16 +164,88 @@ func (f *fakeHerdr) polls(from time.Time) int {
 	return n
 }
 
-// subscribed waits for the next events.subscribe.
+// subscribed waits for the next Subscribe.
 func (f *fakeHerdr) subscribed(t *testing.T) []herdr.Subscription {
 	t.Helper()
 	select {
 	case subs := <-f.asked:
 		return subs
 	case <-time.After(5 * time.Second):
-		t.Fatal("no events.subscribe came")
+		t.Fatal("no Subscribe came")
 		return nil
 	}
+}
+
+// watchedStream is one stream of the fake's: the events pushed into it, counted open until its reader is handed its
+// end — by the fake, or by the watcher closing it.
+type watchedStream struct {
+	*herdrfake.Stream
+	f    *fakeHerdr
+	once sync.Once
+}
+
+func (s *watchedStream) Next() (herdr.Event, error) {
+	event, err := s.Stream.Next()
+	if err != nil {
+		s.done()
+	}
+	return event, err
+}
+
+func (s *watchedStream) Close() error {
+	s.f.mu.Lock()
+	s.f.closes++
+	s.f.mu.Unlock()
+	s.done()
+	return s.Stream.Close()
+}
+
+// closedHere is how many streams the watcher closed itself.
+func (f *fakeHerdr) closedHere() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.closes
+}
+
+func (s *watchedStream) done() { s.once.Do(func() { s.f.closed(s) }) }
+
+// parseEvent reads one line as herdr sends it: an event of the stream, or the error that ends it.
+func parseEvent(line string) (herdr.Event, error) {
+	var said struct {
+		Event string `json:"event"`
+		Data  struct {
+			Type        string `json:"type"`
+			PaneID      string `json:"pane_id"`
+			AgentStatus string `json:"agent_status"`
+			MatchedLine string `json:"matched_line"`
+			Read        struct {
+				Text string `json:"text"`
+			} `json:"read"`
+			Standing *bool              `json:"standing"`
+			Match    *herdr.OutputMatch `json:"match"`
+			Pane     struct {
+				PaneID string `json:"pane_id"`
+			} `json:"pane"`
+		} `json:"data"`
+		Error *herdr.Error `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(line), &said); err != nil {
+		return herdr.Event{}, err
+	}
+	if said.Error != nil {
+		return herdr.Event{}, said.Error
+	}
+	kind, pane := said.Event, said.Data.PaneID
+	if kind == "" {
+		kind = said.Data.Type
+	}
+	if pane == "" {
+		pane = said.Data.Pane.PaneID
+	}
+	return herdr.Event{
+		Kind: kind, PaneID: pane, AgentStatus: said.Data.AgentStatus, MatchedLine: said.Data.MatchedLine,
+		Text: said.Data.Read.Text, Standing: said.Data.Standing, Watch: said.Data.Match,
+	}, nil
 }
 
 // waitFor waits until cond holds, a few seconds at most.

@@ -3,6 +3,8 @@
 import type { Dictionary } from "../../i18n";
 
 export const auditpanels: Dictionary = {
+  "This adds a machine: any host your": "Здесь добавляется машина: любой хост, до которого ваш",
+  "reaches with keys, running remuda-core there.": "достаёт по ключам и где запущен remuda-core.",
   "Claude Code shows its plan limits to its status line alone, and remuda reads them there once you let it. Not set up yet on {machines}: the machine's ⓘ → Updates → “Show Claude Code's plan limits”.": "Claude Code показывает лимиты плана только своей строке состояния, и remuda читает их там, если это разрешить. Пока не включено на {machines}: ⓘ машины → Обновления → «Show Claude Code's plan limits».",
   "no origin remote, so no owner's avatar": "у репозитория нет origin, поэтому нет аватара владельца",
   "the origin remote names no host and owner": "в адресе origin нет хоста и владельца",
@@ -39,9 +41,6 @@ export const auditpanels: Dictionary = {
   reviewed: "просмотрен",
   repo: "репо",
   Options: "Параметры",
-  "Machines saved in herdr appear on their own. This adds another: any host your":
-    "Машины, сохранённые в herdr, появляются сами. Здесь добавляется ещё одна: любой хост, до которого ваш",
-  "reaches with keys, with herdr running there.": "достаёт по ключам и где запущен herdr.",
   "last {ago}: {result}": "последний запуск {ago}: {result}",
   you: "вы",
   "The issue is read with": "Issue читается через",

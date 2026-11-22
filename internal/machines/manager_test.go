@@ -1,16 +1,26 @@
 package machines
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/dev1antdev/remuda/internal/herdr"
 )
+
+// silentAPI answers nothing: a machine of a test that never asks it, and reaches no core of anyone's.
+type silentAPI struct{ herdr.API }
+
+// newTestManager is the fleet of a test that only reads the registry.
+func newTestManager(dir string) *Manager { return NewManagerWith(dir, nil, false, &silentAPI{}, nil) }
 
 func TestAServersHostIsNoMachineOfTheFleet(t *testing.T) {
 	dir := t.TempDir()
-	m := NewManager(dir, filepath.Join(dir, "no-herdr.sock"), "herdr", nil)
+	m := newTestManager(dir)
 	m.machines["gog"] = newRemote(Config{ID: "gog", Label: "GOG", Host: "gog.remote"})
 	m.order = append(m.order, "gog")
 	if ids := idsOf(m.List()); ids != "local,gog" {
@@ -77,7 +87,7 @@ func TestTheLocalMachineIsNamedForItsSystem(t *testing.T) {
 // The person's order: the machines it names first, as they dragged them; one added since after them, as it arrived.
 func TestTheFleetIsListedInThePersonsOrder(t *testing.T) {
 	dir := t.TempDir()
-	m := NewManager(dir, filepath.Join(dir, "no-herdr.sock"), "herdr", nil)
+	m := newTestManager(dir)
 	for _, id := range []string{"gog", "roofr", "windows"} {
 		m.machines[id] = newRemote(Config{ID: id, Label: id, Host: id + ".remote"})
 		m.order = append(m.order, id)
@@ -111,7 +121,7 @@ func TestTheFleetIsListedInThePersonsOrder(t *testing.T) {
 
 func TestAnOrderNamesKnownMachinesOnce(t *testing.T) {
 	dir := t.TempDir()
-	m := NewManager(dir, filepath.Join(dir, "no-herdr.sock"), "herdr", nil)
+	m := newTestManager(dir)
 	m.machines["gog"] = newRemote(Config{ID: "gog", Label: "GOG", Host: "gog.remote"})
 	m.order = append(m.order, "gog")
 	if err := m.SetOrder([]string{"gog", "nowhere"}); err == nil {
@@ -137,13 +147,13 @@ func TestAnOrderNamesKnownMachinesOnce(t *testing.T) {
 // The order outlives a restart: the next registry on the same state dir reads it.
 func TestTheOrderIsKeptAcrossARestart(t *testing.T) {
 	dir := t.TempDir()
-	m := NewManager(dir, filepath.Join(dir, "no-herdr.sock"), "herdr", nil)
+	m := newTestManager(dir)
 	m.machines["gog"] = newRemote(Config{ID: "gog", Label: "GOG", Host: "gog.remote"})
 	m.order = append(m.order, "gog")
 	if err := m.SetOrder([]string{"gog", "local"}); err != nil {
 		t.Fatal(err)
 	}
-	next := NewManager(dir, filepath.Join(dir, "no-herdr.sock"), "herdr", nil)
+	next := newTestManager(dir)
 	next.machines["gog"] = newRemote(Config{ID: "gog", Label: "GOG", Host: "gog.remote"})
 	next.order = append(next.order, "gog")
 	if ids := idsOf(next.List()); ids != "gog,local" {
@@ -172,61 +182,80 @@ func split(s string) []string {
 	return strings.Split(s, ",")
 }
 
-func TestTheFleetCallsAMachineGoneOnlyOnceHerdrsWereRead(t *testing.T) {
+// TestARemovalThatCouldNotBeKeptLeavesTheMachine: the list without it is written before it goes, so a disk that refused
+// the write leaves the machine a machine of the fleet, its panes and checkpoints with it.
+func TestARemovalThatCouldNotBeKeptLeavesTheMachine(t *testing.T) {
 	dir := t.TempDir()
-	herdr := filepath.Join(dir, "herdr")
-	if err := os.WriteFile(herdr, []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
+	m := newTestManager(dir)
+	// in the registry, never connected: a host named for a test must reach no ssh of the person's
+	m.machines["box"] = newRemote(Config{ID: "box", Label: "Box", Host: "box.remote"})
+	m.order = append(m.order, "box")
+	if err := os.Mkdir(filepath.Join(dir, "machines.json"), 0o755); err != nil { // a write over a folder fails
 		t.Fatal(err)
 	}
-	m := NewManager(dir, filepath.Join(dir, "no-herdr.sock"), herdr, nil)
-	m.SyncHerdr()
-	if m.Gone("mini") {
-		t.Fatal("gone while herdr's machines could not be read")
+	if err := m.Remove("box"); err == nil {
+		t.Fatal("a removal that could not be written went ahead")
 	}
-	if err := os.WriteFile(herdr, []byte("#!/bin/sh\necho '[]'\n"), 0o755); err != nil {
+	if _, err := m.Get("box"); err != nil || m.Gone("box") {
+		t.Fatalf("the machine left the fleet for a removal that did not land: %v", err)
+	}
+}
+
+// TestTwoRemovalsBothStayRemoved: a removal writes the list without its machine before the machine goes, one at a time,
+// so the second can never write the first back — not in the running fleet, and not in the file a restart reads.
+func TestTwoRemovalsBothStayRemoved(t *testing.T) {
+	dir := t.TempDir()
+	m := newTestManager(dir)
+	for _, id := range []string{"one", "two"} {
+		m.machines[id] = newRemote(Config{ID: id, Label: id, Host: id + ".remote"})
+		m.order = append(m.order, id)
+	}
+	if err := m.save(); err != nil {
 		t.Fatal(err)
 	}
-	m.SyncHerdr()
-	if !m.Gone("mini") || m.Gone(LocalID) {
-		t.Fatal("a machine of no list is not gone, or the local one is")
-	}
-	failing := NewManager(t.TempDir(), filepath.Join(dir, "no-herdr.sock"), herdr+"-failing", nil)
-	if err := os.WriteFile(herdr+"-failing", []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
+	if err := m.Remove("one"); err != nil {
 		t.Fatal(err)
 	}
-	failing.SyncHerdr()
-	added, err := failing.Add("Mini", "mini.invalid")
+	if err := m.Remove("two"); err != nil {
+		t.Fatal(err)
+	}
+	if ids := idsOf(m.List()); ids != "local" {
+		t.Fatalf("the fleet after both removals: %s", ids)
+	}
+	// the file a restart reads, decoded as it stands: no manager, so a regression here reaches no ssh and no core
+	saved, err := os.ReadFile(filepath.Join(dir, "machines.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Mkdir(filepath.Join(failing.dir, removedFile), 0o700); err != nil {
+	var remotes []Config
+	if err := json.Unmarshal(saved, &remotes); err != nil {
+		t.Fatalf("machines.json: %v\n%s", err, saved)
+	}
+	if len(remotes) != 0 {
+		t.Fatalf("a restart brings back %+v", remotes)
+	}
+}
+
+// TestARemovalOfOneAlreadyRemovedLocksNothing: two tabs removing one machine, the second finds it gone; the fleet's
+// next write must not wait behind anything the second left held.
+func TestARemovalOfOneAlreadyRemovedLocksNothing(t *testing.T) {
+	m := newTestManager(t.TempDir())
+	m.machines["box"] = newRemote(Config{ID: "box", Label: "Box", Host: "box.remote"})
+	m.order = append(m.order, "box")
+	if err := m.Remove("box"); err != nil {
 		t.Fatal(err)
 	}
-	if err := failing.Remove(added.ID()); err == nil || failing.Gone(added.ID()) {
-		t.Fatalf("a removal that could not be noted went through: %v", err)
+	if err := m.Remove("box"); err == nil {
+		t.Fatal("a machine removed twice went twice")
 	}
-	if err := os.Remove(filepath.Join(failing.dir, removedFile)); err != nil {
-		t.Fatal(err)
-	}
-	if err := failing.Remove(added.ID()); err != nil {
-		t.Fatal(err)
-	}
-	if !failing.Gone(added.ID()) {
-		t.Fatal("a machine the person removed is not gone while herdr fails")
-	}
-	again := NewManager(failing.dir, filepath.Join(dir, "no-herdr.sock"), herdr+"-failing", nil)
-	again.SyncHerdr()
-	if !again.Gone(added.ID()) {
-		t.Fatal("a removal is forgotten across a restart while herdr fails")
-	}
-	if _, err := failing.Add("Mini", "mini.invalid"); err != nil || failing.Gone(added.ID()) {
-		t.Fatalf("a machine added again is still gone: %v", err)
-	}
-	for _, bin := range []string{filepath.Join(dir, "no-such-herdr"), ""} {
-		none := NewManager(dir, filepath.Join(dir, "no-herdr.sock"), bin, nil)
-		none.SyncHerdr()
-		if !none.Gone("mini") {
-			t.Fatalf("without herdr (%q) the fleet is whole", bin)
+	done := make(chan error, 1)
+	go func() { done <- m.save() }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
 		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the fleet's next write waits behind the removal of a machine already gone")
 	}
 }

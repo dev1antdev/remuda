@@ -320,7 +320,7 @@ func TestAnAgentOnTheLocalCoreIsNamedByItsSessionFile(t *testing.T) {
 	coretest.StandInClaude(t, sid)
 	c := coretest.Server(t)
 	c.Use(t)
-	m := NewCoreManager(t.TempDir(), "", nil, false)
+	m := NewManager(t.TempDir(), nil, false)
 	defer m.Close()
 	mc, err := m.Get(LocalID)
 	if err != nil {

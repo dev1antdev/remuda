@@ -1,7 +1,7 @@
 # Working in remuda
 
 remuda is a Go server with an embedded React SPA: a browser and phone
-cockpit for the AI coding agents that **herdr** runs on the user's
+cockpit for the AI coding agents that **remuda-core** runs on the user's
 machines. This file is *how to work here*, for any agent. `CLAUDE.md` is
 the record of *what lives where and why* — every package, every
 invariant — read its bullet before touching a package and change the
@@ -22,6 +22,7 @@ once after cloning and after every change under `web/`.
 | TypeScript check | `make typecheck` (`tsc --noEmit` + `go vet`) |
 | The page's unit tests (Vitest on the pure modules) | `make webtest` (`npm test` in `web/`; `make test` runs it too) |
 | Everything, as CI does (`.github/workflows/ci.yml`) | `make test && make typecheck`, or `docker build --target test .` |
+| The dialling guard: a stub `remuda-core` first on PATH must fail the run | `RC_BIN=$(command -v remuda-core) PATH=<stub>:$PATH go test ./internal/machines/ ./internal/server/ ./internal/watch/ ./internal/app/ ./internal/restart/ ./internal/sleep/ ./internal/code/ ./internal/updates/ ./internal/triggers/ ./internal/core/` — a package that dials a core belongs on that list |
 | The end-to-end smoke and the display checks: a throwaway remuda-core, a remuda of its own, headless Chrome, every screen at a desk's and a phone's width in English and Russian (`scripts/e2e.sh`, `e2e/smoke.mjs`, `e2e/display.mjs`) | `make e2e` (needs remuda-core, node and Chrome; nothing of yours is touched; `E2E_DISPLAY_PASSES=desk-en` for one pass, `E2E_SMOKE_ONLY=1` for the smoke alone) |
 | A pull request | against `release`: `gh pr create --base release` |
 | A release | `git checkout main && git merge --ff-only release && git tag -a vX.Y.Z -m 'remuda X.Y.Z' && make publish` — the Release workflow builds and publishes it |
@@ -41,10 +42,10 @@ agree. `make publish` refuses any branch but `main`
 (`PUBLISH_BRANCH=<branch>` overrides). A hotfix is made on `main` and
 merged into `release` the same day, or the next fast-forward fails.
 
-Tests are plain `testing` and need no herdr: the ones that start a
-throwaway herdr server skip when `herdr` is not on PATH, the ones that
+Tests are plain `testing` and need no herdr: the ones that
 start a throwaway remuda-core (`internal/core/coretest`) skip without
-`RC_BIN` or `remuda-core` on PATH, and a package
+`RC_BIN` or `remuda-core` on PATH, a test that only needs a machine's API
+puts `internal/herdr/herdrfake` in place of a core, and a package
 that runs scripts is tested on a `shell.Fake` with a recorded answer
 (`internal/review/wire_test.go`, `internal/jobs/jobs_test.go`). The web
 side runs Vitest on its pure modules, a `*.test.ts` beside each (`lib/`,
@@ -63,9 +64,10 @@ runs the whole list.
 These protect the person's machine and the agents running on it. They are
 not style.
 
-- **herdr owns every process and status.** remuda keeps no session state
-  and must keep working across its own restart while agents run. Never
-  spawn, kill or track an agent yourself; ask herdr over its RPC. The one
+- **remuda-core owns every process and status.** remuda keeps no session
+  state and must keep working across its own restart while agents run.
+  Never spawn, kill or track an agent yourself; ask the machine's
+  remuda-core over its RPC (`herdr.API`, the adapter in `internal/core`). The one
   exception: on a machine moved to remuda-core, herdr's server is stopped
   (`herdr server stop`; herdr stays installed) only when the person
   presses it, behind a confirm naming what stops — never from a schedule,
@@ -95,6 +97,11 @@ not style.
   same agent under the same pid (`core.Adapter.sendTo`).
 - **Never `--takeover`.** herdr allows one attached client per terminal;
   stealing the slot is the person's call only, never remuda's.
+- **A test never stops the person's herdr or core.** A `Server` asked to
+  stop herdr (`HerdrStops`) in a test gets `SetMovedHerdr` with a socket of
+  the test's own first, and a test core is `coretest.Server`'s — an agent
+  running in herdr carries `HERDR_SOCKET_PATH` in its environment, and a
+  stop without one is the person's own server (it happened, Core 26j).
 - **A test remuda-core is `coretest.Server`'s, `scripts/e2e.sh`'s or the
   Windows job's own session's, each with its own `RC_SESSION`, `RC_SOCKET`, XDG
   folders, `HOME` and `RC_LAUNCHD_DIRECT` — the last for a core started with
@@ -103,16 +110,16 @@ not style.
   core started without them reaches the person's.
 - **A test herdr needs `HERDR_SOCKET_PATH`, never a changed `HOME`
   alone.** herdr ignores `HOME` for its socket: `HOME=/tmp/x herdr server
-  stop` stopped the person's real server once. `internal/herdr/
-  server_test.go` is the pattern. An agent working inside a herdr pane
+  stop` stopped the person's real server once. An agent working inside a herdr pane
   already has `HERDR_SOCKET_PATH` and `HERDR_SOCKET` in its environment,
   naming the person's real server: a test sets both itself and never
   counts on them being unset. **And a `HOME` of its own beside them**:
   herdr restores the saved session of the `HOME` it runs under — the
   person's workspaces, their agents resumed with `--resume` — and saves
   its own over it; a throwaway on the person's `HOME` once resumed a live
-  Claude Code session in a hidden pane. `internal/herdr/herdrtest.Server`
-  sets all three.
+  Claude Code session in a hidden pane. A test of remuda itself starts
+  `internal/core/coretest.Server` instead: a throwaway core on a socket,
+  HOME and folders of its own, never a herdr.
 - **Never run the uninstall for real on the person's machine.** `remuda
   uninstall` and `scripts/uninstall.sh run` stop the service, and with
   `-herdr` the server and every agent in it. To look, use `-n` (the plan
@@ -234,9 +241,9 @@ not style.
   package (`sessions`, `chat`, `review`, `updates`, `tasks`, …). A package
   that only runs scripts on a machine takes a `shell.Host`, never a
   `*machines.Machine`, and builds its scripts with `internal/script`. A
-  package that asks a machine's herdr takes the `herdr.API` and
-  `herdr.Terminals` that `Machine.Ready()` hands out; only `internal/herdr`
-  and `internal/machines` name `*herdr.Client`.
+  package that asks a machine takes the `herdr.API` and `herdr.Terminals`
+  that `Machine.Ready()` hands out; their one implementation is the adapter
+  over the machine's remuda-core (`internal/core`).
   Packages hear each other through `internal/events`; the subscriptions
   are listed once, in `internal/app`. `docs/architecture.md` draws the
   map; a new feature is a package with its use cases, a file in

@@ -3,7 +3,6 @@
 package watch
 
 import (
-	"net"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -13,7 +12,6 @@ import (
 
 	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/herdr"
-	"github.com/dev1antdev/remuda/internal/machines"
 )
 
 // cpuTime is the CPU this process used so far.
@@ -81,48 +79,9 @@ func TestAStreamHerdrEndedIsClosedHere(t *testing.T) {
 	f.push(`{"id":"remuda-9","error":{"code":"events_lost","message":"the subscriber fell behind"}}`)
 	f.subscribed(t)
 	waitFor(t, "the stream that lost events to close here", func() bool { return f.answered() == 2 && f.open() == 1 })
-}
-
-// closings counts the connections a client dialled and closed.
-type closings struct {
-	dialled, closed atomic.Int32
-}
-
-type countedConn struct {
-	net.Conn
-	by   *closings
-	once sync.Once
-}
-
-func (c *countedConn) Close() error {
-	c.once.Do(func() { c.by.closed.Add(1) })
-	return c.Conn.Close()
-}
-
-func TestEveryStreamThatEndsLeavesNoConnection(t *testing.T) {
-	quickPace(t)
-	f := newFakeHerdr(t, "w1:p1")
-	var count closings
-	watching(t, f, func(w *Watcher) {
-		mc, _ := w.machines.Get(machines.LocalID)
-		client, _, _ := mc.Ready()
-		client.(*herdr.Client).Dial = func(timeout time.Duration) (net.Conn, error) {
-			conn, err := net.DialTimeout("unix", f.sock, timeout)
-			if err != nil {
-				return nil, err
-			}
-			count.dialled.Add(1)
-			return &countedConn{Conn: conn, by: &count}, nil
-		}
-	})
-	f.subscribed(t)
-	waitFor(t, "the stream", func() bool { return f.open() == 1 })
-	for i := 0; i < 3; i++ {
-		f.closeStreams()
-		f.subscribed(t)
-		waitFor(t, "the stream again", func() bool { return f.answered() == i+2 && f.open() == 1 })
+	if f.closedHere() < 1 {
+		t.Fatal("the stream that lost events was dropped, not closed here: its registration and its feeds would stay")
 	}
-	waitFor(t, "every connection but the standing stream closed", func() bool { return count.dialled.Load()-count.closed.Load() == 1 })
 }
 
 func TestASwapHerdrRefusedIsTriedAgain(t *testing.T) {
@@ -149,24 +108,16 @@ func TestASwapHerdrRefusedIsTriedAgain(t *testing.T) {
 
 func TestANewStreamIsFollowedByASnapshot(t *testing.T) {
 	quickPace(t)
-	for _, bridged := range []bool{false, true} {
-		f := newFakeHerdr(t, "w1:p1")
-		watching(t, f, func(w *Watcher) {
-			if bridged {
-				mc, _ := w.machines.Get(machines.LocalID)
-				client, _, _ := mc.Ready()
-				client.(*herdr.Client).Dial = func(timeout time.Duration) (net.Conn, error) { return net.DialTimeout("unix", f.sock, timeout) }
-			}
-		})
-		f.subscribed(t)
-		waitFor(t, "the stream", func() bool { return f.open() == 1 })
-		f.setPanes("w1:p1", "w1:p2")
-		f.push(`{"data":{"type":"pane_created","pane":{"pane_id":"w1:p2"}},"event":"pane_created"}`)
-		f.subscribed(t)
-		waitFor(t, "the new stream", func() bool { return f.answered() == 2 })
-		swapped := f.lastAnswer()
-		waitFor(t, "a snapshot after the new stream stood", func() bool { return f.polls(swapped) >= 1 }) // what the new pane did before it is in it
-	}
+	f := newFakeHerdr(t, "w1:p1")
+	watching(t, f, nil)
+	f.subscribed(t)
+	waitFor(t, "the stream", func() bool { return f.open() == 1 })
+	f.setPanes("w1:p1", "w1:p2")
+	f.push(`{"data":{"type":"pane_created","pane":{"pane_id":"w1:p2"}},"event":"pane_created"}`)
+	f.subscribed(t)
+	waitFor(t, "the new stream", func() bool { return f.answered() == 2 })
+	swapped := f.lastAnswer()
+	waitFor(t, "a snapshot after the new stream stood", func() bool { return f.polls(swapped) >= 1 }) // what the new pane did before it is in it
 }
 
 func TestAnEditedWatchIsNotCarried(t *testing.T) {
