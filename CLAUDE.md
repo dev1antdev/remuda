@@ -3908,7 +3908,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   focused, an agent detected, a pane exited, a layout updated
   (`urgentKinds`) — every pane's `pane.agent_status_changed` (the core binds
   that one to a pane, so the set follows the panes) and the output watches
-  `Watcher.Outputs` names (`internal/triggers`); a stream's subscriptions
+  `Watcher.Outputs` names (`internal/triggers`), which is told the watches the stream subscribes to now, so at the cap
+  a standing watch is never taken for a pane that just appeared; a stream's subscriptions
   are fixed, so a pane made or gone, or a rule changed (`Resubscribe`), is
   a new stream — opened before the old one closes — never more than two.
   A move the snapshot asked for is kept pending for the rest of its burst

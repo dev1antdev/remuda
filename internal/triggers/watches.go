@@ -12,9 +12,9 @@ import (
 
 // MaxWatches is how many output watches one machine's stream holds: every pane gets the two built-in ones and the
 // person's rules that cover it, the person's first; past the cap the person's rules come before the built-ins, and
-// within either class the watches the stream holds now before the ones it does not — so a pane that just appeared
-// takes no watch of a pane that stands, and a rule just saved still takes its place from a built-in. The rest are
-// left out, said once an hour.
+// within either class the watches the stream subscribes to now before the ones it does not — so a pane that just
+// appeared takes no watch of a pane that stands, and a rule just saved still takes its place from a built-in. The
+// rest are left out, said once an hour.
 const MaxWatches = 200
 
 var (
@@ -23,8 +23,8 @@ var (
 )
 
 // Watches is the output watches for a machine's snapshot: the person's rules where they look, then the built-in two
-// on every pane, at most MaxWatches.
-func (s *Service) Watches(machine string, snap *herdr.Snapshot) []watch.Output {
+// on every pane, at most MaxWatches — standing being the watches the machine's stream subscribes to now.
+func (s *Service) Watches(machine string, snap *herdr.Snapshot, standing []watch.Output) []watch.Output {
 	rules := s.Rules.List()
 	var person, builtin []watch.Output
 	for i := range snap.Panes {
@@ -50,29 +50,18 @@ func (s *Service) Watches(machine string, snap *herdr.Snapshot) []watch.Output {
 			log.Printf("%s: %d output watches asked for, %d kept", machine, len(all), MaxWatches)
 		}
 		overMu.Unlock()
-		all = s.admitted(machine, all)
+		all = admitted(all, standing)
 	}
-	s.rememberWatched(machine, all) // only what was kept: a watch that got no room does not stand
 	return all
 }
 
-// rememberWatched keeps the watches the set kept, so the next admission knows which of them stand.
-func (s *Service) rememberWatched(machine string, kept []watch.Output) {
-	watches := make(map[string]bool, len(kept))
-	for _, o := range kept {
-		watches[watchKey(o)] = true
-	}
-	s.mu.Lock()
-	s.watched[machine] = watches
-	s.mu.Unlock()
-}
-
 // admitted cuts the set to MaxWatches: the person's rules before the built-ins, and within either class the watches
-// the set kept before the rest.
-func (s *Service) admitted(machine string, all []watch.Output) []watch.Output {
-	s.mu.Lock()
-	held := s.watched[machine]
-	s.mu.Unlock()
+// the stream subscribes to now before the ones it does not.
+func admitted(all, standing []watch.Output) []watch.Output {
+	held := make(map[string]bool, len(standing))
+	for _, o := range standing {
+		held[watchKey(o)] = true
+	}
 	rank := func(o watch.Output) int {
 		switch {
 		case o.Person && held[watchKey(o)]:

@@ -182,7 +182,7 @@ func TestARuleEditPromotesASettlingSetAtOnce(t *testing.T) {
 	f.memory = true
 	var rules atomic.Pointer[[]Output]
 	watcher, _, _ := watching(t, f, func(w *Watcher) {
-		w.Outputs = func(string, *herdr.Snapshot) []Output {
+		w.Outputs = func(string, *herdr.Snapshot, []Output) []Output {
 			if p := rules.Load(); p != nil {
 				return *p
 			}
@@ -299,7 +299,7 @@ func TestOutputMatchesGoOnTheBusWithTheirWatch(t *testing.T) {
 	f := newFakeHerdr(t, "w1:p1")
 	var mu sync.Mutex
 	var heard []events.OutputMatched
-	outputs := func(machine string, snap *herdr.Snapshot) []Output {
+	outputs := func(machine string, snap *herdr.Snapshot, standing []Output) []Output {
 		var out []Output
 		for _, pane := range snap.Panes {
 			out = append(out,
@@ -362,7 +362,7 @@ func TestHerdrRefusingThePersonsWatchesKeepsTheStream(t *testing.T) {
 	}
 	var mu sync.Mutex
 	var refusals []error
-	outputs := func(machine string, snap *herdr.Snapshot) []Output {
+	outputs := func(machine string, snap *herdr.Snapshot, standing []Output) []Output {
 		return []Output{
 			{Key: "serve", Pane: "w1:p1", Match: herdr.OutputMatch{Type: "regex", Value: "Local:"}, Lines: 40},
 			{Key: "rule:1", Pane: "w1:p1", Match: herdr.OutputMatch{Type: "regex", Value: "bad"}, Lines: 40, Person: true},

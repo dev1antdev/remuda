@@ -611,7 +611,9 @@ func Run(ctx context.Context, o Options) error {
 	paneTriggers.Listening = func(machineID string, port int) (string, bool) { return srv.Listening(machineID, port) }
 	paneTriggers.Changed = hub.RosterChanged
 	paneTriggers.Resubscribe = watcher.Resubscribe
-	watcher.Outputs = paneTriggers.Watches
+	watcher.Outputs = func(machine string, snap *herdr.Snapshot, standing []watch.Output) []watch.Output {
+		return paneTriggers.Watches(machine, snap, standing)
+	}
 	watcher.Refused = paneTriggers.Refused
 	events.Subscribe(bus, paneTriggers.Observe)
 	events.Subscribe(bus, paneTriggers.OnMatch)

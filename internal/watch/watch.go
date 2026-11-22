@@ -60,8 +60,9 @@ type Watcher struct {
 	machines *machines.Manager
 	bus      *events.Bus
 
-	// Outputs names the watches herdr keeps on a machine's panes' output, for its latest snapshot; nil for none.
-	Outputs func(machine string, snap *herdr.Snapshot) []Output
+	// Outputs names the watches the core keeps on a machine's panes' output, for its latest snapshot, told the watches
+	// the stream subscribes to now so a standing watch is never taken for a pane that just appeared; nil for none.
+	Outputs func(machine string, snap *herdr.Snapshot, standing []Output) []Output
 	// Refused hears herdr refusing the person's own watches on a machine (nil once it takes them again).
 	Refused func(machine string, err error)
 

@@ -296,7 +296,7 @@ func TestWatchesPutThePersonsRulesFirstAndKeepToTheCap(t *testing.T) {
 		Panes:      []herdr.PaneInfo{{PaneID: "w1:p1", WorkspaceID: "w1", CWD: "/home/me/api"}, {PaneID: "w2:p1", WorkspaceID: "w2", CWD: "/home/me/web"}},
 	}
 	var got []string
-	for _, o := range s.Watches("gog", snap) {
+	for _, o := range s.Watches("gog", snap, nil) {
 		got = append(got, o.Pane+" "+o.Key)
 	}
 	want := "w1:p1 rule:api,w1:p1 rule:all,w2:p1 rule:all,w1:p1 serve,w1:p1 tests,w2:p1 serve,w2:p1 tests"
@@ -307,7 +307,7 @@ func TestWatchesPutThePersonsRulesFirstAndKeepToTheCap(t *testing.T) {
 	for i := 0; i < MaxWatches; i++ {
 		many.Panes = append(many.Panes, herdr.PaneInfo{PaneID: "w1:p" + string(rune('a'+i%26)) + strings.Repeat("x", i/26)})
 	}
-	if n := len(s.Watches("gog", many)); n != MaxWatches {
+	if n := len(s.Watches("gog", many, nil)); n != MaxWatches {
 		t.Fatalf("%d watches past the cap", n)
 	}
 }
@@ -321,15 +321,15 @@ func TestANewPaneTakesNoWatchFromAPaneThatStands(t *testing.T) {
 	for i := range 66 { // 66 panes × three watches each: inside the cap, so every one of them stands
 		snap.Panes = append(snap.Panes, herdr.PaneInfo{PaneID: fmt.Sprintf("w1:p%d", i)})
 	}
-	stood := s.Watches("gog", &snap)
+	stood := s.Watches("gog", &snap, nil)
 	if len(stood) != 198 {
 		t.Fatalf("a set of %d watches", len(stood))
 	}
 
 	// a pane appears before them all, and a second snapshot comes before the stream swaps
 	grown := herdr.Snapshot{Panes: append([]herdr.PaneInfo{{PaneID: "w1:new"}}, snap.Panes...)}
-	s.Watches("gog", &grown)
-	then := s.Watches("gog", &grown)
+	s.Watches("gog", &grown, stood)
+	then := s.Watches("gog", &grown, stood)
 	have, own := map[string]bool{}, 0
 	for _, o := range then {
 		have[o.Pane+" "+o.Key] = true
@@ -357,8 +357,9 @@ func TestAtTheCapAPersonRuleKeepsItsPlace(t *testing.T) {
 	for i := range 99 { // the rule's one pane, and ninety-nine outside its folder: built-ins are the whole cap
 		snap.Panes = append(snap.Panes, herdr.PaneInfo{PaneID: fmt.Sprintf("w2:p%d", i), WorkspaceID: "w2", CWD: "/srv/other"})
 	}
-	if n := len(s.Watches("gog", snap)); n != MaxWatches {
-		t.Fatalf("a full cap of built-ins: %d", n)
+	standing := s.Watches("gog", snap, nil) // the built-ins of every pane, the whole cap
+	if len(standing) != MaxWatches {
+		t.Fatalf("a full cap of built-ins: %d", len(standing))
 	}
 	rule := Rule{ID: "api", Name: "In api", Machine: "gog", Dir: "/home/me/api", Match: "substring", Pattern: "DONE", Action: ActionFeed, Enabled: true}
 	if _, err := s.Replace([]Rule{rule}); err != nil {
@@ -372,17 +373,17 @@ func TestAtTheCapAPersonRuleKeepsItsPlace(t *testing.T) {
 		}
 		return false
 	}
-	if !has(s.Watches("gog", snap)) {
+	if !has(s.Watches("gog", snap, nil)) {
 		t.Fatal("a rule saved on a machine whose built-ins fill the cap never takes effect")
 	}
 	// the pane leaves the rule's folder for a snapshot and comes back: the rule is not lost for it
 	away := *snap
 	away.Panes = append([]herdr.PaneInfo(nil), snap.Panes...)
 	away.Panes[0].WorkspaceID, away.Panes[0].CWD = "w2", "/srv/other"
-	if has(s.Watches("gog", &away)) {
+	if has(s.Watches("gog", &away, standing)) {
 		t.Fatal("the rule covers a pane in another folder")
 	}
-	if !has(s.Watches("gog", snap)) {
+	if !has(s.Watches("gog", snap, nil)) {
 		t.Fatal("a pane that left the folder for a moment took the rule with it")
 	}
 }

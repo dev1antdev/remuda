@@ -35,6 +35,7 @@ const lazyKind = "pane.updated"
 type streamSet struct {
 	subs    []herdr.Subscription
 	all     []Output            // the watches asked for, as asked
+	held    []Output            // the output watches this stream holds, in subscription order
 	outputs map[string][]Output // by pane, the ones held
 	key     string              // the whole set as one string, to tell a move
 	person  string              // the person's own watches as one string, "" for none
@@ -74,6 +75,7 @@ func buildSet(snap *herdr.Snapshot, outputs []Output, refused string) *streamSet
 		match := o.Match
 		set.subs = append(set.subs, herdr.Subscription{Type: herdr.EventOutputMatched, PaneID: o.Pane, Source: "recent", Lines: o.Lines, Match: &match})
 		set.outputs[o.Pane] = append(set.outputs[o.Pane], o)
+		set.held = append(set.held, o)
 	}
 	set.key = fingerprint(set.subs)
 	return set
@@ -88,6 +90,14 @@ func fingerprint[T any](values []T) string {
 	return string(b)
 }
 
+// heldWatches is the output watches a set holds, nil for none: the ones a stream subscribing to it would carry.
+func (set *streamSet) heldWatches() []Output {
+	if set == nil {
+		return nil
+	}
+	return set.held
+}
+
 // noteWanted works out the subscriptions for the snapshot just applied and tells the stream when they moved. A move
 // the snapshot asked for — a pane that appeared or went, the watches that follow the panes — is kept pending for the
 // rest of its burst (`eventDebounce`), and only then becomes the set the stream subscribes to: a pane that appears and
@@ -96,9 +106,12 @@ func fingerprint[T any](values []T) string {
 // person asked for (`now`: a rule edited, a refusal taken again) is promoted and told at once, and so is the first
 // set.
 func (w *Watcher) noteWanted(machineID string, snap *herdr.Snapshot, now bool) {
+	w.mu.Lock()
+	standing := w.stateFor(machineID).wanted.heldWatches() // what the stream subscribes to now: the rules keep those
+	w.mu.Unlock()
 	var outputs []Output
 	if w.Outputs != nil {
-		outputs = w.Outputs(machineID, snap)
+		outputs = w.Outputs(machineID, snap, standing)
 	}
 	w.mu.Lock()
 	st := w.stateFor(machineID)

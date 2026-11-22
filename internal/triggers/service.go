@@ -66,7 +66,7 @@ type Offer struct {
 // New is the service over the person's rules in dir.
 func New(dir string) *Service {
 	return &Service{Rules: Open(dir), machines: map[string]map[string]*paneView{}, standing: map[string]map[string]time.Time{},
-		acted: map[string]time.Time{}, offers: map[string]Offer{}, refused: map[string]string{}, watched: map[string]map[string]bool{}}
+		acted: map[string]time.Time{}, offers: map[string]Offer{}, refused: map[string]string{}}
 }
 
 func key(machine, pane string) string { return machine + "|" + pane }
@@ -125,7 +125,6 @@ func (s *Service) Forget(machine string) {
 	}
 	delete(s.machines, machine)
 	delete(s.refused, machine)
-	delete(s.watched, machine)
 }
 
 // OnMatch hears a match. herdr says a match once as it appears, and again for one standing on the screen whenever a
