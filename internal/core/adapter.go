@@ -49,6 +49,9 @@ type AdapterHooks struct {
 	SessionOf SessionLookup
 	// Reread has SessionOf's answers read again now, waiting for them; nil for none.
 	Reread func() error
+	// Canonical names a folder as the machine does — a symlink resolved — so a workspace made on it, its checkout and
+	// its panes are one spelling everywhere remuda keys them; nil leaves a folder as given.
+	Canonical func(dir string) string
 }
 
 // SessionLookup names the conversation of an agent's process; nil while it is not known.

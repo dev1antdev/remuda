@@ -3,11 +3,16 @@ package machines
 import (
 	"os"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/rpath"
+	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/shell"
 )
+
+// canonicalWithin bounds the read of a folder's own spelling.
+const canonicalWithin = 5 * time.Second
 
 // A Machine is a shell.Host: scripts run here through sh -c, or over the ssh master.
 
@@ -42,6 +47,21 @@ func (mc *Machine) Home() string {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
 	return mc.home
+}
+
+// Canonical is a folder the way the machine spells it — a symlink resolved, Windows' own separators and drive letter
+// — so two spellings of one folder meet in remuda's keys: the documents on its core, the triggers and the repository
+// settings alike. The path as given, cleaned, when the machine cannot say (away, or no such folder).
+func (mc *Machine) Canonical(dir string) string {
+	if dir == "" {
+		return ""
+	}
+	style := mc.Paths()
+	out, err := shell.Text(mc, "cd -- "+script.Quote(style.Slash(dir))+" 2>/dev/null && pwd -P", canonicalWithin)
+	if said := strings.TrimSpace(out); err == nil && said != "" {
+		return style.Clean(said)
+	}
+	return style.Clean(dir)
 }
 
 // StateDir is the folder remuda keeps on this machine, "" for a remote before its first connect.

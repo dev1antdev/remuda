@@ -70,6 +70,7 @@ func (s *Server) handleRepoSettingsPut(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 400, errors.New("which repository: its main folder, as a whole path"))
 		return
 	}
+	req.Root = mc.Canonical(req.Root) // one spelling of a folder: the one the roster's sessions are named in
 	saved, err := s.Repos.Put(mc.ID(), req.Root, req.Settings)
 	if err != nil {
 		httpErr(w, 400, err)

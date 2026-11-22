@@ -167,6 +167,9 @@ func (a *Adapter) workspaceOn(cwd, label string, tree *herdr.WorktreeInfo) (*her
 	if _, err := a.SessionSnapshot(); err != nil {
 		return nil, err
 	}
+	if a.hooks.Canonical != nil {
+		cwd = a.hooks.Canonical(cwd) // one spelling of a folder: the machine's, so its checkout and panes are the same
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), callWithin)
 	defer cancel()
 	space, tab := "ws-"+state.NewID(), "tab-"+state.NewID()

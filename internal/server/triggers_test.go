@@ -1,7 +1,10 @@
 package server
 
 import (
+	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -55,5 +58,32 @@ func TestTriggerRoutes(t *testing.T) {
 	code, out = taskCall(mux, "POST", "/api/triggers/try", "", `{"machine":"local","rule":{"match":"substring","pattern":"x","action":"push"}}`)
 	if msg, _ := out["error"].(string); code != 400 || !strings.Contains(msg, "pane") {
 		t.Fatalf("a try without a pane: %d %v", code, out)
+	}
+}
+
+// TestARuleSavedOnASymlinkedFolderIsKeptAsTheMachineNamesIt: a folder is one spelling in the rules, the one the panes
+// of that folder are named in, so a rule saved through a symlink still covers them.
+func TestARuleSavedOnASymlinkedFolderIsKeptAsTheMachineNamesIt(t *testing.T) {
+	dir := t.TempDir()
+	s := &Server{Triggers: triggers.New(dir), Machines: herdrfake.Manager(dir)}
+	mux := http.NewServeMux()
+	s.triggerRoutes(mux)
+	real := t.TempDir()
+	physical, err := filepath.EvalSymlinks(real)
+	if err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(real, link); err != nil {
+		t.Fatal(err)
+	}
+	body := fmt.Sprintf(`[{"name":"QA","machine":"local","dir":%q,"match":"regex","pattern":"^ready for qa$","action":"push","enabled":true}]`, link)
+	code, out := taskCall(mux, "PUT", "/api/triggers", "", body)
+	rules, _ := out["rules"].([]any)
+	if code != 200 || len(rules) != 1 {
+		t.Fatalf("put: %d %v", code, out)
+	}
+	if got, _ := rules[0].(map[string]any)["dir"].(string); got != physical {
+		t.Fatalf("the rule's folder is %q, not the machine's %q", got, physical)
 	}
 }

@@ -52,14 +52,16 @@ func (s *Server) handleTriggersPut(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &list) {
 		return
 	}
-	for _, rule := range list {
+	for i, rule := range list {
 		if rule.Machine == "" {
 			continue
 		}
-		if _, err := s.Machines.Get(rule.Machine); err != nil {
+		mc, err := s.Machines.Get(rule.Machine)
+		if err != nil {
 			httpErr(w, http.StatusBadRequest, fmt.Errorf("trigger %q: %w", rule.Name, err))
 			return
 		}
+		list[i].Dir = mc.Canonical(rule.Dir) // one spelling of a folder: the one the machine's panes are named in
 	}
 	if _, err := s.Triggers.Replace(list); err != nil {
 		httpErr(w, http.StatusBadRequest, err)

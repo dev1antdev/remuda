@@ -2,7 +2,10 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/dev1antdev/remuda/internal/auth"
@@ -109,5 +112,38 @@ func TestAConfirmationAnswersForWhatTheDialogSaid(t *testing.T) {
 	}
 	if plain == removalStamp(look, false, true) {
 		t.Error("a branch the dialog called safe reads the same once its merged request is forgotten")
+	}
+}
+
+// TestSettingsOnASymlinkedFolderAreKeptAsTheMachineNamesIt: the repository's settings are keyed by the folder the
+// roster's sessions are named in, so saving them through a symlink is not a second repository.
+func TestSettingsOnASymlinkedFolderAreKeptAsTheMachineNamesIt(t *testing.T) {
+	dir := t.TempDir()
+	s := &Server{Machines: herdrfake.Manager(dir), Repos: repos.Open(dir)}
+	api := http.NewServeMux()
+	s.repoRoutes(api)
+	real := t.TempDir()
+	physical, err := filepath.EvalSymlinks(real)
+	if err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(real, link); err != nil {
+		t.Fatal(err)
+	}
+	body := fmt.Sprintf(`{"machine":"local","root":%q,"settings":{"base":"main"}}`, link)
+	if rec := ask(api, "PUT", "/api/repos/settings", body); rec.Code != 200 {
+		t.Fatalf("put: %d %s", rec.Code, rec.Body)
+	}
+	rec := ask(api, "GET", "/api/repos/settings?machine=local&root="+physical+"&quick=1", "")
+	var got struct {
+		Root     string         `json:"root"`
+		Settings repos.Settings `json:"settings"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Settings.Base != "main" {
+		t.Fatalf("the settings saved through a symlink are not the machine's folder's: %+v", got)
 	}
 }
