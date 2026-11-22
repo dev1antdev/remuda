@@ -61,11 +61,12 @@ func (s *Server) handleRepoSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	root, named := s.repoRoot(mc, r.URL.Query().Get("root"))
 	settings := s.repoSettings(mc.ID(), root)
+	version := s.Repos.Version(mc.ID(), root)
 	if !named {
-		settings = repos.Settings{} // the machine cannot name the folder: a record under an old spelling is not its word
+		settings, version = repos.Settings{}, "" // the machine cannot name the folder: what is kept there is not shown
 	}
 	answer := map[string]any{
-		"root": root, "name": rpath.For(root).Base(root), "settings": settings,
+		"root": root, "name": rpath.For(root).Base(root), "settings": settings, "version": version,
 		"defaults": map[string]string{"issue_branch": repos.DefaultIssueBranch, "issue_prompt": repos.DefaultIssuePrompt, "pr_prompt": repos.DefaultPRPrompt},
 		"icons":    repos.Icons, "setup": !mc.Windows(),
 	}
@@ -91,6 +92,7 @@ func (s *Server) handleRepoSettingsPut(w http.ResponseWriter, r *http.Request) {
 		Machine  string         `json:"machine"`
 		Root     string         `json:"root"`
 		Settings repos.Settings `json:"settings"`
+		Version  *string        `json:"version"` // what the draft was read from; absent for a request that carries none
 	}
 	if !decode(w, r, &req) {
 		return
@@ -115,6 +117,12 @@ func (s *Server) handleRepoSettingsPut(w http.ResponseWriter, r *http.Request) {
 		// the whole of it would erase what it could not show (a folder that is not there, a machine that is away)
 		httpErr(w, http.StatusBadGateway, fmt.Errorf("%s cannot name %s just now, so its settings are not replaced", mc.Label(), req.Root))
 		return
+	}
+	if req.Version != nil {
+		if *req.Version != s.Repos.Version(mc.ID(), req.Root) {
+			httpErr(w, http.StatusConflict, errors.New("the settings changed since they were read: open them again"))
+			return
+		}
 	}
 	saved, err := s.Repos.Put(mc.ID(), req.Root, req.Settings, olderSpelling(mc, given, req.Root))
 	if err != nil {

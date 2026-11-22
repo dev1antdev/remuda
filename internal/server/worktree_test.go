@@ -331,17 +331,41 @@ func TestSettingsTheMachineCannotNameAreNotReplaced(t *testing.T) {
 	if err := os.MkdirAll(folder, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.Put("local", folder, repos.Settings{Base: "main", Setup: "pnpm i"}); err != nil {
+	physical, err := filepath.EvalSymlinks(folder)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Put("local", physical, repos.Settings{Base: "main", Setup: "pnpm i"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.RemoveAll(folder); err != nil { // the checkout is not there just now
 		t.Fatal(err)
 	}
-	body := fmt.Sprintf(`{"machine":"local","root":%q,"settings":{"location":"sibling"}}`, folder)
+	body := fmt.Sprintf(`{"machine":"local","root":%q,"settings":{"location":"/Users/me/worktrees"}}`, physical) // the roster's own spelling
 	if rec := ask(api, "PUT", "/api/repos/settings", body); rec.Code != http.StatusBadGateway {
 		t.Fatalf("a save read without the record replaced it: %d %s", rec.Code, rec.Body)
 	}
-	if got := store.Get("local", folder); got.Base != "main" || got.Setup != "pnpm i" {
+	if got := store.Get("local", physical); got.Base != "main" || got.Setup != "pnpm i" {
 		t.Fatalf("the record the machine could not show was erased: %+v", got)
+	}
+	// the draft was read while the folder was missing: the folder coming back does not make its empty version the one
+	// it would replace
+	if err := os.MkdirAll(folder, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	stale := fmt.Sprintf(`{"machine":"local","root":%q,"settings":{"location":"/Users/me/worktrees"},"version":""}`, physical)
+	if rec := ask(api, "PUT", "/api/repos/settings", stale); rec.Code != http.StatusConflict {
+		t.Fatalf("a draft read without the record replaced it once the folder returned: %d %s", rec.Code, rec.Body)
+	}
+	if got := store.Get("local", physical); got.Base != "main" || got.Setup != "pnpm i" {
+		t.Fatalf("a stale draft erased the record: %+v", got)
+	}
+	// a draft read with it does
+	fresh := fmt.Sprintf(`{"machine":"local","root":%q,"settings":{"base":"main","setup":"pnpm i","location":"/Users/me/worktrees"},"version":%q}`, physical, store.Version("local", physical))
+	if rec := ask(api, "PUT", "/api/repos/settings", fresh); rec.Code != 200 {
+		t.Fatalf("a draft read with the record was refused: %d %s", rec.Code, rec.Body)
+	}
+	if got := store.Get("local", physical); got.Location != "/Users/me/worktrees" {
+		t.Fatalf("the save did not land: %+v", got)
 	}
 }

@@ -5,6 +5,9 @@
 package repos
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -93,6 +96,21 @@ func (st *Store) Get(machine, root string) Settings {
 	st.mu.Lock()
 	defer st.mu.Unlock()
 	return clone(st.all[key(machine, root)])
+}
+
+// Version is what the settings kept for the repository are, as one short string, "" for none (or only a clear): a
+// draft read with it may replace them, and one read without them — the machine could not show them — may not.
+func (st *Store) Version(machine, root string) string {
+	s := st.Get(machine, root)
+	if empty(s) {
+		return ""
+	}
+	b, err := json.Marshal(s)
+	if err != nil {
+		return ""
+	}
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:8])
 }
 
 // Has says settings are kept for the repository, for a caller that looks one spelling up after another.
