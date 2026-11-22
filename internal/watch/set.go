@@ -89,9 +89,11 @@ func fingerprint[T any](values []T) string {
 }
 
 // noteWanted works out the subscriptions for the snapshot just applied and tells the stream when they moved. A move
-// the snapshot asked for — a pane that appeared or went, the watches that follow the panes — waits for the churn's
-// rest (`eventDebounce`), so a pane that appears and goes within it swaps no stream at all; a move the person asked
-// for (`now`: a rule edited, a refusal taken again) is told at once, and so is the first set.
+// the snapshot asked for — a pane that appeared or went, the watches that follow the panes — is kept pending until
+// the churn's rest (`eventDebounce`) is over, and only then becomes the set the stream subscribes to, so a pane that
+// appears and goes within it swaps no stream at all and a stream opening meanwhile holds the set that stands. A move
+// the person asked for (`now`: a rule edited, a refusal taken again) is promoted and told at once, and so is the first
+// set.
 func (w *Watcher) noteWanted(machineID string, snap *herdr.Snapshot, now bool) {
 	var outputs []Output
 	if w.Outputs != nil {
@@ -100,22 +102,66 @@ func (w *Watcher) noteWanted(machineID string, snap *herdr.Snapshot, now bool) {
 	w.mu.Lock()
 	st := w.stateFor(machineID)
 	set := buildSet(snap, outputs, st.refused)
-	if st.wanted != nil && st.wanted.key == set.key {
+	switch {
+	case st.wanted == nil || now:
+		if st.wanted != nil && st.wanted.key == set.key && st.pending == nil {
+			w.mu.Unlock()
+			return
+		}
+		st.promote(set)
+		w.mu.Unlock()
+		signal(st.changed)
+	case st.wanted.key == set.key:
+		if st.pending != nil { // back where the stream stands: the settling move is dropped
+			st.dropSettling()
+			w.mu.Unlock()
+			return
+		}
+		w.mu.Unlock()
+	default:
+		st.pending = set
+		st.gen++
+		gen := st.gen
+		if st.settling != nil {
+			st.settling.Stop()
+		}
+		st.settling = time.AfterFunc(eventDebounce, func() { w.settle(st, gen) })
+		w.mu.Unlock()
+	}
+}
+
+// settle promotes the set the churn's rest left, so the stream swaps to it — once: a move booked a later rest is not
+// the one that fired.
+func (w *Watcher) settle(st *machineState, gen uint64) {
+	w.mu.Lock()
+	if st.gen != gen || st.pending == nil {
 		w.mu.Unlock()
 		return
 	}
-	first := st.wanted == nil
-	st.wanted = set
-	if st.settling != nil { // a swap stood booked for the rest of the churn: the move re-arms it on the set as it is now
+	st.promote(st.pending)
+	w.mu.Unlock()
+	signal(st.changed)
+}
+
+// promote makes set the one the stream subscribes to, drops any move still settling, and answers whether it is news.
+// The caller holds the lock.
+func (st *machineState) promote(set *streamSet) {
+	st.wanted, st.pending = set, nil
+	st.gen++
+	if st.settling != nil {
 		st.settling.Stop()
 		st.settling = nil
 	}
-	if !first && !now {
-		st.settling = time.AfterFunc(eventDebounce, func() { signal(st.changed) })
-	}
-	w.mu.Unlock()
-	if first || now {
-		signal(st.changed)
+}
+
+// dropSettling drops the move still settling, leaving the set the stream subscribes to as it is. The caller holds
+// the lock.
+func (st *machineState) dropSettling() {
+	st.pending = nil
+	st.gen++
+	if st.settling != nil {
+		st.settling.Stop()
+		st.settling = nil
 	}
 }
 

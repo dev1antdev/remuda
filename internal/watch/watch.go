@@ -47,7 +47,9 @@ type machineState struct {
 	memory    atomic.Bool   // the client answers the snapshot from memory: an event waits for no gap
 	polled    time.Time     // when the last poll of the loop began
 	wanted    *streamSet    // the subscriptions for the latest snapshot
-	settling  *time.Timer   // a swap booked for the rest of the churn the snapshot asked for
+	pending   *streamSet    // the set the churn's rest has not promoted yet: a pane that comes and goes is no swap
+	gen       uint64        // which rest is the one that fired
+	settling  *time.Timer   // the rest booked for the pending set
 	refused   string        // the person's watches herdr refused, by their fingerprint: left out until they change
 
 	noStreamUntil time.Time // herdr refused the stream itself (one too old for it): the next try waits till then

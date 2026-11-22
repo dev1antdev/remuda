@@ -4,6 +4,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -141,6 +142,66 @@ func TestAPaneThatComesAndGoesSwapsNoStream(t *testing.T) {
 
 	if n := f.subscribes(); n != 1 {
 		t.Fatalf("a pane that came and went within the churn's rest swapped the stream: %d subscribes", n)
+	}
+}
+
+// TestAStreamOpeningWhileASetSettlesHoldsTheOneThatStands: a set the snapshot moved waits for the churn's rest, and
+// a stream that opens meanwhile — an ended one, a swap that failed — subscribes to the set that stands, never to the
+// one still settling: a momentary pane can cost no stream, nor place a watch of the panes that stand past a cap.
+func TestAStreamOpeningWhileASetSettlesHoldsTheOneThatStands(t *testing.T) {
+	quickPace(t)
+	eventDebounce = 300 * time.Millisecond // the rest is long enough to open a stream inside it
+	f := newFakeHerdr(t, "w1:p1")
+	f.memory = true
+	watching(t, f, nil)
+	f.subscribed(t)
+	waitFor(t, "the stream to stand", func() bool { return f.open() == 1 })
+	time.Sleep(2 * memoryDebounce)
+
+	appeared := time.Now()
+	f.setPanes("w1:p1", "w1:p2")
+	f.push(`{"data":{"type":"pane_created","pane":{"pane_id":"w1:p2"}},"event":"pane_created"}`)
+	waitFor(t, "the snapshot with the momentary pane", func() bool { return f.polls(appeared) == 1 })
+
+	f.closeStreams() // the next stream opens inside the rest, on the set that stands
+	if got := statusPanes(f.subscribed(t)); got != "w1:p1" {
+		t.Fatalf("a stream opened on the set still settling: %s", got)
+	}
+}
+
+// TestARuleEditPromotesASettlingSetAtOnce: a rule edited is the person's move, not the churn's: a poll that read the
+// new rule and booked it waits for no rest once Resubscribe says so.
+func TestARuleEditPromotesASettlingSetAtOnce(t *testing.T) {
+	quickPace(t)
+	eventDebounce = 300 * time.Millisecond // a rest long enough to tell an immediate move from a settled one
+	f := newFakeHerdr(t, "w1:p1")
+	f.memory = true
+	var rules atomic.Pointer[[]Output]
+	watcher, _, _ := watching(t, f, func(w *Watcher) {
+		w.Outputs = func(string, *herdr.Snapshot) []Output {
+			if p := rules.Load(); p != nil {
+				return *p
+			}
+			return nil
+		}
+	})
+	f.subscribed(t)
+	waitFor(t, "the stream to stand", func() bool { return f.open() == 1 })
+	time.Sleep(2 * memoryDebounce)
+
+	rules.Store(&[]Output{{Key: "deployed", Pane: "w1:p1", Match: herdr.OutputMatch{Type: "substring", Value: "DEPLOYED"}, Lines: 40, Person: true}})
+	seen := time.Now()
+	f.push(`{"data":{"type":"layout_updated"},"event":"layout_updated"}`)
+	waitFor(t, "the snapshot with the new rule", func() bool { return f.polls(seen) == 1 })
+
+	edited := time.Now()
+	watcher.Resubscribe()
+	subs := f.subscribed(t)
+	if took := time.Since(edited); took >= eventDebounce/2 {
+		t.Fatalf("the person's rule waited for the churn's rest: %s", took)
+	}
+	if got := fingerprint(subs); !strings.Contains(got, herdr.EventOutputMatched) || !strings.Contains(got, "DEPLOYED") {
+		t.Fatalf("the rule's watch is not in the stream: %s", got)
 	}
 }
 
