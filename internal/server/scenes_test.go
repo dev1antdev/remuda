@@ -12,7 +12,7 @@ import (
 // The scene routes: the list saved whole and checked, a machine the fleet lacks refused, a run of a scene that is not
 // there or a tidy with nothing picked refused, a run that ended long ago not found.
 func TestSceneRoutes(t *testing.T) {
-	fleet := machines.NewManager(t.TempDir(), "/nowhere.sock", "herdr", nil)
+	fleet := machines.NewManager(t.TempDir(), nil, false)
 	runner := &scenes.Service{Store: scenes.New(t.TempDir()), Machines: func() []scenes.Machine { return nil }}
 	s := &Server{Machines: fleet, Scenes: runner}
 	mux := http.NewServeMux()

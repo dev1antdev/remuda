@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/core/coretest"
 	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/herdr"
-	"github.com/dev1antdev/remuda/internal/herdr/herdrtest"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/repos"
 	"github.com/dev1antdev/remuda/internal/sessions"
@@ -19,13 +19,34 @@ import (
 	"github.com/dev1antdev/remuda/internal/watch"
 )
 
-// worktreeServer is a throwaway herdr with a repository of one commit in its HOME, a workspace on its main checkout,
-// and the server's worktree routes over them.
-func worktreeServer(t *testing.T) (*Server, *http.ServeMux, *herdr.Client, *machines.Machine, string, string) {
+// coreSays asks a machine's snapshot until it says what want looks for: the adapter's mirror takes a write at once,
+// and a fresh fill may land beside it a moment later.
+func coreSays(t *testing.T, client herdr.API, want func(*herdr.Snapshot) bool) *herdr.Snapshot {
 	t.Helper()
-	sock := herdrtest.Server(t)
-	client := herdr.NewClient(sock)
-	home := os.Getenv("HOME")
+	for start := time.Now(); ; time.Sleep(50 * time.Millisecond) {
+		snap, err := client.SessionSnapshot()
+		if err == nil && want(snap) {
+			return snap
+		}
+		if time.Since(start) > 10*time.Second {
+			t.Fatalf("the machine never said it: %+v %v", snap, err)
+		}
+	}
+}
+
+// worktreeServer is a throwaway core with a repository of one commit in its HOME, a workspace on its main checkout,
+// and the server's worktree routes over them.
+func worktreeServer(t *testing.T) (*Server, *http.ServeMux, herdr.API, *machines.Machine, string, string) {
+	t.Helper()
+	coretest.Server(t).Use(t)
+	home, err := os.UserHomeDir() // the throwaway core's own
+	if err != nil {
+		t.Fatal(err)
+	}
+	if real, err := filepath.EvalSymlinks(home); err == nil && real != home {
+		home = real
+		t.Setenv("HOME", home) // the core's terminals and git name the real folder, and a temp one may be behind a link
+	}
 	repo := filepath.Join(home, "code", "app")
 	if err := os.MkdirAll(repo, 0o755); err != nil {
 		t.Fatal(err)
@@ -38,27 +59,34 @@ func worktreeServer(t *testing.T) (*Server, *http.ServeMux, *herdr.Client, *mach
 			t.Fatalf("git %v: %v %s", args, err, out)
 		}
 	}
+	state := t.TempDir()
+	fleet := machines.NewManager(state, nil, false)
+	t.Cleanup(fleet.Close)
+	mc, err := fleet.Get(machines.LocalID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client, _, err := mc.Ready()
+	if err != nil {
+		t.Fatal(err)
+	}
 	main, err := client.WorkspaceCreate(repo, "app")
 	if err != nil {
 		t.Fatal(err)
 	}
-	state := t.TempDir()
-	fleet := machines.NewManager(state, sock, "herdr", nil)
+	workspace := main.Workspace.WorkspaceID
+	coreSays(t, client, func(snap *herdr.Snapshot) bool { return snap.Workspace(workspace) != nil })
 	watcher := watch.New(fleet, events.NewBus())
 	s := &Server{Machines: fleet, Watch: watcher, Input: sessions.NewInput(fleet, watcher), Repos: repos.Open(state)}
-	mc, err := fleet.Get("local")
-	if err != nil {
-		t.Fatal(err)
-	}
 	api := http.NewServeMux()
 	s.worktreeRoutes(api)
 	s.sessionRoutes(api)
-	return s, api, client, mc, repo, main.Workspace.WorkspaceID
+	return s, api, client, mc, repo, workspace
 }
 
-// A branch checked out in a workspace the watcher has not read yet: herdr's worktree.open answers that workspace
-// (already_open), and the create answers it as opened — nothing started in its pane, which the person uses.
-func TestOpeningACheckoutHerdrHasOpenAlreadyStartsNothingThere(t *testing.T) {
+// A branch checked out in a workspace the watcher has not read yet: the core's worktree.open answers that workspace
+// (already open), and the create answers it as opened — nothing started in its pane, which the person uses.
+func TestOpeningACheckoutTheCoreHasOpenAlreadyStartsNothingThere(t *testing.T) {
 	_, api, client, _, repo, mainWS := worktreeServer(t)
 	made, err := client.WorktreeCreateAt(mainWS, "feat-x", "", "x", "")
 	if err != nil {
@@ -78,14 +106,14 @@ func TestOpeningACheckoutHerdrHasOpenAlreadyStartsNothingThere(t *testing.T) {
 		t.Fatal(err)
 	}
 	if answer.ID != made.Workspace.WorkspaceID || answer.Pane != made.RootPane.PaneID {
-		t.Fatalf("herdr answered another workspace: %s", rec.Body)
+		t.Fatalf("the core answered another workspace: %s", rec.Body)
 	}
 	if !answer.Opened {
-		t.Errorf("a workspace herdr had open already was answered as made, its pane would get the agent and its first prompt: %s", rec.Body)
+		t.Errorf("a workspace the core had open already was answered as made, its pane would get the agent and its first prompt: %s", rec.Body)
 	}
 }
 
-// A workspace whose worktree folder was deleted behind herdr's back stays a linked worktree in herdr's snapshot: the
+// A workspace whose worktree folder was deleted behind the core's back stays a linked worktree in its snapshot: the
 // remove dialog cannot look at it, and its Close, keep the folder must still close the workspace — the page's close of
 // such a workspace goes through that dialog alone.
 func TestAWorkspaceWhoseWorktreeFolderIsGoneStillCloses(t *testing.T) {
@@ -173,7 +201,11 @@ func TestCloseWorkspaceDoesNotBecomeARemovalWhenTheOthersLeave(t *testing.T) {
 // TestClosingAWorkspaceLeavesTheWorktreeAnAgentWorksIn: the close takes the workspace, the folder stays for later.
 func TestClosingAWorkspaceLeavesTheWorktreeAnAgentWorksIn(t *testing.T) {
 	s, _, client, mc, _, mainWS := worktreeServer(t)
-	path := filepath.Join(os.Getenv("HOME"), ".herdr", "worktrees", "app", "feat-y")
+	home, err := filepath.EvalSymlinks(os.Getenv("HOME"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(home, ".herdr", "worktrees", "app", "feat-y")
 	made, err := client.WorktreeCreateAt(mainWS, "feat-y", "", "y", path)
 	if err != nil {
 		t.Fatal(err)

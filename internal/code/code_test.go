@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -130,7 +129,7 @@ func proxied(t *testing.T, answer http.HandlerFunc) (http.Handler, *[]string) {
 	t.Cleanup(backend.Close)
 	port := backend.Listener.Addr().(*net.TCPAddr).Port
 	dir := t.TempDir()
-	mc, err := machines.NewManager(dir, filepath.Join(dir, "no-herdr.sock"), "herdr", nil).Get(machines.LocalID)
+	mc, err := machines.NewManager(dir, nil, false).Get(machines.LocalID)
 	if err != nil {
 		t.Fatal(err)
 	}

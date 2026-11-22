@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -64,7 +63,7 @@ func TestPortsNotReadYetSayNoTime(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("a Windows machine reads no ports")
 	}
-	fleet := machines.NewManager(t.TempDir(), filepath.Join(t.TempDir(), "none.sock"), "herdr", nil)
+	fleet := machines.NewManager(t.TempDir(), nil, false)
 	s := &Server{Machines: fleet, Ports: ports.New(func() []ports.Target { return nil }, func() map[int]bool { return nil })}
 	mux := http.NewServeMux()
 	s.resourceRoutes(mux)

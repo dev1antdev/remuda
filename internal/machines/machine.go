@@ -32,7 +32,7 @@ type Machine struct {
 	os          string // darwin | linux | windows as the connection read it, "" before a remote's first connect
 
 	conn   *sshx.Conn
-	client herdr.API       // herdr's client, or the adapter over remuda-core (speaksCore)
+	client herdr.API       // the adapter over the machine's remuda-core, nil before it answers
 	attach herdr.Terminals // remuda-core's terminals, the adapter over the machine's own core
 	home   string
 

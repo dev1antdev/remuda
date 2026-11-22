@@ -2,7 +2,6 @@ package server
 
 import (
 	"net/http"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -20,7 +19,7 @@ import (
 // wrong is refused.
 func TestNoteRoutesKeepANotePerCheckout(t *testing.T) {
 	dir := t.TempDir()
-	fleet := machines.NewManager(dir, filepath.Join(dir, "no-herdr.sock"), "herdr", nil)
+	fleet := machines.NewManager(dir, nil, false)
 	s := &Server{Machines: fleet, Notes: notes.Open(dir), Review: review.New(dir)}
 	mux := http.NewServeMux()
 	s.noteRoutes(mux)
@@ -69,7 +68,7 @@ func TestNoteRoutesKeepANotePerCheckout(t *testing.T) {
 // the pane's read under way and its outcome riding on the roster.
 func TestPRRefreshReadsTheCardsRequestsAgain(t *testing.T) {
 	dir := t.TempDir()
-	fleet := machines.NewManager(dir, filepath.Join(dir, "no-herdr.sock"), "herdr", nil)
+	fleet := machines.NewManager(dir, nil, false)
 	host := &shell.Fake{Name: "local", Answer: func(string) (string, error) {
 		return `{"state":"OPEN","title":"Saved carts","isDraft":false,"mergeable":"MERGEABLE","mergeStateStatus":"CLEAN","reviewDecision":"","statusCheckRollup":[]}`, nil
 	}}

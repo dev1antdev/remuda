@@ -4,16 +4,13 @@ import (
 	"bytes"
 	"errors"
 	"log"
-	"net"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/herdr"
-	"github.com/dev1antdev/remuda/internal/machines"
 )
 
 // lockedLog is the log's output while a test runs.
@@ -58,38 +55,14 @@ func TestAHerdrWithoutStreamsIsAskedAgainQuietly(t *testing.T) {
 	}
 }
 
-// refusingWrites is a connection whose events.subscribe never reaches herdr, as a bridge whose ssh session fails.
-type refusingWrites struct {
-	net.Conn
-	tries *atomic.Int32
-}
-
-func (c refusingWrites) Write(p []byte) (int, error) {
-	if bytes.Contains(p, []byte("events.subscribe")) {
-		c.tries.Add(1)
-		return 0, errors.New("broken pipe")
-	}
-	return c.Conn.Write(p)
-}
-
 func TestAStreamThatCannotBeReachedIsTriedLessAndLessOften(t *testing.T) {
 	quickPace(t)
 	f := newFakeHerdr(t, "w1:p1")
-	var tries atomic.Int32
-	watching(t, f, func(w *Watcher) {
-		mc, _ := w.machines.Get(machines.LocalID)
-		client, _, _ := mc.Ready()
-		client.(*herdr.Client).Dial = func(timeout time.Duration) (net.Conn, error) {
-			conn, err := net.DialTimeout("unix", f.sock, timeout)
-			if err != nil {
-				return nil, err
-			}
-			return refusingWrites{Conn: conn, tries: &tries}, nil
-		}
-	})
-	waitFor(t, "the first try", func() bool { return tries.Load() >= 1 })
+	f.unreachable = errors.New("remuda-core: broken pipe")
+	watching(t, f, nil)
+	waitFor(t, "the first try", func() bool { return f.subscribes() >= 1 })
 	time.Sleep(1500 * time.Millisecond)
-	if n := tries.Load(); n > 8 {
+	if n := f.subscribes(); n > 8 {
 		t.Fatalf("a stream that cannot be reached backs off from 50 ms: %d tries in 1.5 s", n)
 	}
 }

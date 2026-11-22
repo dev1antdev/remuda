@@ -21,7 +21,7 @@ import (
 func fileServer(t *testing.T) http.Handler {
 	t.Helper()
 	dir := t.TempDir()
-	fleet := machines.NewManager(dir, filepath.Join(dir, "no-herdr.sock"), "herdr", nil)
+	fleet := machines.NewManager(dir, nil, false)
 	s := &Server{Machines: fleet, Watch: watch.New(fleet, events.NewBus())}
 	mux := http.NewServeMux()
 	s.fileRoutes(mux)

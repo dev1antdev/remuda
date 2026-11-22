@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dev1antdev/remuda/internal/core/coretest"
 	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/herdr"
-	"github.com/dev1antdev/remuda/internal/herdr/herdrtest"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/radar"
 	"github.com/dev1antdev/remuda/internal/review"
@@ -21,13 +21,22 @@ import (
 	"github.com/dev1antdev/remuda/internal/watch"
 )
 
-// TestSleepRefusesWhatHasNothingToSleep runs the routes against a throwaway herdr: a workspace of shells has nothing
+// TestSleepRefusesWhatHasNothingToSleep runs the routes against a throwaway core: a workspace of shells has nothing
 // to put to sleep, an awake one nothing to wake, and the switches are kept. No agent is started: the sleep and the
 // wake themselves are tested on fakes.
 func TestSleepRefusesWhatHasNothingToSleep(t *testing.T) {
-	sock := herdrtest.Server(t)
-	client := herdr.NewClient(sock)
+	coretest.Server(t).Use(t)
 	dir, err := filepath.EvalSymlinks(os.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	fleet := machines.NewManager(t.TempDir(), nil, false)
+	t.Cleanup(fleet.Close)
+	mc, err := fleet.Get(machines.LocalID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client, _, err := mc.Ready()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,10 +44,10 @@ func TestSleepRefusesWhatHasNothingToSleep(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer client.WorkspaceClose(made.Workspace.WorkspaceID)
+	t.Cleanup(func() { client.WorkspaceClose(made.Workspace.WorkspaceID) })
 	workspace := made.Workspace.WorkspaceID
+	coreSays(t, client, func(snap *herdr.Snapshot) bool { return snap.Workspace(workspace) != nil })
 
-	fleet := machines.NewManager(t.TempDir(), sock, "herdr", nil)
 	watcher := watch.New(fleet, events.NewBus())
 	s := &Server{Machines: fleet, Watch: watcher, Input: sessions.NewInput(fleet, watcher), Sleep: &sleep.Service{Store: sleep.Open(t.TempDir())}}
 	mux := http.NewServeMux()

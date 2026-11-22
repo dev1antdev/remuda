@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -19,7 +18,7 @@ import (
 // serverModeServer is a remuda whose host serves the page only: no machine of the roster, its vitals in roster.server
 func serverModeServer(t *testing.T) *Server {
 	dir := t.TempDir()
-	fleet := machines.NewManager(dir, filepath.Join(dir, "no-herdr.sock"), "herdr", nil)
+	fleet := machines.NewManager(dir, nil, false)
 	fleet.SetServer(true)
 	return &Server{Machines: fleet, Watch: watch.New(fleet, events.NewBus()), Health: health.New("", fleet, "v-test", false), Jira: jira.New(dir)}
 }

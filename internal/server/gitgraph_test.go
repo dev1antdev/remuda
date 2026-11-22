@@ -44,7 +44,7 @@ func gitRepository(t *testing.T) string {
 func gitServer(t *testing.T, busy string) *http.ServeMux {
 	t.Helper()
 	state := t.TempDir()
-	fleet := machines.NewManager(state, filepath.Join(state, "no-herdr.sock"), "herdr", nil)
+	fleet := machines.NewManager(state, nil, false)
 	s := &Server{Machines: fleet, Watch: watch.New(fleet, events.NewBus()), GitOps: &gitops.Service{Busy: func(string, string, []string) string { return busy }}}
 	api := http.NewServeMux()
 	s.gitRoutes(api)

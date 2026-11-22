@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -22,7 +21,7 @@ func TestTheUndoRoutesListPlanAndRefuse(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := &Server{
-		Machines: machines.NewManager(dir, filepath.Join(dir, "no-herdr.sock"), "herdr", nil),
+		Machines: machines.NewManager(dir, nil, false),
 		Undo: &undo.Service{Store: store, Tracker: undo.NewTracker(store, undo.Inputs{}),
 			Host: func(string) (undo.Host, error) { return nil, errors.New("not reached") }},
 	}

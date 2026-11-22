@@ -16,7 +16,7 @@ import (
 // guards it carried while herdr's agents were unseen here are gone (Core 26e). A page-only host answers with its own
 // reason, never for being on remuda-core; the work itself is e2e's, on a throwaway core.
 func TestLeftoversAndTeleportAreNotRefusedForBeingOnRemudaCore(t *testing.T) {
-	fleet := machines.NewCoreManager(t.TempDir(), "", nil, true) // a page-only host: no core of its own is started
+	fleet := machines.NewManager(t.TempDir(), nil, true) // a page-only host: no core of its own is started
 	defer fleet.Close()
 	s := &Server{Machines: fleet, Updates: &updates.Service{Jobs: jobs.New(events.NewBus())}}
 	mux := http.NewServeMux()

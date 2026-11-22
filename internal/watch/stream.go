@@ -36,11 +36,10 @@ type liveStream struct {
 
 func (ls *liveStream) close() { ls.stream.Close() }
 
-// stream keeps the machine's event stream open until stop, one at a time — two for a moment while a socket's is
-// swapped for the next, never for the `nc -U` bridge, whose every connection is a session of the ssh master. Every
-// stream that opens is followed by a snapshot, so what moved before it stood is not missed; a stream that ended is
-// closed here too, whatever ended it, and the next carries its watches: a row that stood through the gap is the same
-// row, one that came in it is news.
+// stream keeps the machine's event stream open until stop, one at a time — two for a moment while one is swapped for
+// the next. Every stream that opens is followed by a snapshot, so what moved before it stood is not missed; a stream
+// that ended is closed here too, whatever ended it, and the next carries its watches: a row that stood through the gap
+// is the same row, one that came in it is news.
 func (w *Watcher) stream(mc *machines.Machine, st *machineState, stop <-chan struct{}) {
 	var cur, last *liveStream // the stream standing; the one before it, while none stands
 	defer func() {
@@ -72,7 +71,7 @@ func (w *Watcher) stream(mc *machines.Machine, st *machineState, stop <-chan str
 		if cur == nil {
 			next, wait := w.connect(mc, st, last)
 			if next == nil {
-				if !pause(max(wait, backoff)) { // a bridged remote's every try is an ssh session: patience while it fails
+				if !pause(max(wait, backoff)) { // a stream that would not open is tried again, further apart as it keeps failing
 					return
 				}
 				backoff = min(backoff*2, streamBackoff)
@@ -116,7 +115,7 @@ func (w *Watcher) stream(mc *machines.Machine, st *machineState, stop <-chan str
 			}
 			if next == nil {
 				last = cur
-				st.streaming.Store(false) // the bridge's new stream did not open: the loop above tries at its pace
+				st.streaming.Store(false) // the new stream did not open: the loop above tries at its pace
 			}
 			cur, retry = next, nil
 			signal(st.kick)
@@ -124,9 +123,9 @@ func (w *Watcher) stream(mc *machines.Machine, st *machineState, stop <-chan str
 	}
 }
 
-// swap opens a stream on the wanted set in place of cur when the set moved: the new one first on a socket, cur closed
-// first through the bridge. It answers the stream that stands now — cur when nothing moved or a socket's new stream
-// could not open (then how long until it is tried again), else the new one, or nil when the bridge's did not open.
+// swap opens a stream on the wanted set in place of cur when the set moved: the new one first, then cur closed. It
+// answers the stream that stands now — cur when nothing moved or the new one could not open (then how long until it is
+// tried again), else the new one.
 func (w *Watcher) swap(mc *machines.Machine, st *machineState, cur *liveStream) (*liveStream, time.Duration) {
 	w.mu.Lock()
 	wanted := st.wanted
@@ -137,11 +136,6 @@ func (w *Watcher) swap(mc *machines.Machine, st *machineState, cur *liveStream) 
 	client, _, err := mc.Ready()
 	if err != nil || client == nil {
 		return cur, 2 * streamRetry
-	}
-	if client.Bridged() {
-		cur.close()
-		next, _ := w.connect(mc, st, cur)
-		return next, 0
 	}
 	next, wait := w.connect(mc, st, cur)
 	if next == nil {

@@ -71,9 +71,6 @@ type JobDone struct {
 	OK      bool
 }
 
-// LocalHerdrDown says the local herdr has not answered for a few polls in a row.
-type LocalHerdrDown struct{ Err error }
-
 // PullRequestNamed says a pane's agent named a pull or merge request in its answers, first seen or changed.
 type PullRequestNamed struct {
 	Pane  PaneRef

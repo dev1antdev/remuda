@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -208,7 +207,7 @@ func TestAnAgentsKeyImportsNoIssue(t *testing.T) {
 	}
 	t.Cleanup(func() { store.Close() })
 	dir := t.TempDir()
-	fleet := machines.NewManager(dir, filepath.Join(dir, "no-herdr.sock"), "herdr", nil)
+	fleet := machines.NewManager(dir, nil, false)
 	fleet.SetServer(true) // its own machine answers no Ready: nothing runs gh here
 	s := &Server{Tasks: store, Machines: fleet}
 	h := http.NewServeMux()

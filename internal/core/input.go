@@ -316,19 +316,12 @@ func (a *Adapter) PaneSendKeys(paneID string, keys []string) error {
 	return a.inputRefusal(err, "pane_not_found", "pane_not_found")
 }
 
-// keyBytes are the bytes sessions types for the keys herdr 0.9.5 has no name for; the core names them, and encodes each
-// for the program's keyboard modes.
-var keyBytes = map[string]string{"\x1bOH": "home", "\x1bOF": "end", "\x1b[5~": "pageup", "\x1b[6~": "pagedown", "\x1b[3~": "delete"}
-
 // PaneSendText types text as it is, byte for byte, into a terminal its shell holds — a command line remuda types into a
 // shell it just opened — through a viewer of the terminal's own that leaves its size alone, since the core takes text
 // only as a paste. It goes as the terminal's automatic input, starting no draft the core would hold a prompt back for.
 // Into a pane an agent holds it types nothing (agent_pane_busy): a person's typing there comes with the live terminal,
 // and remuda's own would be pasted ahead of the agent's next prompt.
 func (a *Adapter) PaneSendText(paneID, text string) error {
-	if key, ok := keyBytes[text]; ok {
-		return a.PaneSendKeys(paneID, []string{key})
-	}
 	t, err := a.terminal(paneID)
 	if err != nil {
 		return err

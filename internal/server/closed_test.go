@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -19,7 +18,7 @@ import (
 
 func TestClosedListsTheAgentsWhosePanesWentAway(t *testing.T) {
 	dir := t.TempDir()
-	fleet := machines.NewManager(dir, filepath.Join(dir, "no-herdr.sock"), "herdr", nil)
+	fleet := machines.NewManager(dir, nil, false)
 	restarter := restart.New(fleet)
 	restarter.Memory = restart.OpenMemory(dir)
 	pane := herdr.PaneInfo{PaneID: "w1:p1", WorkspaceID: "w1", Agent: "claude", CWD: "/work/api", Title: "Fix the queue", AgentSession: &herdr.AgentSession{Kind: "id", Value: "9b1c2d3e-4f50-4a6b-8c7d-0e1f2a3b4c5d"}}

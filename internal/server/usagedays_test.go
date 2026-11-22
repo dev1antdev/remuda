@@ -15,7 +15,7 @@ import (
 
 // The year's days: every machine of the fleet, the days cut in the viewer's zone; the person's alone.
 func TestUsageDaysRoute(t *testing.T) {
-	fleet := machines.NewManager(t.TempDir(), "/nowhere.sock", "herdr", nil)
+	fleet := machines.NewManager(t.TempDir(), nil, false)
 	book := usage.OpenBook(t.TempDir())
 	book.Read = func(shell.Host, time.Time, *time.Location, string) (usage.Report, error) { return usage.Report{}, nil }
 	s := &Server{Machines: fleet, UsageDays: book}

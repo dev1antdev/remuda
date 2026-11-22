@@ -16,10 +16,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/machines"
 )
 
-const (
-	discoverEvery  = 5 * time.Second
-	syncHerdrEvery = 30 * time.Second
-)
+const discoverEvery = 5 * time.Second
 
 // The poll's pace: without herdr's event stream as before, slower behind it; vars so tests can shrink them.
 var (
@@ -33,9 +30,6 @@ type paneState struct {
 	status string
 	since  time.Time
 }
-
-// localDownAfter is how many failed polls in a row mean the local herdr is really gone.
-const localDownAfter = 4
 
 type machineState struct {
 	snap    *herdr.Snapshot
@@ -79,12 +73,7 @@ func New(m *machines.Manager, bus *events.Bus) *Watcher {
 // Start polls forever; new machines are picked up on each discovery round.
 func (w *Watcher) Start() {
 	go func() {
-		lastSync := time.Time{}
 		for {
-			if time.Since(lastSync) >= syncHerdrEvery {
-				w.machines.SyncHerdr()
-				lastSync = time.Now()
-			}
 			for _, mc := range w.machines.List() {
 				w.mu.Lock()
 				st := w.stateFor(mc.ID())
@@ -148,7 +137,7 @@ func closed(done <-chan struct{}) bool {
 	}
 }
 
-// poll fetches one snapshot and applies it; transport failures reach the machine through its client.
+// poll fetches one snapshot and applies it; transport failures reach the machine through its API.
 func (w *Watcher) poll(mc *machines.Machine) (*herdr.Snapshot, error) {
 	w.mu.Lock()
 	st := w.stateFor(mc.ID())
@@ -169,12 +158,7 @@ func (w *Watcher) poll(mc *machines.Machine) (*herdr.Snapshot, error) {
 	w.mu.Lock()
 	st.err = err
 	st.fails++
-	fails := st.fails
 	w.mu.Unlock()
-	// herdr's own restart or update handoff unbinds the socket for a moment: a few misses first
-	if mc.Local() && fails >= localDownAfter {
-		go events.Publish(w.bus, events.LocalHerdrDown{Err: err})
-	}
 	return nil, err
 }
 

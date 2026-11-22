@@ -95,6 +95,11 @@ not style.
   same agent under the same pid (`core.Adapter.sendTo`).
 - **Never `--takeover`.** herdr allows one attached client per terminal;
   stealing the slot is the person's call only, never remuda's.
+- **A test never stops the person's herdr or core.** A `Server` asked to
+  stop herdr (`HerdrStops`) in a test gets `SetMovedHerdr` with a socket of
+  the test's own first, and a test core is `coretest.Server`'s — an agent
+  running in herdr carries `HERDR_SOCKET_PATH` in its environment, and a
+  stop without one is the person's own server (it happened, Core 26j).
 - **A test remuda-core is `coretest.Server`'s, `scripts/e2e.sh`'s or the
   Windows job's own session's, each with its own `RC_SESSION`, `RC_SOCKET`, XDG
   folders, `HOME` and `RC_LAUNCHD_DIRECT` — the last for a core started with
@@ -111,8 +116,9 @@ not style.
   herdr restores the saved session of the `HOME` it runs under — the
   person's workspaces, their agents resumed with `--resume` — and saves
   its own over it; a throwaway on the person's `HOME` once resumed a live
-  Claude Code session in a hidden pane. `internal/herdr/herdrtest.Server`
-  sets all three.
+  Claude Code session in a hidden pane. A test of remuda itself starts
+  `internal/core/coretest.Server` instead: a throwaway core on a socket,
+  HOME and folders of its own, never a herdr.
 - **Never run the uninstall for real on the person's machine.** `remuda
   uninstall` and `scripts/uninstall.sh run` stop the service, and with
   `-herdr` the server and every agent in it. To look, use `-n` (the plan

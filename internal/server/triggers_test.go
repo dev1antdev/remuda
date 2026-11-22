@@ -16,7 +16,7 @@ func TestTriggerRoutes(t *testing.T) {
 	resubscribed := 0
 	svc := triggers.New(dir)
 	svc.Resubscribe = func() { resubscribed++ }
-	s := &Server{Triggers: svc, Machines: machines.NewManager(dir, dir+"/none.sock", "", nil)}
+	s := &Server{Triggers: svc, Machines: machines.NewManager(dir, nil, false)}
 	mux := http.NewServeMux()
 	s.triggerRoutes(mux)
 

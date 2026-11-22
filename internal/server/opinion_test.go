@@ -13,7 +13,7 @@ import (
 
 func opinionServer(t *testing.T) (*Server, *http.ServeMux) {
 	t.Helper()
-	s := &Server{Opinions: opinion.NewService(t.TempDir()), Machines: machines.NewManager(t.TempDir(), "/nowhere.sock", "herdr", nil)}
+	s := &Server{Opinions: opinion.NewService(t.TempDir()), Machines: machines.NewManager(t.TempDir(), nil, false)}
 	mux := http.NewServeMux()
 	s.opinionRoutes(mux)
 	return s, mux

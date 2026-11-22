@@ -1,51 +1,70 @@
 package triggers
 
 import (
-	"os"
+	"context"
 	"testing"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/core"
+	"github.com/dev1antdev/remuda/internal/core/coretest"
 	"github.com/dev1antdev/remuda/internal/herdr"
-	"github.com/dev1antdev/remuda/internal/herdr/herdrtest"
 )
 
-// TestHerdrReadsTheBuiltInWatches: the two patterns are herdr's to run, in its Rust dialect; one it refused would
-// refuse every machine's stream. A throwaway herdr takes them and tells a match of each as a pane prints it.
-func TestHerdrReadsTheBuiltInWatches(t *testing.T) {
-	sock := herdrtest.Server(t)
-	client := herdr.NewClient(sock)
-	made, err := client.WorkspaceCreate(os.TempDir(), "triggers")
+// TestCoreReadsTheBuiltInWatches: the two patterns are remuda-core's to run, in its own dialect; one it refused would
+// refuse every machine's stream. A throwaway core takes them and tells a match of each as a pane prints it.
+func TestCoreReadsTheBuiltInWatches(t *testing.T) {
+	c := coretest.Server(t)
+	client := c.Client(t)
+	adapter := core.NewAdapter(client, nil, core.AdapterHooks{})
+	t.Cleanup(func() { adapter.Close() })
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	running, err := client.Run(ctx, core.RunParams{Argv: []string{"sh"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer client.WorkspaceClose(made.Workspace.WorkspaceID)
-	pane := made.RootPane.PaneID
-	stream, err := client.Subscribe([]herdr.Subscription{
+	pane := running.Address
+	for start := time.Now(); ; time.Sleep(50 * time.Millisecond) {
+		if snap, err := adapter.SessionSnapshot(); err == nil && snap.Pane(pane) != nil {
+			break
+		}
+		if time.Since(start) > 10*time.Second {
+			t.Fatal("the machine never showed the pane")
+		}
+	}
+	stream, err := adapter.Subscribe([]herdr.Subscription{
 		{Type: herdr.EventOutputMatched, PaneID: pane, Source: "recent", Lines: lines, Match: &herdr.OutputMatch{Type: "regex", Value: ServePattern}},
 		{Type: herdr.EventOutputMatched, PaneID: pane, Source: "recent", Lines: lines, Match: &herdr.OutputMatch{Type: "regex", Value: TestsPattern}},
 	})
 	if err != nil {
-		t.Fatalf("herdr refused the built-in watches: %v", err)
+		t.Fatalf("remuda-core refused the built-in watches: %v", err)
 	}
 	defer stream.Close()
 	// the rows go out through printf, so the command line typed shows neither the dev server's words nor the test's
-	if err := client.PaneSendText(pane, `printf '%s:   http://localhost:%s/\n%s: TestLogin (0.01s)\n' '  ➜  Local' 5173 '--- FAIL'`+"\r"); err != nil {
+	if err := adapter.PaneSendText(pane, `printf '%s:   http://localhost:%s/\n%s: TestLogin (0.01s)\n' '  ➜  Local' 5173 '--- FAIL'`+"\r"); err != nil {
 		t.Fatal(err)
 	}
 	got := map[string]bool{}
-	deadline := time.After(5 * time.Second)
+	deadline := time.After(10 * time.Second)
 	for len(got) < 2 {
 		done := make(chan herdr.Event, 1)
 		go func() {
-			if e, err := stream.Next(); err == nil {
-				done <- e
+			for {
+				e, err := stream.Next()
+				if err != nil {
+					return
+				}
+				if e.Kind == herdr.EventOutputMatched {
+					done <- e
+					return
+				}
 			}
 		}()
 		select {
 		case e := <-done:
 			got[e.MatchedLine] = true
 		case <-deadline:
-			t.Fatalf("herdr told %v", got)
+			t.Fatalf("remuda-core told %v", got)
 		}
 	}
 	if !got["  ➜  Local:   http://localhost:5173/"] || !got["--- FAIL: TestLogin (0.01s)"] {

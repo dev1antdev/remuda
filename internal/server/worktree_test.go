@@ -3,7 +3,6 @@ package server
 import (
 	"encoding/json"
 	"net/http"
-	"path/filepath"
 	"testing"
 
 	"github.com/dev1antdev/remuda/internal/auth"
@@ -16,7 +15,7 @@ import (
 
 func TestAProjectsSettingsAreKeptAndReadBack(t *testing.T) {
 	dir := t.TempDir()
-	s := &Server{Machines: machines.NewManager(dir, filepath.Join(dir, "no-herdr.sock"), "herdr", nil), Repos: repos.Open(dir)}
+	s := &Server{Machines: machines.NewManager(dir, nil, false), Repos: repos.Open(dir)}
 	api := http.NewServeMux()
 	s.repoRoutes(api)
 
