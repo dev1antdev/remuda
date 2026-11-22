@@ -28,7 +28,7 @@ func TestAnInMemorySnapshotDoesNotWaitThePace(t *testing.T) {
 			asked := time.Now()
 			f.push(status)
 			waitFor(t, "a snapshot after an event", func() bool { return f.polls(asked) == 1 })
-			took := time.Since(asked)
+			took := f.polledAt(asked).Sub(asked) // the fake's own clock: a late test goroutine says nothing of the pace
 			t.Logf("an event's snapshot: %s", took)
 			if request && took < eventDebounce {
 				t.Fatalf("a request's snapshot waits for the rest of the burst: %s", took)
@@ -40,7 +40,7 @@ func TestAnInMemorySnapshotDoesNotWaitThePace(t *testing.T) {
 			right := time.Now()
 			f.push(status)
 			waitFor(t, "a snapshot right after one", func() bool { return f.polls(right) == 1 })
-			after := time.Since(right)
+			after := f.polledAt(right).Sub(right)
 			t.Logf("an event right after a snapshot: %s", after)
 			if request && after < localGap-eventDebounce {
 				t.Fatalf("a request's snapshot keeps the gap: %s", after)

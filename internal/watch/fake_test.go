@@ -165,6 +165,19 @@ func (f *fakeHerdr) polls(from time.Time) int {
 	return n
 }
 
+// polledAt is when the first snapshot at or after from was asked for, so a test measures the watcher's timing rather
+// than how late its own goroutine was scheduled.
+func (f *fakeHerdr) polledAt(from time.Time) time.Time {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, at := range f.snapshots {
+		if !at.Before(from) {
+			return at
+		}
+	}
+	return time.Time{}
+}
+
 // subscribed waits for the next Subscribe.
 func (f *fakeHerdr) subscribed(t *testing.T) []herdr.Subscription {
 	t.Helper()
