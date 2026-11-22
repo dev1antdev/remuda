@@ -387,16 +387,17 @@ func (m *Manager) Remove(id string) error {
 	if id == LocalID {
 		return fmt.Errorf("cannot remove the local machine")
 	}
+	// one removal at a time, through its write and the machine's going: a second one's list is built after the first
+	// machine left, so it can never write a removed machine back
+	m.saveMu.Lock()
+	defer m.saveMu.Unlock()
 	m.mu.Lock()
 	if m.machines[id] == nil {
 		m.mu.Unlock()
 		return fmt.Errorf("machine %q not found", id)
 	}
-	m.mu.Unlock()
 	// the list without the machine is written before it goes: one that could not be written stays a machine of the
 	// fleet, and nothing of it — its checkpoints, its panes — is let go for a removal that did not land
-	m.saveMu.Lock()
-	m.mu.Lock()
 	cfgs := []Config{}
 	for _, oid := range m.order {
 		if oid != id && oid != LocalID && m.machines[oid] != nil {
@@ -404,9 +405,7 @@ func (m *Manager) Remove(id string) error {
 		}
 	}
 	m.mu.Unlock()
-	err := m.writeMachines(cfgs)
-	m.saveMu.Unlock()
-	if err != nil {
+	if err := m.writeMachines(cfgs); err != nil {
 		return err
 	}
 	m.drop(id)

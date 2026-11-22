@@ -185,7 +185,9 @@ func split(s string) []string {
 func TestARemovalThatCouldNotBeKeptLeavesTheMachine(t *testing.T) {
 	dir := t.TempDir()
 	m := newTestManager(dir)
-	m.add(Config{ID: "box", Label: "Box", Host: "box.remote"})
+	// in the registry, never connected: a host named for a test must reach no ssh of the person's
+	m.machines["box"] = newRemote(Config{ID: "box", Label: "Box", Host: "box.remote"})
+	m.order = append(m.order, "box")
 	if err := os.Mkdir(filepath.Join(dir, "machines.json"), 0o755); err != nil { // a write over a folder fails
 		t.Fatal(err)
 	}
@@ -194,5 +196,33 @@ func TestARemovalThatCouldNotBeKeptLeavesTheMachine(t *testing.T) {
 	}
 	if _, err := m.Get("box"); err != nil || m.Gone("box") {
 		t.Fatalf("the machine left the fleet for a removal that did not land: %v", err)
+	}
+}
+
+// TestTwoRemovalsBothStayRemoved: a removal writes the list without its machine before the machine goes, one at a time,
+// so the second can never write the first back — not in the running fleet, and not in the file a restart reads.
+func TestTwoRemovalsBothStayRemoved(t *testing.T) {
+	dir := t.TempDir()
+	m := newTestManager(dir)
+	for _, id := range []string{"one", "two"} {
+		m.machines[id] = newRemote(Config{ID: id, Label: id, Host: id + ".remote"})
+		m.order = append(m.order, id)
+	}
+	if err := m.save(); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Remove("one"); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Remove("two"); err != nil {
+		t.Fatal(err)
+	}
+	if ids := idsOf(m.List()); ids != "local" {
+		t.Fatalf("the fleet after both removals: %s", ids)
+	}
+	reloaded := NewManager(dir, nil, true) // a restart: the file is all it has
+	defer reloaded.Close()
+	if ids := idsOf(reloaded.All()); ids != "local" {
+		t.Fatalf("the fleet a restart reads: %s", ids)
 	}
 }
