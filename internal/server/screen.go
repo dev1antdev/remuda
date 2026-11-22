@@ -10,8 +10,8 @@ import (
 	"github.com/dev1antdev/remuda/internal/scrollback"
 )
 
-// The screen a client outside the page reads (/api/screen: the end-to-end checks) and the rows above it for the
-// terminal lens's find (/api/scrollback), read through the machine's core on demand.
+// The screen read by a client outside the page (/api/screen: the end-to-end checks) and the rows above it for the
+// terminal lens's find (/api/scrollback), through the machine's core on demand.
 
 // MaxScrollbackRows bounds one find's read; the page asks for fewer.
 const MaxScrollbackRows = 20000
@@ -21,7 +21,7 @@ func (s *Server) screenRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/scrollback", s.handleScrollback)
 }
 
-// handleScrollback is GET /api/scrollback?pane&q&lines: the finds in the core's recent rows, the screen and the history above it.
+// handleScrollback is GET /api/scrollback?pane&q&lines: the matches in the core's recent rows, the screen and the history above it.
 func (s *Server) handleScrollback(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	paneID := q.Get("pane")
