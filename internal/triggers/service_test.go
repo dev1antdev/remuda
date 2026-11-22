@@ -1,6 +1,7 @@
 package triggers
 
 import (
+	"fmt"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -278,6 +279,41 @@ func TestRefusalsAreKeptByMachine(t *testing.T) {
 	s.Forget("gog")
 	if len(s.Refusals()) != 0 {
 		t.Fatal("a machine removed")
+	}
+}
+
+func TestANewPaneTakesNoWatchFromAPaneThatStands(t *testing.T) {
+	s := New(t.TempDir())
+	if _, err := s.Replace([]Rule{{ID: "all", Name: "Everywhere", Match: "substring", Pattern: "DONE", Action: ActionFeed, Enabled: true}}); err != nil {
+		t.Fatal(err)
+	}
+	var snap herdr.Snapshot
+	for i := range 66 { // 66 panes × three watches each: inside the cap, so every one of them stands
+		snap.Panes = append(snap.Panes, herdr.PaneInfo{PaneID: fmt.Sprintf("w1:p%d", i)})
+	}
+	stood := s.Watches("gog", &snap)
+	if len(stood) != 198 {
+		t.Fatalf("a set of %d watches", len(stood))
+	}
+
+	// a pane appears before them all: its watches come first in the list a cut would take the tail of the old set for
+	grown := herdr.Snapshot{Panes: append([]herdr.PaneInfo{{PaneID: "w1:new"}}, snap.Panes...)}
+	then := s.Watches("gog", &grown)
+	have := map[string]bool{}
+	own := 0
+	for _, o := range then {
+		have[o.Pane+" "+o.Key] = true
+		if o.Pane == "w1:new" {
+			own++
+		}
+	}
+	for _, o := range stood {
+		if !have[o.Pane+" "+o.Key] {
+			t.Fatalf("a pane that stands lost its watch: %s %s", o.Pane, o.Key)
+		}
+	}
+	if own == 3 {
+		t.Fatalf("a pane that just appeared took %d watches at the cap", own)
 	}
 }
 

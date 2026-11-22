@@ -10,7 +10,9 @@ import (
 )
 
 // MaxWatches is how many output watches one machine's stream holds: every pane gets the two built-in ones and the
-// person's rules that cover it, the person's first; past the cap the rest are left out, said once an hour.
+// person's rules that cover it, the person's first; past the cap the panes watched the time before keep their watches
+// and a pane just appeared gets what is left, so a momentary pane takes no watch of a pane that stands; the rest are
+// left out, said once an hour.
 const MaxWatches = 200
 
 var (
@@ -46,7 +48,40 @@ func (s *Service) Watches(machine string, snap *herdr.Snapshot) []watch.Output {
 			log.Printf("%s: %d output watches asked for, %d kept", machine, len(all), MaxWatches)
 		}
 		overMu.Unlock()
-		all = all[:MaxWatches]
+		all = s.watchedBefore(machine, all)
 	}
+	s.rememberWatched(machine, snap)
 	return all
+}
+
+// watchedBefore cuts the set to MaxWatches keeping first the watches of the panes the machine had the time before: a
+// pane that just appeared is served with what is left, so it never displaces a watch of a pane that stands.
+func (s *Service) watchedBefore(machine string, all []watch.Output) []watch.Output {
+	s.mu.Lock()
+	before := s.watched[machine]
+	s.mu.Unlock()
+	var kept, fresh []watch.Output
+	for _, o := range all {
+		if before[o.Pane] {
+			kept = append(kept, o)
+		} else {
+			fresh = append(fresh, o)
+		}
+	}
+	kept = append(kept, fresh...)
+	if len(kept) > MaxWatches {
+		kept = kept[:MaxWatches]
+	}
+	return kept
+}
+
+// rememberWatched keeps which panes the machine had, so the next set knows the ones that just appeared.
+func (s *Service) rememberWatched(machine string, snap *herdr.Snapshot) {
+	panes := make(map[string]bool, len(snap.Panes))
+	for i := range snap.Panes {
+		panes[snap.Panes[i].PaneID] = true
+	}
+	s.mu.Lock()
+	s.watched[machine] = panes
+	s.mu.Unlock()
 }

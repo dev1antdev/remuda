@@ -150,7 +150,7 @@ func TestAPaneThatComesAndGoesSwapsNoStream(t *testing.T) {
 // one still settling: a momentary pane can cost no stream, nor place a watch of the panes that stand past a cap.
 func TestAStreamOpeningWhileASetSettlesHoldsTheOneThatStands(t *testing.T) {
 	quickPace(t)
-	localGap = 300 * time.Millisecond // the rest is long enough to open a stream inside it
+	eventDebounce = 300 * time.Millisecond // the rest is long enough to open a stream inside it
 	f := newFakeHerdr(t, "w1:p1")
 	f.memory = true
 	watching(t, f, nil)
@@ -173,7 +173,7 @@ func TestAStreamOpeningWhileASetSettlesHoldsTheOneThatStands(t *testing.T) {
 // new rule and booked it waits for no rest once Resubscribe says so.
 func TestARuleEditPromotesASettlingSetAtOnce(t *testing.T) {
 	quickPace(t)
-	localGap = 10 * time.Second // a rest no test would sit through: only the person's word promotes the set
+	eventDebounce = 10 * time.Second // a rest no test would sit through: only the person's word promotes the set
 	f := newFakeHerdr(t, "w1:p1")
 	f.memory = true
 	var rules atomic.Pointer[[]Output]
@@ -235,26 +235,11 @@ func TestASettlingSetIsNotPushedOutByTheSameSetAgain(t *testing.T) {
 	}
 }
 
-// TestAMachineThatStoodQuietWatchesANewPaneAfterTheBurst: the rest a move waits is what the poll would have kept —
-// the gap only as far as it stands — so a pane made after a quiet spell prints its first lines under a watch, rather
-// than waiting out a whole gap it has already served.
-func TestAMachineThatStoodQuietWatchesANewPaneAfterTheBurst(t *testing.T) {
-	if rest := settleRest(time.Second, 2*time.Second); rest != eventDebounce {
-		t.Fatalf("a quiet machine waits out a whole gap: %s", rest)
-	}
-	if rest := settleRest(time.Second, 0); rest != time.Second {
-		t.Fatalf("a poll just made waits less than the gap: %s", rest)
-	}
-	if rest := settleRest(time.Second, 900*time.Millisecond); rest != eventDebounce {
-		t.Fatalf("a gap nearly served waits less than the burst: %s", rest)
-	}
-}
-
 // TestASettlingSetTakesTheLatestTopology: panes that keep coming replace the set still settling without moving its
 // rest, and the one stream that opens holds the topology as it stands then — never one per pane.
 func TestASettlingSetTakesTheLatestTopology(t *testing.T) {
 	quickPace(t)
-	localGap = 300 * time.Millisecond
+	eventDebounce = 300 * time.Millisecond // both panes appear inside one rest
 	f := newFakeHerdr(t, "w1:p1")
 	f.memory = true
 	watching(t, f, nil)

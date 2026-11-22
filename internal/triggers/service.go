@@ -39,6 +39,7 @@ type Service struct {
 	acted    map[string]time.Time            // "machine|pane|watch" → the last action, for the quiet spells
 	offers   map[string]Offer                // "machine|pane"
 	refused  map[string]string               // machine → why herdr refused the person's watches
+	watched  map[string]map[string]bool      // machine → the panes its last set of watches was worked out for
 }
 
 type paneView struct {
@@ -65,7 +66,7 @@ type Offer struct {
 // New is the service over the person's rules in dir.
 func New(dir string) *Service {
 	return &Service{Rules: Open(dir), machines: map[string]map[string]*paneView{}, standing: map[string]map[string]time.Time{},
-		acted: map[string]time.Time{}, offers: map[string]Offer{}, refused: map[string]string{}}
+		acted: map[string]time.Time{}, offers: map[string]Offer{}, refused: map[string]string{}, watched: map[string]map[string]bool{}}
 }
 
 func key(machine, pane string) string { return machine + "|" + pane }
