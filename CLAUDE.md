@@ -1635,7 +1635,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   (`features/roster/HealthButton.tsx`; the rules in `concerns.ts`) turns amber on an update, a lagging
   remote remuda, a nearly full disk, Claude Code's sign-in running out (`internal/signin`) or a
   setting there on a model being retired (`internal/retire`; `concerns(…, more)` takes the
-  machine's name, its `retiring`, the roster's `retirements` its hits name and the clock); a Windows PC's ⓘ opens on a System row, "Windows · the terminal is the pane's screen, no Code mode".
+  machine's name, its `retiring`, the roster's `retirements` its hits name and the clock); a Windows PC's ⓘ opens on a System row, "Windows · no Code mode".
 - `internal/gitsync/` — **every repository at a glance, and fetch, pull
   and push at the person's press** (tested on temp repositories with a bare
   remote made in the test, a HOME and no system config of their own, and on
@@ -7145,8 +7145,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   keeps the rail to Agents, Usage, Activity and a server's
   Server place (its panel hides Read again and the updates), the header
   wears "Viewing only" and no search, Changes is shut, the Git lens draws
-  its graph and opens no menu, the terminal lens on a machine on
-  remuda-core is the live terminal only watched (`/ws/pane` is a viewer's
+  its graph and opens no menu, the terminal lens is the live terminal only
+  watched (`/ws/pane` is a viewer's
   route; `handlePaneWS` opens it `Observe`, drops what the page sends, and asks
   again right before every write (a frame gathers at most `maxFrame` 256 KB,
   so a terminal that never stops printing is asked about that often) and
@@ -7155,14 +7155,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   device it signed in, not revoked), closing with "this link was revoked"
   — tested on a throwaway core; the page's
   `TerminalLens` `readOnly`: the pane's own grid, xterm's `disableStdin`, no
-  key bar, nothing sent), else
-  the pane's screen (`features/terminal/Screen.tsx` over `GET /api/screen`,
-  `internal/server/screen.go` → `herdr.API.PaneScreen`, `terminal.read` with
-  `format: "vt"`, every 3 s while its agent works, 15 s otherwise, an ETag
-  over the text so an unchanged screen is a 304; no attach, so no slot is
-  taken and the shared pane is never resized; the rows through `ansi.ts`
-  at the font that fits the pane's columns, `thumbFont`, the bottom rows
-  kept when the height runs out),
+  key bar, nothing sent),
   the chat has no composer, keys or question buttons, the
   tab strip no + or ×, the sidebar no menus and its ⓘ the vitals alone —
   no update, Resume, read-again or All updates, `concerns(…, viewOnly)`
@@ -7721,7 +7714,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   asked.
 - **Terminal bytes go over WS binary frames**, control messages over JSON
   text frames. Over the HTTP transport typing goes once or not at all
-  (`engine/transport.ts`, on `screen/sender.ts`, a sender per stream): what
+  (`engine/transport.ts`, on `engine/sender.ts`, a sender per stream): what
   fails, hangs or finds no stream is dropped, never sent later, and a toast
   says so unless it was only the terminal's own reports. An attach paints the screen on start; late joiners are
   painted it again, never handed a byte replay.
