@@ -59,7 +59,7 @@ func ScriptKnowing(known []int) string {
 	for i, pid := range known {
 		pids[i] = strconv.Itoa(pid)
 	}
-	return script.PATH + `
+	return script.PATH + "\n" + script.CwdOf + `
 known=" ` + strings.Join(pids, " ") + ` "
 emit() {
   [ "$1" -ge 1024 ] 2>/dev/null || return 0
@@ -67,17 +67,15 @@ emit() {
     printf '%s\037%s\037%s\037%s\037=\037=\037=\n' "$1" "$2" "$3" "$4"
     return 0 ;;
   esac
-  if [ -r "/proc/$3/cwd" ] || [ -L "/proc/$3/cwd" ]; then
-    cwd=$(readlink "/proc/$3/cwd" 2>/dev/null)
+  cwd_of "$3"; known_cwd=$cwd
+  if [ -d "/proc/$3" ]; then
     ppid=$(awk '{print $4}' "/proc/$3/stat" 2>/dev/null)
-    pcwd=$(readlink "/proc/$ppid/cwd" 2>/dev/null)
   else
-    cwd=$(lsof -a -p "$3" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -1)
     ppid=$(ps -o ppid= -p "$3" 2>/dev/null | tr -d ' ')
-    pcwd=$(lsof -a -p "$ppid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -1)
   fi
+  cwd_of "$ppid"; parent_cwd=$cwd
   args=$(ps -o args= -p "$3" 2>/dev/null | cut -c1-240)
-  printf '%s\037%s\037%s\037%s\037%s\037%s\037%s\n' "$1" "$2" "$3" "$4" "$cwd" "$pcwd" "$args"
+  printf '%s\037%s\037%s\037%s\037%s\037%s\037%s\n' "$1" "$2" "$3" "$4" "$known_cwd" "$parent_cwd" "$args"
 }
 if [ "$(uname)" = Linux ] && command -v ss >/dev/null 2>&1; then
   ss -ltnpH 2>/dev/null | while read -r state recv send local peer users; do

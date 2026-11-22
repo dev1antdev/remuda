@@ -2,6 +2,7 @@ package preview
 
 import (
 	"net"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
@@ -125,7 +126,13 @@ func serveHere(t *testing.T) (port, pid int, dir string) {
 	if lsofErr != nil && ssErr != nil {
 		t.Skip("neither lsof nor ss")
 	}
-	dir, err = filepath.EvalSymlinks(t.TempDir())
+	// a folder whose name needs the laptop's own spelling: a space, and letters lsof writes as bytes past ASCII in a
+	// C locale, where the script must read them back as the folder it is
+	named := filepath.Join(t.TempDir(), `café \ dir`)
+	if err := os.MkdirAll(named, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	dir, err = filepath.EvalSymlinks(named)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -3679,7 +3679,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   `Script` is one POSIX script per machine — `ss -ltnpH` and `/proc` on
   Linux, `lsof -iTCP -sTCP:LISTEN -Fpcn` and `ps` elsewhere — printing
   every listening TCP port above 1023 with its pid, process, working
-  folder (its parent's when it has none) and arguments; `Parse` keeps one
+  folder (its parent's when it has none, both through `script.CwdOf` — one
+  rule for a process's folder, the one the sessions' pid lookup reads, which
+  takes lsof's escapes and a locale's bytes back to the folder itself) and
+  arguments; `Parse` keeps one
   per port (the IPv4 loopback's socket first), leaves out the ports given
   (the cockpit's own `-addr`, 7317, the door 7318 — on a port its sshd
   picked, the door goes by that process's name — code-server's), the
