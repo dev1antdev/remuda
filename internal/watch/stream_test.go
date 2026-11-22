@@ -610,3 +610,38 @@ func TestARefusalForASupersededSetIsDropped(t *testing.T) {
 		t.Fatalf("the superseded set was tried again: %d subscribes", n)
 	}
 }
+
+// TestARecheckWorksOutItsOwnTopology: a set worked out again before it is installed is ranked on the snapshot it was
+// worked out for, never on a newer one still settling — the pane a newer snapshot added is not pulled in early.
+func TestARecheckWorksOutItsOwnTopology(t *testing.T) {
+	quickPace(t)
+	f := newFakeHerdr(t, "w1:p1")
+	watcher, mc, _ := watching(t, f, nil)
+	f.subscribed(t)
+	waitFor(t, "the stream to stand", func() bool { return f.open() == 1 })
+
+	mine := &herdr.Snapshot{Panes: []herdr.PaneInfo{{PaneID: "w1:p1", WorkspaceID: "w1"}}}
+	newer := &herdr.Snapshot{Panes: []herdr.PaneInfo{{PaneID: "w1:p1", WorkspaceID: "w1"}, {PaneID: "w1:p2", WorkspaceID: "w1"}}}
+	var mu sync.Mutex
+	var asked *herdr.Snapshot
+	watcher.mu.Lock()
+	watcher.Outputs = func(_ string, snap *herdr.Snapshot, _ []Output) []Output {
+		mu.Lock()
+		asked = snap
+		mu.Unlock()
+		return nil
+	}
+	st := watcher.stateFor(mc.ID())
+	st.snap = newer   // a newer topology is already settling
+	st.accepted = nil // nothing taken yet: any basis is stale
+	watcher.mu.Unlock()
+
+	set := buildSet(mine, nil, "")
+	set.basis = "an older admission"
+	watcher.recheck(mc, st, set)
+	mu.Lock()
+	defer mu.Unlock()
+	if asked != mine {
+		t.Fatalf("a set worked out again was ranked on another topology: %+v", asked)
+	}
+}
