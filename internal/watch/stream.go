@@ -151,6 +151,7 @@ func (w *Watcher) connect(mc *machines.Machine, st *machineState, prev *liveStre
 	set := st.wanted
 	wait := time.Until(st.noStreamUntil)
 	w.mu.Unlock()
+	set = w.recheck(mc, st, set)
 	if set == nil {
 		return nil, streamRetry // no snapshot yet: the first one tells the set
 	}
@@ -169,6 +170,7 @@ func (w *Watcher) connect(mc *machines.Machine, st *machineState, prev *liveStre
 		w.mu.Lock()
 		st.refused = set.person
 		set = buildSet(st.snap, set.all, st.refused)
+		set.basis = fingerprint(st.accepted.heldWatches())
 		st.wanted = set
 		w.mu.Unlock()
 		if w.Refused != nil {
@@ -221,6 +223,24 @@ func (w *Watcher) connect(mc *machines.Machine, st *machineState, prev *liveStre
 		}
 	}()
 	return ls, 0
+}
+
+// recheck works a set out again when the standing watches it was admitted against are not the ones a stream took since:
+// a set queued before another subscription was taken may rank a watch the core has just accepted below a fresh one.
+func (w *Watcher) recheck(mc *machines.Machine, st *machineState, set *streamSet) *streamSet {
+	if set == nil || w.Outputs == nil {
+		return set
+	}
+	w.mu.Lock()
+	snap, refused := st.snap, st.refused
+	accepted := st.accepted.heldWatches()
+	w.mu.Unlock()
+	if snap == nil || set.basis == fingerprint(accepted) {
+		return set
+	}
+	rebuilt := buildSet(snap, w.Outputs(mc.ID(), snap, accepted), refused)
+	rebuilt.basis = fingerprint(accepted)
+	return rebuilt
 }
 
 // sayOnce says whether a refusal of the stream is news for the log: not the same words as the try before.

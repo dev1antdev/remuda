@@ -38,6 +38,7 @@ type streamSet struct {
 	held    []Output            // the output watches this stream holds, in subscription order
 	outputs map[string][]Output // by pane, the ones held
 	key     string              // the whole set as one string, to tell a move
+	basis   string              // the standing watches it was admitted against: a set worked out before another one was taken is worked out again
 	person  string              // the person's own watches as one string, "" for none
 	holds   bool                // the person's watches are in it: herdr has not refused them as they stand
 }
@@ -116,6 +117,7 @@ func (w *Watcher) noteWanted(machineID string, snap *herdr.Snapshot, now bool) {
 	w.mu.Lock()
 	st := w.stateFor(machineID)
 	set := buildSet(snap, outputs, st.refused)
+	set.basis = fingerprint(standing)
 	switch {
 	case st.wanted == nil || now:
 		if st.wanted != nil && st.wanted.key == set.key && st.pending == nil {
