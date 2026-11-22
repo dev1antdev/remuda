@@ -31,7 +31,7 @@ func (s *Server) handleRepoSettings(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 404, err)
 		return
 	}
-	root := r.URL.Query().Get("root")
+	root := mc.Canonical(r.URL.Query().Get("root"))
 	answer := map[string]any{
 		"root": root, "name": rpath.For(root).Base(root), "settings": s.repoSettings(mc.ID(), root),
 		"defaults": map[string]string{"issue_branch": repos.DefaultIssueBranch, "issue_prompt": repos.DefaultIssuePrompt, "pr_prompt": repos.DefaultPRPrompt},
@@ -70,7 +70,7 @@ func (s *Server) handleRepoSettingsPut(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 400, errors.New("which repository: its main folder, as a whole path"))
 		return
 	}
-	req.Root = mc.Canonical(req.Root) // one spelling of a folder: the one the roster's sessions are named in
+	req.Root = mc.Canonical(req.Root)
 	saved, err := s.Repos.Put(mc.ID(), req.Root, req.Settings)
 	if err != nil {
 		httpErr(w, 400, err)
@@ -102,7 +102,7 @@ func (s *Server) handleRunAction(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 404, errors.New("no run actions here"))
 		return
 	}
-	action, found := s.Repos.Action(mc.ID(), req.Root, req.Action)
+	action, found := s.Repos.Action(mc.ID(), mc.Canonical(req.Root), req.Action)
 	if !found {
 		httpErr(w, 404, errors.New("that run action is not saved for the repository any more"))
 		return

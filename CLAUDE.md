@@ -710,7 +710,11 @@ components and icons as rules for whoever changes it: @docs/design.md
   came from, for the stop at the person's press), `files.go` (the file
   viewer's reads and the one write), `shell.go` (a `Machine` is a
   `shell.Host`: `Run` / `Stream` here through `sh -c` or over the master,
-  and `PutFile` writes a file whole there, the way a teleport's archive arrives);
+  `PutFile` writes a file whole there, the way a teleport's archive
+  arrives, and `Canonical` names a folder the way that machine does —
+  `cd -P … && pwd -P`, `cygpath -w` on a Windows PC, the folder as given
+  when it cannot be reached — which the documents on its core, the
+  triggers, the repository settings and a schedule's folder are keyed by);
   `Machine.Transcripts` is a `transcript.Reader`. `local` is always present,
   named "This Mac · <host>" on a Mac and "This machine · <host>" on
   anything else (`localLabel`, tested) until the person renames it.

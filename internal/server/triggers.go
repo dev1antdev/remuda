@@ -52,6 +52,7 @@ func (s *Server) handleTriggersPut(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &list) {
 		return
 	}
+	spelled := map[string]string{} // one read of the machine for a folder two rules share
 	for i, rule := range list {
 		if rule.Machine == "" {
 			continue
@@ -61,7 +62,15 @@ func (s *Server) handleTriggersPut(w http.ResponseWriter, r *http.Request) {
 			httpErr(w, http.StatusBadRequest, fmt.Errorf("trigger %q: %w", rule.Name, err))
 			return
 		}
-		list[i].Dir = mc.Canonical(rule.Dir) // one spelling of a folder: the one the machine's panes are named in
+		if rule.Dir == "" {
+			continue
+		}
+		if folder, ok := spelled[mc.ID()+"|"+rule.Dir]; ok {
+			list[i].Dir = folder
+			continue
+		}
+		list[i].Dir = mc.Canonical(rule.Dir)
+		spelled[mc.ID()+"|"+rule.Dir] = list[i].Dir
 	}
 	if _, err := s.Triggers.Replace(list); err != nil {
 		httpErr(w, http.StatusBadRequest, err)

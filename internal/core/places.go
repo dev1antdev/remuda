@@ -168,7 +168,7 @@ func (a *Adapter) workspaceOn(cwd, label string, tree *herdr.WorktreeInfo) (*her
 		return nil, err
 	}
 	if a.hooks.Canonical != nil {
-		cwd = a.hooks.Canonical(cwd) // one spelling of a folder: the machine's, so its checkout and panes are the same
+		cwd = a.hooks.Canonical(cwd)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), callWithin)
 	defer cancel()

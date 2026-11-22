@@ -29,8 +29,8 @@ func TestCanonicalIsTheMachinesOwnSpellingOfAFolder(t *testing.T) {
 	if got := mc.Canonical(link + "/./"); got != physical {
 		t.Fatalf("a folder with a trailing . is named %q, not %q", got, physical)
 	}
-	if got := mc.Canonical("/no/such/folder/."); got != "/no/such/folder" {
-		t.Fatalf("a folder that is not there is kept cleaned: %q", got)
+	if got := mc.Canonical("/no/such/folder/."); got != "/no/such/folder/." {
+		t.Fatalf("a folder that is not there is kept as given, never moved elsewhere: %q", got)
 	}
 	if got := mc.Canonical(""); got != "" {
 		t.Fatalf("no folder is named %q", got)

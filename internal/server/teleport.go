@@ -177,7 +177,8 @@ func (s *Server) handleTeleport(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 404, err)
 		return
 	}
-	if s.heldByHerdr(w, target.ID()) { // the move writes a checkout there
+	req.Folder = target.Canonical(req.Folder) // one spelling: the folder as the target machine names it
+	if s.heldByHerdr(w, target.ID()) {        // the move writes a checkout there
 		return
 	}
 	if mc.Windows() || target.Windows() {

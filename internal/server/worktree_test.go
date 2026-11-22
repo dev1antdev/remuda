@@ -135,15 +135,17 @@ func TestSettingsOnASymlinkedFolderAreKeptAsTheMachineNamesIt(t *testing.T) {
 	if rec := ask(api, "PUT", "/api/repos/settings", body); rec.Code != 200 {
 		t.Fatalf("put: %d %s", rec.Code, rec.Body)
 	}
-	rec := ask(api, "GET", "/api/repos/settings?machine=local&root="+physical+"&quick=1", "")
-	var got struct {
-		Root     string         `json:"root"`
-		Settings repos.Settings `json:"settings"`
-	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
-		t.Fatal(err)
-	}
-	if got.Settings.Base != "main" {
-		t.Fatalf("the settings saved through a symlink are not the machine's folder's: %+v", got)
+	for _, root := range []string{link, physical} { // saved through the link, read through either spelling
+		rec := ask(api, "GET", "/api/repos/settings?machine=local&root="+root+"&quick=1", "")
+		var got struct {
+			Root     string         `json:"root"`
+			Settings repos.Settings `json:"settings"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+			t.Fatal(err)
+		}
+		if got.Settings.Base != "main" || got.Root != physical {
+			t.Fatalf("the settings saved through a symlink are not read back through %q: %+v", root, got)
+		}
 	}
 }

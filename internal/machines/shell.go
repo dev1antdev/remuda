@@ -49,19 +49,24 @@ func (mc *Machine) Home() string {
 	return mc.home
 }
 
-// Canonical is a folder the way the machine spells it — a symlink resolved, Windows' own separators and drive letter
-// — so two spellings of one folder meet in remuda's keys: the documents on its core, the triggers and the repository
-// settings alike. The path as given, cleaned, when the machine cannot say (away, or no such folder).
+// Canonical is a folder the way the machine spells it — every link resolved before a .. in the path too (`cd -P`),
+// Windows' own separators and drive letter — so two spellings of one folder meet in remuda's keys: the documents on
+// its core, the triggers and the repository settings alike. The folder as given when the machine cannot say (away, or
+// no such folder): a folder remuda cannot reach is not silently moved to another.
 func (mc *Machine) Canonical(dir string) string {
 	if dir == "" {
 		return ""
 	}
 	style := mc.Paths()
-	out, err := shell.Text(mc, "cd -- "+script.Quote(style.Slash(dir))+" 2>/dev/null && pwd -P", canonicalWithin)
-	if said := strings.TrimSpace(out); err == nil && said != "" {
+	here := `$(pwd -P)`
+	if style.Windows { // Git Bash answers /cygdrive/c/…, which is Windows' own spelling only through cygpath
+		here = `$(cygpath -w "$(pwd -P)")`
+	}
+	out, err := shell.Text(mc, "cd -P -- "+script.Quote(style.Slash(dir))+` 2>/dev/null && printf '%s\n' "`+here+`"`, canonicalWithin)
+	if said := strings.TrimSuffix(strings.TrimSuffix(out, "\n"), "\r"); err == nil && strings.TrimSpace(said) != "" {
 		return style.Clean(said)
 	}
-	return style.Clean(dir)
+	return dir
 }
 
 // StateDir is the folder remuda keeps on this machine, "" for a remote before its first connect.
