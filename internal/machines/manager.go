@@ -277,6 +277,11 @@ func (m *Manager) save() error {
 		}
 	}
 	m.mu.Unlock()
+	return m.writeMachines(cfgs)
+}
+
+// writeMachines keeps the list given in machines.json, one save at a time.
+func (m *Manager) writeMachines(cfgs []Config) error {
 	b, _ := json.MarshalIndent(cfgs, "", "  ")
 	return state.WriteFile(m.path, b)
 }
@@ -383,15 +388,29 @@ func (m *Manager) Remove(id string) error {
 		return fmt.Errorf("cannot remove the local machine")
 	}
 	m.mu.Lock()
-	mc := m.machines[id]
-	if mc == nil {
+	if m.machines[id] == nil {
 		m.mu.Unlock()
 		return fmt.Errorf("machine %q not found", id)
 	}
 	m.mu.Unlock()
-	// the removal is kept before the machine goes: one that could not be noted stays, and Gone never says it went
+	// the list without the machine is written before it goes: one that could not be written stays a machine of the
+	// fleet, and nothing of it — its checkpoints, its panes — is let go for a removal that did not land
+	m.saveMu.Lock()
+	m.mu.Lock()
+	cfgs := []Config{}
+	for _, oid := range m.order {
+		if oid != id && oid != LocalID && m.machines[oid] != nil {
+			cfgs = append(cfgs, m.machines[oid].Cfg)
+		}
+	}
+	m.mu.Unlock()
+	err := m.writeMachines(cfgs)
+	m.saveMu.Unlock()
+	if err != nil {
+		return err
+	}
 	m.drop(id)
-	return m.save()
+	return nil
 }
 
 func (m *Manager) Get(id string) (*Machine, error) {

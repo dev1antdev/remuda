@@ -2,13 +2,23 @@ package machines
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/dev1antdev/remuda/internal/herdr"
 )
+
+// silentAPI answers nothing: a machine of a test that never asks it, and reaches no core of anyone's.
+type silentAPI struct{ herdr.API }
+
+// newTestManager is the fleet of a test that only reads the registry.
+func newTestManager(dir string) *Manager { return NewManagerWith(dir, nil, false, &silentAPI{}, nil) }
 
 func TestAServersHostIsNoMachineOfTheFleet(t *testing.T) {
 	dir := t.TempDir()
-	m := NewManager(dir, nil, false)
+	m := newTestManager(dir)
 	m.machines["gog"] = newRemote(Config{ID: "gog", Label: "GOG", Host: "gog.remote"})
 	m.order = append(m.order, "gog")
 	if ids := idsOf(m.List()); ids != "local,gog" {
@@ -75,7 +85,7 @@ func TestTheLocalMachineIsNamedForItsSystem(t *testing.T) {
 // The person's order: the machines it names first, as they dragged them; one added since after them, as it arrived.
 func TestTheFleetIsListedInThePersonsOrder(t *testing.T) {
 	dir := t.TempDir()
-	m := NewManager(dir, nil, false)
+	m := newTestManager(dir)
 	for _, id := range []string{"gog", "roofr", "windows"} {
 		m.machines[id] = newRemote(Config{ID: id, Label: id, Host: id + ".remote"})
 		m.order = append(m.order, id)
@@ -109,7 +119,7 @@ func TestTheFleetIsListedInThePersonsOrder(t *testing.T) {
 
 func TestAnOrderNamesKnownMachinesOnce(t *testing.T) {
 	dir := t.TempDir()
-	m := NewManager(dir, nil, false)
+	m := newTestManager(dir)
 	m.machines["gog"] = newRemote(Config{ID: "gog", Label: "GOG", Host: "gog.remote"})
 	m.order = append(m.order, "gog")
 	if err := m.SetOrder([]string{"gog", "nowhere"}); err == nil {
@@ -135,13 +145,13 @@ func TestAnOrderNamesKnownMachinesOnce(t *testing.T) {
 // The order outlives a restart: the next registry on the same state dir reads it.
 func TestTheOrderIsKeptAcrossARestart(t *testing.T) {
 	dir := t.TempDir()
-	m := NewManager(dir, nil, false)
+	m := newTestManager(dir)
 	m.machines["gog"] = newRemote(Config{ID: "gog", Label: "GOG", Host: "gog.remote"})
 	m.order = append(m.order, "gog")
 	if err := m.SetOrder([]string{"gog", "local"}); err != nil {
 		t.Fatal(err)
 	}
-	next := NewManager(dir, nil, false)
+	next := newTestManager(dir)
 	next.machines["gog"] = newRemote(Config{ID: "gog", Label: "GOG", Host: "gog.remote"})
 	next.order = append(next.order, "gog")
 	if ids := idsOf(next.List()); ids != "gog,local" {
@@ -168,4 +178,21 @@ func split(s string) []string {
 		return nil
 	}
 	return strings.Split(s, ",")
+}
+
+// TestARemovalThatCouldNotBeKeptLeavesTheMachine: the list without it is written before it goes, so a disk that refused
+// the write leaves the machine a machine of the fleet, its panes and checkpoints with it.
+func TestARemovalThatCouldNotBeKeptLeavesTheMachine(t *testing.T) {
+	dir := t.TempDir()
+	m := newTestManager(dir)
+	m.add(Config{ID: "box", Label: "Box", Host: "box.remote"})
+	if err := os.Mkdir(filepath.Join(dir, "machines.json"), 0o755); err != nil { // a write over a folder fails
+		t.Fatal(err)
+	}
+	if err := m.Remove("box"); err == nil {
+		t.Fatal("a removal that could not be written went ahead")
+	}
+	if _, err := m.Get("box"); err != nil || m.Gone("box") {
+		t.Fatalf("the machine left the fleet for a removal that did not land: %v", err)
+	}
 }
