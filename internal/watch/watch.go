@@ -44,6 +44,7 @@ type machineState struct {
 	nudge     chan struct{} // an event that may wait a few seconds (a pane's title moved)
 	changed   chan struct{} // the subscriptions the stream should hold moved
 	streaming atomic.Bool   // herdr's event stream stands for the machine
+	memory    atomic.Bool   // the client answers the snapshot from memory: an event waits for no gap
 	polled    time.Time     // when the last poll of the loop began
 	wanted    *streamSet    // the subscriptions for the latest snapshot
 	refused   string        // the person's watches herdr refused, by their fingerprint: left out until they change
@@ -146,6 +147,7 @@ func (w *Watcher) poll(mc *machines.Machine) (*herdr.Snapshot, error) {
 	defer st.pollMu.Unlock()
 	client, _, err := mc.Ready()
 	if err == nil {
+		st.memory.Store(client != nil && client.SnapshotFromMemory())
 		var snap *herdr.Snapshot
 		if snap, err = client.SessionSnapshot(); err == nil {
 			w.mu.Lock()

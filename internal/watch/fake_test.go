@@ -16,6 +16,7 @@ import (
 type fakeHerdr struct {
 	mu          sync.Mutex
 	snap        herdr.Snapshot
+	memory      bool // the snapshot is the fake's own, as remuda-core's mirror holds one
 	snapshots   []time.Time
 	streams     []*watchedStream // open streams
 	closes      int              // streams the watcher closed itself, not ones an error read ended
@@ -37,7 +38,7 @@ func newFakeHerdr(t *testing.T, panes ...string) *fakeHerdr {
 
 // api is the herdr.API the watcher's machine speaks.
 func (f *fakeHerdr) api() herdr.API {
-	return &herdrfake.API{Snapshot: f.snapshot, SubscribeF: f.subscribe}
+	return &herdrfake.API{Memory: f.memory, Snapshot: f.snapshot, SubscribeF: f.subscribe}
 }
 
 func (f *fakeHerdr) setPanes(panes ...string) {

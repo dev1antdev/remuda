@@ -16,11 +16,11 @@ import (
 // quickPace shrinks the pace so a test sees in milliseconds what takes seconds.
 func quickPace(t *testing.T) {
 	t.Helper()
-	saved := []time.Duration{localEvery, localStreamingEvery, eventDebounce, localGap, lazyGap, streamRetry, freshFor}
-	localEvery, localStreamingEvery, eventDebounce, localGap, lazyGap, streamRetry, freshFor =
-		40*time.Millisecond, 10*time.Second, 20*time.Millisecond, 40*time.Millisecond, 300*time.Millisecond, 50*time.Millisecond, 200*time.Millisecond
+	saved := []time.Duration{localEvery, localStreamingEvery, eventDebounce, memoryDebounce, localGap, lazyGap, streamRetry, freshFor}
+	localEvery, localStreamingEvery, eventDebounce, memoryDebounce, localGap, lazyGap, streamRetry, freshFor =
+		40*time.Millisecond, 10*time.Second, 20*time.Millisecond, 5*time.Millisecond, 40*time.Millisecond, 300*time.Millisecond, 50*time.Millisecond, 200*time.Millisecond
 	t.Cleanup(func() {
-		localEvery, localStreamingEvery, eventDebounce, localGap, lazyGap, streamRetry, freshFor = saved[0], saved[1], saved[2], saved[3], saved[4], saved[5], saved[6]
+		localEvery, localStreamingEvery, eventDebounce, memoryDebounce, localGap, lazyGap, streamRetry, freshFor = saved[0], saved[1], saved[2], saved[3], saved[4], saved[5], saved[6], saved[7]
 	})
 }
 

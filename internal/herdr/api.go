@@ -6,6 +6,8 @@ import "time"
 // remuda-core's adapter (internal/core) is the one implementation, so the packages that ask a machine never name it.
 type API interface {
 	SessionSnapshot() (*Snapshot, error)
+	// SnapshotFromMemory says a snapshot costs no request: the client holds the machine already.
+	SnapshotFromMemory() bool
 	Subscribe(subs []Subscription) (EventStream, error)
 
 	WorkspaceCreate(cwd, label string) (*WorkspaceCreateResult, error)

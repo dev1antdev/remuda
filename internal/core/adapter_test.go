@@ -56,6 +56,9 @@ func TestTheAdapterShowsTheDocumentsWorkspacesAndEveryTerminal(t *testing.T) {
 		t.Fatal(err)
 	}
 	adapter := adapterOf(t, client, core.AdapterHooks{})
+	if !adapter.SnapshotFromMemory() {
+		t.Fatal("the adapter holds the machine: its snapshot is never a request")
+	}
 	snap := eventually(t, adapter, func(s *herdr.Snapshot) bool { return len(s.Panes) == 2 && len(s.Workspaces) == 2 })
 	if ws := snap.Workspaces[0]; ws.WorkspaceID != "w1" || ws.Label != "api" || ws.ActiveTabID != "a" {
 		t.Fatalf("first workspace %+v", ws)
