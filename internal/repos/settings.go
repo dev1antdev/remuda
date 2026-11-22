@@ -114,10 +114,11 @@ func (st *Store) Action(machine, root, id string) (Action, bool) {
 }
 
 // Put keeps the repository's settings whole, checked and trimmed; actions without an id get one. A clear leaves an
-// empty record rather than nothing, so a caller looking one spelling up after another stops at it and a record kept
-// under an older spelling never comes back. Nothing else is deleted: a record saved under another spelling of the
-// same folder stays where it is, out of the way of the machine's own spelling once that one is written.
-func (st *Store) Put(machine, root string, s Settings) (Settings, error) {
+// empty record rather than nothing, under the machine's spelling and under the spelling the request used when that is
+// a second key of the same folder: a caller looking one spelling up after another stops at it, even when the machine
+// can no longer name the folder, and a record kept under an older spelling never comes back. Nothing is ever deleted
+// or moved: a record saved earlier under another spelling stays where it is.
+func (st *Store) Put(machine, root string, s Settings, older ...string) (Settings, error) {
 	s, err := Check(root, s)
 	if err != nil {
 		return Settings{}, err
@@ -129,6 +130,13 @@ func (st *Store) Put(machine, root string, s Settings) (Settings, error) {
 		next[k] = v
 	}
 	next[key(machine, root)] = s
+	if empty(s) {
+		for _, was := range older {
+			if was != "" && key(machine, was) != key(machine, root) {
+				next[key(machine, was)] = s
+			}
+		}
+	}
 	if err := state.SaveJSON(st.dir, file, next); err != nil {
 		return Settings{}, err
 	}

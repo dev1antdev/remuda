@@ -262,6 +262,20 @@ func TestClearingSettingsThroughAnOldSpellingClearsThem(t *testing.T) {
 	if base := read(link).Base; base != "" {
 		t.Fatalf("an older record came back after a clear through the machine's spelling: %q", base)
 	}
+	// a clear through the link stands even when the machine can no longer name the folder: the link goes away
+	if _, err := store.Put("local", link, repos.Settings{Base: "stale"}); err != nil {
+		t.Fatal(err)
+	}
+	body = fmt.Sprintf(`{"machine":"local","root":%q,"settings":{}}`, link)
+	if rec := ask(api, "PUT", "/api/repos/settings", body); rec.Code != 200 {
+		t.Fatalf("clear through %q: %d %s", link, rec.Code, rec.Body)
+	}
+	if err := os.Remove(link); err != nil {
+		t.Fatal(err)
+	}
+	if base := read(link).Base; base != "" {
+		t.Fatalf("a cleared record came back while the folder could not be resolved: %q", base)
+	}
 }
 
 // TestSavingThroughASymlinkFollowedByItsParentLeavesTheOtherCheckoutAlone: a folder named with a .. behind a link

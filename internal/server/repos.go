@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/dev1antdev/remuda/internal/events"
@@ -21,6 +22,15 @@ func (s *Server) repoRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/repos/settings", s.handleRepoSettings)
 	api.HandleFunc("PUT /api/repos/settings", s.handleRepoSettingsPut)
 	api.HandleFunc("POST /api/run", s.handleRunAction)
+}
+
+// olderSpelling is the folder as a request named it, when that spelling is a second key of the same folder and a
+// clear must stand under it too: never one with a .. in it, which may name another folder once cleaned.
+func olderSpelling(mc *machines.Machine, given, root string) string {
+	if given == root || slices.Contains(strings.Split(mc.Paths().Slash(given), "/"), "..") {
+		return ""
+	}
+	return given
 }
 
 // repoRoot is the folder a repository's settings are kept under: the machine's spelling of it, or the caller's own
@@ -84,13 +94,14 @@ func (s *Server) handleRepoSettingsPut(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 400, errors.New("which repository: its main folder, as a whole path"))
 		return
 	}
+	given := req.Root
 	if named, ok := mc.Canonical(req.Root); ok {
 		req.Root = named
 	} else if unclear(mc, req.Root) {
 		httpErr(w, 400, fmt.Errorf("the folder %s is not on %s, and its .. names another one", req.Root, mc.Label()))
 		return
 	}
-	saved, err := s.Repos.Put(mc.ID(), req.Root, req.Settings)
+	saved, err := s.Repos.Put(mc.ID(), req.Root, req.Settings, olderSpelling(mc, given, req.Root))
 	if err != nil {
 		httpErr(w, 400, err)
 		return
