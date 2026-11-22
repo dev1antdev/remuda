@@ -27,10 +27,15 @@ func (s *Server) repoRoutes(api *http.ServeMux) {
 // olderSpelling is the folder as a request named it, when that spelling is a second key of the same folder and a
 // clear must stand under it too: never one with a .. in it, which may name another folder once cleaned.
 func olderSpelling(mc *machines.Machine, given, root string) string {
-	if given == root || slices.Contains(strings.Split(mc.Paths().Slash(given), "/"), "..") {
+	if given == root || hasUp(mc, given) {
 		return ""
 	}
 	return given
+}
+
+// hasUp says the path holds a .. — which, cleaned, may name another folder than the one the machine resolved.
+func hasUp(mc *machines.Machine, dir string) bool {
+	return slices.Contains(strings.Split(mc.Paths().Slash(dir), "/"), "..")
 }
 
 // repoRoot is the folder a repository's settings are read under: the machine's spelling of it, or the caller's own
@@ -43,6 +48,9 @@ func (s *Server) repoRoot(mc *machines.Machine, root string) (string, bool) {
 		return root, false
 	}
 	if named == root || s.Repos == nil {
+		return named, true
+	}
+	if hasUp(mc, root) { // a .. that cleans elsewhere is no second spelling of this folder
 		return named, true
 	}
 	if !s.Repos.Has(mc.ID(), named) && s.Repos.Has(mc.ID(), root) {
