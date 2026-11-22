@@ -107,7 +107,7 @@ func (set *streamSet) heldWatches() []Output {
 // set.
 func (w *Watcher) noteWanted(machineID string, snap *herdr.Snapshot, now bool) {
 	w.mu.Lock()
-	standing := w.stateFor(machineID).wanted.heldWatches() // what the stream subscribes to now: the rules keep those
+	standing := w.stateFor(machineID).accepted.heldWatches() // what the stream standing took: the rules keep those
 	w.mu.Unlock()
 	var outputs []Output
 	if w.Outputs != nil {
@@ -176,6 +176,13 @@ func (st *machineState) dropSettling() {
 		st.settling.Stop()
 		st.settling = nil
 	}
+}
+
+// accept is the set the stream that stood took: the watches it holds are the ones a pane that appears may not take.
+func (w *Watcher) accept(st *machineState, set *streamSet) {
+	w.mu.Lock()
+	st.accepted = set
+	w.mu.Unlock()
 }
 
 // Resubscribe works the subscriptions out again on every machine: the watches asked for moved.

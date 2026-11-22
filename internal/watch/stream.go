@@ -198,6 +198,7 @@ func (w *Watcher) connect(mc *machines.Machine, st *machineState, prev *liveStre
 	w.mu.Lock()
 	st.said = "" // a refusal after this one stood is news again
 	w.mu.Unlock()
+	w.accept(st, set) // the watches this stream holds, from a subscription the core took
 	ls := &liveStream{stream: stream, set: set, started: time.Now(), carried: map[string]bool{}, ended: make(chan error, 1)}
 	if prev != nil {
 		for pane, outputs := range prev.set.outputs {
