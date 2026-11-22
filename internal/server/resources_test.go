@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"github.com/dev1antdev/remuda/internal/script"
 	"net/http"
 	"net/http/httptest"
 	"runtime"
@@ -21,7 +22,7 @@ import (
 // A workspace carries the ports its processes listen on, the contract the sidebar's card and the status bar share;
 // one with none carries no field at all.
 func TestRosterCarriesTheWorkspacesPorts(t *testing.T) {
-	answer := strings.Join([]string{"5173", "[::1]", "4100", "node", "/home/me/app", "/home/me/app", "node node_modules/.bin/vite"}, "\x1f") + "\n"
+	answer := strings.Join([]string{"5173", "[::1]", "4100", "node", "/home/me/app", "/home/me/app", "node node_modules/.bin/vite"}, script.NUL) + script.NUL
 	host := &shell.Fake{Name: "gog", Remote: true, Answer: func(string) (string, error) { return answer, nil }}
 	listening := ports.New(func() []ports.Target {
 		return []ports.Target{{ID: "local", Host: host, Folders: map[string]string{"w1": "/home/me/app", "w2": "/home/me/notes"}}}

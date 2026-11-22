@@ -2,6 +2,7 @@ package ports
 
 import (
 	"errors"
+	"github.com/dev1antdev/remuda/internal/script"
 	"strings"
 	"sync"
 	"testing"
@@ -10,7 +11,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/shell"
 )
 
-func line(fields ...string) string { return strings.Join(fields, "\x1f") + "\n" }
+func line(fields ...string) string { return strings.Join(fields, script.NUL) + script.NUL }
 
 // gog's listeners: vite in a worktree, next in the repository, a server outside every workspace, remuda's own
 var gogAnswer = line("5173", "[::1]", "4100", "node", "/home/me/.herdr/worktrees/app/task-1", "/home/me/.herdr/worktrees/app/task-1", "node node_modules/.bin/vite") +
