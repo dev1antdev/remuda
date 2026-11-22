@@ -35,6 +35,7 @@ const lazyKind = "pane.updated"
 type streamSet struct {
 	subs    []herdr.Subscription
 	all     []Output            // the watches asked for, as asked
+	held    []Output            // the watches this stream holds: all but the ones refused, in subscription order
 	outputs map[string][]Output // by pane, the ones held
 	key     string              // the whole set as one string, to tell a move
 	person  string              // the person's own watches as one string, "" for none
@@ -74,6 +75,7 @@ func buildSet(snap *herdr.Snapshot, outputs []Output, refused string) *streamSet
 		match := o.Match
 		set.subs = append(set.subs, herdr.Subscription{Type: herdr.EventOutputMatched, PaneID: o.Pane, Source: "recent", Lines: o.Lines, Match: &match})
 		set.outputs[o.Pane] = append(set.outputs[o.Pane], o)
+		set.held = append(set.held, o)
 	}
 	set.key = fingerprint(set.subs)
 	return set

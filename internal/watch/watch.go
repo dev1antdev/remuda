@@ -229,6 +229,17 @@ func (w *Watcher) apply(machineID string, snap *herdr.Snapshot) {
 	w.noteWanted(machineID, snap, false)
 }
 
+// latest is the machine's latest snapshot, nil before its first, for the stream asking what a new set is worked out
+// from.
+func (w *Watcher) latest(machineID string) *herdr.Snapshot {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if st := w.states[machineID]; st != nil {
+		return st.snap
+	}
+	return nil
+}
+
 // Snapshot returns the machine's latest snapshot, or the error its last poll hit.
 func (w *Watcher) Snapshot(machineID string) (*herdr.Snapshot, error) {
 	w.mu.Lock()

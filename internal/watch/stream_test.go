@@ -432,3 +432,44 @@ func TestTheWatcherTellsTheWatchesItsStreamHolds(t *testing.T) {
 		t.Fatalf("the stream's watches: %+v", held)
 	}
 }
+
+// TestTheWatchesToldAreTheOnesTheStreamHolds: the watches a core refused are not part of the stream, so they are not
+// told as holding a slot either.
+func TestTheWatchesToldAreTheOnesTheStreamHolds(t *testing.T) {
+	quickPace(t)
+	f := newFakeHerdr(t, "w1:p1")
+	f.memory = true
+	f.refuse = func(subs []herdr.Subscription) string {
+		for _, s := range subs {
+			if s.Type == herdr.EventOutputMatched && s.Match != nil && s.Match.Value == "bad" {
+				return "invalid_regex"
+			}
+		}
+		return ""
+	}
+	var mu sync.Mutex
+	var held []Output
+	watching(t, f, func(w *Watcher) {
+		w.Outputs = func(string, *herdr.Snapshot) []Output {
+			return []Output{
+				{Key: "bad", Pane: "w1:p1", Match: herdr.OutputMatch{Type: "regex", Value: "bad"}, Person: true},
+				{Key: "serve", Pane: "w1:p1"},
+			}
+		}
+		w.Installed = func(_ string, outputs []Output) { mu.Lock(); held = append([]Output(nil), outputs...); mu.Unlock() }
+	})
+	f.subscribed(t)
+	waitFor(t, "the watches the stream holds", func() bool { mu.Lock(); defer mu.Unlock(); return len(held) > 0 })
+	mu.Lock()
+	defer mu.Unlock()
+	serve := false
+	for _, o := range held {
+		if o.Key == "bad" {
+			t.Fatalf("a watch the core refused is told as held: %+v", held)
+		}
+		serve = serve || o.Key == "serve"
+	}
+	if !serve {
+		t.Fatalf("the watches the stream holds: %+v", held)
+	}
+}
