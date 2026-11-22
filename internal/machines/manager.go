@@ -399,13 +399,26 @@ func (m *Manager) Remove(id string) error {
 	if id == LocalID {
 		return fmt.Errorf("cannot remove the local machine")
 	}
-	// one removal at a time, through its write and the machine's going: a second one's list is built after the first
-	// machine left, so it can never write a removed machine back
+	gone, err := m.removeFromFleet(id)
+	if err != nil {
+		return err
+	}
+	if gone != nil {
+		m.retire(gone) // outside the lock: a master that stopped answering may take a while to let go
+	}
+	return nil
+}
+
+// removeFromFleet checks, writes the fleet without the machine and takes it out of the registry, one at a time: a
+// second removal's list is built after the first machine left, so it can never write a removed machine back. What ends
+// the connection is the caller's, outside the lock.
+func (m *Manager) removeFromFleet(id string) (*Machine, error) {
 	m.saveMu.Lock()
+	defer m.saveMu.Unlock()
 	m.mu.Lock()
 	if m.machines[id] == nil {
 		m.mu.Unlock()
-		return fmt.Errorf("machine %q not found", id)
+		return nil, fmt.Errorf("machine %q not found", id)
 	}
 	// the list without the machine is written before it goes: one that could not be written stays a machine of the
 	// fleet, and nothing of it — its checkpoints, its panes — is let go for a removal that did not land
@@ -417,15 +430,9 @@ func (m *Manager) Remove(id string) error {
 	}
 	m.mu.Unlock()
 	if err := m.writeMachines(cfgs); err != nil {
-		m.saveMu.Unlock()
-		return err
+		return nil, err
 	}
-	gone := m.take(id) // out of the fleet before the lock is let go: no later writer can put it back
-	m.saveMu.Unlock()  // and its connection ended outside it: a master that stopped answering may take a while
-	if gone != nil {
-		m.retire(gone)
-	}
-	return nil
+	return m.take(id), nil
 }
 
 func (m *Manager) Get(id string) (*Machine, error) {

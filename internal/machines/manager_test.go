@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dev1antdev/remuda/internal/herdr"
 )
@@ -232,5 +233,29 @@ func TestTwoRemovalsBothStayRemoved(t *testing.T) {
 	}
 	if len(remotes) != 0 {
 		t.Fatalf("a restart brings back %+v", remotes)
+	}
+}
+
+// TestARemovalOfOneAlreadyRemovedLocksNothing: two tabs removing one machine, the second finds it gone; the fleet's
+// next write must not wait behind anything the second left held.
+func TestARemovalOfOneAlreadyRemovedLocksNothing(t *testing.T) {
+	m := newTestManager(t.TempDir())
+	m.machines["box"] = newRemote(Config{ID: "box", Label: "Box", Host: "box.remote"})
+	m.order = append(m.order, "box")
+	if err := m.Remove("box"); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Remove("box"); err == nil {
+		t.Fatal("a machine removed twice went twice")
+	}
+	done := make(chan error, 1)
+	go func() { done <- m.save() }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the fleet's next write waits behind the removal of a machine already gone")
 	}
 }
