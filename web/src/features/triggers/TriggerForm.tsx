@@ -46,7 +46,7 @@ export default function TriggerForm({ rule, machineId, dir, workspace, blocked, 
         </label>
         <label className="grow">
           <span>
-            {rule.match === "regex" ? t("Regular expression") : t("Text")} <small>{rule.match === "regex" ? t("one line at a time, as herdr reads it") : t("case and all")}</small>
+            {rule.match === "regex" ? t("Regular expression") : t("Text")} <small>{rule.match === "regex" ? t("one line at a time, as the core reads it") : t("case and all")}</small>
           </span>
           <input className="trigger-pattern" value={rule.pattern} spellCheck={false} placeholder={rule.match === "regex" ? "ready in \\d+ ?ms" : "DEPLOYED"} onChange={(e) => set({ pattern: e.target.value })} />
         </label>

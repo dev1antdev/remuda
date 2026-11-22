@@ -20,5 +20,5 @@ export async function saveProject(machine: string, root: string, settings: Setti
   return answer.settings;
 }
 
-// runAction starts a saved action in a shell herdr makes for it; the answer is its pane
+// runAction starts a saved action in a shell the core makes for it; the answer is its pane
 export const runAction = (req: { machine: string; workspace: string; pane: string; root: string; action: string }): Promise<{ pane: string; place: string }> => sendJSON("POST", "/api/run", req);

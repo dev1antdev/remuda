@@ -60,7 +60,7 @@ export default function ResumeDialog({ machineId, onClose }: { machineId: string
   const some = someLabel(picked.length, stopped.length);
   return (
     <Dialog title={t("Resume after restart")} icon="refresh-cw" size="md" onClose={notNow} className="resume-dialog">
-      <p className="modal-hint">{t("These were running before their panes came back as bare shells — a reboot, or herdr's server started again. Each comes back in its own pane, on its own conversation.")}</p>
+      <p className="modal-hint">{t("These were running before their panes came back as bare shells — a reboot, or the core started again. Each comes back in its own pane, on its own conversation.")}</p>
       {stopped.some(fromHerdr) && <p className="modal-hint">{t("The ones from herdr ran there before the machine moved to remuda-core: each comes back in a tab of a workspace on its folder.")}</p>}
       {stopped.some(unseen) && <p className="modal-hint">{t("A Gemini CLI or Kimi Code from herdr starts unticked: remuda cannot see its session resumed by hand, so tick it only if it runs nowhere yet.")}</p>}
       {machine?.resuming ? (
@@ -90,7 +90,7 @@ export default function ResumeDialog({ machineId, onClose }: { machineId: string
           })}
         </ul>
       )}
-      <p className="modal-hint">{t("Each agent comes back with its own resume command; a model or arguments it was started with are not carried over, since herdr does not keep them.")}</p>
+      <p className="modal-hint">{t("Each agent comes back with its own resume command; a model or arguments it was started with are not carried over, since the core does not keep them.")}</p>
       <label className="check-row resume-auto">
         <input type="checkbox" checked={!!settings.data?.resume_automatically} disabled={!settings.data} onChange={(e) => void flipAuto(e.target.checked)} />
         <span>{t("Resume automatically next time")}</span>

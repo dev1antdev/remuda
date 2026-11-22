@@ -16,5 +16,5 @@ export function startOn(machines: Machine[]): string {
 }
 
 // NO_MACHINES is what a server's page says while it has no machine to show: where the agents run is added with the
-// sidebar's + or with herdr's own machine list on the server
-export const NO_MACHINES = "This remuda serves the page only: add a machine its agents run on — the + beside Machines, any SSH host with herdr — or run herdr machine add on the server.";
+// sidebar's + or with the core's own machine list on the server
+export const NO_MACHINES = "This remuda serves the page only: add a machine its agents run on — the + beside Machines, any SSH host with remuda-core.";

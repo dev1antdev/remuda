@@ -33,8 +33,8 @@ export const server: Dictionary = {
   "CPU clock": "Частота CPU",
   Throttling: "Троттлинг",
   // server mode and the Server place
-  "This remuda serves the page only: add a machine its agents run on — the + beside Machines, any SSH host with herdr — or run herdr machine add on the server.":
-    "Этот remuda только отдаёт страницу: добавьте машину, на которой работают агенты, — «+» рядом с «Машины», любой SSH-хост с herdr, — или выполните herdr machine add на сервере.",
+  "This remuda serves the page only: add a machine its agents run on — the + beside Machines, any SSH host with remuda-core.":
+    "Этот remuda только отдаёт страницу: добавьте машину, на которой работают агенты, — «+» рядом с «Машины», любой SSH-хост с remuda-core.",
   Server: "Сервер",
   "The machine this remuda serves the page from: its load, memory, temperature and throttling": "Машина, с которой этот remuda отдаёт страницу: нагрузка, память, температура и троттлинг",
   "Server · {name}": "Сервер · {name}",

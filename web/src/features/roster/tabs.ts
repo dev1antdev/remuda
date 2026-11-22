@@ -1,5 +1,5 @@
 // What a workspace's tab says above the pane: the agent it runs by its logo and name, or "terminal" for a shell, a
-// name of the person's own over either; two tabs that would read the same are told apart by herdr's number.
+// name of the person's own over either; two tabs that would read the same are told apart by the core's number.
 
 import { t, tn } from "@/lib/i18n";
 import { VENDOR_NAME } from "@/ui/brand";

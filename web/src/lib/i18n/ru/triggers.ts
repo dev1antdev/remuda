@@ -9,12 +9,12 @@ export const triggers: Dictionary = {
   "Triggers in {workspace}…": "Триггеры в {workspace}…",
   "what its panes print, and what that sets off": "что печатают его панели и что за этим следует",
   "a line a pane prints, and what it sets off: a push, a preview, a task moved": "строка, которую печатает панель, и что за ней следует: пуш, превью, задача в другую колонку",
-  "herdr watches what each pane prints. Built in, on every pane: a dev server saying where it serves is offered in the corner as a preview once its port listens, and tests that failed send one push per pane — never while its agent is at work or its terminal is open here, then not again for half an hour.":
-    "herdr следит за тем, что печатает каждая панель. Встроено для всех панелей: dev-сервер, назвавший свой адрес, появляется в углу как превью, как только его порт слушает, а упавшие тесты присылают один пуш на панель — никогда, пока её агент работает или её терминал открыт здесь, и потом не чаще раза в полчаса.",
+  "remuda-core watches what each pane prints. Built in, on every pane: a dev server saying where it serves is offered in the corner as a preview once its port listens, and tests that failed send one push per pane — never while its agent is at work or its terminal is open here, then not again for half an hour.":
+    "remuda-core следит за тем, что печатает каждая панель. Встроено для всех панелей: dev-сервер, назвавший свой адрес, появляется в углу как превью, как только его порт слушает, а упавшие тесты присылают один пуш на панель — никогда, пока её агент работает или её терминал открыт здесь, и потом не чаще раза в полчаса.",
   "Your own triggers look for a line — text as written, or a regular expression — everywhere or in one folder, and push, note it in the activity, offer a preview or move the task whose agent runs there. Shared by every device that uses this remuda.":
     "Ваши триггеры ищут строку — текст как есть или регулярное выражение — везде или в одной папке и присылают пуш, отмечают её в событиях, предлагают превью или переносят задачу, чей агент там работает. Общие для всех устройств этого remuda.",
-  "herdr on {machine} refused your triggers, so they are left out there until you change them: {why}":
-    "herdr на {machine} не принял ваши триггеры, поэтому там они не работают, пока вы их не измените: {why}",
+  "remuda-core on {machine} refused your triggers, so they are left out there until you change them: {why}":
+    "remuda-core на {machine} не принял ваши триггеры, поэтому там они не работают, пока вы их не измените: {why}",
   "No trigger of yours looks at this folder yet.": "Ни один ваш триггер пока не смотрит в эту папку.",
   "No triggers of your own yet.": "Своих триггеров пока нет.",
   "{n} more look only at other folders.": ["Ещё {n} смотрит только в другие папки.", "Ещё {n} смотрят только в другие папки.", "Ещё {n} смотрят только в другие папки."],
@@ -24,7 +24,7 @@ export const triggers: Dictionary = {
   "Look for": "Искать",
   "Regular expression": "Регулярное выражение",
   "Text, as written": "Текст как есть",
-  "one line at a time, as herdr reads it": "по одной строке, как читает herdr",
+  "one line at a time, as the core reads it": "по одной строке, как читает ядро",
   "case and all": "с учётом регистра",
   Where: "Где",
   "Every folder of one machine": "Все папки одной машины",
@@ -49,7 +49,7 @@ export const triggers: Dictionary = {
   "Name the trigger.": "Назовите триггер.",
   "Say what to look for.": "Укажите, что искать.",
   "A pattern is {n} characters at most.": "Шаблон — не длиннее {n} символов.",
-  "herdr reads one line at a time: a pattern holds no line break.": "herdr читает по одной строке: в шаблоне не может быть переноса строки.",
+  "A pattern matches one line at a time: it holds no line break.": "Шаблон проверяется по одной строке: переноса строки в нём быть не может.",
   "Name the column the task moves to.": "Назовите колонку, куда перенести задачу.",
   "The folder is an absolute path.": "Папка — это абсолютный путь.",
   everywhere: "везде",

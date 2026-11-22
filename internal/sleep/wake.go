@@ -33,7 +33,7 @@ func (s *Service) Wake(mc *machines.Machine, workspaceID string) (Started, error
 	for _, a := range w.Agents {
 		lines = append(lines, fmt.Sprintf("%s in %s   (%s)", restart.Title(a.Kind), a.Pane, restart.Resume(a.Kind, a.Session)))
 	}
-	command := "# on " + mc.Label() + ", through herdr: each agent started again on its session, in its own shell or a new tab\n" + strings.Join(lines, "\n")
+	command := "# on " + mc.Label() + ", through remuda-core: each agent started again on its session, in its own shell or a new tab\n" + strings.Join(lines, "\n")
 	checks := func(a Agent) error { return restart.CanResume(mc, a.Kind, a.Session, a.Dir) }
 	job := s.Jobs.Run(mc, "Wake "+w.Name, command, func(say func(string)) error {
 		defer s.release(mc.ID(), workspaceID)
@@ -124,7 +124,7 @@ func (s *Service) wakeOne(client Client, machineID, workspaceID string, a Agent,
 	if free, err := client.PaneAtPrompt(a.Pane); err != nil || !free {
 		say(fmt.Sprintf("· %s (%s): something runs in its shell", title, a.Pane))
 		if err != nil {
-			return keep("herdr cannot say its shell is free: "+err.Error(), a)
+			return keep("the core could not say its shell is free: "+err.Error(), a)
 		}
 		return keep("something runs in its shell", a)
 	}
@@ -140,7 +140,7 @@ func (s *Service) wakeInTab(client Client, snap *herdr.Snapshot, workspaceID str
 		res, err := client.TabCreate(workspaceID, a.TabName)
 		if err != nil {
 			say(fmt.Sprintf("· %s (%s): its pane is gone, and no tab could be made: %v", title, a.Pane, err))
-			return keep("its pane is gone and herdr made no tab: "+err.Error(), a)
+			return keep("its pane is gone and no tab could be made: "+err.Error(), a)
 		}
 		say(fmt.Sprintf("· %s (%s): its pane is gone — a new tab, %s", title, a.Pane, res.RootPane.PaneID))
 		a.Pane, a.Tab = res.RootPane.PaneID, res.Tab.TabID
@@ -155,7 +155,7 @@ func (s *Service) wakeInTab(client Client, snap *herdr.Snapshot, workspaceID str
 		if place.Pane != "" {
 			return keep("it did not start in its new tab: "+err.Error(), a)
 		}
-		return keep("its pane is gone and herdr made no place for it: "+err.Error(), a)
+		return keep("its pane is gone and no place could be made for it: "+err.Error(), a)
 	}
 	say(fmt.Sprintf("· %s: its pane is gone — back in %s, session %s resumed", title, place.Pane, short(a.Session)))
 	return outcome{back: true}

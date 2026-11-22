@@ -100,7 +100,7 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ remuda-core: its 
   a way to the one that waited longest. **Alt+]** and **Alt+[** walk every
   agent in the sidebar's order. Each agent wears its vendor's logo and hue
   (27 vendors), the busiest folder sorts first; the sidebar's ⋯ flips to a
-  flat list by activity, herdr's own order, sections by priority (needs
+  flat list by activity, the agents' own order, sections by priority (needs
   you, done, working, idle) or by ticket prefix (`PR-12`, `INS-4`, after
   `feature/` too), its settings hold the thresholds and the label. Above
   the pane each tab says what it runs — the agent by its logo and name, a
@@ -156,14 +156,15 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ remuda-core: its 
   palette) makes a task of one, its description and labels with it. The
   token stays on the server and is never shown back; remuda asks the site
   only while a page is open, and nothing until you set it.
-- **Roster** — workspaces, tabs and panes from `session.snapshot`, with
-  herdr's own agent statuses: `RUN` (working), `NEEDS YOU` (blocked),
+- **Roster** — workspaces, tabs and panes from the core's snapshot, with
+  its own agent statuses: `RUN` (working), `NEEDS YOU` (blocked),
   `READY` (idle), `DONE`.
 - **Terminal lens** — xterm.js fed by a live attach of remuda-core per pane
   (every viewer its own; the screen painted on attach, so a late joiner has it).
   A Windows PC's lens is the same live attach, there as everywhere else,
   its text selectable.
-- **Chat lens** — the transcript herdr names via `agent_session`, parsed
+- **Chat lens** — the transcript remuda finds for the pane (the agent's own
+  session, resolved on its machine), parsed
   into turns (text, thinking, tool calls with outputs), polled with ETags.
   Claude Code's session files, Codex's rollouts and Gemini CLI's chats
   all read into the same turns, so a Codex or Gemini pane has its chat,
@@ -182,10 +183,10 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ remuda-core: its 
 - **The address follows you** — `?machine=&pane=&mode=&lens=` is what you
   are looking at, so a link, a reload or a notification lands on the same
   pane in the same lens.
-- **Submit** — herdr's `agent.prompt` (bracketed paste + Enter), refused
-  while the agent waits on a menu or when the pane has no agent ready, so
-  what you wrote for an agent never runs in a shell. Named keys (`Enter`, `Escape`, arrows, `Ctrl+C`) via
-  `pane.send_keys`.
+- **Submit** — a message as a bracketed paste and Enter through the core's
+  `terminal.send`, refused while the agent waits on a menu or when the pane
+  has no agent ready, so what you wrote for an agent never runs in a shell.
+  Named keys (`Enter`, `Escape`, arrows, `Ctrl+C`) via `terminal.keys`.
 - **Answer** — while the agent waits on a dialog, the chat shows the
   question as it stands on the screen (Claude Code's permission prompts,
   its "trust this folder", an AskUserQuestion) with a button per choice;
@@ -195,9 +196,10 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ remuda-core: its 
   Claude Code's permission mode as its footer does — accept edits, plan,
   auto, manual, bypass in amber — and a tap cycles it with shift+tab, the
   key a phone has no way to send.
-- **New workspace / close** — `workspace.create` + `agent.start` (any agent
-  herdr has a manifest for, with the model, extra arguments and first
-  prompt you chose under Options), `workspace.close`.
+- **New workspace / close** — a terminal run in a new workspace of the
+  core's `remuda` document (any agent it runs, with the model, extra
+  arguments and first prompt you chose under Options), and that workspace
+  closed.
 - **The rail** — the places of the page down the left edge, each an
   icon with its name: Agents, Tasks, Code, Review, then Usage, Schedules,
   Repositories, Activity, Shell and Settings. On a phone it lies along the
@@ -550,7 +552,7 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ remuda-core: its 
   the failed job's log and the open threads handed to the agent from the
   same menu, and the merge moving the task to *Done*. Once merged, its menu
   offers *Close & remove worktree…*, the table below.
-  Closing a workspace that stands on a worktree herdr or remuda made
+  Closing a workspace that stands on a worktree remuda made
   (under `~/.herdr/worktrees`), or *Close & remove worktree…* in its ⋯
   menu, opens a table of what goes, after Orca's: the folder *Deleted*,
   the branch *Kept* or *Deleted* (deleted once merged; a click flips
@@ -700,10 +702,10 @@ Codex's `config.toml`, Gemini CLI's `settings.json`) and hashes the
 files, no agent is started, and no file's content leaves the machine —
 names, versions, hashes and flags only.
 
-**After a reboot the chats come back too.** herdr restores the
-workspaces and panes, but every pane is a bare shell again. remuda
-remembers which agent and which session each pane ran, so when a
-machine's herdr comes back with those panes empty, the machine's ⓘ
+**After a reboot the chats come back too.** remuda-core restores its
+terminals and remuda its workspaces and tabs, but every pane is a bare
+shell again. remuda remembers which agent and which session each pane
+ran, so when a machine's panes come back empty, the machine's ⓘ
 turns amber — "3 chats stopped with the reboot: Claude Code in api,
 Codex in web, …" — with a **Resume…** button, and a toast in the corner
 says the same once. Either opens **Resume after restart**: a row per
@@ -714,7 +716,7 @@ chat starts again in its own pane on its session (`claude --resume`,
 `codex resume`, …), one job whose log sits under the machine's recent
 jobs; a pane whose folder or session file is gone, or that runs
 something else by then, is skipped with the reason. The model and the
-arguments an agent was first started with are not carried over (herdr
+arguments an agent was first started with are not carried over (the core
 does not keep them). Nothing starts until you press a button — unless
 you tick **Resume automatically next time** (in the dialog, or in
 Settings › Sleep and resume): then the chats a reboot stopped come back
@@ -730,6 +732,44 @@ on that machine, its agents may still be on those conversations, so
 Resume refuses and offers **Stop herdr's server on GOG…**: after its
 confirm every agent still running in herdr there stops, herdr stays
 installed, and you press Resume again.
+
+**herdr stays installed, and is the way back.** remuda-core and herdr are
+separate runtimes: moving a machine to the core stops nothing herdr still
+holds, and herdr's own saved session — its workspaces and the agents in
+them — is left where it was. The last release that speaks herdr, **v0.17.0**,
+is the rollback build. The order:
+
+1. **Stop what starts agents by itself** — schedules, a project's queue and
+   pipelines, arenas — so nothing starts while you move.
+2. **End every agent in remuda-core on every machine, and wait for it.**
+   Sleep each workspace and wait for its job to finish, or end the
+   agent's program in the core; never close the workspace, since a closed
+   one leaves the core's document. Sleep marks a workspace asleep before
+   its job is done and leaves agents with no resumable session running, so
+   read the job's last lines and the core's terminal list: every affected
+   agent, idle ones too, must have exited before the next step. The core's
+   agents and herdr's would otherwise run in the same folders.
+3. **Put v0.17.0 on the cockpit**, the machine that serves the page, and
+   start it. It speaks herdr again: it starts herdr's server on every
+   machine it reaches, that server restores its own saved session — the
+   workspaces, and the agents it was running, each on `--resume` — and
+   the page lists them as before. Make sure the rollback service does not
+   run with `REMUDA_CORE=1`: v0.17.0 reads that setting too, and would
+   keep to remuda-core.
+4. **Turn the schedules and queues back on** once the roster is back.
+
+Work made after the move is not in herdr's session, and is not on the page
+after the rollback. The workspaces you did not close stay in the core's
+document, their terminals kept and back as shells when the core next
+starts. The agents' conversations stay in each agent's own store — Claude
+Code's files under `~/.claude`, Codex's rollouts, Gemini CLI's chats — so
+install the current release again and the workspaces are listed again:
+**Wake** a workspace you slept (or open it, with Wake on open switched
+on), **Resume after restart** a chat a reboot stopped, and **Reopen a
+closed agent** one you closed. A workspace you closed before the rollback
+is gone from the document; open a workspace on its folder and start an
+agent on the conversation there. Nothing in your transcripts is deleted
+and nothing has to be reinstalled.
 
 **Put a workspace to sleep, wake it later.** "Sleep…" in a workspace's
 ⋯ menu (or the palette) asks every agent in it to leave the way you
@@ -788,7 +828,7 @@ probe, the vitals, the door, keep-awake, the Changes lens, the file viewer, the 
 
 The long way, piece by piece:
 
-Requirements: Go 1.22+, Node 18+ (build only), remuda-core 0.2.4+ installed
+Requirements: Go 1.27.4+, Node 22.13+ (22.x, build only), remuda-core 0.2.4+ installed
 (its core need not be running: `rc connect` starts one where remuda reaches).
 
 ```bash
@@ -885,7 +925,7 @@ Once, on the PC:
 
 Then, from the cockpit, two steps: `remuda setup -host pc` puts remuda-core and
 `remuda.exe` there (`~\.local\bin\remuda.exe`) — no service: there is nothing on Windows for it to serve — and **+ PC**
-in the sidebar, with that ssh host, adds it to the roster and connects it like the others (herdr's own list is not read).
+in the sidebar, with that ssh host, adds it to the roster and connects it like the others (the core's own machine list is not read).
 A PC added before remuda-core reached it offers **Install remuda-core** in its Updates.
 `remuda mcp install -host pc` connects its agents to your tasks, and the
 Updates panel offers the agents' updates and a newer `remuda.exe` from the release.
@@ -1090,8 +1130,8 @@ expression — everywhere, on one machine or in one folder, and what it does: a
 push, a row in the activity, a preview offered, or the task whose agent runs
 in that pane moved to a column (`ready for QA` → Testing). Test tries a rule
 on a pane's last 500 rows before you save it. A regular expression is read the
-way herdr's did — `\w`, `\d` and `\b` know every alphabet, Cyrillic too —
-and one herdr would refuse or read otherwise (`\<`, `\12`, a bare `{`) is
+way the core's does — `\w`, `\d` and `\b` know every alphabet, Cyrillic too —
+and one the core would refuse or read otherwise (`\<`, `\12`, a bare `{`) is
 refused when you save it, with what to write instead. A muted workspace's
 triggers stay quiet, though a task still moves. The webhooks hear them as
 "tests that failed" and "a trigger of yours".
@@ -1348,7 +1388,7 @@ once, then "Add to Home Screen" — it installs as a PWA.
   the turns' checkpoints writes nothing into the repository.
 - remuda signals a process only when you press **Stop** on a port in the
   status bar and confirm: a SIGTERM to the pid that listens there now,
-  looked up afresh — never remuda's, herdr's, ssh's or Tailscale's own, nor
+  looked up afresh — never remuda's, the core's, ssh's or Tailscale's own, nor
   an agent's (Claude Code holds a loopback port of its own), nor another
   user's.
 
@@ -1356,11 +1396,8 @@ A second copy beside the real one (to try `-tailscale`, say) gets its own
 token, tasks and push subscriptions with `REMUDA_STATE_DIR=/some/dir`, and
 places no agent door of its own, here or on your other machines, so the
 agents keep talking to the real one (`-door` opens it anyway, `-no-door`
-closes it for any instance). It also writes nothing into herdr — no
-figures in its sidebar, no toasts, so the two never fight over the same
-panes — and records no timelapses of your
-screens and keeps none of the agents' turns to undo (`-record` does both
-anyway).
+closes it for any instance). It records no timelapses of your screens and
+keeps none of the agents' turns to undo (`-record` does both anyway).
 
 ## Development
 
@@ -1380,12 +1417,13 @@ issue and the cause is half found.
 
 ## Status / roadmap
 
-Working today (verified against herdr 0.9.1, protocol 22, local + a real
-remote machine): multi-machine roster with herdr's agent statuses, live
+Working today (verified against remuda-core 0.2.4, local + a real remote
+machine): multi-machine roster with its agent statuses, live
 terminal (one attach per viewer, input, resize, find, touch key bar) on local **and
-remote** panes, chat (exact session via `agent_session`, remote transcripts
-fetched by delta over SSH, thinking/tool folding, submit via `agent.prompt`,
-approval nudge), workspace create/close with `agent.start`, add/remove remote
+remote** panes, chat (the exact session file, remote transcripts
+fetched by delta over SSH, thinking/tool folding, submit via the core's
+`terminal.send`, approval nudge), workspace create/close through its
+`remuda` document, add/remove remote
 machines, token auth, PWA shell.
 
 Also: new tab / new worktree / close from a workspace's ⋯ menu, tabs in a
@@ -1730,7 +1768,7 @@ iPhone, Chrome on the desk; nothing passes through remuda.
 
 **Type `/` or `@`** in the composer and a list opens over it: `/` as the first character lists the slash commands the pane's agent knows — Claude Code's own, your commands and skills under `~/.claude`, the project's under its `.claude` — and `@` lists the folder's files as git sees them (Codex and Gemini panes get their own command lists); ↑ ↓ walk, ↵ or Tab picks, Esc closes, a tap picks on the phone. **Switch the model** (View menu, or the palette) tells a Claude Code pane `/model` with Opus, Sonnet, Haiku or an id you type: the terminal shows the switch, the next answer's foot line names the model, and Claude Code keeps the pick as its default for new sessions, as its own `/model` does.
 
-**Machines** carry the names herdr gave them, and every remote one a
+**Machines** carry the names setup gave them, and every remote one a
 hue of its own — the edge of its block in the sidebar, a dot in the
 palette — so three machines are told apart at a
 glance; the ⋯ beside a machine
@@ -1787,7 +1825,7 @@ kept on this remuda and shared by every device that uses it;
 another. A *set-up* is a list of steps across your machines: a folder,
 what runs there — an agent with its model, arguments and first prompt, a
 recipe, or a plain shell — the tab's name, and if you like the layout of
-a workspace's tab as you arranged it in herdr ("Capture this workspace's
+a workspace's tab as you arranged it ("Capture this workspace's
 layout": its splits, their sizes, each pane's folder, label and command,
 the agent in the pane it ran in). "Add the workspaces open now" makes a
 step of every workspace you have open. Pressing it shows the steps first
@@ -1810,7 +1848,7 @@ it, a tidy only while nobody's agent on its machines works or asks (else
 the run is skipped and noted). Kept on this remuda like the recipes.
 
 **Machine vitals:** the ⓘ next to each machine shows which Claude Code,
-herdr and remuda run there, disk and load — and the day they had: a small
+remuda-core and remuda run there, disk and load — and the day they had: a small
 chart under each from the readings remuda already takes every fifteen
 minutes (kept in `vitals.json`, nothing new is probed), with the limits
 drawn as dashed lines, so a disk filling up or a load that never drops

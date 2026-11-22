@@ -30,13 +30,13 @@ export const sleep: Dictionary = {
   "asleep · {n} agents back on their conversations": ["спит · {n} агент вернётся к своему разговору", "спит · {n} агента вернутся к своим разговорам", "спит · {n} агентов вернутся к своим разговорам"],
   "Resume after restart on {machine}…": "Возобновить после перезапуска на {machine}…",
   "Resume after restart": "Возобновить после перезапуска",
-  "These were running before their panes came back as bare shells — a reboot, or herdr's server started again. Each comes back in its own pane, on its own conversation.":
-    "Они работали, пока их панели не вернулись пустыми оболочками — после перезагрузки или нового запуска сервера herdr. Каждый вернётся в своей панели, к своему разговору.",
+  "These were running before their panes came back as bare shells — a reboot, or the core started again. Each comes back in its own pane, on its own conversation.":
+    "Они работали, пока их панели не вернулись пустыми оболочками — после перезагрузки или нового запуска ядра. Каждый вернётся в своей панели, к своему разговору.",
   "They are being resumed right now.": "Они возобновляются прямо сейчас.",
   "Nothing waits on {machine}: every chat stopped there is back, or was left as it was.": "На {machine} ничего не ждёт: каждый остановленный там чат вернулся или оставлен как есть.",
   "Chats stopped with the reboot": "Чаты, остановленные перезагрузкой",
-  "Each agent comes back with its own resume command; a model or arguments it was started with are not carried over, since herdr does not keep them.":
-    "Каждый агент вернётся своей командой возобновления; модель и аргументы, с которыми его запускали, не переносятся: herdr их не хранит.",
+  "Each agent comes back with its own resume command; a model or arguments it was started with are not carried over, since the core does not keep them.":
+    "Каждый агент вернётся своей командой возобновления; модель и аргументы, с которыми его запускали, не переносятся: ядро их не хранит.",
   "Resume automatically next time": "В следующий раз возобновлять автоматически",
   "Not now": "Не сейчас",
   "Resume all": "Возобновить все",

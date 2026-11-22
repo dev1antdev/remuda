@@ -72,7 +72,7 @@ export const tasks: Dictionary = {
   "New task from a GitHub issue": "Задача из GitHub issue",
   "New tasks land here": "Сюда попадают новые задачи",
   "Next page": "Следующая страница",
-  "No agent is running in herdr": "В herdr не запущен ни один агент",
+  "No agent is running in remuda-core": "В remuda-core не запущен ни один агент",
   "No connected machine has a workspace to branch off": "Ни на одной подключённой машине нет пространства, от которого ветвиться",
   "No description.": "Без описания.",
   "No labels yet": "Меток пока нет",

@@ -157,7 +157,7 @@ export function TaskDetail({ task: t, projects, statuses, fields, labels, onChan
       ))}
 
       <div className="tasks-send">
-        <span className={`split${canSend ? "" : " off"}`} title={canSend ? "" : tr("No agent is running in herdr")}>
+        <span className={`split${canSend ? "" : " off"}`} title={canSend ? "" : tr("No agent is running in remuda-core")}>
           <button type="button" className="btn primary split-main" disabled={!canSend} onClick={() => onSend(false)}>
             {tr("Send to agent")}
           </button>

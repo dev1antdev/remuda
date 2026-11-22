@@ -22,7 +22,7 @@ once after cloning and after every change under `web/`.
 | TypeScript check | `make typecheck` (`tsc --noEmit` + `go vet`) |
 | The page's unit tests (Vitest on the pure modules) | `make webtest` (`npm test` in `web/`; `make test` runs it too) |
 | Everything, as CI does (`.github/workflows/ci.yml`) | `make test && make typecheck`, or `docker build --target test .` |
-| The dialling guard: a stub `remuda-core` first on PATH must fail the run | `RC_BIN=$(command -v remuda-core) PATH=<stub>:$PATH go test ./internal/machines/ ./internal/server/ ./internal/watch/ ./internal/app/ ./internal/restart/ ./internal/sleep/ ./internal/code/ ./internal/updates/ ./internal/triggers/ ./internal/core/` — a package that dials a core belongs on that list |
+| The dialling guard: a stub `remuda-core` first on PATH logs every call and fails; a non-empty log must fail the run | `stub=$(mktemp -d) && printf '#!/bin/sh\necho "$*" >> "%s/calls"\nexit 1\n' "$stub" > "$stub/remuda-core" && chmod +x "$stub/remuda-core" && RC_BIN=$(command -v remuda-core) PATH=$stub:$PATH go test ./internal/machines/ ./internal/server/ ./internal/watch/ ./internal/app/ ./internal/restart/ ./internal/sleep/ ./internal/code/ ./internal/updates/ ./internal/triggers/ ./internal/core/ && test ! -s "$stub/calls"` — a package that dials a core belongs on that list, and the last check is what CI does |
 | The end-to-end smoke and the display checks: a throwaway remuda-core, a remuda of its own, headless Chrome, every screen at a desk's and a phone's width in English and Russian (`scripts/e2e.sh`, `e2e/smoke.mjs`, `e2e/display.mjs`) | `make e2e` (needs remuda-core, node and Chrome; nothing of yours is touched; `E2E_DISPLAY_PASSES=desk-en` for one pass, `E2E_SMOKE_ONLY=1` for the smoke alone) |
 | A pull request | against `release`: `gh pr create --base release` |
 | A release | `git checkout main && git merge --ff-only release && git tag -a vX.Y.Z -m 'remuda X.Y.Z' && make publish` — the Release workflow builds and publishes it |
@@ -42,7 +42,7 @@ agree. `make publish` refuses any branch but `main`
 (`PUBLISH_BRANCH=<branch>` overrides). A hotfix is made on `main` and
 merged into `release` the same day, or the next fast-forward fails.
 
-Tests are plain `testing` and need no herdr: the ones that
+Tests are plain `testing` and no core has to be running before them: the ones that
 start a throwaway remuda-core (`internal/core/coretest`) skip without
 `RC_BIN` or `remuda-core` on PATH, a test that only needs a machine's API
 puts `internal/herdr/herdrfake` in place of a core, and a package
@@ -78,7 +78,8 @@ not style.
   the status line in `settings.json` only when the person runs it or
   presses Run on its Updates row (a backup kept in remuda's state dir,
   `internal/limits`), and a test of it runs in a temp HOME only.
-  Input reaches an agent only through herdr — `agent.prompt`, for a message
+  Input reaches an agent only through the core — the adapter's `AgentPrompt`
+  (the core's `terminal.send`), for a message
   naming a picture with the Enter `sessions/settle.go` adds after it —
   serialized per pane by `sessions.Input`. What is
   written for an agent is never typed into a pane without one. Never queue, retry or auto-send what a person typed. The
@@ -97,29 +98,29 @@ not style.
   same agent under the same pid (`core.Adapter.sendTo`).
 - **Never `--takeover`.** herdr allows one attached client per terminal;
   stealing the slot is the person's call only, never remuda's.
-- **A test never stops the person's herdr or core.** A `Server` asked to
-  stop herdr (`HerdrStops`) in a test gets `SetMovedHerdr` with a socket of
-  the test's own first, and a test core is `coretest.Server`'s — an agent
-  running in herdr carries `HERDR_SOCKET_PATH` in its environment, and a
-  stop without one is the person's own server (it happened, Core 26j).
+- **A test never stops the person's runtime, herdr or core.** A `Server`
+  asked to stop herdr (`HerdrStops`) in a test gets `SetMovedHerdr` with a
+  socket of the test's own first, and the person's herdr is theirs. A test
+  core is `coretest.Server`'s; the person's own core is theirs to stop, and
+  `guard-bash.sh` refuses any `remuda-core`/`rc server stop` or `serve`,
+  whatever socket the command names.
 - **A test remuda-core is `coretest.Server`'s, `scripts/e2e.sh`'s or the
-  Windows job's own session's, each with its own `RC_SESSION`, `RC_SOCKET`, XDG
-  folders, `HOME` and `RC_LAUNCHD_DIRECT` — the last for a core started with
-  `server start` in the runner's session, where an elevated sshd would refuse
-  to start one; never started another way**: a
-  core started without them reaches the person's.
-- **A test herdr needs `HERDR_SOCKET_PATH`, never a changed `HOME`
-  alone.** herdr ignores `HOME` for its socket: `HOME=/tmp/x herdr server
-  stop` stopped the person's real server once. An agent working inside a herdr pane
-  already has `HERDR_SOCKET_PATH` and `HERDR_SOCKET` in its environment,
-  naming the person's real server: a test sets both itself and never
-  counts on them being unset. **And a `HOME` of its own beside them**:
-  herdr restores the saved session of the `HOME` it runs under — the
-  person's workspaces, their agents resumed with `--resume` — and saves
-  its own over it; a throwaway on the person's `HOME` once resumed a live
-  Claude Code session in a hidden pane. A test of remuda itself starts
-  `internal/core/coretest.Server` instead: a throwaway core on a socket,
-  HOME and folders of its own, never a herdr.
+  Windows job's own session's, never started another way**: on Unix its own
+  `RC_SESSION`, `RC_SOCKET`, XDG folders, `HOME` and `RC_LAUNCHD_DIRECT` —
+  the last the parent's pid, so a `serve` on macOS is not handed to launchd
+  as a job of the person's session. The Windows job is the
+  exception: its unique `RC_SESSION` picks its named pipe and it clears
+  `RC_SOCKET`, with its own XDG config and state folders and no `HOME` or
+  `RC_LAUNCHD_DIRECT` of its own. A core started without them reaches the
+  person's; `coretest.Server` is the pattern to copy.
+- **A test of remuda starts `internal/core/coretest.Server`, never a
+  herdr.** herdr stays on the machines for the rollback and is the person's
+  to start and stop; an agent only reads it (`herdr status server`,
+  `herdr api snapshot`, `herdr machine list`). `guard-bash.sh` refuses every
+  `herdr server stop`, `restart` or bare `server`, and any `HOME=… herdr`,
+  socket named or not: no test starts one by hand any more. A throwaway
+  core is the rule above; a scratch herdr on the person's `HOME` once
+  resumed a live Claude Code session in a hidden pane.
 - **Never run the uninstall for real on the person's machine.** `remuda
   uninstall` and `scripts/uninstall.sh run` stop the service, and with
   `-herdr` the server and every agent in it. To look, use `-n` (the plan
@@ -127,9 +128,13 @@ not style.
   temp `HOME` whose `~/.local/bin` holds stand-ins for `launchctl`,
   `systemctl`, `herdr`, `brew` and `ssh`, checked to be what the script
   finds before anything runs; a full run belongs in a container.
-- **Live checks touch only panes you created.** The person's own
-  sessions are in the same roster. Create a scratch workspace through the
-  API, drive that one, delete it when done (`/live-check` in Claude Code).
+- **Live checks touch only panes you created, and a scratch instance's one
+  write to the person's core is the `keep` mark** (`terminal.keep`: the
+  panes it places are marked to come back after a reboot; nothing is typed
+  and no screen changes). The person's own sessions are in the same roster:
+  create a scratch workspace through the API, drive that one, delete it when
+  done (`/live-check` in Claude Code). A check that must change nothing of
+  the person's uses `scripts/e2e.sh`'s own core.
 - **Every route is behind the token** except `/api/health` and
   `/api/login`. A new route goes on the guarded mux and resolves its
   machine through `machineFor` / `ready()`, never by trusting the body.
@@ -164,12 +169,10 @@ not style.
   repository's own hooks skipped) only on the one commit or push the
   person picked it for, never remembered; git's own words shown
   when it fails; the secret check before a commit and a push, hooks
-  skipped or not. **A new worktree and its branch** are herdr's to make
-  on a herdr machine; on a remuda-core machine (and in teleport) remuda
-  makes them itself with git where herdr did (`internal/core/worktree.go`:
-  `git worktree add`, a new branch from its base), for the same callers
-  and only where a herdr machine would make one — never forced, never
-  over a folder that is there. Every read
+  skipped or not. **A new worktree and its branch** remuda makes itself
+  with git (`internal/core/worktree.go`: `git worktree add`, a new branch
+  from its base), for the same callers and only where one is not there
+  already — never forced, never over a folder that is there. Every read
   that diffs or lists a checkout runs `git --no-optional-locks -c
   core.fsmonitor=false -c diff.autoRefreshIndex=false` (`script.ReadGit`;
   `script/readtest` checks a script for it), so a look never touches the
@@ -279,7 +282,7 @@ not style.
 | Who hears what | `internal/events/`, the subscriptions in `internal/app/app.go` |
 | The page's own state: the selected pane, the mode, the lens, the URL | `web/src/app/store.ts`, `url.ts`, `current.ts` |
 | How a screen reads the server | `web/src/lib/query.ts` (`useQuery`), the feature's `api.ts`; the roster through `web/src/features/roster/useRoster.tsx` |
-| herdr RPC, the model of a machine, starting herdr | `internal/herdr/` |
+| The core's RPC and its model, and the client to it | `internal/herdr/` (the vocabulary), `internal/core/` (the client and adapter) |
 | Remote machines, SSH, remote files | `internal/machines/`, `internal/sshx/` |
 | A Windows PC of the fleet: the probe, its paths, `remuda-core.exe connect` over ssh | `internal/machines/probe.go`, `internal/machines/core.go`, `internal/rpath/`; the tests on a real Windows: `internal/wintest/` and the `windows` job in ci.yml |
 | What the sidebar says about an agent | `internal/radar/`, `web/src/features/roster/` (`radar.ts` the model, `Sidebar.tsx`, `rows.tsx`) |
@@ -298,14 +301,14 @@ not style.
 - `.claude/settings.json` — Claude Code: the read-only and build commands
   that run without asking, a deny on writes to the transcripts under `~/.claude/projects` (`*.jsonl` only; the memory folder beside them stays writable),
   and two hooks in `.claude/hooks/`: `guard-bash.sh` refuses
-  `--takeover`, an unscoped `herdr server stop`, a `HOME=…` herdr, and a
-  `remuda-core` (or `rc`) `server stop` or `serve`, whatever socket it
-  names (a throwaway core is `scripts/e2e.sh`'s or `coretest.Server`'s,
+  `--takeover`, every `herdr server stop`, `restart` or bare `server`, a
+  `HOME=…` herdr, and a `remuda-core` (or `rc`) `server stop` or `serve`,
+  whatever socket it names (a throwaway core is `scripts/e2e.sh`'s or `coretest.Server`'s,
   the person's own is theirs to stop), its cases in `guard-bash.test.sh`,
   which CI runs;
   `gofmt.sh` formats a Go file after every edit.
 - `.claude/skills/` — `/verify` (the full check), `/live-check` (a
-  scratch workspace against the real herdr, cleaned up afterwards),
-  `/herdr` (reading herdr's state and RPC by hand).
+  scratch workspace against the real remuda-core, cleaned up afterwards),
+  `/core` (the core's API by hand, and one of its own for a test).
 - `GEMINI.md` is this file (a symlink). Codex, Cursor and Copilot read
   `AGENTS.md` as it is. The rules are the same for every agent.

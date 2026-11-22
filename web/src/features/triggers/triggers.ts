@@ -74,7 +74,7 @@ export function draftCheck(rule: Rule): string {
   if (!rule.name.trim()) return t("Name the trigger.");
   if (!rule.pattern.trim()) return t("Say what to look for.");
   if (rule.pattern.length > MAX_PATTERN) return t("A pattern is {n} characters at most.", { n: MAX_PATTERN });
-  if (/[\r\n]/.test(rule.pattern)) return t("herdr reads one line at a time: a pattern holds no line break.");
+  if (/[\r\n]/.test(rule.pattern)) return t("A pattern matches one line at a time: it holds no line break.");
   if (rule.action === "task" && !rule.column?.trim()) return t("Name the column the task moves to.");
   if (scopeOf(rule) === "folder" && !absolutePath(rule.dir ?? "")) return t("The folder is an absolute path.");
   return "";
