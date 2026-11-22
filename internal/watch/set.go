@@ -90,9 +90,11 @@ func fingerprint[T any](values []T) string {
 
 // noteWanted works out the subscriptions for the snapshot just applied and tells the stream when they moved. A move
 // the snapshot asked for — a pane that appeared or went, the watches that follow the panes — is kept pending for the
-// gap a snapshot moved at before the mirror made one free (`localGap` / `remoteGap`), and only then becomes the set
-// the stream subscribes to: a pane that appears and goes within it swaps no stream at all, a stream opening meanwhile
-// holds the set that stands, and the watches asked of a machine move no faster than they did before. A move the
+// rest the poll that saw it would have kept at the old pace (`pace.go`, the deadline the loop stores), and only then
+// becomes the set the stream subscribes to: a pane that appears and goes within it swaps no stream at all, a stream
+// opening meanwhile holds the set that stands, and the watches asked of a machine move no faster than they did before.
+// A later snapshot replaces the set still settling without moving that rest, so a status event cannot push a watch
+// out. A move the
 // person asked for (`now`: a rule edited, a refusal taken again) is promoted and told at once, and so is the first
 // set.
 func (w *Watcher) noteWanted(machineID string, snap *herdr.Snapshot, now bool) {
@@ -117,16 +119,18 @@ func (w *Watcher) noteWanted(machineID string, snap *herdr.Snapshot, now bool) {
 			st.dropSettling()
 		}
 		w.mu.Unlock()
-	case st.pending != nil && st.pending.key == set.key:
-		w.mu.Unlock() // the same move, still settling: its own rest stands, a status event does not push it out
 	default:
 		st.pending = set
+		if st.settling != nil {
+			w.mu.Unlock() // a set is already settling: this one takes its place, the rest it was booked for stands
+			return
+		}
 		st.gen++
 		gen := st.gen
-		if st.settling != nil {
-			st.settling.Stop()
+		rest := time.Duration(st.deadline.Load())
+		if rest <= 0 {
+			rest = eventDebounce
 		}
-		rest := st.rest
 		st.settling = time.AfterFunc(rest, func() { w.settle(st, gen) })
 		w.mu.Unlock()
 	}

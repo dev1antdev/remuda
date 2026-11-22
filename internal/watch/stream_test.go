@@ -235,6 +235,48 @@ func TestASettlingSetIsNotPushedOutByTheSameSetAgain(t *testing.T) {
 	}
 }
 
+// TestAMachineThatStoodQuietWatchesANewPaneAfterTheBurst: the rest a move waits is what the poll would have kept —
+// the gap only as far as it stands — so a pane made after a quiet spell prints its first lines under a watch, rather
+// than waiting out a whole gap it has already served.
+func TestAMachineThatStoodQuietWatchesANewPaneAfterTheBurst(t *testing.T) {
+	if rest := settleRest(time.Second, 2*time.Second); rest != eventDebounce {
+		t.Fatalf("a quiet machine waits out a whole gap: %s", rest)
+	}
+	if rest := settleRest(time.Second, 0); rest != time.Second {
+		t.Fatalf("a poll just made waits less than the gap: %s", rest)
+	}
+	if rest := settleRest(time.Second, 900*time.Millisecond); rest != eventDebounce {
+		t.Fatalf("a gap nearly served waits less than the burst: %s", rest)
+	}
+}
+
+// TestASettlingSetTakesTheLatestTopology: panes that keep coming replace the set still settling without moving its
+// rest, and the one stream that opens holds the topology as it stands then — never one per pane.
+func TestASettlingSetTakesTheLatestTopology(t *testing.T) {
+	quickPace(t)
+	localGap = 300 * time.Millisecond
+	f := newFakeHerdr(t, "w1:p1")
+	f.memory = true
+	watching(t, f, nil)
+	f.subscribed(t)
+	waitFor(t, "the stream to stand", func() bool { return f.open() == 1 })
+	time.Sleep(eventDebounce) // the snapshot a new stream asks for
+
+	for _, pane := range []string{"w1:p2", "w1:p3"} {
+		f.setPanes("w1:p1", "w1:p2", "w1:p3")
+		seen := time.Now()
+		f.push(`{"data":{"type":"pane_created","pane":{"pane_id":"` + pane + `"}},"event":"pane_created"}`)
+		waitFor(t, "the snapshot with the pane", func() bool { return f.polls(seen) == 1 })
+		time.Sleep(localGap / 6)
+	}
+	if got := statusPanes(f.subscribed(t)); got != "w1:p1,w1:p2,w1:p3" {
+		t.Fatalf("the settling set was not the latest topology: %s", got)
+	}
+	if n := f.subscribes(); n != 2 {
+		t.Fatalf("a set per pane instead of one for the churn: %d subscribes", n)
+	}
+}
+
 func TestAStreamThatEndsGoesBackToThePollAndOpensAgain(t *testing.T) {
 	quickPace(t)
 	streamRetry = 300 * time.Millisecond

@@ -13,6 +13,12 @@ var (
 	lazyGap        = 5 * time.Second
 )
 
+// settleRest is how long a move the snapshot brought settles: what a snapshot asked for by an event would have
+// waited — the rest of its burst, and the gap only as far as it stands since the poll before.
+func settleRest(gap, idle time.Duration) time.Duration {
+	return max(eventDebounce, gap-idle)
+}
+
 // every is the poll's pace: today's without herdr's event stream, the safety net's behind it.
 func every(local, streaming bool) time.Duration {
 	switch {
