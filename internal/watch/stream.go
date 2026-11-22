@@ -169,9 +169,12 @@ func (w *Watcher) connect(mc *machines.Machine, st *machineState, prev *liveStre
 		}
 		w.mu.Lock()
 		st.refused = set.person
+		failed := set.key
 		set = buildSet(set.snap, set.all, st.refused)
 		set.basis = fingerprint(st.accepted.heldWatches())
-		st.wanted = set
+		if st.wanted != nil && st.wanted.key == failed {
+			st.wanted = set // the attempt is still what the stream should hold: the refusal is its answer
+		}
 		w.mu.Unlock()
 		if w.Refused != nil {
 			w.Refused(mc.ID(), err)
