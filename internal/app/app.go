@@ -612,7 +612,6 @@ func Run(ctx context.Context, o Options) error {
 	paneTriggers.Changed = hub.RosterChanged
 	paneTriggers.Resubscribe = watcher.Resubscribe
 	watcher.Outputs = paneTriggers.Watches
-	watcher.Installed = paneTriggers.Installed
 	watcher.Refused = paneTriggers.Refused
 	events.Subscribe(bus, paneTriggers.Observe)
 	events.Subscribe(bus, paneTriggers.OnMatch)

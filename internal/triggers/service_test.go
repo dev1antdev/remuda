@@ -325,7 +325,6 @@ func TestANewPaneTakesNoWatchFromAPaneThatStands(t *testing.T) {
 	if len(stood) != 198 {
 		t.Fatalf("a set of %d watches", len(stood))
 	}
-	s.Installed("gog", stood) // the stream holds them now
 
 	// a pane appears before them all, and a second snapshot comes before the stream swaps
 	grown := herdr.Snapshot{Panes: append([]herdr.PaneInfo{{PaneID: "w1:new"}}, snap.Panes...)}
@@ -361,7 +360,6 @@ func TestAtTheCapAPersonRuleKeepsItsPlace(t *testing.T) {
 	if n := len(s.Watches("gog", snap)); n != MaxWatches {
 		t.Fatalf("a full cap of built-ins: %d", n)
 	}
-	s.Installed("gog", s.Watches("gog", snap))
 	rule := Rule{ID: "api", Name: "In api", Machine: "gog", Dir: "/home/me/api", Match: "substring", Pattern: "DONE", Action: ActionFeed, Enabled: true}
 	if _, err := s.Replace([]Rule{rule}); err != nil {
 		t.Fatal(err)

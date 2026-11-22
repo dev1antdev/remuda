@@ -64,8 +64,6 @@ type Watcher struct {
 	Outputs func(machine string, snap *herdr.Snapshot) []Output
 	// Refused hears herdr refusing the person's own watches on a machine (nil once it takes them again).
 	Refused func(machine string, err error)
-	// Installed hears the output watches a machine's stream holds, once it stands.
-	Installed func(machine string, held []Output)
 
 	mu       sync.Mutex
 	states   map[string]*machineState
@@ -227,17 +225,6 @@ func (w *Watcher) apply(machineID string, snap *herdr.Snapshot) {
 		events.Publish(w.bus, change)
 	}
 	w.noteWanted(machineID, snap, false)
-}
-
-// latest is the machine's latest snapshot, nil before its first, for the stream asking what a new set is worked out
-// from.
-func (w *Watcher) latest(machineID string) *herdr.Snapshot {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	if st := w.states[machineID]; st != nil {
-		return st.snap
-	}
-	return nil
 }
 
 // Snapshot returns the machine's latest snapshot, or the error its last poll hit.

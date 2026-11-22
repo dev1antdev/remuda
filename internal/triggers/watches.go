@@ -52,26 +52,26 @@ func (s *Service) Watches(machine string, snap *herdr.Snapshot) []watch.Output {
 		overMu.Unlock()
 		all = s.admitted(machine, all)
 	}
+	s.rememberWatched(machine, all) // only what was kept: a watch that got no room does not stand
 	return all
 }
 
-// Installed is the watches the machine's stream holds now, told by the watcher as one stands: the admission at the cap
-// keeps them first, so no pane that stands loses a watch for a pane that just appeared.
-func (s *Service) Installed(machine string, held []watch.Output) {
-	watches := make(map[string]bool, len(held))
-	for _, o := range held {
+// rememberWatched keeps the watches the set kept, so the next admission knows which of them stand.
+func (s *Service) rememberWatched(machine string, kept []watch.Output) {
+	watches := make(map[string]bool, len(kept))
+	for _, o := range kept {
 		watches[watchKey(o)] = true
 	}
 	s.mu.Lock()
-	s.installed[machine] = watches
+	s.watched[machine] = watches
 	s.mu.Unlock()
 }
 
-// admitted cuts the set to MaxWatches: the person's rules before the built-ins, and within either class what the
-// stream holds now before what it does not.
+// admitted cuts the set to MaxWatches: the person's rules before the built-ins, and within either class the watches
+// the set kept before the rest.
 func (s *Service) admitted(machine string, all []watch.Output) []watch.Output {
 	s.mu.Lock()
-	held := s.installed[machine]
+	held := s.watched[machine]
 	s.mu.Unlock()
 	rank := func(o watch.Output) int {
 		switch {
