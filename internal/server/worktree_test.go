@@ -179,9 +179,23 @@ func TestSettingsSavedUnderAnOldSpellingAreStillFound(t *testing.T) {
 	if got.Settings.Base != "legacy" {
 		t.Fatalf("settings saved under %q are not read through it: %+v", link, got)
 	}
+	// a draft read through the link is saved back through it, on the version the read gave
+	var read struct {
+		Version string `json:"version"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &read); err != nil {
+		t.Fatal(err)
+	}
+	body := fmt.Sprintf(`{"machine":"local","root":%q,"settings":{"base":"trunk"},"version":%q}`, link, read.Version)
+	if rec := ask(api, "PUT", "/api/repos/settings", body); rec.Code != 200 {
+		t.Fatalf("a draft read through the link was refused: %d %s", rec.Code, rec.Body)
+	}
+	if got := store.Get("local", link); got.Base != "trunk" {
+		t.Fatalf("the save through the link did not land: %+v", got)
+	}
 	// a folder that is not there and whose .. names another one is refused, never stored under the other one
-	body := `{"machine":"local","root":"/checkout/missing/..","settings":{"base":"main"}}`
-	if rec := ask(api, "PUT", "/api/repos/settings", body); rec.Code < 400 {
+	odd := `{"machine":"local","root":"/checkout/missing/..","settings":{"base":"main"}}`
+	if rec := ask(api, "PUT", "/api/repos/settings", odd); rec.Code < 400 {
 		t.Fatalf("a folder whose .. names another is saved anyway: %d %s", rec.Code, rec.Body)
 	}
 }

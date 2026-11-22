@@ -106,18 +106,17 @@ func (s *Server) handleRepoSettingsPut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	given := req.Root
-	if named, ok := mc.Canonical(req.Root); ok {
-		req.Root = named
-	} else if unclear(mc, req.Root) {
-		httpErr(w, 400, fmt.Errorf("the folder %s is not on %s, and its .. names another one", req.Root, mc.Label()))
-		return
-	} else if s.Repos.Has(mc.ID(), req.Root) {
-		// a record is there and the machine cannot name its folder: the dialog's draft was read without it, so saving
-		// the whole of it would erase what it could not show (a folder that is not there, a machine that is away)
-		httpErr(w, http.StatusBadGateway, fmt.Errorf("%s cannot name %s just now, so its settings are not replaced", mc.Label(), req.Root))
+	if _, ok := mc.Canonical(given); !ok && unclear(mc, given) {
+		httpErr(w, 400, fmt.Errorf("the folder %s is not on %s, and its .. names another one", given, mc.Label()))
 		return
 	}
-	root, _ := s.repoRoot(mc, req.Root) // the record the read named: the machine's spelling, or the one kept
+	root, named := s.repoRoot(mc, given) // the very record the read named: the machine's spelling, or the one kept
+	if !named && s.Repos.Has(mc.ID(), root) {
+		// a record is there and the machine cannot name its folder: the dialog's draft was read without it, so saving
+		// the whole of it would erase what it could not show (a folder that is not there, a machine that is away)
+		httpErr(w, http.StatusBadGateway, fmt.Errorf("%s cannot name %s just now, so its settings are not replaced", mc.Label(), root))
+		return
+	}
 	saved, err := s.Repos.Commit(mc.ID(), root, req.Settings, req.Version, olderSpelling(mc, given, root))
 	if errors.Is(err, repos.ErrStale) {
 		httpErr(w, http.StatusConflict, err)
