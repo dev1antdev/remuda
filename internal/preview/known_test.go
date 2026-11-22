@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/shell"
 )
 
@@ -35,7 +36,7 @@ func TestRecallPutsBackWhatAnEarlierLookLearnt(t *testing.T) {
 
 func TestScriptKnowingLooksUpNothingOfTheKnownPids(t *testing.T) {
 	text := ScriptKnowing([]int{4100, 4300})
-	if !strings.Contains(text, `known=" 4100 4300 "`) || !strings.Contains(text, `\037=\037=\037=\n`) {
+	if !strings.Contains(text, `known=" 4100 4300 "`) || !strings.Contains(text, `\000=\000=\000=\000`) {
 		t.Fatalf("the script does not skip the known pids:\n%s", text)
 	}
 	if !strings.Contains(Script(), `known="  "`) {
@@ -58,7 +59,7 @@ func TestAKnownServerIsNotLookedUpAgain(t *testing.T) {
 	if err != nil && strings.TrimSpace(again) == "" {
 		t.Fatal(err)
 	}
-	if !strings.Contains(again, "\x1f"+strconv.Itoa(pid)+"\x1f"+seen[pid].Command+"\x1f=\x1f=\x1f=\n") {
+	if !strings.Contains(again, script.NUL+strconv.Itoa(pid)+script.NUL+seen[pid].Command+script.NUL+"="+script.NUL+"="+script.NUL+"="+script.NUL) {
 		t.Fatalf("the known pid was looked up again:\n%q", again)
 	}
 	for _, l := range Parse(Recall(again, seen), nil) {

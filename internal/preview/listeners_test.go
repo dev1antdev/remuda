@@ -2,6 +2,7 @@ package preview
 
 import (
 	"net"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
@@ -9,11 +10,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/shell"
 )
 
-// line is one line of the script's answer
-func line(fields ...string) string { return strings.Join(fields, "\x1f") + "\n" }
+// line is one record of the script's answer
+func line(fields ...string) string { return strings.Join(fields, script.NUL) + script.NUL }
 
 // a Mac's answer: lsof lists a socket per fd and an IPv6 one on its own; ControlCenter runs in /
 var macAnswer = line("5000", "*", "632", "ControlCenter", "/", "/", "/System/Library/CoreServices/ControlCenter.app/Contents/MacOS/ControlCenter") +
@@ -125,7 +127,14 @@ func serveHere(t *testing.T) (port, pid int, dir string) {
 	if lsofErr != nil && ssErr != nil {
 		t.Skip("neither lsof nor ss")
 	}
-	dir, err = filepath.EvalSymlinks(t.TempDir())
+	// a folder whose name is every trouble the script must survive: a space, letters lsof writes as bytes past ASCII
+	// in a C locale, a backslash it escapes, and a line break the record's own separator must not read as the end of it
+	named := filepath.Join(t.TempDir(), "café \\ dir\nx")
+	t.Setenv("LC_ALL", "C") // lsof writes letters past ASCII as \xNN in C's locale: the script must not leave them so
+	if err := os.MkdirAll(named, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	dir, err = filepath.EvalSymlinks(named)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,4 +175,26 @@ func TestTheScriptFindsAServerRunningHere(t *testing.T) {
 		}
 	}
 	t.Fatalf("port %d not found among %s", port, ports(list))
+}
+
+// TestACutRecordIsNoListenerAndAFolderIsItself: a record the script was killed in the middle of is dropped whole, and a
+// folder whose name ends in a line break is the folder itself — not its sibling that ends one byte earlier.
+func TestACutRecordIsNoListenerAndAFolderIsItself(t *testing.T) {
+	whole := line("3000", "127.0.0.1", "4200", "node", "/Users/me/app\n", "/Users/me", "node server.js")
+	cut := strings.Join([]string{"3001", "127.0.0.1", "4201", "node", "/Users/me/app", "/Users/me", "node ser"}, script.NUL)
+	list := Parse(whole+cut, nil)
+	if len(list) != 1 || list[0].Port != 3000 {
+		t.Fatalf("a cut record became a listener: %+v", list)
+	}
+	if list[0].Dir != "/Users/me/app\n" {
+		t.Fatalf("a folder ending in a line break was read as %q", list[0].Dir)
+	}
+	// the record answered `Known` for its folders takes them verbatim too
+	seen := map[int]Seen{}
+	Recall(whole, seen)
+	known := line("3000", "127.0.0.1", "4200", "node", Known, Known, Known)
+	again := Parse(Recall(known, seen), nil)
+	if len(again) != 1 || again[0].Dir != "/Users/me/app\n" {
+		t.Fatalf("a known folder is not the folder it was: %+v", again)
+	}
 }

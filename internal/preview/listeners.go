@@ -59,25 +59,23 @@ func ScriptKnowing(known []int) string {
 	for i, pid := range known {
 		pids[i] = strconv.Itoa(pid)
 	}
-	return script.PATH + `
+	return script.PATH + "\n" + script.CwdOf + `
 known=" ` + strings.Join(pids, " ") + ` "
 emit() {
   [ "$1" -ge 1024 ] 2>/dev/null || return 0
   case $known in *" $3 "*)
-    printf '%s\037%s\037%s\037%s\037=\037=\037=\n' "$1" "$2" "$3" "$4"
+    printf '%s\000%s\000%s\000%s\000=\000=\000=\000' "$1" "$2" "$3" "$4"
     return 0 ;;
   esac
-  if [ -r "/proc/$3/cwd" ] || [ -L "/proc/$3/cwd" ]; then
-    cwd=$(readlink "/proc/$3/cwd" 2>/dev/null)
+  cwd_of "$3"; known_cwd=$cwd
+  if [ -d "/proc/$3" ]; then
     ppid=$(awk '{print $4}' "/proc/$3/stat" 2>/dev/null)
-    pcwd=$(readlink "/proc/$ppid/cwd" 2>/dev/null)
   else
-    cwd=$(lsof -a -p "$3" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -1)
     ppid=$(ps -o ppid= -p "$3" 2>/dev/null | tr -d ' ')
-    pcwd=$(lsof -a -p "$ppid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -1)
   fi
+  cwd_of "$ppid"; parent_cwd=$cwd
   args=$(ps -o args= -p "$3" 2>/dev/null | cut -c1-240)
-  printf '%s\037%s\037%s\037%s\037%s\037%s\037%s\n' "$1" "$2" "$3" "$4" "$cwd" "$pcwd" "$args"
+  printf '%s\000%s\000%s\000%s\000%s\000%s\000%s\000' "$1" "$2" "$3" "$4" "$known_cwd" "$parent_cwd" "$args"
 }
 if [ "$(uname)" = Linux ] && command -v ss >/dev/null 2>&1; then
   ss -ltnpH 2>/dev/null | while read -r state recv send local peer users; do
@@ -97,6 +95,22 @@ fi
 `
 }
 
+// records reads the script's answer: seven NUL-ended fields a listener, so a folder holding any byte at all — a line
+// break too — is the folder itself, and a record cut short by a killed script is dropped whole.
+func records(out string) [][7]string {
+	fields := strings.Split(out, script.NUL)
+	if len(fields) > 0 {
+		fields = fields[:len(fields)-1] // what stands past the last NUL is no field: the record it began is cut short
+	}
+	var list [][7]string
+	for i := 0; i+7 <= len(fields); i += 7 {
+		var one [7]string
+		copy(one[:], fields[i:i+7])
+		list = append(list, one)
+	}
+	return list
+}
+
 // Known is what ScriptKnowing answers for each field it did not look up again.
 const Known = "="
 
@@ -109,11 +123,7 @@ type Seen struct{ Command, Dir, ParentDir, Args string }
 func Recall(out string, seen map[int]Seen) string {
 	var b strings.Builder
 	listening := map[int]bool{}
-	for _, line := range script.Lines(out) {
-		f := script.Fields(line)
-		if len(f) != 7 {
-			continue
-		}
+	for _, f := range records(out) {
 		pid, err := strconv.Atoi(strings.TrimSpace(f[2]))
 		if err != nil {
 			continue
@@ -130,8 +140,8 @@ func Recall(out string, seen map[int]Seen) string {
 		} else {
 			seen[pid] = Seen{Command: command, Dir: f[4], ParentDir: f[5], Args: f[6]}
 		}
-		b.WriteString(strings.Join(f, script.US))
-		b.WriteByte('\n')
+		b.WriteString(strings.Join(f[:], script.NUL))
+		b.WriteString(script.NUL)
 	}
 	for pid := range seen {
 		if !listening[pid] {
@@ -156,11 +166,7 @@ func agentProgram(args string) bool {
 // folder of the person's own (a system daemon runs in /, another user's answers nothing).
 func Parse(out string, skip map[int]bool) []Listener {
 	byPort := map[int]Listener{}
-	for _, line := range script.Lines(out) {
-		f := script.Fields(line)
-		if len(f) != 7 {
-			continue
-		}
+	for _, f := range records(out) {
 		port, err := strconv.Atoi(strings.TrimSpace(f[0]))
 		if err != nil || port < 1024 || port > 65535 || skip[port] {
 			continue
@@ -170,9 +176,9 @@ func Parse(out string, skip map[int]bool) []Listener {
 		if infrastructure[command] || agentProgram(f[6]) {
 			continue
 		}
-		dir := strings.TrimSpace(f[4])
+		dir := f[4] // the folder itself: a name may end in a space or a line break, and a sibling may differ by one
 		if dir == "" || dir == "/" {
-			dir = strings.TrimSpace(f[5])
+			dir = f[5]
 		}
 		if dir == "" || dir == "/" {
 			continue
