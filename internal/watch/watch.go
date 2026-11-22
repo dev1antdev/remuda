@@ -49,7 +49,8 @@ type machineState struct {
 	wanted    *streamSet    // the subscriptions for the latest snapshot
 	pending   *streamSet    // the set the churn's rest has not promoted yet: a pane that comes and goes is no swap
 	gen       uint64        // which rest is the one that fired
-	deadline  atomic.Int64  // how long a snapshot this poll would have waited at the old pace, in nanoseconds
+	gap       time.Duration // the pace the stream moved at before the mirror made a snapshot free: localGap, remoteGap
+	promoted  time.Time     // when the set the stream subscribes to was set last: the gap counts from it
 	settling  *time.Timer   // the rest booked for the pending set
 	refused   string        // the person's watches herdr refused, by their fingerprint: left out until they change
 
@@ -125,15 +126,7 @@ func (w *Watcher) run(mc *machines.Machine, done <-chan struct{}) {
 		w.stream(mc, st, stop)
 	}()
 	for !mc.Removed() && !closed(done) {
-		start := time.Now()
-		gap := remoteGap
-		if mc.Local() {
-			gap = localGap
-		}
-		// the pace a snapshot asked for by an event kept before the mirror made one free (pace.go): a move the
-		// snapshot brings is booked for the same rest, so the watches of a machine move no faster than they did
-		st.deadline.Store(settleRest(gap, start.Sub(st.polled)).Nanoseconds())
-		st.polled = start
+		st.polled = time.Now()
 		w.poll(mc)
 		w.wait(st, mc.Local(), done)
 	}
@@ -159,6 +152,12 @@ func (w *Watcher) poll(mc *machines.Machine) (*herdr.Snapshot, error) {
 	defer st.pollMu.Unlock()
 	client, _, err := mc.Ready()
 	st.memory.Store(err == nil && client != nil && client.SnapshotFromMemory())
+	w.mu.Lock()
+	st.gap = remoteGap
+	if mc.Local() {
+		st.gap = localGap
+	}
+	w.mu.Unlock()
 	if err == nil {
 		var snap *herdr.Snapshot
 		if snap, err = client.SessionSnapshot(); err == nil {

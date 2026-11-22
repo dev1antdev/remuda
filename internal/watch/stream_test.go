@@ -262,13 +262,15 @@ func TestASettlingSetTakesTheLatestTopology(t *testing.T) {
 	waitFor(t, "the stream to stand", func() bool { return f.open() == 1 })
 	time.Sleep(eventDebounce) // the snapshot a new stream asks for
 
-	for _, pane := range []string{"w1:p2", "w1:p3"} {
-		f.setPanes("w1:p1", "w1:p2", "w1:p3")
-		seen := time.Now()
-		f.push(`{"data":{"type":"pane_created","pane":{"pane_id":"` + pane + `"}},"event":"pane_created"}`)
-		waitFor(t, "the snapshot with the pane", func() bool { return f.polls(seen) == 1 })
-		time.Sleep(localGap / 6)
-	}
+	f.setPanes("w1:p1", "w1:p2") // a set of its own, booked while p3 is still to come
+	seen := time.Now()
+	f.push(`{"data":{"type":"pane_created","pane":{"pane_id":"w1:p2"}},"event":"pane_created"}`)
+	waitFor(t, "the snapshot with the first pane", func() bool { return f.polls(seen) == 1 })
+	time.Sleep(localGap / 6)
+	f.setPanes("w1:p1", "w1:p2", "w1:p3")
+	seen = time.Now()
+	f.push(`{"data":{"type":"pane_created","pane":{"pane_id":"w1:p3"}},"event":"pane_created"}`)
+	waitFor(t, "the snapshot with the second", func() bool { return f.polls(seen) == 1 })
 	if got := statusPanes(f.subscribed(t)); got != "w1:p1,w1:p2,w1:p3" {
 		t.Fatalf("the settling set was not the latest topology: %s", got)
 	}

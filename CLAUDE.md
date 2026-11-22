@@ -3911,11 +3911,11 @@ components and icons as rules for whoever changes it: @docs/design.md
   `Watcher.Outputs` names (`internal/triggers`); a stream's subscriptions
   are fixed, so a pane made or gone, or a rule changed (`Resubscribe`), is
   a new stream — opened before the old one closes — never more than two.
-  A move the snapshot asked for is kept pending for the rest the poll that
-  saw it would have kept (`settleRest`: the burst's rest, and the gap only
-  as far as it stands since the poll before), so the watches asked of a
-  machine move no faster than they did and a pane made after a quiet spell
-  is watched after the burst, not after a gap it has served already; a pane
+  A move the snapshot asked for is kept pending for the rest the set that
+  stands has left of its gap (`settleRest`: the burst's rest, and the gap
+  only as far as it stands since that set was promoted), so the watches
+  asked of a machine move no faster than they did and a pane made after a
+  quiet spell is watched after the burst, not after a gap already served; a pane
   that appears and goes within that rest swaps no stream at all, and a
   stream that opens meanwhile subscribes to the set that stands
   (`TestAPaneThatComesAndGoesSwapsNoStream`,

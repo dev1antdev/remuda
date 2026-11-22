@@ -127,11 +127,7 @@ func (w *Watcher) noteWanted(machineID string, snap *herdr.Snapshot, now bool) {
 		}
 		st.gen++
 		gen := st.gen
-		rest := time.Duration(st.deadline.Load())
-		if rest <= 0 {
-			rest = eventDebounce
-		}
-		st.settling = time.AfterFunc(rest, func() { w.settle(st, gen) })
+		st.settling = time.AfterFunc(settleRest(st.gap, time.Since(st.promoted)), func() { w.settle(st, gen) })
 		w.mu.Unlock()
 	}
 }
@@ -152,7 +148,7 @@ func (w *Watcher) settle(st *machineState, gen uint64) {
 // promote makes set the one the stream subscribes to, drops any move still settling, and answers whether it is news.
 // The caller holds the lock.
 func (st *machineState) promote(set *streamSet) {
-	st.wanted, st.pending = set, nil
+	st.wanted, st.pending, st.promoted = set, nil, time.Now()
 	st.gen++
 	if st.settling != nil {
 		st.settling.Stop()
