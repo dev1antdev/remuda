@@ -231,11 +231,8 @@ func TestClearingSettingsThroughAnOldSpellingClearsThem(t *testing.T) {
 			t.Fatalf("put %s: %d %s", settings, rec.Code, rec.Body)
 		}
 	}
-	put(`{"base":"main"}`) // saved through the link: the record moves to the machine's spelling
-	if store.Has("local", link) {
-		t.Fatal("the old spelling kept its record after a save")
-	}
-	put(`{}`) // cleared through the link
+	put(`{"base":"main"}`) // saved through the link: the record is the machine's spelling's
+	put(`{}`)              // cleared through the link
 	read := func(root string) repos.Settings {
 		t.Helper()
 		rec := ask(api, "GET", "/api/repos/settings?machine=local&root="+root+"&quick=1", "")
@@ -264,5 +261,41 @@ func TestClearingSettingsThroughAnOldSpellingClearsThem(t *testing.T) {
 	}
 	if base := read(link).Base; base != "" {
 		t.Fatalf("an older record came back after a clear through the machine's spelling: %q", base)
+	}
+}
+
+// TestSavingThroughASymlinkFollowedByItsParentLeavesTheOtherCheckoutAlone: a folder named with a .. behind a link
+// resolves to the folder the link points into, and the settings of the folder it was written through are untouched —
+// nothing is ever retired for another spelling.
+func TestSavingThroughASymlinkFollowedByItsParentLeavesTheOtherCheckoutAlone(t *testing.T) {
+	dir := t.TempDir()
+	store := repos.Open(dir)
+	s := &Server{Machines: herdrfake.Manager(dir), Repos: store}
+	api := http.NewServeMux()
+	s.repoRoutes(api)
+	first, second := t.TempDir(), t.TempDir()
+	if _, err := store.Put("local", first, repos.Settings{Base: "first"}); err != nil {
+		t.Fatal(err)
+	}
+	nested := filepath.Join(second, "nested")
+	if err := os.MkdirAll(nested, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(nested, filepath.Join(first, "link")); err != nil {
+		t.Fatal(err)
+	}
+	body := fmt.Sprintf(`{"machine":"local","root":%q,"settings":{"base":"landed"}}`, first+"/link/..") // not Join: it would clean the .. away
+	if rec := ask(api, "PUT", "/api/repos/settings", body); rec.Code != 200 {
+		t.Fatalf("put: %d %s", rec.Code, rec.Body)
+	}
+	if got := store.Get("local", first).Base; got != "first" {
+		t.Fatalf("the folder the path was written through lost its settings: %q", got)
+	}
+	physical, err := filepath.EvalSymlinks(second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := store.Get("local", physical).Base; got != "landed" {
+		t.Fatalf("the folder the path resolved to has %q", got)
 	}
 }

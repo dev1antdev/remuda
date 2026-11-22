@@ -84,14 +84,13 @@ func (s *Server) handleRepoSettingsPut(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 400, errors.New("which repository: its main folder, as a whole path"))
 		return
 	}
-	given := req.Root
 	if named, ok := mc.Canonical(req.Root); ok {
 		req.Root = named
 	} else if unclear(mc, req.Root) {
 		httpErr(w, 400, fmt.Errorf("the folder %s is not on %s, and its .. names another one", req.Root, mc.Label()))
 		return
 	}
-	saved, err := s.Repos.Put(mc.ID(), req.Root, req.Settings, given)
+	saved, err := s.Repos.Put(mc.ID(), req.Root, req.Settings)
 	if err != nil {
 		httpErr(w, 400, err)
 		return
