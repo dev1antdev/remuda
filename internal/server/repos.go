@@ -110,6 +110,11 @@ func (s *Server) handleRepoSettingsPut(w http.ResponseWriter, r *http.Request) {
 	} else if unclear(mc, req.Root) {
 		httpErr(w, 400, fmt.Errorf("the folder %s is not on %s, and its .. names another one", req.Root, mc.Label()))
 		return
+	} else if s.Repos.Has(mc.ID(), req.Root) {
+		// a record is there and the machine cannot name its folder: the dialog's draft was read without it, so saving
+		// the whole of it would erase what it could not show (a folder that is not there, a machine that is away)
+		httpErr(w, http.StatusBadGateway, fmt.Errorf("%s cannot name %s just now, so its settings are not replaced", mc.Label(), req.Root))
+		return
 	}
 	saved, err := s.Repos.Put(mc.ID(), req.Root, req.Settings, olderSpelling(mc, given, req.Root))
 	if err != nil {

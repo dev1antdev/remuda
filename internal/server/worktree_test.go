@@ -317,3 +317,31 @@ func TestSavingThroughASymlinkFollowedByItsParentLeavesTheOtherCheckoutAlone(t *
 		t.Fatalf("the folder the path resolved to has %q", got)
 	}
 }
+
+// TestSettingsTheMachineCannotNameAreNotReplaced: a record is kept for a folder the machine cannot name just now, and
+// a save read without it — the whole record, as the dialog sends it — is refused rather than erasing what it did not
+// show.
+func TestSettingsTheMachineCannotNameAreNotReplaced(t *testing.T) {
+	dir := t.TempDir()
+	store := repos.Open(dir)
+	s := &Server{Machines: herdrfake.Manager(dir), Repos: store}
+	api := http.NewServeMux()
+	s.repoRoutes(api)
+	folder := filepath.Join(t.TempDir(), "app")
+	if err := os.MkdirAll(folder, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Put("local", folder, repos.Settings{Base: "main", Setup: "pnpm i"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.RemoveAll(folder); err != nil { // the checkout is not there just now
+		t.Fatal(err)
+	}
+	body := fmt.Sprintf(`{"machine":"local","root":%q,"settings":{"location":"sibling"}}`, folder)
+	if rec := ask(api, "PUT", "/api/repos/settings", body); rec.Code != http.StatusBadGateway {
+		t.Fatalf("a save read without the record replaced it: %d %s", rec.Code, rec.Body)
+	}
+	if got := store.Get("local", folder); got.Base != "main" || got.Setup != "pnpm i" {
+		t.Fatalf("the record the machine could not show was erased: %+v", got)
+	}
+}
