@@ -151,11 +151,11 @@ func (w *Watcher) connect(mc *machines.Machine, st *machineState, prev *liveStre
 	set := st.wanted
 	wait := time.Until(st.noStreamUntil)
 	w.mu.Unlock()
-	queued := set.key // the candidate this attempt stands for, before a recheck works it out again
-	set = w.recheck(mc, st, set)
 	if set == nil {
 		return nil, streamRetry // no snapshot yet: the first one tells the set
 	}
+	queued := set.key // the candidate this attempt stands for, before a recheck works it out again
+	set = w.recheck(mc, st, set)
 	if wait > 0 {
 		return nil, wait
 	}
