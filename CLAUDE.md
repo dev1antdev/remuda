@@ -4002,10 +4002,12 @@ components and icons as rules for whoever changes it: @docs/design.md
   matched before is taken for it, the text being all core tells (a row
   number that survives a resubscription is task #332); `Service.Watches` is the set for a machine's snapshot — the
   person's rules where they look, then two built-in ones on every pane, at
-  most `MaxWatches` 200 a machine — past it the panes the machine had the
-  time before keep their watches and a pane just appeared gets what is left,
-  so a momentary pane takes no watch of a pane that stands (the rest left
-  out, logged once an hour, `TestANewPaneTakesNoWatchFromAPaneThatStands`). **Built in**: `ServePattern`, a dev server announcing its address
+  most `MaxWatches` 200 a machine — past it the person's rules come first,
+  the built-in ones after them, and within either class the watches the set
+  kept before the rest, so a momentary pane takes no watch of a pane that
+  stands and a rule saved on a full machine still takes effect (the rest
+  left out, logged once an hour; `TestANewPaneTakesNoWatchFromAPaneThatStands`,
+  `TestAtTheCapAPersonRuleKeepsItsPlace`). **Built in**: `ServePattern`, a dev server announcing its address
   (Vite, Next.js, CRA, Astro, webpack-dev-server, http.server, uvicorn,
   Flask, Django, Rails, Hugo, Jekyll, php -S, "listening on :3000"),
   `ServedAt` its port (none under 1024) → once the previews find the port

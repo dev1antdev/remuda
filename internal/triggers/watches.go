@@ -2,6 +2,7 @@ package triggers
 
 import (
 	"log"
+	"sort"
 	"sync"
 	"time"
 
@@ -54,21 +55,28 @@ func (s *Service) Watches(machine string, snap *herdr.Snapshot) []watch.Output {
 	return all
 }
 
-// watchedBefore cuts the set to MaxWatches keeping first the very watches the last set kept — a watch that stands is
-// never taken for a pane that just appeared, which is served with what is left of the cap.
+// watchedBefore cuts the set to MaxWatches: the person's rules first, the built-ins after them, and within either
+// class the watches the last set kept before the rest. A watch that stands is never taken for a pane that just
+// appeared, a rule just saved still takes its place from a built-in, and a pane that leaves a rule's folder for a
+// moment comes back to it.
 func (s *Service) watchedBefore(machine string, all []watch.Output) []watch.Output {
 	s.mu.Lock()
 	before := s.watched[machine]
 	s.mu.Unlock()
-	var kept, fresh []watch.Output
-	for _, o := range all {
-		if before[watchKey(o)] {
-			kept = append(kept, o)
-		} else {
-			fresh = append(fresh, o)
+	rank := func(o watch.Output) int {
+		stood := before[watchKey(o)]
+		switch {
+		case o.Person && stood:
+			return 0
+		case o.Person:
+			return 1
+		case stood:
+			return 2
 		}
+		return 3
 	}
-	kept = append(kept, fresh...)
+	kept := append([]watch.Output(nil), all...)
+	sort.SliceStable(kept, func(i, j int) bool { return rank(kept[i]) < rank(kept[j]) })
 	if len(kept) > MaxWatches {
 		kept = kept[:MaxWatches]
 	}
