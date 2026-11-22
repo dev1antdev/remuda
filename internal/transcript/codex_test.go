@@ -3,6 +3,7 @@ package transcript
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -208,4 +209,66 @@ func TestCodexFilesAreFoundByThreadId(t *testing.T) {
 		t.Fatalf("remote find across formats: %s", got)
 	}
 	_ = time.Now()
+}
+
+// codexRevert is a thread's rollout and the file a revert of its history wrote beside it: the same thread id, a
+// rollout id of its own, and a session_meta naming the file it replays to an ordinal.
+func codexRevert(t *testing.T, home, id string) (base, revert string) {
+	t.Helper()
+	dir := filepath.Join(home, ".codex", "sessions", "2026", "11", "20")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	line := func(ordinal int, role, text string) string {
+		return `{"timestamp":"2026-11-20T02:0` + strconv.Itoa(ordinal) + `:00.000Z","ordinal":` + strconv.Itoa(ordinal) +
+			`,"type":"response_item","payload":{"type":"message","id":"msg_` + text + `","role":"` + role + `","content":[{"type":"` +
+			map[string]string{"user": "input_text", "assistant": "output_text"}[role] + `","text":"` + text + `"}]}}`
+	}
+	meta := `{"timestamp":"2026-11-20T02:00:00.000Z","type":"session_meta","payload":{"session_id":"` + id + `","id":"` + id + `","cwd":"/home/u/proj","originator":"codex-tui"}}`
+	base = filepath.Join(dir, "rollout-2026-11-20T02-00-00-"+id+".jsonl")
+	body := meta + "\n" + line(1, "user", "first prompt") + "\n" + line(2, "assistant", "first answer") + "\n" + line(3, "user", "reverted prompt") + "\n"
+	if err := os.WriteFile(base, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	revert = filepath.Join(dir, "rollout-2026-11-20T03-00-00-"+id+"_0f0e0d0c-1111-4222-8333-944455556666.jsonl")
+	head := `{"timestamp":"2026-11-20T03:00:00.000Z","type":"session_meta","payload":{"session_id":"` + id + `","id":"` + id + `","cwd":"/home/u/proj","originator":"codex-tui","history_base":{"path":"` + base + `","end_ordinal_exclusive":3}}}`
+	body = head + "\n" + line(4, "user", "after revert") + "\n"
+	if err := os.WriteFile(revert, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return base, revert
+}
+
+// TestACodexRevertReadsTheThreadWhole: after a revert of its history Codex writes a new file that keeps the thread's id
+// and replays the part that stayed; the chat shows that part and what came after, the reverted turns are gone, and the
+// listing names the thread once.
+func TestACodexRevertReadsTheThreadWhole(t *testing.T) {
+	home := t.TempDir()
+	id := "01a187d8-720d-7860-9918-8fc3e6cd3a1f"
+	_, revert := codexRevert(t, home, id)
+	if got := CodexSessionID(revert); got != id {
+		t.Fatalf("the thread id of a revert's file: %q", got)
+	}
+	if got, err := findCodexSession(home, id); err != nil || got != revert {
+		t.Fatalf("resolved %q, %v; want the revert's file %s", got, err, revert)
+	}
+	turns, err := parseCodexFile(revert)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var texts []string
+	for _, turn := range turns {
+		for _, part := range turn.Parts {
+			if part.Type == "text" {
+				texts = append(texts, part.Text)
+			}
+		}
+	}
+	if got := strings.Join(texts, " | "); got != "first prompt | first answer | after revert" {
+		t.Fatalf("the conversation after a revert: %s", got)
+	}
+	files := CodexFiles(filepath.Join(home, ".codex", "sessions"))
+	if len(files) != 1 || files[0].ID != id || files[0].Path != revert {
+		t.Fatalf("the thread is listed %d times: %+v", len(files), files)
+	}
 }

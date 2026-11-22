@@ -945,7 +945,15 @@ components and icons as rules for whoever changes it: @docs/design.md
   model and the `model_context_window` the lines before it named, so the
   meter shows the window of a model the catalog does not price), and
   `compacted` with the history replaced in place (the file goes on: no
-  continuation chain, no subagents); the harness envelopes in the user's
+  continuation chain, no subagents), and **a revert of the thread's history**
+  (`codex-revert`): the new file `rollout-<time>-<id>_<rollout id>.jsonl` keeps
+  the thread id (`CodexSessionID` cuts at the `_`) and its `session_meta` names
+  a `history_base` to `end_ordinal_exclusive` — `codexHistory` reads it, and
+  `parseCodexFile` puts that part of the old file before the new file's own
+  records, so the chat shows what stayed and then what came after, never the
+  reverted turns; the resolver takes the newest file of the thread and the
+  listing names it once (`TestACodexRevertReadsTheThreadWhole`); the harness
+  envelopes in the user's
   slot (`<environment_context>`, `<user_instructions>`, …) are skipped;
   the thread id is what `codex resume` takes and what the core's codex hook
   reports; `update_plan` feeds `Plan`, `request_user_input` is a question
