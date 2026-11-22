@@ -176,3 +176,25 @@ func TestTheScriptFindsAServerRunningHere(t *testing.T) {
 	}
 	t.Fatalf("port %d not found among %s", port, ports(list))
 }
+
+// TestACutRecordIsNoListenerAndAFolderIsItself: a record the script was killed in the middle of is dropped whole, and a
+// folder whose name ends in a line break is the folder itself — not its sibling that ends one byte earlier.
+func TestACutRecordIsNoListenerAndAFolderIsItself(t *testing.T) {
+	whole := line("3000", "127.0.0.1", "4200", "node", "/Users/me/app\n", "/Users/me", "node server.js")
+	cut := strings.Join([]string{"3001", "127.0.0.1", "4201", "node", "/Users/me/app", "/Users/me", "node ser"}, script.NUL)
+	list := Parse(whole+cut, nil)
+	if len(list) != 1 || list[0].Port != 3000 {
+		t.Fatalf("a cut record became a listener: %+v", list)
+	}
+	if list[0].Dir != "/Users/me/app\n" {
+		t.Fatalf("a folder ending in a line break was read as %q", list[0].Dir)
+	}
+	// the record answered `Known` for its folders takes them verbatim too
+	seen := map[int]Seen{}
+	Recall(whole, seen)
+	known := line("3000", "127.0.0.1", "4200", "node", Known, Known, Known)
+	again := Parse(Recall(known, seen), nil)
+	if len(again) != 1 || again[0].Dir != "/Users/me/app\n" {
+		t.Fatalf("a known folder is not the folder it was: %+v", again)
+	}
+}

@@ -99,6 +99,9 @@ fi
 // break too — is the folder itself, and a record cut short by a killed script is dropped whole.
 func records(out string) [][7]string {
 	fields := strings.Split(out, script.NUL)
+	if len(fields) > 0 {
+		fields = fields[:len(fields)-1] // what stands past the last NUL is no field: the record it began is cut short
+	}
 	var list [][7]string
 	for i := 0; i+7 <= len(fields); i += 7 {
 		var one [7]string
@@ -173,9 +176,9 @@ func Parse(out string, skip map[int]bool) []Listener {
 		if infrastructure[command] || agentProgram(f[6]) {
 			continue
 		}
-		dir := strings.TrimSpace(f[4])
+		dir := f[4] // the folder itself: a name may end in a space or a line break, and a sibling may differ by one
 		if dir == "" || dir == "/" {
-			dir = strings.TrimSpace(f[5])
+			dir = f[5]
 		}
 		if dir == "" || dir == "/" {
 			continue
