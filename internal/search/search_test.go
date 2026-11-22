@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/dev1antdev/remuda/internal/transcript"
 )
 
 func TestScanNewestFirstWithFilters(t *testing.T) {
@@ -81,5 +83,28 @@ func TestScriptQuotesAndSpellings(t *testing.T) {
 	}
 	if capitalized("вику") != "Вику" {
 		t.Fatalf("capitalized %q", capitalized("вику"))
+	}
+}
+
+// TestSearchLooksInASessionFolderAnAgentNamed: a Claude Code under CLAUDE_CONFIG_DIR writes its projects elsewhere; once
+// the machine's reader has learned that folder from the process, the search looks there too.
+func TestSearchLooksInASessionFolderAnAgentNamed(t *testing.T) {
+	home := t.TempDir()
+	own := filepath.Join(home, "profile")
+	projects := filepath.Join(own, "projects", "-work-app")
+	if err := os.MkdirAll(projects, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	line := `{"type":"user","message":{"role":"user","content":"a needle of its own folder"}}`
+	if err := os.WriteFile(filepath.Join(projects, "4c9d6f0e-1111-4222-8333-944455556666.jsonl"), []byte(line+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	transcript.RememberRoot(home, transcript.Claude, filepath.Join(own, "projects")) // the home is this test's own
+	var b strings.Builder
+	if err := ScanHome(home, "needle of its own folder", "", time.Time{}, 10, &b); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(b.String(), "needle of its own folder") {
+		t.Fatalf("the folder the agent named is not searched: %q", b.String())
 	}
 }

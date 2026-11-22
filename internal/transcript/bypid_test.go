@@ -161,6 +161,18 @@ func TestClaudeSessionComesFromItsConfigDirAndItsStart(t *testing.T) {
 	if got[pid] != "4c9d6f0e-1111-4222-8333-944455556666" {
 		t.Fatalf("session = %q, want the one in CLAUDE_CONFIG_DIR", got[pid])
 	}
+	// the transcript behind that id lives under the config dir's own projects: the file is found there, not only the id
+	projects := filepath.Join(config, "projects", EncodePath("/work/api"))
+	if err := os.MkdirAll(projects, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	transcriptPath := filepath.Join(projects, "4c9d6f0e-1111-4222-8333-944455556666.jsonl")
+	if err := os.WriteFile(transcriptPath, []byte("{\"type\":\"user\"}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if path, err := reader.ResolveSession("claude", "/work/api", "id", "4c9d6f0e-1111-4222-8333-944455556666"); err != nil || path != transcriptPath {
+		t.Fatalf("session file = %q, %v; want %s", path, err, transcriptPath)
+	}
 	// the pane was seen in another folder: the pid went to this process since
 	if got, err := reader.SessionsOf([]Running{{PID: pid, Agent: "claude", CWD: filepath.Join(work, "elsewhere")}}); err != nil || len(named(got)) != 0 {
 		t.Fatalf("a process standing in another folder than the pane's: got %v, %v", got, err)
@@ -810,5 +822,34 @@ func TestParseSessionsByPID(t *testing.T) {
 				t.Fatalf("got %v, want %q", got, c.want)
 			}
 		})
+	}
+}
+
+// TestASessionUnderItsOwnCODEXHOMEIsOpenedToo: Codex with CODEX_HOME of its own writes its rollout there; the session
+// the process holds is found by id, and the file behind it is found under that folder, not only under ~/.codex.
+func TestASessionUnderItsOwnCODEXHOMEIsOpenedToo(t *testing.T) {
+	home := realDir(t)
+	t.Setenv("HOME", home)
+	own := filepath.Join(home, "codex-profile")
+	dir := filepath.Join(own, "sessions", "2026", "11", "20")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "rollout-2026-11-20T02-28-48-"+rolloutID+".jsonl")
+	if err := os.WriteFile(path, []byte(sessionMeta(rolloutID, false)+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	work := realDir(t)
+	pid := holder(t, work, []string{path}, []string{"CODEX_HOME=" + own}, false, "")
+	reader := NewReader(remoteHere(home))
+	got, err := reader.SessionsOf([]Running{{PID: pid, Agent: "codex", CWD: work}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got[pid] != rolloutID {
+		t.Fatalf("session = %q, want %q", got[pid], rolloutID)
+	}
+	if found, err := reader.ResolveSession("codex", work, "id", rolloutID); err != nil || found != path {
+		t.Fatalf("rollout = %q, %v; want %s", found, err, path)
 	}
 }

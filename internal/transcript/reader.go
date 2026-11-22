@@ -63,6 +63,13 @@ func NewReader(host shell.Host) *Reader {
 		subTails: map[string]*cachedTail{}, subagents: map[string]*subagentEntry{}, subDirs: map[string]dirListing{}, metas: map[string]cachedMeta{}}
 }
 
+// AddRoot is a folder an agent named for itself — Claude Code's CLAUDE_CONFIG_DIR's projects, Codex's CODEX_HOME's
+// sessions — learned from the process that writes there: its session is found under it from now on.
+func (r *Reader) AddRoot(f Format, dir string) { RememberRoot(r.host.Home(), f, dir) }
+
+// roots is the machine's folders for its sessions: its home's own, and the ones agents named for themselves.
+func (r *Reader) roots() Roots { return RootsFor(r.host.Home()) }
+
 // Version stats the session file; the version doubles as the ETag.
 func (r *Reader) Version(path string) (Version, error) {
 	if r.host.Local() {
@@ -240,7 +247,7 @@ func (r *Reader) ResolveSession(agent, cwd, kind, value string) (string, error) 
 	// the agent's own hooks chose these: a path only under one of the session roots, an id only what looks like one
 	if kind == "path" {
 		clean := rpath.For(r.host.Home()).Clean(value)
-		if !(strings.HasSuffix(clean, ".jsonl") || strings.HasSuffix(clean, ".json")) || !UnderRoot(r.host.Home(), clean) {
+		if !(strings.HasSuffix(clean, ".jsonl") || strings.HasSuffix(clean, ".json")) || !underRoots(r.roots(), rpath.For(r.host.Home()), clean) {
 			return "", fmt.Errorf("session path %q is not a session file under ~/.claude/projects, ~/.codex/sessions or ~/.gemini/tmp", value)
 		}
 		return clean, nil
@@ -249,6 +256,7 @@ func (r *Reader) ResolveSession(agent, cwd, kind, value string) (string, error) 
 		return "", fmt.Errorf("session id %q does not look like one", value)
 	}
 	format := FormatOfAgent(agent)
+	roots := r.roots()
 	key := string(format) + "|" + cwd + "|" + value // one id may have a copy in each project: the folder's own comes first
 	r.mu.Lock()
 	cached, ok := r.sessionPath[key]
@@ -277,11 +285,11 @@ func (r *Reader) ResolveSession(agent, cwd, kind, value string) (string, error) 
 	}
 	if r.host.Local() {
 		var err error
-		if path, err = FindSession(format, cwd, value); err != nil {
+		if path, err = findSessionIn(roots, format, cwd, value); err != nil {
 			return miss(err)
 		}
 	} else {
-		out, err := shell.Text(r.host, findScript(format, r.host.Home(), cwd, value), 15*time.Second)
+		out, err := shell.Text(r.host, findScript(roots, format, r.host.Home(), cwd, value), 15*time.Second)
 		if err != nil {
 			return miss(err)
 		}
@@ -296,8 +304,9 @@ func (r *Reader) ResolveSession(agent, cwd, kind, value string) (string, error) 
 	return path, nil
 }
 
-// findScript is FindSession as a shell line for a remote machine: the formats tried in turn, the first path printed.
-func findScript(format Format, home, cwd, id string) string {
+// findScript is findSessionIn as a shell line for a remote machine: the formats tried in turn, the folders of each in
+// turn, the first path printed.
+func findScript(roots Roots, format Format, home, cwd, id string) string {
 	formats := []Format{format}
 	if format == "" {
 		formats = []Format{Claude, Codex, Gemini}
@@ -307,14 +316,17 @@ func findScript(format Format, home, cwd, id string) string {
 	for _, f := range formats {
 		switch f {
 		case Codex:
-			steps = append(steps, codexFindScript(quotedHome, id))
+			steps = append(steps, codexFindScript(roots[Codex], id))
 		case Gemini:
 			steps = append(steps, geminiFindScript(quotedHome, id))
 		default:
-			projects := home + "/.claude/projects"
-			primary := projects + "/" + EncodePath(cwd) + "/" + id + ".jsonl"
-			steps = append(steps, `if [ -f `+script.Quote(primary)+` ]; then printf %s `+script.Quote(primary)+`; else ls `+
-				script.Quote(projects)+`/*/`+script.Quote(id+".jsonl")+` 2>/dev/null | head -1; fi`)
+			var tries []string
+			for _, projects := range roots[Claude] {
+				primary := filepath.Join(projects, EncodePath(cwd), id+".jsonl")
+				tries = append(tries, `if [ -f `+script.Quote(primary)+` ]; then printf %s `+script.Quote(primary)+`; else ls `+
+					script.Quote(projects)+`/*/`+script.Quote(id+".jsonl")+` 2>/dev/null | head -1; fi`)
+			}
+			steps = append(steps, strings.Join(tries, "; "))
 		}
 	}
 	if len(steps) == 1 {

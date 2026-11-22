@@ -66,6 +66,7 @@ func (r *Reader) SessionsOf(procs []Running) (map[int]string, error) {
 			return nil, err
 		}
 		found, unsure = parseSessionsByPID(out, procs, rpath.For(r.host.Home()), clock)
+		r.learnRoots(out, procs)
 	}
 	answer := map[int]string{}
 	for _, p := range procs {
@@ -77,6 +78,53 @@ func (r *Reader) SessionsOf(procs []Running) (map[int]string, error) {
 		return answer, errors.Join(clockErr, errors.New("the machine was too slow telling its boot to tell its processes apart"))
 	}
 	return answer, clockErr
+}
+
+// learnRoots keeps the folders the processes of an answer named for themselves — the config dir whose session file
+// answered for Claude Code, the rollout folder Codex writes its sessions under — so the transcript behind a session
+// found here is found there too.
+func (r *Reader) learnRoots(out string, procs []Running) {
+	asked := map[int]bool{}
+	for _, p := range procs {
+		asked[p.PID] = true
+	}
+	for _, record := range script.Sections(out) {
+		record = strings.TrimSpace(record)
+		if rest, ok := strings.CutPrefix(record, "config"+script.US); ok {
+			pid, dir, _ := strings.Cut(rest, script.US)
+			if n, err := strconv.Atoi(strings.TrimSpace(pid)); err == nil && asked[n] && dir != "" {
+				r.AddRoot(Claude, dir+"/projects")
+			}
+			continue
+		}
+		fields := strings.SplitN(record, script.US, 7)
+		if len(fields) < 5 {
+			continue
+		}
+		pid, err := strconv.Atoi(strings.TrimSpace(fields[0]))
+		if err != nil || !asked[pid] {
+			continue
+		}
+		if path := heldRollout(fields[4], pid); path != "" {
+			if i := strings.Index(path, "/sessions/"); i > 0 {
+				r.AddRoot(Codex, path[:i]+"/sessions") // the folder Codex puts its dated tree under
+			}
+		}
+	}
+}
+
+// heldRollout is the rollout file one process of a payload holds open: its own, never a child's.
+func heldRollout(payload string, pid int) string {
+	for _, entry := range strings.Split(payload, script.FS) {
+		fields := strings.SplitN(entry, script.GS, 3)
+		if len(fields) < 2 || strings.TrimSpace(fields[0]) != strconv.Itoa(pid) {
+			continue
+		}
+		if strings.HasSuffix(fields[1], ".jsonl") {
+			return fields[1]
+		}
+	}
+	return ""
 }
 
 // needsClock says whether a process is told from a later one given its pid by the machine's clock alone: the runtime
@@ -132,6 +180,9 @@ func sessionsByPIDScript(procs []Running) string {
 		if !lookedUp(p) {
 			continue
 		}
+		if p.Agent == "claude" {
+			b.WriteString("config_of " + strconv.Itoa(p.PID) + " " + script.Quote(p.CWD) + "\n")
+		}
 		b.WriteString("s " + strconv.Itoa(p.PID) + " " + p.Agent + " " + script.Quote(p.CWD) + "\n")
 	}
 	if b.Len() == 0 {
@@ -156,6 +207,29 @@ else
   printf 'system\037%s\036\n' "$system"
 fi
 case "$system" in MINGW* | MSYS* | CYGWIN*) windows=1 ;; *) windows= ;; esac
+config_dirs() {
+  if [ -r "/proc/$1/environ" ]; then
+    tr '\0' '\n' < "/proc/$1/environ" | sed -n 's/^CLAUDE_CONFIG_DIR=//p' | head -n 1
+  else
+    ps -E -ww -o command= -p "$1" 2>/dev/null | awk '
+      { key = " CLAUDE_CONFIG_DIR="; p = 0; t = $0
+        while ((j = index(t, key)) > 0) { p += j; t = substr(t, j + 1) }
+        if (!p) next
+        v = substr($0, p + length(key)); seen = ""
+        while (match(v, / [A-Za-z_][A-Za-z0-9_]*=/)) {
+          print seen substr(v, 1, RSTART - 1)
+          seen = seen substr(v, 1, RSTART + RLENGTH - 1); v = substr(v, RSTART + RLENGTH)
+        }
+        print seen v }'
+  fi
+  printf '%s\n' "$HOME/.claude"
+}
+config_of() {
+  config_dirs "$1" | while IFS= read -r c; do
+    case "$c" in /* | [A-Za-z]:*) ;; ?*) c="$2/$c" ;; esac
+    [ -n "$c" ] && [ -f "$c/sessions/$1.json" ] && printf 'config\037%s\037%s\036\n' "$1" "$c"
+  done
+}
 lstart() { LC_ALL=C TZ=UTC ps -o lstart= -p "$1" 2>/dev/null; }
 s() {
   start=$(lstart "$1")
@@ -170,23 +244,7 @@ s() {
   case "$start" in -|ft:*) ;; *) cwd_of "$1" ;; esac
   printf '%s\037%s\037%s\037%s\037' "$1" "$2" "$start" "$cwd"
   if [ "$2" = claude ]; then
-    {
-      if [ -r "/proc/$1/environ" ]; then
-        tr '\0' '\n' < "/proc/$1/environ" | sed -n 's/^CLAUDE_CONFIG_DIR=//p' | head -n 1
-      else
-        ps -E -ww -o command= -p "$1" 2>/dev/null | awk '
-          { key = " CLAUDE_CONFIG_DIR="; p = 0; t = $0
-            while ((j = index(t, key)) > 0) { p += j; t = substr(t, j + 1) }
-            if (!p) next
-            v = substr($0, p + length(key)); seen = ""
-            while (match(v, / [A-Za-z_][A-Za-z0-9_]*=/)) {
-              print seen substr(v, 1, RSTART - 1)
-              seen = seen substr(v, 1, RSTART + RLENGTH - 1); v = substr(v, RSTART + RLENGTH)
-            }
-            print seen v }'
-      fi
-      printf '%s\n' "$HOME/.claude"
-    } | while IFS= read -r c; do
+    config_dirs "$1" | while IFS= read -r c; do
       case "$c" in /* | [A-Za-z]:*) ;; ?*) c="$3/$c" ;; esac
       f="$c/sessions/$1.json"
       [ -n "$c" ] && [ -f "$f" ] && { head -c 65536 "$f"; printf '\035'; }

@@ -3,7 +3,9 @@ package transcript
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
+	"sync"
 
 	"github.com/dev1antdev/remuda/internal/rpath"
 )
@@ -63,12 +65,75 @@ func homeDir() string {
 	return home
 }
 
+// Roots are the folders one machine keeps session files in, per format: its home's own, and any an agent named for
+// itself — Claude Code's CLAUDE_CONFIG_DIR, Codex's CODEX_HOME — learned from the process that writes there.
+type Roots map[Format][]string
+
+// RootsOf is a home's own folders, the ones an agent writes to unless it says otherwise.
+func RootsOf(home string) Roots {
+	out := make(Roots, len(SessionRoots(home)))
+	for f, dir := range SessionRoots(home) {
+		out[f] = []string{dir}
+	}
+	return out
+}
+
+// With is the set with one folder added for a format, once: the machine's own set, never the one lent.
+func (r Roots) With(f Format, dir string) Roots {
+	if dir == "" || slices.Contains(r[f], dir) {
+		return r
+	}
+	out := make(Roots, len(r)+1)
+	for k, v := range r {
+		out[k] = append([]string(nil), v...)
+	}
+	out[f] = append(out[f], dir)
+	return out
+}
+
+// learnedRoots are the folders agents named for themselves, by the home of the machine they run on: what the readers,
+// the search and the usage counter of that machine look in beside its home's own.
+var learnedRoots = struct {
+	sync.Mutex
+	m map[string]Roots
+}{m: map[string]Roots{}}
+
+// RootsFor is a home's own folders and the ones its agents named for themselves, learned from their processes.
+func RootsFor(home string) Roots {
+	learnedRoots.Lock()
+	extra := learnedRoots.m[home]
+	learnedRoots.Unlock()
+	all := RootsOf(home)
+	for f, dirs := range extra {
+		for _, dir := range dirs {
+			all = all.With(f, dir)
+		}
+	}
+	return all
+}
+
+// RememberRoot keeps a folder an agent named for itself, for the machine whose home this is.
+func RememberRoot(home string, f Format, dir string) {
+	if dir == "" {
+		return
+	}
+	learnedRoots.Lock()
+	defer learnedRoots.Unlock()
+	learnedRoots.m[home] = learnedRoots.m[home].With(f, dir)
+}
+
 // UnderRoot says whether a session path the agent's own hooks reported sits under one of the roots of this home.
 func UnderRoot(home, path string) bool {
-	style := rpath.For(home)
-	for _, root := range SessionRoots(home) {
-		if rel, ok := style.Rel(root, path); ok && rel != "." {
-			return true
+	return underRoots(RootsOf(home), rpath.For(home), path)
+}
+
+// underRoots says whether a path sits under one of the folders of the set.
+func underRoots(roots Roots, style rpath.Style, path string) bool {
+	for _, dir := range roots {
+		for _, root := range dir {
+			if rel, ok := style.Rel(root, path); ok && rel != "." {
+				return true
+			}
 		}
 	}
 	return false

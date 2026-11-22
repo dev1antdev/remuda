@@ -117,7 +117,7 @@ func TestGeminiFilesAreFoundByHashAndId(t *testing.T) {
 	if err != nil || len(turns) != 2 {
 		t.Fatalf("Parse by path: %d %v", len(turns), err)
 	}
-	if got := findScript(Gemini, "/h", cwd, id); !strings.Contains(got, "'/h'/.gemini/tmp/*/chats/session-*-6f1c2a3b.json*") || !strings.Contains(got, id) {
+	if got := findScript(RootsOf("/h"), Gemini, "/h", cwd, id); !strings.Contains(got, "'/h'/.gemini/tmp/*/chats/session-*-6f1c2a3b.json*") || !strings.Contains(got, id) {
 		t.Fatalf("remote find: %s", got)
 	}
 }

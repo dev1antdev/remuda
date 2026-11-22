@@ -29,12 +29,18 @@ type scanFile struct {
 // ScanHome writes the records under a home that match q, newest file first and up to limit: Claude Code's as
 // grep -r prints them ("./<rel path>:<raw line>"), Codex's as "codex:<cwd>␟<thread id>␟<raw line>".
 func ScanHome(home, q, dir string, since time.Time, limit int, w io.Writer) error {
-	roots := transcript.SessionRoots(home)
-	files, err := claudeFiles(roots[transcript.Claude], dir, since)
-	if err != nil {
-		return err
+	roots := transcript.RootsFor(home)
+	var files []scanFile
+	for _, projects := range roots[transcript.Claude] {
+		found, err := claudeFiles(projects, dir, since)
+		if err != nil {
+			return err
+		}
+		files = append(files, found...)
 	}
-	files = append(files, codexFiles(roots[transcript.Codex], dir, since)...)
+	for _, folder := range roots[transcript.Codex] {
+		files = append(files, codexFiles(folder, dir, since)...)
+	}
 	return scan(files, q, since, limit, w)
 }
 

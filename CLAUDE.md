@@ -929,6 +929,12 @@ components and icons as rules for whoever changes it: @docs/design.md
   Claude Code's own rule — and `userText` reads the person's words without
   the wrapper (`pasted_test.go`). Session resolution: the core's
   `agent_session` (exact UUID) first, cwd-encoded dir scan as fallback.
+  **A session folder the agent named for itself** (`format.go`, `RootsOf` / `RootsFor` / `RememberRoot`):
+  a home's `~/.claude/projects`, `~/.codex/sessions`, `~/.gemini/tmp`, and any folder a running agent named in
+  its environment — `CLAUDE_CONFIG_DIR`'s `projects`, the `sessions` folder above the rollout
+  `CODEX_HOME` gave — learned by `SessionsOf` from the process (`learnRoots`) and kept per home, so
+  `ResolveSession`, the search and the usage counter look there too (`TestClaudeSessionComesFromItsConfigDirAndItsStart`,
+  `TestASessionUnderItsOwnCODEXHOMEIsOpenedToo`); a machine's remuda learns its own, which its search uses.
   **Codex and Gemini sessions read into the same `Turn`** (`format.go`:
   a `Format` by the file's place — `~/.claude/projects`, `~/.codex/sessions`,
   `~/.gemini/tmp` — and `FormatOfAgent` by the core's `agent` field;

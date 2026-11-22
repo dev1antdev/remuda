@@ -66,11 +66,15 @@ func ScanHomeDays(home string, since time.Time, loc *time.Location) (Report, err
 }
 
 func scanHome(b *builder, home string) (Report, error) {
-	roots := transcript.SessionRoots(home)
-	if err := b.walkClaude(roots[transcript.Claude]); err != nil {
-		return b.report(), err
+	roots := transcript.RootsFor(home)
+	for _, projects := range roots[transcript.Claude] {
+		if err := b.walkClaude(projects); err != nil {
+			return b.report(), err
+		}
 	}
-	b.walkCodex(roots[transcript.Codex])
+	for _, folder := range roots[transcript.Codex] {
+		b.walkCodex(folder)
+	}
 	return b.report(), nil
 }
 

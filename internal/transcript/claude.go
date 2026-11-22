@@ -208,6 +208,11 @@ func scanTitle(path string) (title string, final bool) {
 // FindSession locates a session file by id in one format, or in every format when none is named: Claude Code's
 // project dirs, Codex's date tree, Gemini's chats.
 func FindSession(format Format, cwd, id string) (string, error) {
+	return findSessionIn(RootsOf(homeDir()), format, cwd, id)
+}
+
+// findSessionIn is FindSession in the folders of one machine: a home's own and any an agent named for itself.
+func findSessionIn(roots Roots, format Format, cwd, id string) (string, error) {
 	formats := []Format{format}
 	if format == "" {
 		formats = []Format{Claude, Codex, Gemini}
@@ -217,11 +222,11 @@ func FindSession(format Format, cwd, id string) (string, error) {
 		var err error
 		switch f {
 		case Codex:
-			path, err = findCodexSession(homeDir(), id)
+			path, err = findCodexIn(roots[Codex], id)
 		case Gemini:
 			path, err = findGeminiSession(homeDir(), cwd, id)
 		default:
-			path, err = FindSessionByID(cwd, id)
+			path, err = findClaudeIn(roots[Claude], cwd, id)
 		}
 		if err == nil {
 			return path, nil
@@ -232,26 +237,33 @@ func FindSession(format Format, cwd, id string) (string, error) {
 
 // FindSessionByID locates <uuid>.jsonl: the project dir encoded from cwd first, then every project dir.
 func FindSessionByID(cwd, id string) (string, error) {
+	return findClaudeIn(RootsOf(homeDir())[Claude], cwd, id)
+}
+
+// findClaudeIn is FindSessionByID in the project folders of a machine, each tried in turn.
+func findClaudeIn(projects []string, cwd, id string) (string, error) {
 	if !text.SessionID(id) { // the id is the agent's own word: a path in it must name no file here
 		return "", os.ErrNotExist
 	}
-	if cwd != "" {
-		p := filepath.Join(projectsDir(), EncodePath(cwd), id+".jsonl")
-		if _, err := os.Stat(p); err == nil {
-			return p, nil
+	for _, projects := range projects {
+		if cwd != "" {
+			p := filepath.Join(projects, EncodePath(cwd), id+".jsonl")
+			if _, err := os.Stat(p); err == nil {
+				return p, nil
+			}
 		}
-	}
-	entries, err := os.ReadDir(projectsDir())
-	if err != nil {
-		return "", err
-	}
-	for _, e := range entries {
-		if !e.IsDir() {
+		entries, err := os.ReadDir(projects)
+		if err != nil {
 			continue
 		}
-		p := filepath.Join(projectsDir(), e.Name(), id+".jsonl")
-		if _, err := os.Stat(p); err == nil {
-			return p, nil
+		for _, e := range entries {
+			if !e.IsDir() {
+				continue
+			}
+			p := filepath.Join(projects, e.Name(), id+".jsonl")
+			if _, err := os.Stat(p); err == nil {
+				return p, nil
+			}
 		}
 	}
 	return "", os.ErrNotExist

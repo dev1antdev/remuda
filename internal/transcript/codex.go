@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/text"
 )
 
@@ -530,10 +531,19 @@ func codexFirstPrompt(path string) string {
 
 // findCodexSession is the rollout of a thread id under home, wherever in the date tree it sits.
 func findCodexSession(home, id string) (string, error) {
+	return findCodexIn(RootsOf(home)[Codex], id)
+}
+
+// findCodexIn is findCodexSession in the rollout folders of a machine, each tried in turn.
+func findCodexIn(roots []string, id string) (string, error) {
 	if !text.SessionID(id) {
 		return "", os.ErrNotExist
 	}
-	hits, _ := filepath.Glob(filepath.Join(SessionRoots(home)[Codex], "*", "*", "*", "rollout-*-"+id+".jsonl"))
+	var hits []string
+	for _, root := range roots {
+		found, _ := filepath.Glob(filepath.Join(root, "*", "*", "*", "rollout-*-"+id+".jsonl"))
+		hits = append(hits, found...)
+	}
 	if len(hits) == 0 {
 		return "", os.ErrNotExist
 	}
@@ -542,6 +552,10 @@ func findCodexSession(home, id string) (string, error) {
 }
 
 // codexFindScript is findCodexSession as a shell line for a remote machine: prints the path, or nothing.
-func codexFindScript(quotedHome, id string) string {
-	return `ls ` + quotedHome + `/.codex/sessions/*/*/*/rollout-*-` + id + `.jsonl 2>/dev/null | tail -1`
+func codexFindScript(roots []string, id string) string {
+	var steps []string
+	for _, root := range roots {
+		steps = append(steps, `ls `+script.Quote(root)+`/*/*/*/rollout-*-`+id+`.jsonl 2>/dev/null | tail -1`) // the id is a session id: no quoting to do
+	}
+	return strings.Join(steps, "; ")
 }
