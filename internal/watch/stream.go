@@ -202,8 +202,8 @@ func (w *Watcher) connect(mc *machines.Machine, st *machineState, prev *liveStre
 		w.Installed(mc.ID(), set.held) // the watches this stream holds from now on
 	}
 	if snap := w.latest(mc.ID()); snap != nil {
-		// the stream now holds them: a set worked out before may admit another one for a pane that just appeared
-		w.noteWanted(mc.ID(), snap, true)
+		// the stream now holds them: a set worked out before is worked out again, on the same rest it was settling for
+		w.noteWanted(mc.ID(), snap, false)
 	}
 	ls := &liveStream{stream: stream, set: set, started: time.Now(), carried: map[string]bool{}, ended: make(chan error, 1)}
 	if prev != nil {

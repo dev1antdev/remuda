@@ -167,6 +167,10 @@ func TestAStreamOpeningWhileASetSettlesHoldsTheOneThatStands(t *testing.T) {
 	if got := statusPanes(f.subscribed(t)); got != "w1:p1" {
 		t.Fatalf("a stream opened on the set still settling: %s", got)
 	}
+	time.Sleep(eventDebounce / 2) // a stream standing is no licence for the pane still settling
+	if n := f.subscribes(); n != 2 {
+		t.Fatalf("a reconnect opened a third stream inside the rest: %d subscribes", n)
+	}
 }
 
 // TestARuleEditPromotesASettlingSetAtOnce: a rule edited is the person's move, not the snapshot's: a poll that read the
