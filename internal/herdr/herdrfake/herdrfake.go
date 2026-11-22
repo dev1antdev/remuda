@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/machines"
 )
 
 // API is a herdr.API whose calls are the functions given; a call with none answers nothing and no error.
@@ -328,4 +329,11 @@ func (t *Terminals) Viewers(termID string) int {
 		return 0
 	}
 	return t.ViewersF(termID)
+}
+
+// Manager is a fleet whose local machine answers this package's fakes and reaches no core: what a test that builds a
+// registry, a route or a watcher without asking a machine needs. A test that wants a real core starts coretest.Server
+// and machines.NewManager instead.
+func Manager(dir string) *machines.Manager {
+	return machines.NewManagerWith(dir, nil, false, &API{}, &Terminals{})
 }

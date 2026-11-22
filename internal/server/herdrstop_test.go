@@ -3,9 +3,12 @@ package server
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/dev1antdev/remuda/internal/herdr/herdrfake"
 	"github.com/dev1antdev/remuda/internal/machines"
 )
 
@@ -20,8 +23,17 @@ func TestHerdrsServerIsStoppedOnlyWhereTheFleetLeftIt(t *testing.T) {
 		mux.ServeHTTP(rec, httptest.NewRequest("POST", "/api/machines/"+machine+"/herdr/stop", nil))
 		return rec.Code, rec.Body.String()
 	}
-	onHerdr := machines.NewManager(t.TempDir(), nil, false)
+	// herdr is pinned to a stand-in that records its call and a socket of the test's: a stop must never be the person's
+	// own server, which an agent running in herdr carries in HERDR_SOCKET_PATH
+	calls := filepath.Join(t.TempDir(), "calls")
+	stub := filepath.Join(t.TempDir(), "herdr")
+	if err := os.WriteFile(stub, []byte("#!/bin/sh\necho \"$*\" >> "+calls+"\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	pin := func(m *machines.Manager) { m.SetMovedHerdr(stub, filepath.Join(t.TempDir(), "herdr.sock")) }
+	onHerdr := herdrfake.Manager(t.TempDir())
 	t.Cleanup(onHerdr.Close)
+	pin(onHerdr)
 	if code, body := stop(&Server{Machines: onHerdr}, "local"); code != 409 || !strings.Contains(body, "scratch instance") {
 		t.Fatalf("a scratch instance: %d %s", code, body)
 	}
@@ -30,7 +42,11 @@ func TestHerdrsServerIsStoppedOnlyWhereTheFleetLeftIt(t *testing.T) {
 	}
 	pageOnly := machines.NewManager(t.TempDir(), nil, true)
 	t.Cleanup(pageOnly.Close)
+	pin(pageOnly)
 	if code, body := stop(&Server{Machines: pageOnly, HerdrStops: true}, "local"); code != 409 || !strings.Contains(body, "runs as a server") {
 		t.Fatalf("the page's own host under -server: %d %s", code, body)
+	}
+	if said, err := os.ReadFile(calls); err == nil && len(said) > 0 {
+		t.Fatalf("herdr was asked to stop on a machine the stop is refused for: %s", said)
 	}
 }

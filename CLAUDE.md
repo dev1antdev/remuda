@@ -605,7 +605,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   write, every terminal still labelled for what they closed, so a layout or
   a tab made meanwhile goes with it. The document keeps no pane's
   environment; the tree is taken as scenes' `checkLayout` passed it, only one
-  with no pane refused (`invalid_request`). `Bridged` is false: a stream costs the core nothing. The
+  with no pane refused (`invalid_request`).
   watcher still paces the snapshots an event asks for (`internal/watch`,
   150 ms debounce, 500 ms / 1 s apart): the mirror makes each one free, not
   sooner.
@@ -6807,10 +6807,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   when it still sits in `on_start` (a card the person moved meanwhile
   stays; the push title says `→ Testing`); a pane gone two minutes →
   `gone`, its pipeline stopped in the same transaction (`GoneRun`), and so
-  is a run on a machine gone from the fleet that long (`Manager.Gone`: one
-  the person removed, kept in `removed.json` until that id comes back, or
-  any once herdr's machines, never saved, were read
-  since the start; `internal/app`'s `readTaskPane`, which also reads a pane its agent left
+  is a run on a machine gone from the fleet that long (`Manager.Gone`: id
+  not in the fleet — removed, or never added; `internal/app`'s
+  `readTaskPane`, which also reads a pane its agent left
   as idle, so a last answer not reported yet is its finish). **What a run was denied** (`denied.go`, `denied_test.go`): the
   finish reads, through `RunWatch.Denied` (`chat.Service.Denied`), the
   calls Claude Code refused without asking after the record reported

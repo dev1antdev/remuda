@@ -183,7 +183,7 @@ export default function Sidebar() {
                 <MachineMenu
                   machine={m}
                   onRename={() => actions.openDialog({ kind: "renameMachine", machine: m })}
-                  onRemove={m.id !== "local" && m.source !== "herdr" ? () => onRemoveMachine(m) : undefined}
+                  onRemove={m.id !== "local" ? () => onRemoveMachine(m) : undefined}
                   onStep={order.canMove ? (by) => order.step(m.id, by) : undefined}
                   first={at === 0}
                   last={at === order.shown.length - 1}

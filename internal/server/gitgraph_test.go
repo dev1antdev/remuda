@@ -14,7 +14,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/gitgraph"
 	"github.com/dev1antdev/remuda/internal/gitops"
-	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/herdr/herdrfake"
 	"github.com/dev1antdev/remuda/internal/watch"
 )
 
@@ -44,7 +44,7 @@ func gitRepository(t *testing.T) string {
 func gitServer(t *testing.T, busy string) *http.ServeMux {
 	t.Helper()
 	state := t.TempDir()
-	fleet := machines.NewManager(state, nil, false)
+	fleet := herdrfake.Manager(state)
 	s := &Server{Machines: fleet, Watch: watch.New(fleet, events.NewBus()), GitOps: &gitops.Service{Busy: func(string, string, []string) string { return busy }}}
 	api := http.NewServeMux()
 	s.gitRoutes(api)

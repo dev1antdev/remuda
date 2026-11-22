@@ -13,7 +13,7 @@ import (
 
 	"github.com/dev1antdev/remuda/internal/auth"
 	"github.com/dev1antdev/remuda/internal/events"
-	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/herdr/herdrfake"
 	"github.com/dev1antdev/remuda/internal/watch"
 )
 
@@ -21,7 +21,7 @@ import (
 func fileServer(t *testing.T) http.Handler {
 	t.Helper()
 	dir := t.TempDir()
-	fleet := machines.NewManager(dir, nil, false)
+	fleet := herdrfake.Manager(dir)
 	s := &Server{Machines: fleet, Watch: watch.New(fleet, events.NewBus())}
 	mux := http.NewServeMux()
 	s.fileRoutes(mux)

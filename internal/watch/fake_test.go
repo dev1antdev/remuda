@@ -18,6 +18,7 @@ type fakeHerdr struct {
 	snap        herdr.Snapshot
 	snapshots   []time.Time
 	streams     []*watchedStream // open streams
+	closes      int              // streams the watcher closed itself, not ones an error read ended
 	most        int              // the most streams open at once
 	started     int              // streams answered
 	answers     []time.Time
@@ -192,8 +193,18 @@ func (s *watchedStream) Next() (herdr.Event, error) {
 }
 
 func (s *watchedStream) Close() error {
+	s.f.mu.Lock()
+	s.f.closes++
+	s.f.mu.Unlock()
 	s.done()
 	return s.Stream.Close()
+}
+
+// closedHere is how many streams the watcher closed itself.
+func (f *fakeHerdr) closedHere() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.closes
 }
 
 func (s *watchedStream) done() { s.once.Do(func() { s.f.closed(s) }) }

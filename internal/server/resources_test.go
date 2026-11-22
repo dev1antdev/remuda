@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/herdr"
-	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/herdr/herdrfake"
 	"github.com/dev1antdev/remuda/internal/ports"
 	"github.com/dev1antdev/remuda/internal/radar"
 	"github.com/dev1antdev/remuda/internal/review"
@@ -63,7 +63,7 @@ func TestPortsNotReadYetSayNoTime(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("a Windows machine reads no ports")
 	}
-	fleet := machines.NewManager(t.TempDir(), nil, false)
+	fleet := herdrfake.Manager(t.TempDir())
 	s := &Server{Machines: fleet, Ports: ports.New(func() []ports.Target { return nil }, func() map[int]bool { return nil })}
 	mux := http.NewServeMux()
 	s.resourceRoutes(mux)

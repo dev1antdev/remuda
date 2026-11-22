@@ -53,12 +53,23 @@ func Keys(names []string) ([]string, error) {
 	return out, nil
 }
 
-// SendKeys presses named keys in a pane, all in one call; the names went through Keys.
+// keysPerCall bounds one keys request: the core paces its keys (30 ms each) and does not stop a batch once sent, so a
+// long one is several requests, each within a call's time, and a failure ends the rest.
+const keysPerCall = 32
+
+// SendKeys presses named keys in a pane, in batches of keysPerCall; the names went through Keys.
 func (in *Input) SendKeys(client Prompter, ref events.PaneRef, keys []string) error {
 	lock := in.lock(ref)
 	lock.Lock()
 	defer lock.Unlock()
-	return client.PaneSendKeys(ref.Pane, keys)
+	for len(keys) > 0 {
+		n := min(len(keys), keysPerCall)
+		if err := client.PaneSendKeys(ref.Pane, keys[:n]); err != nil {
+			return err
+		}
+		keys = keys[n:]
+	}
+	return nil
 }
 
 // MaxTypedText bounds one request's text: a paste of a page or two.

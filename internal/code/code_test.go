@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/dev1antdev/remuda/internal/auth"
+	"github.com/dev1antdev/remuda/internal/herdr/herdrfake"
 	"github.com/dev1antdev/remuda/internal/machines"
 )
 
@@ -129,7 +130,7 @@ func proxied(t *testing.T, answer http.HandlerFunc) (http.Handler, *[]string) {
 	t.Cleanup(backend.Close)
 	port := backend.Listener.Addr().(*net.TCPAddr).Port
 	dir := t.TempDir()
-	mc, err := machines.NewManager(dir, nil, false).Get(machines.LocalID)
+	mc, err := herdrfake.Manager(dir).Get(machines.LocalID)
 	if err != nil {
 		t.Fatal(err)
 	}

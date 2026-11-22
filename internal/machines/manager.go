@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -24,10 +23,9 @@ import (
 )
 
 const (
-	LocalID     = "local"
-	labelsFile  = "labels.json"  // the user's own names for machines, by id
-	macsFile    = "macs.json"    // the MAC address of a machine the person may want to wake, by id
-	removedFile = "removed.json" // the machines the person removed, by id, until one of that id comes back (Gone)
+	LocalID    = "local"
+	labelsFile = "labels.json" // the user's own names for machines, by id
+	macsFile   = "macs.json"   // the MAC address of a machine the person may want to wake, by id
 
 	StateConnected  = "connected"
 	StateConnecting = "connecting"
@@ -59,7 +57,6 @@ type Manager struct {
 	server   bool                                  // the host serves the page only: no machine of the fleet (SetServer)
 	core     bool                                  // every machine is reached through remuda-core (NewCoreManager)
 	// herdr's machines, never saved, were read once since the start, or there is no herdr: the fleet is whole (Gone)
-	removed map[string]bool // removed.json
 }
 
 // ErrServerHost is what a request for the host's own herdr gets when remuda runs as a server: it has no workspaces.
@@ -249,10 +246,6 @@ func newManager(dir string, door *Door, local *Machine, speaksCore bool) *Manage
 		m.macs = map[string]string{}
 	}
 	_ = state.LoadJSON(m.dir, orderFile, &m.placed)
-	_ = state.LoadJSON(m.dir, removedFile, &m.removed)
-	if m.removed == nil {
-		m.removed = map[string]bool{}
-	}
 	local.setLabel(m.names[LocalID])
 	for _, cfg := range m.load() {
 		m.add(cfg)
@@ -272,7 +265,7 @@ func (m *Manager) load() []Config {
 	return cfgs
 }
 
-// save persists the manually added machines; herdr's own stay in herdr.
+// save persists the machines the person added.
 func (m *Manager) save() error {
 	m.saveMu.Lock() // one save at a time, in order: a later Add must not lose to an earlier write
 	defer m.saveMu.Unlock()
@@ -297,12 +290,7 @@ func (m *Manager) add(cfg Config) *Machine {
 	mc.setLabel(m.names[cfg.ID])
 	m.machines[cfg.ID] = mc
 	m.order = append(m.order, cfg.ID)
-	back := m.removed[cfg.ID]
-	delete(m.removed, cfg.ID)
 	m.mu.Unlock()
-	if back {
-		_ = m.saveRemoved()
-	}
 	go mc.connect()
 	return mc
 }
@@ -311,18 +299,6 @@ func newRemote(cfg Config) *Machine {
 	mc := &Machine{Cfg: cfg, state: StateConnecting}
 	mc.Transcripts = transcript.NewReader(mc)
 	return mc
-}
-
-// herdrMachine is one row of `herdr machine list --json`.
-
-// saveRemoved keeps the removals for a restart.
-func (m *Manager) saveRemoved() error {
-	m.saveMu.Lock()
-	defer m.saveMu.Unlock()
-	m.mu.Lock()
-	removed := maps.Clone(m.removed)
-	m.mu.Unlock()
-	return state.SaveJSON(m.dir, removedFile, removed)
 }
 
 // Gone says the fleet has no such machine: it was removed, or it never was there.
@@ -412,15 +388,8 @@ func (m *Manager) Remove(id string) error {
 		m.mu.Unlock()
 		return fmt.Errorf("machine %q not found", id)
 	}
-	m.removed[id] = true
 	m.mu.Unlock()
 	// the removal is kept before the machine goes: one that could not be noted stays, and Gone never says it went
-	if err := m.saveRemoved(); err != nil {
-		m.mu.Lock()
-		delete(m.removed, id)
-		m.mu.Unlock()
-		return err
-	}
 	m.drop(id)
 	return m.save()
 }

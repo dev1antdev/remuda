@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/herdr/herdrfake"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/shell"
 	"github.com/dev1antdev/remuda/internal/undo"
@@ -21,7 +22,7 @@ func TestTheUndoRoutesListPlanAndRefuse(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := &Server{
-		Machines: machines.NewManager(dir, nil, false),
+		Machines: herdrfake.Manager(dir),
 		Undo: &undo.Service{Store: store, Tracker: undo.NewTracker(store, undo.Inputs{}),
 			Host: func(string) (undo.Host, error) { return nil, errors.New("not reached") }},
 	}

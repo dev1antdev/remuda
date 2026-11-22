@@ -255,7 +255,7 @@ export function NewTabDialog({ session, machine, agents, onCreate, onClose }: {
 export function RenameMachineDialog({ machine, onRename, onClose }: { machine: Machine; onRename: (label: string) => Promise<void>; onClose: () => void }) {
   const [label, setLabel] = useState(machine.label);
   const submit = useSubmit(() => onRename(label.trim()));
-  const registered = machine.id === "local" ? t("this host's name") : machine.source === "herdr" ? t("the name in herdr's machine list") : t("the name it was added with");
+  const registered = machine.id === "local" ? t("this host's name") : t("the name it was added with");
   return (
     <FormDialog title={t("Rename machine")} icon="edit" hint={t("Shown everywhere in remuda. Leave it empty to go back to {name}.", { name: registered })} onClose={onClose} submit={submit} submitLabel={t("Rename")}>
       <label>
@@ -279,8 +279,8 @@ export function AddMachineDialog({ onAdd, onClose }: { onAdd: (label: string, ho
       icon="monitor"
       hint={
         <>
-          {t("Machines saved in herdr appear on their own. This adds another: any host your")} <code>ssh</code>{" "}
-          {t("reaches with keys, with herdr running there.")}
+          {t("This adds a machine: any host your")} <code>ssh</code>{" "}
+          {t("reaches with keys, running remuda-core there.")}
         </>
       }
       onClose={onClose}

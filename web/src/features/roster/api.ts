@@ -211,7 +211,7 @@ export type Machine = {
   id: string;
   label: string;
   host?: string;
-  source?: "herdr";
+  source?: string; // always "" now: the roster named herdr's machine list once
   state: "connected" | "connecting" | "error";
   error?: string;
   reached?: boolean; // its ssh master is up, though its herdr or remuda-core may not answer: nothing to wake

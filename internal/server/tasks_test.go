@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/dev1antdev/remuda/internal/auth"
-	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/herdr/herdrfake"
 	"github.com/dev1antdev/remuda/internal/tasks"
 )
 
@@ -207,7 +207,7 @@ func TestAnAgentsKeyImportsNoIssue(t *testing.T) {
 	}
 	t.Cleanup(func() { store.Close() })
 	dir := t.TempDir()
-	fleet := machines.NewManager(dir, nil, false)
+	fleet := herdrfake.Manager(dir)
 	fleet.SetServer(true) // its own machine answers no Ready: nothing runs gh here
 	s := &Server{Tasks: store, Machines: fleet}
 	h := http.NewServeMux()

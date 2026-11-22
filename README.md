@@ -174,11 +174,11 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ remuda-core: its 
   sidebar and the chat redraw within about a second instead of
   on the next poll, and the polls themselves slow down to a safety net:
   fewer requests, less battery on a phone. Without the socket (an old
-  proxy, a hiccup) everything polls as before. remuda itself hears herdr
-  the same way: one event stream per machine, so a question or a finish
-  is on the page and your phone about a quarter of a second
-  after the agent stopped, and herdr is asked for its state every 15–20 s
-  instead of every 2–4 while the stream stands.
+  proxy, a hiccup) everything polls as before. remuda itself hears the
+  machines the same way: one event stream from each remuda-core, so a
+  question or a finish is on the page and your phone about a quarter of a
+  second after the agent stopped, and the machine is asked for its state
+  every 15–20 s instead of every 2–4 while the stream stands.
 - **The address follows you** — `?machine=&pane=&mode=&lens=` is what you
   are looking at, so a link, a reload or a notification lands on the same
   pane in the same lens.
@@ -1080,7 +1080,7 @@ really listens; Preview opens it the same way. Nothing opens by itself.
 
 ## Triggers — what a pane prints
 
-herdr itself watches what every pane prints and tells remuda the moment a
+remuda-core watches what every pane prints and tells remuda the moment a
 line matches. Built in: the dev servers above, and **tests that failed** —
 go test, jest, vitest, pytest, cargo, mocha, rspec — one push per pane, never
 while its agent is still at work on them or while you have its terminal open,
@@ -1090,7 +1090,7 @@ expression — everywhere, on one machine or in one folder, and what it does: a
 push, a row in the activity, a preview offered, or the task whose agent runs
 in that pane moved to a column (`ready for QA` → Testing). Test tries a rule
 on a pane's last 500 rows before you save it. A regular expression is read the
-way herdr reads it — `\w`, `\d` and `\b` know every alphabet, Cyrillic too —
+way herdr's did — `\w`, `\d` and `\b` know every alphabet, Cyrillic too —
 and one herdr would refuse or read otherwise (`\<`, `\12`, a bare `{`) is
 refused when you save it, with what to write instead. A muted workspace's
 triggers stay quiet, though a task still moves. The webhooks hear them as
@@ -1145,8 +1145,8 @@ The agent rewrote the wrong file, or the whole approach was a dead end:
 button in the Changes lens's head, which offers the folder's last turn
 and the ones before it — puts the folder back as the turn found it. It
 works for any agent, Codex and Gemini CLI as much as Claude Code, since
-remuda watches the folder, not the agent: when herdr says an agent pane
-starts working remuda reads the folder's git state on its machine, and
+remuda watches the folder, not the agent: when the machine says an agent
+pane starts working remuda reads the folder's git state on its machine, and
 again when the pane comes to rest, and keeps what moved in between on
 the cockpit. Reading writes nothing into your repository — no stash, no
 object, your index untouched.

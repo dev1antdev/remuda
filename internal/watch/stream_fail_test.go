@@ -79,6 +79,9 @@ func TestAStreamHerdrEndedIsClosedHere(t *testing.T) {
 	f.push(`{"id":"remuda-9","error":{"code":"events_lost","message":"the subscriber fell behind"}}`)
 	f.subscribed(t)
 	waitFor(t, "the stream that lost events to close here", func() bool { return f.answered() == 2 && f.open() == 1 })
+	if f.closedHere() < 1 {
+		t.Fatal("the stream that lost events was dropped, not closed here: its registration and its feeds would stay")
+	}
 }
 
 func TestASwapHerdrRefusedIsTriedAgain(t *testing.T) {

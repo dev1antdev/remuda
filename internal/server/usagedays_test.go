@@ -8,14 +8,14 @@ import (
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/auth"
-	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/herdr/herdrfake"
 	"github.com/dev1antdev/remuda/internal/shell"
 	"github.com/dev1antdev/remuda/internal/usage"
 )
 
 // The year's days: every machine of the fleet, the days cut in the viewer's zone; the person's alone.
 func TestUsageDaysRoute(t *testing.T) {
-	fleet := machines.NewManager(t.TempDir(), nil, false)
+	fleet := herdrfake.Manager(t.TempDir())
 	book := usage.OpenBook(t.TempDir())
 	book.Read = func(shell.Host, time.Time, *time.Location, string) (usage.Report, error) { return usage.Report{}, nil }
 	s := &Server{Machines: fleet, UsageDays: book}

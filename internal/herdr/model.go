@@ -1,5 +1,3 @@
-// Package herdr speaks herdr's newline-JSON RPC over its Unix socket, and holds
-// the model remuda asks every machine through.
 package herdr
 
 import "strings"

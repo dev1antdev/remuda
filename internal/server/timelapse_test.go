@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/herdr/herdrfake"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/timelapse"
 )
@@ -32,7 +33,7 @@ func recordedIn(t *testing.T, workspace string, own bool) (*Server, *http.ServeM
 		return fmt.Sprintf("\x1b[32mstep %d\x1b[0m", reads.Add(1)), nil
 	}, Own: func(string, string) bool { return own }})
 	t.Cleanup(recorder.Close)
-	s := &Server{Machines: machines.NewManager(dir, nil, false), Timelapse: recorder}
+	s := &Server{Machines: herdrfake.Manager(dir), Timelapse: recorder}
 	pane := func(status string) *herdr.Snapshot {
 		return &herdr.Snapshot{
 			Workspaces: []herdr.WorkspaceInfo{{WorkspaceID: "w1", Label: workspace}},
