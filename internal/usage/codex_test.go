@@ -3,6 +3,7 @@ package usage
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -24,6 +25,44 @@ func codexResponse(id, ts string, input, cached, output int64) string {
 	return `{"timestamp":"` + ts + `","type":"token_usage_record","payload":{"thread_id":"x","turn_id":"t1","response_id":"` + id + `","usage":{"input_tokens":` + itoa(input) + `,"cached_input_tokens":` + itoa(cached) + `,"cache_write_input_tokens":0,"output_tokens":` + itoa(output) + `,"reasoning_output_tokens":0,"total_tokens":0}}}` + "\n"
 }
 
+// rootedHost is a machine whose reader knows a folder its agent named for itself.
+type rootedHost struct {
+	shell.Host
+	roots transcript.Roots
+}
+
+func (h rootedHost) TranscriptRoots() transcript.Roots { return h.roots }
+
+// TestReadHostCountsASessionUnderItsOwnRoot: usage scans the folders the machine's reader learned, and a remote scan is
+// handed them as -root flags.
+func TestReadHostCountsASessionUnderItsOwnRoot(t *testing.T) {
+	home := t.TempDir()
+	own := filepath.Join(home, "profile")
+	dir := filepath.Join(own, "projects", "-work-app")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)
+	path := filepath.Join(dir, "4c9d6f0e-1111-4222-8333-944455556666.jsonl")
+	if err := os.WriteFile(path, []byte(rec("m1", "claude-fable-5-1", "2026-10-08T10:00:00Z", 10)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	roots := transcript.RootsOf(home)
+	roots[transcript.Claude] = append(roots[transcript.Claude], filepath.Join(own, "projects"))
+	host := rootedHost{Host: shell.Local{Name: "local"}, roots: roots}
+	rep, err := ReadHost(host, now.AddDate(0, 0, -7), time.UTC, "", false, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.Files != 1 || rep.Total.Turns != 1 {
+		t.Fatalf("files %d turns %d: %+v", rep.Files, rep.Total.Turns, rep)
+	}
+	remote := ScriptRoots(roots, home, now, "")
+	if !strings.Contains(remote, " -root 'claude="+filepath.Join(own, "projects")+"'") {
+		t.Fatalf("the remote scan is not handed the root: %s", remote)
+	}
+}
+
 func TestScanHomeCountsCodexBesideClaude(t *testing.T) {
 	home := t.TempDir()
 	write := func(rel, body string, mod time.Time) {
@@ -39,7 +78,7 @@ func TestScanHomeCountsCodexBesideClaude(t *testing.T) {
 	write(".codex/sessions/2026/09/01/rollout-2026-09-01T09-00-00-01a1-0000-7000-8000-000000000001.jsonl",
 		rollout("/p/a", "gpt-6.1-sol", codexResponse("resp_old", "2026-09-01T09:00:05.000Z", 100, 0, 10)), now.AddDate(0, 0, -40))
 
-	rep, err := ScanHome(home, now.AddDate(0, 0, -7), time.UTC)
+	rep, err := ScanRoots(transcript.RootsOf(home), now.AddDate(0, 0, -7), time.UTC)
 	if err != nil {
 		t.Fatal(err)
 	}

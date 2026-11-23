@@ -92,20 +92,37 @@ func EncodePath(cwd string) string {
 	return b.String()
 }
 
-func projectsDir() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".claude", "projects")
+// Sessions is the session files of one format for a working directory in the folders this machine's reader knows, its
+// agents' own included, newest first.
+func (r *Reader) Sessions(format Format, cwd string) ([]SessionInfo, error) {
+	return sessionsIn(r.Roots(), r.host.Home(), format, cwd)
 }
 
-// Sessions lists the session files of one format for a working directory, newest first.
-func Sessions(format Format, cwd string) ([]SessionInfo, error) {
+func sessionsIn(roots Roots, home string, format Format, cwd string) ([]SessionInfo, error) {
 	switch format {
 	case Codex:
-		return codexSessions(homeDir(), cwd), nil
+		return codexSessions(roots[Codex], cwd), nil
 	case Gemini:
-		return geminiSessions(homeDir(), cwd), nil
+		return geminiSessions(home, cwd), nil
 	}
-	dir := filepath.Join(projectsDir(), EncodePath(cwd))
+	var out []SessionInfo
+	for _, projects := range roots[Claude] {
+		sessions, err := claudeSessions(projects, cwd)
+		if err != nil {
+			continue
+		}
+		out = append(out, sessions...)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ModTime.After(out[j].ModTime) })
+	for i := range min(5, len(out)) {
+		out[i].Title = sessionTitle(out[i].Path, out[i].Size)
+	}
+	return out, nil
+}
+
+// claudeSessions is Sessions in one Claude Code projects folder.
+func claudeSessions(projects, cwd string) ([]SessionInfo, error) {
+	dir := filepath.Join(projects, EncodePath(cwd))
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -116,7 +133,7 @@ func Sessions(format Format, cwd string) ([]SessionInfo, error) {
 	var out []SessionInfo
 	for _, e := range entries {
 		name := e.Name()
-		if e.IsDir() || !strings.HasSuffix(name, ".jsonl") {
+		if !e.Type().IsRegular() || !strings.HasSuffix(name, ".jsonl") {
 			continue
 		}
 		fi, err := e.Info()
@@ -129,10 +146,6 @@ func Sessions(format Format, cwd string) ([]SessionInfo, error) {
 			ModTime: fi.ModTime(),
 			Size:    fi.Size(),
 		})
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].ModTime.After(out[j].ModTime) })
-	for i := range min(5, len(out)) {
-		out[i].Title = sessionTitle(out[i].Path, out[i].Size)
 	}
 	return out, nil
 }
@@ -173,7 +186,7 @@ func sessionTitle(path string, size int64) string {
 
 // scanTitle reads up to titleScanLines; final says whether more of the file could still change the answer.
 func scanTitle(path string) (title string, final bool) {
-	f, err := os.Open(path)
+	f, err := OpenSession(path)
 	if err != nil {
 		return "", false
 	}
@@ -205,9 +218,9 @@ func scanTitle(path string) (title string, final bool) {
 	return first, n >= titleScanLines
 }
 
-// FindSession locates a session file by id in one format, or in every format when none is named: Claude Code's
-// project dirs, Codex's date tree, Gemini's chats.
-func FindSession(format Format, cwd, id string) (string, error) {
+// findSessionIn locates a session file by id in one format, or in every format when none is named, in the folders of one
+// machine: a home's own and any an agent named for itself.
+func findSessionIn(roots Roots, format Format, cwd, id string) (string, error) {
 	formats := []Format{format}
 	if format == "" {
 		formats = []Format{Claude, Codex, Gemini}
@@ -217,11 +230,11 @@ func FindSession(format Format, cwd, id string) (string, error) {
 		var err error
 		switch f {
 		case Codex:
-			path, err = findCodexSession(homeDir(), id)
+			path, err = findCodexIn(roots[Codex], id)
 		case Gemini:
 			path, err = findGeminiSession(homeDir(), cwd, id)
 		default:
-			path, err = FindSessionByID(cwd, id)
+			path, err = findClaudeIn(roots[Claude], cwd, id)
 		}
 		if err == nil {
 			return path, nil
@@ -230,28 +243,30 @@ func FindSession(format Format, cwd, id string) (string, error) {
 	return "", os.ErrNotExist
 }
 
-// FindSessionByID locates <uuid>.jsonl: the project dir encoded from cwd first, then every project dir.
-func FindSessionByID(cwd, id string) (string, error) {
+// findClaudeIn is a Claude Code session id's file in the project folders of a machine, each tried in turn.
+func findClaudeIn(projects []string, cwd, id string) (string, error) {
 	if !text.SessionID(id) { // the id is the agent's own word: a path in it must name no file here
 		return "", os.ErrNotExist
 	}
-	if cwd != "" {
-		p := filepath.Join(projectsDir(), EncodePath(cwd), id+".jsonl")
-		if _, err := os.Stat(p); err == nil {
-			return p, nil
+	for _, projects := range projects {
+		if cwd != "" {
+			p := filepath.Join(projects, EncodePath(cwd), id+".jsonl")
+			if sessionFile(p) {
+				return p, nil
+			}
 		}
-	}
-	entries, err := os.ReadDir(projectsDir())
-	if err != nil {
-		return "", err
-	}
-	for _, e := range entries {
-		if !e.IsDir() {
+		entries, err := os.ReadDir(projects)
+		if err != nil {
 			continue
 		}
-		p := filepath.Join(projectsDir(), e.Name(), id+".jsonl")
-		if _, err := os.Stat(p); err == nil {
-			return p, nil
+		for _, e := range entries {
+			if !e.IsDir() {
+				continue
+			}
+			p := filepath.Join(projects, e.Name(), id+".jsonl")
+			if sessionFile(p) {
+				return p, nil
+			}
 		}
 	}
 	return "", os.ErrNotExist
@@ -743,7 +758,7 @@ func continuedIn(path string) string {
 
 // tailBytes is the last n bytes of a file, the whole of a shorter one.
 func tailBytes(path string, n int64) ([]byte, error) {
-	f, err := os.Open(path)
+	f, err := OpenSession(path)
 	if err != nil {
 		return nil, err
 	}
@@ -774,7 +789,7 @@ func forkOf(later, earlier string) bool {
 
 // firstInHead is the first match of re in a session file's first 64 KB.
 func firstInHead(path string, re *regexp.Regexp) string {
-	f, err := os.Open(path)
+	f, err := OpenSession(path)
 	if err != nil {
 		return ""
 	}
@@ -792,7 +807,7 @@ func firstInHead(path string, re *regexp.Regexp) string {
 // The parent of a continuation sits near the old file's end, so the tail is read first.
 func hasRecord(path, uuid string) bool {
 	needle := []byte(`"uuid":"` + uuid + `"`)
-	f, err := os.Open(path)
+	f, err := OpenSession(path)
 	if err != nil {
 		return false
 	}

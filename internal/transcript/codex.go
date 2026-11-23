@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/rpath"
+	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/text"
 )
 
@@ -163,37 +165,59 @@ func codexInput(arguments string) json.RawMessage {
 	return truncateJSON(b, 8*1024)
 }
 
+// codexRead is one rollout's bytes, at the path a history_base names too.
+type codexRead func(path string) ([]byte, error)
+
+// maxCodexHistoryDepth bounds a chain of reverts; a loop in history_base is cut at it.
+const maxCodexHistoryDepth = 16
+
+// parseCodexFile reads a rollout in process, following a revert's history_base.
 func parseCodexFile(path string) ([]Turn, error) {
-	f, err := os.Open(path)
+	return parseCodexHistory(path, ReadSession)
+}
+
+// parseCodexHistory reads a rollout and the part of its history a revert kept: the chain is replayed oldest first, then
+// the new file's own records. A missing or looping base leaves the records the new file holds, never a failed chat.
+func parseCodexHistory(path string, read codexRead) ([]Turn, error) {
+	data, err := codexReplay(path, 0, read, map[string]bool{}, true)
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
-	base, end := codexHistory(path)
-	if base == "" {
-		if fi, err := f.Stat(); err == nil && fi.Size() > tailWindow {
-			if _, err := f.Seek(fi.Size()-tailWindow, 0); err != nil {
-				return nil, err
-			}
+	if len(data) > tailWindow {
+		data = data[len(data)-tailWindow:]
+	}
+	return parseCodex(bytes.NewReader(data))
+}
+
+// codexReplay is one file's conversation with its history_base replayed first; end keeps records below that ordinal.
+func codexReplay(path string, end int, read codexRead, seen map[string]bool, required bool) ([]byte, error) {
+	if seen[path] || len(seen) >= maxCodexHistoryDepth {
+		return nil, nil
+	}
+	seen[path] = true
+	data, err := read(path)
+	if err != nil {
+		if required {
+			return nil, err
 		}
-		return parseCodex(f)
+		return nil, nil // the base is gone: the new file's own records still show
 	}
-	saved, err := codexSaved(base, end)
-	if err != nil {
-		return nil, err
+	base, baseEnd := codexHistory(data)
+	var out []byte
+	if base != "" {
+		earlier, err := codexReplay(base, baseEnd, read, seen, false)
+		if err == nil {
+			out = append(out, earlier...)
+		}
 	}
-	return parseCodex(io.MultiReader(bytes.NewReader(saved), f)) // what stayed, then what the revert added
+	out = append(out, codexPrefix(data, end)...)
+	return out, nil
 }
 
 // codexHistory is the file a rollout of a reverted history replays from, and how far into it: its session_meta names a
 // history_base to end_ordinal_exclusive. "" for a rollout that kept its whole history, as every one but a revert's.
-func codexHistory(path string) (string, int) {
-	f, err := os.Open(path)
-	if err != nil {
-		return "", 0
-	}
-	defer f.Close()
-	head, _ := bufio.NewReaderSize(f, 256*1024).ReadBytes('\n')
+func codexHistory(data []byte) (string, int) {
+	head, _, _ := bytes.Cut(data, []byte("\n"))
 	var rec codexRecord
 	var p codexPayload
 	if json.Unmarshal(bytes.TrimSpace(head), &rec) != nil || json.Unmarshal(rec.Payload, &p) != nil || p.HistoryBase == nil {
@@ -205,16 +229,14 @@ func codexHistory(path string) (string, int) {
 	return p.HistoryBase.Path, p.HistoryBase.EndOrdinalExclusive
 }
 
-// codexSaved is the part of a rollout a revert kept: its records up to, and not including, the ordinal given.
-func codexSaved(path string, end int) ([]byte, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
+// codexPrefix is the part of a rollout a revert kept: its records up to, and not including, the ordinal given.
+func codexPrefix(data []byte, end int) []byte {
+	if end <= 0 {
+		return data
 	}
-	defer f.Close()
 	var out bytes.Buffer
 	stopped := false
-	_ = Lines(f, 16*1024*1024, func(raw []byte) {
+	_ = Lines(bytes.NewReader(data), 16*1024*1024, func(raw []byte) {
 		if stopped || len(raw) == 0 {
 			return
 		}
@@ -226,7 +248,7 @@ func codexSaved(path string, end int) ([]byte, error) {
 		out.Write(raw)
 		out.WriteByte('\n')
 	})
-	return out.Bytes(), nil
+	return out.Bytes()
 }
 
 // parseCodex reads a rollout into turns: the person's prompts, the assistant's texts, its reasoning summaries and its
@@ -480,7 +502,7 @@ func CodexCwd(path string) string {
 	if ok {
 		return cwd
 	}
-	f, err := os.Open(path)
+	f, err := OpenSession(path)
 	if err != nil {
 		return ""
 	}
@@ -500,7 +522,7 @@ func CodexCwd(path string) string {
 	return cwd
 }
 
-// CodexFiles lists every rollout under root, newest first.
+// CodexFiles lists every rollout under root, newest first: a revert's file and the one it replays are both here.
 func CodexFiles(root string) []SessionInfo {
 	var out []SessionInfo
 	_ = filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
@@ -508,43 +530,52 @@ func CodexFiles(root string) []SessionInfo {
 			return nil
 		}
 		info, err := d.Info()
-		if err != nil {
+		if err != nil || !info.Mode().IsRegular() {
 			return nil
 		}
 		out = append(out, SessionInfo{ID: CodexSessionID(p), Path: p, ModTime: info.ModTime(), Size: info.Size(), Agent: "codex"})
 		return nil
 	})
 	sort.Slice(out, func(i, j int) bool { return out[i].ModTime.After(out[j].ModTime) })
-	seen := map[string]bool{}
-	once := out[:0]
-	for _, s := range out {
-		if s.ID == "" || seen[s.ID] {
-			continue // a revert's file is the same thread as the one it replays: the newest one speaks for it
-		}
-		seen[s.ID] = true
-		once = append(once, s)
-	}
-	return once
+	return out
 }
 
 const codexSessionsLookAt = 300 // the newest rollouts whose folder is read for a listing by folder
 
 // codexSessions lists the rollouts recorded in cwd, newest first, titled from Codex's own index.
-func codexSessions(home, cwd string) []SessionInfo {
-	var out []SessionInfo
-	for i, s := range CodexFiles(SessionRoots(home)[Codex]) {
-		if i >= codexSessionsLookAt {
-			break
-		}
-		if CodexCwd(s.Path) == cwd {
-			out = append(out, s)
+func codexSessions(roots []string, cwd string) []SessionInfo {
+	type rooted struct {
+		SessionInfo
+		root string
+	}
+	var all []rooted
+	for _, root := range roots {
+		for _, s := range CodexFiles(root) {
+			all = append(all, rooted{SessionInfo: s, root: root})
 		}
 	}
-	names := codexThreadNames(home)
+	sort.Slice(all, func(i, j int) bool { return all[i].ModTime.After(all[j].ModTime) })
+	if len(all) > codexSessionsLookAt {
+		all = all[:codexSessionsLookAt]
+	}
+	names := map[string]map[string]string{}
+	seen := map[string]bool{}
+	var out []SessionInfo
+	for _, s := range all {
+		if s.ID == "" || CodexCwd(s.Path) != cwd || seen[s.ID] {
+			continue // one card a thread, its newest file
+		}
+		seen[s.ID] = true
+		if names[s.root] == nil {
+			names[s.root] = codexThreadNames(filepath.Dir(s.root))
+		}
+		if name := names[s.root][s.ID]; name != "" {
+			s.Title = name
+		}
+		out = append(out, s.SessionInfo)
+	}
 	for i := range out {
-		if name := names[out[i].ID]; name != "" {
-			out[i].Title = name
-		} else if i < 5 {
+		if out[i].Title == "" && i < 5 {
 			out[i].Title = codexFirstPrompt(out[i].Path)
 		}
 	}
@@ -552,9 +583,9 @@ func codexSessions(home, cwd string) []SessionInfo {
 }
 
 // codexThreadNames is Codex's own session index: the thread id and the name it gave the thread.
-func codexThreadNames(home string) map[string]string {
+func codexThreadNames(codexHome string) map[string]string {
 	names := map[string]string{}
-	f, err := os.Open(filepath.Join(home, ".codex", "session_index.jsonl"))
+	f, err := OpenSession(filepath.Join(codexHome, "session_index.jsonl"))
 	if err != nil {
 		return names
 	}
@@ -572,7 +603,7 @@ func codexThreadNames(home string) map[string]string {
 }
 
 func codexFirstPrompt(path string) string {
-	f, err := os.Open(path)
+	f, err := OpenSession(path)
 	if err != nil {
 		return ""
 	}
@@ -598,15 +629,20 @@ func codexFirstPrompt(path string) string {
 	return title
 }
 
-// findCodexSession is the rollout of a thread id under home, wherever in the date tree it sits.
-func findCodexSession(home, id string) (string, error) {
+// findCodexIn is a thread's rollouts in the folders of a machine, each tried in turn: its own file and a revert's, the
+// newest one being the conversation now.
+func findCodexIn(roots []string, id string) (string, error) {
 	if !text.SessionID(id) {
 		return "", os.ErrNotExist
 	}
-	root := filepath.Join(SessionRoots(home)[Codex], "*", "*", "*")
-	hits, _ := filepath.Glob(filepath.Join(root, "rollout-*-"+id+".jsonl"))
-	reverts, _ := filepath.Glob(filepath.Join(root, "rollout-*-"+id+"_*.jsonl"))
-	hits = append(hits, reverts...) // a revert of the thread's history: its newest file is the conversation now
+	var hits []string
+	for _, root := range roots {
+		for _, session := range CodexFiles(root) {
+			if session.ID == id {
+				hits = append(hits, session.Path)
+			}
+		}
+	}
 	if len(hits) == 0 {
 		return "", os.ErrNotExist
 	}
@@ -624,10 +660,10 @@ func newer(a, b string) bool {
 	return a > b
 }
 
-// codexFindScript is findCodexSession as a shell line for a remote machine: prints the path, or nothing.
-func codexFindScript(quotedHome, id string) string {
-	// both names a thread's rollout goes by: its own, and a revert's, which carries the first's id and a rollout id of
-	// its own; the newest is the conversation now
-	return `ls -t ` + quotedHome + `/.codex/sessions/*/*/*/rollout-*-` + id + `.jsonl ` + quotedHome +
-		`/.codex/sessions/*/*/*/rollout-*-` + id + `_*.jsonl 2>/dev/null | head -1`
+// codexFindScript is findCodexSession in one rollout folder, as a shell line for a remote machine: both names a
+// thread's rollout goes by are searched, and the newest is the conversation now.
+func codexFindScript(root, id string) string {
+	root = rpath.For(root).Slash(root)
+	return `find ` + script.Quote(root) + ` -type f \( -name ` + script.Quote("rollout-*-"+id+".jsonl") +
+		` -o -name ` + script.Quote("rollout-*-"+id+"_*.jsonl") + ` \) -exec ls -t {} + 2>/dev/null | head -1`
 }

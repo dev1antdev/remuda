@@ -1,7 +1,7 @@
 // Package search finds what was said across every transcript on every machine: Claude Code's
-// and Codex's. There is no index: each machine scans its own ~/.claude/projects and ~/.codex/sessions
-// on demand, in-process here and through the remuda deployed on a remote (`remuda search`), else a
-// plain grep over Claude Code's files.
+// and Codex's. There is no index: each machine scans its own session folders — a home's defaults
+// and the folders its agents named for themselves — on demand, in-process here and through the
+// remuda deployed on a remote (`remuda search`), else a plain grep over Claude Code's files.
 package search
 
 import (
@@ -79,16 +79,17 @@ func Search(hosts []shell.Host, q, dir string, since time.Time) Result {
 }
 
 func one(host shell.Host, q, dir string, since time.Time) ([]Hit, error) {
+	roots := transcript.RootsFor(host)
 	var out string
 	if host.Local() {
 		var b strings.Builder
-		if err := ScanHome(host.Home(), q, dir, since, perMachine, &b); err != nil {
+		if err := ScanRoots(roots, q, dir, since, perMachine, &b); err != nil {
 			return nil, err
 		}
 		out = b.String()
 	} else {
 		var err error
-		if out, err = shell.Text(host, remoteScript(host.Home(), q, dir, since), timeout); err != nil {
+		if out, err = shell.Text(host, remoteScriptRoots(roots, host.Home(), q, dir, since), timeout); err != nil {
 			return nil, err
 		}
 	}
@@ -150,10 +151,11 @@ func codexHit(machine string, rec []byte, q, dir string, since time.Time) (Hit, 
 	return Hit{Machine: machine, Agent: "codex", Project: transcript.EncodePath(cwd), Dir: cwd, Session: id, UUID: m.UUID, Ts: m.Ts, Role: m.Role, Snippet: m.Snippet}, true
 }
 
-// remoteScript runs the scan on a remote machine: remuda's own scanner where `make deploy` put it (Claude Code's
-// files and Codex's), else grep over Claude Code's alone.
+// remoteScriptRoots runs the scan on a remote machine, with the session folders the machine's agents named for
+// themselves: remuda's own scanner where `make deploy` put it (Claude Code's files and Codex's), else grep over
+// Claude Code's alone.
 // The grep takes the four spellings as they sit in the JSON (grep -i folds ASCII only); BSD grep is seconds per hundred MB.
-func remoteScript(home, q, dir string, since time.Time) string {
+func remoteScriptRoots(roots transcript.Roots, home, q, dir string, since time.Time) string {
 	seen := map[string]bool{}
 	var pats []string
 	for _, v := range spellings(q) {
@@ -170,6 +172,7 @@ func remoteScript(home, q, dir string, since time.Time) string {
 	if !since.IsZero() {
 		args += " -since " + script.Quote(since.UTC().Format(time.RFC3339))
 	}
+	args += transcript.RootFlags(roots, home)
 	return "if " + guard + " && " + bin + " " + args + "; then exit 0; fi; " +
 		"cd " + script.Quote(home+"/.claude/projects") + " 2>/dev/null || exit 0; " +
 		"grep -raF --include='*.jsonl' " + strings.Join(pats, " ") + " . 2>/dev/null | " +

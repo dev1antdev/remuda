@@ -9,6 +9,7 @@ import (
 
 	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/shell"
+	"github.com/dev1antdev/remuda/internal/transcript"
 )
 
 const rolloutHead = `{"timestamp":"2026-10-08T09:00:00.000Z","type":"session_meta","payload":{"session_id":"01a1-0000-7000-8000-c0dec0dec0de","id":"01a1-0000-7000-8000-c0dec0dec0de","cwd":"/p/a","originator":"codex-tui"}}` + "\n"
@@ -34,7 +35,7 @@ func TestScanHomeReadsCodexRolloutsToo(t *testing.T) {
 	write(".codex/sessions/2026/10/08/rollout-2026-10-08T09-00-00-01a1-0000-7000-8000-c0dec0dec0de.jsonl", rollout, time.Date(2026, 10, 8, 9, 0, 0, 0, time.UTC))
 
 	var b strings.Builder
-	if err := ScanHome(home, "needle", "", time.Time{}, 10, &b); err != nil {
+	if err := ScanRoots(transcript.RootsOf(home), "needle", "", time.Time{}, 10, &b); err != nil {
 		t.Fatal(err)
 	}
 	lines := strings.Split(strings.TrimSpace(b.String()), "\n")
@@ -51,7 +52,7 @@ func TestScanHomeReadsCodexRolloutsToo(t *testing.T) {
 		t.Fatalf("claude line: %q", lines[2])
 	}
 	b.Reset()
-	_ = ScanHome(home, "needle", "/p/b", time.Time{}, 10, &b)
+	_ = ScanRoots(transcript.RootsOf(home), "needle", "/p/b", time.Time{}, 10, &b)
 	if b.Len() != 0 {
 		t.Fatalf("another folder: %q", b.String())
 	}

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/shell"
+	"github.com/dev1antdev/remuda/internal/transcript"
 )
 
 func recIn(id, model, ts, cwd string, out int64) string {
@@ -40,7 +41,7 @@ func TestEveryDayIsBrokenDownByFolderAndSession(t *testing.T) {
 		"-p-a/s1/subagents/agent-1.jsonl": recIn("m3", "claude-haiku-4-5", "2026-11-11T11:00:00Z", "/p/a", 30),
 		"-p-b/s2.jsonl":                   recIn("m4", "claude-opus-5-5", "2026-11-12T09:00:00Z", "/p/b", 40),
 	}, now)
-	rep, err := ScanHomeDays(home, time.Date(2026, 11, 1, 0, 0, 0, 0, kyiv), kyiv)
+	rep, err := ScanRootsDays(transcript.RootsOf(home), time.Date(2026, 11, 1, 0, 0, 0, 0, kyiv), kyiv)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +62,7 @@ func TestEveryDayIsBrokenDownByFolderAndSession(t *testing.T) {
 	if len(second) != 2 || second[0].Project != "-p-a" || second[0].Turns != 1 || second[1].Project != "-p-b" || second[1].Cost <= 0 {
 		t.Fatalf("the 12th: %+v", second)
 	}
-	plain, _ := ScanHome(home, time.Date(2026, 11, 1, 0, 0, 0, 0, kyiv), kyiv)
+	plain, _ := ScanRoots(transcript.RootsOf(home), time.Date(2026, 11, 1, 0, 0, 0, 0, kyiv), kyiv)
 	if plain.Daily != nil {
 		t.Fatal("the usage report carries no days unless asked")
 	}

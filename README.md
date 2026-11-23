@@ -20,10 +20,11 @@ A from-scratch, auditable replacement for
   reaches its remuda-core over one OpenSSH ControlMaster (your keys, your
   ~/.ssh/config, your tunnels) and shows its workspaces, terminals and chat
   beside the local ones. Nothing runs there but remuda-core.
-- **Read-only on your data.** The chat view reads Claude Code's own session
-  files under `~/.claude/projects/` (resolved through the agent's process);
-  remuda never writes them. Sending a message goes through remuda-core's
-  `terminal.send`, exactly like typing into the pane.
+- **Read-only on your data.** The chat view reads Claude Code's, Codex's and
+  Gemini CLI's own session files, under the folder each agent was given
+  (`CLAUDE_CONFIG_DIR` and `CODEX_HOME` included, resolved through the agent's
+  process while it runs and for ten minutes after); remuda never writes them.
+  Sending a message goes through remuda-core's `terminal.send`, exactly like typing into the pane.
 - **No telemetry, no third-party services.** The server talks to your
   browser, to remuda-core, and to the SSH hosts you add. That's the complete list.
 
@@ -31,7 +32,7 @@ A from-scratch, auditable replacement for
 
 ```
 browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ remuda-core: its RPC and one attach per viewer
-                                        │          └─ reads ~/.claude/projects/…
+                                        │          └─ reads the agents' own session folders
                                         │
                                         └─ per remote machine: one ssh ControlMaster
                                              ├─ `remuda-core connect` there: RPC and attaches
@@ -170,6 +171,9 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ remuda-core: its 
   all read into the same turns, so a Codex or Gemini pane has its chat,
   recap, meter and search like a Claude Code one (Gemini's
   reader is written from the CLI's own types and has not been seen live).
+  When Codex reverts a thread's history, its new rollout replays the part that
+  stayed from the old file: the chat shows that part and what came after, never
+  the reverted turns, and the session list still names the thread once.
 - **One socket for the news** — the page keeps one WebSocket to its
   remuda, which says when the roster moved or a transcript grew, so the
   sidebar and the chat redraw within about a second instead of
@@ -1978,7 +1982,8 @@ dock tells you before you switch.
 machine, Claude Code's and Codex's — what you or an agent said, never tool output — filtered by
 machine, folder and period. A hit jumps to the turn in the running pane, or
 opens the old transcript read-only. No index, no database: each machine
-scans its own `~/.claude/projects` on demand (remuda's scanner where the
+scans its own session folders on demand — `~/.claude/projects` and `~/.codex/sessions` plus the folders its
+agents named for themselves (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`) while they run (remuda's scanner where the
 binary is deployed, grep otherwise). Above the conversations, a **Screens**
 part lists where the words stood on the agents' recorded screens (see
 Timelapse). Every turn of a pane's conversation

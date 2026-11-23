@@ -1,12 +1,15 @@
 package transcript
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/dev1antdev/remuda/internal/shell"
 )
 
 // codexSample is a rollout as Codex 0.164 writes one, anonymized: the harness envelopes, a prompt, a commentary
@@ -173,39 +176,40 @@ func TestCodexFilesAreFoundByThreadId(t *testing.T) {
 	if FormatOf(path) != Codex || FormatOfAgent("codex") != Codex || FormatOfAgent("claude") != Claude || FormatOfAgent("kimi") != "" {
 		t.Fatal("formats")
 	}
+	roots := RootsOf(home)
 	for _, format := range []Format{Codex, ""} {
-		found, err := FindSession(format, "/home/u/proj", id)
+		found, err := findSessionIn(roots, format, "/home/u/proj", id)
 		if err != nil || found != path {
-			t.Fatalf("FindSession(%q): %q %v", format, found, err)
+			t.Fatalf("findSessionIn(%q): %q %v", format, found, err)
 		}
 	}
-	if _, err := FindSession(Claude, "/home/u/proj", id); err == nil {
+	if _, err := findSessionIn(roots, Claude, "/home/u/proj", id); err == nil {
 		t.Fatal("found a rollout among Claude Code's files")
 	}
-	if _, err := FindSession(Codex, "", "../etc"); err == nil {
+	if _, err := findSessionIn(roots, Codex, "", "../etc"); err == nil {
 		t.Fatal("a path passed as an id")
 	}
 	if CodexCwd(path) != "/home/u/proj" {
 		t.Fatalf("cwd: %q", CodexCwd(path))
 	}
-	sessions, err := Sessions(Codex, "/home/u/proj")
+	sessions, err := sessionsIn(roots, home, Codex, "/home/u/proj")
 	if err != nil || len(sessions) != 1 || sessions[0].ID != id || sessions[0].Title != "Make hello" || sessions[0].Agent != "codex" {
 		t.Fatalf("sessions of the folder: %+v %v", sessions, err)
 	}
-	if other, _ := Sessions(Codex, "/elsewhere"); len(other) != 0 {
+	if other, _ := sessionsIn(roots, home, Codex, "/elsewhere"); len(other) != 0 {
 		t.Fatalf("another folder's listing: %+v", other)
 	}
 	turns, err := Parse(path)
 	if err != nil || len(turns) != 4 {
 		t.Fatalf("Parse by path: %d %v", len(turns), err)
 	}
-	if !UnderRoot(home, path) || UnderRoot(home, filepath.Join(home, "elsewhere.jsonl")) {
+	if !UnderRoots(RootsOf(home), home, path) || UnderRoots(RootsOf(home), home, filepath.Join(home, "elsewhere.jsonl")) {
 		t.Fatal("UnderRoot")
 	}
-	if got := findScript(Codex, "/h", "/p", id); !strings.Contains(got, "'/h'/.codex/sessions/*/*/*/rollout-*-"+id+".jsonl") {
+	if got := findScript(RootsOf("/h"), Codex, "/h", "/p", id); !strings.Contains(got, "find '/h/.codex/sessions' -type f \\( -name 'rollout-*-"+id+".jsonl' -o -name 'rollout-*-"+id+"_*.jsonl' \\)") {
 		t.Fatalf("remote find: %s", got)
 	}
-	if got := findScript("", "/h", "/p", id); strings.Count(got, "exit 0") != 3 || !strings.Contains(got, ".claude/projects") || !strings.Contains(got, ".gemini/tmp") {
+	if got := findScript(RootsOf("/h"), "", "/h", "/p", id); strings.Count(got, "exit 0") != 4 || !strings.Contains(got, "/.claude/projects") || !strings.Contains(got, ".gemini/tmp") {
 		t.Fatalf("remote find across formats: %s", got)
 	}
 	_ = time.Now()
@@ -242,14 +246,165 @@ func codexRevert(t *testing.T, home, id string) (base, revert string) {
 // TestACodexRevertReadsTheThreadWhole: after a revert of its history Codex writes a new file that keeps the thread's id
 // and replays the part that stayed; the chat shows that part and what came after, the reverted turns are gone, and the
 // listing names the thread once.
+// TestARevertChainKeepsEverySavedPart: a second revert replays the first one's saved part before its own records.
+func TestARevertChainKeepsEverySavedPart(t *testing.T) {
+	home := t.TempDir()
+	id := "01a187d8-720d-7860-9918-8fc3e6cd3a1f"
+	_, first := codexRevert(t, home, id)
+	second := filepath.Join(filepath.Dir(first), "rollout-2026-11-20T04-00-00-"+id+"_1f0e0d0c-1111-4222-8333-944455556666.jsonl")
+	head := `{"timestamp":"2026-11-20T04:00:00.000Z","type":"session_meta","payload":{"session_id":"` + id + `","id":"` + id + `","cwd":"/home/u/proj","originator":"codex-tui","history_base":{"path":"` + first + `","end_ordinal_exclusive":5}}}`
+	line := `{"timestamp":"2026-11-20T04:01:00.000Z","ordinal":5,"type":"response_item","payload":{"type":"message","id":"msg_second","role":"user","content":[{"type":"input_text","text":"after second revert"}]}}`
+	if err := os.WriteFile(second, []byte(head+"\n"+line+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	turns, err := parseCodexFile(second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var texts []string
+	for _, turn := range turns {
+		for _, part := range turn.Parts {
+			if part.Type == "text" {
+				texts = append(texts, part.Text)
+			}
+		}
+	}
+	if got := strings.Join(texts, " | "); got != "first prompt | first answer | after revert | after second revert" {
+		t.Fatalf("a chain of reverts: %s", got)
+	}
+}
+
+// TestAMissingHistoryBaseStillShowsTheNewFile: a replayed file whose base was removed gives its own records, not an
+// error that would leave the chat empty.
+func TestAMissingHistoryBaseStillShowsTheNewFile(t *testing.T) {
+	home := t.TempDir()
+	id := "01a187d8-720d-7860-9918-8fc3e6cd3a1f"
+	base, revert := codexRevert(t, home, id)
+	if err := os.Remove(base); err != nil {
+		t.Fatal(err)
+	}
+	turns, err := parseCodexFile(revert)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := ""
+	for _, turn := range turns {
+		for _, part := range turn.Parts {
+			if part.Type == "text" {
+				seen += part.Text
+			}
+		}
+	}
+	if seen != "after revert" {
+		t.Fatalf("a missing base shows %q, want the new file's prompt", seen)
+	}
+}
+
+// TestARevertIsResolvedAgainByTheSameReader: a cold resolution kept the base before the revert file appeared; the next
+// look finds the newer file, not the cached base.
+func TestARevertIsResolvedAgainByTheSameReader(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	id := "01a187d8-720d-7860-9918-8fc3e6cd3a1f"
+	base, revert := codexRevert(t, home, id)
+	body, err := os.ReadFile(revert)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(revert); err != nil {
+		t.Fatal(err)
+	}
+	reader := NewReader(shell.Local{Name: "local"})
+	if got, err := reader.ResolveSession("codex", "/home/u/proj", "id", id); err != nil || got != base {
+		t.Fatalf("before the revert: %q, %v; want %s", got, err, base)
+	}
+	if err := os.WriteFile(revert, body, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	reader.mu.Lock()
+	for key := range reader.sessionAt {
+		if key.format == Codex {
+			reader.sessionAt[key] = time.Now().Add(-codexResolveFresh)
+		}
+	}
+	reader.mu.Unlock()
+	if got, err := reader.ResolveSession("codex", "/home/u/proj", "id", id); err != nil || got != revert {
+		t.Fatalf("after the revert: %q, %v; want %s", got, err, revert)
+	}
+}
+
+// TestARevertOnSSHFollowsItsHistory: Reader.Turns over ssh reads both the new file and the base it names.
+func TestARevertOnSSHFollowsItsHistory(t *testing.T) {
+	home := t.TempDir()
+	id := "01a187d8-720d-7860-9918-8fc3e6cd3a1f"
+	base, revert := codexRevert(t, home, id)
+	host := &shell.Fake{Name: "gog", Dir: home, Remote: true, Answer: func(script string) (string, error) {
+		for _, path := range []string{revert, base} {
+			if strings.Contains(script, path) {
+				data, err := os.ReadFile(path)
+				return string(data), err
+			}
+		}
+		return "", nil
+	}}
+	turns, err := NewReader(host).Turns(revert, Version{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var texts []string
+	for _, turn := range turns {
+		for _, part := range turn.Parts {
+			if part.Type == "text" {
+				texts = append(texts, part.Text)
+			}
+		}
+	}
+	if got := strings.Join(texts, " | "); got != "first prompt | first answer | after revert" {
+		t.Fatalf("ssh revert: %s", got)
+	}
+}
+
+// TestAHistoryBaseOutsideTheRootsIsNotRead: a rollout cannot point history_base at any file on the machine.
+func TestAHistoryBaseOutsideTheRootsIsNotRead(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	id := "01a187d8-720d-7860-9918-8fc3e6cd3a1f"
+	base, revert := codexRevert(t, home, id)
+	outsideDir := t.TempDir()
+	outside := filepath.Join(outsideDir, "rollout-2026-11-20T05-00-00-"+id+".jsonl")
+	line := `{"timestamp":"2026-11-20T05:01:00.000Z","ordinal":1,"type":"response_item","payload":{"type":"message","id":"msg_outside","role":"user","content":[{"type":"input_text","text":"outside the roots"}]}}`
+	if err := os.WriteFile(outside, []byte(line+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(revert)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body = bytes.Replace(body, []byte(base), []byte(outside), 1)
+	if err := os.WriteFile(revert, body, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	turns, err := NewReader(shell.Local{Name: "local"}).Turns(revert, Version{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, turn := range turns {
+		for _, part := range turn.Parts {
+			if strings.Contains(part.Text, "outside the roots") {
+				t.Fatalf("a history base outside the roots was read: %+v", turns)
+			}
+		}
+	}
+}
+
 func TestACodexRevertReadsTheThreadWhole(t *testing.T) {
 	home := t.TempDir()
 	id := "01a187d8-720d-7860-9918-8fc3e6cd3a1f"
-	_, revert := codexRevert(t, home, id)
+	base, revert := codexRevert(t, home, id)
 	if got := CodexSessionID(revert); got != id {
 		t.Fatalf("the thread id of a revert's file: %q", got)
 	}
-	if got, err := findCodexSession(home, id); err != nil || got != revert {
+	if got, err := findCodexIn(RootsOf(home)[Codex], id); err != nil || got != revert {
 		t.Fatalf("resolved %q, %v; want the revert's file %s", got, err, revert)
 	}
 	turns, err := parseCodexFile(revert)
@@ -268,7 +423,11 @@ func TestACodexRevertReadsTheThreadWhole(t *testing.T) {
 		t.Fatalf("the conversation after a revert: %s", got)
 	}
 	files := CodexFiles(filepath.Join(home, ".codex", "sessions"))
-	if len(files) != 1 || files[0].ID != id || files[0].Path != revert {
-		t.Fatalf("the thread is listed %d times: %+v", len(files), files)
+	if len(files) != 2 || files[0].Path != revert || files[1].Path != base {
+		t.Fatalf("the physical rollouts are %d: %+v", len(files), files)
+	}
+	sessions, err := sessionsIn(RootsOf(home), home, Codex, "/home/u/proj")
+	if err != nil || len(sessions) != 1 || sessions[0].Path != revert {
+		t.Fatalf("the thread is listed %d times: %+v, %v", len(sessions), sessions, err)
 	}
 }

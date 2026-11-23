@@ -24,12 +24,16 @@ type Reader struct {
 	host shell.Host
 
 	mu           sync.Mutex
-	tails        map[string]*cachedTail  // remote files by path
-	sessionPath  map[string]string       // session id -> resolved path
-	sessionMiss  map[string]time.Time    // session id -> when it was last not found
+	tails        map[string]*cachedTail // remote files by path
+	sessionPath  map[sessionKey]string  // session id and root generation -> resolved path
+	sessionAt    map[sessionKey]time.Time
+	sessionMiss  map[sessionKey]time.Time
 	continuation map[string]continuation // session file -> its continuation, as last looked
 	predecessor  map[string]string       // session file -> the file it continues ("" when none)
-	subTails     map[string]*cachedTail  // remote subagent files by path
+	learnedRoots map[Format]map[string]time.Time
+	active       map[string]activeSession
+	rootVersion  uint64
+	subTails     map[string]*cachedTail // remote subagent files by path
 	subagents    map[string]*subagentEntry
 	subagentUses uint64                // the use count behind subagentEntry.used
 	subDirs      map[string]dirListing // a remote session's subagent folder, as listed a moment ago
@@ -47,6 +51,17 @@ type continuation struct {
 	at   time.Time
 }
 
+type sessionKey struct {
+	format      Format
+	cwd, id     string
+	rootVersion uint64
+}
+
+type activeSession struct {
+	path  string
+	until time.Time
+}
+
 const (
 	remoteTailCap = 8 * 1024 * 1024 // the most of one remote file kept
 	// what each cache of a machine's remote files holds at most: a wall of busy agents reads every file in turn
@@ -54,19 +69,173 @@ const (
 	remoteSubTailsBudget = 64 << 20
 	// a tail asked for this recently is not pushed out for a file not cached yet: the next read would fetch it whole again
 	recentlyRead = time.Minute
+	// how long a folder an agent named for itself is trusted after a process last named it
+	learnedRootTTL = 10 * time.Minute
+	// how long a Codex id's resolved file stands before it is looked up again: a revert writes a newer file at once
+	codexResolveFresh = 2 * time.Second
 )
 
 // NewReader reads the transcripts on host.
 func NewReader(host shell.Host) *Reader {
-	return &Reader{host: host, tails: map[string]*cachedTail{}, sessionPath: map[string]string{}, sessionMiss: map[string]time.Time{},
+	return &Reader{host: host, tails: map[string]*cachedTail{}, sessionPath: map[sessionKey]string{}, sessionAt: map[sessionKey]time.Time{}, sessionMiss: map[sessionKey]time.Time{},
 		continuation: map[string]continuation{}, predecessor: map[string]string{},
-		subTails: map[string]*cachedTail{}, subagents: map[string]*subagentEntry{}, subDirs: map[string]dirListing{}, metas: map[string]cachedMeta{}}
+		learnedRoots: map[Format]map[string]time.Time{},
+		active:       map[string]activeSession{},
+		subTails:     map[string]*cachedTail{}, subagents: map[string]*subagentEntry{}, subDirs: map[string]dirListing{}, metas: map[string]cachedMeta{}}
+}
+
+// addRoot keeps a folder an agent named for itself after an accepted process read, for a while: its session is found
+// under it until no accepted read renews it.
+func (r *Reader) addRoot(f Format, dir string) {
+	if f != Claude && f != Codex {
+		return
+	}
+	style := rpath.For(r.host.Home())
+	dir = style.Clean(dir)
+	if dir == "" || !style.IsAbs(dir) {
+		return
+	}
+	for _, fallback := range RootsOf(r.host.Home())[f] {
+		if style.Equal(fallback, dir) {
+			return
+		}
+	}
+	now := time.Now()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.learnedRoots[f] == nil {
+		r.learnedRoots[f] = map[string]time.Time{}
+	}
+	until, known := r.learnedRoots[f][dir]
+	r.learnedRoots[f][dir] = now.Add(learnedRootTTL)
+	if !known || !until.After(now) {
+		r.bumpRootsLocked()
+	}
+}
+
+// bumpRootsLocked starts another root generation and drops what was resolved against the one before. The caller holds r.mu.
+func (r *Reader) bumpRootsLocked() {
+	r.rootVersion++
+	for key := range r.sessionPath {
+		if key.rootVersion != r.rootVersion {
+			delete(r.sessionPath, key)
+			delete(r.sessionAt, key)
+		}
+	}
+	for key := range r.sessionMiss {
+		if key.rootVersion != r.rootVersion {
+			delete(r.sessionMiss, key)
+		}
+	}
+}
+
+// rememberSession keeps the file an accepted process read named, so a copy of the same id under another root cannot be
+// opened before the agent's live one.
+func (r *Reader) rememberSession(id, path string) {
+	if id == "" || path == "" {
+		return
+	}
+	now := time.Now()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for known, session := range r.active {
+		if !session.until.After(now) {
+			delete(r.active, known)
+		}
+	}
+	r.active[id] = activeSession{path: path, until: now.Add(learnedRootTTL)}
+}
+
+// activePath is the live file an accepted process read named, while that reading is fresh.
+func (r *Reader) activePath(id string) string {
+	now := time.Now()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	session, ok := r.active[id]
+	if !ok || !session.until.After(now) {
+		delete(r.active, id)
+		return ""
+	}
+	return session.path
+}
+
+// regularSession says a session path is a regular file on the machine.
+func (r *Reader) regularSession(path string) bool {
+	if r.host.Local() {
+		return sessionFile(path)
+	}
+	_, err := shell.Text(r.host, "if "+remoteSessionFile(path)+"; then exit 0; else exit 1; fi", 10*time.Second)
+	return err == nil
+}
+
+// Roots is this machine's session folders: its home's own and the ones accepted processes named for themselves while
+// they are fresh. It is a copy: a scanner may keep it.
+func (r *Reader) Roots() Roots {
+	roots, _ := r.rootsSnapshot()
+	return roots
+}
+
+// rootsSnapshot is Roots with the generation it was read at, so a resolved path is never cached against another set.
+func (r *Reader) rootsSnapshot() (Roots, uint64) {
+	roots, style := RootsOf(r.host.Home()), rpath.For(r.host.Home())
+	now := time.Now()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	expired := false
+	for f, learned := range r.learnedRoots {
+		for dir, until := range learned {
+			if !until.After(now) {
+				delete(learned, dir)
+				expired = true
+				continue
+			}
+			known := false
+			for _, fallback := range roots[f] {
+				if style.Equal(fallback, dir) {
+					known = true
+					break
+				}
+			}
+			if !known {
+				roots[f] = append(roots[f], dir)
+			}
+		}
+	}
+	if expired {
+		r.bumpRootsLocked()
+	}
+	return roots, r.rootVersion
+}
+
+// open opens a session file in the folder it belongs to: locally inside that root's own confinement, remotely as
+// OpenSession checks it.
+func (r *Reader) open(path string) (*os.File, error) {
+	if r.host.Local() {
+		style := rpath.For(r.host.Home())
+		for _, dirs := range r.Roots() {
+			for _, root := range dirs {
+				if rel, ok := style.Rel(root, path); ok && rel != "." {
+					return OpenInRoot(root, path)
+				}
+			}
+		}
+	}
+	return OpenSession(path)
 }
 
 // Version stats the session file; the version doubles as the ETag.
 func (r *Reader) Version(path string) (Version, error) {
 	if r.host.Local() {
-		return Stat(path)
+		f, err := r.open(path)
+		if err != nil {
+			return Version{}, err
+		}
+		defer f.Close()
+		info, err := f.Stat()
+		if err != nil {
+			return Version{}, err
+		}
+		return Version{Size: info.Size(), MTime: info.ModTime().UnixNano()}, nil
 	}
 	out, err := shell.Text(r.host, script.Stat(script.Quote(path), "%s %Y", "%z %m"), 10*time.Second)
 	if err != nil {
@@ -138,7 +307,7 @@ func (r *Reader) dirVersions(dir string, suffixes ...string) (map[string]Version
 // ReadFrom returns a file's bytes from offset to its end; remotely a tail over ssh.
 func (r *Reader) ReadFrom(path string, offset int64) ([]byte, error) {
 	if r.host.Local() {
-		f, err := os.Open(path)
+		f, err := r.open(path)
 		if err != nil {
 			return nil, err
 		}
@@ -148,13 +317,53 @@ func (r *Reader) ReadFrom(path string, offset int64) ([]byte, error) {
 		}
 		return io.ReadAll(io.LimitReader(f, 256<<20))
 	}
-	return r.host.Run(fmt.Sprintf("tail -c +%d %s", offset+1, script.Quote(path)), 120*time.Second)
+	return r.host.Run(fmt.Sprintf("if %s; then tail -c +%d %s; else exit 1; fi", remoteSessionFile(path), offset+1, script.Quote(path)), 120*time.Second)
+}
+
+// remoteSessionFile is the shell test a remote read makes first: a regular file, never a link or a named pipe.
+func remoteSessionFile(path string) string {
+	q := script.Quote(path)
+	return "[ -f " + q + " ] && [ ! -L " + q + " ]"
+}
+
+// Turns parses the session file at the given version, remotely from a cached tail grown by delta.
+// readSession is a session file's whole content, local or remote, only from under the machine's session roots.
+func (r *Reader) readSession(path string) ([]byte, error) {
+	if !underRoots(r.Roots(), rpath.For(r.host.Home()), path) {
+		return nil, fmt.Errorf("%s is outside the machine's session roots", path)
+	}
+	if r.host.Local() {
+		f, err := r.open(path)
+		if err != nil {
+			return nil, err
+		}
+		defer f.Close()
+		return io.ReadAll(io.LimitReader(f, 256<<20))
+	}
+	return r.ReadFrom(path, 0)
 }
 
 // Turns parses the session file at the given version, remotely from a cached tail grown by delta.
 func (r *Reader) Turns(path string, v Version) ([]Turn, error) {
+	if FormatOf(path) == Codex {
+		return parseCodexHistory(path, r.readSession) // a revert's history_base may lie in another root or on ssh
+	}
 	if r.host.Local() {
-		return Parse(path)
+		f, err := r.open(path)
+		if err != nil {
+			return nil, err
+		}
+		defer f.Close()
+		switch FormatOf(path) {
+		case Gemini:
+			data, err := io.ReadAll(io.LimitReader(f, tailWindow))
+			if err != nil {
+				return nil, err
+			}
+			return parseGemini(data)
+		default:
+			return parseRecords(f, false)
+		}
 	}
 	data, err := r.remoteTail(path, v)
 	if err != nil {
@@ -184,7 +393,8 @@ func (r *Reader) remoteTailIn(tails map[string]*cachedTail, path string, v Versi
 	var data []byte
 	if cached != nil && v.Size > cached.version.Size {
 		// grew: fetch the delta only (tail -c +N is 1-indexed)
-		delta, err := r.host.Run(fmt.Sprintf("tail -c +%d %s | head -c %d", cached.version.Size+1, quoted, v.Size-cached.version.Size), 30*time.Second)
+		delta, err := r.host.Run(fmt.Sprintf("if %s; then tail -c +%d %s | head -c %d; else exit 1; fi",
+			remoteSessionFile(path), cached.version.Size+1, quoted, v.Size-cached.version.Size), 30*time.Second)
 		if err == nil {
 			data = append(cached.data[:len(cached.data):len(cached.data)], delta...) // the cached slice is shared: copy
 		}
@@ -192,7 +402,8 @@ func (r *Reader) remoteTailIn(tails map[string]*cachedTail, path string, v Versi
 	if data == nil {
 		fetch := min(v.Size, remoteTailCap)
 		var err error
-		if data, err = r.host.Run(fmt.Sprintf("head -c %d %s | tail -c %d", v.Size, quoted, fetch), 60*time.Second); err != nil {
+		if data, err = r.host.Run(fmt.Sprintf("if %s; then head -c %d %s | tail -c %d; else exit 1; fi",
+			remoteSessionFile(path), v.Size, quoted, fetch), 60*time.Second); err != nil {
 			return nil, err
 		}
 	}
@@ -240,29 +451,46 @@ func (r *Reader) ResolveSession(agent, cwd, kind, value string) (string, error) 
 	// the agent's own hooks chose these: a path only under one of the session roots, an id only what looks like one
 	if kind == "path" {
 		clean := rpath.For(r.host.Home()).Clean(value)
-		if !(strings.HasSuffix(clean, ".jsonl") || strings.HasSuffix(clean, ".json")) || !UnderRoot(r.host.Home(), clean) {
-			return "", fmt.Errorf("session path %q is not a session file under ~/.claude/projects, ~/.codex/sessions or ~/.gemini/tmp", value)
+		if !(strings.HasSuffix(clean, ".jsonl") || strings.HasSuffix(clean, ".json")) || !underRoots(r.Roots(), rpath.For(r.host.Home()), clean) || !r.regularSession(clean) {
+			return "", fmt.Errorf("session path %q is not a regular session file under one of the machine's session roots", value)
 		}
 		return clean, nil
 	}
 	if !text.SessionID(value) {
 		return "", fmt.Errorf("session id %q does not look like one", value)
 	}
+	if path := r.activePath(value); path != "" {
+		style := rpath.For(r.host.Home())
+		clean := style.Clean(path)
+		if underRoots(r.Roots(), style, clean) && (!r.host.Local() || sessionFile(clean)) {
+			return clean, nil
+		}
+	}
 	format := FormatOfAgent(agent)
-	key := string(format) + "|" + cwd + "|" + value // one id may have a copy in each project: the folder's own comes first
+	roots, rootVersion := r.rootsSnapshot()
 	r.mu.Lock()
+	key := sessionKey{format: format, cwd: cwd, id: value, rootVersion: rootVersion}
 	cached, ok := r.sessionPath[key]
+	cachedAt := r.sessionAt[key]
 	missedAt, missed := r.sessionMiss[key]
 	r.mu.Unlock()
 	if ok {
-		if !r.host.Local() {
+		recheck := format == Codex || format == "" && FormatOf(cached) == Codex
+		fresh := !recheck || time.Since(cachedAt) < codexResolveFresh
+		if fresh && !r.host.Local() {
 			return cached, nil
 		}
-		if _, err := os.Stat(cached); err == nil {
-			return cached, nil
+		if fresh {
+			if _, err := os.Stat(cached); err == nil {
+				return cached, nil
+			}
 		}
 	}
-	if missed && time.Since(missedAt) < 30*time.Second {
+	missedFor := 30 * time.Second
+	if format == Codex {
+		missedFor = codexResolveFresh
+	}
+	if missed && time.Since(missedAt) < missedFor {
 		return "", os.ErrNotExist
 	}
 
@@ -277,48 +505,55 @@ func (r *Reader) ResolveSession(agent, cwd, kind, value string) (string, error) 
 	}
 	if r.host.Local() {
 		var err error
-		if path, err = FindSession(format, cwd, value); err != nil {
+		if path, err = findSessionIn(roots, format, cwd, value); err != nil {
 			return miss(err)
 		}
 	} else {
-		out, err := shell.Text(r.host, findScript(format, r.host.Home(), cwd, value), 15*time.Second)
+		out, err := shell.Text(r.host, findScript(roots, format, r.host.Home(), cwd, value), 15*time.Second)
 		if err != nil {
 			return miss(err)
 		}
 		if path = strings.TrimSpace(out); path == "" {
 			return miss(os.ErrNotExist)
 		}
+		if strings.ContainsAny(path, "\r\n") {
+			return miss(errors.New("the machine named more than one session file"))
+		}
 	}
 	r.mu.Lock()
 	r.sessionPath[key] = path
+	r.sessionAt[key] = time.Now()
 	delete(r.sessionMiss, key)
 	r.mu.Unlock()
 	return path, nil
 }
 
-// findScript is FindSession as a shell line for a remote machine: the formats tried in turn, the first path printed.
-func findScript(format Format, home, cwd, id string) string {
+// findScript is findSessionIn as a shell line for a remote machine: the formats tried in turn, the folders of each in
+// turn, the first path printed.
+func findScript(roots Roots, format Format, home, cwd, id string) string {
 	formats := []Format{format}
 	if format == "" {
 		formats = []Format{Claude, Codex, Gemini}
 	}
-	quotedHome := script.Quote(home)
+	style := rpath.For(home)
 	var steps []string
 	for _, f := range formats {
 		switch f {
 		case Codex:
-			steps = append(steps, codexFindScript(quotedHome, id))
+			for _, root := range roots[Codex] {
+				steps = append(steps, codexFindScript(root, id))
+			}
 		case Gemini:
-			steps = append(steps, geminiFindScript(quotedHome, id))
+			steps = append(steps, geminiFindScript(home, id))
 		default:
-			projects := home + "/.claude/projects"
-			primary := projects + "/" + EncodePath(cwd) + "/" + id + ".jsonl"
-			steps = append(steps, `if [ -f `+script.Quote(primary)+` ]; then printf %s `+script.Quote(primary)+`; else ls `+
-				script.Quote(projects)+`/*/`+script.Quote(id+".jsonl")+` 2>/dev/null | head -1; fi`)
+			for _, projects := range roots[Claude] {
+				project := style.Join(projects, EncodePath(cwd))
+				quotedProject, quotedProjects := script.Quote(style.Slash(project)), script.Quote(style.Slash(projects))
+				steps = append(steps, `if [ -d `+quotedProject+` ] && [ ! -L `+quotedProject+` ]; then find `+quotedProject+
+					` -maxdepth 1 -type f -name `+script.Quote(id+".jsonl")+` 2>/dev/null | head -1; else find `+quotedProjects+
+					` -maxdepth 2 -type f -name `+script.Quote(id+".jsonl")+` 2>/dev/null | head -1; fi`)
+			}
 		}
-	}
-	if len(steps) == 1 {
-		return steps[0]
 	}
 	var b strings.Builder
 	for i, step := range steps {
@@ -327,6 +562,7 @@ func findScript(format Format, home, cwd, id string) string {
 			b.WriteString("; ")
 		}
 	}
+	b.WriteString("; exit 0")
 	return b.String()
 }
 

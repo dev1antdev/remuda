@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"github.com/dev1antdev/remuda/internal/rpath"
+	"github.com/dev1antdev/remuda/internal/script"
+	"github.com/dev1antdev/remuda/internal/shell"
 )
 
 // Format is which agent wrote a session file, told by where the file lives: Claude Code's under
@@ -21,7 +23,13 @@ const (
 
 // FormatOf is the format of a session file by its path.
 func FormatOf(path string) Format {
+	name := path
+	if i := strings.LastIndexAny(name, `/\`); i >= 0 {
+		name = name[i+1:]
+	}
 	switch {
+	case strings.HasPrefix(name, "rollout-"):
+		return Codex
 	case strings.Contains(path, "/.codex/"):
 		return Codex
 	case strings.Contains(path, "/.gemini/"):
@@ -63,12 +71,63 @@ func homeDir() string {
 	return home
 }
 
-// UnderRoot says whether a session path the agent's own hooks reported sits under one of the roots of this home.
-func UnderRoot(home, path string) bool {
-	style := rpath.For(home)
-	for _, root := range SessionRoots(home) {
-		if rel, ok := style.Rel(root, path); ok && rel != "." {
-			return true
+// Roots are the folders one machine keeps session files in, per format: its home's own, and any an agent named for
+// itself — Claude Code's CLAUDE_CONFIG_DIR, Codex's CODEX_HOME — learned from the process that writes there.
+type Roots map[Format][]string
+
+// RootsOf is a home's own folders, the ones an agent writes to unless it says otherwise.
+func RootsOf(home string) Roots {
+	out := make(Roots, len(SessionRoots(home)))
+	for f, dir := range SessionRoots(home) {
+		out[f] = []string{dir}
+	}
+	return out
+}
+
+// RootsFor is the session-root snapshot of a machine whose reader knows the folders its agents named for themselves.
+// A bare host has only its home's defaults.
+func RootsFor(host shell.Host) Roots {
+	if rooted, ok := host.(interface{ TranscriptRoots() Roots }); ok {
+		return rooted.TranscriptRoots()
+	}
+	return RootsOf(host.Home())
+}
+
+// UnderRoots says whether a session path sits under one of the folders of this machine's set.
+func UnderRoots(roots Roots, home, path string) bool {
+	return underRoots(roots, rpath.For(home), path)
+}
+
+// RootFlags names the folders agents named for themselves, beyond the home's own defaults, as command-line flags a
+// remote scan is handed: " -root format=path" each.
+func RootFlags(roots Roots, home string) string {
+	style, defaults := rpath.For(home), RootsOf(home)
+	var flags strings.Builder
+	for _, format := range []Format{Claude, Codex} {
+		for _, dir := range roots[format] {
+			own := false
+			for _, known := range defaults[format] {
+				if style.Equal(known, dir) {
+					own = true
+					break
+				}
+			}
+			if !own {
+				flags.WriteString(" -root ")
+				flags.WriteString(script.Quote(string(format) + "=" + style.Slash(dir)))
+			}
+		}
+	}
+	return flags.String()
+}
+
+// underRoots says whether a path sits under one of the folders of the set.
+func underRoots(roots Roots, style rpath.Style, path string) bool {
+	for _, dir := range roots {
+		for _, root := range dir {
+			if rel, ok := style.Rel(root, path); ok && rel != "." {
+				return true
+			}
 		}
 	}
 	return false
