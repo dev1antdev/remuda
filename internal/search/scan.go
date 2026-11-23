@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"io"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -26,13 +25,9 @@ type scanFile struct {
 	id     string // Codex: the thread id
 }
 
-// ScanHome writes the records under a home's own roots that match q, newest file first and up to limit: Claude Code's as
-// grep -r prints them ("./<rel path>:<raw line>"), Codex's as "codex:<cwd>␟<thread id>␟<raw line>".
-func ScanHome(home, q, dir string, since time.Time, limit int, w io.Writer) error {
-	return ScanRoots(transcript.RootsOf(home), q, dir, since, limit, w)
-}
-
-// ScanRoots is ScanHome over the session folders one machine knows, including those its agents named for themselves.
+// ScanRoots writes the records under the session folders one machine knows, including those its agents named for
+// themselves, that match q, newest file first and up to limit: Claude Code's as grep -r prints them
+// ("./<rel path>:<raw line>"), Codex's as "codex:<cwd>␟<thread id>␟<raw line>".
 func ScanRoots(roots transcript.Roots, q, dir string, since time.Time, limit int, w io.Writer) error {
 	var files []scanFile
 	for _, projects := range roots[transcript.Claude] {
@@ -77,7 +72,7 @@ func claudeFiles(projects, dir string, since time.Time) ([]scanFile, error) {
 			}
 			return nil
 		}
-		if !strings.HasSuffix(d.Name(), ".jsonl") {
+		if !strings.HasSuffix(d.Name(), ".jsonl") || !d.Type().IsRegular() {
 			return nil
 		}
 		info, err := d.Info()
@@ -121,7 +116,7 @@ func scan(files []scanFile, q string, since time.Time, limit int, w io.Writer) e
 	defer out.Flush()
 	n := 0
 	for _, f := range files {
-		fh, err := os.Open(f.path)
+		fh, err := transcript.OpenSession(f.path)
 		if err != nil {
 			continue
 		}

@@ -172,39 +172,40 @@ func TestCodexFilesAreFoundByThreadId(t *testing.T) {
 	if FormatOf(path) != Codex || FormatOfAgent("codex") != Codex || FormatOfAgent("claude") != Claude || FormatOfAgent("kimi") != "" {
 		t.Fatal("formats")
 	}
+	roots := RootsOf(home)
 	for _, format := range []Format{Codex, ""} {
-		found, err := FindSession(format, "/home/u/proj", id)
+		found, err := findSessionIn(roots, format, "/home/u/proj", id)
 		if err != nil || found != path {
-			t.Fatalf("FindSession(%q): %q %v", format, found, err)
+			t.Fatalf("findSessionIn(%q): %q %v", format, found, err)
 		}
 	}
-	if _, err := FindSession(Claude, "/home/u/proj", id); err == nil {
+	if _, err := findSessionIn(roots, Claude, "/home/u/proj", id); err == nil {
 		t.Fatal("found a rollout among Claude Code's files")
 	}
-	if _, err := FindSession(Codex, "", "../etc"); err == nil {
+	if _, err := findSessionIn(roots, Codex, "", "../etc"); err == nil {
 		t.Fatal("a path passed as an id")
 	}
 	if CodexCwd(path) != "/home/u/proj" {
 		t.Fatalf("cwd: %q", CodexCwd(path))
 	}
-	sessions, err := Sessions(Codex, "/home/u/proj")
+	sessions, err := sessionsIn(roots, home, Codex, "/home/u/proj")
 	if err != nil || len(sessions) != 1 || sessions[0].ID != id || sessions[0].Title != "Make hello" || sessions[0].Agent != "codex" {
 		t.Fatalf("sessions of the folder: %+v %v", sessions, err)
 	}
-	if other, _ := Sessions(Codex, "/elsewhere"); len(other) != 0 {
+	if other, _ := sessionsIn(roots, home, Codex, "/elsewhere"); len(other) != 0 {
 		t.Fatalf("another folder's listing: %+v", other)
 	}
 	turns, err := Parse(path)
 	if err != nil || len(turns) != 4 {
 		t.Fatalf("Parse by path: %d %v", len(turns), err)
 	}
-	if !UnderRoot(home, path) || UnderRoot(home, filepath.Join(home, "elsewhere.jsonl")) {
+	if !UnderRoots(RootsOf(home), home, path) || UnderRoots(RootsOf(home), home, filepath.Join(home, "elsewhere.jsonl")) {
 		t.Fatal("UnderRoot")
 	}
 	if got := findScript(RootsOf("/h"), Codex, "/h", "/p", id); !strings.Contains(got, "find '/h/.codex/sessions' -type f -name 'rollout-*-"+id+".jsonl'") {
 		t.Fatalf("remote find: %s", got)
 	}
-	if got := findScript(RootsOf("/h"), "", "/h", "/p", id); strings.Count(got, "exit 0") != 3 || !strings.Contains(got, "/.claude/projects") || !strings.Contains(got, ".gemini/tmp") {
+	if got := findScript(RootsOf("/h"), "", "/h", "/p", id); strings.Count(got, "exit 0") != 4 || !strings.Contains(got, "/.claude/projects") || !strings.Contains(got, ".gemini/tmp") {
 		t.Fatalf("remote find across formats: %s", got)
 	}
 	_ = time.Now()

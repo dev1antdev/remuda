@@ -170,6 +170,13 @@ func TestClaudeSessionComesFromItsConfigDirAndItsStart(t *testing.T) {
 	if err := os.WriteFile(transcriptPath, []byte("{\"type\":\"user\"}\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	defaultProjects := filepath.Join(home, ".claude", "projects", EncodePath("/work/api"))
+	if err := os.MkdirAll(defaultProjects, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(defaultProjects, "4c9d6f0e-1111-4222-8333-944455556666.jsonl"), []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	if path, err := reader.ResolveSession("claude", "/work/api", "id", "4c9d6f0e-1111-4222-8333-944455556666"); err != nil || path != transcriptPath {
 		t.Fatalf("session file = %q, %v; want %s", path, err, transcriptPath)
 	}
@@ -545,12 +552,18 @@ func TestCodexSessionIsThePersonsRolloutItsProcessHoldsOpen(t *testing.T) {
 			t.Setenv("HOME", home)
 			holds, underShell, shellHolds := c.holds(home)
 			pid := holder(t, home, holds, nil, underShell, shellHolds)
-			got, err := NewReader(remoteHere(home)).SessionsOf([]Running{{PID: pid, Agent: "codex", CWD: home}})
+			reader := NewReader(remoteHere(home))
+			got, err := reader.SessionsOf([]Running{{PID: pid, Agent: "codex", CWD: home}})
 			if err != nil {
 				t.Fatal(err)
 			}
 			if got[pid] != c.want {
 				t.Fatalf("session = %q, want %q", got[pid], c.want)
+			}
+			if c.name == "a revert's replacement file" {
+				if found, err := reader.ResolveSession("codex", home, "id", rolloutID); err != nil || found != holds[0] {
+					t.Fatalf("the live replacement rollout = %q, %v; want %s", found, err, holds[0])
+				}
 			}
 		})
 	}

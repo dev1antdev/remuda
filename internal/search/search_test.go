@@ -19,6 +19,10 @@ type rootedHost struct {
 
 func (h rootedHost) TranscriptRoots() transcript.Roots { return h.roots }
 
+func remoteScript(home, q, dir string, since time.Time) string {
+	return remoteScriptRoots(transcript.RootsOf(home), home, q, dir, since)
+}
+
 func TestScanNewestFirstWithFilters(t *testing.T) {
 	projects := t.TempDir()
 	write := func(rel, body string, mod time.Time) {

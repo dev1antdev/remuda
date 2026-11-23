@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 	"time"
 
@@ -45,7 +46,8 @@ type shelf struct {
 	Machine string         `json:"machine"`
 	Zone    string         `json:"zone"`
 	Looked  time.Time      `json:"looked"`
-	Days    map[string]Day `json:"days"` // the days that ended, each read after it ended; a day nobody worked is kept empty
+	Days    map[string]Day `json:"days"`            // the days that ended, each read after it ended; a day nobody worked is kept empty
+	Roots   []string       `json:"roots,omitempty"` // the session folders the kept days were read from
 
 	today     *Day
 	todayDate string
@@ -93,6 +95,47 @@ func OpenBook(dir string) *Book {
 
 func shelfKey(machine, zone string) string { return machine + "|" + zone }
 
+// rootsKey is the session folders a year's days are read from, sorted so two readings compare.
+func rootsKey(roots transcript.Roots) []string {
+	seen := map[string]bool{}
+	var keys []string
+	for _, format := range []transcript.Format{transcript.Claude, transcript.Codex} {
+		for _, dir := range roots[format] {
+			key := string(format) + "=" + dir
+			if !seen[key] {
+				seen[key] = true
+				keys = append(keys, key)
+			}
+		}
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// covers says every folder of subset is in roots.
+func covers(roots, subset []string) bool {
+	known := make(map[string]bool, len(roots))
+	for _, root := range roots {
+		known[root] = true
+	}
+	for _, root := range subset {
+		if !known[root] {
+			return false
+		}
+	}
+	return true
+}
+
+func sameRoots(a, b []string) bool { return len(a) == len(b) && covers(a, b) }
+
+// rescan forgets what was read from another set of session folders; the read that follows fills it again.
+func (s *shelf) rescan(roots []string) {
+	s.Days = map[string]Day{}
+	s.Roots = roots
+	s.today, s.todayDate, s.todayAt = nil, "", time.Time{}
+	s.failed, s.failedAt = "", time.Time{}
+}
+
 // dayOf is a moment's local day.
 func dayOf(t time.Time, loc *time.Location) string { return t.In(loc).Format("2006-01-02") }
 
@@ -131,7 +174,7 @@ func (b *Book) Look(hosts []YearHost, loc *time.Location, tz string) Year {
 		}
 		s.Looked = now
 		if !host.Away {
-			b.readIfDue(host.Host, s, days, now, loc, tz)
+			b.readIfDue(host, s, days, now, loc, tz)
 		}
 		year.Machines = append(year.Machines, s.year(host, days, today, year.Names))
 	}
@@ -139,10 +182,22 @@ func (b *Book) Look(hosts []YearHost, loc *time.Location, tz string) Year {
 }
 
 // readIfDue starts a read of the days the shelf lacks, and of today once its reading is old; one at a time per shelf,
-// a failed one tried again after RetryAfter.
-func (b *Book) readIfDue(host shell.Host, s *shelf, days []string, now time.Time, loc *time.Location, tz string) {
+// a failed one tried again after RetryAfter. A session folder learned after the days were kept makes them be read again;
+// a folder that has since lapsed keeps what was read with it.
+func (b *Book) readIfDue(host YearHost, s *shelf, days []string, now time.Time, loc *time.Location, tz string) {
 	if s.busy || (s.failed != "" && now.Sub(s.failedAt) < RetryAfter) {
 		return
+	}
+	roots := rootsKey(transcript.RootsFor(host))
+	switch {
+	case !covers(roots, s.Roots) && !covers(s.Roots, roots):
+		s.rescan(roots) // another set of folders entirely
+	case covers(roots, s.Roots):
+		if !sameRoots(roots, s.Roots) {
+			s.rescan(roots) // a folder was learned: its kept days may be missing
+		}
+	default:
+		return // a folder has lapsed: read nothing with the reduced set, keep what the bigger one found
 	}
 	today := days[len(days)-1]
 	missing, first := 0, ""
@@ -164,7 +219,7 @@ func (b *Book) readIfDue(host shell.Host, s *shelf, days []string, now time.Time
 	b.reads.Add(1)
 	go func() {
 		defer b.reads.Done()
-		rep, err := b.Read(host, midnight(first, loc), loc, tz)
+		rep, err := b.Read(host.Host, midnight(first, loc), loc, tz)
 		b.shelve(s, first, today, now, rep, err)
 	}()
 }

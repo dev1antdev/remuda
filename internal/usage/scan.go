@@ -2,7 +2,6 @@ package usage
 
 import (
 	"io/fs"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -53,23 +52,13 @@ type SessionTotals struct {
 
 const topSessions = 40
 
-// ScanHome sums every transcript under a home's own roots written since: Claude Code's project files and Codex's
-// rollouts.
-func ScanHome(home string, since time.Time, loc *time.Location) (Report, error) {
-	return ScanRoots(transcript.RootsOf(home), since, loc)
-}
-
-// ScanRoots is ScanHome over the session folders one machine knows, including those its agents named for themselves.
+// ScanRoots sums every transcript under the session folders one machine knows, including those its agents named for
+// themselves, written since: Claude Code's project files and Codex's rollouts.
 func ScanRoots(roots transcript.Roots, since time.Time, loc *time.Location) (Report, error) {
 	return scanHome(newBuilder(since, loc), roots)
 }
 
-// ScanHomeDays is ScanHome with every day broken down by folder, for the year's heatmap.
-func ScanHomeDays(home string, since time.Time, loc *time.Location) (Report, error) {
-	return ScanRootsDays(transcript.RootsOf(home), since, loc)
-}
-
-// ScanRootsDays is ScanRoots with every day broken down by folder.
+// ScanRootsDays is ScanRoots with every day broken down by folder, for the year's heatmap.
 func ScanRootsDays(roots transcript.Roots, since time.Time, loc *time.Location) (Report, error) {
 	b := newBuilder(since, loc)
 	b.daily = map[string]map[string]*DayFolder{}
@@ -147,7 +136,7 @@ func (b *builder) walkClaude(projects string) error {
 			return nil
 		}
 		info, err := d.Info()
-		if err != nil || (!b.since.IsZero() && info.ModTime().Before(b.since)) {
+		if err != nil || !info.Mode().IsRegular() || (!b.since.IsZero() && info.ModTime().Before(b.since)) {
 			return nil
 		}
 		rel, _ := filepath.Rel(projects, p)
@@ -185,7 +174,7 @@ func (b *builder) walkCodex(sessions string) {
 
 // file sums one transcript; a project of "" is taken from the folder its records name.
 func (b *builder) file(p, project, session string) {
-	f, err := os.Open(p)
+	f, err := transcript.OpenSession(p)
 	if err != nil {
 		return
 	}

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -84,6 +85,12 @@ func TestALearnedRootExpires(t *testing.T) {
 	reader := NewReader(shell.Local{Name: "local"})
 	root := filepath.Join(t.TempDir(), "projects")
 	path := filepath.Join(root, "-work", "s.jsonl")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	reader.addRoot(Claude, root)
 	if got, err := reader.ResolveSession("claude", "", "path", path); err != nil || got != path {
 		t.Fatalf("fresh root: %q, %v", got, err)
@@ -98,6 +105,43 @@ func TestALearnedRootExpires(t *testing.T) {
 	}
 	if slices.Contains(reader.Roots()[Claude], root) {
 		t.Fatalf("an expired root is still offered: %v", reader.Roots())
+	}
+}
+
+// TestTheLiveSessionWinsOverACopyUnderAnotherRoot: the same id may sit in the default root and a root an agent named;
+// the accepted live file opens, and a remote lookup names one file rather than both.
+func TestTheLiveSessionWinsOverACopyUnderAnotherRoot(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	const id = "4c9d6f0e-1111-4222-8333-944455556666"
+	cwd := "/work/app"
+	write := func(root string) string {
+		path := filepath.Join(root, EncodePath(cwd), id+".jsonl")
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("{}\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+	defaultPath := write(RootsOf(home)[Claude][0])
+	ownRoot := filepath.Join(home, "profile", "projects")
+	ownPath := write(ownRoot)
+	reader := NewReader(shell.Local{Name: "local"})
+	reader.addRoot(Claude, ownRoot)
+	reader.rememberSession(id, ownPath)
+	if got, err := reader.ResolveSession("claude", cwd, "id", id); err != nil || got != ownPath {
+		t.Fatalf("the live session = %q, %v; want %s", got, err, ownPath)
+	}
+	roots := reader.Roots()
+	out, err := shell.Text(shell.Local{Name: "local"}, findScript(roots, Claude, home, cwd, id), 5*time.Second)
+	if err != nil || strings.TrimSpace(out) != defaultPath {
+		t.Fatalf("a remote lookup = %q, %v; want one file %s", out, err, defaultPath)
+	}
+	missing := "00000000-0000-4000-8000-000000000000"
+	if out, err := shell.Text(shell.Local{Name: "local"}, findScript(roots, Claude, home, cwd, missing), 5*time.Second); err != nil || out != "" {
+		t.Fatalf("a miss = %q, %v; want a successful empty answer", out, err)
 	}
 }
 

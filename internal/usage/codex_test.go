@@ -78,7 +78,7 @@ func TestScanHomeCountsCodexBesideClaude(t *testing.T) {
 	write(".codex/sessions/2026/09/01/rollout-2026-09-01T09-00-00-01a1-0000-7000-8000-000000000001.jsonl",
 		rollout("/p/a", "gpt-6.1-sol", codexResponse("resp_old", "2026-09-01T09:00:05.000Z", 100, 0, 10)), now.AddDate(0, 0, -40))
 
-	rep, err := ScanHome(home, now.AddDate(0, 0, -7), time.UTC)
+	rep, err := ScanRoots(transcript.RootsOf(home), now.AddDate(0, 0, -7), time.UTC)
 	if err != nil {
 		t.Fatal(err)
 	}

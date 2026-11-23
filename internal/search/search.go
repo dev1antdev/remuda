@@ -151,14 +151,10 @@ func codexHit(machine string, rec []byte, q, dir string, since time.Time) (Hit, 
 	return Hit{Machine: machine, Agent: "codex", Project: transcript.EncodePath(cwd), Dir: cwd, Session: id, UUID: m.UUID, Ts: m.Ts, Role: m.Role, Snippet: m.Snippet}, true
 }
 
-// remoteScript runs the scan on a remote machine: remuda's own scanner where `make deploy` put it (Claude Code's
-// files and Codex's), else grep over Claude Code's alone.
+// remoteScriptRoots runs the scan on a remote machine, with the session folders the machine's agents named for
+// themselves: remuda's own scanner where `make deploy` put it (Claude Code's files and Codex's), else grep over
+// Claude Code's alone.
 // The grep takes the four spellings as they sit in the JSON (grep -i folds ASCII only); BSD grep is seconds per hundred MB.
-func remoteScript(home, q, dir string, since time.Time) string {
-	return remoteScriptRoots(transcript.RootsOf(home), home, q, dir, since)
-}
-
-// remoteScriptRoots is remoteScript with the session folders this machine's agents named for themselves.
 func remoteScriptRoots(roots transcript.Roots, home, q, dir string, since time.Time) string {
 	seen := map[string]bool{}
 	var pats []string
@@ -176,23 +172,11 @@ func remoteScriptRoots(roots transcript.Roots, home, q, dir string, since time.T
 	if !since.IsZero() {
 		args += " -since " + script.Quote(since.UTC().Format(time.RFC3339))
 	}
-	args += rootArguments(roots, home)
+	args += transcript.RootFlags(roots, home)
 	return "if " + guard + " && " + bin + " " + args + "; then exit 0; fi; " +
 		"cd " + script.Quote(home+"/.claude/projects") + " 2>/dev/null || exit 0; " +
 		"grep -raF --include='*.jsonl' " + strings.Join(pats, " ") + " . 2>/dev/null | " +
 		"cut -b1-" + strconv.Itoa(lineCap) + " | head -c " + strconv.Itoa(outputCap) + "; exit 0"
-}
-
-// rootArguments names the folders beyond a machine's own defaults, one -root format=path each.
-func rootArguments(roots transcript.Roots, home string) string {
-	var args []string
-	for _, value := range transcript.RootValues(roots, home) {
-		args = append(args, "-root "+script.Quote(value))
-	}
-	if len(args) == 0 {
-		return ""
-	}
-	return " " + strings.Join(args, " ")
 }
 
 // jsonText is s as it appears inside a JSON string, without the quotes and without HTML escaping.

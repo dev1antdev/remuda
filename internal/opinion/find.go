@@ -20,14 +20,9 @@ import (
 // findTimeout is how long the search over a machine's session files may take.
 var findTimeout = 30 * time.Second
 
-// FindScript prints the session files of the agent's under the home's own folders that hold the request's ref line.
-func FindScript(home, agent, dir, ref string) string {
-	return FindScriptIn(transcript.RootsOf(home), home, agent, dir, ref)
-}
-
-// FindScriptIn is FindScript over the session folders a machine's reader knows, the folders its agents named for
-// themselves included: Claude Code's in the folder's project, Codex's and Gemini CLI's written in the last two days;
-// every format for another agent.
+// FindScriptIn prints the session files of the agent's under the session folders a machine's reader knows, the folders
+// its agents named for themselves included, that hold the request's ref line: Claude Code's in the folder's project,
+// Codex's and Gemini CLI's written in the last two days; every format for another agent.
 func FindScriptIn(roots transcript.Roots, home, agent, dir, ref string) string {
 	var finds []string
 	style := rpath.For(home)

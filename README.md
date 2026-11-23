@@ -23,8 +23,8 @@ A from-scratch, auditable replacement for
 - **Read-only on your data.** The chat view reads Claude Code's, Codex's and
   Gemini CLI's own session files, under the folder each agent was given
   (`CLAUDE_CONFIG_DIR` and `CODEX_HOME` included, resolved through the agent's
-  process); remuda never writes them. Sending a message goes through remuda-core's
-  `terminal.send`, exactly like typing into the pane.
+  process while it runs and for ten minutes after); remuda never writes them.
+  Sending a message goes through remuda-core's `terminal.send`, exactly like typing into the pane.
 - **No telemetry, no third-party services.** The server talks to your
   browser, to remuda-core, and to the SSH hosts you add. That's the complete list.
 
@@ -1980,7 +1980,7 @@ machine, Claude Code's and Codex's — what you or an agent said, never tool out
 machine, folder and period. A hit jumps to the turn in the running pane, or
 opens the old transcript read-only. No index, no database: each machine
 scans its own session folders on demand — `~/.claude/projects` and `~/.codex/sessions` plus the folders its
-agents named for themselves (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`) (remuda's scanner where the
+agents named for themselves (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`) while they run (remuda's scanner where the
 binary is deployed, grep otherwise). Above the conversations, a **Screens**
 part lists where the words stood on the agents' recorded screens (see
 Timelapse). Every turn of a pane's conversation

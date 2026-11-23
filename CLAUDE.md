@@ -939,7 +939,11 @@ components and icons as rules for whoever changes it: @docs/design.md
   usage counter and the second opinion's find; a remote scan is given the folders beyond its home's own as
   `-root format=folder`. `ResolveSession`'s hit and miss are cached by the roots' generation, so a folder learned
   (or expired) later is looked in again (`TestSessionsOfLearnsOnlyAcceptedRoots`,
-  `TestResolvedSessionFollowsTheRoots`, `TestASessionUnderItsOwnCODEXHOMEIsOpenedToo`).
+  `TestResolvedSessionFollowsTheRoots`, `TestASessionUnderItsOwnCODEXHOMEIsOpenedToo`). The live file an accepted
+  process read named is remembered for the same ten minutes and asked first, before a copy of its id under another
+  root. A session file is read through `OpenInRoot` under its root (an `os.Root` refuses a linked parent that leaves
+  it) and `OpenSession` (a link, a FIFO or any other special file is refused), locally and remotely
+  (`TestOpenSessionRefusesLinksAndPipes`).
   **Codex and Gemini sessions read into the same `Turn`** (`format.go`:
   a `Format` by the file's place — `~/.claude/projects`, `~/.codex/sessions`,
   `~/.gemini/tmp`, or a Codex rollout's name, which carries across a `CODEX_HOME` of its own — and `FormatOfAgent` by the core's `agent` field;
@@ -3585,7 +3589,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   opens it, accepted only when its first prompt is this very request
   (`Answered` / `IsRequest`: `PromptStart` and the ref), else the
   conversation *found* by the request (`opinion.Request`, find.go,
-  tested on real files: `FindScript` greps the agent's session files —
+  tested on real files: `FindScriptIn` greps the agent's session files —
   Claude Code's in the folder's project, Codex's and Gemini CLI's of the
   last two days — for the ref line on the reviewer's machine, then the
   file is followed through `Reader.Live` to where a compaction moved the
@@ -5795,7 +5799,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   denied calls (`deniedWords` in `agent.ts`)).
 - `internal/search/` — **full-text search** over every transcript on every
   machine (`GET /api/search?q=&machine=&dir=&days=`; the 🔍 in the
-  header, or the last row of the ⌘K palette with what was typed there). No index: `ScanHome` walks the machine's own
+  header, or the last row of the ⌘K palette with what was typed there). No index: `ScanRoots` walks the machine's own
   `~/.claude/projects` and `~/.codex/sessions` (and the folders its agents named for themselves, `RootsFor`),
   newest-first,
   sieves lines by four spellings of the query (as typed, lower, UPPER,
@@ -5841,7 +5845,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   Codex rollout's `token_usage_record`s count too, tokens alone (no
   OpenAI price in the catalog: `unknown`, the model named as the file
   names it, the window from the file), in the meter, the report
-  (`ScanHome`: Claude Code's project files and Codex's rollouts, a
+  (`ScanRoots`: Claude Code's project files and Codex's rollouts, a
   rollout's project the encoded folder its head names, so a folder's
   budget covers both agents) and `remuda usage` on a remote. One API response is written as
   several records sharing `message.id` with the same usage — `Accumulator`
@@ -5868,7 +5872,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   trip, `Reader.DirVersions`) and sidechain records count toward the pane
   too, less the copy of the parent's response a fork's file opens with
   — the number should agree with Claude Code's own. **Report**: `Scan` (`GET /api/usage?days=&machine=
-  &tz=`, since = a local midnight) walks `~/.claude/projects` for files
+  &tz=`, since = a local midnight) walks the machine's session roots for files
   written since, oldest first, each message id once across the files (a
   continuation's copied tail is credited to the session that made it),
   subagent files count toward their session, per day in
@@ -5885,15 +5889,17 @@ components and icons as rules for whoever changes it: @docs/design.md
   and budgets in `UsageSections.tsx`) and **Models**, the scorecard below;
   `ByName` is the catalog's way back from a name to an id. **The year**
   (after Orchi's Stats; `days.go`, `book.go`, `year.go`, tested on temp
-  homes, a fake reader and a fake clock): `ScanHomeDays` is `ScanHome`
+  homes, a fake reader and a fake clock): `ScanRootsDays` is `ScanRoots`
   with `Report.Daily`, every local day folder by folder (`DayFolder`: the
   cost, tokens and responses, tokens by model, each session's first and
   last response that day; a subagent's are its session's), `remuda usage
-  -daily` on a remote (`DaysScript`), `ReadHost` the one per-machine read
+  -daily` on a remote (`DaysScriptRoots`), `ReadHost` the one per-machine read
   `Collect` shares. `Book` (`OpenBook`, `<state>/usage-days.json`, 0600,
   a damaged file read as none, said once) keeps by machine and the
   viewer's zone the days that ended, each read once after it ended and
-  never again (a day nobody worked kept empty); `Look(hosts, loc, tz)`
+  never again (a day nobody worked kept empty); a shelf keeps the session roots it was read from, so a folder learned
+  later reads the year again, while a folder that has lapsed leaves the days already kept for it alone;
+  `Look(hosts, loc, tz)`
   answers the last `YearDays` 365 days from what is kept and starts, one
   read at a time per machine and zone, in the background, the read it
   lacks — from the earliest ended day never read, else today's midnight

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/dev1antdev/remuda/internal/rpath"
+	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/shell"
 )
 
@@ -92,21 +93,16 @@ func RootsFor(host shell.Host) Roots {
 	return RootsOf(host.Home())
 }
 
-// UnderRoot says whether a session path the agent's own hooks reported sits under one of the default roots of this home.
-func UnderRoot(home, path string) bool {
-	return underRoots(RootsOf(home), rpath.For(home), path)
-}
-
 // UnderRoots says whether a session path sits under one of the folders of this machine's set.
 func UnderRoots(roots Roots, home, path string) bool {
 	return underRoots(roots, rpath.For(home), path)
 }
 
-// RootValues names the folders agents named for themselves, beyond the home's own defaults, as format=folder: what a
-// remote scan is handed so it looks where the cockpit's reader learned.
-func RootValues(roots Roots, home string) []string {
-	defaults, style := RootsOf(home), rpath.For(home)
-	var values []string
+// RootFlags names the folders agents named for themselves, beyond the home's own defaults, as command-line flags a
+// remote scan is handed: " -root format=path" each.
+func RootFlags(roots Roots, home string) string {
+	style, defaults := rpath.For(home), RootsOf(home)
+	var flags strings.Builder
 	for _, format := range []Format{Claude, Codex} {
 		for _, dir := range roots[format] {
 			own := false
@@ -117,11 +113,12 @@ func RootValues(roots Roots, home string) []string {
 				}
 			}
 			if !own {
-				values = append(values, string(format)+"="+style.Slash(dir))
+				flags.WriteString(" -root ")
+				flags.WriteString(script.Quote(string(format) + "=" + style.Slash(dir)))
 			}
 		}
 	}
-	return values
+	return flags.String()
 }
 
 // underRoots says whether a path sits under one of the folders of the set.

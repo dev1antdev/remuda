@@ -97,19 +97,20 @@ func TestGeminiFilesAreFoundByHashAndId(t *testing.T) {
 	if GeminiSessionID(path) != id || SessionID(path) != id || FormatOf(path) != Gemini {
 		t.Fatalf("id from the metadata: %q", GeminiSessionID(path))
 	}
+	roots := RootsOf(home)
 	for _, c := range []string{cwd, "/somewhere/else", ""} { // the folder's own chats first, then every project's
-		found, err := FindSession(Gemini, c, id)
+		found, err := findSessionIn(roots, Gemini, c, id)
 		if err != nil || found != path {
-			t.Fatalf("FindSession(cwd %q): %q %v", c, found, err)
+			t.Fatalf("findSessionIn(cwd %q): %q %v", c, found, err)
 		}
 	}
-	if found, err := FindSession("", cwd, id); err != nil || found != path {
+	if found, err := findSessionIn(roots, "", cwd, id); err != nil || found != path {
 		t.Fatalf("across formats: %q %v", found, err)
 	}
-	if _, err := FindSession(Gemini, cwd, "6f1c2a3b-0000-4f70-a1b2-c3d4e5f60718"); err == nil {
+	if _, err := findSessionIn(roots, Gemini, cwd, "6f1c2a3b-0000-4f70-a1b2-c3d4e5f60718"); err == nil {
 		t.Fatal("found a chat whose metadata names another id")
 	}
-	sessions, err := Sessions(Gemini, cwd)
+	sessions, err := sessionsIn(roots, home, Gemini, cwd)
 	if err != nil || len(sessions) != 1 || sessions[0].ID != id || sessions[0].Title != "List the folder" || sessions[0].Agent != "gemini" {
 		t.Fatalf("sessions: %+v %v", sessions, err)
 	}
@@ -117,7 +118,7 @@ func TestGeminiFilesAreFoundByHashAndId(t *testing.T) {
 	if err != nil || len(turns) != 2 {
 		t.Fatalf("Parse by path: %d %v", len(turns), err)
 	}
-	if got := findScript(RootsOf("/h"), Gemini, "/h", cwd, id); !strings.Contains(got, "'/h/.gemini/tmp'/*/chats/session-*-6f1c2a3b.json*") || !strings.Contains(got, id) {
+	if got := findScript(RootsOf("/h"), Gemini, "/h", cwd, id); !strings.Contains(got, "find '/h/.gemini/tmp' -maxdepth 3 -type f -name 'session-*-6f1c2a3b.json*'") || !strings.Contains(got, id) {
 		t.Fatalf("remote find: %s", got)
 	}
 }

@@ -73,6 +73,7 @@ func (r *Reader) SessionsOf(procs []Running) (map[int]string, error) {
 			answer[p.PID] = found[p.PID]
 			if answer[p.PID] != "" {
 				r.learnRoot(FormatOfAgent(p.Agent), paths[p.PID])
+				r.rememberSession(answer[p.PID], paths[p.PID])
 			}
 		}
 	}
@@ -89,9 +90,8 @@ func (r *Reader) learnRoot(f Format, path string) {
 	}
 	style := rpath.For(r.host.Home())
 	switch f {
-	case Claude: // <config dir>/sessions/<pid>.json
-		config := style.Dir(style.Dir(path))
-		r.addRoot(Claude, style.Join(config, "projects"))
+	case Claude: // <config dir>/projects/<encoded cwd>/<id>.jsonl
+		r.addRoot(Claude, style.Dir(style.Dir(path)))
 	case Codex: // <codex home>/sessions/YYYY/MM/DD/rollout-….jsonl
 		root := path
 		for range 4 {
@@ -344,19 +344,29 @@ func claudeSession(payload string, pid int, start, cwd string, style rpath.Style
 		switch {
 		case file.ProcStart != "" && !native:
 			if strings.TrimSpace(file.ProcStart) == start {
-				return file.SessionID, path
+				return file.SessionID, claudeTranscript(style, path, file.CWD, cwd, file.SessionID)
 			}
 		case native && ft:
 			if max(created-recorded, recorded-created) < filetimeMS && inFolder {
-				return file.SessionID, path
+				return file.SessionID, claudeTranscript(style, path, file.CWD, cwd, file.SessionID)
 			}
 		case known && file.StartedAt > 0:
 			if file.StartedAt >= began && inFolder {
-				return file.SessionID, path
+				return file.SessionID, claudeTranscript(style, path, file.CWD, cwd, file.SessionID)
 			}
 		}
 	}
 	return "", ""
+}
+
+// claudeTranscript is the file a pid's session was written to: <config dir>/projects/<encoded cwd>/<id>.jsonl.
+func claudeTranscript(style rpath.Style, pidFile, sessionCwd, processCwd, id string) string {
+	dir := sessionCwd
+	if dir == "" {
+		dir = processCwd
+	}
+	projects := style.Join(style.Dir(style.Dir(pidFile)), "projects")
+	return style.Join(projects, EncodePath(dir), id+".jsonl")
 }
 
 // FILETIME counts 100 ns from 1601: a millisecond of it, and the Unix epoch in it.

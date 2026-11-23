@@ -92,13 +92,8 @@ func EncodePath(cwd string) string {
 	return b.String()
 }
 
-// Sessions lists the session files of one format for a working directory, newest first.
-func Sessions(format Format, cwd string) ([]SessionInfo, error) {
-	home := homeDir()
-	return sessionsIn(RootsOf(home), home, format, cwd)
-}
-
-// Sessions is Sessions in the session folders this machine's reader knows, its agents' own included.
+// Sessions is the session files of one format for a working directory in the folders this machine's reader knows, its
+// agents' own included, newest first.
 func (r *Reader) Sessions(format Format, cwd string) ([]SessionInfo, error) {
 	return sessionsIn(r.Roots(), r.host.Home(), format, cwd)
 }
@@ -138,7 +133,7 @@ func claudeSessions(projects, cwd string) ([]SessionInfo, error) {
 	var out []SessionInfo
 	for _, e := range entries {
 		name := e.Name()
-		if e.IsDir() || !strings.HasSuffix(name, ".jsonl") {
+		if !e.Type().IsRegular() || !strings.HasSuffix(name, ".jsonl") {
 			continue
 		}
 		fi, err := e.Info()
@@ -191,7 +186,7 @@ func sessionTitle(path string, size int64) string {
 
 // scanTitle reads up to titleScanLines; final says whether more of the file could still change the answer.
 func scanTitle(path string) (title string, final bool) {
-	f, err := os.Open(path)
+	f, err := OpenSession(path)
 	if err != nil {
 		return "", false
 	}
@@ -223,13 +218,8 @@ func scanTitle(path string) (title string, final bool) {
 	return first, n >= titleScanLines
 }
 
-// FindSession locates a session file by id in one format, or in every format when none is named: Claude Code's
-// project dirs, Codex's date tree, Gemini's chats.
-func FindSession(format Format, cwd, id string) (string, error) {
-	return findSessionIn(RootsOf(homeDir()), format, cwd, id)
-}
-
-// findSessionIn is FindSession in the folders of one machine: a home's own and any an agent named for itself.
+// findSessionIn locates a session file by id in one format, or in every format when none is named, in the folders of one
+// machine: a home's own and any an agent named for itself.
 func findSessionIn(roots Roots, format Format, cwd, id string) (string, error) {
 	formats := []Format{format}
 	if format == "" {
@@ -253,12 +243,7 @@ func findSessionIn(roots Roots, format Format, cwd, id string) (string, error) {
 	return "", os.ErrNotExist
 }
 
-// FindSessionByID locates <uuid>.jsonl: the project dir encoded from cwd first, then every project dir.
-func FindSessionByID(cwd, id string) (string, error) {
-	return findClaudeIn(RootsOf(homeDir())[Claude], cwd, id)
-}
-
-// findClaudeIn is FindSessionByID in the project folders of a machine, each tried in turn.
+// findClaudeIn is a Claude Code session id's file in the project folders of a machine, each tried in turn.
 func findClaudeIn(projects []string, cwd, id string) (string, error) {
 	if !text.SessionID(id) { // the id is the agent's own word: a path in it must name no file here
 		return "", os.ErrNotExist
@@ -266,7 +251,7 @@ func findClaudeIn(projects []string, cwd, id string) (string, error) {
 	for _, projects := range projects {
 		if cwd != "" {
 			p := filepath.Join(projects, EncodePath(cwd), id+".jsonl")
-			if _, err := os.Stat(p); err == nil {
+			if sessionFile(p) {
 				return p, nil
 			}
 		}
@@ -279,7 +264,7 @@ func findClaudeIn(projects []string, cwd, id string) (string, error) {
 				continue
 			}
 			p := filepath.Join(projects, e.Name(), id+".jsonl")
-			if _, err := os.Stat(p); err == nil {
+			if sessionFile(p) {
 				return p, nil
 			}
 		}
@@ -773,7 +758,7 @@ func continuedIn(path string) string {
 
 // tailBytes is the last n bytes of a file, the whole of a shorter one.
 func tailBytes(path string, n int64) ([]byte, error) {
-	f, err := os.Open(path)
+	f, err := OpenSession(path)
 	if err != nil {
 		return nil, err
 	}
@@ -804,7 +789,7 @@ func forkOf(later, earlier string) bool {
 
 // firstInHead is the first match of re in a session file's first 64 KB.
 func firstInHead(path string, re *regexp.Regexp) string {
-	f, err := os.Open(path)
+	f, err := OpenSession(path)
 	if err != nil {
 		return ""
 	}
@@ -822,7 +807,7 @@ func firstInHead(path string, re *regexp.Regexp) string {
 // The parent of a continuation sits near the old file's end, so the tail is read first.
 func hasRecord(path, uuid string) bool {
 	needle := []byte(`"uuid":"` + uuid + `"`)
-	f, err := os.Open(path)
+	f, err := OpenSession(path)
 	if err != nil {
 		return false
 	}

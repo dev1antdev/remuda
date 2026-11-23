@@ -12,13 +12,13 @@ import (
 
 // sizedHost is a remote machine whose session files answer as many bytes as a read asks for, counting them.
 func sizedHost(fetched *int64) *shell.Fake {
-	take := regexp.MustCompile(`(?:tail|head) -c (\d+) *$`)
+	take := regexp.MustCompile(`(?:tail|head) -c (\d+)`)
 	return &shell.Fake{Name: "gog", Dir: "/home/me", Remote: true, Answer: func(s string) (string, error) {
-		m := take.FindStringSubmatch(s) // the last count of the pipe is what reaches the reader
-		if m == nil {
+		ms := take.FindAllStringSubmatch(s, -1) // the last count of the pipe is what reaches the reader
+		if len(ms) == 0 {
 			return "", nil
 		}
-		n, _ := strconv.Atoi(m[1])
+		n, _ := strconv.Atoi(ms[len(ms)-1][1])
 		*fetched += int64(n)
 		return strings.Repeat("x", n), nil
 	}}
