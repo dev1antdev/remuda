@@ -13,6 +13,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/push"
 	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/shell"
+	"github.com/dev1antdev/remuda/internal/transcript"
 )
 
 type pushes struct {
@@ -39,6 +40,33 @@ func (p *pushes) titles() []string {
 // reading is a machine's answer carrying Claude's 5-hour window at the use given
 func reading(claude5h float64) string {
 	return script.RS + "\n" + `{"at":"2026-11-04T10:05:00Z","rate_limits":{"five_hour":{"used_percentage":` + strconv.FormatFloat(claude5h, 'f', -1, 64) + `,"resets_at":1793801000}}}` + "\n" + script.RS + "\n\n"
+}
+
+// rooted is a machine as the limits reader sees it: a host whose reader knows the session folders its agents named.
+type rooted struct {
+	*shell.Fake
+	roots transcript.Roots
+}
+
+func (h rooted) TranscriptRoots() transcript.Roots { return h.roots }
+
+// TestReadAsksForACodexHomeItsAgentNamed: a machine is handed the folders its Codex named for itself, once each, and
+// its home's own only in the script's own $HOME spelling.
+func TestReadAsksForACodexHomeItsAgentNamed(t *testing.T) {
+	home, named := "/home/me", "/srv/codex/sessions"
+	host := rooted{
+		Fake:  &shell.Fake{Name: "gog", Dir: home, Remote: true, Answer: func(string) (string, error) { return reading(50), nil }},
+		roots: transcript.Roots{transcript.Codex: {home + "/.codex/sessions", named}},
+	}
+	s := New(t.TempDir())
+	s.Read(host, "GOG")
+	ran := host.Scripts()
+	if len(ran) != 1 || !strings.Contains(ran[0], script.Quote(named)) {
+		t.Fatalf("scripts: %q", ran)
+	}
+	if strings.Contains(ran[0], script.Quote(home+"/.codex/sessions")) {
+		t.Fatalf("the home's own folder is named twice: %q", ran[0])
+	}
 }
 
 func TestWarnsOncePerWindowAndLevel(t *testing.T) {

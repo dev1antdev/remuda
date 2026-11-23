@@ -937,8 +937,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   a process lookup accepted for a pid hands its session file back with the id (`parseSessionsByPID`), and only then
   is the folder it sits under learned (`learnRoot`), cleaned and absolute, for `learnedRootTTL` 10 min after the
   last accepted read. `RootsFor(host)` hands that snapshot to `ResolveSession`, `Reader.Sessions`, the search, the
-  usage counter and the second opinion's find; a remote scan is given the folders beyond its home's own as
-  `-root format=folder`. `ResolveSession`'s hit and miss are cached by the roots' generation, so a folder learned
+  usage counter, the plan limits and the second opinion's find; a remote scan is given the folders beyond its
+  home's own (`NamedRoots`) as `-root format=folder`. `ResolveSession`'s hit and miss are cached by the roots' generation, so a folder learned
   (or expired) later is looked in again (`TestSessionsOfLearnsOnlyAcceptedRoots`,
   `TestResolvedSessionFollowsTheRoots`, `TestASessionUnderItsOwnCODEXHOMEIsOpenedToo`). The live file an accepted
   process read named is remembered for the same ten minutes and asked first, before a copy of its id under another
@@ -6026,7 +6026,10 @@ components and icons as rules for whoever changes it: @docs/design.md
 - `internal/limits/` — **the plan limits**: how much of each agent's
   subscription is spent, before an agent stops on it (tested). `Script`
   is one shell per machine (`shell.Text`, here or over ssh): the newest
-  `rate_limits` line of Codex's rollouts of the last 8 days (its
+  `rate_limits` line of Codex's rollouts of the last 8 days, in
+  `~/.codex/sessions` and in the folders beyond it a Codex named for
+  itself (`CODEX_HOME`, learned by the reader: `transcript.RootsFor` /
+  `NamedRoots`, `TestScriptReadsACodexHomeItsAgentNamed`) (its
   `primary` 5-hour and `secondary` weekly windows: `used_percent`,
   `resets_at`), the snapshot `remuda statusline` keeps in remuda's state
   dir there (`claude-limits.json`), and whether that wrapper is in

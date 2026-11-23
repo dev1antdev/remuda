@@ -98,24 +98,35 @@ func UnderRoots(roots Roots, home, path string) bool {
 	return underRoots(roots, rpath.For(home), path)
 }
 
+// NamedRoots are a format's folders beyond the home's own defaults: the ones an agent named for itself, in the order
+// they were learned.
+func NamedRoots(roots Roots, home string, format Format) []string {
+	style, defaults := rpath.For(home), RootsOf(home)[format]
+	var named []string
+	for _, dir := range roots[format] {
+		own := false
+		for _, known := range defaults {
+			if style.Equal(known, dir) {
+				own = true
+				break
+			}
+		}
+		if !own {
+			named = append(named, dir)
+		}
+	}
+	return named
+}
+
 // RootFlags names the folders agents named for themselves, beyond the home's own defaults, as command-line flags a
 // remote scan is handed: " -root format=path" each.
 func RootFlags(roots Roots, home string) string {
-	style, defaults := rpath.For(home), RootsOf(home)
+	style := rpath.For(home)
 	var flags strings.Builder
 	for _, format := range []Format{Claude, Codex} {
-		for _, dir := range roots[format] {
-			own := false
-			for _, known := range defaults[format] {
-				if style.Equal(known, dir) {
-					own = true
-					break
-				}
-			}
-			if !own {
-				flags.WriteString(" -root ")
-				flags.WriteString(script.Quote(string(format) + "=" + style.Slash(dir)))
-			}
+		for _, dir := range NamedRoots(roots, home, format) {
+			flags.WriteString(" -root ")
+			flags.WriteString(script.Quote(string(format) + "=" + style.Slash(dir)))
 		}
 	}
 	return flags.String()

@@ -89,7 +89,7 @@ func TestScriptReadsTheMachine(t *testing.T) {
 	must(t, os.MkdirAll(filepath.Join(home, ".claude"), 0o700))
 	must(t, os.WriteFile(filepath.Join(home, ".claude", "settings.json"), []byte(`{"statusLine":{"type":"command","command":"'/x/.local/bin/remuda' statusline"}}`), 0o644))
 
-	cmd := exec.Command("sh", "-c", Script())
+	cmd := exec.Command("sh", "-c", Script(nil))
 	cmd.Env = []string{"HOME=" + home, "PATH=" + os.Getenv("PATH")}
 	out, err := cmd.Output()
 	if err != nil {
@@ -106,8 +106,33 @@ func TestScriptReadsTheMachine(t *testing.T) {
 	}
 }
 
+// TestScriptReadsACodexHomeItsAgentNamed runs the script in a temp home whose Codex named a folder of its own: the
+// newest rate_limits line among that folder and the home's own is the one read.
+func TestScriptReadsACodexHomeItsAgentNamed(t *testing.T) {
+	home := t.TempDir()
+	named := filepath.Join(home, "work", "codex", "sessions")
+	must(t, os.MkdirAll(filepath.Join(named, "2026", "11", "04"), 0o755))
+	must(t, os.WriteFile(filepath.Join(named, "2026", "11", "04", "rollout-named.jsonl"), []byte(strings.Replace(codexLine, "42.5", "77", 1)+"\n"), 0o644))
+	own := filepath.Join(home, ".codex", "sessions", "2026", "11", "03")
+	must(t, os.MkdirAll(own, 0o755))
+	must(t, os.WriteFile(filepath.Join(own, "rollout-home.jsonl"), []byte(strings.Replace(codexLine, "42.5", "11", 1)+"\n"), 0o644))
+	older := time.Now().Add(-time.Hour)
+	must(t, os.Chtimes(filepath.Join(own, "rollout-home.jsonl"), older, older))
+
+	cmd := exec.Command("sh", "-c", Script([]string{named}))
+	cmd.Env = []string{"HOME=" + home, "PATH=" + os.Getenv("PATH")}
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("script: %v", err)
+	}
+	r := Parse(string(out), time.Unix(1793790000, 0))
+	if len(r.Windows) != 2 || r.Windows[0].Used != 77 {
+		t.Fatalf("not the named folder's newest line: %+v\n%s", r, out)
+	}
+}
+
 func TestScriptAnswersAnEmptyMachine(t *testing.T) {
-	cmd := exec.Command("sh", "-c", Script())
+	cmd := exec.Command("sh", "-c", Script([]string{filepath.Join(t.TempDir(), "gone", "sessions")}))
 	cmd.Env = []string{"HOME=" + t.TempDir(), "PATH=" + os.Getenv("PATH")}
 	out, err := cmd.Output()
 	if err != nil {
