@@ -92,19 +92,25 @@ func TestTheRequestIsFoundWithoutTheSessionAndFollowedThroughACompaction(t *test
 }
 
 func TestTheSearchCoversTheAgentsOwnFilesOnly(t *testing.T) {
-	codex := FindScript("/h", "codex", "/w", "r")
+	codex := FindScriptIn(transcript.RootsOf("/h"), "/h", "codex", "/w", "r")
 	if !strings.Contains(codex, "'/h/.codex/sessions'") || strings.Contains(codex, ".claude") || !strings.Contains(codex, "-mtime -2") {
 		t.Fatalf("Codex's search: %s", codex)
 	}
-	claude := FindScript("/h", "claude", "/w/app", "r")
+	claude := FindScriptIn(transcript.RootsOf("/h"), "/h", "claude", "/w/app", "r")
 	if !strings.Contains(claude, "/h/.claude/projects/"+transcript.EncodePath("/w/app")) || strings.Contains(claude, ".codex") {
 		t.Fatalf("Claude Code's search: %s", claude)
 	}
-	other := FindScript("/h", "kimi", "/w", "r")
+	other := FindScriptIn(transcript.RootsOf("/h"), "/h", "kimi", "/w", "r")
 	if !strings.Contains(other, ".claude") || !strings.Contains(other, ".codex") || !strings.Contains(other, ".gemini") {
 		t.Fatalf("another agent's search: %s", other)
 	}
 	if !strings.Contains(codex, `line='(second opinion request r)'`) {
 		t.Fatalf("the line searched for: %s", codex)
+	}
+	roots := transcript.RootsOf("/h")
+	roots[transcript.Claude] = append(roots[transcript.Claude], "/h/profile/projects")
+	own := FindScriptIn(roots, "/h", "claude", "/w/app", "r")
+	if !strings.Contains(own, "/h/profile/projects/"+transcript.EncodePath("/w/app")) {
+		t.Fatalf("the folder an agent named for itself: %s", own)
 	}
 }

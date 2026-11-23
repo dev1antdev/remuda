@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/rpath"
+	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/text"
 )
 
@@ -96,7 +98,7 @@ func geminiParts(raw json.RawMessage) []geminiPart {
 }
 
 func parseGeminiFile(path string) ([]Turn, error) {
-	f, err := os.Open(path)
+	f, err := OpenSession(path)
 	if err != nil {
 		return nil, err
 	}
@@ -343,7 +345,7 @@ func GeminiSessionID(path string) string {
 	if ok {
 		return id
 	}
-	f, err := os.Open(path)
+	f, err := OpenSession(path)
 	if err != nil {
 		return ""
 	}
@@ -400,7 +402,7 @@ func geminiSessions(home, cwd string) []SessionInfo {
 }
 
 func geminiFirstPrompt(path string) string {
-	data, err := os.ReadFile(path)
+	data, err := ReadSession(path)
 	if err != nil || len(data) > 8*1024*1024 {
 		return ""
 	}
@@ -431,7 +433,7 @@ func findGeminiSession(home, cwd, id string) (string, error) {
 	for _, g := range globs {
 		hits, _ := filepath.Glob(g)
 		for _, hit := range hits {
-			if isGeminiChat(filepath.Base(hit)) && GeminiSessionID(hit) == id {
+			if isGeminiChat(filepath.Base(hit)) && GeminiSessionID(hit) == id && sessionFile(hit) {
 				return hit, nil
 			}
 		}
@@ -441,11 +443,13 @@ func findGeminiSession(home, cwd, id string) (string, error) {
 
 // geminiFindScript is findGeminiSession as a shell line for a remote machine: prints the path, or nothing. The
 // listing is read a line at a time, so a home with a space stays whole.
-func geminiFindScript(quotedHome, id string) string {
+func geminiFindScript(home, id string) string {
 	short := id
 	if len(short) > 8 {
 		short = short[:8]
 	}
-	return `ls -t ` + quotedHome + `/.gemini/tmp/*/chats/session-*-` + short + `.json* 2>/dev/null | while IFS= read -r f; do ` +
+	style := rpath.For(home)
+	root := script.Quote(style.Slash(style.Join(home, ".gemini", "tmp")))
+	return `find ` + root + ` -maxdepth 3 -type f -name ` + script.Quote("session-*-"+short+".json*") + ` 2>/dev/null | while IFS= read -r f; do ` +
 		`if head -c 65536 "$f" | grep -q '"sessionId": *"` + id + `"'; then printf %s "$f"; break; fi; done`
 }

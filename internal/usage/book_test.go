@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/shell"
+	"github.com/dev1antdev/remuda/internal/transcript"
 )
 
 // fakeDays answers a read with one response a day in folder -p from the day asked to the clock's, and notes each ask.
@@ -107,6 +108,38 @@ func TestAFirstLookReadsTheYearInTheBackgroundAndKeepsTheDaysThatEnded(t *testin
 	}
 	if info, err := os.Stat(filepath.Join(dir, bookFile)); err != nil || info.Mode().Perm() != 0o600 {
 		t.Fatalf("the book's file: %v %v", info, err)
+	}
+}
+
+func TestALearnedRootReadsTheKeptYearAgainAndALapsedOneKeepsIt(t *testing.T) {
+	now := time.Date(2026, 11, 13, 15, 0, 0, 0, time.UTC)
+	book, fake := newTestBook(t, t.TempDir(), &now)
+	home := t.TempDir()
+	roots := transcript.RootsOf(home)
+	gog := func(roots transcript.Roots) []YearHost {
+		return []YearHost{{Host: rootedHost{Host: &shell.Fake{Name: "gog"}, roots: roots}}}
+	}
+	book.Look(gog(roots), time.UTC, "UTC")
+	book.Wait()
+	if len(fake.asks()) != 1 || len(book.shelves[shelfKey("gog", "UTC")].Days) != YearDays-1 {
+		t.Fatalf("the first year: %d asks, %d days", len(fake.asks()), len(book.shelves[shelfKey("gog", "UTC")].Days))
+	}
+
+	own := transcript.RootsOf(home)
+	own[transcript.Claude] = append(own[transcript.Claude], filepath.Join(home, "profile", "projects"))
+	book.Look(gog(own), time.UTC, "UTC")
+	book.Wait()
+	if asks := fake.asks(); len(asks) != 2 || !asks[1].Equal(time.Date(2025, 11, 14, 0, 0, 0, 0, time.UTC)) {
+		t.Fatalf("a learned folder reads the year again: %v", asks)
+	}
+
+	book.Look(gog(roots), time.UTC, "UTC")
+	book.Wait()
+	if len(fake.asks()) != 2 {
+		t.Fatalf("a lapsed folder read the kept year again: %v", fake.asks())
+	}
+	if days := book.shelves[shelfKey("gog", "UTC")].Days; len(days) != YearDays-1 {
+		t.Fatalf("a lapsed folder dropped the kept year: %d days", len(days))
 	}
 }
 

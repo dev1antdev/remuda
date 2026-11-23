@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash/fnv"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -211,7 +210,7 @@ func (r *Reader) metasOf(dir string, versions map[string]Version) map[string]sub
 	read := map[string]subagentMeta{}
 	if r.host.Local() {
 		for _, path := range missing {
-			raw, err := os.ReadFile(path)
+			raw, err := ReadSession(path)
 			var meta subagentMeta
 			if err == nil && json.Unmarshal(raw, &meta) == nil {
 				read[path] = meta
@@ -498,7 +497,7 @@ func cutRunes(s string, max int) string {
 
 // parseFile parses a transcript on this machine, keeping or dropping the sidechain records.
 func parseFile(path string, keepSidechain bool) ([]Turn, error) {
-	f, err := os.Open(path)
+	f, err := OpenSession(path)
 	if err != nil {
 		return nil, err
 	}

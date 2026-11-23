@@ -21,7 +21,7 @@ func TestAWallOfRemoteAgentsFetchesEachFileWholeOnce(t *testing.T) {
 	}
 	var whole atomic.Int32
 	host := &shell.Fake{Name: "gog", Dir: home, Remote: true, Answer: func(script string) (string, error) {
-		if strings.HasPrefix(script, "head -c") {
+		if strings.Contains(script, "; then head -c") {
 			whole.Add(1)
 		}
 		out, err := exec.Command("sh", "-c", script).Output()

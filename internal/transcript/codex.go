@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/rpath"
+	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/text"
 )
 
@@ -160,7 +162,7 @@ func codexInput(arguments string) json.RawMessage {
 }
 
 func parseCodexFile(path string) ([]Turn, error) {
-	f, err := os.Open(path)
+	f, err := OpenSession(path)
 	if err != nil {
 		return nil, err
 	}
@@ -419,7 +421,7 @@ func CodexCwd(path string) string {
 	if ok {
 		return cwd
 	}
-	f, err := os.Open(path)
+	f, err := OpenSession(path)
 	if err != nil {
 		return ""
 	}
@@ -447,7 +449,7 @@ func CodexFiles(root string) []SessionInfo {
 			return nil
 		}
 		info, err := d.Info()
-		if err != nil {
+		if err != nil || !info.Mode().IsRegular() {
 			return nil
 		}
 		out = append(out, SessionInfo{ID: CodexSessionID(p), Path: p, ModTime: info.ModTime(), Size: info.Size(), Agent: "codex"})
@@ -460,21 +462,37 @@ func CodexFiles(root string) []SessionInfo {
 const codexSessionsLookAt = 300 // the newest rollouts whose folder is read for a listing by folder
 
 // codexSessions lists the rollouts recorded in cwd, newest first, titled from Codex's own index.
-func codexSessions(home, cwd string) []SessionInfo {
-	var out []SessionInfo
-	for i, s := range CodexFiles(SessionRoots(home)[Codex]) {
-		if i >= codexSessionsLookAt {
-			break
-		}
-		if CodexCwd(s.Path) == cwd {
-			out = append(out, s)
+func codexSessions(roots []string, cwd string) []SessionInfo {
+	type rooted struct {
+		SessionInfo
+		root string
+	}
+	var all []rooted
+	for _, root := range roots {
+		for _, s := range CodexFiles(root) {
+			all = append(all, rooted{SessionInfo: s, root: root})
 		}
 	}
-	names := codexThreadNames(home)
+	sort.Slice(all, func(i, j int) bool { return all[i].ModTime.After(all[j].ModTime) })
+	if len(all) > codexSessionsLookAt {
+		all = all[:codexSessionsLookAt]
+	}
+	names := map[string]map[string]string{}
+	var out []SessionInfo
+	for _, s := range all {
+		if CodexCwd(s.Path) != cwd {
+			continue
+		}
+		if names[s.root] == nil {
+			names[s.root] = codexThreadNames(filepath.Dir(s.root))
+		}
+		if name := names[s.root][s.ID]; name != "" {
+			s.Title = name
+		}
+		out = append(out, s.SessionInfo)
+	}
 	for i := range out {
-		if name := names[out[i].ID]; name != "" {
-			out[i].Title = name
-		} else if i < 5 {
+		if out[i].Title == "" && i < 5 {
 			out[i].Title = codexFirstPrompt(out[i].Path)
 		}
 	}
@@ -482,9 +500,9 @@ func codexSessions(home, cwd string) []SessionInfo {
 }
 
 // codexThreadNames is Codex's own session index: the thread id and the name it gave the thread.
-func codexThreadNames(home string) map[string]string {
+func codexThreadNames(codexHome string) map[string]string {
 	names := map[string]string{}
-	f, err := os.Open(filepath.Join(home, ".codex", "session_index.jsonl"))
+	f, err := OpenSession(filepath.Join(codexHome, "session_index.jsonl"))
 	if err != nil {
 		return names
 	}
@@ -502,7 +520,7 @@ func codexThreadNames(home string) map[string]string {
 }
 
 func codexFirstPrompt(path string) string {
-	f, err := os.Open(path)
+	f, err := OpenSession(path)
 	if err != nil {
 		return ""
 	}
@@ -530,10 +548,22 @@ func codexFirstPrompt(path string) string {
 
 // findCodexSession is the rollout of a thread id under home, wherever in the date tree it sits.
 func findCodexSession(home, id string) (string, error) {
+	return findCodexIn(RootsOf(home)[Codex], id)
+}
+
+// findCodexIn is findCodexSession in the rollout folders of a machine, each tried in turn.
+func findCodexIn(roots []string, id string) (string, error) {
 	if !text.SessionID(id) {
 		return "", os.ErrNotExist
 	}
-	hits, _ := filepath.Glob(filepath.Join(SessionRoots(home)[Codex], "*", "*", "*", "rollout-*-"+id+".jsonl"))
+	var hits []string
+	for _, root := range roots {
+		for _, session := range CodexFiles(root) {
+			if session.ID == id {
+				hits = append(hits, session.Path)
+			}
+		}
+	}
 	if len(hits) == 0 {
 		return "", os.ErrNotExist
 	}
@@ -541,7 +571,10 @@ func findCodexSession(home, id string) (string, error) {
 	return hits[len(hits)-1], nil
 }
 
-// codexFindScript is findCodexSession as a shell line for a remote machine: prints the path, or nothing.
-func codexFindScript(quotedHome, id string) string {
-	return `ls ` + quotedHome + `/.codex/sessions/*/*/*/rollout-*-` + id + `.jsonl 2>/dev/null | tail -1`
+// codexFindScript is findCodexSession in one rollout folder, as a shell line for a remote machine: prints the path, or
+// nothing.
+func codexFindScript(root, id string) string {
+	root = rpath.For(root).Slash(root)
+	return `find ` + script.Quote(root) + ` -type f -name ` + script.Quote("rollout-*-"+id+".jsonl") +
+		` 2>/dev/null | sort | tail -1` // the id is a session id: no quoting to do
 }

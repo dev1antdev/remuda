@@ -53,6 +53,15 @@ func newProcessSessions(name string, read func([]transcript.Running) (map[int]st
 	return &processSessions{name: name, read: read, fresh: sessionsFresh, forget: sessionsForget, procs: map[processKey]*process{}}
 }
 
+// TranscriptRoots is the session folders this machine's reader knows, the folders its agents named for themselves
+// included: what search and usage scan beside its home's own.
+func (mc *Machine) TranscriptRoots() transcript.Roots {
+	if mc.Transcripts == nil {
+		return transcript.RootsOf(mc.Home())
+	}
+	return mc.Transcripts.Roots()
+}
+
 // of is the core adapter's SessionLookup: what the last read found of the process, a read booked when it is new or due.
 func (s *processSessions) of(asked core.AgentProcess) *herdr.AgentSession {
 	now := time.Now()

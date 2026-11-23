@@ -419,7 +419,7 @@ func (c *Service) open(mc *machines.Machine, paneID, sessionID, dir string, tail
 		format := transcript.FormatOfAgent(pane.Agent) // the folder's sessions of the pane's own agent: those it can resume
 		if sessionID != "" {                           // only a session of this folder: another folder's is the viewer's business
 			if mc.Local() {
-				conv.Sessions, _ = transcript.Sessions(format, conv.Dir)
+				conv.Sessions, _ = mc.Transcripts.Sessions(format, conv.Dir)
 				for _, session := range conv.Sessions {
 					if session.ID == sessionID {
 						conv.Path = session.Path
@@ -434,7 +434,7 @@ func (c *Service) open(mc *machines.Machine, paneID, sessionID, dir string, tail
 		}
 		if conv.Path == "" && mc.Local() && newest {
 			if conv.Sessions == nil {
-				conv.Sessions, _ = transcript.Sessions(format, conv.Dir)
+				conv.Sessions, _ = mc.Transcripts.Sessions(format, conv.Dir)
 			}
 			if len(conv.Sessions) > 0 {
 				conv.Path = conv.Sessions[0].Path
@@ -456,7 +456,7 @@ func (c *Service) open(mc *machines.Machine, paneID, sessionID, dir string, tail
 	conv.ID = transcript.SessionID(conv.Path)
 	conv.stamp = mc.Transcripts.SubagentsStamp(conv.Path, time.Now())
 	if conv.Sessions == nil && mc.Local() && paneID != "" && !tail {
-		conv.Sessions, _ = transcript.Sessions(transcript.FormatOf(conv.Path), conv.Dir)
+		conv.Sessions, _ = mc.Transcripts.Sessions(transcript.FormatOf(conv.Path), conv.Dir)
 	}
 	return conv, nil
 }
