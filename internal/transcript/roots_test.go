@@ -13,6 +13,78 @@ import (
 	"github.com/dev1antdev/remuda/internal/shell"
 )
 
+// TestALearnedFolderAndItsSessionOutliveARestart: what an accepted process read is kept in the state dir, so the next
+// run of remuda reads that conversation under the folder its agent named — while an id nobody read there is not found
+// under a folder whose process reads lapsed long ago.
+func TestALearnedFolderAndItsSessionOutliveARestart(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	store := OpenRootStore(t.TempDir())
+	host := shell.Local{Name: "local"}
+	root := filepath.Join(t.TempDir(), "profile", "projects")
+	const read, unknown = "4c9d6f0e-1111-4222-8333-944455556666", "5d0e7f1f-2222-4333-8444-a55566667777"
+	path := filepath.Join(root, "-work", read+".jsonl")
+	for _, name := range []string{read, unknown} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, "-work", name+".jsonl"), []byte("{}\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	first := NewReader(host).Keeping(store)
+	first.addRoot(Claude, root)
+	first.rememberSession(read, path)
+
+	// the agent stops and remuda restarts: nothing is fresh, nothing is in memory
+	next := NewReader(host).Keeping(store)
+	if got, err := next.ResolveSession("claude", "/work", "id", read); err != nil || got != path {
+		t.Fatalf("the conversation read there: %q, %v; want %s", got, err, path)
+	}
+	if _, err := next.ResolveSession("claude", "/work", "id", unknown); err == nil {
+		t.Fatal("an id nobody read there is found under a lapsed folder")
+	}
+	if !slices.Contains(next.Roots()[Claude], root) {
+		t.Fatalf("the folder is dropped from the machine's history: %v", next.Roots())
+	}
+}
+
+// TestAFolderThatIsGoneIsForgotten: a kept folder checked and found gone leaves the machine's roots and the file; one
+// the machine could not be asked about stays.
+func TestAFolderThatIsGoneIsForgotten(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	dir := t.TempDir()
+	store := OpenRootStore(dir)
+	host := shell.Local{Name: "local"}
+	root := filepath.Join(t.TempDir(), "profile", "projects")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	first := NewReader(host).Keeping(store)
+	first.addRoot(Claude, root)
+	if !slices.Contains(first.Roots()[Claude], root) {
+		t.Fatalf("learned folder: %v", first.Roots())
+	}
+	if err := os.RemoveAll(root); err != nil {
+		t.Fatal(err)
+	}
+	next := NewReader(host).Keeping(store)
+	if slices.Contains(next.Roots()[Claude], root) {
+		t.Fatalf("a folder that is gone is still offered: %v", next.Roots())
+	}
+	if slices.Contains(store.Loaded(host.ID()).Roots[Claude], root) {
+		t.Fatal("a folder that is gone is still kept")
+	}
+
+	unasked := &shell.Fake{Name: "remote", Dir: t.TempDir(), Remote: true, Answer: func(string) (string, error) {
+		return "", errors.New("the connection went away")
+	}}
+	kept := NewReader(unasked).Keeping(store)
+	kept.addRoot(Claude, root)
+	if !slices.Contains(kept.Roots()[Claude], root) {
+		t.Fatalf("a folder the machine could not be asked about is dropped: %v", kept.Roots())
+	}
+}
+
 // TestSessionsOfLearnsOnlyAcceptedRoots: the folder an agent named for itself is kept when the process read is one
 // SessionsOf answers for, never from a record the pid check rejected.
 func TestSessionsOfLearnsOnlyAcceptedRoots(t *testing.T) {
@@ -79,12 +151,15 @@ func TestResolvedSessionFollowsTheRoots(t *testing.T) {
 	}
 }
 
-// TestALearnedRootExpires: a path an agent named is accepted while its process read is fresh and refused after it.
-func TestALearnedRootExpires(t *testing.T) {
+// TestALearnedRootExpiresForANewResume: an id is found under a folder an agent named while that read is fresh, and not
+// after it lapses: the reader keeps the folder for the sessions it already read, not as a place to look for a
+// conversation nobody saw there.
+func TestALearnedRootExpiresForANewResume(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	reader := NewReader(shell.Local{Name: "local"})
 	root := filepath.Join(t.TempDir(), "projects")
-	path := filepath.Join(root, "-work", "s.jsonl")
+	const id = "4c9d6f0e-1111-4222-8333-944455556666"
+	path := filepath.Join(root, "-work", id+".jsonl")
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +167,7 @@ func TestALearnedRootExpires(t *testing.T) {
 		t.Fatal(err)
 	}
 	reader.addRoot(Claude, root)
-	if got, err := reader.ResolveSession("claude", "", "path", path); err != nil || got != path {
+	if got, err := reader.ResolveSession("claude", "/work", "id", id); err != nil || got != path {
 		t.Fatalf("fresh root: %q, %v", got, err)
 	}
 	reader.mu.Lock()
@@ -100,11 +175,11 @@ func TestALearnedRootExpires(t *testing.T) {
 		reader.learnedRoots[Claude][dir] = time.Now().Add(-time.Second)
 	}
 	reader.mu.Unlock()
-	if _, err := reader.ResolveSession("claude", "", "path", path); err == nil {
-		t.Fatal("a path under an expired root was accepted")
+	if _, err := reader.ResolveSession("claude", "/work", "id", id); err == nil {
+		t.Fatal("an id was found under an expired root")
 	}
-	if slices.Contains(reader.Roots()[Claude], root) {
-		t.Fatalf("an expired root is still offered: %v", reader.Roots())
+	if !slices.Contains(reader.Roots()[Claude], root) {
+		t.Fatalf("the folder an agent left is dropped from the machine's history: %v", reader.Roots())
 	}
 }
 

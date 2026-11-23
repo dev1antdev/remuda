@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -31,6 +32,9 @@ type Reader struct {
 	continuation map[string]continuation // session file -> its continuation, as last looked
 	predecessor  map[string]string       // session file -> the file it continues ("" when none)
 	learnedRoots map[Format]map[string]time.Time
+	kept         KeptRoots // the folders and conversations that outlive this run, see Keeping
+	store        *RootStore
+	keptAt       time.Time // when the kept folders were last checked to be there
 	active       map[string]activeSession
 	rootVersion  uint64
 	subTails     map[string]*cachedTail // remote subagent files by path
@@ -73,6 +77,8 @@ const (
 	learnedRootTTL = 10 * time.Minute
 	// how long a Codex id's resolved file stands before it is looked up again: a revert writes a newer file at once
 	codexResolveFresh = 2 * time.Second
+	// how often the folders kept from earlier runs are checked to be still there: one that is gone is forgotten
+	keptCheck = 10 * time.Minute
 )
 
 // NewReader reads the transcripts on host.
@@ -80,8 +86,18 @@ func NewReader(host shell.Host) *Reader {
 	return &Reader{host: host, tails: map[string]*cachedTail{}, sessionPath: map[sessionKey]string{}, sessionAt: map[sessionKey]time.Time{}, sessionMiss: map[sessionKey]time.Time{},
 		continuation: map[string]continuation{}, predecessor: map[string]string{},
 		learnedRoots: map[Format]map[string]time.Time{},
+		kept:         KeptRoots{Roots: map[Format][]string{}, Sessions: map[string]string{}},
 		active:       map[string]activeSession{},
 		subTails:     map[string]*cachedTail{}, subagents: map[string]*subagentEntry{}, subDirs: map[string]dirListing{}, metas: map[string]cachedMeta{}}
+}
+
+// Keeping loads what store kept for this machine and saves what the reader learns there: the folders its agents named
+// for themselves and the file each conversation was read in, so the next run of remuda finds them again.
+func (r *Reader) Keeping(store *RootStore) *Reader {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.store, r.kept = store, copyKept(store.Loaded(r.host.ID()))
+	return r
 }
 
 // addRoot keeps a folder an agent named for itself after an accepted process read, for a while: its session is found
@@ -110,6 +126,10 @@ func (r *Reader) addRoot(f Format, dir string) {
 	r.learnedRoots[f][dir] = now.Add(learnedRootTTL)
 	if !known || !until.After(now) {
 		r.bumpRootsLocked()
+	}
+	if !slices.Contains(r.kept.Roots[f], dir) {
+		r.kept.Roots[f] = append(r.kept.Roots[f], dir)
+		r.saveKeptLocked()
 	}
 }
 
@@ -144,19 +164,26 @@ func (r *Reader) rememberSession(id, path string) {
 		}
 	}
 	r.active[id] = activeSession{path: path, until: now.Add(learnedRootTTL)}
+	if r.kept.Sessions[id] != path {
+		r.kept.Sessions[id] = path
+		r.saveKeptLocked()
+	}
 }
 
-// activePath is the live file an accepted process read named, while that reading is fresh.
-func (r *Reader) activePath(id string) string {
+// activePath is the file an accepted process read named: the live one while that read is fresh, else the one kept from
+// an earlier run. kept says it came from the kept set, so whether it is still there has yet to be asked.
+func (r *Reader) activePath(id string) (path string, kept bool) {
 	now := time.Now()
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	session, ok := r.active[id]
-	if !ok || !session.until.After(now) {
+	if session, ok := r.active[id]; ok {
+		if session.until.After(now) {
+			return session.path, false
+		}
 		delete(r.active, id)
-		return ""
 	}
-	return session.path
+	path, kept = r.kept.Sessions[id], r.kept.Sessions[id] != ""
+	return path, kept
 }
 
 // regularSession says a session path is a regular file on the machine.
@@ -168,11 +195,89 @@ func (r *Reader) regularSession(path string) bool {
 	return err == nil
 }
 
-// Roots is this machine's session folders: its home's own and the ones accepted processes named for themselves while
-// they are fresh. It is a copy: a scanner may keep it.
+// Roots is this machine's session folders: its home's own, every folder an agent named for itself that this reader
+// kept — whether its process read is still fresh or the agent stopped long ago — and the ones a running process named
+// since. A folder found gone is forgotten. It is a copy: a scanner may keep it.
 func (r *Reader) Roots() Roots {
-	roots, _ := r.rootsSnapshot()
+	r.forgetGone()
+	roots, style := RootsOf(r.host.Home()), rpath.For(r.host.Home())
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for f, dirs := range r.kept.Roots {
+		roots[f] = appendMissing(roots[f], style, dirs...)
+	}
+	for f, learned := range r.learnedRoots {
+		for dir := range learned {
+			roots[f] = appendMissing(roots[f], style, dir)
+		}
+	}
 	return roots
+}
+
+// appendMissing is list with the folders not already in it.
+func appendMissing(list []string, style rpath.Style, dirs ...string) []string {
+	for _, dir := range dirs {
+		known := false
+		for _, have := range list {
+			if style.Equal(have, dir) {
+				known = true
+				break
+			}
+		}
+		if !known {
+			list = append(list, dir)
+		}
+	}
+	return list
+}
+
+// forgetGone drops the kept folders that are no longer on the machine, checked at most every keptCheck: one the machine
+// could not be asked about stays.
+func (r *Reader) forgetGone() {
+	r.mu.Lock()
+	if !r.keptAt.IsZero() && time.Since(r.keptAt) < keptCheck {
+		r.mu.Unlock()
+		return
+	}
+	r.keptAt = time.Now()
+	kept := copyKept(r.kept)
+	r.mu.Unlock()
+	gone := map[Format][]string{}
+	for f, dirs := range kept.Roots {
+		for _, dir := range dirs {
+			if r.gone(dir) {
+				gone[f] = append(gone[f], dir)
+			}
+		}
+	}
+	if len(gone) == 0 {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for f, dirs := range gone {
+		for _, dir := range dirs {
+			r.kept.Roots[f] = slices.DeleteFunc(r.kept.Roots[f], func(have string) bool { return have == dir })
+		}
+	}
+	r.saveKeptLocked()
+}
+
+// gone says whether a folder is no longer on the machine; one it could not be asked about is kept.
+func (r *Reader) gone(dir string) bool {
+	if r.host.Local() {
+		info, err := os.Stat(dir)
+		return errors.Is(err, os.ErrNotExist) || err == nil && !info.IsDir()
+	}
+	out, err := shell.Text(r.host, "if [ -d "+script.Quote(dir)+" ]; then echo yes; else echo no; fi", 10*time.Second)
+	return err == nil && strings.TrimSpace(out) == "no"
+}
+
+// saveKeptLocked writes what outlives this run; the caller holds r.mu.
+func (r *Reader) saveKeptLocked() {
+	if r.store != nil {
+		r.store.Keep(r.host.ID(), r.kept)
+	}
 }
 
 // rootsSnapshot is Roots with the generation it was read at, so a resolved path is never cached against another set.
@@ -459,10 +564,11 @@ func (r *Reader) ResolveSession(agent, cwd, kind, value string) (string, error) 
 	if !text.SessionID(value) {
 		return "", fmt.Errorf("session id %q does not look like one", value)
 	}
-	if path := r.activePath(value); path != "" {
+	if path, kept := r.activePath(value); path != "" {
 		style := rpath.For(r.host.Home())
 		clean := style.Clean(path)
-		if underRoots(r.Roots(), style, clean) && (!r.host.Local() || sessionFile(clean)) {
+		// the live file was just read; one kept from an earlier run must still be there
+		if underRoots(r.Roots(), style, clean) && (kept && r.regularSession(clean) || !kept && (!r.host.Local() || sessionFile(clean))) {
 			return clean, nil
 		}
 	}
