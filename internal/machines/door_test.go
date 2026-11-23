@@ -36,10 +36,10 @@ func TestDoorScriptPlacesTheFilesPrivately(t *testing.T) {
 		`d="${XDG_CONFIG_HOME:-$HOME/.config}/remuda"`,
 		`chmod 700 "$d"`,
 		`url='http://127.0.0.1:7318'`,
-		`cat > "$d/agent-key.new"`,
-		`mv -f "$d/agent-key.new" "$d/agent-key"`,
-		`printf '%s\n' "$url" > "$d/agent-url.new"`,
-		`mv -f "$d/agent-url.new" "$d/agent-url"`,
+		`cat > "$d/agent-key.new.$$"`,
+		`mv -f "$d/agent-key.new.$$" "$d/agent-key"`,
+		`printf '%s\n' "$url" > "$d/agent-url.new.$$"`,
+		`mv -f "$d/agent-url.new.$$" "$d/agent-url"`,
 		`chmod 600 "$d/agent-key" "$d/agent-url"`,
 	} {
 		if !strings.Contains(s, want) {

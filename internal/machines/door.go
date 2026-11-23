@@ -53,7 +53,7 @@ for held in "$lock".*; do
   rm -rf "$held"
 done
 mine() { [ -e "$lock.$now/$me" ] && [ -e "$lock.$((now + 1))/$me" ]; }
-drop() { for slot in "$now" "$((now + 1))"; do if [ -e "$lock.$slot/$me" ]; then rm -rf "$lock.$slot/$me"; rmdir "$lock.$slot" 2>/dev/null; fi; done; return 0; }
+drop() { for slot in "$now" "$((now + 1))"; do if [ -e "$lock.$slot/$me" ]; then rm -rf "$lock.$slot/$me"; rmdir "$lock.$slot" 2>/dev/null; fi; done; rm -f "$d/agent-door-moved.new.$$" "$d/agent-key.new.$$" "$d/agent-url.new.$$"; return 0; }
 trap drop EXIT
 for slot in "$now" "$((now + 1))"; do
   mkdir "$lock.$slot" 2>/dev/null && mkdir "$lock.$slot/$me" 2>/dev/null || { echo ` + doorBusy + `; exit 0; }
@@ -68,9 +68,9 @@ mine || { echo ` + doorBusy + `; exit 0; }
 if [ "$url" = "$usual" ]; then
   rm -f "$d/agent-door-moved"
 else
-  printf '%s\n' "$url" > "$d/agent-door-moved.new" && mv -f "$d/agent-door-moved.new" "$d/agent-door-moved" || exit 1
+  printf '%s\n' "$url" > "$d/agent-door-moved.new.$$" && mv -f "$d/agent-door-moved.new.$$" "$d/agent-door-moved" || exit 1
 fi
-cat > "$d/agent-key.new" && mv -f "$d/agent-key.new" "$d/agent-key" && printf '%s\n' "$url" > "$d/agent-url.new" && mv -f "$d/agent-url.new" "$d/agent-url" && chmod 600 "$d/agent-key" "$d/agent-url" || exit 1
+cat > "$d/agent-key.new.$$" && mv -f "$d/agent-key.new.$$" "$d/agent-key" && printf '%s\n' "$url" > "$d/agent-url.new.$$" && mv -f "$d/agent-url.new.$$" "$d/agent-url" && chmod 600 "$d/agent-key" "$d/agent-url" || exit 1
 echo ` + doorPlaced
 }
 
