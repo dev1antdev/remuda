@@ -877,7 +877,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   while one of now or of the next `doorLockAhead` half minutes stands; a
   dead script's lapse or, dated further ahead, count for nothing, placing
   is asked again long enough to outwait them, `doorPlaceTries`; each run
-  marks its locks and places nothing once they are no longer its own) and
+  marks its locks and places nothing once they are no longer its own, and on
+  its way out releases only the marks it still holds) and
   answers `placed`, `taken` or `busy`. A door that answers `/api/health` — asked straight, past any
   proxy; one nobody could ask counts — stays against a door that would
   move, and one on a port of its own (`agent-door-moved` names it, so a
@@ -1024,7 +1025,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   `started_ms` moves with a step, as ps's start does, so a process born as
   much later as the clock went back carries the very value the one before had
   (what `started_since_boot` closes); a reading wider than `maxBootSpan`
-  20 ms, or none (a `date` telling no milliseconds), leaves the processes the
+  100 ms, or none (a `date` telling no milliseconds), leaves the processes the
   second cannot settle out of the answer, as a clock not read does (below); a
   FILETIME's millisecond on Windows; on macOS, where ps tells no millisecond,
   `ps -o lstart`'s second alone — a later process given the pid within that

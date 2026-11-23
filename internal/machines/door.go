@@ -53,7 +53,7 @@ for held in "$lock".*; do
   rm -rf "$held"
 done
 mine() { [ -e "$lock.$now/$me" ] && [ -e "$lock.$((now + 1))/$me" ]; }
-drop() { for slot in "$now" "$((now + 1))"; do [ ! -e "$lock.$slot/$me" ] || rm -rf "$lock.$slot"; done; }
+drop() { for slot in "$now" "$((now + 1))"; do if [ -e "$lock.$slot/$me" ]; then rm -rf "$lock.$slot/$me"; rmdir "$lock.$slot" 2>/dev/null; fi; done; return 0; }
 trap drop EXIT
 for slot in "$now" "$((now + 1))"; do
   mkdir "$lock.$slot" 2>/dev/null && mkdir "$lock.$slot/$me" 2>/dev/null || { echo ` + doorBusy + `; exit 0; }
