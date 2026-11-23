@@ -364,18 +364,19 @@ func TestARealProcessIsKnownByTheCreationTheRuntimeTold(t *testing.T) {
 	t.Setenv("HOME", home)
 	pid := holder(t, home, nil, nil, false, "")
 	start := procStart(t, pid)
-	body := fmt.Sprintf(`{"pid":%d,"sessionId":"4c9d6f0e-1111-4222-8333-944455556666","cwd":%q,"startedAt":%d,"procStart":%q}`, pid, home, time.Now().UnixMilli(), start)
+	began, err := time.Parse(time.ANSIC, start)
+	if err != nil {
+		t.Fatal(err)
+	}
+	created := creationOf(t, pid, began)
+	body := fmt.Sprintf(`{"pid":%d,"sessionId":"4c9d6f0e-1111-4222-8333-944455556666","cwd":%q,"startedAt":%d,"procStart":%q}`, pid, home, created+1000, start)
 	if err := os.MkdirAll(filepath.Join(home, ".claude", "sessions"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(home, ".claude", "sessions", strconv.Itoa(pid)+".json"), []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	began, err := time.Parse(time.ANSIC, start)
-	if err != nil {
-		t.Fatal(err)
-	}
-	known := Running{PID: pid, Agent: "claude", CWD: home, Seen: time.Now().Add(-time.Hour), Started: creationOf(t, pid, began)}
+	known := Running{PID: pid, Agent: "claude", CWD: home, Seen: time.Now().Add(-time.Hour), Started: created}
 	if runtime.GOOS == "linux" {
 		known.SinceBoot = sinceBootOf(t, pid) // a core that tells it binds the process without reading a clock
 	}
