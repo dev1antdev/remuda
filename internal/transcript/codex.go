@@ -536,7 +536,12 @@ func CodexFiles(root string) []SessionInfo {
 		out = append(out, SessionInfo{ID: CodexSessionID(p), Path: p, ModTime: info.ModTime(), Size: info.Size(), Agent: "codex"})
 		return nil
 	})
-	sort.Slice(out, func(i, j int) bool { return out[i].ModTime.After(out[j].ModTime) })
+	sort.Slice(out, func(i, j int) bool {
+		if !out[i].ModTime.Equal(out[j].ModTime) {
+			return out[i].ModTime.After(out[j].ModTime)
+		}
+		return out[i].Path > out[j].Path // a revert's name is later than the file it replays
+	})
 	return out
 }
 
@@ -554,7 +559,12 @@ func codexSessions(roots []string, cwd string) []SessionInfo {
 			all = append(all, rooted{SessionInfo: s, root: root})
 		}
 	}
-	sort.Slice(all, func(i, j int) bool { return all[i].ModTime.After(all[j].ModTime) })
+	sort.Slice(all, func(i, j int) bool {
+		if !all[i].ModTime.Equal(all[j].ModTime) {
+			return all[i].ModTime.After(all[j].ModTime)
+		}
+		return all[i].Path > all[j].Path
+	})
 	if len(all) > codexSessionsLookAt {
 		all = all[:codexSessionsLookAt]
 	}
