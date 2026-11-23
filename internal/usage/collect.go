@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/shell"
+	"github.com/dev1antdev/remuda/internal/transcript"
 )
 
 // MachineReport is one machine's report in the fleet's answer, or why it has none.
@@ -48,17 +49,18 @@ var errNoReport = errors.New("the machine's remuda gave no report")
 // ReadHost is one machine's report since a moment, its days by folder when daily: in process here, through the
 // machine's own remuda on a remote.
 func ReadHost(host shell.Host, since time.Time, loc *time.Location, tz string, daily bool, timeout time.Duration) (Report, error) {
+	roots := transcript.RootsFor(host)
 	if host.Local() {
 		if daily {
-			return ScanHomeDays(host.Home(), since, loc)
+			return ScanRootsDays(roots, since, loc)
 		}
-		return ScanHome(host.Home(), since, loc)
+		return ScanRoots(roots, since, loc)
 	}
-	run := Script
+	run := ScriptRoots
 	if daily {
-		run = DaysScript
+		run = DaysScriptRoots
 	}
-	raw, err := shell.Text(host, run(host.Home(), since, tz), timeout)
+	raw, err := shell.Text(host, run(roots, host.Home(), since, tz), timeout)
 	if err != nil {
 		return Report{}, errors.New(strings.TrimSpace(err.Error()))
 	}

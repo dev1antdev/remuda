@@ -1,6 +1,9 @@
 package transcript
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestAWindowsSessionPathIsUnderItsHomesRoots(t *testing.T) {
 	home := `C:\Users\me`
@@ -23,5 +26,10 @@ func TestAWindowsSessionPathIsUnderItsHomesRoots(t *testing.T) {
 	}
 	if got := EncodePath(`C:\Users\me\app`); got != "C--Users-me-app" {
 		t.Errorf("Claude Code's folder for a Windows project: %q", got)
+	}
+	id := "4c9d6f0e-1111-4222-8333-944455556666"
+	script := findScript(RootsOf(home), "", home, `C:\work\app`, id)
+	if !strings.Contains(script, `'C:/Users/me/.codex/sessions'`) || !strings.Contains(script, `'C:/Users/me/.claude/projects/C--work-app/`+id+`.jsonl'`) {
+		t.Errorf("a remote Windows find is not spelt for Git Bash: %s", script)
 	}
 }

@@ -107,4 +107,10 @@ func TestTheSearchCoversTheAgentsOwnFilesOnly(t *testing.T) {
 	if !strings.Contains(codex, `line='(second opinion request r)'`) {
 		t.Fatalf("the line searched for: %s", codex)
 	}
+	roots := transcript.RootsOf("/h")
+	roots[transcript.Claude] = append(roots[transcript.Claude], "/h/profile/projects")
+	own := FindScriptIn(roots, "/h", "claude", "/w/app", "r")
+	if !strings.Contains(own, "/h/profile/projects/"+transcript.EncodePath("/w/app")) {
+		t.Fatalf("the folder an agent named for itself: %s", own)
+	}
 }

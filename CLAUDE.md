@@ -905,7 +905,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   8 MB of a file, 128 MB of tails in all and 64 MB of subagents', the
   ones read longest ago going first, never one read in the last minute
   for a file not cached yet: a fleet of agents reads every file in turn);
-  `Reader.ResolveSession` finds `<uuid>.jsonl` and caches the hit on both sides,
+  `Reader.ResolveSession` finds `<uuid>.jsonl` and caches the hit on both sides, keyed by the session roots it looked in,
   and a miss for half a minute only when the file is known not there — a
   machine that did not answer is no miss.
   `Machine.Ready()` reconnects a dead remote at most every 15s; a removed
@@ -929,15 +929,20 @@ components and icons as rules for whoever changes it: @docs/design.md
   Claude Code's own rule — and `userText` reads the person's words without
   the wrapper (`pasted_test.go`). Session resolution: the core's
   `agent_session` (exact UUID) first, cwd-encoded dir scan as fallback.
-  **A session folder the agent named for itself** (`format.go`, `RootsOf` / `RootsFor` / `RememberRoot`):
+  **A session folder the agent named for itself** (`format.go`, `Reader.Roots` / `RootValues`):
   a home's `~/.claude/projects`, `~/.codex/sessions`, `~/.gemini/tmp`, and any folder a running agent named in
   its environment — `CLAUDE_CONFIG_DIR`'s `projects`, the `sessions` folder above the rollout
-  `CODEX_HOME` gave — learned by `SessionsOf` from the process (`learnRoots`) and kept per home, so
-  `ResolveSession`, the search and the usage counter look there too (`TestClaudeSessionComesFromItsConfigDirAndItsStart`,
-  `TestASessionUnderItsOwnCODEXHOMEIsOpenedToo`); a machine's remuda learns its own, which its search uses.
+  `CODEX_HOME` gave. The folders live on that machine's `transcript.Reader`, never in a package-level registry:
+  a process lookup accepted for a pid hands its session file back with the id (`parseSessionsByPID`), and only then
+  is the folder it sits under learned (`learnRoot`), cleaned and absolute, for `learnedRootTTL` 10 min after the
+  last accepted read. `RootsFor(host)` hands that snapshot to `ResolveSession`, `Reader.Sessions`, the search, the
+  usage counter and the second opinion's find; a remote scan is given the folders beyond its home's own as
+  `-root format=folder`. `ResolveSession`'s hit and miss are cached by the roots' generation, so a folder learned
+  (or expired) later is looked in again (`TestSessionsOfLearnsOnlyAcceptedRoots`,
+  `TestResolvedSessionFollowsTheRoots`, `TestASessionUnderItsOwnCODEXHOMEIsOpenedToo`).
   **Codex and Gemini sessions read into the same `Turn`** (`format.go`:
   a `Format` by the file's place — `~/.claude/projects`, `~/.codex/sessions`,
-  `~/.gemini/tmp` — and `FormatOfAgent` by the core's `agent` field;
+  `~/.gemini/tmp`, or a Codex rollout's name, which carries across a `CODEX_HOME` of its own — and `FormatOfAgent` by the core's `agent` field;
   `Parse` / `ParseBytesOf` dispatch on it). `codex.go` (tested on an
   anonymized rollout): Codex's `rollout-<time>-<thread id>.jsonl` is one
   record a line, `{"timestamp","type","payload"}` — `session_meta` the
@@ -1067,9 +1072,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   process, else a child of it, holds open (`/proc/<pid>/fd`,
   else `lsof -nP`; none on Windows), none when two are, the id the one its
   `session_meta` names (a revert's replacement file,
-  `rollout-<time>-<id>_<rollout id>.jsonl`, keeps the thread's); an id found under a
-  `CLAUDE_CONFIG_DIR` of the agent's own still names a file the readers,
-  which know the default roots alone, do not open yet;
+  `rollout-<time>-<id>_<rollout id>.jsonl`, keeps the thread's); a session the lookup accepted
+  teaches that machine's reader the folder its file sits under, so the transcript behind the id is opened there too
+  (`learnedRootTTL`);
   stateless, since `/clear` and `/resume` change the session under the same
   pid (a core machine's cache of it is `internal/machines`' `processSessions`,
   see `internal/core`); nothing under `~/.claude` or `~/.codex` is written. `NewUsageScanner(path)` is the
@@ -5790,7 +5795,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   denied calls (`deniedWords` in `agent.ts`)).
 - `internal/search/` — **full-text search** over every transcript on every
   machine (`GET /api/search?q=&machine=&dir=&days=`; the 🔍 in the
-  header, or the last row of the ⌘K palette with what was typed there). No index: `ScanHome` walks `~/.claude/projects` and `~/.codex/sessions` newest-first,
+  header, or the last row of the ⌘K palette with what was typed there). No index: `ScanHome` walks the machine's own
+  `~/.claude/projects` and `~/.codex/sessions` (and the folders its agents named for themselves, `RootsFor`),
+  newest-first,
   sieves lines by four spellings of the query (as typed, lower, UPPER,
   Capitalized — a byte search folds nothing), then `transcript.MatchLine`
   (`MatchCodexLine` for a rollout) parses the candidates: only user/assistant texts count (a message sent while the agent worked, an attachment record, as the person's), never tool
@@ -7821,7 +7828,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   a core go through `text.SessionID` before naming a file or following
   `--resume` (the pane's own hooks report them: the agent chooses the
   value), and a `path` session must be a `.jsonl` under
-  `~/.claude/projects`. Release asset URLs must be GitHub's for this
+  one of the machine's session roots. Release asset URLs must be GitHub's for this
   repository and tag (`releaseURLOK`) and are shell-quoted. Uploads refuse
   a `.remuda`/`uploads` that is a symlink and write with `O_EXCL|O_NOFOLLOW`.
   The review diff refuses a path starting with `-` and passes `--` to git.

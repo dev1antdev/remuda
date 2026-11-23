@@ -11,11 +11,42 @@ import (
 
 	"github.com/dev1antdev/remuda/internal/auth"
 	"github.com/dev1antdev/remuda/internal/code"
+	"github.com/dev1antdev/remuda/internal/rpath"
 	"github.com/dev1antdev/remuda/internal/search"
 	"github.com/dev1antdev/remuda/internal/setup"
 	"github.com/dev1antdev/remuda/internal/state"
+	"github.com/dev1antdev/remuda/internal/transcript"
 	"github.com/dev1antdev/remuda/internal/usage"
 )
+
+// rootFlags are the session folders an agent named for itself, as a scan command receives them from the cockpit.
+type rootFlags struct {
+	roots transcript.Roots
+}
+
+func (r *rootFlags) String() string { return "" }
+
+func (r *rootFlags) Set(value string) error {
+	name, dir, ok := strings.Cut(value, "=")
+	format := transcript.Format(name)
+	if !ok || dir == "" || !rpath.Absolute(dir) || format != transcript.Claude && format != transcript.Codex {
+		return fmt.Errorf("a root is claude=<absolute folder> or codex=<absolute folder>")
+	}
+	if r.roots == nil {
+		r.roots = transcript.Roots{}
+	}
+	r.roots[format] = append(r.roots[format], dir)
+	return nil
+}
+
+// forHome is the machine's own roots with the ones its agents named for themselves.
+func (r *rootFlags) forHome(home string) transcript.Roots {
+	roots := transcript.RootsOf(home)
+	for format, dirs := range r.roots {
+		roots[format] = append(roots[format], dirs...)
+	}
+	return roots
+}
 
 // commands are the subcommands beside the server: setup, uninstall and code for people, search and usage for a remuda on a
 // remote machine, mcp and tasks for the coding agents (and a person at a shell) to reach the task list.
@@ -40,6 +71,8 @@ func searchCmd(args []string) {
 	dir := fs.String("dir", "", "only conversations in this folder")
 	sinceS := fs.String("since", "", "only records after this time (RFC 3339)")
 	limit := fs.Int("limit", 400, "stop after this many hits, newest first")
+	var roots rootFlags
+	fs.Var(&roots, "root", "a session folder an agent named for itself, format=folder")
 	_ = fs.Parse(args)
 	if strings.TrimSpace(*q) == "" {
 		fmt.Fprintln(os.Stderr, "remuda search -q <text> [-dir <folder>] [-since <RFC3339>] [-limit N]")
@@ -54,7 +87,7 @@ func searchCmd(args []string) {
 		}
 	}
 	home, _ := os.UserHomeDir()
-	if err := search.ScanHome(home, *q, *dir, since, *limit, os.Stdout); err != nil {
+	if err := search.ScanRoots(roots.forHome(home), *q, *dir, since, *limit, os.Stdout); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
@@ -66,6 +99,8 @@ func usageCmd(args []string) {
 	sinceS := fs.String("since", "", "records from this time on (RFC 3339); default: 7 days")
 	tz := fs.String("tz", "", "the zone days are cut in (IANA name); default: this machine's")
 	daily := fs.Bool("daily", false, "every day broken down by folder too, for the year's heatmap")
+	var roots rootFlags
+	fs.Var(&roots, "root", "a session folder an agent named for itself, format=folder")
 	_ = fs.Parse(args)
 	since := time.Now().AddDate(0, 0, -7)
 	if *sinceS != "" {
@@ -82,11 +117,11 @@ func usageCmd(args []string) {
 		}
 	}
 	home, _ := os.UserHomeDir()
-	scan := usage.ScanHome
+	scan := usage.ScanRoots
 	if *daily {
-		scan = usage.ScanHomeDays
+		scan = usage.ScanRootsDays
 	}
-	rep, err := scan(home, since, loc)
+	rep, err := scan(roots.forHome(home), since, loc)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/rpath"
+	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/text"
 )
 
@@ -441,11 +443,13 @@ func findGeminiSession(home, cwd, id string) (string, error) {
 
 // geminiFindScript is findGeminiSession as a shell line for a remote machine: prints the path, or nothing. The
 // listing is read a line at a time, so a home with a space stays whole.
-func geminiFindScript(quotedHome, id string) string {
+func geminiFindScript(home, id string) string {
 	short := id
 	if len(short) > 8 {
 		short = short[:8]
 	}
-	return `ls -t ` + quotedHome + `/.gemini/tmp/*/chats/session-*-` + short + `.json* 2>/dev/null | while IFS= read -r f; do ` +
+	style := rpath.For(home)
+	root := script.Quote(style.Slash(style.Join(home, ".gemini", "tmp")))
+	return `ls -t ` + root + `/*/chats/session-*-` + short + `.json* 2>/dev/null | while IFS= read -r f; do ` +
 		`if head -c 65536 "$f" | grep -q '"sessionId": *"` + id + `"'; then printf %s "$f"; break; fi; done`
 }

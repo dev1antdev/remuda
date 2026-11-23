@@ -59,19 +59,21 @@ func (r *Reader) SessionsOf(procs []Running) (map[int]string, error) {
 	if slices.ContainsFunc(procs, needsClock) {
 		clock, clockErr = r.machineClock()
 	}
-	found, unsure := map[int]string{}, map[int]bool{}
+	found, paths, unsure := map[int]string{}, map[int]string{}, map[int]bool{}
 	if lookup := sessionsByPIDScript(procs); lookup != "" {
 		out, err := shell.Text(r.host, lookup, 15*time.Second)
 		if err != nil {
 			return nil, err
 		}
-		found, unsure = parseSessionsByPID(out, procs, rpath.For(r.host.Home()), clock)
-		r.learnRoots(out, procs)
+		found, paths, unsure = parseSessionsByPID(out, procs, rpath.For(r.host.Home()), clock)
 	}
 	answer := map[int]string{}
 	for _, p := range procs {
 		if (clockErr == nil || !needsClock(p)) && !unsure[p.PID] {
 			answer[p.PID] = found[p.PID]
+			if answer[p.PID] != "" {
+				r.learnRoot(FormatOfAgent(p.Agent), paths[p.PID])
+			}
 		}
 	}
 	if len(unsure) > 0 {
@@ -80,51 +82,23 @@ func (r *Reader) SessionsOf(procs []Running) (map[int]string, error) {
 	return answer, clockErr
 }
 
-// learnRoots keeps the folders the processes of an answer named for themselves — the config dir whose session file
-// answered for Claude Code, the rollout folder Codex writes its sessions under — so the transcript behind a session
-// found here is found there too.
-func (r *Reader) learnRoots(out string, procs []Running) {
-	asked := map[int]bool{}
-	for _, p := range procs {
-		asked[p.PID] = true
+// learnRoot keeps the folder behind a session file an accepted process named: Claude Code's config dir, Codex's home.
+func (r *Reader) learnRoot(f Format, path string) {
+	if path == "" {
+		return
 	}
-	for _, record := range script.Sections(out) {
-		record = strings.TrimSpace(record)
-		if rest, ok := strings.CutPrefix(record, "config"+script.US); ok {
-			pid, dir, _ := strings.Cut(rest, script.US)
-			if n, err := strconv.Atoi(strings.TrimSpace(pid)); err == nil && asked[n] && dir != "" {
-				r.AddRoot(Claude, dir+"/projects")
-			}
-			continue
+	style := rpath.For(r.host.Home())
+	switch f {
+	case Claude: // <config dir>/sessions/<pid>.json
+		config := style.Dir(style.Dir(path))
+		r.addRoot(Claude, style.Join(config, "projects"))
+	case Codex: // <codex home>/sessions/YYYY/MM/DD/rollout-….jsonl
+		root := path
+		for range 4 {
+			root = style.Dir(root)
 		}
-		fields := strings.SplitN(record, script.US, 7)
-		if len(fields) < 5 {
-			continue
-		}
-		pid, err := strconv.Atoi(strings.TrimSpace(fields[0]))
-		if err != nil || !asked[pid] {
-			continue
-		}
-		if path := heldRollout(fields[4], pid); path != "" {
-			if i := strings.Index(path, "/sessions/"); i > 0 {
-				r.AddRoot(Codex, path[:i]+"/sessions") // the folder Codex puts its dated tree under
-			}
-		}
+		r.addRoot(Codex, root)
 	}
-}
-
-// heldRollout is the rollout file one process of a payload holds open: its own, never a child's.
-func heldRollout(payload string, pid int) string {
-	for _, entry := range strings.Split(payload, script.FS) {
-		fields := strings.SplitN(entry, script.GS, 3)
-		if len(fields) < 2 || strings.TrimSpace(fields[0]) != strconv.Itoa(pid) {
-			continue
-		}
-		if strings.HasSuffix(fields[1], ".jsonl") {
-			return fields[1]
-		}
-	}
-	return ""
 }
 
 // needsClock says whether a process is told from a later one given its pid by the machine's clock alone: the runtime
@@ -180,9 +154,6 @@ func sessionsByPIDScript(procs []Running) string {
 		if !lookedUp(p) {
 			continue
 		}
-		if p.Agent == "claude" {
-			b.WriteString("config_of " + strconv.Itoa(p.PID) + " " + script.Quote(p.CWD) + "\n")
-		}
 		b.WriteString("s " + strconv.Itoa(p.PID) + " " + p.Agent + " " + script.Quote(p.CWD) + "\n")
 	}
 	if b.Len() == 0 {
@@ -224,12 +195,6 @@ config_dirs() {
   fi
   printf '%s\n' "$HOME/.claude"
 }
-config_of() {
-  config_dirs "$1" | while IFS= read -r c; do
-    case "$c" in /* | [A-Za-z]:*) ;; ?*) c="$2/$c" ;; esac
-    [ -n "$c" ] && [ -f "$c/sessions/$1.json" ] && printf 'config\037%s\037%s\036\n' "$1" "$c"
-  done
-}
 lstart() { LC_ALL=C TZ=UTC ps -o lstart= -p "$1" 2>/dev/null; }
 s() {
   start=$(lstart "$1")
@@ -247,7 +212,7 @@ s() {
     config_dirs "$1" | while IFS= read -r c; do
       case "$c" in /* | [A-Za-z]:*) ;; ?*) c="$3/$c" ;; esac
       f="$c/sessions/$1.json"
-      [ -n "$c" ] && [ -f "$f" ] && { head -c 65536 "$f"; printf '\035'; }
+      [ -n "$c" ] && [ -f "$f" ] && { printf '%s\034' "$f"; head -c 65536 "$f"; printf '\035'; }
     done
   else
     for p in $1 $(pgrep -P "$1" 2>/dev/null); do
@@ -286,12 +251,12 @@ type claudeSessionFile struct {
 
 // parseSessionsByPID reads sessionsByPIDScript's answer, and names the processes it could not tell from a later one
 // given their pid: a reading of the boot too slow to place them.
-func parseSessionsByPID(out string, procs []Running, style rpath.Style, clock machineClock) (map[int]string, map[int]bool) {
+func parseSessionsByPID(out string, procs []Running, style rpath.Style, clock machineClock) (map[int]string, map[int]string, map[int]bool) {
 	cwds, seen, started, sinceBoot := map[int]string{}, map[int]time.Time{}, map[int]int64{}, map[int]SinceBoot{}
 	for _, p := range procs {
 		cwds[p.PID], seen[p.PID], started[p.PID], sinceBoot[p.PID] = p.CWD, p.Seen, p.Started, p.SinceBoot
 	}
-	found, unsure, boot := map[int]string{}, map[int]bool{}, linuxBoot{}
+	found, paths, unsure, boot := map[int]string{}, map[int]string{}, map[int]bool{}, linuxBoot{}
 	var bootID, timeNS string // the machine's boot and the lookup's time namespace, on Linux
 	for _, record := range script.Sections(out) {
 		if system, ok := strings.CutPrefix(strings.TrimSpace(record), "system"+script.US); ok {
@@ -343,28 +308,35 @@ func parseSessionsByPID(out string, procs []Running, style rpath.Style, clock ma
 		} else if !clock.begunBy(start, seen[pid]) {
 			continue
 		}
-		var id string
+		var id, path string
 		switch fields[1] {
 		case "claude":
-			id = claudeSession(payload, pid, start, cwd, style, started[pid])
+			id, path = claudeSession(payload, pid, start, cwd, style, started[pid])
 		case "codex":
-			id = heldThread(payload, pid)
+			id, path = heldThread(payload, pid)
 		}
 		if text.SessionID(id) {
 			found[pid] = id
+			if path != "" {
+				paths[pid] = path
+			}
 		}
 	}
-	return found, unsure
+	return found, paths, unsure
 }
 
 // claudeSession is the session of the candidate file that is this very process's, none for one nothing ties to it.
-func claudeSession(payload string, pid int, start, cwd string, style rpath.Style, told int64) string {
+func claudeSession(payload string, pid int, start, cwd string, style rpath.Style, told int64) (string, string) {
 	began, known := startedMS(start)
 	creation, native := strings.CutPrefix(start, "ft:")
 	created, _ := filetimeOf(creation)
 	for _, doc := range strings.Split(payload, script.GS) {
+		path, document, prefixed := strings.Cut(doc, script.FS)
+		if !prefixed {
+			path, document = "", doc
+		}
 		var file claudeSessionFile
-		if json.Unmarshal([]byte(doc), &file) != nil || file.PID != pid || told != 0 && file.StartedAt < told {
+		if json.Unmarshal([]byte(document), &file) != nil || file.PID != pid || told != 0 && file.StartedAt < told {
 			continue
 		}
 		inFolder := cwd == "" || file.CWD == "" || style.Equal(file.CWD, cwd)
@@ -372,19 +344,19 @@ func claudeSession(payload string, pid int, start, cwd string, style rpath.Style
 		switch {
 		case file.ProcStart != "" && !native:
 			if strings.TrimSpace(file.ProcStart) == start {
-				return file.SessionID
+				return file.SessionID, path
 			}
 		case native && ft:
 			if max(created-recorded, recorded-created) < filetimeMS && inFolder {
-				return file.SessionID
+				return file.SessionID, path
 			}
 		case known && file.StartedAt > 0:
 			if file.StartedAt >= began && inFolder {
-				return file.SessionID
+				return file.SessionID, path
 			}
 		}
 	}
-	return ""
+	return "", ""
 }
 
 // FILETIME counts 100 ns from 1601: a millisecond of it, and the Unix epoch in it.
@@ -497,11 +469,11 @@ func personsThread(head string) (string, bool) {
 	return meta.ID, !subagent && (meta.ThreadSource == "" || meta.ThreadSource == "user")
 }
 
-// heldThread is the thread of the person's conversation among the rollouts a Codex process holds open: the
-// foreground process's own first, a child's only when it holds none; "" when none or more than one is there,
-// since enumeration order says nothing about which one is on screen.
-func heldThread(payload string, pid int) string {
-	own, children := map[string]bool{}, map[string]bool{}
+// heldThread is the thread and rollout of the person's conversation among the rollouts a Codex process holds open: the
+// foreground process's own first, a child's only when it holds none; "" when none or more than one is there, since
+// enumeration order says nothing about which one is on screen.
+func heldThread(payload string, pid int) (string, string) {
+	own, children := map[string]string{}, map[string]string{}
 	for _, entry := range strings.Split(payload, script.FS) {
 		fields := strings.SplitN(entry, script.GS, 3)
 		if len(fields) < 3 {
@@ -518,20 +490,20 @@ func heldThread(payload string, pid int) string {
 			continue
 		}
 		if fields[0] == strconv.Itoa(pid) {
-			own[id] = true
+			own[id] = fields[1]
 		} else {
-			children[id] = true
+			children[id] = fields[1]
 		}
 	}
-	for _, ids := range []map[string]bool{own, children} {
-		if len(ids) == 1 {
-			for id := range ids {
-				return id
+	for _, held := range []map[string]string{own, children} {
+		if len(held) == 1 {
+			for id, path := range held {
+				return id, path
 			}
 		}
-		if len(ids) > 1 {
-			return ""
+		if len(held) > 1 {
+			return "", ""
 		}
 	}
-	return ""
+	return "", ""
 }

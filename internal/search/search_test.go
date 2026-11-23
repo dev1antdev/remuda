@@ -7,8 +7,17 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/shell"
 	"github.com/dev1antdev/remuda/internal/transcript"
 )
+
+// rootedHost is a machine whose reader knows a folder its agent named for itself.
+type rootedHost struct {
+	shell.Host
+	roots transcript.Roots
+}
+
+func (h rootedHost) TranscriptRoots() transcript.Roots { return h.roots }
 
 func TestScanNewestFirstWithFilters(t *testing.T) {
 	projects := t.TempDir()
@@ -81,13 +90,18 @@ func TestScriptQuotesAndSpellings(t *testing.T) {
 	if s := remoteScript("/h", "x", "/p/q", time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)); !strings.Contains(s, " -dir '/p/q' -since '2026-10-01T00:00:00Z'") {
 		t.Fatalf("filters: %s", s)
 	}
+	roots := transcript.RootsOf("/h")
+	roots[transcript.Claude] = append(roots[transcript.Claude], "/h/profile/projects")
+	if s := remoteScriptRoots(roots, "/h", "x", "", time.Time{}); !strings.Contains(s, " -root 'claude=/h/profile/projects'") {
+		t.Fatalf("a root an agent named for itself: %s", s)
+	}
 	if capitalized("вику") != "Вику" {
 		t.Fatalf("capitalized %q", capitalized("вику"))
 	}
 }
 
-// TestSearchLooksInASessionFolderAnAgentNamed: a Claude Code under CLAUDE_CONFIG_DIR writes its projects elsewhere; once
-// the machine's reader has learned that folder from the process, the search looks there too.
+// TestSearchLooksInASessionFolderAnAgentNamed: a Claude Code under CLAUDE_CONFIG_DIR writes its projects elsewhere;
+// the machine's reader's roots, handed to the scan, make the search look there too.
 func TestSearchLooksInASessionFolderAnAgentNamed(t *testing.T) {
 	home := t.TempDir()
 	own := filepath.Join(home, "profile")
@@ -99,12 +113,11 @@ func TestSearchLooksInASessionFolderAnAgentNamed(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(projects, "4c9d6f0e-1111-4222-8333-944455556666.jsonl"), []byte(line+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	transcript.RememberRoot(home, transcript.Claude, filepath.Join(own, "projects")) // the home is this test's own
-	var b strings.Builder
-	if err := ScanHome(home, "needle of its own folder", "", time.Time{}, 10, &b); err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(b.String(), "needle of its own folder") {
-		t.Fatalf("the folder the agent named is not searched: %q", b.String())
+	roots := transcript.RootsOf(home)
+	roots[transcript.Claude] = append(roots[transcript.Claude], filepath.Join(own, "projects"))
+	host := rootedHost{Host: shell.Local{Name: "local"}, roots: roots}
+	result := Search([]shell.Host{host}, "needle of its own folder", "", time.Time{})
+	if len(result.Hits) != 1 || !strings.Contains(result.Hits[0].Snippet, "needle of its own folder") {
+		t.Fatalf("the folder the agent named is not searched: %+v", result)
 	}
 }

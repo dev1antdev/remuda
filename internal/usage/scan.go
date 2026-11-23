@@ -53,20 +53,30 @@ type SessionTotals struct {
 
 const topSessions = 40
 
-// ScanHome sums every transcript under a home written since: Claude Code's project files and Codex's rollouts.
+// ScanHome sums every transcript under a home's own roots written since: Claude Code's project files and Codex's
+// rollouts.
 func ScanHome(home string, since time.Time, loc *time.Location) (Report, error) {
-	return scanHome(newBuilder(since, loc), home)
+	return ScanRoots(transcript.RootsOf(home), since, loc)
+}
+
+// ScanRoots is ScanHome over the session folders one machine knows, including those its agents named for themselves.
+func ScanRoots(roots transcript.Roots, since time.Time, loc *time.Location) (Report, error) {
+	return scanHome(newBuilder(since, loc), roots)
 }
 
 // ScanHomeDays is ScanHome with every day broken down by folder, for the year's heatmap.
 func ScanHomeDays(home string, since time.Time, loc *time.Location) (Report, error) {
-	b := newBuilder(since, loc)
-	b.daily = map[string]map[string]*DayFolder{}
-	return scanHome(b, home)
+	return ScanRootsDays(transcript.RootsOf(home), since, loc)
 }
 
-func scanHome(b *builder, home string) (Report, error) {
-	roots := transcript.RootsFor(home)
+// ScanRootsDays is ScanRoots with every day broken down by folder.
+func ScanRootsDays(roots transcript.Roots, since time.Time, loc *time.Location) (Report, error) {
+	b := newBuilder(since, loc)
+	b.daily = map[string]map[string]*DayFolder{}
+	return scanHome(b, roots)
+}
+
+func scanHome(b *builder, roots transcript.Roots) (Report, error) {
 	for _, projects := range roots[transcript.Claude] {
 		if err := b.walkClaude(projects); err != nil {
 			return b.report(), err

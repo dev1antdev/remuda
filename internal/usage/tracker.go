@@ -319,21 +319,35 @@ func (t *Tracker) Display(machineID, paneID string) (Display, bool) {
 
 // Script runs the report on a remote machine through its own remuda.
 func Script(home string, since time.Time, tz string) string {
-	return reportScript(home, since, tz, "")
+	return ScriptRoots(transcript.RootsOf(home), home, since, tz)
+}
+
+// ScriptRoots is Script with the session folders the machine's agents named for themselves.
+func ScriptRoots(roots transcript.Roots, home string, since time.Time, tz string) string {
+	return reportScript(roots, home, since, tz, "")
 }
 
 // DaysScript is Script with every day broken down by folder (ScanHomeDays there).
 func DaysScript(home string, since time.Time, tz string) string {
-	return reportScript(home, since, tz, " -daily")
+	return DaysScriptRoots(transcript.RootsOf(home), home, since, tz)
 }
 
-func reportScript(home string, since time.Time, tz, flags string) string {
+// DaysScriptRoots is DaysScript with the session folders the machine's agents named for themselves.
+func DaysScriptRoots(roots transcript.Roots, home string, since time.Time, tz string) string {
+	return reportScript(roots, home, since, tz, " -daily")
+}
+
+func reportScript(roots transcript.Roots, home string, since time.Time, tz, flags string) string {
 	q := script.Quote
 	bin, guard := script.Remuda(home, version.Build)
 	tzFlag := ""
 	if tz != "" {
 		tzFlag = " -tz " + q(tz)
 	}
-	return "if " + guard + "; then " + bin + " usage -since " + q(since.UTC().Format(time.RFC3339)) + tzFlag + flags +
+	rootFlags := ""
+	for _, value := range transcript.RootValues(roots, home) {
+		rootFlags += " -root " + q(value)
+	}
+	return "if " + guard + "; then " + bin + " usage -since " + q(since.UTC().Format(time.RFC3339)) + tzFlag + flags + rootFlags +
 		"; else echo 'no remuda of this version on the machine (make deploy)' >&2; exit 3; fi"
 }

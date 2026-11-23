@@ -3,11 +3,10 @@ package transcript
 import (
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
-	"sync"
 
 	"github.com/dev1antdev/remuda/internal/rpath"
+	"github.com/dev1antdev/remuda/internal/shell"
 )
 
 // Format is which agent wrote a session file, told by where the file lives: Claude Code's under
@@ -23,7 +22,13 @@ const (
 
 // FormatOf is the format of a session file by its path.
 func FormatOf(path string) Format {
+	name := path
+	if i := strings.LastIndexAny(name, `/\`); i >= 0 {
+		name = name[i+1:]
+	}
 	switch {
+	case strings.HasPrefix(name, "rollout-"):
+		return Codex
 	case strings.Contains(path, "/.codex/"):
 		return Codex
 	case strings.Contains(path, "/.gemini/"):
@@ -78,53 +83,45 @@ func RootsOf(home string) Roots {
 	return out
 }
 
-// With is the set with one folder added for a format, once: the machine's own set, never the one lent.
-func (r Roots) With(f Format, dir string) Roots {
-	if dir == "" || slices.Contains(r[f], dir) {
-		return r
+// RootsFor is the session-root snapshot of a machine whose reader knows the folders its agents named for themselves.
+// A bare host has only its home's defaults.
+func RootsFor(host shell.Host) Roots {
+	if rooted, ok := host.(interface{ TranscriptRoots() Roots }); ok {
+		return rooted.TranscriptRoots()
 	}
-	out := make(Roots, len(r)+1)
-	for k, v := range r {
-		out[k] = append([]string(nil), v...)
-	}
-	out[f] = append(out[f], dir)
-	return out
+	return RootsOf(host.Home())
 }
 
-// learnedRoots are the folders agents named for themselves, by the home of the machine they run on: what the readers,
-// the search and the usage counter of that machine look in beside its home's own.
-var learnedRoots = struct {
-	sync.Mutex
-	m map[string]Roots
-}{m: map[string]Roots{}}
-
-// RootsFor is a home's own folders and the ones its agents named for themselves, learned from their processes.
-func RootsFor(home string) Roots {
-	learnedRoots.Lock()
-	extra := learnedRoots.m[home]
-	learnedRoots.Unlock()
-	all := RootsOf(home)
-	for f, dirs := range extra {
-		for _, dir := range dirs {
-			all = all.With(f, dir)
-		}
-	}
-	return all
-}
-
-// RememberRoot keeps a folder an agent named for itself, for the machine whose home this is.
-func RememberRoot(home string, f Format, dir string) {
-	if dir == "" {
-		return
-	}
-	learnedRoots.Lock()
-	defer learnedRoots.Unlock()
-	learnedRoots.m[home] = learnedRoots.m[home].With(f, dir)
-}
-
-// UnderRoot says whether a session path the agent's own hooks reported sits under one of the roots of this home.
+// UnderRoot says whether a session path the agent's own hooks reported sits under one of the default roots of this home.
 func UnderRoot(home, path string) bool {
 	return underRoots(RootsOf(home), rpath.For(home), path)
+}
+
+// UnderRoots says whether a session path sits under one of the folders of this machine's set.
+func UnderRoots(roots Roots, home, path string) bool {
+	return underRoots(roots, rpath.For(home), path)
+}
+
+// RootValues names the folders agents named for themselves, beyond the home's own defaults, as format=folder: what a
+// remote scan is handed so it looks where the cockpit's reader learned.
+func RootValues(roots Roots, home string) []string {
+	defaults, style := RootsOf(home), rpath.For(home)
+	var values []string
+	for _, format := range []Format{Claude, Codex} {
+		for _, dir := range roots[format] {
+			own := false
+			for _, known := range defaults[format] {
+				if style.Equal(known, dir) {
+					own = true
+					break
+				}
+			}
+			if !own {
+				values = append(values, string(format)+"="+style.Slash(dir))
+			}
+		}
+	}
+	return values
 }
 
 // underRoots says whether a path sits under one of the folders of the set.

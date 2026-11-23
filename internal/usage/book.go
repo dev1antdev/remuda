@@ -11,6 +11,7 @@ import (
 
 	"github.com/dev1antdev/remuda/internal/shell"
 	"github.com/dev1antdev/remuda/internal/state"
+	"github.com/dev1antdev/remuda/internal/transcript"
 )
 
 // The year's heatmap reads each machine's days once. A day that ended is kept in <state>/usage-days.json by machine and
@@ -60,6 +61,9 @@ type YearHost struct {
 	shell.Host
 	Away bool
 }
+
+// TranscriptRoots carries the machine's own session roots through the wrapper the heatmap reads.
+func (h YearHost) TranscriptRoots() transcript.Roots { return transcript.RootsFor(h.Host) }
 
 // OpenBook reads what was kept; a damaged file is an empty book, said once.
 func OpenBook(dir string) *Book {

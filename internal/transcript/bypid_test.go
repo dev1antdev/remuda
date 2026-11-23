@@ -281,7 +281,7 @@ func TestALinuxProcessIsKnownByItsBirthToTheMillisecond(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			procs := []Running{{PID: 7, Agent: "claude", CWD: "/a", Seen: seen, Started: seen.UnixMilli()}}
 			never := machineClock{asked: seen.Add(time.Hour), latest: seen.Add(-time.Hour)}
-			got, unsure := parseSessionsByPID(system(c.before, c.after)+record(c.ticks), procs, rpath.Style{}, never)
+			got, _, unsure := parseSessionsByPID(system(c.before, c.after)+record(c.ticks), procs, rpath.Style{}, never)
 			if got[7] != c.want || unsure[7] != c.unsure {
 				t.Fatalf("got %v, unsure %v, want %q", got, unsure, c.want)
 			}
@@ -342,7 +342,7 @@ func TestTheStartSinceBootDecides(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			procs := []Running{{PID: 7, Agent: "claude", CWD: "/a", Seen: began, Started: began.UnixMilli(), SinceBoot: told}}
 			never := machineClock{asked: began.Add(time.Hour), latest: began.Add(-time.Hour)}
-			got, unsure := parseSessionsByPID(stepped+c.out, procs, rpath.Style{}, never)
+			got, _, unsure := parseSessionsByPID(stepped+c.out, procs, rpath.Style{}, never)
 			if got[7] != c.want || unsure[7] != c.unsure {
 				t.Fatalf("got %v, unsure %v, want %q", got, unsure, c.want)
 			}
@@ -645,13 +645,13 @@ func TestAProcessBegunAfterTheAgentWasSeenHasNoSession(t *testing.T) {
 			asked := seen.Add(20 * time.Minute)
 			machineNow := asked.Add(c.ahead + 300*time.Millisecond)
 			clock := machineClock{asked: asked, latest: time.Unix(machineNow.Unix()+1, 0)}
-			got, _ := parseSessionsByPID(record, []Running{{PID: 7, Agent: "claude", CWD: "/a", Seen: seen}}, rpath.Style{}, clock)
+			got, _, _ := parseSessionsByPID(record, []Running{{PID: 7, Agent: "claude", CWD: "/a", Seen: seen}}, rpath.Style{}, clock)
 			if got[7] != c.want {
 				t.Fatalf("got %v, want %q", got, c.want)
 			}
 		})
 	}
-	if got, _ := parseSessionsByPID(record, []Running{{PID: 7, Agent: "claude", CWD: "/a"}}, rpath.Style{}, machineClock{asked: began, latest: began}); got[7] != "id-1" {
+	if got, _, _ := parseSessionsByPID(record, []Running{{PID: 7, Agent: "claude", CWD: "/a"}}, rpath.Style{}, machineClock{asked: began, latest: began}); got[7] != "id-1" {
 		t.Fatalf("no sighting known: got %v", got)
 	}
 
@@ -730,7 +730,7 @@ func TestTheCreationTheRuntimeToldDecides(t *testing.T) {
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			procs := []Running{{PID: 7, Agent: "claude", CWD: c.cwd, Seen: began.Add(time.Minute), Started: c.started.UnixMilli()}}
-			got, unsure := parseSessionsByPID(c.out, procs, c.style, c.clock)
+			got, _, unsure := parseSessionsByPID(c.out, procs, c.style, c.clock)
 			if got[7] != c.want || unsure[7] != strings.HasPrefix(c.name, "a Linux that told no boot") {
 				t.Fatalf("got %v, unsure %v, want %q", got, unsure, c.want)
 			}
@@ -817,7 +817,7 @@ func TestParseSessionsByPID(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got, _ := parseSessionsByPID(c.out, c.procs, c.style, machineClock{})
+			got, _, _ := parseSessionsByPID(c.out, c.procs, c.style, machineClock{})
 			if got[c.procs[0].PID] != c.want {
 				t.Fatalf("got %v, want %q", got, c.want)
 			}
@@ -851,5 +851,9 @@ func TestASessionUnderItsOwnCODEXHOMEIsOpenedToo(t *testing.T) {
 	}
 	if found, err := reader.ResolveSession("codex", work, "id", rolloutID); err != nil || found != path {
 		t.Fatalf("rollout = %q, %v; want %s", found, err, path)
+	}
+	sessions, err := reader.Sessions(Codex, "")
+	if err != nil || len(sessions) != 1 || sessions[0].Path != path {
+		t.Fatalf("the folder's sessions = %+v, %v; want %s", sessions, err, path)
 	}
 }

@@ -26,10 +26,14 @@ type scanFile struct {
 	id     string // Codex: the thread id
 }
 
-// ScanHome writes the records under a home that match q, newest file first and up to limit: Claude Code's as
+// ScanHome writes the records under a home's own roots that match q, newest file first and up to limit: Claude Code's as
 // grep -r prints them ("./<rel path>:<raw line>"), Codex's as "codex:<cwd>␟<thread id>␟<raw line>".
 func ScanHome(home, q, dir string, since time.Time, limit int, w io.Writer) error {
-	roots := transcript.RootsFor(home)
+	return ScanRoots(transcript.RootsOf(home), q, dir, since, limit, w)
+}
+
+// ScanRoots is ScanHome over the session folders one machine knows, including those its agents named for themselves.
+func ScanRoots(roots transcript.Roots, q, dir string, since time.Time, limit int, w io.Writer) error {
 	var files []scanFile
 	for _, projects := range roots[transcript.Claude] {
 		found, err := claudeFiles(projects, dir, since)

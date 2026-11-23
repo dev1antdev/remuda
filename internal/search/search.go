@@ -1,7 +1,7 @@
 // Package search finds what was said across every transcript on every machine: Claude Code's
-// and Codex's. There is no index: each machine scans its own ~/.claude/projects and ~/.codex/sessions
-// on demand, in-process here and through the remuda deployed on a remote (`remuda search`), else a
-// plain grep over Claude Code's files.
+// and Codex's. There is no index: each machine scans its own session folders — a home's defaults
+// and the folders its agents named for themselves — on demand, in-process here and through the
+// remuda deployed on a remote (`remuda search`), else a plain grep over Claude Code's files.
 package search
 
 import (
@@ -79,16 +79,17 @@ func Search(hosts []shell.Host, q, dir string, since time.Time) Result {
 }
 
 func one(host shell.Host, q, dir string, since time.Time) ([]Hit, error) {
+	roots := transcript.RootsFor(host)
 	var out string
 	if host.Local() {
 		var b strings.Builder
-		if err := ScanHome(host.Home(), q, dir, since, perMachine, &b); err != nil {
+		if err := ScanRoots(roots, q, dir, since, perMachine, &b); err != nil {
 			return nil, err
 		}
 		out = b.String()
 	} else {
 		var err error
-		if out, err = shell.Text(host, remoteScript(host.Home(), q, dir, since), timeout); err != nil {
+		if out, err = shell.Text(host, remoteScriptRoots(roots, host.Home(), q, dir, since), timeout); err != nil {
 			return nil, err
 		}
 	}
@@ -154,6 +155,11 @@ func codexHit(machine string, rec []byte, q, dir string, since time.Time) (Hit, 
 // files and Codex's), else grep over Claude Code's alone.
 // The grep takes the four spellings as they sit in the JSON (grep -i folds ASCII only); BSD grep is seconds per hundred MB.
 func remoteScript(home, q, dir string, since time.Time) string {
+	return remoteScriptRoots(transcript.RootsOf(home), home, q, dir, since)
+}
+
+// remoteScriptRoots is remoteScript with the session folders this machine's agents named for themselves.
+func remoteScriptRoots(roots transcript.Roots, home, q, dir string, since time.Time) string {
 	seen := map[string]bool{}
 	var pats []string
 	for _, v := range spellings(q) {
@@ -170,10 +176,23 @@ func remoteScript(home, q, dir string, since time.Time) string {
 	if !since.IsZero() {
 		args += " -since " + script.Quote(since.UTC().Format(time.RFC3339))
 	}
+	args += rootArguments(roots, home)
 	return "if " + guard + " && " + bin + " " + args + "; then exit 0; fi; " +
 		"cd " + script.Quote(home+"/.claude/projects") + " 2>/dev/null || exit 0; " +
 		"grep -raF --include='*.jsonl' " + strings.Join(pats, " ") + " . 2>/dev/null | " +
 		"cut -b1-" + strconv.Itoa(lineCap) + " | head -c " + strconv.Itoa(outputCap) + "; exit 0"
+}
+
+// rootArguments names the folders beyond a machine's own defaults, one -root format=path each.
+func rootArguments(roots transcript.Roots, home string) string {
+	var args []string
+	for _, value := range transcript.RootValues(roots, home) {
+		args = append(args, "-root "+script.Quote(value))
+	}
+	if len(args) == 0 {
+		return ""
+	}
+	return " " + strings.Join(args, " ")
 }
 
 // jsonText is s as it appears inside a JSON string, without the quotes and without HTML escaping.

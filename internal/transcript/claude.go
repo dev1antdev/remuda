@@ -92,20 +92,42 @@ func EncodePath(cwd string) string {
 	return b.String()
 }
 
-func projectsDir() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".claude", "projects")
-}
-
 // Sessions lists the session files of one format for a working directory, newest first.
 func Sessions(format Format, cwd string) ([]SessionInfo, error) {
+	home := homeDir()
+	return sessionsIn(RootsOf(home), home, format, cwd)
+}
+
+// Sessions is Sessions in the session folders this machine's reader knows, its agents' own included.
+func (r *Reader) Sessions(format Format, cwd string) ([]SessionInfo, error) {
+	return sessionsIn(r.Roots(), r.host.Home(), format, cwd)
+}
+
+func sessionsIn(roots Roots, home string, format Format, cwd string) ([]SessionInfo, error) {
 	switch format {
 	case Codex:
-		return codexSessions(homeDir(), cwd), nil
+		return codexSessions(roots[Codex], cwd), nil
 	case Gemini:
-		return geminiSessions(homeDir(), cwd), nil
+		return geminiSessions(home, cwd), nil
 	}
-	dir := filepath.Join(projectsDir(), EncodePath(cwd))
+	var out []SessionInfo
+	for _, projects := range roots[Claude] {
+		sessions, err := claudeSessions(projects, cwd)
+		if err != nil {
+			continue
+		}
+		out = append(out, sessions...)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ModTime.After(out[j].ModTime) })
+	for i := range min(5, len(out)) {
+		out[i].Title = sessionTitle(out[i].Path, out[i].Size)
+	}
+	return out, nil
+}
+
+// claudeSessions is Sessions in one Claude Code projects folder.
+func claudeSessions(projects, cwd string) ([]SessionInfo, error) {
+	dir := filepath.Join(projects, EncodePath(cwd))
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -129,10 +151,6 @@ func Sessions(format Format, cwd string) ([]SessionInfo, error) {
 			ModTime: fi.ModTime(),
 			Size:    fi.Size(),
 		})
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].ModTime.After(out[j].ModTime) })
-	for i := range min(5, len(out)) {
-		out[i].Title = sessionTitle(out[i].Path, out[i].Size)
 	}
 	return out, nil
 }

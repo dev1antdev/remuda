@@ -201,7 +201,7 @@ func TestCodexFilesAreFoundByThreadId(t *testing.T) {
 	if !UnderRoot(home, path) || UnderRoot(home, filepath.Join(home, "elsewhere.jsonl")) {
 		t.Fatal("UnderRoot")
 	}
-	if got := findScript(RootsOf("/h"), Codex, "/h", "/p", id); !strings.Contains(got, "'/h/.codex/sessions'/*/*/*/rollout-*-"+id+".jsonl") {
+	if got := findScript(RootsOf("/h"), Codex, "/h", "/p", id); !strings.Contains(got, "find '/h/.codex/sessions' -type f -name 'rollout-*-"+id+".jsonl'") {
 		t.Fatalf("remote find: %s", got)
 	}
 	if got := findScript(RootsOf("/h"), "", "/h", "/p", id); strings.Count(got, "exit 0") != 3 || !strings.Contains(got, "/.claude/projects") || !strings.Contains(got, ".gemini/tmp") {

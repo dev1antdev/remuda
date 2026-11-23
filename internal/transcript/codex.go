@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/rpath"
 	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/text"
 )
@@ -461,21 +462,37 @@ func CodexFiles(root string) []SessionInfo {
 const codexSessionsLookAt = 300 // the newest rollouts whose folder is read for a listing by folder
 
 // codexSessions lists the rollouts recorded in cwd, newest first, titled from Codex's own index.
-func codexSessions(home, cwd string) []SessionInfo {
-	var out []SessionInfo
-	for i, s := range CodexFiles(SessionRoots(home)[Codex]) {
-		if i >= codexSessionsLookAt {
-			break
-		}
-		if CodexCwd(s.Path) == cwd {
-			out = append(out, s)
+func codexSessions(roots []string, cwd string) []SessionInfo {
+	type rooted struct {
+		SessionInfo
+		root string
+	}
+	var all []rooted
+	for _, root := range roots {
+		for _, s := range CodexFiles(root) {
+			all = append(all, rooted{SessionInfo: s, root: root})
 		}
 	}
-	names := codexThreadNames(home)
+	sort.Slice(all, func(i, j int) bool { return all[i].ModTime.After(all[j].ModTime) })
+	if len(all) > codexSessionsLookAt {
+		all = all[:codexSessionsLookAt]
+	}
+	names := map[string]map[string]string{}
+	var out []SessionInfo
+	for _, s := range all {
+		if CodexCwd(s.Path) != cwd {
+			continue
+		}
+		if names[s.root] == nil {
+			names[s.root] = codexThreadNames(filepath.Dir(s.root))
+		}
+		if name := names[s.root][s.ID]; name != "" {
+			s.Title = name
+		}
+		out = append(out, s.SessionInfo)
+	}
 	for i := range out {
-		if name := names[out[i].ID]; name != "" {
-			out[i].Title = name
-		} else if i < 5 {
+		if out[i].Title == "" && i < 5 {
 			out[i].Title = codexFirstPrompt(out[i].Path)
 		}
 	}
@@ -483,9 +500,9 @@ func codexSessions(home, cwd string) []SessionInfo {
 }
 
 // codexThreadNames is Codex's own session index: the thread id and the name it gave the thread.
-func codexThreadNames(home string) map[string]string {
+func codexThreadNames(codexHome string) map[string]string {
 	names := map[string]string{}
-	f, err := os.Open(filepath.Join(home, ".codex", "session_index.jsonl"))
+	f, err := os.Open(filepath.Join(codexHome, "session_index.jsonl"))
 	if err != nil {
 		return names
 	}
@@ -541,8 +558,13 @@ func findCodexIn(roots []string, id string) (string, error) {
 	}
 	var hits []string
 	for _, root := range roots {
-		found, _ := filepath.Glob(filepath.Join(root, "*", "*", "*", "rollout-*-"+id+".jsonl"))
-		hits = append(hits, found...)
+		_ = filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+			if err != nil || d.IsDir() || !strings.HasPrefix(d.Name(), "rollout-") || !strings.HasSuffix(d.Name(), "-"+id+".jsonl") {
+				return nil
+			}
+			hits = append(hits, p)
+			return nil
+		})
 	}
 	if len(hits) == 0 {
 		return "", os.ErrNotExist
@@ -555,7 +577,9 @@ func findCodexIn(roots []string, id string) (string, error) {
 func codexFindScript(roots []string, id string) string {
 	var steps []string
 	for _, root := range roots {
-		steps = append(steps, `ls `+script.Quote(root)+`/*/*/*/rollout-*-`+id+`.jsonl 2>/dev/null | tail -1`) // the id is a session id: no quoting to do
+		root = rpath.For(root).Slash(root)
+		steps = append(steps, `find `+script.Quote(root)+` -type f -name `+script.Quote("rollout-*-"+id+".jsonl")+
+			` 2>/dev/null | sort | tail -1`) // the id is a session id: no quoting to do
 	}
 	return strings.Join(steps, "; ")
 }

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/rpath"
 	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/shell"
 	"github.com/dev1antdev/remuda/internal/transcript"
@@ -19,21 +20,39 @@ import (
 // findTimeout is how long the search over a machine's session files may take.
 var findTimeout = 30 * time.Second
 
-// FindScript prints the session files of the agent's under the home that hold the request's ref line: Claude Code's
-// in the folder's project, Codex's and Gemini CLI's written in the last two days; every format for another agent.
+// FindScript prints the session files of the agent's under the home's own folders that hold the request's ref line.
 func FindScript(home, agent, dir, ref string) string {
-	roots := transcript.SessionRoots(home)
+	return FindScriptIn(transcript.RootsOf(home), home, agent, dir, ref)
+}
+
+// FindScriptIn is FindScript over the session folders a machine's reader knows, the folders its agents named for
+// themselves included: Claude Code's in the folder's project, Codex's and Gemini CLI's written in the last two days;
+// every format for another agent.
+func FindScriptIn(roots transcript.Roots, home, agent, dir, ref string) string {
 	var finds []string
+	style := rpath.For(home)
 	add := func(root string, depth int, name string, recent bool) {
-		find := "find " + script.Quote(root) + " -maxdepth " + strconv.Itoa(depth) + " -type f -name " + script.Quote(name)
+		find := "find " + script.Quote(style.Slash(root)) + " -maxdepth " + strconv.Itoa(depth) + " -type f -name " + script.Quote(name)
 		if recent {
 			find += " -mtime -2"
 		}
 		finds = append(finds, find+" -exec grep -lF -- \"$line\" {} + 2>/dev/null")
 	}
-	claude := func() { add(roots[transcript.Claude]+"/"+transcript.EncodePath(dir), 1, "*.jsonl", false) }
-	codex := func() { add(roots[transcript.Codex], 4, "rollout-*.jsonl", true) }
-	gemini := func() { add(roots[transcript.Gemini], 3, "session-*.json*", true) }
+	claude := func() {
+		for _, projects := range roots[transcript.Claude] {
+			add(style.Join(projects, transcript.EncodePath(dir)), 1, "*.jsonl", false)
+		}
+	}
+	codex := func() {
+		for _, sessions := range roots[transcript.Codex] {
+			add(sessions, 4, "rollout-*.jsonl", true)
+		}
+	}
+	gemini := func() {
+		for _, root := range roots[transcript.Gemini] {
+			add(root, 3, "session-*.json*", true)
+		}
+	}
 	switch transcript.FormatOfAgent(agent) {
 	case transcript.Claude:
 		claude()
@@ -107,9 +126,9 @@ func Request(host shell.Host, reader *transcript.Reader, op Opinion) (Reply, boo
 	if op.Ref == "" {
 		return Reply{}, false
 	}
-	out, _ := shell.Text(host, FindScript(host.Home(), op.Agent, op.Dir, op.Ref), findTimeout)
+	out, _ := shell.Text(host, FindScriptIn(reader.Roots(), host.Home(), op.Agent, op.Dir, op.Ref), findTimeout)
 	for _, path := range script.Lines(out) {
-		if !transcript.UnderRoot(host.Home(), path) {
+		if !transcript.UnderRoots(reader.Roots(), host.Home(), path) {
 			continue
 		}
 		prompt, _, ok := conversation(reader, path)
