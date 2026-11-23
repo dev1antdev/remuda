@@ -1949,7 +1949,7 @@ when it is forecast to run out half an hour or more before its reset.
 An agent schedule whose agent's window is nearly spent skips its run
 and offers it on the other vendor the same way the queue does (see
 Tasks). Codex writes its limits into
-its own files, so they show by themselves. Claude Code hands them only to
+its own files (`~/.codex/sessions`, or wherever its `CODEX_HOME` puts them), so they show by themselves. Claude Code hands them only to
 its status line: Updates in a machine's ⓘ offers "Show Claude Code's
 plan limits", which puts remuda in front of your status line in
 `~/.claude/settings.json` (your file backed up first) — remuda notes the

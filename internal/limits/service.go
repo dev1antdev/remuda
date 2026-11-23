@@ -13,6 +13,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/push"
 	"github.com/dev1antdev/remuda/internal/shell"
 	"github.com/dev1antdev/remuda/internal/state"
+	"github.com/dev1antdev/remuda/internal/transcript"
 )
 
 // Every is how often a machine's limits are read again; a sweep never runs twice at once on one machine.
@@ -183,7 +184,8 @@ func (s *Service) Refresh(host shell.Host, label string) {
 
 // Read reads a machine's limits now and warns of a window that crossed 80 % or its limit.
 func (s *Service) Read(host shell.Host, label string) {
-	out, err := shell.Text(host, Script(), 30*time.Second)
+	named := transcript.NamedRoots(transcript.RootsFor(host), host.Home(), transcript.Codex)
+	out, err := shell.Text(host, Script(named), 30*time.Second)
 	if err != nil {
 		return
 	}

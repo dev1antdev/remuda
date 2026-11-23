@@ -38,12 +38,19 @@ type Snapshot struct {
 	RateLimits json.RawMessage `json:"rate_limits"`
 }
 
-// Script reads a machine's limits in one shell: the newest rate_limits line of Codex's recent rollouts, the snapshot
-// the status line wrapper keeps in remuda's state dir there, and whether the wrapper is in Claude Code's settings.
-func Script() string {
-	return `d="$HOME/.codex/sessions"
-if [ -d "$d" ]; then
-  find "$d" -name 'rollout-*.jsonl' -type f -mtime -8 -exec ls -t {} + 2>/dev/null | head -n 5 | while IFS= read -r f; do
+// Script reads a machine's limits in one shell: the newest rate_limits line of Codex's recent rollouts, in its home's
+// folder and the ones a Codex named for itself, the snapshot the status line wrapper keeps in remuda's state dir
+// there, and whether the wrapper is in Claude Code's settings.
+func Script(named []string) string {
+	roots := `set --
+[ -d "$HOME/.codex/sessions" ] && set -- "$HOME/.codex/sessions"`
+	for _, dir := range named {
+		quoted := script.Quote(dir)
+		roots += "\n[ -d " + quoted + ` ] && set -- "$@" ` + quoted
+	}
+	return roots + `
+if [ $# -gt 0 ]; then
+  find "$@" -name 'rollout-*.jsonl' -type f -mtime -8 -exec ls -t {} + 2>/dev/null | head -n 5 | while IFS= read -r f; do
     line=$(tail -c 1048576 "$f" 2>/dev/null | grep '"rate_limits"' | tail -n 1)
     if [ -n "$line" ]; then printf '%s\n' "$line"; break; fi
   done
