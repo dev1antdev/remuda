@@ -171,6 +171,9 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ remuda-core: its 
   all read into the same turns, so a Codex or Gemini pane has its chat,
   recap, meter and search like a Claude Code one (Gemini's
   reader is written from the CLI's own types and has not been seen live).
+  When Codex reverts a thread's history, its new rollout replays the part that
+  stayed from the old file: the chat shows that part and what came after, never
+  the reverted turns, and the session list still names the thread once.
 - **One socket for the news** — the page keeps one WebSocket to its
   remuda, which says when the roster moved or a transcript grew, so the
   sidebar and the chat redraw within about a second instead of

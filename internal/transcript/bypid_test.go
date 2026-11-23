@@ -357,27 +357,32 @@ func TestTheStartSinceBootDecides(t *testing.T) {
 	}
 }
 
-// End to end on a real process, as remuda-core tells its creation: the one told is found whatever its sighting says,
-// and a creation a second off is another process's.
+// End to end on a real process, as remuda-core tells its creation: the process the runtime names is found, and one a
+// tick of its boot or a second of its creation away is another process's.
 func TestARealProcessIsKnownByTheCreationTheRuntimeTold(t *testing.T) {
 	home := realDir(t)
 	t.Setenv("HOME", home)
 	pid := holder(t, home, nil, nil, false, "")
 	start := procStart(t, pid)
-	body := fmt.Sprintf(`{"pid":%d,"sessionId":"4c9d6f0e-1111-4222-8333-944455556666","cwd":%q,"startedAt":%d,"procStart":%q}`, pid, home, time.Now().UnixMilli(), start)
+	began, err := time.Parse(time.ANSIC, start)
+	if err != nil {
+		t.Fatal(err)
+	}
+	created := creationOf(t, pid, began)
+	body := fmt.Sprintf(`{"pid":%d,"sessionId":"4c9d6f0e-1111-4222-8333-944455556666","cwd":%q,"startedAt":%d,"procStart":%q}`, pid, home, created+1000, start)
 	if err := os.MkdirAll(filepath.Join(home, ".claude", "sessions"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(home, ".claude", "sessions", strconv.Itoa(pid)+".json"), []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	began, err := time.Parse(time.ANSIC, start)
-	if err != nil {
-		t.Fatal(err)
+	known := Running{PID: pid, Agent: "claude", CWD: home, Seen: time.Now().Add(-time.Hour), Started: created}
+	if runtime.GOOS == "linux" {
+		known.SinceBoot = sinceBootOf(t, pid) // a core that tells it binds the process without reading a clock
 	}
 	host := remoteHere(home)
 	reader := NewReader(host)
-	got, err := reader.SessionsOf([]Running{{PID: pid, Agent: "claude", CWD: home, Seen: time.Now().Add(-time.Hour), Started: creationOf(t, pid, began)}})
+	got, err := reader.SessionsOf([]Running{known})
 	if err != nil || got[pid] != "4c9d6f0e-1111-4222-8333-944455556666" {
 		t.Fatalf("the creation told: got %v, %v", got, err)
 	}
@@ -386,24 +391,27 @@ func TestARealProcessIsKnownByTheCreationTheRuntimeTold(t *testing.T) {
 			t.Fatal("the machine's clock was read though the runtime told the creation")
 		}
 	}
-	got, err = reader.SessionsOf([]Running{{PID: pid, Agent: "claude", CWD: home, Seen: time.Now(), Started: creationOf(t, pid, began) - 1000}})
+
+	other := known
+	if runtime.GOOS == "linux" {
+		other.SinceBoot.Ticks++
+	} else {
+		other.Started -= 1000
+	}
+	got, err = reader.SessionsOf([]Running{other})
 	if err != nil || len(named(got)) != 0 {
-		t.Fatalf("a creation a second off: got %v, %v", got, err)
+		t.Fatalf("another process than the runtime named: got %v, %v", got, err)
 	}
 
 	if runtime.GOOS != "linux" {
 		return
 	}
-	// on Linux the start since boot decides alone: a creation the clocks place a second off is no matter beside it
-	since := sinceBootOf(t, pid)
-	got, err = reader.SessionsOf([]Running{{PID: pid, Agent: "claude", CWD: home, Seen: time.Now(), Started: creationOf(t, pid, began) - 1000, SinceBoot: since}})
+	// On Linux the start since boot decides alone: a creation the clocks place a second off is no matter beside it.
+	clocksOff := known
+	clocksOff.Started -= 1000
+	got, err = reader.SessionsOf([]Running{clocksOff})
 	if err != nil || got[pid] != "4c9d6f0e-1111-4222-8333-944455556666" {
 		t.Fatalf("the start since boot told: got %v, %v", got, err)
-	}
-	since.Ticks++
-	got, err = reader.SessionsOf([]Running{{PID: pid, Agent: "claude", CWD: home, Seen: time.Now(), Started: creationOf(t, pid, began), SinceBoot: since}})
-	if err != nil || len(named(got)) != 0 {
-		t.Fatalf("a start since boot a tick off: got %v, %v", got, err)
 	}
 }
 

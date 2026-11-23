@@ -387,8 +387,9 @@ func filetimeOf(s string) (int64, bool) {
 const coreBootSlack = 10
 
 // maxBootSpan is the widest a Linux machine's reading of its boot may be and still tell two processes born in one
-// second apart: the real clock read this far apart around /proc/uptime, at the tightest of three tries.
-const maxBootSpan = 20
+// second apart: the real clock read this far apart around /proc/uptime, at the tightest of three tries. A loaded
+// machine can spend tens of milliseconds between the two reads; past this the answer is unsure rather than wrong.
+const maxBootSpan = 100
 
 // linuxBoot is what a Linux machine told of its boot: /proc/stat's whole second (ps's), the earliest and latest moment
 // it can have been in ms (the real clock read before and after /proc/uptime, which counts hundredths), how far apart

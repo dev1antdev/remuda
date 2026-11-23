@@ -26,6 +26,7 @@ type Reader struct {
 	mu           sync.Mutex
 	tails        map[string]*cachedTail // remote files by path
 	sessionPath  map[sessionKey]string  // session id and root generation -> resolved path
+	sessionAt    map[sessionKey]time.Time
 	sessionMiss  map[sessionKey]time.Time
 	continuation map[string]continuation // session file -> its continuation, as last looked
 	predecessor  map[string]string       // session file -> the file it continues ("" when none)
@@ -70,11 +71,13 @@ const (
 	recentlyRead = time.Minute
 	// how long a folder an agent named for itself is trusted after a process last named it
 	learnedRootTTL = 10 * time.Minute
+	// how long a Codex id's resolved file stands before it is looked up again: a revert writes a newer file at once
+	codexResolveFresh = 2 * time.Second
 )
 
 // NewReader reads the transcripts on host.
 func NewReader(host shell.Host) *Reader {
-	return &Reader{host: host, tails: map[string]*cachedTail{}, sessionPath: map[sessionKey]string{}, sessionMiss: map[sessionKey]time.Time{},
+	return &Reader{host: host, tails: map[string]*cachedTail{}, sessionPath: map[sessionKey]string{}, sessionAt: map[sessionKey]time.Time{}, sessionMiss: map[sessionKey]time.Time{},
 		continuation: map[string]continuation{}, predecessor: map[string]string{},
 		learnedRoots: map[Format]map[string]time.Time{},
 		active:       map[string]activeSession{},
@@ -116,6 +119,7 @@ func (r *Reader) bumpRootsLocked() {
 	for key := range r.sessionPath {
 		if key.rootVersion != r.rootVersion {
 			delete(r.sessionPath, key)
+			delete(r.sessionAt, key)
 		}
 	}
 	for key := range r.sessionMiss {
@@ -323,7 +327,27 @@ func remoteSessionFile(path string) string {
 }
 
 // Turns parses the session file at the given version, remotely from a cached tail grown by delta.
+// readSession is a session file's whole content, local or remote, only from under the machine's session roots.
+func (r *Reader) readSession(path string) ([]byte, error) {
+	if !underRoots(r.Roots(), rpath.For(r.host.Home()), path) {
+		return nil, fmt.Errorf("%s is outside the machine's session roots", path)
+	}
+	if r.host.Local() {
+		f, err := r.open(path)
+		if err != nil {
+			return nil, err
+		}
+		defer f.Close()
+		return io.ReadAll(io.LimitReader(f, 256<<20))
+	}
+	return r.ReadFrom(path, 0)
+}
+
+// Turns parses the session file at the given version, remotely from a cached tail grown by delta.
 func (r *Reader) Turns(path string, v Version) ([]Turn, error) {
+	if FormatOf(path) == Codex {
+		return parseCodexHistory(path, r.readSession) // a revert's history_base may lie in another root or on ssh
+	}
 	if r.host.Local() {
 		f, err := r.open(path)
 		if err != nil {
@@ -331,8 +355,6 @@ func (r *Reader) Turns(path string, v Version) ([]Turn, error) {
 		}
 		defer f.Close()
 		switch FormatOf(path) {
-		case Codex:
-			return parseCodex(f)
 		case Gemini:
 			data, err := io.ReadAll(io.LimitReader(f, tailWindow))
 			if err != nil {
@@ -449,17 +471,26 @@ func (r *Reader) ResolveSession(agent, cwd, kind, value string) (string, error) 
 	r.mu.Lock()
 	key := sessionKey{format: format, cwd: cwd, id: value, rootVersion: rootVersion}
 	cached, ok := r.sessionPath[key]
+	cachedAt := r.sessionAt[key]
 	missedAt, missed := r.sessionMiss[key]
 	r.mu.Unlock()
 	if ok {
-		if !r.host.Local() {
+		recheck := format == Codex || format == "" && FormatOf(cached) == Codex
+		fresh := !recheck || time.Since(cachedAt) < codexResolveFresh
+		if fresh && !r.host.Local() {
 			return cached, nil
 		}
-		if _, err := os.Stat(cached); err == nil {
-			return cached, nil
+		if fresh {
+			if _, err := os.Stat(cached); err == nil {
+				return cached, nil
+			}
 		}
 	}
-	if missed && time.Since(missedAt) < 30*time.Second {
+	missedFor := 30 * time.Second
+	if format == Codex {
+		missedFor = codexResolveFresh
+	}
+	if missed && time.Since(missedAt) < missedFor {
 		return "", os.ErrNotExist
 	}
 
@@ -491,6 +522,7 @@ func (r *Reader) ResolveSession(agent, cwd, kind, value string) (string, error) 
 	}
 	r.mu.Lock()
 	r.sessionPath[key] = path
+	r.sessionAt[key] = time.Now()
 	delete(r.sessionMiss, key)
 	r.mu.Unlock()
 	return path, nil

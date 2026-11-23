@@ -877,7 +877,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   while one of now or of the next `doorLockAhead` half minutes stands; a
   dead script's lapse or, dated further ahead, count for nothing, placing
   is asked again long enough to outwait them, `doorPlaceTries`; each run
-  marks its locks and places nothing once they are no longer its own) and
+  marks its locks and places nothing once they are no longer its own, and on
+  its way out releases only the marks it still holds) and
   answers `placed`, `taken` or `busy`. A door that answers `/api/health` — asked straight, past any
   proxy; one nobody could ask counts — stays against a door that would
   move, and one on a port of its own (`agent-door-moved` names it, so a
@@ -960,7 +961,21 @@ components and icons as rules for whoever changes it: @docs/design.md
   model and the `model_context_window` the lines before it named, so the
   meter shows the window of a model the catalog does not price), and
   `compacted` with the history replaced in place (the file goes on: no
-  continuation chain, no subagents); the harness envelopes in the user's
+  continuation chain, no subagents), and **a revert of the thread's history**:
+  the new file `rollout-<time>-<id>_<rollout id>.jsonl` keeps
+  the thread id (`CodexSessionID` cuts at the `_`) and its `session_meta` names
+  a `history_base` to `end_ordinal_exclusive`. `codexReplay` follows that chain (at most
+  `maxCodexHistoryDepth` 16, a loop cut short), putting each base's records below its ordinal
+  before the new file's own, so the chat shows what stayed and then what came after, never the
+  reverted turns; a base read by `Reader.readSession` must sit under the machine's session
+  roots and is read locally or over ssh, and one that is gone leaves the new file's records
+  rather than a failed chat. The result is cut to `tailWindow` like any other read. The resolver
+  takes the newest file of the thread, re-reading a Codex id after `codexResolveFresh` 2 s so a
+  live revert is seen; `CodexFiles` stays the physical list (search and the usage counter need
+  both files) and `codexSessions` names the thread once
+  (`TestACodexRevertReadsTheThreadWhole`, `TestARevertChainKeepsEverySavedPart`,
+  `TestAMissingHistoryBaseStillShowsTheNewFile`, `TestARevertOnSSHFollowsItsHistory`); the harness
+  envelopes in the user's
   slot (`<environment_context>`, `<user_instructions>`, …) are skipped;
   the thread id is what `codex resume` takes and what the core's codex hook
   reports; `update_plan` feeds `Plan`, `request_user_input` is a question
@@ -1010,7 +1025,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   `started_ms` moves with a step, as ps's start does, so a process born as
   much later as the clock went back carries the very value the one before had
   (what `started_since_boot` closes); a reading wider than `maxBootSpan`
-  20 ms, or none (a `date` telling no milliseconds), leaves the processes the
+  100 ms, or none (a `date` telling no milliseconds), leaves the processes the
   second cannot settle out of the answer, as a clock not read does (below); a
   FILETIME's millisecond on Windows; on macOS, where ps tells no millisecond,
   `ps -o lstart`'s second alone — a later process given the pid within that
