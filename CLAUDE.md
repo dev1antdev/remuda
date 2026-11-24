@@ -1396,6 +1396,12 @@ components and icons as rules for whoever changes it: @docs/design.md
   finger's first move picks the way for the gesture and the mount is
   panned by hand, since the grid's `touch-action` is none while the app
   tracks the mouse; any other drag is the app's scroll.
+- Terminal cell widths (`features/terminal/engine/widths.ts`, tested): the page counts a cell as the core does —
+  xterm's Unicode 11 tables (`@xterm/addon-unicode11`), and one rule over them: a variation selector
+  (U+FE0F) after a one-cell character makes the emoji two cells wide (`✍️`), as libghostty's grapheme
+  clustering counts it (mode 2027). A joined soft-wrapped row arrives as one line for the viewer to
+  wrap, so a table a cell off would put every cell after the emoji on another column than the core's
+  (`schema/README.md`, "Attach streams").
 - Terminal mouse and selection (`features/terminal/engine/`: `modes.ts`
   intercepts, `mouse.ts` encodes the reports, `pointer.ts` listens,
   `selection.ts` keeps the selection, `layer.ts` is the ⬚ layer, `copy.ts`
