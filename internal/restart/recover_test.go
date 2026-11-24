@@ -12,6 +12,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/transcript"
 )
 
 const sid = "9b1c2d3e-4f50-4a6b-8c7d-0e1f2a3b4c5d"
@@ -299,6 +300,40 @@ func TestAChatIsStoppedWhereItsAgentRanThoughItsShellStoodElsewhere(t *testing.T
 	out := r.resume(client, "gog", stopped, checks, func(string) {})
 	if checked != "/work/api/sub" || len(client.started) != 1 || len(out.back()) != 1 {
 		t.Fatalf("checked %q, started %v, back %v", checked, client.started, out.back())
+	}
+}
+
+// TestARememberedConversationResumesAfterARestart: the file an accepted process read is kept in the state dir, so
+// Resume after a reboot finds a conversation of an agent that has stopped — while an id nobody read under that folder
+// is still not found there.
+func TestARememberedConversationResumesAfterARestart(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir := t.TempDir()
+	root := filepath.Join(t.TempDir(), "profile", "projects")
+	path := filepath.Join(root, "-work", sid+".jsonl")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	transcript.OpenRootStore(dir).Keep(machines.LocalID, transcript.KeptRoots{
+		Roots:    map[transcript.Format][]string{transcript.Claude: {root}},
+		Sessions: map[string]string{sid: path},
+	})
+	fleet := machines.NewManager(dir, nil, true) // a page-only host: no core is started
+	defer fleet.Close()
+	mc, err := fleet.Get(machines.LocalID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	work := t.TempDir()
+	if err := CanResume(mc, "claude", sid, work); err != nil {
+		t.Fatalf("a conversation the reader kept: %v", err)
+	}
+	if err := CanResume(mc, "claude", "5d0e7f1f-2222-4333-8444-a55566667777", work); err == nil || errors.Is(err, ErrUnasked) {
+		t.Fatalf("an id nobody read under that folder: %v", err)
 	}
 }
 
