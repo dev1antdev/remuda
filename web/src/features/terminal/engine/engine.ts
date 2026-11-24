@@ -21,6 +21,7 @@ import { interceptModes, splitTracking } from "./modes";
 import { createReporter } from "./mouse";
 import { installPaste } from "./paste";
 import { installSearch } from "./search";
+import { installWidths } from "./widths";
 import { installPointer, type Flags } from "./pointer";
 import { trackSelection } from "./selection";
 import { connect, type Transport } from "./transport";
@@ -56,6 +57,7 @@ export function createEngine(mount: HTMLElement, machineId: string, paneId: stri
     theme: terminalTheme(props().flavor),
     disableStdin: props().readOnly,
   });
+  installWidths(term);
   const readOnly = !!props().readOnly;
   let flavorNow = props().flavor;
   let fontNow = props().fontFamily;

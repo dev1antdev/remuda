@@ -215,8 +215,11 @@ not style.
 - **TypeScript, React 19 function components**, 2-space indent, double
   quotes, semicolons. Dependencies are react, react-dom, xterm with its
   search addon (`@xterm/addon-search`, the find over the terminal's
-  scrollback: the same project as xterm, not worth writing twice) and
-  radix-ui (menus, tooltips, popovers, hover cards: the primitives whose keyboard and
+  scrollback: the same project as xterm, not worth writing twice) and its
+  Unicode 11 width tables (`@xterm/addon-unicode11`: the widths the core counts,
+  on which a joined soft-wrapped row's columns stand — `engine/widths.ts` adds
+  the one rule the tables lack, an emoji with a variation selector two cells)
+  and radix-ui (menus, tooltips, popovers, hover cards: the primitives whose keyboard and
   focus behaviour is not worth writing twice; `ui/Menu.tsx`, `ui/Popover.tsx`,
   `ui/HoverCard.tsx` and `ui/Tip.tsx` are the only places that import it) and mermaid (the
   flowcharts and sequence diagrams agents draw in their answers and
