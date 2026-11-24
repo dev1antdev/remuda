@@ -935,14 +935,22 @@ components and icons as rules for whoever changes it: @docs/design.md
   its environment — `CLAUDE_CONFIG_DIR`'s `projects`, the `sessions` folder above the rollout
   `CODEX_HOME` gave. The folders live on that machine's `transcript.Reader`, never in a package-level registry:
   a process lookup accepted for a pid hands its session file back with the id (`parseSessionsByPID`), and only then
-  is the folder it sits under learned (`learnRoot`), cleaned and absolute, for `learnedRootTTL` 10 min after the
-  last accepted read. `RootsFor(host)` hands that snapshot to `ResolveSession`, `Reader.Sessions`, the search, the
-  usage counter, the plan limits and the second opinion's find; a remote scan is given the folders beyond its
-  home's own (`NamedRoots`) as `-root format=folder`. `ResolveSession`'s hit and miss are cached by the roots' generation, so a folder learned
+  is the folder it sits under learned (`learnRoot`), cleaned and absolute, trusted for `learnedRootTTL` 10 min after
+  the last accepted read, and **kept** in `transcript-roots.json` in remuda's state dir by machine (`roots.go`:
+  `RootStore`, `Reader.Keeping`), so it outlives the agent that named it and a restart of remuda. Two views of the
+  set: `Roots()` is the home's own folders plus every folder ever learned — what `Reader.Sessions`, the search, the
+  usage counter, the plan limits and the second opinion's find read, and what a session path is confined to; the
+  fresh snapshot (`rootsSnapshot`) is the home's own plus the folders still trusted, and only `ResolveSession`'s tree
+  scan is given it, so a lapsed folder cannot answer a new resume by itself. `RootsFor(host)` hands `Roots()` to a
+  scanner; a remote scan is given the folders beyond its home's own (`NamedRoots`) as `-root format=folder`. A kept
+  folder checked gone (`keptCheck`, 10 min; never one the machine could not be asked about) leaves the set and the
+  file (`TestAFolderThatIsGoneIsForgotten`). `ResolveSession`'s hit and miss are cached by the roots' generation, so a folder learned
   (or expired) later is looked in again (`TestSessionsOfLearnsOnlyAcceptedRoots`,
   `TestResolvedSessionFollowsTheRoots`, `TestASessionUnderItsOwnCODEXHOMEIsOpenedToo`). The live file an accepted
   process read named is remembered for the same ten minutes and asked first, before a copy of its id under another
-  root. A session file is read through `OpenInRoot` under its root (an `os.Root` refuses a linked parent that leaves
+  root; that file is kept by session id in the same store too, so Resume after a restart finds a conversation whose
+  agent has stopped (`TestALearnedFolderAndItsSessionOutliveARestart`,
+  `TestARememberedConversationResumesAfterARestart`). A session file is read through `OpenInRoot` under its root (an `os.Root` refuses a linked parent that leaves
   it) and `OpenSession` (a link, a FIFO or any other special file is refused), locally and remotely
   (`TestOpenSessionRefusesLinksAndPipes`).
   **Codex and Gemini sessions read into the same `Turn`** (`format.go`:
@@ -2207,7 +2215,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   pane under its lock, a fresh look — gone, another agent, the shell in
   another folder, the agent back already by hand — then the folder
   (`Machine.ResolvePath`) and, for Claude Code, the session file
-  (`Transcripts.ResolveSession`) checked (`CanResume`, which the wake
+  (`Transcripts.ResolveSession`, which finds the file an accepted process
+  read even after its agent stopped and remuda restarted) checked (`CanResume`, which the wake
   shares), then `AgentStartWith` with the
   kind's resume arguments under a name of the pane's own; a start that
   fails leaves the pane on the list, a pane that will not come back is
@@ -5913,7 +5922,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   a damaged file read as none, said once) keeps by machine and the
   viewer's zone the days that ended, each read once after it ended and
   never again (a day nobody worked kept empty); a shelf keeps the session roots it was read from, so a folder learned
-  later reads the year again, while a folder that has lapsed leaves the days already kept for it alone;
+  later reads the year again, while one forgotten as gone leaves the days already kept for it alone — a restart offers
+  the same folders the reader kept, so it reads only today again, not the year;
   `Look(hosts, loc, tz)`
   answers the last `YearDays` 365 days from what is kept and starts, one
   read at a time per machine and zone, in the background, the read it

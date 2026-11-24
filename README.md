@@ -719,7 +719,10 @@ command that brings it back (`cd ~/work/api && claude --resume …`), then
 chat starts again in its own pane on its session (`claude --resume`,
 `codex resume`, …), one job whose log sits under the machine's recent
 jobs; a pane whose folder or session file is gone, or that runs
-something else by then, is skipped with the reason. The model and the
+something else by then, is skipped with the reason — a session under a
+folder the agent named for itself (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`) is
+still found there, because remuda keeps the folders and files it read.
+The model and the
 arguments an agent was first started with are not carried over (the core
 does not keep them). Nothing starts until you press a button — unless
 you tick **Resume automatically next time** (in the dialog, or in
@@ -1983,7 +1986,8 @@ machine, Claude Code's and Codex's — what you or an agent said, never tool out
 machine, folder and period. A hit jumps to the turn in the running pane, or
 opens the old transcript read-only. No index, no database: each machine
 scans its own session folders on demand — `~/.claude/projects` and `~/.codex/sessions` plus the folders its
-agents named for themselves (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`) while they run (remuda's scanner where the
+agents named for themselves (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`), remembered once read so an agent that stopped
+is still searched (remuda's scanner where the
 binary is deployed, grep otherwise). Above the conversations, a **Screens**
 part lists where the words stood on the agents' recorded screens (see
 Timelapse). Every turn of a pane's conversation

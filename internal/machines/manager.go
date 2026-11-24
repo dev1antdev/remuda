@@ -56,6 +56,7 @@ type Manager struct {
 	onState  func(id, label, state, reason string) // hears every remote's connection move, set by OnState
 	server   bool                                  // the host serves the page only: no machine of the fleet (SetServer)
 	core     bool                                  // every machine is reached through remuda-core (NewCoreManager)
+	roots    *transcript.RootStore                 // the folders and conversations its agents named, kept across restarts
 	// herdr's machines, never saved, were read once since the start, or there is no herdr: the fleet is whole (Gone)
 }
 
@@ -236,7 +237,9 @@ func newManager(dir string, door *Door, local *Machine, speaksCore bool) *Manage
 		names:    map[string]string{},
 		door:     door,
 		core:     speaksCore,
+		roots:    transcript.OpenRootStore(dir),
 	}
+	local.Transcripts = local.Transcripts.Keeping(m.roots)
 	_ = state.LoadJSON(m.dir, labelsFile, &m.names)
 	if m.names == nil {
 		m.names = map[string]string{}
@@ -288,6 +291,7 @@ func (m *Manager) writeMachines(cfgs []Config) error {
 
 func (m *Manager) add(cfg Config) *Machine {
 	mc := newRemote(cfg)
+	mc.Transcripts = mc.Transcripts.Keeping(m.roots)
 	mc.door = m.door
 	mc.onState = m.stateMoved
 	mc.speaksCore = m.core
