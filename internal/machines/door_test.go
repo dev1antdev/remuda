@@ -442,9 +442,16 @@ func TestDoorScriptKeepsALiveDoor(t *testing.T) {
 }
 
 // TestDoorScriptGoesOneAtATime: of cockpits placing their live doors together exactly one wins, the others finding its
-// door.
+// door. The health check is a stub here, answering at once: a real one under a busy machine may miss its two seconds,
+// and a door nobody could ask is placed over by design — that side is TestDoorScriptKeepsALiveDoor's — which would put
+// a second door here for a reason this test is not about.
 func TestDoorScriptGoesOneAtATime(t *testing.T) {
 	home := newDoorHome(t)
+	tools := t.TempDir()
+	if err := os.WriteFile(filepath.Join(tools, "curl"), []byte("#!/bin/sh\nprintf '%s' '{\"ok\":true}'\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", tools+string(os.PathListSeparator)+os.Getenv("PATH"))
 	urls := []string{liveDoor(t), liveDoor(t), liveDoor(t), liveDoor(t)}
 	answers := make([]string, len(urls))
 	var cockpits sync.WaitGroup
