@@ -2024,7 +2024,11 @@ components and icons as rules for whoever changes it: @docs/design.md
   nothing. `REMUDA_INSTALL_VERSION` / `_ONLY` / `_MISSING` / `_BASE` steer
   it, and `setup -host H` runs it on H with ONLY and MISSING (and this
   build's tag when it is a release, `installEnv`), so a remote without
-  remuda fetches the binary for its own OS and CPU. `-open` waits for
+  remuda fetches the binary for its own OS and CPU. Every script `-host`
+  sends goes on the ssh session's stdin (`sshx.Remote` / `RemoteWithInput`), its
+  variables and arguments inside the script, so a tcsh or fish login shell reads
+  the line as it is written and Dropbear's 9000-byte command limit is never
+  reached. `-open` waits for
   `/api/health` and opens the page on a Mac at the desk, the address
   handed to `osascript` on stdin (`openPage` in local.go: the token never
   goes on a command line; on Linux the link is only printed). `remuda
