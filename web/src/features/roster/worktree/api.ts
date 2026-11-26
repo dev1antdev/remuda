@@ -58,6 +58,8 @@ export type Removal = {
   merged: boolean;
   has_submodules?: boolean;
   submodules?: string[];
+  ignored?: string[]; // ignored files and folders that go with it, build and dependency folders left out
+  ignored_more?: number; // further ignored entries beyond the ones named
   made: boolean;
   shared?: string[];
   working?: string;

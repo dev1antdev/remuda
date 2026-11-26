@@ -33,6 +33,15 @@ export function warnings(rm: Removal, deleteBranch: boolean): string[] {
   for (const sub of rm.submodules ?? []) out.push(t("Submodule {name} has commits that aren't pushed anywhere: they will be lost.", { name: sub }));
   // not every submodule can be looked into (one nested, one deinitialized), so having any is said aloud
   if (rm.has_submodules) out.push(t("This worktree has submodules: whatever only they hold goes with it."));
+  const ignored = rm.ignored ?? [];
+  if (ignored.length > 0 || (rm.ignored_more ?? 0) > 0) {
+    const names = [ignored.map((name) => name.replace(/\/$/, "")).join(", "), rm.ignored_more ? t("and {n} more", { n: rm.ignored_more }) : ""].filter(Boolean).join(", ");
+    out.push(
+      ignored.length === 1 && !rm.ignored_more
+        ? t("Ignored file {names} goes with the folder.", { names })
+        : t("Ignored files go with the folder: {names}.", { names }),
+    );
+  }
   return out;
 }
 

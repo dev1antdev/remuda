@@ -155,7 +155,7 @@ func (s *Server) handleGitOp(w http.ResponseWriter, r *http.Request) {
 	case errors.As(err, &invalid):
 		httpErr(w, 400, err)
 		return
-	case errors.As(err, &busy), errors.Is(err, gitops.ErrStale):
+	case errors.As(err, &busy), errors.Is(err, gitops.ErrStale), errors.Is(err, gitops.ErrTreeMoved):
 		httpErr(w, http.StatusConflict, err)
 		return
 	case errors.Is(err, gitops.ErrNotRepository):

@@ -119,6 +119,38 @@ func (mc *Machine) EffectivePath(cwd, raw string) string {
 	return cleanPath(style, p)
 }
 
+// RealPath is the path with its folder's symlinks resolved on the machine, a final link refused: what a viewer's reach
+// is judged on, so a link out of a workspace reaches nothing. A folder that cannot be read is an error.
+func (mc *Machine) RealPath(path string) (string, error) {
+	if mc.local {
+		if real, err := filepath.EvalSymlinks(path); err == nil {
+			return real, nil
+		}
+		dir, err := filepath.EvalSymlinks(filepath.Dir(path))
+		if err != nil {
+			return "", err
+		}
+		return filepath.Join(dir, filepath.Base(path)), nil
+	}
+	out, err := mc.text(realPathScript(mc.Paths().Slash(path)), 15*time.Second)
+	if err != nil {
+		return "", err
+	}
+	real := strings.TrimSpace(out)
+	if real == "" {
+		return "", fmt.Errorf("%s cannot be read", path)
+	}
+	return real, nil
+}
+
+// realPathScript prints the path on the machine with its folder resolved by the kernel, and nothing for a link: a
+// viewer may not follow one, even to a file inside its workspace, since the screen after could be another.
+func realPathScript(path string) string {
+	return `p=` + script.Quote(path) + `; [ -L "$p" ] && { echo "a link"; exit 2; }; ` +
+		`d=$(cd -P "$(dirname "$p")" 2>/dev/null && pwd -P) || { echo "no folder"; exit 3; }; ` +
+		`printf '%s/%s\n' "$d" "$(basename "$p")"`
+}
+
 // InStateDir says the path lies in a folder a remuda serves from, wherever that was put: its lock file stands there. A
 // machine that cannot be asked counts as yes.
 func (mc *Machine) InStateDir(path string) bool {
@@ -434,5 +466,5 @@ func gitDiffScript(folder, quotedPath string) string {
 	return `d=` + script.Quote(folder) + `; while [ ! -d "$d" ]; do up=$(dirname "$d"); [ "$up" = "$d" ] && exit 0; d=$up; done; ` +
 		`cd "$d" 2>/dev/null || exit 0; root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; ` +
 		`printf '%s\n' "$root"; if ` + script.ReadGit + ` ls-files --error-unmatch -- ` + quotedPath + ` >/dev/null 2>&1 || [ -n "$(git ls-tree --name-only HEAD -- ` + quotedPath + ` 2>/dev/null)" ]; then echo tracked; ` +
-		script.ReadGit + ` -c color.ui=never diff --no-ext-diff --no-textconv HEAD -- ` + quotedPath + ` | head -c 400000; else echo untracked; fi`
+		script.ReadGit + ` diff ` + script.PatchForm + ` HEAD -- ` + quotedPath + ` | head -c 400000; else echo untracked; fi`
 }

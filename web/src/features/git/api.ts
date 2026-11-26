@@ -20,7 +20,9 @@ export type GitState = {
   operation?: Operation;
   fingerprint?: string;
   dirty: number;
+  tracked?: number;
   conflicts: number;
+  tree?: string;
   changes?: Change[];
 };
 
@@ -68,6 +70,7 @@ export type OpRequest = {
   no_ff?: boolean;
   force?: boolean;
   operation?: Operation;
+  tree?: string;
   head: string;
   branch: string;
 };

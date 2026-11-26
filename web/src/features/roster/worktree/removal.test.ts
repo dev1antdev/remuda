@@ -39,6 +39,11 @@ describe("the remove dialog", () => {
     expect(buttonWords(clean, true, false)).toBe("Remove");
     expect(warnings({ ...clean, has_submodules: true }, false)).toEqual(["This worktree has submodules: whatever only they hold goes with it."]);
     expect(buttonWords({ ...clean, has_submodules: true }, false, false)).toBe("Remove anyway");
+    expect(warnings({ ...clean, ignored: [".env", "config/local.json"] }, false)).toEqual(["Ignored files go with the folder: .env, config/local.json."]);
+    expect(warnings({ ...clean, ignored: [".env"], ignored_more: 3 }, false)).toEqual(["Ignored files go with the folder: .env, and 3 more."]);
+    expect(warnings({ ...clean, ignored: [".env"] }, false)).toEqual(["Ignored file .env goes with the folder."]);
+    expect(buttonWords({ ...clean, ignored: [".env"] }, false, false)).toBe("Remove anyway");
+    expect(keepFolderOffered({ ...clean, ignored: [".env"] }, false)).toBe(true);
     expect(buttonWords(clean, true, true)).toBe("Removing…");
   });
   it("closes the workspace alone when another one uses the checkout", () => {

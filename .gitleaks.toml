@@ -1,0 +1,10 @@
+# gitleaks' own rules, plus the one test literal the whole-history scan keeps finding: the fixed token the auth tests
+# signed in with before devices replaced it, in internal/auth/auth_test.go and internal/server/devices_test.go of commit
+# 29f9b8e7. It is not a credential, and no rule is weakened for a new commit.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "the auth tests' fixed token is a test literal, not a secret"
+paths = ['''internal/(auth/auth_test|server/devices_test)\.go''']
+regexes = ['''0123456789abcdef0123456789abcdef01234567''']
