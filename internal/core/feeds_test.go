@@ -47,7 +47,7 @@ func TestStreamsAskingForTheSameWatchesShareOneFeed(t *testing.T) {
 	tell := func(channel uint32, line string) {
 		mu.Lock()
 		defer mu.Unlock()
-		core.write(channel, frameData, []byte(`{"jsonrpc":"2.0","method":"event","params":{"seq":2,"type":"output","data":{"watch":"0","line":"`+line+`","fresh":false}}}`+"\n"))
+		core.write(channel, frameData, []byte(`{"jsonrpc":"2.0","method":"event","params":{"seq":2,"type":"output","data":{"watch":"0","line":"`+line+`","pos":42,"fresh":false}}}`+"\n"))
 	}
 	heard := func(stream herdr.EventStream, want string) {
 		t.Helper()
@@ -57,8 +57,8 @@ func TestStreamsAskingForTheSameWatchesShareOneFeed(t *testing.T) {
 				t.Fatalf("waiting for %q: %v", want, err)
 			}
 			if ev.Kind == herdr.EventOutputMatched {
-				if ev.MatchedLine != want || ev.PaneID != "t1" {
-					t.Fatalf("heard %+v, want %q", ev, want)
+				if ev.MatchedLine != want || ev.PaneID != "t1" || ev.Pos != 42 {
+					t.Fatalf("heard %+v, want %q at 42", ev, want)
 				}
 				return
 			}

@@ -209,6 +209,7 @@ func (a *Adapter) tell(f *feed) {
 		}
 		var row struct {
 			Line  string `json:"line"`
+			Pos   uint64 `json:"pos"`
 			Lost  int    `json:"lost"`
 			Fresh *bool  `json:"fresh"`
 		}
@@ -219,6 +220,6 @@ func (a *Adapter) tell(f *feed) {
 			log.Printf("remuda-core dropped %d rows of an output watch on %s before this one", row.Lost, f.pane)
 			toldLost = true
 		}
-		f.push(herdr.Event{Kind: herdr.EventOutputMatched, PaneID: f.pane, MatchedLine: row.Line, Text: row.Line, Standing: row.Fresh, Watch: &f.match})
+		f.push(herdr.Event{Kind: herdr.EventOutputMatched, PaneID: f.pane, MatchedLine: row.Line, Pos: row.Pos, Text: row.Line, Standing: row.Fresh, Watch: &f.match})
 	}
 }

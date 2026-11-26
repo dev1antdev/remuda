@@ -35,11 +35,18 @@ type Service struct {
 
 	mu       sync.Mutex
 	machines map[string]map[string]*paneView // machine → pane
-	standing map[string]map[string]time.Time // "machine|pane|watch" → each row it matched lately, when last
+	standing map[string]map[rowKey]time.Time // "machine|pane|watch" → each row it matched lately, when last
 	acted    map[string]time.Time            // "machine|pane|watch" → the last action, for the quiet spells
 	offers   map[string]Offer                // "machine|pane"
 	refused  map[string]string               // machine → why herdr refused the person's watches
 	watched  map[string]map[string]bool      // machine → the watches the last set kept, by pane and key
+}
+
+// rowKey is a row as a watch told it: its text and, when the server says, its place in the terminal, so two rows of the
+// same text at different places are two rows.
+type rowKey struct {
+	line string
+	pos  uint64
 }
 
 type paneView struct {
@@ -65,7 +72,7 @@ type Offer struct {
 
 // New is the service over the person's rules in dir.
 func New(dir string) *Service {
-	return &Service{Rules: Open(dir), machines: map[string]map[string]*paneView{}, standing: map[string]map[string]time.Time{},
+	return &Service{Rules: Open(dir), machines: map[string]map[string]*paneView{}, standing: map[string]map[rowKey]time.Time{},
 		acted: map[string]time.Time{}, offers: map[string]Offer{}, refused: map[string]string{}}
 }
 
@@ -137,11 +144,12 @@ func (s *Service) OnMatch(e events.OutputMatched) {
 	s.mu.Lock()
 	rows := s.standing[k]
 	if rows == nil {
-		rows = map[string]time.Time{}
+		rows = map[rowKey]time.Time{}
 		s.standing[k] = rows
 	}
-	prev, had := rows[e.Line]
-	rows[e.Line] = e.At
+	row := rowKey{line: e.Line, pos: e.Pos}
+	prev, had := rows[row]
+	rows[row] = e.At
 	if len(rows) > maxStanding {
 		delete(rows, oldest(rows))
 	}
@@ -161,11 +169,12 @@ func (s *Service) OnMatch(e events.OutputMatched) {
 }
 
 // oldest is the row matched longest ago.
-func oldest(rows map[string]time.Time) string {
-	var first string
-	for line, at := range rows {
-		if first == "" || at.Before(rows[first]) {
-			first = line
+func oldest(rows map[rowKey]time.Time) rowKey {
+	var first rowKey
+	found := false
+	for row, at := range rows {
+		if !found || at.Before(rows[first]) {
+			first, found = row, true
 		}
 	}
 	return first
