@@ -54,7 +54,7 @@ func TestACloseSaysItsReasonAndPostsTheCommentFirst(t *testing.T) {
 		return "", nil
 	})
 	s, _ := serviceOn(host)
-	if err := s.Close("gog", "acme/widgets", 41, "not_planned", "Duplicate of #40."); err != nil {
+	if err := s.Close("gog", "acme/widgets", 41, "", "not_planned", "Duplicate of #40."); err != nil {
 		t.Fatal(err)
 	}
 	script := host.Scripts()[len(host.Scripts())-1]
@@ -63,23 +63,23 @@ func TestACloseSaysItsReasonAndPostsTheCommentFirst(t *testing.T) {
 	if comment < 0 || closing < comment {
 		t.Fatalf("close with comment:\n%s", script)
 	}
-	if err := s.Close("gog", "acme/widgets", 41, "", ""); err != nil {
+	if err := s.Close("gog", "acme/widgets", 41, "", "", ""); err != nil {
 		t.Fatal(err)
 	}
 	if script := host.Scripts()[len(host.Scripts())-1]; !strings.Contains(script, "--reason 'completed'") || strings.Contains(script, "comment") {
 		t.Fatalf("a plain close:\n%s", script)
 	}
-	if err := s.Close("gog", "acme/widgets", 41, "wontfix", ""); !errors.Is(err, ErrInvalid) {
+	if err := s.Close("gog", "acme/widgets", 41, "", "wontfix", ""); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("a reason gh does not take: %v", err)
 	}
-	if err := s.Reopen("gog", "acme/widgets", 41, ""); err != nil {
+	if err := s.Reopen("gog", "acme/widgets", 41, "", ""); err != nil {
 		t.Fatal(err)
 	}
 	if script := host.Scripts()[len(host.Scripts())-1]; !strings.Contains(script, "gh issue reopen 41 -R 'acme/widgets'") {
 		t.Fatalf("reopen:\n%s", script)
 	}
 	for me, flag := range map[bool]string{true: "--add-assignee @me", false: "--remove-assignee @me"} {
-		if err := s.Assign("gog", "acme/widgets", 41, me); err != nil {
+		if err := s.Assign("gog", "acme/widgets", 41, "", me); err != nil {
 			t.Fatal(err)
 		}
 		if script := host.Scripts()[len(host.Scripts())-1]; !strings.Contains(script, "gh issue edit 41 -R 'acme/widgets' "+flag) {
@@ -93,7 +93,7 @@ func TestAWriteGhRefusesSaysWhatGhSaid(t *testing.T) {
 		return "GraphQL: Resource not accessible by integration (updateIssue)\n", &shell.ExitError{Code: 1}
 	})
 	s, _ := serviceOn(host)
-	err := s.Reopen("gog", "acme/widgets", 41, "")
+	err := s.Reopen("gog", "acme/widgets", 41, "", "")
 	var refused *Refused
 	if !errors.As(err, &refused) || !strings.Contains(err.Error(), "Resource not accessible by integration") || !strings.Contains(err.Error(), "GOG") {
 		t.Fatalf("%v", err)
@@ -103,7 +103,47 @@ func TestAWriteGhRefusesSaysWhatGhSaid(t *testing.T) {
 	})
 	s, _ = serviceOn(host)
 	var trouble *Trouble
-	if err := s.Assign("gog", "acme/widgets", 41, true); !errors.As(err, &trouble) || trouble.Kind != "signed-out" {
+	if err := s.Assign("gog", "acme/widgets", 41, "", true); !errors.As(err, &trouble) || trouble.Kind != "signed-out" {
 		t.Fatalf("a signed-out gh's write: %v", err)
+	}
+}
+
+func TestAWritesIDNamesTheIssueItSaw(t *testing.T) {
+	host := newFake(func(script string) (string, error) {
+		if strings.Contains(script, "mktemp") {
+			return "/tmp/remuda-issue.x\n", nil
+		}
+		return "", nil
+	})
+	s, _ := serviceOn(host)
+	const id = "I_kwDOAbc123"
+	if err := s.Close("gog", "acme/widgets", 41, id, "not_planned", "Duplicate of #40."); err != nil {
+		t.Fatal(err)
+	}
+	script := host.Scripts()[len(host.Scripts())-1]
+	if strings.Contains(script, "gh issue close") || !strings.Contains(script, "closeIssue") || !strings.Contains(script, id) || !strings.Contains(script, "NOT_PLANNED") {
+		t.Fatalf("a close by id:\n%s", script)
+	}
+	if comment, closing := strings.Index(script, "gh issue comment 41"), strings.Index(script, "closeIssue"); comment < 0 || closing < comment {
+		t.Fatalf("the comment goes first:\n%s", script)
+	}
+	if err := s.Reopen("gog", "acme/widgets", 41, id, ""); err != nil {
+		t.Fatal(err)
+	}
+	if script := host.Scripts()[len(host.Scripts())-1]; strings.Contains(script, "gh issue reopen") || !strings.Contains(script, "reopenIssue") || !strings.Contains(script, id) {
+		t.Fatalf("a reopen by id:\n%s", script)
+	}
+	if err := s.Assign("gog", "acme/widgets", 41, id, true); err != nil {
+		t.Fatal(err)
+	}
+	script = host.Scripts()[len(host.Scripts())-1]
+	if !strings.Contains(script, "addAssigneesToAssignable") || !strings.Contains(script, "login=$(gh api user --jq .login)") || !strings.Contains(script, `-f login="$login"`) || !strings.Contains(script, id) {
+		t.Fatalf("an assign by id:\n%s", script)
+	}
+	if err := s.Assign("gog", "acme/widgets", 41, id, false); err != nil {
+		t.Fatal(err)
+	}
+	if script := host.Scripts()[len(host.Scripts())-1]; !strings.Contains(script, "removeAssigneesFromAssignable") {
+		t.Fatalf("an unassign by id:\n%s", script)
 	}
 }

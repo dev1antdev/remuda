@@ -84,7 +84,7 @@ export function useToasts(): ToastItem[] {
           className="btn sm"
           onClick={() => {
             actions.setIssueClosed(null);
-            void reopenIssue(issueClosed.machineId, issueClosed.repo, issueClosed.number).then(
+            void reopenIssue(issueClosed.machineId, issueClosed.repo, issueClosed.number, "", issueClosed.id).then(
               () => actions.notify(t("Reopened #{n}", { n: issueClosed.number }), { brief: true }),
               (e: unknown) => actions.notify(errMsg(e), { error: true }),
             );

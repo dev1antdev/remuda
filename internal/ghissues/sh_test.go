@@ -87,6 +87,9 @@ func TestTheScriptsRunInShAndA304AsksNothingMore(t *testing.T) {
 	if err != nil || len(list.Items) != 3 || list.Me != "alice" {
 		t.Fatalf("%+v %v", list, err)
 	}
+	if list.Items[0].ID != "I_42" || list.Items[1].ID != "I_41" {
+		t.Fatalf("the list carries the node ids: %+v", list.Items)
+	}
 	clock = clock.Add(2 * time.Minute)
 	if probed, err := s.List("here", "acme/widgets", DefaultList, false); err != nil || probed.Source != FromProbe {
 		t.Fatalf("%+v %v", probed.Source, err)
@@ -99,11 +102,14 @@ func TestTheScriptsRunInShAndA304AsksNothingMore(t *testing.T) {
 	if err != nil || d.Title != "Crash on start" || len(d.Timeline) == 0 || len(d.Pulls) != 1 {
 		t.Fatalf("%+v %v", d, err)
 	}
+	if d.ID != "I_41" {
+		t.Fatalf("the issue carries its node id: %+v", d)
+	}
 }
 
 func TestAWriteInShPostsTheFileAndRemovesIt(t *testing.T) {
 	home, s := standIn(t)
-	if err := s.Close("here", "acme/widgets", 41, "not planned", "Won't fix: it's by design."); err != nil {
+	if err := s.Close("here", "acme/widgets", 41, "", "not planned", "Won't fix: it's by design."); err != nil {
 		t.Fatal(err)
 	}
 	posted, _ := os.ReadFile(filepath.Join(home, "posted.txt"))
@@ -113,7 +119,7 @@ func TestAWriteInShPostsTheFileAndRemovesIt(t *testing.T) {
 	if left, _ := filepath.Glob(filepath.Join(home, "remuda-issue.*")); len(left) != 0 {
 		t.Fatalf("the comment's file stayed: %v", left)
 	}
-	err := s.Reopen("here", "acme/widgets", 41, "Back again.")
+	err := s.Reopen("here", "acme/widgets", 41, "", "Back again.")
 	if err == nil || !strings.Contains(err.Error(), "Could not reopen") {
 		t.Fatalf("gh's refusal: %v", err)
 	}

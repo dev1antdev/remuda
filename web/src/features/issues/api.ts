@@ -8,6 +8,7 @@ export type Label = { name: string; color: string; description?: string };
 export type Trouble = { kind: "no-gh" | "signed-out" | "not-found" | "failed"; text: string; run?: string };
 
 export type Item = {
+  id: string; // GitHub's node id: a write names the issue the person saw, whatever its repository is called now
   number: number;
   title: string;
   author: Person;
@@ -45,6 +46,7 @@ export type Event = {
 export type Pull = { repo: string; number: number; title: string; url: string; state: string; draft?: boolean };
 
 export type Detail = {
+  id: string;
   number: number;
   title: string;
   body: string;
@@ -100,8 +102,8 @@ export const commentIssue = (machine: string, repo: string, number: number, body
 // Written is a write's answer; a close or reopen gh refused after the comment that goes first was posted says so
 export type Written = { ok: boolean; commented?: boolean; error?: string };
 
-export const closeIssue = (machine: string, repo: string, number: number, reason: "completed" | "not_planned", comment = "") => sendJSON<Written>("POST", `/api/issues/${number}/close`, { machine, repo, reason, comment });
+export const closeIssue = (machine: string, repo: string, number: number, reason: "completed" | "not_planned", comment = "", id = "") => sendJSON<Written>("POST", `/api/issues/${number}/close`, { machine, repo, id, reason, comment });
 
-export const reopenIssue = (machine: string, repo: string, number: number, comment = "") => sendJSON<Written>("POST", `/api/issues/${number}/reopen`, { machine, repo, comment });
+export const reopenIssue = (machine: string, repo: string, number: number, comment = "", id = "") => sendJSON<Written>("POST", `/api/issues/${number}/reopen`, { machine, repo, id, comment });
 
-export const assignIssue = (machine: string, repo: string, number: number, me: boolean) => sendJSON("POST", `/api/issues/${number}/assign`, { machine, repo, me });
+export const assignIssue = (machine: string, repo: string, number: number, me: boolean, id = "") => sendJSON("POST", `/api/issues/${number}/assign`, { machine, repo, id, me });

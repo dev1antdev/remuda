@@ -24,6 +24,7 @@ type ghLabel struct {
 }
 
 type ghListItem struct {
+	ID          string     `json:"id"`
 	Number      int        `json:"number"`
 	Title       string     `json:"title"`
 	Author      ghAuthor   `json:"author"`
@@ -123,7 +124,7 @@ func parseList(text, query string) ([]Item, error) {
 	items := []Item{}
 	for _, r := range raw {
 		state, reason := stateOf(r.State, r.StateReason)
-		items = append(items, Item{Number: r.Number, Title: strings.TrimSpace(r.Title), Author: personOf(r.Author), State: state, Reason: reason, Labels: labelsOf(r.Labels), Assignees: peopleOf(r.Assignees), Updated: r.UpdatedAt, URL: r.URL})
+		items = append(items, Item{ID: r.ID, Number: r.Number, Title: strings.TrimSpace(r.Title), Author: personOf(r.Author), State: state, Reason: reason, Labels: labelsOf(r.Labels), Assignees: peopleOf(r.Assignees), Updated: r.UpdatedAt, URL: r.URL})
 	}
 	if !strings.Contains(query, "sort:") {
 		sort.SliceStable(items, func(i, j int) bool { return items[i].Updated.After(items[j].Updated) })
@@ -134,9 +135,9 @@ func parseList(text, query string) ([]Item, error) {
 // scopeRe is a search naming where to look, which can reach past the repository the list was asked of.
 var scopeRe = regexp.MustCompile(`(?i)(^|\s)-?(repo|org|user|owner):`)
 
-// ownItems leaves a search that names where to look only the repository's own issues: the panel acts on its repository
-// by number, and another's #12 would be taken for this one's. A plain search is left alone: a renamed repository's
-// issues answer under its new name.
+// ownItems leaves a search that names where to look only the repository's own issues: a comment still goes by number,
+// and another's #12 would be taken for this one's. A plain search is left alone: a renamed repository's issues answer
+// under its new name, and a write by node id still names the issue the person saw.
 func ownItems(items []Item, repo, query string) []Item {
 	if !scopeRe.MatchString(query) {
 		return items
@@ -194,6 +195,7 @@ type restMilestone struct {
 }
 
 type restIssue struct {
+	ID          string                     `json:"node_id"`
 	Number      int                        `json:"number"`
 	Title       string                     `json:"title"`
 	Body        string                     `json:"body"`

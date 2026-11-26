@@ -41,23 +41,24 @@ func (s *Service) Comment(machineID, repo string, number int, body string) error
 	return s.write(machineID, repo, number, body, func(file string) string { return commentScript(repo, number, file) })
 }
 
-// Close closes the issue for the reason ("completed" or "not planned"), the comment posted first when there is one.
-func (s *Service) Close(machineID, repo string, number int, reason, comment string) error {
+// Close closes the issue for the reason ("completed" or "not planned"), the comment posted first when there is one. An
+// id names the issue the person saw; without one the number is used, which a renamed repository can point elsewhere.
+func (s *Service) Close(machineID, repo string, number int, id, reason, comment string) error {
 	why, ok := Reason(reason)
 	if !ok {
 		return ErrInvalid
 	}
-	return s.write(machineID, repo, number, comment, func(file string) string { return closeScript(repo, number, why, file) })
+	return s.write(machineID, repo, number, comment, func(file string) string { return closeScript(repo, number, id, why, file) })
 }
 
 // Reopen reopens the issue, the comment posted first when there is one.
-func (s *Service) Reopen(machineID, repo string, number int, comment string) error {
-	return s.write(machineID, repo, number, comment, func(file string) string { return reopenScript(repo, number, file) })
+func (s *Service) Reopen(machineID, repo string, number int, id, comment string) error {
+	return s.write(machineID, repo, number, comment, func(file string) string { return reopenScript(repo, number, id, file) })
 }
 
 // Assign adds the signed-in account to the issue's assignees, or takes it off.
-func (s *Service) Assign(machineID, repo string, number int, me bool) error {
-	return s.write(machineID, repo, number, "", func(string) string { return assignScript(repo, number, me) })
+func (s *Service) Assign(machineID, repo string, number int, id string, me bool) error {
+	return s.write(machineID, repo, number, "", func(string) string { return assignScript(repo, number, id, me) })
 }
 
 // write runs one write's script, the text put on the machine first when there is one, and marks what it changed.

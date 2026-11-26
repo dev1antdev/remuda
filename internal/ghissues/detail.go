@@ -10,6 +10,7 @@ import (
 // Detail is one issue as the viewer shows it: the issue, its timeline, the pull requests that close it and everyone who
 // took part.
 type Detail struct {
+	ID           string     `json:"id"`
 	Number       int        `json:"number"`
 	Title        string     `json:"title"`
 	Body         string     `json:"body"`
@@ -327,7 +328,7 @@ func detailOf(issueBody, timeline, closedBy string) (Detail, error) {
 	}
 	state, reason := stateOf(raw.State, raw.StateReason)
 	d := Detail{
-		Number: raw.Number, Title: strings.TrimSpace(raw.Title), Body: raw.Body, URL: raw.HTMLURL, State: state, Reason: reason,
+		ID: raw.ID, Number: raw.Number, Title: strings.TrimSpace(raw.Title), Body: raw.Body, URL: raw.HTMLURL, State: state, Reason: reason,
 		Author: raw.User.person(), Role: raw.Association, Created: raw.CreatedAt, Updated: raw.UpdatedAt, Closed: raw.ClosedAt,
 		Labels: labelsOf(raw.Labels), Assignees: []Person{}, Reactions: reactionsOf(raw.Reactions), Comments: raw.Comments,
 		Pull: len(raw.PullRequest) > 0 && string(raw.PullRequest) != "null",
