@@ -966,7 +966,8 @@ Logs: `~/Library/Logs/remuda.log` (macOS) or `journalctl --user -u remuda`.
 
 Everything the cockpit keeps lives in its state dir: your tasks, the
 schedules, budgets, recipes, scenes, webhooks and settings, the signed-in devices,
-the agents' keys, the token, the push keys and its Tailscale node. On a
+the agents' keys, the push keys and its Tailscale node — but not the
+cockpit's own token. On a
 Raspberry Pi that is an SD card. **Settings › Backups** copies it every
 night (at a time you pick, in the cockpit's own zone) to another machine
 of your fleet, into that machine's remuda folder under
@@ -986,8 +987,10 @@ is aside (`…/remuda.before-restore-<time>`) rather than deleting it, and
 keeps the backups that machine holds for others. Restored on a new
 machine, the cockpit keeps its Tailscale address, so every device stays
 signed in — never run the old one and the restored one at the same time.
-A backup holds the token: it is written 0600 into a 0700 folder on your
-own machine, and nowhere else. It holds remuda's state dir alone: the
+A backup holds no cockpit token: the copy is written 0600 into a 0700
+folder on your own machine, and a restore mints a new token on its next
+start, so a page or an API client holding the old one signs in again. It
+holds remuda's state dir alone: the
 machine's own `~/.ssh` — its key and the hosts it reaches — is not in
 it, so a cockpit restored on a new machine needs that machine's key let
 in on your other machines again. A server (`-server`, below) keeps no
