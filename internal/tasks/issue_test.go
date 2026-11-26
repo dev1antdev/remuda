@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dev1antdev/remuda/internal/prstatus"
 	"github.com/dev1antdev/remuda/internal/shell"
 )
 
@@ -120,6 +121,9 @@ func TestImportIssueMakesTheTaskWithItsLabelsOnce(t *testing.T) {
 	prompt := Prompt(task, inbox[0], false)
 	if strings.Count(prompt, "https://github.com/cli/cli/issues/14814") != 1 || !strings.Contains(prompt, "The token is only expired.") {
 		t.Fatalf("prompt: %q", prompt)
+	}
+	if !strings.HasSuffix(prompt, prstatus.Guard) {
+		t.Fatalf("the issue's body is not ended by the guard: %q", prompt)
 	}
 	if _, err := ImportIssue(st, inbox[0].ID, issue); !errors.Is(err, ErrInvalid) || !strings.Contains(err.Error(), "already task #") {
 		t.Fatalf("second import: %v", err)
