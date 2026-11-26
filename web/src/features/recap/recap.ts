@@ -36,20 +36,3 @@ export function fileList(paths: string[], dir: string, max = 6): string {
   return shown.join(", ");
 }
 
-// recapMarkdown is one conversation's recap ready to paste
-export function recapMarkdown(title: string, r: Recap, dir: string): string {
-  const code = (texts: string[], max: number) => {
-    const out = texts.slice(0, max).map((text) => `\`${shownPath(text, dir).replace(/`/g, "'")}\``);
-    if (texts.length > max) out.push(`+${texts.length - max} more`);
-    return out.join(", ");
-  };
-  const lines = [`## ${title}`, "", `- ${numbers(r)}`];
-  if (r.calls > 0) lines.push(`- ${calls(r)}`);
-  if (r.commands.length) lines.push(`- Ran: ${code(r.commands.map((command) => (command.length > 60 ? command.slice(0, 59) + "…" : command)), 6)}`);
-  if (r.edited.length) lines.push(`- Edited: ${code(r.edited, 12)}`);
-  if (r.read.length) lines.push(`- Read: ${code(r.read, 12)}`);
-  const more = [r.subagents > 0 ? plural(r.subagents, "subagent") : "", r.questions > 0 ? plural(r.questions, "question") : ""].filter(Boolean);
-  if (more.length) lines.push(`- ${more.join(" · ")}`);
-  if (r.said) lines.push(`- Last answer: ${r.said}`);
-  return lines.join("\n") + "\n";
-}
