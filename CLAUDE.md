@@ -5594,8 +5594,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   `features/recap/`: `RecapDialog.tsx` (dialog kind `recap`: the Recap
   row in `chat/ChatTools.tsx` for the session shown, the palette for the
   pane and for a transcript open from the search; Copy as Markdown
-  through `copyText`), `RecapBody.tsx` the lines it draws (`recap.ts`,
-  tested: `numbers`, `calls`, `fileList`, `recapMarkdown`), under **the
+  copies the response's own `markdown` — the report the MCP's
+  `agent_recap` reads too, not one built on the page), `RecapBody.tsx`
+  the lines it draws (`recap.ts`, tested: `numbers`, `calls`, `fileList`), under **the
   day strip** (`DayStrip.tsx` over `strip.ts`, pure
   and tested: `window` — the period from `since` to now, the last 8
   hours on a phone under 600 px, the last day for a recap without a

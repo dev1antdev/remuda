@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Recap } from "./api";
-import { calls, fileList, numbers, recapMarkdown } from "./recap";
+import { calls, fileList, numbers } from "./recap";
 
 const empty = (): Recap => ({ prompts: 0, answers: 0, took: 0, tokens: 0, cost: 0, calls: 0, tools: {}, failed: 0, commands: [], edited: [], read: [], subagents: 0, questions: 0, asking: false });
 const busy = (): Recap => ({
@@ -29,24 +29,5 @@ describe("the lines", () => {
     expect(calls(busy())).toBe("7 tool calls (Read 3, Agent 1, AskUserQuestion 1, Bash 1) · 1 failed call · longest Bash 1 min 2 s (go test ./...)");
     expect(fileList(["/w/a/b.go", "/x/d.go"], "/w")).toBe("a/b.go, /x/d.go");
     expect(fileList(["/w/1", "/w/2", "/w/3"], "/w", 2)).toBe("1, 2, +1 more");
-  });
-});
-
-describe("recapMarkdown", () => {
-  it("is the report's lines for one conversation", () => {
-    expect(recapMarkdown("api on gog", busy(), "/w")).toBe(
-      [
-        "## api on gog",
-        "",
-        "- 2 prompts · 2 answers · 1 min 37 s · 38k tokens · $0.42",
-        "- 7 tool calls (Read 3, Agent 1, AskUserQuestion 1, Bash 1) · 1 failed call · longest Bash 1 min 2 s (go test ./...)",
-        "- Ran: `go test ./...`",
-        "- Edited: `a/b.go`",
-        "- Read: `a/c.go`, `/x/d.go`",
-        "- 1 subagent · 1 question",
-        "- Last answer: Fixed",
-        "",
-      ].join("\n"),
-    );
   });
 });
