@@ -7144,6 +7144,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   signed in before devices keeps working. A revoked device's cookie is
   dropped and refused at once (no 500 ms wait: a page of the person's own
   must not be slowed; logged once per id), a wrong token still waits.
+  A revoke or rename the file could not keep is undone and answered as an error, as is a key's removal and the old key
+  a replaced one dropped; a restart therefore never brings a signed-out device or a revoked key back. The same holds
+  for a note (`notes.Set` keeps the old one on a failed write) and for the push subscriptions, whose file one writer
+  at a time takes (`saveMu`), so an older snapshot never lands after a newer one.
   `auth.DeviceID(ctx)` is the caller's device in a handler.
   `internal/server/devices.go`: `GET /api/devices` (each with `this` for
   the caller's own, never the hash), `PATCH /api/devices/{id} {name}`,
