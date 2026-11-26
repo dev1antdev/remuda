@@ -6453,9 +6453,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   branch `arena-<arena>-<lane>`, the commit it stands on noted as the
   lane's `Base`, the agent through `sessions.StartAgentWith` with the
   model, a task's run through `tasks.StartRun` when it is a task's
-  arena, then the prompt handed over the way a task's start does it
-  (Claude Code's trust question for that very worktree answered yes
-  through `tasks.TrustPrompt`, any other question pushed once); a lane
+  arena, then `sessions.Handoff` hands the prompt over as a task's start
+  does (Claude Code's trust question for that very worktree answered yes
+  through `sessions.TrustPrompt`, any other question pushed once); a lane
   refused on the way keeps its reason. `Service.Stats` reads each lane's
   work against its base — commits, staged, unstaged and new files,
   `.gitignore` kept — through a throwaway index (`GIT_INDEX_FILE`, so
@@ -6940,13 +6940,13 @@ components and icons as rules for whoever changes it: @docs/design.md
   too), a `task_runs` row holding the prompt before anything is typed
   (`Run.Prompt`) and the task moved to its project's `on_start`
   column (`StartRun`) — all of it `tasks.Launcher.Start` (start.go); then
-  the delivery in a goroutine: `AgentPrompt` every 2 s until the agent takes it.
+  the delivery in a goroutine through `sessions.Handoff`: `AgentPrompt` every 2 s until the agent takes it.
   `RunWatch.ResumeStarting`, once as remuda comes up, hands a starting
   run's saved prompt over again (`Launcher.Redeliver`, the window then
   counting from the hand-over), so a restart in the middle of a start does
   not leave the task failed with a worktree and no agent at work. Claude
   Code's "trust this folder" question for that very worktree is answered
-  yes (`PaneRead` → `isTrustPrompt` → keys down+enter, noted as a comment);
+  yes (`PaneRead` → `sessions.TrustPrompt` → keys down+enter, noted as a comment);
   any other question of the agent's gets one push and waits; five minutes
   → `failed`. `tasks.RunWatch` (wired in `internal/app`, every 15 s, its
   inputs the radar's display and `chat.Service.LastAnswer`) turns every finish — the pane not working and the
@@ -7454,6 +7454,11 @@ components and icons as rules for whoever changes it: @docs/design.md
   the text or `FirstPromptTimeout` passes; a dialog on the agent's screen
   — Claude Code's trust question for the folder — is waited through and
   never answered, the folder being theirs to trust; the error says why).
+  **`Handoff`** is the loop a task's run and an arena lane share: the same
+  `Deliver`, retried every `Retry` (2 s) until `Timeout` (5 min), with
+  `TrustPrompt` answered yes once for the folder, one `Notify` on any other
+  question, and its ending as the last error and whether the timeout ran
+  out.
   The page's side is `features/roster/startOptions.ts` (pure, tested:
   `modelChoices`, `optionsFor`, `choiceFor`, pref `start.model:<kind>`
   for the model last used) under the dialogs' folded **Options**
