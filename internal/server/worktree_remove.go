@@ -148,6 +148,10 @@ func (s *Server) handleWorktreeRemoveAsShown(w http.ResponseWriter, r *http.Requ
 		httpErr(w, http.StatusConflict, errors.New("it changed since this opened; look again, and remove it if that is still what you want"))
 		return
 	}
+	// From here no new workspace may open on the folder: one that did between the close and git's removal would be
+	// left standing on nothing.
+	done := s.removing.begin(mc.ID(), rm.Path)
+	defer done()
 	if err := client.WorkspaceClose(id); err != nil {
 		rpcErr(w, err)
 		return

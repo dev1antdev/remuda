@@ -5251,7 +5251,11 @@ components and icons as rules for whoever changes it: @docs/design.md
   `merged_pr` are in it)
   is a 409 ("it changed since this opened"), else the core closes the workspace, a
   workspace found on the checkout right after (or no answer) keeps the
-  folder, and `RemoveAsShown` runs `git worktree remove`, with `--force` only for the
+  folder, and `RemoveAsShown` runs `git worktree remove` — the server holding
+  the folder from the close until the removal ends (`removing` in
+  `internal/server`: `POST /api/sessions` naming it or a folder inside it is
+  refused `conflict` meanwhile, so no workspace opens on what git takes away),
+  with `--force` only for the
   uncommitted work or the submodules the dialog named (the person's
   decision of 2026-11-13: git's writes at their press, a loss behind a
   danger button that says it), and `deleteBranchAt` at the commit the look

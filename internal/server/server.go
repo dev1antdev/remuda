@@ -140,6 +140,7 @@ type Server struct {
 	streams   termStreams
 	trees     filetree.Service // the project tree's folders, each checkout's git status read once for a few seconds
 	teleports sync.Map         // the moves of work to another machine, by job id: where the agent carrying on is
+	removing  removing         // the worktrees a removal is taking, so no workspace opens on one meanwhile
 }
 
 // Handler mounts every route: each context registers its own, the static page comes last, and the guard wraps all but two.
