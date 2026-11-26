@@ -45,7 +45,7 @@ export default function Schedules({ machines, onClose, ask }: {
 
   return (
     <Dialog
-      title={t("Schedules")}
+      title={t("Automations")}
       icon="calendar"
       size="md"
       className="schedules"

@@ -26,7 +26,7 @@ const MODES: (Place & { mode: Mode; desk?: boolean })[] = [
 ];
 const PANELS: (Place & { panel: Panel })[] = [
   { panel: "usage", label: t("Usage"), icon: "chart", about: t("What the agents cost, by day, project and session") },
-  { panel: "schedules", label: t("Schedules"), short: tc("rail", "Schedules"), icon: "calendar", about: t("Prompts sent to agents on a timetable") },
+  { panel: "schedules", label: t("Automations"), short: tc("rail", "Automations"), icon: "calendar", about: t("Prompts sent to agents on a timetable") },
   { panel: "repos", label: t("Repositories"), short: t("Repos"), icon: "folder-git", about: t("Every repository on every machine at a glance: what is not pushed or not pulled; fetch, pull and push") },
   { panel: "activity", label: t("Activity"), short: tc("rail", "Activity"), icon: "bell", about: t("What happened across the agents while you were away; the alert settings are inside") },
 ];

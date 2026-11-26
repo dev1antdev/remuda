@@ -110,6 +110,7 @@ export const panels: Dictionary = {
   "Run the tests and sum up what failed. If everything passes, say so in one line.": "Прогони тесты и кратко опиши, что упало. Если всё прошло, скажи это одной строкой.",
   Save: "Сохранить",
   Schedules: "Расписания",
+  Automations: "Автоматизации",
   Scout: "Разведчик",
   "Search every conversation": "Искать во всех разговорах",
   "Search every conversation…": "Искать во всех разговорах…",

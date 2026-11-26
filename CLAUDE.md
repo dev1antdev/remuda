@@ -1449,7 +1449,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   ends xterm's own drag; a click that never moves is left to xterm. The ⬚ selection layer (phone long-press) is screen-only.
 - **Nothing in a bar moves when state changes.** The page's places are
   **the rail** (`app/Rail.tsx`) down the left edge: the four modes, then
-  Usage, Schedules, Repositories (panel `repos`, "Repos"
+  Usage, Automations, Repositories (panel `repos`, "Repos"
   under its icon; see `internal/gitsync`), Activity (a dot for news), Shell, in server
   mode **Server** (panel `server`, `features/roster/ServerPanel.tsx`:
   the host's load, disk, memory, temperature, clock and throttling with
@@ -5844,7 +5844,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   routes `GET/PUT /api/schedules`, `GET /api/schedules/next?cron=` (the
   next three runs on the host's clock, `Store.Upcoming`; a 400 with the
   parser's reason), `DELETE /api/schedules/{id}`, `POST
-  /api/schedules/{id}/run`. `features/schedules/Schedules.tsx` is the
+  /api/schedules/{id}/run`. `features/schedules/Schedules.tsx` is the Automations panel:
   panel behind the calendar button in the sidebar head (a row says its
   cron in words, its next run through `whenAhead` in `lib/time.ts`, and a
   skipped run quietly in the page's words — `runs.ts`; `cron.ts` the

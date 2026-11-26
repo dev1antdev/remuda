@@ -210,7 +210,7 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ remuda-core: its 
   arguments and first prompt you chose under Options), and that workspace
   closed.
 - **The rail** — the places of the page down the left edge, each an
-  icon with its name: Agents, Tasks, Code, Review, then Usage, Schedules,
+  icon with its name: Agents, Tasks, Code, Review, then Usage, Automations,
   Repositories, Activity, Shell and Settings. On a phone it lies along the
   bottom under the thumb, with Code, the panels and Settings behind
   More. The sidebar's head keeps two buttons: + (a workspace, a PC) and
@@ -442,7 +442,7 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ remuda-core: its 
   for its times, click one to open the chat right there. **Copy as
   Markdown** gives it ready to paste. All of it is read from the
   transcript remuda already has; nothing is sent anywhere.
-- **Schedules** — a prompt to the agent in a folder on a timetable, or
+- **Automations** — a prompt to the agent in a folder on a timetable, or
   **a scout every few hours**: the second kind of schedule, "Start an
   agent", opens a fresh tab in a folder, starts the agent you name (with
   a model and arguments if you like, or a saved recipe that fills the
@@ -467,7 +467,7 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ remuda-core: its 
   `--permission-mode acceptEdits` (or `auto`) in its extra arguments, or
   allow rules in its settings; a `--settings` you pass yourself as JSON
   gets the setting merged in, one naming a file is refused with what to
-  put in it. Schedules saved before the switch keep asking, as they did,
+  put in it. Automations saved before the switch keep asking, as they did,
   until you turn it on. For the scout to create tasks, its
   agent needs remuda's tasks MCP set up (see Tasks below) — and, while it
   denies instead of asking, those tools allowed: Claude Code asks before

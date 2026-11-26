@@ -2,7 +2,7 @@
 // project, by model, the sessions that cost the most. API-equivalent prices
 // from Claude Code's own catalog; on a subscription a measure, not a bill.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { fetchUsage, type UsageTotals } from "@/features/usage/api";
 import type { Machine } from "@/features/roster/api";
 import { useRoster } from "@/features/roster/useRoster";
@@ -38,7 +38,11 @@ export default function Usage({ machines, onClose, onOpenSession }: {
   const [machine, setMachine] = useState("all");
   const [tab, setTab] = usePref<UsageTab>(USAGE_TAB_KEY, "spend");
   const [scoreDays, setScoreDays] = usePref<number>(SCORE_PERIOD_KEY, DEFAULT_SCORE_PERIOD);
-  const { budgets, viewOnly } = useRoster();
+  const { budgets, viewOnly, refresh } = useRoster();
+  // the providers' windows are asked again as the report opens, not left to the roster's next poll
+  useEffect(() => {
+    refresh();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const spend = tab !== "models";
   const { data, error, loading } = useQuery(() => fetchUsage(Number(days), machine === "all" ? "" : machine, tz), [days, machine, tz], { keep: true, enabled: spend });

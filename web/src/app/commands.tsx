@@ -213,7 +213,7 @@ function useCommands(): (query: string) => Entry[] {
         if (id) command(`scene:${id}`, t("Scene: {name}…", { name: scene.name }), () => actions.openDialog({ kind: "scene-run", id }), { hint: scene.kind === "tidy" ? t("a tidy, each action shown before it runs") : t("a set-up, its steps shown before they run"), icon: scene.kind === "tidy" ? "moon" : "sun", keywords: ["scene", scene.kind === "tidy" ? "evening" : "morning", "run"] });
       }
       command("triggers", t("Triggers…"), () => actions.openDialog({ kind: "triggers" }), { hint: t("a line a pane prints, and what it sets off: a push, a preview, a task moved"), icon: "zap", keywords: ["trigger", "triggers", "rule", "output", "match", "regex", "pattern", "watch", "tests", "dev server"] });
-      command("schedules", t("Schedules"), () => actions.openPanel("schedules"), { hint: t("prompts sent to agents on a timetable"), icon: "calendar", keywords: ["cron", "timer", "prompt"] });
+      command("schedules", t("Automations"), () => actions.openPanel("schedules"), { hint: t("prompts sent to agents on a timetable"), icon: "calendar", keywords: ["cron", "timer", "prompt", "automation", "schedules"] });
       command("repos", t("Repositories"), () => actions.openPanel("repos"), { hint: t("every repository on every machine: not pushed, not pulled; fetch, pull, push"), icon: "folder-git", keywords: ["git", "repository", "repo", "fetch", "pull", "push", "sync", "ahead", "behind", "manygit", "репозиторий"] });
       const usageOn = (tab: UsageTab) => () => {
         writePref(USAGE_TAB_KEY, tab);
