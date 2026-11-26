@@ -152,7 +152,10 @@ func firstPromptPlace(req *createReq, extra map[string]any) string {
 }
 
 func (s *Server) handleNewWorkspace(w http.ResponseWriter, r *http.Request) {
-	s.create(w, r, func(_ *machines.Machine, c coreapi.API, req *createReq) (string, *coreapi.PaneInfo, map[string]any, error) {
+	s.create(w, r, func(mc *machines.Machine, c coreapi.API, req *createReq) (string, *coreapi.PaneInfo, map[string]any, error) {
+		if s.removing.under(mc.ID(), req.Dir) {
+			return "", nil, nil, &coreapi.Error{Code: "conflict", Message: "its worktree is being removed; open the folder once it is gone"}
+		}
 		res, err := c.WorkspaceCreate(req.Dir, req.Name)
 		if err != nil {
 			return "", nil, nil, err
