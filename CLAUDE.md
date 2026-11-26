@@ -7855,7 +7855,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   the way out (cookies are kept by host, not by port), opens only a port
   found listening, only at the person's Open, and closes when idle.
   `decode` caps a JSON body at 1 MB, `HandleLogin` the unsigned sign-in
-  form at 4 KB; the `-addr` server has header and
+  form at 4 KB under a 10 s read deadline (`loginReadTimeout`), and the tailnet's :80 redirect has a header and an idle
+  timeout; the `-addr` server has header and
   idle timeouts. The sign-in URL is logged only on the first run or to a
   terminal; a wrong token is logged with the remote address and answered
   after 500 ms; `REMUDA_TOKEN` must be ≥ 32 characters. A browser's

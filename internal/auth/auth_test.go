@@ -331,3 +331,29 @@ func TestConcurrentChecks(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+func TestALoginFormDrippedOneByteAtATimeIsCut(t *testing.T) {
+	was := loginReadTimeout
+	loginReadTimeout = 50 * time.Millisecond
+	t.Cleanup(func() { loginReadTimeout = was })
+	g := NewGuard(testToken, nil, nil)
+	srv := httptest.NewServer(http.HandlerFunc(g.HandleLogin))
+	defer srv.Close()
+	pr, pw := io.Pipe()
+	defer pw.Close()
+	go func() { _, _ = pw.Write([]byte("token=")) }() // one byte's worth, then nothing: the form never ends
+	req, err := http.NewRequest("POST", srv.URL, pr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	start := time.Now()
+	res, err := (&http.Client{Timeout: 2 * time.Second}).Do(req)
+	if err != nil {
+		t.Fatalf("the server did not answer a dripped form: %v", err)
+	}
+	res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest || time.Since(start) > time.Second {
+		t.Fatalf("answer %d after %s", res.StatusCode, time.Since(start))
+	}
+}
