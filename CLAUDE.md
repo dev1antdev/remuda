@@ -2070,7 +2070,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   a folder holding its pid, let go by the exit trap on any end but a kill
   -9 and never taken over: a second install names it and stops); one installed already is swapped by its own `update --from`
   (its terminals keep running), one as new or newer left alone, a fresh
-  one starts nothing; on Linux `loginctl enable-linger`, said when refused.
+  one starts nothing; on Linux `loginctl --no-ask-password
+  enable-linger` (the service and code-server installers too), said when
+  refused.
   `remuda setup` installs it and nothing else (never under `-server`; a
   failure ends setup, since a machine without its runtime is not set up and
   no service comes up to offer it again — CI's Windows job checks it really

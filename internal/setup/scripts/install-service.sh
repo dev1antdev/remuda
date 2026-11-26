@@ -98,7 +98,7 @@ Linux)
     case "$ACTION" in
     install)
         # linger first: it is what brings the user manager up on a host reached only over ssh
-        loginctl enable-linger "$(id -un)" 2>/dev/null || echo "warning: loginctl enable-linger failed; the service will stop at logout"
+        loginctl --no-ask-password enable-linger "$(id -un)" 2>/dev/null || echo "warning: loginctl enable-linger failed; the service will stop at logout"
         # a container, WSL without systemd: no user manager to hand a unit to
         systemctl --user show-environment >/dev/null 2>&1 || { echo "no systemd user session here, so no service: start $BIN yourself, or set up with remuda setup -no-service"; exit 1; }
         mkdir -p "$UNIT_DIR"

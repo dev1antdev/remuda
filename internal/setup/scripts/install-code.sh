@@ -159,7 +159,7 @@ RestartSec=3
 WantedBy=default.target
 EOF
         # linger first: it is what brings the user manager up on a host reached only over ssh
-        loginctl enable-linger "$(id -un)" 2>/dev/null || echo "warning: loginctl enable-linger failed; the service will stop at logout"
+        loginctl --no-ask-password enable-linger "$(id -un)" 2>/dev/null || echo "warning: loginctl enable-linger failed; the service will stop at logout"
         systemctl --user daemon-reload
         systemctl --user enable code-server.service
         systemctl --user restart code-server.service # a re-install replaces a running one too

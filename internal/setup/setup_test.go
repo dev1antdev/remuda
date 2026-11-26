@@ -597,6 +597,12 @@ func TestTheServiceUnitsRunFromAHomeWithASpace(t *testing.T) {
 			t.Errorf("the stand-ins never saw %q:\n%s", want, calls)
 		}
 	}
+	if !strings.Contains(string(calls), "loginctl --no-ask-password enable-linger") {
+		t.Errorf("linger was asked without --no-ask-password, so polkit could prompt in the middle of an install:\n%s", calls)
+	}
+	if strings.Contains(string(calls), "loginctl enable-linger") {
+		t.Errorf("a bare loginctl enable-linger asked for a password:\n%s", calls)
+	}
 }
 
 // TestASetupThatCouldNotInstallTheCoreIsAnError: a machine without its runtime is not set up — no service comes up to
