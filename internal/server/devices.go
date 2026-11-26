@@ -88,7 +88,12 @@ func (s *Server) handleDeviceRevoke(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := r.PathValue("id")
-	if !store.Revoke(id) {
+	ok, err := store.Revoke(id)
+	if err != nil {
+		httpErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	if !ok {
 		httpErr(w, 404, auth.ErrNoDevice)
 		return
 	}
@@ -109,6 +114,10 @@ func (s *Server) handleDevicesRevokeOthers(w http.ResponseWriter, r *http.Reques
 		httpErr(w, 400, fmt.Errorf("say which: ?others=1 signs out every device but this one"))
 		return
 	}
-	gone := store.RevokeOthers(auth.DeviceID(r.Context()))
+	gone, err := store.RevokeOthers(auth.DeviceID(r.Context()))
+	if err != nil {
+		httpErr(w, http.StatusInternalServerError, err)
+		return
+	}
 	writeJSON(w, map[string]any{"revoked": gone})
 }

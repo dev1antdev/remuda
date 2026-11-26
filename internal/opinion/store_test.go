@@ -323,8 +323,22 @@ func TestAReviewerThatStoppedOnDeniedCallsIsNotLeftReviewing(t *testing.T) {
 	mu.Lock()
 	conversation = turnsOf(Prompt(Scope{}, op.Ref), "FINDINGS\na.go:1: x")
 	mu.Unlock()
-	if got, n := settle(Done); got.State != Done || got.Open() != 1 || got.Note != "" || n != 1 {
-		t.Fatalf("its answer once taken on in the tab: %+v, %d closed", got, n)
+	got, n := settle(Done)
+	if got.State != Done || got.Open() != 1 || got.Note != "" {
+		t.Fatalf("its answer once taken on in the tab: %+v", got)
+	}
+	// the tab is closed just after the answer is kept, in the same read: a look between the two is fine
+	deadline := time.Now().Add(2 * time.Second)
+	for n != 1 && time.Now().Before(deadline) {
+		mu.Lock()
+		n = len(closed)
+		mu.Unlock()
+		if n != 1 {
+			time.Sleep(5 * time.Millisecond)
+		}
+	}
+	if n != 1 {
+		t.Fatalf("its answer once taken on in the tab: %d closed", n)
 	}
 	if _, reply := PromptAndReply(turnsOf("hi", "")); reply.Stopped {
 		t.Error("a conversation the person's turn ends stopped nowhere")

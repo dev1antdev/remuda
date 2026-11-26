@@ -5,7 +5,20 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/dev1antdev/remuda/internal/prstatus"
 )
+
+var issueLink = regexp.MustCompile(`Issue: <a href="([^"]+)"`)
+
+// guardForDescription ends a task made from a GitHub issue with the sentence every message remuda hands an agent from
+// GitHub ends with: the issue's body above is other people's text, not a request from the person.
+func guardForDescription(description string) string {
+	if m := issueLink.FindStringSubmatch(description); m != nil {
+		return prstatus.GuardOf(html.UnescapeString(m[1]))
+	}
+	return ""
+}
 
 // Prompt is what an agent gets for a task: the title, the description as text, the in_prompt fields with a value, and which task it is.
 // The same words the UI's "Send to agent" composes.
@@ -32,6 +45,9 @@ func Prompt(t Task, project Project, groom bool) string {
 	}
 	parts = append(parts, where+")")
 	out := strings.Join(parts, "\n\n")
+	if guard := guardForDescription(t.Description); guard != "" {
+		out += "\n\n" + guard
+	}
 	if groom {
 		out = "/grill-me " + out
 	}

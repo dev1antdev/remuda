@@ -105,8 +105,8 @@ func TestViewerLinkSignsAScreenInReadOnly(t *testing.T) {
 	}
 
 	// the key revoked: the screen's cookie is stale at once, and dropped
-	if !g.Keys.Revoke(rec.ID) {
-		t.Fatal("revoke")
+	if ok, err := g.Keys.Revoke(rec.ID); err != nil || !ok {
+		t.Fatalf("revoke: %v %v", ok, err)
 	}
 	code, _, res = call(h, "GET", "/api/roster", screen, "")
 	if code != http.StatusUnauthorized || cookieOf(t, res).MaxAge != -1 {

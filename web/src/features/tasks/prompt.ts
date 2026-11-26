@@ -1,9 +1,18 @@
 // What a task says outside its own screen: the prompt an agent gets, the branch it works on, its due date in words.
 
 import { locale, t as tr } from "@/lib/i18n";
+import { GUARD } from "@/lib/guard";
 import type { Project, Task } from "./api";
 import { valueText } from "./fields";
 import { htmlToText } from "./html";
+
+// the first paragraph ImportIssue writes: the issue the task came from, which ends its prompt with the guard
+const ISSUE_LINK = /Issue: <a href="([^"]+)"/;
+
+// guardForTask is the sentence a task made from an issue ends with, "" for any other task (internal/tasks/prompt.go).
+export function guardForTask(description: string | undefined): string {
+  return description && ISSUE_LINK.test(description) ? `\n\n${GUARD}` : "";
+}
 
 // taskPrompt is what the agent gets — the same words the server composes (internal/tasks/prompt.go) — with /grill-me in front for a grooming pass
 export function taskPrompt(t: Task, project: Project | undefined, groom: boolean): string {
@@ -15,7 +24,7 @@ export function taskPrompt(t: Task, project: Project | undefined, groom: boolean
     .map((x) => `${x.f.title}: ${x.text}`)
     .join("\n");
   const parts = [t.title.trim(), desc, fields, `(remuda task ${t.identifier}${project ? ` in ${project.title}` : ""})`].filter(Boolean);
-  return (groom ? "/grill-me " : "") + parts.join("\n\n");
+  return (groom ? "/grill-me " : "") + parts.join("\n\n") + guardForTask(t.description);
 }
 
 // branchFor is a branch name from the title: "task-12-fix-the-login-page"

@@ -85,13 +85,22 @@ func (s *Server) handleViewerKeyRevoke(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := r.PathValue("id")
-	if !store.Revoke(id) {
+	ok, err := store.Revoke(id)
+	if err != nil {
+		httpErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	if !ok {
 		httpErr(w, 404, errors.New("no such link"))
 		return
 	}
 	screens := 0
 	if s.Guard != nil && s.Guard.Devices != nil {
-		screens = s.Guard.Devices.RevokeByKey(id)
+		screens, err = s.Guard.Devices.RevokeByKey(id)
+		if err != nil {
+			httpErr(w, http.StatusInternalServerError, err)
+			return
+		}
 	}
 	writeJSON(w, map[string]any{"revoked": id, "screens": screens})
 }

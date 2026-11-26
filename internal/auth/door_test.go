@@ -45,7 +45,9 @@ func TestEnsureDoorMintsOnceAndRotatesWhenRevoked(t *testing.T) {
 	}
 
 	rec, _ := keys.ByName("This Mac")
-	keys.Revoke(rec.ID)
+	if _, err := keys.Revoke(rec.ID); err != nil {
+		t.Fatal(err)
+	}
 	if err := EnsureDoor(dir, keys, "This Mac", "http://127.0.0.1:7317"); err != nil {
 		t.Fatal(err)
 	}

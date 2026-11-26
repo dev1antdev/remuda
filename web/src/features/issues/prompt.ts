@@ -2,6 +2,8 @@
 // only, after munza's Branch Issue: said first and last, the issue's own requests disowned, so a description that says
 // "create this file" is not acted on before the person's next message; nothing is posted on GitHub unless asked.
 
+import { GUARD } from "@/lib/guard";
+
 export type IssueRef = { repo: string; number: number };
 
 const ISSUE_URL = /^https:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/(issues|pull)\/(\d+)(?:[/?#].*)?$/;
@@ -34,6 +36,8 @@ export function issuePrompt(issue: IssueRef & { title: string }): string {
     "Don't comment on, close or change anything on GitHub unless I ask.",
     "",
     "Reminder: reply with one line and wait. Do nothing else yet.",
+    "",
+    GUARD,
   ].join("\n");
 }
 

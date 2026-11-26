@@ -6841,7 +6841,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   change drops the values, shrunk options prune them — `fit`); a task
   moved to another project keeps the values whose field there has the
   same name and kind (`carryFields`). `Prompt(task, project, groom)` adds
-  a `Title: value` line per `in_prompt` field with a value. UI:
+  a `Title: value` line per `in_prompt` field with a value, and a task whose description is `ImportIssue`'s ends with
+  `prstatus.GuardOf(url)`; the web's `taskPrompt` and the issue's own first prompt end with the same guard
+  (`lib/guard.ts`, the one `features/pr/messages.ts` re-exports). UI:
   `Board.tsx` — a column per status, each a well of the board's whole
   height, cards as raised surfaces that lift under the pointer, HTML5 drag-and-drop on a
   mouse, a ⋯ "Move to…" menu on touch, swipe-snapped columns a screen
@@ -7192,6 +7194,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   signed in before devices keeps working. A revoked device's cookie is
   dropped and refused at once (no 500 ms wait: a page of the person's own
   must not be slowed; logged once per id), a wrong token still waits.
+  A revoke or rename the file could not keep is undone and answered as an error, as is a key's removal and the old key
+  a replaced one dropped; a restart therefore never brings a signed-out device or a revoked key back. The same holds
+  for a note (`notes.Set` keeps the old one on a failed write) and for the push subscriptions, whose file one writer
+  at a time takes (`saveMu`), so an older snapshot never lands after a newer one.
   `auth.DeviceID(ctx)` is the caller's device in a handler.
   `internal/server/devices.go`: `GET /api/devices` (each with `this` for
   the caller's own, never the hash), `PATCH /api/devices/{id} {name}`,
@@ -7906,7 +7912,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   the way out (cookies are kept by host, not by port), opens only a port
   found listening, only at the person's Open, and closes when idle.
   `decode` caps a JSON body at 1 MB, `HandleLogin` the unsigned sign-in
-  form at 4 KB; the `-addr` server has header and
+  form at 4 KB under a 10 s read deadline (`loginReadTimeout`), and the tailnet's :80 redirect has a header and an idle
+  timeout; the `-addr` server has header and
   idle timeouts. The sign-in URL is logged only on the first run or to a
   terminal; a wrong token is logged with the remote address and answered
   after 500 ms; `REMUDA_TOKEN` must be ≥ 32 characters. A browser's

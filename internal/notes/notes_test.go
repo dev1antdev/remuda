@@ -97,3 +97,30 @@ func TestADamagedFileIsReadAsNone(t *testing.T) {
 		t.Fatalf("writing over a damaged file: %v", err)
 	}
 }
+
+func TestANoteTheFileCouldNotLoseStays(t *testing.T) {
+	dir := t.TempDir()
+	s := Open(dir)
+	if _, err := s.Set("local", "/w/app", "old"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
+	if _, err := s.Set("local", "/w/app", "new"); err == nil {
+		t.Fatal("a note the file could not take was answered as kept")
+	}
+	if err := s.Remove("local", "/w/app"); err == nil {
+		t.Fatal("a note the file could not lose was answered as gone")
+	}
+	if err := os.Chmod(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.Of("local", "/w/app"); got != "old" {
+		t.Fatalf("the note is %q, not the one on disk", got)
+	}
+	if got := Open(dir).Of("local", "/w/app"); got != "old" {
+		t.Fatalf("the file holds %q", got)
+	}
+}
