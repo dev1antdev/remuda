@@ -1069,7 +1069,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   process is named the earlier one's session — its own file, which Claude
   Code writes as it starts, corrects the disk, while remuda goes on naming
   what it read until a read succeeds again (`sessionsFresh`, 30 s, longer
-  while the reads fail): known limits, task #360),
+  while the reads fail): the one process remuda itself saw with that pid is
+  remembered (`Reader.pidSessions`: its since-boot and the session it was in),
+  and the same file is refused for another since-boot; a process it never saw
+  stays a known limit, task #360),
   nor, from a core that tells none (0.2.1 and before), one that
   began after the agent was seen running (`Running.Seen`: a later process
   took the pid before it was read), the sighting placed on the machine's
