@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 )
 
 func TestAMachineNotHeardFromForAwayHasItsTurnWrittenWhereItWasLastSeen(t *testing.T) {
@@ -22,8 +22,8 @@ func TestAMachineNotHeardFromForAwayHasItsTurnWrittenWhereItWasLastSeen(t *testi
 	}
 	b.clock = b.clock.Add(time.Hour)
 	b.work(2*time.Minute, "w1:p1")
-	b.rest(herdr.StatusDone, Grace+2*time.Second, "w1:p1")
-	if list := b.List("local", "w1:p1", ""); len(list) != 2 || list[0].Ended != herdr.StatusDone || list[0].End.Sub(list[0].Start) > 3*time.Minute {
+	b.rest(coreapi.StatusDone, Grace+2*time.Second, "w1:p1")
+	if list := b.List("local", "w1:p1", ""); len(list) != 2 || list[0].Ended != coreapi.StatusDone || list[0].End.Sub(list[0].Start) > 3*time.Minute {
 		t.Fatalf("back from away: %+v", list)
 	}
 }
@@ -45,9 +45,9 @@ func TestAMachineBackAfterAwayWithNoTickBetweenStartsANewTurn(t *testing.T) {
 	b.work(2*time.Minute, "w1:p1")
 	b.clock = b.clock.Add(Away + time.Hour)
 	b.work(2*time.Minute, "w1:p1")
-	b.rest(herdr.StatusDone, Grace+2*time.Second, "w1:p1")
+	b.rest(coreapi.StatusDone, Grace+2*time.Second, "w1:p1")
 	list := b.List("local", "w1:p1", "")
-	if len(list) != 2 || list[1].Ended != EndedAway || list[0].Ended != herdr.StatusDone || list[0].End.Sub(list[0].Start) > 3*time.Minute {
+	if len(list) != 2 || list[1].Ended != EndedAway || list[0].Ended != coreapi.StatusDone || list[0].End.Sub(list[0].Start) > 3*time.Minute {
 		t.Fatalf("a turn spans the machine's absence: %+v", list)
 	}
 }
@@ -68,7 +68,7 @@ func TestClosingWritesATurnThatEndedAndStillWaitsInTheQueue(t *testing.T) {
 	b := newBench(t)
 	b.work(2*time.Minute, "w1:p1")
 	b.held()
-	b.Observe("local", snap(herdr.StatusWorking), b.clock)
+	b.Observe("local", snap(coreapi.StatusWorking), b.clock)
 	b.Close()
 	if list := b.List("local", "w1:p1", ""); len(list) != 1 || list[0].Ended != EndedGone {
 		t.Fatalf("listed %+v", list)
@@ -83,7 +83,7 @@ func TestOffAndDeleteAllDropATurnThatEndedAndStillWaitsInTheQueue(t *testing.T) 
 		b := newBench(t)
 		b.work(2*time.Minute, "w1:p1")
 		release := b.held()
-		b.Observe("local", snap(herdr.StatusWorking), b.clock)
+		b.Observe("local", snap(coreapi.StatusWorking), b.clock)
 		drop(b)
 		release()
 		if got := files(t, b.dir); len(got) != 0 {
@@ -101,8 +101,8 @@ func TestAReadOfAPaneThatClosedMeanwhileIsNoFailure(t *testing.T) {
 	b.work(2*time.Minute, "w1:p1")
 	release := b.held()
 	b.clock = b.clock.Add(4 * time.Second)
-	b.Observe("local", snap(herdr.StatusWorking, "w1:p1"), b.clock)
-	b.Observe("local", snap(herdr.StatusWorking), b.clock)
+	b.Observe("local", snap(coreapi.StatusWorking, "w1:p1"), b.clock)
+	b.Observe("local", snap(coreapi.StatusWorking), b.clock)
 	delete(b.screen, "w1:p1")
 	release()
 	if strings.Contains(logged.String(), "reading w1:p1") {

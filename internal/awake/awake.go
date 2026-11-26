@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/shell"
 	"github.com/dev1antdev/remuda/internal/state"
 )
@@ -75,13 +75,13 @@ func New(dir string, hosts func(id string) (shell.Host, bool), holder Holder) *S
 }
 
 // Working counts the agent panes of a snapshot that work right now.
-func Working(snap *herdr.Snapshot) int {
+func Working(snap *coreapi.Snapshot) int {
 	if snap == nil {
 		return 0
 	}
 	n := 0
 	for i := range snap.Panes {
-		if p := &snap.Panes[i]; p.Agent != "" && p.AgentStatus == herdr.StatusWorking {
+		if p := &snap.Panes[i]; p.Agent != "" && p.AgentStatus == coreapi.StatusWorking {
 			n++
 		}
 	}

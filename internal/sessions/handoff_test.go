@@ -5,14 +5,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/events"
-	"github.com/dev1antdev/remuda/internal/herdr"
 )
 
 func TestHandoffAnswersTheTrustQuestionOnceAndThenLeaves(t *testing.T) {
 	client := &fakeClient{
 		screen:    "Accessing workspace:\n/w/wt\n❯ No, exit\n  Yes, I trust this folder\n",
-		promptErr: &herdr.Error{Code: "agent_blocked"},
+		promptErr: &coreapi.Error{Code: "agent_blocked"},
 	}
 	trusted := 0
 	h := Handoff{
@@ -36,7 +36,7 @@ func TestHandoffAnswersTheTrustQuestionOnceAndThenLeaves(t *testing.T) {
 }
 
 func TestHandoffSaysOnceAboutAnotherQuestionAndTimesOut(t *testing.T) {
-	client := &fakeClient{screen: "Do you want to proceed?\n❯ Yes\n  No", promptErr: &herdr.Error{Code: "agent_blocked"}}
+	client := &fakeClient{screen: "Do you want to proceed?\n❯ Yes\n  No", promptErr: &coreapi.Error{Code: "agent_blocked"}}
 	asked := 0
 	h := Handoff{
 		Input: NewInput(nil, nil), Client: client, Ref: events.PaneRef{Machine: "m", Pane: "w1:p1"},
@@ -44,7 +44,7 @@ func TestHandoffSaysOnceAboutAnotherQuestionAndTimesOut(t *testing.T) {
 		Notify: func() { asked++ },
 	}
 	last, timedOut := h.Run()
-	if !timedOut || !herdr.IsCode(last, "agent_blocked") || asked != 1 {
+	if !timedOut || !coreapi.IsCode(last, "agent_blocked") || asked != 1 {
 		t.Fatalf("last %v, timedOut %v, asked %d", last, timedOut, asked)
 	}
 }

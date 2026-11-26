@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/auth"
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/tasks"
 )
 
@@ -343,7 +343,7 @@ func (s *Server) handleTaskStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	task, err = s.Launcher.Start(mc, client, task, req.StartRequest)
-	var refusal *herdr.Error
+	var refusal *coreapi.Error
 	switch {
 	case errors.Is(err, tasks.ErrAgentStart):
 		httpErr(w, http.StatusBadGateway, err)

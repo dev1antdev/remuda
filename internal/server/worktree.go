@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/events"
-	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/repos"
 	"github.com/dev1antdev/remuda/internal/sessions"
@@ -204,7 +204,7 @@ func (s *Server) newWorktree(w http.ResponseWriter, r *http.Request, req *newWor
 		httpErr(w, 400, err)
 		return
 	}
-	answerOpened := func(ws *herdr.WorkspaceInfo, pane string) {
+	answerOpened := func(ws *coreapi.WorkspaceInfo, pane string) {
 		if name := strings.TrimSpace(req.Name); name != "" && name != ws.Label {
 			_ = client.WorkspaceRename(ws.WorkspaceID, name)
 		}

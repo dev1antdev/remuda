@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/radar"
 	"github.com/dev1antdev/remuda/internal/review"
 	"github.com/dev1antdev/remuda/internal/subagents"
@@ -31,12 +31,12 @@ func TestRosterCarriesThePanesSubagents(t *testing.T) {
 	counts := subagents.New(func(_, paneID string, _ time.Time) (string, []transcript.Subagent, error) {
 		return "s-" + paneID, lists[paneID], nil
 	}, func(string) bool { return true })
-	snap := &herdr.Snapshot{
-		Workspaces: []herdr.WorkspaceInfo{{WorkspaceID: "w1", Label: "api"}},
-		Tabs:       []herdr.TabInfo{{TabID: "w1:t1", WorkspaceID: "w1", Number: 1}},
-		Panes: []herdr.PaneInfo{
-			{PaneID: "w1:p1", TabID: "w1:t1", WorkspaceID: "w1", Agent: "claude", AgentStatus: herdr.StatusWorking},
-			{PaneID: "w1:p2", TabID: "w1:t1", WorkspaceID: "w1", Agent: "claude", AgentStatus: herdr.StatusIdle},
+	snap := &coreapi.Snapshot{
+		Workspaces: []coreapi.WorkspaceInfo{{WorkspaceID: "w1", Label: "api"}},
+		Tabs:       []coreapi.TabInfo{{TabID: "w1:t1", WorkspaceID: "w1", Number: 1}},
+		Panes: []coreapi.PaneInfo{
+			{PaneID: "w1:p1", TabID: "w1:t1", WorkspaceID: "w1", Agent: "claude", AgentStatus: coreapi.StatusWorking},
+			{PaneID: "w1:p2", TabID: "w1:t1", WorkspaceID: "w1", Agent: "claude", AgentStatus: coreapi.StatusIdle},
 		},
 	}
 	counts.Touch()

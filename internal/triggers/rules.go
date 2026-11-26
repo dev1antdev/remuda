@@ -12,7 +12,7 @@ import (
 	"sync"
 	"unicode/utf8"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/rpath"
 	"github.com/dev1antdev/remuda/internal/state"
 )
@@ -100,7 +100,7 @@ func Check(r *Rule) error {
 
 // checkRegex is the pattern as herdr and Go both read it, and never one every line matches.
 func checkRegex(pattern string) error {
-	re, err := herdr.CompileRegex(pattern)
+	re, err := coreapi.CompileRegex(pattern)
 	if err != nil {
 		return err
 	}

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/rpath"
 	"github.com/dev1antdev/remuda/internal/script"
 )
@@ -121,7 +121,7 @@ func herdrSocket(cfg Config, found probe) string {
 	case found.os == "windows":
 		return windowsSocket(found.appData)
 	}
-	return herdr.DefaultSocket(found.home)
+	return coreapi.DefaultSocket(found.home)
 }
 
 // windowsSocket is herdr's default socket on a Windows machine: %APPDATA%\herdr\herdr.sock, a named pipe of that name.

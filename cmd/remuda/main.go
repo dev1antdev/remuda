@@ -18,7 +18,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/app"
 	"github.com/dev1antdev/remuda/internal/auth"
 	"github.com/dev1antdev/remuda/internal/code"
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/state"
 	buildversion "github.com/dev1antdev/remuda/internal/version"
 )
@@ -75,7 +75,7 @@ func main() {
 	defer stop()
 	err = app.Run(ctx, app.Options{
 		Dir: dir, Token: token, ShowSignIn: created || interactive(),
-		Addr: *addr, HerdrBin: "herdr", Socket: herdr.SocketPath(), CodePort: *codePort,
+		Addr: *addr, HerdrBin: "herdr", Socket: coreapi.SocketPath(), CodePort: *codePort,
 		Tailscale: *tailscale, TailscaleName: *tsName, AuthKey: os.Getenv("TS_AUTHKEY"),
 		VersionCheck: !*noCheck, Version: version,
 		Door:       doorOpen(*noDoor, *withDoor, os.Getenv("REMUDA_STATE_DIR") != ""),

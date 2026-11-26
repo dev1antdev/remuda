@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 )
 
 // Leaver is what asking an agent to leave needs of herdr's client: the agent's own exit typed, keys pressed when it
 // lingers, and the snapshot that shows the shell under it.
 type Leaver interface {
-	SessionSnapshot() (*herdr.Snapshot, error)
+	SessionSnapshot() (*coreapi.Snapshot, error)
 	AgentPrompt(target, text string) error
 	PaneSendKeys(paneID string, keys []string) error
 }
@@ -81,7 +81,7 @@ func waitShell(client Leaver, paneID, kind string, looks int) Left {
 }
 
 // SessionOf is the pane's session id, or "" for one that does not look like one (sessionOf).
-func SessionOf(p *herdr.PaneInfo) string { return sessionOf(p) }
+func SessionOf(p *coreapi.PaneInfo) string { return sessionOf(p) }
 
 // Knows says whether remuda can make an agent of this kind leave and bring it back on its session.
 func Knows(kind string) bool {

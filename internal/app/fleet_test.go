@@ -3,15 +3,15 @@ package app
 import (
 	"testing"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 )
 
 func TestCheckoutDirsLeaveTheLinkedWorktreesOut(t *testing.T) {
-	snap := &herdr.Snapshot{Workspaces: []herdr.WorkspaceInfo{
-		{WorkspaceID: "w1", Worktree: &herdr.WorktreeInfo{CheckoutPath: "/home/me/app/"}},
-		{WorkspaceID: "w2", Worktree: &herdr.WorktreeInfo{CheckoutPath: "/home/me/.herdr/worktrees/app/task-3", IsLinkedWorktree: true}},
-		{WorkspaceID: "w3", Worktree: &herdr.WorktreeInfo{CheckoutPath: "/home/me/app"}},
-		{WorkspaceID: "w4", Worktree: &herdr.WorktreeInfo{CheckoutPath: "/home/me/site"}},
+	snap := &coreapi.Snapshot{Workspaces: []coreapi.WorkspaceInfo{
+		{WorkspaceID: "w1", Worktree: &coreapi.WorktreeInfo{CheckoutPath: "/home/me/app/"}},
+		{WorkspaceID: "w2", Worktree: &coreapi.WorktreeInfo{CheckoutPath: "/home/me/.herdr/worktrees/app/task-3", IsLinkedWorktree: true}},
+		{WorkspaceID: "w3", Worktree: &coreapi.WorktreeInfo{CheckoutPath: "/home/me/app"}},
+		{WorkspaceID: "w4", Worktree: &coreapi.WorktreeInfo{CheckoutPath: "/home/me/site"}},
 	}}
 	got := checkoutDirs(snap)
 	if len(got) != 2 || got[0] != (workspaceDir{"/home/me/app", "w1"}) || got[1] != (workspaceDir{"/home/me/site", "w4"}) {

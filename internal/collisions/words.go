@@ -3,7 +3,7 @@ package collisions
 import (
 	"fmt"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 )
 
 // whyWords is a reason one work lands first, as the push says it.
@@ -49,7 +49,7 @@ type Lookup struct {
 }
 
 // WorkspacesOf lists a machine's workspaces as the radar weighs them.
-func WorkspacesOf(machineID string, snap *herdr.Snapshot, lookup Lookup) []Workspace {
+func WorkspacesOf(machineID string, snap *coreapi.Snapshot, lookup Lookup) []Workspace {
 	var out []Workspace
 	for i := range snap.Workspaces {
 		ws := &snap.Workspaces[i]
@@ -66,7 +66,7 @@ func WorkspacesOf(machineID string, snap *herdr.Snapshot, lookup Lookup) []Works
 			if !entry.Agents {
 				entry.Agents, entry.Pane = true, pane.PaneID
 			}
-			entry.Working = entry.Working || pane.AgentStatus == herdr.StatusWorking
+			entry.Working = entry.Working || pane.AgentStatus == coreapi.StatusWorking
 			entry.PR = entry.PR || lookup.OpenPR(pane.PaneID)
 		}
 		out = append(out, entry)

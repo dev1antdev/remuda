@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/transcript"
 	"github.com/dev1antdev/remuda/internal/version"
@@ -81,11 +81,11 @@ func NewTracker() *Tracker {
 func key(machineID, s string) string { return machineID + "|" + s }
 
 // ObserveSnapshot keeps every agent pane's meter current, one read per machine at a time and off the poll's path.
-func (t *Tracker) ObserveSnapshot(machineID string, source Source, snap *herdr.Snapshot) {
+func (t *Tracker) ObserveSnapshot(machineID string, source Source, snap *coreapi.Snapshot) {
 	if _, running := t.busy.LoadOrStore(machineID, true); running {
 		return
 	}
-	panes := append([]herdr.PaneInfo(nil), snap.Panes...)
+	panes := append([]coreapi.PaneInfo(nil), snap.Panes...)
 	go func() {
 		defer t.busy.Delete(machineID)
 		for i := range panes {

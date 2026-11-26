@@ -9,7 +9,7 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 )
 
 var t0 = time.Date(2026, 11, 12, 14, 0, 0, 0, time.UTC)
@@ -35,7 +35,7 @@ func newBench(t *testing.T) *bench {
 			}
 			return text, nil
 		},
-		Folder: func(machineID, dir string, ws *herdr.WorkspaceInfo) string { return "/repo" },
+		Folder: func(machineID, dir string, ws *coreapi.WorkspaceInfo) string { return "/repo" },
 	})
 	b.reopen()
 	return b
@@ -48,13 +48,13 @@ func (b *bench) reopen() {
 }
 
 // snap is one machine's snapshot with one agent pane in the status given, or none
-func snap(status string, panes ...string) *herdr.Snapshot {
-	s := &herdr.Snapshot{
-		Workspaces: []herdr.WorkspaceInfo{{WorkspaceID: "w1", Label: "app"}},
-		Layouts:    []herdr.Layout{{Panes: []herdr.LayoutPane{{PaneID: "w1:p1", Rect: herdr.Rect{Width: 120, Height: 40}}}}},
+func snap(status string, panes ...string) *coreapi.Snapshot {
+	s := &coreapi.Snapshot{
+		Workspaces: []coreapi.WorkspaceInfo{{WorkspaceID: "w1", Label: "app"}},
+		Layouts:    []coreapi.Layout{{Panes: []coreapi.LayoutPane{{PaneID: "w1:p1", Rect: coreapi.Rect{Width: 120, Height: 40}}}}},
 	}
 	for _, id := range panes {
-		s.Panes = append(s.Panes, herdr.PaneInfo{PaneID: id, WorkspaceID: "w1", Agent: "claude", AgentStatus: status, CWD: "/repo/app", Title: "Draw the page"})
+		s.Panes = append(s.Panes, coreapi.PaneInfo{PaneID: id, WorkspaceID: "w1", Agent: "claude", AgentStatus: status, CWD: "/repo/app", Title: "Draw the page"})
 	}
 	return s
 }
@@ -63,7 +63,7 @@ func snap(status string, panes ...string) *herdr.Snapshot {
 func (b *bench) work(d time.Duration, pane string) {
 	for end := b.clock.Add(d); b.clock.Before(end); b.clock = b.clock.Add(2 * time.Second) {
 		b.screen[pane] = fmt.Sprintf("\x1b[1mworking\x1b[0m\nstep %d\n> ", b.clock.Sub(t0)/(4*time.Second))
-		b.Observe("local", snap(herdr.StatusWorking, pane), b.clock)
+		b.Observe("local", snap(coreapi.StatusWorking, pane), b.clock)
 	}
 }
 
@@ -106,11 +106,11 @@ func TestATurnIsRecordedWhileItWorksAndWrittenOnceWhenItEnds(t *testing.T) {
 	b := newBench(t)
 	b.work(2*time.Minute, "w1:p1")
 	b.screen["w1:p1"] = "Done: the page draws.\n> "
-	b.rest(herdr.StatusDone, 10*time.Second, "w1:p1")
+	b.rest(coreapi.StatusDone, 10*time.Second, "w1:p1")
 	if got := files(t, b.dir); len(got) != 0 {
 		t.Fatalf("written while the turn might still go on: %v", got)
 	}
-	b.rest(herdr.StatusDone, Grace+2*time.Second, "w1:p1")
+	b.rest(coreapi.StatusDone, Grace+2*time.Second, "w1:p1")
 	written := files(t, b.dir)
 	if len(written) != 1 || !strings.HasSuffix(written[0], suffix) || filepath.Base(filepath.Dir(written[0])) != "local" {
 		t.Fatalf("written %v", written)
@@ -123,7 +123,7 @@ func TestATurnIsRecordedWhileItWorksAndWrittenOnceWhenItEnds(t *testing.T) {
 		t.Fatalf("listed %+v", list)
 	}
 	meta := list[0]
-	if meta.Workspace != "app" || meta.Dir != "/repo/app" || meta.Folder != "/repo" || meta.Agent != "claude" || meta.Title != "Draw the page" || meta.Cols != 120 || meta.Rows != 40 || meta.Ended != herdr.StatusDone || meta.Size <= 0 {
+	if meta.Workspace != "app" || meta.Dir != "/repo/app" || meta.Folder != "/repo" || meta.Agent != "claude" || meta.Title != "Draw the page" || meta.Cols != 120 || meta.Rows != 40 || meta.Ended != coreapi.StatusDone || meta.Size <= 0 {
 		t.Fatalf("meta %+v", meta)
 	}
 	if !meta.Start.Equal(t0) || meta.End.Sub(meta.Start) != 2*time.Minute {
@@ -152,11 +152,11 @@ func TestATurnIsRecordedWhileItWorksAndWrittenOnceWhenItEnds(t *testing.T) {
 func TestABlinkThroughIdleIsStillTheSameTurn(t *testing.T) {
 	b := newBench(t)
 	b.work(time.Minute, "w1:p1")
-	b.rest(herdr.StatusIdle, 6*time.Second, "w1:p1")
+	b.rest(coreapi.StatusIdle, 6*time.Second, "w1:p1")
 	b.work(time.Minute, "w1:p1")
-	b.rest(herdr.StatusBlocked, Grace+2*time.Second, "w1:p1")
+	b.rest(coreapi.StatusBlocked, Grace+2*time.Second, "w1:p1")
 	list := b.List("local", "w1:p1", "")
-	if len(list) != 1 || list[0].Ended != herdr.StatusBlocked || list[0].End.Sub(list[0].Start) < 2*time.Minute {
+	if len(list) != 1 || list[0].Ended != coreapi.StatusBlocked || list[0].End.Sub(list[0].Start) < 2*time.Minute {
 		t.Fatalf("listed %+v", list)
 	}
 }
@@ -164,15 +164,15 @@ func TestABlinkThroughIdleIsStillTheSameTurn(t *testing.T) {
 func TestAShortTurnOrAStillScreenIsNotKept(t *testing.T) {
 	b := newBench(t)
 	b.work(40*time.Second, "w1:p1")
-	b.rest(herdr.StatusDone, Grace+2*time.Second, "w1:p1")
+	b.rest(coreapi.StatusDone, Grace+2*time.Second, "w1:p1")
 	if got := files(t, b.dir); len(got) != 0 {
 		t.Fatalf("a 40 s turn written: %v", got)
 	}
 	b.screen["w1:p1"] = "thinking…"
 	for end := b.clock.Add(3 * time.Minute); b.clock.Before(end); b.clock = b.clock.Add(2 * time.Second) {
-		b.Observe("local", snap(herdr.StatusWorking, "w1:p1"), b.clock)
+		b.Observe("local", snap(coreapi.StatusWorking, "w1:p1"), b.clock)
 	}
-	b.rest(herdr.StatusDone, Grace+2*time.Second, "w1:p1")
+	b.rest(coreapi.StatusDone, Grace+2*time.Second, "w1:p1")
 	if got := files(t, b.dir); len(got) != 0 {
 		t.Fatalf("a screen that never moved written: %v", got)
 	}
@@ -184,12 +184,12 @@ func TestAShortTurnOrAStillScreenIsNotKept(t *testing.T) {
 func TestAPaneGoneIsWrittenAtOnceAndAShellIsNeverRead(t *testing.T) {
 	b := newBench(t)
 	b.work(2*time.Minute, "w1:p1")
-	b.Observe("local", snap(herdr.StatusWorking), b.clock)
+	b.Observe("local", snap(coreapi.StatusWorking), b.clock)
 	list := b.List("local", "w1:p1", "")
 	if len(list) != 1 || list[0].Ended != EndedGone {
 		t.Fatalf("listed %+v", list)
 	}
-	shell := snap(herdr.StatusWorking, "w1:p2")
+	shell := snap(coreapi.StatusWorking, "w1:p2")
 	shell.Panes[0].Agent = ""
 	reads := b.reads
 	b.Observe("local", shell, b.clock)
@@ -234,8 +234,8 @@ func TestATurnStillGoingIsCheckpointedUnlistedAndReadAsCutAfterACrash(t *testing
 	if len(list) != 1 || list[0].Ended != EndedCut || list[0].Count < 100 {
 		t.Fatalf("after a crash %+v", list)
 	}
-	b.rest(herdr.StatusDone, Grace+2*time.Second, "w1:p1")
-	if got := files(t, b.dir); len(got) != 1 || b.List("local", "w1:p1", "")[0].Ended != herdr.StatusDone {
+	b.rest(coreapi.StatusDone, Grace+2*time.Second, "w1:p1")
+	if got := files(t, b.dir); len(got) != 1 || b.List("local", "w1:p1", "")[0].Ended != coreapi.StatusDone {
 		t.Fatalf("the turn's end did not replace its checkpoint: %v", got)
 	}
 }
@@ -265,7 +265,7 @@ func TestOffRecordsNothingAndDropsTheTurnBeingRecorded(t *testing.T) {
 		t.Fatalf("the dropped turn's checkpoint stayed: %v", got)
 	}
 	b.work(2*time.Minute, "w1:p1")
-	b.rest(herdr.StatusDone, Grace+2*time.Second, "w1:p1")
+	b.rest(coreapi.StatusDone, Grace+2*time.Second, "w1:p1")
 	if got := files(t, b.dir); len(got) != 0 || b.On() {
 		t.Fatalf("recorded while off: %v", got)
 	}
@@ -278,12 +278,12 @@ func TestOffRecordsNothingAndDropsTheTurnBeingRecorded(t *testing.T) {
 func TestAScratchInstanceRecordsNothingButPlaysWhatIsThere(t *testing.T) {
 	b := newBench(t)
 	b.work(2*time.Minute, "w1:p1")
-	b.Observe("local", snap(herdr.StatusWorking), b.clock)
+	b.Observe("local", snap(coreapi.StatusWorking), b.clock)
 	beside := Open(b.dir, Inputs{Screen: b.Recorder.in.Screen})
 	beside.Scratch()
 	beside.now, beside.run = b.Recorder.now, b.Recorder.run
 	reads := b.reads
-	beside.Observe("local", snap(herdr.StatusWorking, "w1:p2"), b.clock)
+	beside.Observe("local", snap(coreapi.StatusWorking, "w1:p2"), b.clock)
 	if b.reads != reads || beside.On() || !beside.Stats().Scratch {
 		t.Fatal("a scratch instance read a screen, or says it records")
 	}

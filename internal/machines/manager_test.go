@@ -9,11 +9,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 )
 
 // silentAPI answers nothing: a machine of a test that never asks it, and reaches no core of anyone's.
-type silentAPI struct{ herdr.API }
+type silentAPI struct{ coreapi.API }
 
 // newTestManager is the fleet of a test that only reads the registry.
 func newTestManager(dir string) *Manager { return NewManagerWith(dir, nil, false, &silentAPI{}, nil) }

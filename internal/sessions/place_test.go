@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 )
 
 // fakePlacer is a herdr client that makes tabs and workspaces on paper.
@@ -15,21 +15,21 @@ type fakePlacer struct {
 	named      []string // the names they were given
 }
 
-func (f *fakePlacer) WorkspaceCreate(cwd, label string) (*herdr.WorkspaceCreateResult, error) {
+func (f *fakePlacer) WorkspaceCreate(cwd, label string) (*coreapi.WorkspaceCreateResult, error) {
 	f.workspaces = append(f.workspaces, cwd)
 	f.named = append(f.named, label)
-	return &herdr.WorkspaceCreateResult{Workspace: herdr.WorkspaceInfo{WorkspaceID: "w9"}, RootPane: herdr.PaneInfo{PaneID: "w9:p1", TabID: "w9:t1", WorkspaceID: "w9"}}, nil
+	return &coreapi.WorkspaceCreateResult{Workspace: coreapi.WorkspaceInfo{WorkspaceID: "w9"}, RootPane: coreapi.PaneInfo{PaneID: "w9:p1", TabID: "w9:t1", WorkspaceID: "w9"}}, nil
 }
 
-func (f *fakePlacer) TabCreate(workspaceID, label string) (*herdr.TabCreateResult, error) {
+func (f *fakePlacer) TabCreate(workspaceID, label string) (*coreapi.TabCreateResult, error) {
 	f.tabs = append(f.tabs, workspaceID)
-	return &herdr.TabCreateResult{Tab: herdr.TabInfo{TabID: "w2:t3"}, RootPane: herdr.PaneInfo{PaneID: "w2:p3", TabID: "w2:t3", WorkspaceID: workspaceID}}, nil
+	return &coreapi.TabCreateResult{Tab: coreapi.TabInfo{TabID: "w2:t3"}, RootPane: coreapi.PaneInfo{PaneID: "w2:p3", TabID: "w2:t3", WorkspaceID: workspaceID}}, nil
 }
 
 func TestStartInUsesTheFoldersWorkspaceElseMakesOne(t *testing.T) {
-	snap := &herdr.Snapshot{
-		Workspaces: []herdr.WorkspaceInfo{{WorkspaceID: "w2"}},
-		Panes:      []herdr.PaneInfo{{PaneID: "w2:p1", WorkspaceID: "w2", CWD: "/home/me/remuda"}},
+	snap := &coreapi.Snapshot{
+		Workspaces: []coreapi.WorkspaceInfo{{WorkspaceID: "w2"}},
+		Panes:      []coreapi.PaneInfo{{PaneID: "w2:p1", WorkspaceID: "w2", CWD: "/home/me/remuda"}},
 	}
 	client := &fakePlacer{}
 	place, err := StartIn(client, snap, "/home/me/remuda", "", "scout", "codex", Start{Model: "gpt-5", Args: []string{"--full-auto"}})
@@ -65,7 +65,7 @@ func TestStartInUsesTheFoldersWorkspaceElseMakesOne(t *testing.T) {
 }
 
 func TestStartInKeepsThePlaceWhenTheAgentRefuses(t *testing.T) {
-	client := &fakePlacer{fakeClient: fakeClient{startErrs: []*herdr.Error{{Code: "agent_kind_unknown"}}}}
+	client := &fakePlacer{fakeClient: fakeClient{startErrs: []*coreapi.Error{{Code: "agent_kind_unknown"}}}}
 	place, err := StartIn(client, nil, "/x", "", "", "claude", Start{})
 	if err == nil || place.Pane != "w9:p1" || !place.MadeWorkspace {
 		t.Fatalf("err %v place %+v", err, place)
@@ -89,28 +89,28 @@ func (f *fakeCloser) TabClose(id string) error {
 // nor a tab that no longer holds the scout's pane.
 func TestClosePlaceTakesDownOnlyWhatTheAgentHolds(t *testing.T) {
 	made := Place{Pane: "w9:p1", Tab: "w9:t1", Workspace: "w9", MadeWorkspace: true}
-	alone := &herdr.Snapshot{
-		Tabs:  []herdr.TabInfo{{TabID: "w9:t1", WorkspaceID: "w9"}},
-		Panes: []herdr.PaneInfo{{PaneID: "w9:p1", TabID: "w9:t1", WorkspaceID: "w9"}},
+	alone := &coreapi.Snapshot{
+		Tabs:  []coreapi.TabInfo{{TabID: "w9:t1", WorkspaceID: "w9"}},
+		Panes: []coreapi.PaneInfo{{PaneID: "w9:p1", TabID: "w9:t1", WorkspaceID: "w9"}},
 	}
-	withTheirs := &herdr.Snapshot{
-		Tabs:  []herdr.TabInfo{{TabID: "w9:t1", WorkspaceID: "w9"}, {TabID: "w9:t2", WorkspaceID: "w9"}},
-		Panes: []herdr.PaneInfo{{PaneID: "w9:p1", TabID: "w9:t1", WorkspaceID: "w9"}, {PaneID: "w9:p2", TabID: "w9:t2", WorkspaceID: "w9"}},
+	withTheirs := &coreapi.Snapshot{
+		Tabs:  []coreapi.TabInfo{{TabID: "w9:t1", WorkspaceID: "w9"}, {TabID: "w9:t2", WorkspaceID: "w9"}},
+		Panes: []coreapi.PaneInfo{{PaneID: "w9:p1", TabID: "w9:t1", WorkspaceID: "w9"}, {PaneID: "w9:p2", TabID: "w9:t2", WorkspaceID: "w9"}},
 	}
-	moved := &herdr.Snapshot{
-		Tabs:  []herdr.TabInfo{{TabID: "w9:t1", WorkspaceID: "w9"}, {TabID: "w9:t3", WorkspaceID: "w9"}},
-		Panes: []herdr.PaneInfo{{PaneID: "w9:p1", TabID: "w9:t3", WorkspaceID: "w9"}},
+	moved := &coreapi.Snapshot{
+		Tabs:  []coreapi.TabInfo{{TabID: "w9:t1", WorkspaceID: "w9"}, {TabID: "w9:t3", WorkspaceID: "w9"}},
+		Panes: []coreapi.PaneInfo{{PaneID: "w9:p1", TabID: "w9:t3", WorkspaceID: "w9"}},
 	}
 	cases := []struct {
 		name  string
-		snap  *herdr.Snapshot
+		snap  *coreapi.Snapshot
 		place Place
 		want  string
 	}{
 		{"the workspace made for it, holding it alone", alone, made, "workspace w9"},
 		{"the workspace made for it, with the person's tab beside", withTheirs, made, "tab w9:t1"},
 		{"a tab of the person's workspace", withTheirs, Place{Pane: "w9:p1", Tab: "w9:t1", Workspace: "w9"}, "tab w9:t1"},
-		{"the pane gone already", &herdr.Snapshot{}, made, ""},
+		{"the pane gone already", &coreapi.Snapshot{}, made, ""},
 		{"no snapshot yet", nil, made, "workspace w9"},
 	}
 	for _, c := range cases {

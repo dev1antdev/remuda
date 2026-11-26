@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 )
 
 func TestACommandLineIsQuotedForTheShellAtThePrompt(t *testing.T) {
@@ -30,7 +30,7 @@ func TestACommandLineIsQuotedForTheShellAtThePrompt(t *testing.T) {
 	}
 }
 
-func layoutJSON(t *testing.T, tree *herdr.LayoutNode) string {
+func layoutJSON(t *testing.T, tree *coreapi.LayoutNode) string {
 	t.Helper()
 	b, err := json.Marshal(tree)
 	if err != nil {
@@ -147,11 +147,11 @@ func TestAPaneClosedOutOfATreeThatPlacesAnotherKeepsTheTab(t *testing.T) {
 func TestAPromptLeftUnsubmittedIsToldApart(t *testing.T) {
 	a := &Adapter{}
 	pasted := a.inputRefusal(&Error{Kind: "not_submitted", Message: "t1 has 7 in front, not 5", Hint: "read the terminal before sending again"}, "agent_not_ready", "agent_blocked")
-	if !herdr.IsCode(pasted, "not_submitted") || !strings.Contains(pasted.Error(), "pasted but not submitted") || !strings.Contains(pasted.Error(), "read the terminal") || strings.Contains(pasted.Error(), "nothing was sent") {
+	if !coreapi.IsCode(pasted, "not_submitted") || !strings.Contains(pasted.Error(), "pasted but not submitted") || !strings.Contains(pasted.Error(), "read the terminal") || strings.Contains(pasted.Error(), "nothing was sent") {
 		t.Fatalf("pasted, no Enter: %v", pasted)
 	}
 	older := a.inputRefusal(&Error{Kind: "needs_update", Message: "t1 runs in an older rc's holder", Hint: "nothing was typed; a terminal started since rc was updated takes it"}, "agent_not_ready", "agent_blocked")
-	if !herdr.IsCode(older, "invalid_request") || !strings.Contains(older.Error(), "older") || !strings.Contains(older.Error(), "a terminal started since") {
+	if !coreapi.IsCode(older, "invalid_request") || !strings.Contains(older.Error(), "older") || !strings.Contains(older.Error(), "a terminal started since") {
 		t.Fatalf("an older holder: %v", older)
 	}
 }
@@ -219,7 +219,7 @@ func TestASendRefusedUntypedIsReadAgain(t *testing.T) {
 	} {
 		core := &scripted{sends: c.sends, gets: []Terminal{c.again}}
 		err := a.sendTo(core.call, "t1", "hello", "claude", claudeAt(5, c.from), c.asMessage)
-		if c.want == "" && err != nil || c.want != "" && !herdr.IsCode(err, c.want) {
+		if c.want == "" && err != nil || c.want != "" && !coreapi.IsCode(err, c.want) {
 			t.Errorf("%s: %v, want %q", c.name, err, c.want)
 		}
 		var named []string

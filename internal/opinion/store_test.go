@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/events"
-	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/transcript"
 )
 
@@ -129,7 +129,7 @@ func TestASnapshotReadsAReviewerAtRestAndNotesOneGone(t *testing.T) {
 		reads++
 		return Answered(turnsOf(Prompt(Scope{}, op.Ref), "FINDINGS\na.go:1: x"), asked)
 	}
-	snap := &herdr.Snapshot{Panes: []herdr.PaneInfo{{PaneID: "w1:p2", TabID: "w1:t2", AgentStatus: "working"}}}
+	snap := &coreapi.Snapshot{Panes: []coreapi.PaneInfo{{PaneID: "w1:p2", TabID: "w1:t2", AgentStatus: "working"}}}
 	svc.Observe(events.Snapshot{Machine: "gog", Snap: snap, At: gone.Asked.Add(time.Second)})
 	if b, _ := svc.Get("gog", "/b"); reads != 0 || b.State != Running {
 		t.Fatal("a reviewer at work was read, or a pane missing from a snapshot older than its tab was taken for gone")

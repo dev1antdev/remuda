@@ -1,4 +1,4 @@
-package herdr
+package coreapi
 
 import "testing"
 

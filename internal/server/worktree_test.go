@@ -9,8 +9,8 @@ import (
 	"testing"
 
 	"github.com/dev1antdev/remuda/internal/auth"
-	"github.com/dev1antdev/remuda/internal/herdr"
-	"github.com/dev1antdev/remuda/internal/herdr/herdrfake"
+	"github.com/dev1antdev/remuda/internal/coreapi"
+	"github.com/dev1antdev/remuda/internal/coreapi/corefake"
 	"github.com/dev1antdev/remuda/internal/repos"
 	"github.com/dev1antdev/remuda/internal/undo"
 	"github.com/dev1antdev/remuda/internal/worktrees"
@@ -18,7 +18,7 @@ import (
 
 func TestAProjectsSettingsAreKeptAndReadBack(t *testing.T) {
 	dir := t.TempDir()
-	s := &Server{Machines: herdrfake.Manager(dir), Repos: repos.Open(dir)}
+	s := &Server{Machines: corefake.Manager(dir), Repos: repos.Open(dir)}
 	api := http.NewServeMux()
 	s.repoRoutes(api)
 
@@ -75,13 +75,13 @@ func TestGitWaitsWhileAnAgentWorksInTheCheckout(t *testing.T) {
 
 func TestTheWorkspacesSharingAWorktreeAreNamed(t *testing.T) {
 	tree := "/home/me/.herdr/worktrees/app/fix"
-	snap := &herdr.Snapshot{
-		Workspaces: []herdr.WorkspaceInfo{
-			{WorkspaceID: "w1", Label: "fix", Worktree: &herdr.WorktreeInfo{CheckoutPath: tree, IsLinkedWorktree: true}},
-			{WorkspaceID: "w2", Label: "api-fix", Worktree: &herdr.WorktreeInfo{CheckoutPath: tree, IsLinkedWorktree: true}},
+	snap := &coreapi.Snapshot{
+		Workspaces: []coreapi.WorkspaceInfo{
+			{WorkspaceID: "w1", Label: "fix", Worktree: &coreapi.WorktreeInfo{CheckoutPath: tree, IsLinkedWorktree: true}},
+			{WorkspaceID: "w2", Label: "api-fix", Worktree: &coreapi.WorktreeInfo{CheckoutPath: tree, IsLinkedWorktree: true}},
 			{WorkspaceID: "w3", Label: "app"},
 		},
-		Panes: []herdr.PaneInfo{
+		Panes: []coreapi.PaneInfo{
 			{PaneID: "w1:p1", WorkspaceID: "w1", CWD: tree},
 			{PaneID: "w3:p1", WorkspaceID: "w3", CWD: "/home/me/code/app", ForegroundCWD: tree + "/web"},
 		},
@@ -123,7 +123,7 @@ func TestAConfirmationAnswersForWhatTheDialogSaid(t *testing.T) {
 // roster's sessions are named in, so saving them through a symlink is not a second repository.
 func TestSettingsOnASymlinkedFolderAreKeptAsTheMachineNamesIt(t *testing.T) {
 	dir := t.TempDir()
-	s := &Server{Machines: herdrfake.Manager(dir), Repos: repos.Open(dir)}
+	s := &Server{Machines: corefake.Manager(dir), Repos: repos.Open(dir)}
 	api := http.NewServeMux()
 	s.repoRoutes(api)
 	real := t.TempDir()
@@ -159,7 +159,7 @@ func TestSettingsOnASymlinkedFolderAreKeptAsTheMachineNamesIt(t *testing.T) {
 func TestSettingsSavedUnderAnOldSpellingAreStillFound(t *testing.T) {
 	dir := t.TempDir()
 	store := repos.Open(dir)
-	s := &Server{Machines: herdrfake.Manager(dir), Repos: store}
+	s := &Server{Machines: corefake.Manager(dir), Repos: store}
 	api := http.NewServeMux()
 	s.repoRoutes(api)
 	link := filepath.Join(t.TempDir(), "link")
@@ -216,7 +216,7 @@ func TestSettingsSavedUnderAnOldSpellingAreStillFound(t *testing.T) {
 func TestASaveThroughTheSameFolderInAnotherSpellingKeepsIt(t *testing.T) {
 	dir := t.TempDir()
 	store := repos.Open(dir)
-	s := &Server{Machines: herdrfake.Manager(dir), Repos: store}
+	s := &Server{Machines: corefake.Manager(dir), Repos: store}
 	api := http.NewServeMux()
 	s.repoRoutes(api)
 	root := t.TempDir()
@@ -243,7 +243,7 @@ func TestASaveThroughTheSameFolderInAnotherSpellingKeepsIt(t *testing.T) {
 func TestClearingSettingsThroughAnOldSpellingClearsThem(t *testing.T) {
 	dir := t.TempDir()
 	store := repos.Open(dir)
-	s := &Server{Machines: herdrfake.Manager(dir), Repos: store}
+	s := &Server{Machines: corefake.Manager(dir), Repos: store}
 	api := http.NewServeMux()
 	s.repoRoutes(api)
 	link := filepath.Join(t.TempDir(), "link")
@@ -313,7 +313,7 @@ func TestClearingSettingsThroughAnOldSpellingClearsThem(t *testing.T) {
 func TestSavingThroughASymlinkFollowedByItsParentLeavesTheOtherCheckoutAlone(t *testing.T) {
 	dir := t.TempDir()
 	store := repos.Open(dir)
-	s := &Server{Machines: herdrfake.Manager(dir), Repos: store}
+	s := &Server{Machines: corefake.Manager(dir), Repos: store}
 	api := http.NewServeMux()
 	s.repoRoutes(api)
 	first, second := t.TempDir(), t.TempDir()
@@ -349,7 +349,7 @@ func TestSavingThroughASymlinkFollowedByItsParentLeavesTheOtherCheckoutAlone(t *
 func TestSettingsTheMachineCannotNameAreNotReplaced(t *testing.T) {
 	dir := t.TempDir()
 	store := repos.Open(dir)
-	s := &Server{Machines: herdrfake.Manager(dir), Repos: store}
+	s := &Server{Machines: corefake.Manager(dir), Repos: store}
 	api := http.NewServeMux()
 	s.repoRoutes(api)
 	folder := filepath.Join(t.TempDir(), "app")
@@ -407,7 +407,7 @@ func TestSettingsTheMachineCannotNameAreNotReplaced(t *testing.T) {
 func TestAClearThroughOneLinkStandsForEverySpelling(t *testing.T) {
 	dir := t.TempDir()
 	store := repos.Open(dir)
-	s := &Server{Machines: herdrfake.Manager(dir), Repos: store}
+	s := &Server{Machines: corefake.Manager(dir), Repos: store}
 	api := http.NewServeMux()
 	s.repoRoutes(api)
 	real := t.TempDir()
@@ -450,7 +450,7 @@ func TestAClearThroughOneLinkStandsForEverySpelling(t *testing.T) {
 func TestADraftForOneCheckoutIsNoDraftForAnother(t *testing.T) {
 	dir := t.TempDir()
 	store := repos.Open(dir)
-	s := &Server{Machines: herdrfake.Manager(dir), Repos: store}
+	s := &Server{Machines: corefake.Manager(dir), Repos: store}
 	api := http.NewServeMux()
 	s.repoRoutes(api)
 	one, other := t.TempDir(), t.TempDir()
@@ -489,7 +489,7 @@ func TestADraftForOneCheckoutIsNoDraftForAnother(t *testing.T) {
 // and that draft saves — a creation, not a replacement.
 func TestSettingsForACheckoutNotThereYetAreSaved(t *testing.T) {
 	dir := t.TempDir()
-	s := &Server{Machines: herdrfake.Manager(dir), Repos: repos.Open(dir)}
+	s := &Server{Machines: corefake.Manager(dir), Repos: repos.Open(dir)}
 	api := http.NewServeMux()
 	s.repoRoutes(api)
 	root := filepath.Join(t.TempDir(), "not-cloned-yet")

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 )
 
 // asleep is a workspace's record as a sleep left it, its agents in these panes.
@@ -34,8 +34,8 @@ func TestWakeResumesEachAgentInItsShellAndSaysWhatStaysAsleep(t *testing.T) {
 		shellPane("w1:p1", "w1:t1", "/work/api"),
 		shellPane("w1:p2", "w1:t1", "/work/api"),
 		shellPane("w1:p3", "w1:t1", "/home/me"),
-		agentPane("w1:p4", "w1:t1", "claude", sidC, herdr.StatusIdle, "/work/api"),
-		agentPane("w1:p5", "w1:t1", "claude", sidB, herdr.StatusWorking, "/work/api"),
+		agentPane("w1:p4", "w1:t1", "claude", sidC, coreapi.StatusIdle, "/work/api"),
+		agentPane("w1:p5", "w1:t1", "claude", sidB, coreapi.StatusWorking, "/work/api"),
 		shellPane("w1:p6", "w1:t1", "/work/api"),
 	)
 	f.busyShell["w1:p2"] = true
@@ -112,7 +112,7 @@ func TestAGonePaneWakesInANewTabOfItsWorkspace(t *testing.T) {
 func TestAStartThatFailsInANewTabIsTriedInThatTabNextTime(t *testing.T) {
 	w := asleep(sleeper("w1:p2", "w1:t1", "claude", sidA))
 	f := newFake(shellPane("w1:p1", "w1:t1", "/work/api"))
-	f.refuse["w1:p7"] = &herdr.Error{Code: "agent_start_failed", Message: "no such binary"}
+	f.refuse["w1:p7"] = &coreapi.Error{Code: "agent_start_failed", Message: "no such binary"}
 	s := &Service{Store: Open("")}
 	s.Store.put("local", "w1", w)
 	err := s.wakeAll(f, "local", "w1", w, noChecks, func(string) {})

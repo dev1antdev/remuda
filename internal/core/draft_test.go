@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/core"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/events"
-	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/sessions"
 )
 
@@ -139,11 +139,11 @@ func TestAPromptNeverReachesWhatReplacedItsAgent(t *testing.T) {
 	if _, err := person.Write([]byte("\x03")); err != nil { // Ctrl-C: the agent goes, its shell takes the terminal
 		t.Fatal(err)
 	}
-	if err := waitFor(t, sent); !herdr.IsCode(err, "agent_left") && !herdr.IsCode(err, "agent_not_ready") {
+	if err := waitFor(t, sent); !coreapi.IsCode(err, "agent_left") && !coreapi.IsCode(err, "agent_not_ready") {
 		t.Fatalf("a prompt whose agent left as it waited: %v", err)
 	}
 	startStandIn(t, adapter, pane)
-	if err := delivery.Try(); !herdr.IsCode(err, "agent_left") {
+	if err := delivery.Try(); !coreapi.IsCode(err, "agent_left") {
 		t.Fatalf("the delivery tried again on the agent started in its place: %v", err)
 	}
 	time.Sleep(500 * time.Millisecond)
@@ -158,16 +158,16 @@ func TestADeliveryAfterAQuestionNeverReachesAReplacement(t *testing.T) {
 	core.LiftPromptGate(t)
 	client, adapter, pane := idleAgent(t)
 	person := typing(t, client, pane, "ask\r")
-	eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Pane(pane).AgentStatus == herdr.StatusBlocked })
+	eventually(t, adapter, func(s *coreapi.Snapshot) bool { return s.Pane(pane).AgentStatus == coreapi.StatusBlocked })
 	delivery := sessions.NewInput(nil, nil).Deliver(adapter, events.PaneRef{Machine: "local", Pane: pane}, "the old task")
-	if err := delivery.Try(); !herdr.IsCode(err, "agent_blocked") {
+	if err := delivery.Try(); !coreapi.IsCode(err, "agent_blocked") {
 		t.Fatalf("a prompt to an agent asking something: %v", err)
 	}
 	if _, err := person.Write([]byte("\x03")); err != nil {
 		t.Fatal(err)
 	}
 	startStandIn(t, adapter, pane)
-	if err := delivery.Try(); !herdr.IsCode(err, "agent_left") {
+	if err := delivery.Try(); !coreapi.IsCode(err, "agent_left") {
 		t.Fatalf("the first prompt tried again on the agent started in its place: %v", err)
 	}
 	time.Sleep(500 * time.Millisecond)
@@ -179,7 +179,7 @@ func TestADeliveryAfterAQuestionNeverReachesAReplacement(t *testing.T) {
 // A prompt for an agent at rest (a restart's exit, a sleep's) is refused untyped when the person's own draft starts a
 // turn while it waits, the agent idle or done when it was looked at: only the person's message goes to a turn.
 func TestARestartsExitNeverGoesToATurnThePersonStarted(t *testing.T) {
-	for _, from := range []string{herdr.StatusIdle, herdr.StatusDone} {
+	for _, from := range []string{coreapi.StatusIdle, coreapi.StatusDone} {
 		t.Run(from, func(t *testing.T) { exitBehindATurn(t, from) })
 	}
 }
@@ -188,11 +188,11 @@ func exitBehindATurn(t *testing.T, from string) {
 	core.LiftPromptGate(t)
 	client, adapter, pane := idleAgent(t)
 	person := typing(t, client, pane, "")
-	if from == herdr.StatusDone {
+	if from == coreapi.StatusDone {
 		if _, err := person.Write([]byte("finish\r")); err != nil {
 			t.Fatal(err)
 		}
-		eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Pane(pane).AgentStatus == herdr.StatusDone })
+		eventually(t, adapter, func(s *coreapi.Snapshot) bool { return s.Pane(pane).AgentStatus == coreapi.StatusDone })
 	}
 	if _, err := person.Write([]byte("slow")); err != nil {
 		t.Fatal(err)
@@ -204,10 +204,10 @@ func exitBehindATurn(t *testing.T, from string) {
 		t.Fatal(err)
 	}
 	// at work by then, or, from done, a core whose `if` names idle and working alone: nothing sent either way
-	if err := waitFor(t, sent); !herdr.IsCode(err, "agent_working") && !herdr.IsCode(err, "invalid_request") {
+	if err := waitFor(t, sent); !coreapi.IsCode(err, "agent_working") && !coreapi.IsCode(err, "invalid_request") {
 		t.Fatalf("a prompt for an agent at rest, behind a turn the person started: %v", err)
 	}
-	eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Pane(pane).AgentStatus == herdr.StatusIdle })
+	eventually(t, adapter, func(s *coreapi.Snapshot) bool { return s.Pane(pane).AgentStatus == coreapi.StatusIdle })
 	if screen, _ := adapter.PaneRead(pane); strings.Contains(screen, "exit-while-it-works") {
 		t.Fatalf("the prompt went to the turn:\n%s", screen)
 	}
@@ -218,11 +218,11 @@ func TestAPromptForAnAgentAtRestWaitsOutItsTurn(t *testing.T) {
 	core.LiftPromptGate(t)
 	client, adapter, pane := idleAgent(t)
 	typing(t, client, pane, "slow\r")
-	eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Pane(pane).AgentStatus == herdr.StatusWorking })
-	if err := adapter.AgentPrompt(pane, "exit-at-work"); !herdr.IsCode(err, "agent_working") {
+	eventually(t, adapter, func(s *coreapi.Snapshot) bool { return s.Pane(pane).AgentStatus == coreapi.StatusWorking })
+	if err := adapter.AgentPrompt(pane, "exit-at-work"); !coreapi.IsCode(err, "agent_working") {
 		t.Fatalf("a prompt for an agent at rest, to one at work: %v", err)
 	}
-	eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Pane(pane).AgentStatus == herdr.StatusIdle })
+	eventually(t, adapter, func(s *coreapi.Snapshot) bool { return s.Pane(pane).AgentStatus == coreapi.StatusIdle })
 	if screen, _ := adapter.PaneRead(pane); strings.Contains(screen, "exit-at-work") {
 		t.Fatalf("the prompt went to the turn:\n%s", screen)
 	}

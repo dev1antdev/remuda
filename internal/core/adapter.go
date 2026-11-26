@@ -12,11 +12,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/shell"
 )
 
-// Adapter is a machine's remuda-core as herdr.API: a mirror of its live terminals and the `remuda` document, kept
+// Adapter is a machine's remuda-core as coreapi.API: a mirror of its live terminals and the `remuda` document, kept
 // from one event subscription, so a snapshot is read from memory and every change reaches the watcher as it happens.
 type Adapter struct {
 	client *Client
@@ -55,7 +55,7 @@ type AdapterHooks struct {
 }
 
 // SessionLookup names the conversation of an agent's process; nil while it is not known.
-type SessionLookup func(AgentProcess) *herdr.AgentSession
+type SessionLookup func(AgentProcess) *coreapi.AgentSession
 
 // AgentProcess is an agent's process as the mirror sees it, with what tells it from a later one given its pid.
 type AgentProcess struct {
@@ -110,7 +110,7 @@ func (a *Adapter) Close() error {
 	return nil
 }
 
-var _ herdr.API = (*Adapter)(nil)
+var _ coreapi.API = (*Adapter)(nil)
 
 // RereadSessions has the agents' sessions read off their processes again before it answers, for a step about to stop
 // an agent and resume it: a snapshot answers what the last read found, which may be half a minute old.
@@ -123,7 +123,7 @@ func (a *Adapter) RereadSessions() error {
 
 // SessionSnapshot is the machine as the mirror holds it, without a request; before the core first answered it waits
 // for that.
-func (a *Adapter) SessionSnapshot() (*herdr.Snapshot, error) {
+func (a *Adapter) SessionSnapshot() (*coreapi.Snapshot, error) {
 	select {
 	case <-a.answered:
 	case <-time.After(firstFillWait):
@@ -344,7 +344,7 @@ func (a *Adapter) fill(terminals []Terminal, doc Document, version string) (unke
 	}
 	a.held, a.lost = true, nil
 	a.answer()
-	a.tellLocked(herdr.Event{Kind: "layout.updated"})
+	a.tellLocked(coreapi.Event{Kind: "layout.updated"})
 	return unkept
 }
 
@@ -408,19 +408,19 @@ func (a *Adapter) setDoc(doc Document) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.state.doc = doc
-	a.tellLocked(herdr.Event{Kind: "layout.updated"})
+	a.tellLocked(coreapi.Event{Kind: "layout.updated"})
 }
 
-func (a *Adapter) tellLocked(ev herdr.Event) {
+func (a *Adapter) tellLocked(ev coreapi.Event) {
 	for s := range a.streams {
 		s.push(ev)
 	}
 }
 
-// apply changes the mirror by one event (schema/README.md, "Events") and answers it in herdr's words: what the
+// apply changes the mirror by one event (schema/README.md, "Events") and answers it in the core's words: what the
 // watcher reads as work to look at now, a spinner's title it reads lazily, a status change with the status.
-func (m *mirror) apply(ev Event) (herdr.Event, bool) {
-	told := herdr.Event{PaneID: ev.Terminal}
+func (m *mirror) apply(ev Event) (coreapi.Event, bool) {
+	told := coreapi.Event{PaneID: ev.Terminal}
 	t := m.terminals[ev.Terminal]
 	now := time.Now()
 	switch ev.Type {
@@ -431,7 +431,7 @@ func (m *mirror) apply(ev Event) (herdr.Event, bool) {
 		}
 		if record.State != "live" {
 			m.went(record.Address)
-			return herdr.Event{Kind: "pane.closed", PaneID: record.Address}, t != nil
+			return coreapi.Event{Kind: "pane.closed", PaneID: record.Address}, t != nil
 		}
 		record.restored = ev.Type == "restarted"
 		return m.add(record), true
@@ -460,7 +460,7 @@ func (m *mirror) apply(ev Event) (herdr.Event, bool) {
 		}
 		t.Status, t.Records, t.Reported = status.Status, status.Records, status.Reported
 		t.statusAt = now
-		told.Kind, told.AgentStatus = herdr.EventAgentStatus, statusOf(t)
+		told.Kind, told.AgentStatus = coreapi.EventAgentStatus, statusOf(t)
 	case "turn":
 		json.Unmarshal(ev.Data, &struct {
 			Turn *uint64 `json:"turn"`
@@ -536,11 +536,11 @@ func (m *mirror) went(address string) {
 }
 
 // add puts a live terminal in the mirror, its folder its shell's, and answers it as herdr's news of a pane made.
-func (m *mirror) add(record Terminal) herdr.Event {
+func (m *mirror) add(record Terminal) coreapi.Event {
 	followShell(&record)
 	record.handedOver()
 	m.terminals[record.Address] = &record
-	return herdr.Event{Kind: "pane.created", PaneID: record.Address}
+	return coreapi.Event{Kind: "pane.created", PaneID: record.Address}
 }
 
 // local says an address is this machine's terminal: one on a machine the core added comes as `machine/t7`.
@@ -554,7 +554,7 @@ func followShell(t *Terminal) {
 	}
 }
 
-// refusal is the core's refusal in herdr's words, so the callers' herdr.IsCode checks hold (notFound names what was
+// refusal is the core's refusal in the core's words, so the callers' coreapi.IsCode checks hold (notFound names what was
 // missing); a failure to reach the core is told to the machine and passed on.
 func (a *Adapter) refusal(err error, notFound string) error {
 	if err == nil {
@@ -569,7 +569,7 @@ func (a *Adapter) refusal(err error, notFound string) error {
 		case "needs_update":
 			code = "invalid_request"
 		}
-		return &herdr.Error{Code: code, Message: refused.Error()}
+		return &coreapi.Error{Code: code, Message: refused.Error()}
 	}
 	if IsTransport(err) && a.hooks.TransportError != nil {
 		a.hooks.TransportError(err)

@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 )
 
 func term(address string, created int64, labels map[string]string) *Terminal {
@@ -20,9 +20,9 @@ func placedIn(space, tab string) map[string]string {
 	return map[string]string{LabelSpace: space, LabelTab: tab}
 }
 
-func split(a, b string) *herdr.LayoutNode {
-	return &herdr.LayoutNode{Type: "split", Direction: "right", Ratio: 0.5,
-		First: &herdr.LayoutNode{Type: "pane", PaneID: a}, Second: &herdr.LayoutNode{Type: "pane", PaneID: b}}
+func split(a, b string) *coreapi.LayoutNode {
+	return &coreapi.LayoutNode{Type: "split", Direction: "right", Ratio: 0.5,
+		First: &coreapi.LayoutNode{Type: "pane", PaneID: a}, Second: &coreapi.LayoutNode{Type: "pane", PaneID: b}}
 }
 
 func TestTheSnapshotLaysTheDocumentOutAndPlacesEveryLiveTerminal(t *testing.T) {
@@ -37,9 +37,9 @@ func TestTheSnapshotLaysTheDocumentOutAndPlacesEveryLiveTerminal(t *testing.T) {
 		{ID: "w1", Label: "api", ActiveTab: "b", Tabs: []DocTab{
 			{ID: "a", Label: "agents", Layout: split("t2", "t1")},
 			{ID: "b"},
-			{ID: "c", Layout: &herdr.LayoutNode{Type: "pane", PaneID: "t99"}},
+			{ID: "c", Layout: &coreapi.LayoutNode{Type: "pane", PaneID: "t99"}},
 		}},
-		{ID: "w2", Label: "closed", Tabs: []DocTab{{ID: "d", Layout: &herdr.LayoutNode{Type: "pane", PaneID: "t98"}}}},
+		{ID: "w2", Label: "closed", Tabs: []DocTab{{ID: "d", Layout: &coreapi.LayoutNode{Type: "pane", PaneID: "t98"}}}},
 	}}}
 	snap := m.snapshot(nil)
 
@@ -97,7 +97,7 @@ func TestTheAgentIsTheForegroundProcessOrWhatTheProgramReported(t *testing.T) {
 			t.Errorf("status %s reads %s, want %s", state, got, want)
 		}
 	}
-	if got := statusOf(&Terminal{}); got != herdr.StatusUnknown {
+	if got := statusOf(&Terminal{}); got != coreapi.StatusUnknown {
 		t.Errorf("no status reads %s", got)
 	}
 }
@@ -137,7 +137,7 @@ func TestEachEventMovesTheMirrorAndSaysWhatItWasInHerdrsWords(t *testing.T) {
 		kind string
 	}{
 		{coreEvent("foreground", "t1", Foreground{Pid: 200, Name: "claude", Cwd: "/home/me/web"}), "pane.agent_detected"},
-		{coreEvent("status", "t1", map[string]any{"status": Status{State: "working", App: "claude-code"}, "reported": true}), herdr.EventAgentStatus},
+		{coreEvent("status", "t1", map[string]any{"status": Status{State: "working", App: "claude-code"}, "reported": true}), coreapi.EventAgentStatus},
 		{coreEvent("title", "t1", map[string]string{"title": "⠋ Refactoring"}), "pane.updated"},
 		{coreEvent("labels", "t1", map[string]any{"labels": placedIn("w1", "a")}), "pane.moved"},
 		{coreEvent("size", "t1", map[string]int{"cols": 120, "rows": 40}), "layout.updated"},
@@ -245,7 +245,7 @@ func TestEachProcessSeenTakingATerminalIsAnotherForItsSession(t *testing.T) {
 	since := SinceBoot{BootID: "6f1c0d2e-4b7a-4c1e-9a1b-2f3e4d5c6b7a", TimeNS: "time:[4026531834]", Ticks: 216940}
 	running := []Terminal{{Address: "t1", State: "live", Pid: 100, Cwd: "/work/api", Foreground: &Foreground{Pid: 300, Name: "claude", Cwd: "/work/api", StartedMS: 1795048570123, SinceBoot: &since}}}
 	var asked []AgentProcess
-	lookup := func(p AgentProcess) *herdr.AgentSession { asked = append(asked, p); return nil }
+	lookup := func(p AgentProcess) *coreapi.AgentSession { asked = append(asked, p); return nil }
 	later := func(what string) {
 		t.Helper()
 		a.state.snapshot(lookup)

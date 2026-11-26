@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 )
 
 // TestASleepingPaneIsNeitherStoppedNorClosed: the person put the workspace to sleep, so its shells are the sleep's to
@@ -86,12 +86,12 @@ func TestLeaveWaitsForTheShellAndTriesCtrlC(t *testing.T) {
 
 // leavingHerdr is an agent that leaves on its exit, or only after a Ctrl-C when it lingers.
 type leavingHerdr struct {
-	snap    *herdr.Snapshot
+	snap    *coreapi.Snapshot
 	lingers bool
 	keys    []string
 }
 
-func (f *leavingHerdr) SessionSnapshot() (*herdr.Snapshot, error) { return f.snap, nil }
+func (f *leavingHerdr) SessionSnapshot() (*coreapi.Snapshot, error) { return f.snap, nil }
 func (f *leavingHerdr) AgentPrompt(target, text string) error {
 	if !f.lingers {
 		f.snap.Panes[0].Agent = ""

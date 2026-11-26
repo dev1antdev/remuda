@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/sessions"
 	"github.com/dev1antdev/remuda/internal/text"
 )
@@ -73,7 +73,7 @@ func (s *Server) handleFork(w http.ResponseWriter, r *http.Request) {
 }
 
 // forkSession is the conversation a fork copies — the one asked for, else the pane's live one — or why there is none.
-func forkSession(pane *herdr.PaneInfo, asked string) (string, error) {
+func forkSession(pane *coreapi.PaneInfo, asked string) (string, error) {
 	if pane.Agent == "" {
 		return "", errors.New("a shell pane has no conversation to fork")
 	}

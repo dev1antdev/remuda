@@ -11,7 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
+	"github.com/dev1antdev/remuda/internal/herdrollback"
 	"github.com/dev1antdev/remuda/internal/rpath"
 	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/shell"
@@ -57,7 +58,7 @@ func Hold(host shell.Shell) string {
 		return ""
 	}
 	bin, socket := moved.MovedHerdr()
-	if running, err := herdr.Serving(host, bin, socket); running || err != nil {
+	if running, err := herdrollback.Serving(host, bin, socket); running || err != nil {
 		return "herdr's server may still run there, and its agents are not the ones remuda sees"
 	}
 	return ""
@@ -175,7 +176,7 @@ func Leftovers(host shell.Host, open []string) ([]Leftover, error) {
 }
 
 // OpenFolders is every folder a workspace or pane of the snapshot has open: what Leftovers leaves out.
-func OpenFolders(snap *herdr.Snapshot) []string {
+func OpenFolders(snap *coreapi.Snapshot) []string {
 	open := snap.WorkspaceDirs()
 	for i := range snap.Workspaces {
 		if tree := snap.Workspaces[i].Worktree; tree != nil && tree.CheckoutPath != "" {

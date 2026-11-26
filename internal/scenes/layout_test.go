@@ -3,18 +3,18 @@ package scenes
 import (
 	"testing"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 )
 
 // exported is a tab as herdr's layout.export answers it: an editor in the folder, a dev server below it in web/, a
 // shell on the right in another folder, the agent in the second pane.
-func exported() *herdr.LayoutDescription {
-	return &herdr.LayoutDescription{WorkspaceID: "w1", TabID: "w1:t1", Root: herdr.LayoutNode{Type: "split", Direction: "right", Ratio: 0.6,
-		First: &herdr.LayoutNode{Type: "split", Direction: "down", Ratio: 0.7,
-			First:  &herdr.LayoutNode{Type: "pane", PaneID: "w1:p1", CWD: "/home/me/api", Label: "editor"},
-			Second: &herdr.LayoutNode{Type: "pane", PaneID: "w1:p2", CWD: "/home/me/api/web", Command: []string{"npm", "run", "dev"}},
+func exported() *coreapi.LayoutDescription {
+	return &coreapi.LayoutDescription{WorkspaceID: "w1", TabID: "w1:t1", Root: coreapi.LayoutNode{Type: "split", Direction: "right", Ratio: 0.6,
+		First: &coreapi.LayoutNode{Type: "split", Direction: "down", Ratio: 0.7,
+			First:  &coreapi.LayoutNode{Type: "pane", PaneID: "w1:p1", CWD: "/home/me/api", Label: "editor"},
+			Second: &coreapi.LayoutNode{Type: "pane", PaneID: "w1:p2", CWD: "/home/me/api/web", Command: []string{"npm", "run", "dev"}},
 		},
-		Second: &herdr.LayoutNode{Type: "pane", PaneID: "w1:p3", CWD: "/tmp", Env: map[string]string{"TOKEN": "secret"}},
+		Second: &coreapi.LayoutNode{Type: "pane", PaneID: "w1:p3", CWD: "/tmp", Env: map[string]string{"TOKEN": "secret"}},
 	}}
 }
 

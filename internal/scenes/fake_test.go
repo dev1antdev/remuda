@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/radar"
 	"github.com/dev1antdev/remuda/internal/recipes"
 	"github.com/dev1antdev/remuda/internal/sessions"
@@ -32,7 +32,7 @@ func (f *fakeHerdr) note(format string, args ...any) error {
 	call := fmt.Sprintf(format, args...)
 	f.calls = append(f.calls, call)
 	if f.refuse != "" && strings.HasPrefix(call, f.refuse) {
-		return &herdr.Error{Code: "refused", Message: "herdr says no to " + f.refuse}
+		return &coreapi.Error{Code: "refused", Message: "herdr says no to " + f.refuse}
 	}
 	return nil
 }
@@ -55,30 +55,30 @@ func (f *fakeHerdr) AgentStartWith(pane, kind, name string, args []string, _ tim
 	return f.note("start %s %s %s", pane, kind, strings.Join(args, " "))
 }
 
-func (f *fakeHerdr) WorkspaceCreate(cwd, label string) (*herdr.WorkspaceCreateResult, error) {
+func (f *fakeHerdr) WorkspaceCreate(cwd, label string) (*coreapi.WorkspaceCreateResult, error) {
 	if err := f.note("workspace %s", cwd); err != nil {
 		return nil, err
 	}
 	n := f.id()
 	ws := fmt.Sprintf("w%d", n)
-	return &herdr.WorkspaceCreateResult{Workspace: herdr.WorkspaceInfo{WorkspaceID: ws}, RootPane: herdr.PaneInfo{PaneID: ws + ":p1", TabID: ws + ":t1", WorkspaceID: ws}}, nil
+	return &coreapi.WorkspaceCreateResult{Workspace: coreapi.WorkspaceInfo{WorkspaceID: ws}, RootPane: coreapi.PaneInfo{PaneID: ws + ":p1", TabID: ws + ":t1", WorkspaceID: ws}}, nil
 }
 
-func (f *fakeHerdr) TabCreate(workspace, label string) (*herdr.TabCreateResult, error) {
+func (f *fakeHerdr) TabCreate(workspace, label string) (*coreapi.TabCreateResult, error) {
 	if err := f.note("tab %s %q", workspace, label); err != nil {
 		return nil, err
 	}
 	n := f.id()
-	return &herdr.TabCreateResult{Tab: herdr.TabInfo{TabID: fmt.Sprintf("%s:t%d", workspace, n)}, RootPane: herdr.PaneInfo{PaneID: fmt.Sprintf("%s:p%d", workspace, n)}}, nil
+	return &coreapi.TabCreateResult{Tab: coreapi.TabInfo{TabID: fmt.Sprintf("%s:t%d", workspace, n)}, RootPane: coreapi.PaneInfo{PaneID: fmt.Sprintf("%s:p%d", workspace, n)}}, nil
 }
 
 func (f *fakeHerdr) TabRename(tab, label string) error { return f.note("rename %s %q", tab, label) }
 
-func (f *fakeHerdr) LayoutExport(tab string) (*herdr.LayoutDescription, error) {
+func (f *fakeHerdr) LayoutExport(tab string) (*coreapi.LayoutDescription, error) {
 	return nil, f.note("export %s", tab)
 }
 
-func (f *fakeHerdr) LayoutApply(workspace, tab, label string, root herdr.LayoutNode) (*herdr.LayoutDescription, error) {
+func (f *fakeHerdr) LayoutApply(workspace, tab, label string, root coreapi.LayoutNode) (*coreapi.LayoutDescription, error) {
 	if err := f.note("layout %s %s %q %d", workspace, tab, label, len(root.Panes())); err != nil {
 		return nil, err
 	}
@@ -87,7 +87,7 @@ func (f *fakeHerdr) LayoutApply(workspace, tab, label string, root herdr.LayoutN
 	for i, pane := range laid.Panes() {
 		pane.PaneID = fmt.Sprintf("w1:p%d", n*10+i)
 	}
-	return &herdr.LayoutDescription{WorkspaceID: workspace, TabID: fmt.Sprintf("w1:t%d", n), Root: laid}, nil
+	return &coreapi.LayoutDescription{WorkspaceID: workspace, TabID: fmt.Sprintf("w1:t%d", n), Root: laid}, nil
 }
 
 func (f *fakeHerdr) PaneClose(pane string) error { return f.note("close %s", pane) }
@@ -126,7 +126,7 @@ type fakeMachine struct {
 	id, label string
 	client    *fakeHerdr
 	away      error
-	snap      *herdr.Snapshot
+	snap      *coreapi.Snapshot
 	leftovers []worktrees.Leftover
 	tidied    []string
 	refreshed int
@@ -141,8 +141,8 @@ func (m *fakeMachine) Herdr() (Herdr, error) {
 	}
 	return m.client, nil
 }
-func (m *fakeMachine) Snapshot() *herdr.Snapshot { return m.snap }
-func (m *fakeMachine) Refresh()                  { m.refreshed++ }
+func (m *fakeMachine) Snapshot() *coreapi.Snapshot { return m.snap }
+func (m *fakeMachine) Refresh()                    { m.refreshed++ }
 func (m *fakeMachine) Leftovers(open []string) ([]worktrees.Leftover, error) {
 	return m.leftovers, nil
 }
@@ -176,11 +176,11 @@ func fleetOf(t *testing.T, list ...*fakeMachine) (*Service, map[string]radar.Dis
 			return nil, errors.New("no machine " + id)
 		},
 		Readings: Readings{
-			State: func(machine string, pane *herdr.PaneInfo) radar.Display {
+			State: func(machine string, pane *coreapi.PaneInfo) radar.Display {
 				if d, ok := states[machine+"|"+pane.PaneID]; ok {
 					return d
 				}
-				return radar.Display{State: herdr.StatusIdle}
+				return radar.Display{State: coreapi.StatusIdle}
 			},
 			Context: func(machine, pane string) (int, bool) {
 				share, ok := contexts[machine+"|"+pane]

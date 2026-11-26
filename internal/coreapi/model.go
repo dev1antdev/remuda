@@ -1,9 +1,9 @@
-package herdr
+package coreapi
 
 import "strings"
 
-// The machine as remuda reads it: the snapshot, a pane, a workspace, a tab, the layout, the statuses. herdr's model,
-// which remuda-core's adapter fills (internal/core) — the other half of the package's name: the dictionary of a machine.
+// The machine as remuda reads it: the snapshot, a pane, a workspace, a tab, the layout, the statuses. The model
+// remuda-core's adapter fills (internal/core): the dictionary of a machine.
 
 // herdr's agent statuses, and the coarser vocabulary the UI shows.
 const (

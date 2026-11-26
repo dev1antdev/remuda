@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/events"
-	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/transcript"
 )
 
@@ -89,29 +89,29 @@ func waitFor(t *testing.T, what string, ok func() bool) {
 }
 
 func status(to string) events.PaneStatus {
-	return events.PaneStatus{Pane: events.PaneRef{Machine: "local", Pane: "w1:p1"}, Kind: "claude", From: herdr.StatusWorking, To: to}
+	return events.PaneStatus{Pane: events.PaneRef{Machine: "local", Pane: "w1:p1"}, Kind: "claude", From: coreapi.StatusWorking, To: to}
 }
 
 func TestTrackerReadsOnAFinishAndClearsOnWork(t *testing.T) {
 	f := &fake{versions: map[string]string{"local|w1:p1": "10-1"}, answers: map[string]string{"local|w1:p1": "**Merged** everything.\nDetails follow."}}
 	tr := New(Inputs{Version: f.version, Answer: f.answer}, nil)
-	tr.OnStatus(status(herdr.StatusDone))
+	tr.OnStatus(status(coreapi.StatusDone))
 	waitFor(t, "the line", func() bool { return tr.Line("local", "w1:p1") == "Merged everything." })
 
-	tr.OnStatus(status(herdr.StatusIdle))
+	tr.OnStatus(status(coreapi.StatusIdle))
 	time.Sleep(20 * time.Millisecond)
 	if f.count() != 1 {
 		t.Fatalf("an unchanged file was read again: %d reads", f.count())
 	}
 
-	tr.OnStatus(status(herdr.StatusWorking))
+	tr.OnStatus(status(coreapi.StatusWorking))
 	if tr.Line("local", "w1:p1") != "" {
 		t.Fatal("a working agent still says its old line")
 	}
 	f.mu.Lock()
 	f.versions["local|w1:p1"], f.answers["local|w1:p1"] = "20-2", "Released."
 	f.mu.Unlock()
-	tr.OnStatus(status(herdr.StatusDone))
+	tr.OnStatus(status(coreapi.StatusDone))
 	waitFor(t, "the new line", func() bool { return tr.Line("local", "w1:p1") == "Released." })
 
 	tr.OnStatus(status(events.Gone))
@@ -131,7 +131,7 @@ func TestTrackerKeepsTheLinkWhileTheAgentWorks(t *testing.T) {
 		namedMu.Unlock()
 	})
 	tr := New(Inputs{Version: f.version, Answer: f.answer, Link: f.link}, bus)
-	tr.OnStatus(status(herdr.StatusDone))
+	tr.OnStatus(status(coreapi.StatusDone))
 	waitFor(t, "the link", func() bool { _, ok := tr.Link("local", "w1:p1"); return ok })
 	if link, _ := tr.Link("local", "w1:p1"); link.URL != "https://github.com/o/r/pull/1" || link.Label != "PR #1" {
 		t.Fatalf("link = %+v", link)
@@ -142,14 +142,14 @@ func TestTrackerKeepsTheLinkWhileTheAgentWorks(t *testing.T) {
 	}
 	namedMu.Unlock()
 
-	tr.OnStatus(status(herdr.StatusWorking))
+	tr.OnStatus(status(coreapi.StatusWorking))
 	if _, ok := tr.Link("local", "w1:p1"); !ok || tr.Line("local", "w1:p1") != "" {
 		t.Fatal("working clears the line and keeps the link")
 	}
 	f.mu.Lock()
 	f.versions["local|w1:p1"] = "11-1"
 	f.mu.Unlock()
-	tr.OnStatus(status(herdr.StatusDone))
+	tr.OnStatus(status(coreapi.StatusDone))
 	waitFor(t, "the second read", func() bool { return f.count() == 2 })
 	namedMu.Lock()
 	if len(named) != 1 {
@@ -157,19 +157,19 @@ func TestTrackerKeepsTheLinkWhileTheAgentWorks(t *testing.T) {
 	}
 	namedMu.Unlock()
 
-	tr.OnStatus(status(herdr.StatusWorking))
+	tr.OnStatus(status(coreapi.StatusWorking))
 	f.mu.Lock()
 	f.versions["local|w1:p1"] = "20-2"
 	delete(f.links, "local|w1:p1")
 	f.mu.Unlock()
-	tr.OnStatus(status(herdr.StatusDone))
+	tr.OnStatus(status(coreapi.StatusDone))
 	waitFor(t, "the line again", func() bool { return tr.Line("local", "w1:p1") == "Opened the PR." })
 	if _, ok := tr.Link("local", "w1:p1"); ok {
 		t.Fatal("a read that finds no request drops the old one")
 	}
 
 	plain := New(Inputs{Version: f.version, Answer: f.answer}, nil)
-	plain.OnStatus(status(herdr.StatusDone))
+	plain.OnStatus(status(coreapi.StatusDone))
 	waitFor(t, "the plain line", func() bool { return plain.Line("local", "w1:p1") != "" })
 	if _, ok := plain.Link("local", "w1:p1"); ok {
 		t.Fatal("no Link input, no link")
@@ -179,11 +179,11 @@ func TestTrackerKeepsTheLinkWhileTheAgentWorks(t *testing.T) {
 func TestTrackerSeedsFromASnapshotOnce(t *testing.T) {
 	f := &fake{versions: map[string]string{"local|w1:p1": "1-1"}, answers: map[string]string{"local|w1:p1": "Seeded."}}
 	tr := New(Inputs{Version: f.version, Answer: f.answer}, nil)
-	snap := &herdr.Snapshot{Panes: []herdr.PaneInfo{
-		{PaneID: "w1:p1", Agent: "claude", AgentStatus: herdr.StatusDone},
-		{PaneID: "w1:p2", Agent: "claude", AgentStatus: herdr.StatusWorking},
-		{PaneID: "w1:p3", Agent: "", AgentStatus: herdr.StatusIdle},
-		{PaneID: "w1:p4", Agent: "claude", AgentStatus: herdr.StatusIdle}, // no session file
+	snap := &coreapi.Snapshot{Panes: []coreapi.PaneInfo{
+		{PaneID: "w1:p1", Agent: "claude", AgentStatus: coreapi.StatusDone},
+		{PaneID: "w1:p2", Agent: "claude", AgentStatus: coreapi.StatusWorking},
+		{PaneID: "w1:p3", Agent: "", AgentStatus: coreapi.StatusIdle},
+		{PaneID: "w1:p4", Agent: "claude", AgentStatus: coreapi.StatusIdle}, // no session file
 	}}
 	tr.Observe("local", snap)
 	waitFor(t, "the seeded line", func() bool { return tr.Line("local", "w1:p1") == "Seeded." })

@@ -3,17 +3,17 @@ package app
 import (
 	"testing"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 )
 
 // An agent's pane may stand in a checkout its workspace's folder is not in: a tab whose shell went elsewhere and
 // started the agent there. Git's writes on that checkout wait for it as for any other.
 func TestAnAgentWhosePaneIsInTheCheckoutHoldsItsWritesBack(t *testing.T) {
-	snap := &herdr.Snapshot{
-		Workspaces: []herdr.WorkspaceInfo{{WorkspaceID: "w1"}},
-		Panes: []herdr.PaneInfo{
+	snap := &coreapi.Snapshot{
+		Workspaces: []coreapi.WorkspaceInfo{{WorkspaceID: "w1"}},
+		Panes: []coreapi.PaneInfo{
 			{PaneID: "w1:p1", WorkspaceID: "w1", CWD: "/home/me"},
-			{PaneID: "w1:p2", WorkspaceID: "w1", CWD: "/src/app/web", Agent: "claude", AgentStatus: herdr.StatusWorking},
+			{PaneID: "w1:p2", WorkspaceID: "w1", CWD: "/src/app/web", Agent: "claude", AgentStatus: coreapi.StatusWorking},
 		},
 	}
 	same := func(dir string) string { return dir }
@@ -24,7 +24,7 @@ func TestAnAgentWhosePaneIsInTheCheckoutHoldsItsWritesBack(t *testing.T) {
 	if who := busyCheckout(snap, "/src/other", []string{"/src/other"}, same, never); who != "" {
 		t.Errorf("an agent in another checkout held this one back: %q", who)
 	}
-	snap.Panes[1].AgentStatus = herdr.StatusIdle
+	snap.Panes[1].AgentStatus = coreapi.StatusIdle
 	if who := busyCheckout(snap, "/src/app", []string{"/src/app"}, same, func(dir string) bool { return dir == "/home/me" }); who != "" {
 		t.Errorf("a turn ending in another folder held the checkout back: %q", who)
 	}

@@ -17,8 +17,8 @@ import (
 	"time"
 
 	webpush "github.com/SherClockHolmes/webpush-go"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/events"
-	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/state"
 )
 
@@ -487,7 +487,7 @@ func (s *Service) OnStatus(ev events.PaneStatus) {
 	}
 
 	switch ev.To {
-	case herdr.StatusBlocked:
+	case coreapi.StatusBlocked:
 		var targets []*Subscription
 		for _, sub := range subs {
 			if sub.Prefs.Input {
@@ -501,8 +501,8 @@ func (s *Service) OnStatus(ev events.PaneStatus) {
 			Tag:   episodeTag(key, "input", began),
 			Topic: key.String(),
 		}, true, s.asked)
-	case herdr.StatusDone:
-		if ev.From != herdr.StatusWorking {
+	case coreapi.StatusDone:
+		if ev.From != coreapi.StatusWorking {
 			return
 		}
 		var long, always []*Subscription

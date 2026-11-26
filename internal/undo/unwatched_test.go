@@ -4,15 +4,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 )
 
 func TestTrackerLeavesATurnItDidNotSeeBegin(t *testing.T) {
 	dir := repo(t, map[string]string{"a.txt": "one\n"})
 	tracker, store := newTracker(t)
 	at := time.Now()
-	tracker.Observe("local", snapshot(dir, agentPane("p1", herdr.StatusWorking)), at, true)
-	tracker.Observe("local", snapshot(dir, agentPane("p1", herdr.StatusWorking)), at.Add(time.Second), false)
+	tracker.Observe("local", snapshot(dir, agentPane("p1", coreapi.StatusWorking)), at, true)
+	tracker.Observe("local", snapshot(dir, agentPane("p1", coreapi.StatusWorking)), at.Add(time.Second), false)
 	if tracker.Going("local", dir) {
 		t.Fatal("a turn already under way when the machine was first seen is watched as if from its start")
 	}
@@ -20,7 +20,7 @@ func TestTrackerLeavesATurnItDidNotSeeBegin(t *testing.T) {
 	steps := []struct {
 		after  time.Duration
 		status string
-	}{{2 * time.Second, herdr.StatusDone}, {10 * time.Second, herdr.StatusWorking}, {20 * time.Second, herdr.StatusDone}, {20*time.Second + Settle, herdr.StatusDone}, {20*time.Second + Grace, herdr.StatusDone}}
+	}{{2 * time.Second, coreapi.StatusDone}, {10 * time.Second, coreapi.StatusWorking}, {20 * time.Second, coreapi.StatusDone}, {20*time.Second + Settle, coreapi.StatusDone}, {20*time.Second + Grace, coreapi.StatusDone}}
 	for i, step := range steps {
 		if i == 2 {
 			write(t, dir, "b.txt", "the next turn\n")

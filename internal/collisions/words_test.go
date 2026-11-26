@@ -3,20 +3,20 @@ package collisions
 import (
 	"testing"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 )
 
 func TestAWorkspaceIsWeighedByItsAgentsAndItsWork(t *testing.T) {
-	snap := &herdr.Snapshot{
-		Workspaces: []herdr.WorkspaceInfo{
-			{WorkspaceID: "w1", Label: "web", Worktree: &herdr.WorktreeInfo{CheckoutPath: "/r/web"}},
+	snap := &coreapi.Snapshot{
+		Workspaces: []coreapi.WorkspaceInfo{
+			{WorkspaceID: "w1", Label: "web", Worktree: &coreapi.WorktreeInfo{CheckoutPath: "/r/web"}},
 			{WorkspaceID: "w2", Label: "notes"},
 			{WorkspaceID: "w3", Label: "empty"},
 		},
-		Panes: []herdr.PaneInfo{
+		Panes: []coreapi.PaneInfo{
 			{PaneID: "w1:p1", WorkspaceID: "w1", CWD: "/r/web"},
-			{PaneID: "w1:p2", WorkspaceID: "w1", Agent: "claude", AgentStatus: herdr.StatusIdle},
-			{PaneID: "w1:p3", WorkspaceID: "w1", Agent: "codex", AgentStatus: herdr.StatusWorking},
+			{PaneID: "w1:p2", WorkspaceID: "w1", Agent: "claude", AgentStatus: coreapi.StatusIdle},
+			{PaneID: "w1:p3", WorkspaceID: "w1", Agent: "codex", AgentStatus: coreapi.StatusWorking},
 			{PaneID: "w2:p1", WorkspaceID: "w2", CWD: "/notes"},
 		},
 	}

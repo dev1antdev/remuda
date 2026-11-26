@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/state"
 )
 
@@ -19,7 +19,9 @@ const docTries = 5
 // killWithin bounds the end of one terminal: hangup, then terminate, then kill.
 const killWithin = 15 * time.Second
 
-func leaf(address string) *herdr.LayoutNode { return &herdr.LayoutNode{Type: "pane", PaneID: address} }
+func leaf(address string) *coreapi.LayoutNode {
+	return &coreapi.LayoutNode{Type: "pane", PaneID: address}
+}
 
 // editDoc reads the document, changes it and writes it at the version read; a write another remuda made in between
 // has the change made again on what it wrote. The mirror takes the written document at once, so the snapshot asked for
@@ -97,11 +99,11 @@ func (a *Adapter) runIn(ctx context.Context, space, tab string, p RunParams) (Te
 // holds says whether a live terminal the mirror holds now, other than the ones ending, is in a place the snapshot
 // shows: read when the document is written, not before the terminals were ended, so a terminal another request put
 // there meanwhile keeps its place.
-func (a *Adapter) holds(pick func(*herdr.PaneInfo) bool, ending []string) bool {
+func (a *Adapter) holds(pick func(*coreapi.PaneInfo) bool, ending []string) bool {
 	a.mu.Lock()
 	snap := a.state.snapshot(nil)
 	a.mu.Unlock()
-	return len(panesWhere(snap, func(p *herdr.PaneInfo) bool { return pick(p) && !slices.Contains(ending, p.PaneID) })) > 0
+	return len(panesWhere(snap, func(p *coreapi.PaneInfo) bool { return pick(p) && !slices.Contains(ending, p.PaneID) })) > 0
 }
 
 // kill ends terminals side by side; one the core no longer has is gone already.
@@ -123,7 +125,7 @@ func (a *Adapter) kill(addresses ...string) error {
 
 // adopt puts a workspace the snapshot shows in the document when the document lacks it — one made of terminals placed
 // by their labels alone, or of none — so it can be renamed or given a tab; false for a workspace the machine lacks.
-func adopt(doc *Document, snap *herdr.Snapshot, space string) (*DocWorkspace, bool) {
+func adopt(doc *Document, snap *coreapi.Snapshot, space string) (*DocWorkspace, bool) {
 	if i := slices.IndexFunc(doc.Workspaces, func(ws DocWorkspace) bool { return ws.ID == space }); i >= 0 {
 		return &doc.Workspaces[i], true
 	}
@@ -136,7 +138,7 @@ func adopt(doc *Document, snap *herdr.Snapshot, space string) (*DocWorkspace, bo
 }
 
 // adoptTab is adopt for a tab of the workspace.
-func adoptTab(ws *DocWorkspace, snap *herdr.Snapshot, tab string) *DocTab {
+func adoptTab(ws *DocWorkspace, snap *coreapi.Snapshot, tab string) *DocTab {
 	if i := slices.IndexFunc(ws.Tabs, func(t DocTab) bool { return t.ID == tab }); i >= 0 {
 		return &ws.Tabs[i]
 	}
@@ -149,21 +151,21 @@ func adoptTab(ws *DocWorkspace, snap *herdr.Snapshot, tab string) *DocTab {
 }
 
 func spaceMissing(space string) error {
-	return &herdr.Error{Code: "workspace_not_found", Message: "no workspace " + space}
+	return &coreapi.Error{Code: "workspace_not_found", Message: "no workspace " + space}
 }
 
 func tabMissing(tab string) error {
-	return &herdr.Error{Code: "tab_not_found", Message: "no tab " + tab}
+	return &coreapi.Error{Code: "tab_not_found", Message: "no tab " + tab}
 }
 
 // WorkspaceCreate opens a workspace on a folder (the core's own when none): a shell in a tab of its own, and the git
 // checkout the folder is, read once.
-func (a *Adapter) WorkspaceCreate(cwd, label string) (*herdr.WorkspaceCreateResult, error) {
+func (a *Adapter) WorkspaceCreate(cwd, label string) (*coreapi.WorkspaceCreateResult, error) {
 	return a.workspaceOn(cwd, label, nil)
 }
 
 // workspaceOn is WorkspaceCreate with the checkout known already (a worktree just made); nil reads it.
-func (a *Adapter) workspaceOn(cwd, label string, tree *herdr.WorktreeInfo) (*herdr.WorkspaceCreateResult, error) {
+func (a *Adapter) workspaceOn(cwd, label string, tree *coreapi.WorktreeInfo) (*coreapi.WorkspaceCreateResult, error) {
 	if _, err := a.SessionSnapshot(); err != nil {
 		return nil, err
 	}
@@ -190,19 +192,19 @@ func (a *Adapter) workspaceOn(cwd, label string, tree *herdr.WorktreeInfo) (*her
 		a.kill(t.Address)
 		return nil, err
 	}
-	return &herdr.WorkspaceCreateResult{
-		Workspace: herdr.WorkspaceInfo{WorkspaceID: space, Label: label, Folder: folder, ActiveTabID: tab, Worktree: tree},
+	return &coreapi.WorkspaceCreateResult{
+		Workspace: coreapi.WorkspaceInfo{WorkspaceID: space, Label: label, Folder: folder, ActiveTabID: tab, Worktree: tree},
 		RootPane:  paneOf(&t, tab, space, nil),
 	}, nil
 }
 
 // TabCreate opens another tab in the workspace's folder.
-func (a *Adapter) TabCreate(workspaceID, label string) (*herdr.TabCreateResult, error) {
+func (a *Adapter) TabCreate(workspaceID, label string) (*coreapi.TabCreateResult, error) {
 	return a.TabCreateIn(workspaceID, label, "", nil)
 }
 
 // TabCreateIn opens another tab of the workspace, its shell in the folder given (the workspace's when none) with env.
-func (a *Adapter) TabCreateIn(workspaceID, label, cwd string, env map[string]string) (*herdr.TabCreateResult, error) {
+func (a *Adapter) TabCreateIn(workspaceID, label, cwd string, env map[string]string) (*coreapi.TabCreateResult, error) {
 	snap, err := a.SessionSnapshot()
 	if err != nil {
 		return nil, err
@@ -235,8 +237,8 @@ func (a *Adapter) TabCreateIn(workspaceID, label, cwd string, env map[string]str
 		a.kill(t.Address)
 		return nil, err
 	}
-	return &herdr.TabCreateResult{
-		Tab:      herdr.TabInfo{TabID: tab, WorkspaceID: workspaceID, Number: number, Label: label},
+	return &coreapi.TabCreateResult{
+		Tab:      coreapi.TabInfo{TabID: tab, WorkspaceID: workspaceID, Number: number, Label: label},
 		RootPane: paneOf(&t, tab, workspaceID, nil),
 	}, nil
 }
@@ -288,7 +290,7 @@ func (a *Adapter) TabRename(tabID, label string) error {
 	})
 }
 
-func spaceOfTab(snap *herdr.Snapshot, tab string) string {
+func spaceOfTab(snap *coreapi.Snapshot, tab string) string {
 	if shown := snap.Tab(tab); shown != nil {
 		return shown.WorkspaceID
 	}
@@ -305,7 +307,7 @@ func docSpaceOfTab(doc *Document, tab string) string {
 }
 
 // panesWhere are the addresses of the snapshot's panes a test picks.
-func panesWhere(snap *herdr.Snapshot, pick func(*herdr.PaneInfo) bool) []string {
+func panesWhere(snap *coreapi.Snapshot, pick func(*coreapi.PaneInfo) bool) []string {
 	var out []string
 	for i := range snap.Panes {
 		if pick(&snap.Panes[i]) {
@@ -329,7 +331,7 @@ func (a *Adapter) WorkspaceClose(workspaceID string) error {
 	if snap.Workspace(workspaceID) == nil && !a.inDoc(workspaceID) {
 		return spaceMissing(workspaceID)
 	}
-	if err := a.kill(panesWhere(snap, func(p *herdr.PaneInfo) bool { return p.WorkspaceID == workspaceID })...); err != nil {
+	if err := a.kill(panesWhere(snap, func(p *coreapi.PaneInfo) bool { return p.WorkspaceID == workspaceID })...); err != nil {
 		return err
 	}
 	closeBeforeWrite()
@@ -367,7 +369,7 @@ func (a *Adapter) TabClose(tabID string) error {
 	if err != nil {
 		return err
 	}
-	panes := panesWhere(snap, func(p *herdr.PaneInfo) bool { return p.TabID == tabID })
+	panes := panesWhere(snap, func(p *coreapi.PaneInfo) bool { return p.TabID == tabID })
 	if cmp.Or(spaceOfTab(snap, tabID), a.docSpaceOf(tabID)) == "" {
 		return tabMissing(tabID)
 	}
@@ -409,7 +411,7 @@ func (a *Adapter) dropTab(doc *Document, tab string, ending []string) {
 			}
 		}
 		space := ws.ID
-		if len(ws.Tabs) == 0 && !a.holds(func(p *herdr.PaneInfo) bool { return p.WorkspaceID == space }, ending) {
+		if len(ws.Tabs) == 0 && !a.holds(func(p *coreapi.PaneInfo) bool { return p.WorkspaceID == space }, ending) {
 			doc.Workspaces = slices.Delete(doc.Workspaces, i, i+1)
 		}
 		return

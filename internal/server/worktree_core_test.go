@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/core/coretest"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/events"
-	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/repos"
 	"github.com/dev1antdev/remuda/internal/sessions"
@@ -21,7 +21,7 @@ import (
 
 // coreSays asks a machine's snapshot until it says what want looks for: the adapter's mirror takes a write at once,
 // and a fresh fill may land beside it a moment later.
-func coreSays(t *testing.T, client herdr.API, want func(*herdr.Snapshot) bool) *herdr.Snapshot {
+func coreSays(t *testing.T, client coreapi.API, want func(*coreapi.Snapshot) bool) *coreapi.Snapshot {
 	t.Helper()
 	for start := time.Now(); ; time.Sleep(50 * time.Millisecond) {
 		snap, err := client.SessionSnapshot()
@@ -36,7 +36,7 @@ func coreSays(t *testing.T, client herdr.API, want func(*herdr.Snapshot) bool) *
 
 // worktreeServer is a throwaway core with a repository of one commit in its HOME, a workspace on its main checkout,
 // and the server's worktree routes over them.
-func worktreeServer(t *testing.T) (*Server, *http.ServeMux, herdr.API, *machines.Machine, string, string) {
+func worktreeServer(t *testing.T) (*Server, *http.ServeMux, coreapi.API, *machines.Machine, string, string) {
 	t.Helper()
 	coretest.Server(t).Use(t)
 	home, err := os.UserHomeDir() // the throwaway core's own
@@ -75,7 +75,7 @@ func worktreeServer(t *testing.T) (*Server, *http.ServeMux, herdr.API, *machines
 		t.Fatal(err)
 	}
 	workspace := main.Workspace.WorkspaceID
-	coreSays(t, client, func(snap *herdr.Snapshot) bool { return snap.Workspace(workspace) != nil })
+	coreSays(t, client, func(snap *coreapi.Snapshot) bool { return snap.Workspace(workspace) != nil })
 	watcher := watch.New(fleet, events.NewBus())
 	s := &Server{Machines: fleet, Watch: watcher, Input: sessions.NewInput(fleet, watcher), Repos: repos.Open(state)}
 	api := http.NewServeMux()

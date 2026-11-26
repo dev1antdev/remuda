@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/core"
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/shell"
 	"github.com/dev1antdev/remuda/internal/sshx"
@@ -33,7 +33,7 @@ func dialWithin(ctx context.Context) time.Duration {
 // RC_SESSION, RC_SOCKET and the XDG folders aim a scratch instance at a throwaway core; the binary is the one on PATH
 // first, so a scratch instance may run a build of its own.
 func dialLocalCore(ctx context.Context) (net.Conn, error) {
-	bin, err := herdr.FindBinary("remuda-core")
+	bin, err := coreapi.FindBinary("remuda-core")
 	if err != nil {
 		return nil, fmt.Errorf("%v. Run `remuda core install`", err)
 	}

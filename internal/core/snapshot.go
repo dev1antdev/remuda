@@ -6,7 +6,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/rpath"
 )
 
@@ -28,7 +28,7 @@ type placedTab struct {
 
 type placedSpace struct {
 	id, label, folder, active string
-	worktree                  *herdr.WorktreeInfo
+	worktree                  *coreapi.WorktreeInfo
 	tabs                      []placedTab
 }
 
@@ -36,7 +36,7 @@ type placedSpace struct {
 // tab's terminals from its tree, then the ones labelled for it; a terminal labelled for a tab or workspace the
 // document lacks gets one of its own, an unlabelled terminal a workspace of its own; a tab with no live terminal and
 // a workspace with no tab are left out.
-func (m *mirror) snapshot(sessionOf SessionLookup) *herdr.Snapshot {
+func (m *mirror) snapshot(sessionOf SessionLookup) *coreapi.Snapshot {
 	live := m.ordered()
 	placed := make(map[string]bool, len(live))
 	claim := func(t *Terminal) bool {
@@ -86,20 +86,20 @@ func (m *mirror) snapshot(sessionOf SessionLookup) *herdr.Snapshot {
 		spaces[i].tabs = addToTab(spaces[i].tabs, t.Labels[LabelTab], id, t)
 	}
 
-	snap := &herdr.Snapshot{Version: "remuda-core " + m.version}
+	snap := &coreapi.Snapshot{Version: "remuda-core " + m.version}
 	for _, space := range spaces {
-		var tabs []herdr.TabInfo
+		var tabs []coreapi.TabInfo
 		for _, tab := range space.tabs {
 			if len(tab.terminals) == 0 {
 				continue
 			}
-			info := herdr.TabInfo{TabID: tab.id, WorkspaceID: space.id, Number: len(tabs) + 1, Label: tab.label}
-			layout := herdr.Layout{}
+			info := coreapi.TabInfo{TabID: tab.id, WorkspaceID: space.id, Number: len(tabs) + 1, Label: tab.label}
+			layout := coreapi.Layout{}
 			for _, t := range tab.terminals {
 				pane := paneOf(t, tab.id, space.id, sessionOf)
 				info.AgentStatus = graver(info.AgentStatus, pane.AgentStatus)
 				snap.Panes = append(snap.Panes, pane)
-				layout.Panes = append(layout.Panes, herdr.LayoutPane{PaneID: t.Address, Rect: herdr.Rect{Width: int(t.Cols), Height: int(t.Rows)}})
+				layout.Panes = append(layout.Panes, coreapi.LayoutPane{PaneID: t.Address, Rect: coreapi.Rect{Width: int(t.Cols), Height: int(t.Rows)}})
 			}
 			tabs = append(tabs, info)
 			snap.Layouts = append(snap.Layouts, layout)
@@ -107,7 +107,7 @@ func (m *mirror) snapshot(sessionOf SessionLookup) *herdr.Snapshot {
 		if len(tabs) == 0 {
 			continue
 		}
-		ws := herdr.WorkspaceInfo{WorkspaceID: space.id, Label: space.label, Folder: space.folder, ActiveTabID: tabs[0].TabID, Worktree: space.worktree}
+		ws := coreapi.WorkspaceInfo{WorkspaceID: space.id, Label: space.label, Folder: space.folder, ActiveTabID: tabs[0].TabID, Worktree: space.worktree}
 		for _, tab := range tabs {
 			ws.AgentStatus = graver(ws.AgentStatus, tab.AgentStatus)
 			if tab.TabID == space.active {
@@ -144,8 +144,8 @@ func addToTab(tabs []placedTab, id, space string, t *Terminal) []placedTab {
 	return append(tabs, placedTab{id: id, terminals: []*Terminal{t}})
 }
 
-func paneOf(t *Terminal, tab, space string, sessionOf SessionLookup) herdr.PaneInfo {
-	pane := herdr.PaneInfo{
+func paneOf(t *Terminal, tab, space string, sessionOf SessionLookup) coreapi.PaneInfo {
+	pane := coreapi.PaneInfo{
 		PaneID: t.Address, TabID: tab, WorkspaceID: space, TerminalID: t.Address,
 		Agent: agentOf(t), AgentStatus: statusOf(t), CWD: t.Cwd,
 		Title: t.Title, TitleStripped: strings.TrimLeftFunc(t.Title, notWordStart), Restored: t.restored,
@@ -188,7 +188,7 @@ var shells = map[string]bool{
 // it, else the app it reported through OSC 7501 (an agent run in a way its process does not say).
 func agentOf(t *Terminal) string {
 	if fg := t.Foreground; fg != nil {
-		if agent := herdr.AgentProgram(append([]string{fg.Name}, fg.Argv...)); agent != "" {
+		if agent := coreapi.AgentProgram(append([]string{fg.Name}, fg.Argv...)); agent != "" {
 			return agent
 		}
 		if atPrompt(t) {
@@ -203,7 +203,7 @@ func agentOf(t *Terminal) string {
 
 // appAgent is the agent an OSC 7501 report names as its app, "" for none.
 func appAgent(app string) string {
-	if agent := herdr.AgentProgram([]string{app}); agent != "" || app == "" {
+	if agent := coreapi.AgentProgram([]string{app}); agent != "" || app == "" {
 		return agent
 	}
 	return strings.ToLower(app)
@@ -234,18 +234,18 @@ func programName(name string) string {
 // statusOf is the program's own OSC 7501 word in herdr's: an error ends a turn as done does.
 func statusOf(t *Terminal) string {
 	if t.Status == nil {
-		return herdr.StatusUnknown
+		return coreapi.StatusUnknown
 	}
 	switch t.Status.State {
-	case herdr.StatusWorking, herdr.StatusBlocked, herdr.StatusDone, herdr.StatusIdle:
+	case coreapi.StatusWorking, coreapi.StatusBlocked, coreapi.StatusDone, coreapi.StatusIdle:
 		return t.Status.State
 	case "error":
-		return herdr.StatusDone
+		return coreapi.StatusDone
 	}
-	return herdr.StatusUnknown
+	return coreapi.StatusUnknown
 }
 
-var pressing = map[string]int{herdr.StatusBlocked: 5, herdr.StatusWorking: 4, herdr.StatusDone: 3, herdr.StatusIdle: 2, herdr.StatusUnknown: 1}
+var pressing = map[string]int{coreapi.StatusBlocked: 5, coreapi.StatusWorking: 4, coreapi.StatusDone: 3, coreapi.StatusIdle: 2, coreapi.StatusUnknown: 1}
 
 // graver is the status a tab or workspace shows: its most pressing pane's.
 func graver(a, b string) string {

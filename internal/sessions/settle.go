@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 )
 
 // A message that names a picture, and the Enter Claude Code loses of it.
@@ -22,7 +22,7 @@ import (
 
 // Settler is what the Enter after the paste needs of herdr's client beyond a Prompter's part.
 type Settler interface {
-	AgentGet(target string) (herdr.AgentInfo, error)
+	AgentGet(target string) (coreapi.AgentInfo, error)
 	PaneRead(paneID string) (string, error)
 	PaneAtPrompt(paneID string) (bool, error)
 }
@@ -148,7 +148,7 @@ func enterAfterPaste(client interface {
 	switch box := promptBox(screen); {
 	case box == boxEmpty:
 		return nil
-	case box == boxUnsent && (agent.Status == herdr.StatusIdle || agent.Status == herdr.StatusDone):
+	case box == boxUnsent && (agent.Status == coreapi.StatusIdle || agent.Status == coreapi.StatusDone):
 		return client.PaneSendKeys(pane, []string{"enter"})
 	}
 	return ErrNotEntered // a turn can put a question up at any moment, and an Enter would answer it

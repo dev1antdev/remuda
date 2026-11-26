@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/core"
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/sshx"
 	"github.com/dev1antdev/remuda/internal/wintest"
@@ -152,7 +152,7 @@ func TestOnWindowsRemudaCoreIsReachedOverSSH(t *testing.T) {
 		t.Fatalf("the snapshot lacks %s", running.Address)
 	}
 
-	viewer, err := core.NewTerminals(client).Open(running.Address, herdr.View{Cols: 80, Rows: 24})
+	viewer, err := core.NewTerminals(client).Open(running.Address, coreapi.View{Cols: 80, Rows: 24})
 	if err != nil {
 		t.Fatalf("attach: %v", err)
 	}

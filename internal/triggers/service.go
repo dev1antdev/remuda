@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/events"
-	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/push"
 )
 
@@ -188,7 +188,7 @@ func (s *Service) act(e events.OutputMatched, pane paneView) {
 	case e.Watch == WatchServe:
 		s.offer(machine, paneID, e.Line, "")
 	case e.Watch == WatchTests:
-		if pane.status == herdr.StatusWorking || s.Viewed != nil && s.Viewed(machine, paneID) || !s.spell(e, TestsQuiet) {
+		if pane.status == coreapi.StatusWorking || s.Viewed != nil && s.Viewed(machine, paneID) || !s.spell(e, TestsQuiet) {
 			return // the agent is on it, or the person is looking at it, or it said so already
 		}
 		if s.Notify != nil {

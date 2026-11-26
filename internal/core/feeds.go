@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 )
 
 // feed is one core subscription telling one output watch, shared by every stream asking for that same watch. The
@@ -19,7 +19,7 @@ import (
 type feed struct {
 	key   OutputWatch // the watch as subscribed: the adapter's feeds are kept by it
 	pane  string
-	match herdr.OutputMatch
+	match coreapi.OutputMatch
 	sub   *Subscription
 
 	mu      sync.Mutex
@@ -66,7 +66,7 @@ func (f *feed) end(err error) {
 	}
 }
 
-func (f *feed) push(ev herdr.Event) {
+func (f *feed) push(ev coreapi.Event) {
 	f.mu.Lock()
 	streams := make([]*eventStream, 0, len(f.streams))
 	for s := range f.streams {
@@ -139,7 +139,7 @@ func (a *Adapter) join(s *eventStream, watches []OutputWatch) error {
 		return a.refusal(refused, "pane_not_found")
 	}
 	for i, w := range missing {
-		f := &feed{key: w, pane: w.Terminal, match: herdr.OutputMatch{Type: w.Match.Type, Value: w.Match.Value}, sub: subs[i], streams: map[*eventStream]struct{}{s: {}}}
+		f := &feed{key: w, pane: w.Terminal, match: coreapi.OutputMatch{Type: w.Match.Type, Value: w.Match.Value}, sub: subs[i], streams: map[*eventStream]struct{}{s: {}}}
 		a.feeds[f.key] = f
 		s.feeds = append(s.feeds, f)
 		go a.tell(f)
@@ -192,7 +192,7 @@ func (a *Adapter) tell(f *feed) {
 	for {
 		notice, err := f.sub.Next(context.Background())
 		if err == nil && notice.Kind == NoticeMissed {
-			err = &herdr.Error{Code: herdr.ErrEventsLost, Message: "remuda-core dropped output rows: subscribe again"}
+			err = &coreapi.Error{Code: coreapi.ErrEventsLost, Message: "remuda-core dropped output rows: subscribe again"}
 		}
 		if err != nil {
 			a.feedMu.Lock()
@@ -220,6 +220,6 @@ func (a *Adapter) tell(f *feed) {
 			log.Printf("remuda-core dropped %d rows of an output watch on %s before this one", row.Lost, f.pane)
 			toldLost = true
 		}
-		f.push(herdr.Event{Kind: herdr.EventOutputMatched, PaneID: f.pane, MatchedLine: row.Line, Pos: row.Pos, Text: row.Line, Standing: row.Fresh, Watch: &f.match})
+		f.push(coreapi.Event{Kind: coreapi.EventOutputMatched, PaneID: f.pane, MatchedLine: row.Line, Pos: row.Pos, Text: row.Line, Standing: row.Fresh, Watch: &f.match})
 	}
 }

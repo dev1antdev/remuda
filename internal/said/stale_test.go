@@ -4,8 +4,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/events"
-	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/transcript"
 )
 
@@ -39,7 +39,7 @@ func (h *heldReader) link(string, string) (transcript.Link, bool) {
 }
 
 func paneStatus(to string) events.PaneStatus {
-	return events.PaneStatus{Pane: events.PaneRef{Machine: "local", Pane: "w1:p1"}, Kind: "claude", From: herdr.StatusWorking, To: to}
+	return events.PaneStatus{Pane: events.PaneRef{Machine: "local", Pane: "w1:p1"}, Kind: "claude", From: coreapi.StatusWorking, To: to}
 }
 
 func (t *Tracker) settled() bool {
@@ -59,9 +59,9 @@ func TestAReadInFlightWritesNoStaleLineAfterWork(t *testing.T) {
 		answeredMu.Unlock()
 	}
 
-	tr.OnStatus(paneStatus(herdr.StatusDone))
+	tr.OnStatus(paneStatus(coreapi.StatusDone))
 	<-h.entered
-	tr.OnStatus(paneStatus(herdr.StatusWorking)) // the person sent the next prompt while the finish was being read
+	tr.OnStatus(paneStatus(coreapi.StatusWorking)) // the person sent the next prompt while the finish was being read
 	h.release <- struct{}{}
 	waitFor(t, "the read to end", tr.settled)
 	if line := tr.Line("local", "w1:p1"); line != "" {
@@ -76,16 +76,16 @@ func TestAReadInFlightWritesNoStaleLineAfterWork(t *testing.T) {
 	h.mu.Lock()
 	h.version = "2-2"
 	h.mu.Unlock()
-	tr.OnStatus(paneStatus(herdr.StatusDone))
+	tr.OnStatus(paneStatus(coreapi.StatusDone))
 	<-h.entered
 	h.release <- struct{}{}
 	waitFor(t, "the next finish's line", func() bool { return tr.Line("local", "w1:p1") == "Shipped the release." })
 
-	tr.OnStatus(paneStatus(herdr.StatusWorking))
+	tr.OnStatus(paneStatus(coreapi.StatusWorking))
 	h.mu.Lock()
 	h.version = "3-3"
 	h.mu.Unlock()
-	tr.OnStatus(paneStatus(herdr.StatusDone))
+	tr.OnStatus(paneStatus(coreapi.StatusDone))
 	<-h.entered
 	tr.OnStatus(paneStatus(events.Gone)) // the pane closed while its finish was being read
 	h.release <- struct{}{}

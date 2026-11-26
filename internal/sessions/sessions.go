@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/events"
-	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/watch"
 )
@@ -98,7 +98,7 @@ func StartAgentWith(client Starter, paneID, kind string, start Start) error {
 		return client.AgentStartWith(paneID, kind, name, list, 30*time.Second)
 	}
 	err = startAgent(func() error { return try(kind) })
-	if herdr.IsCode(err, "agent_name_taken") {
+	if coreapi.IsCode(err, "agent_name_taken") {
 		err = startAgent(func() error { return try(UniqueName(kind, paneID)) })
 	}
 	return err
@@ -160,7 +160,7 @@ func startAgent(start func() error) error {
 	deadline := time.Now().Add(12 * time.Second)
 	for {
 		err := start()
-		if err == nil || !(herdr.IsCode(err, "agent_pane_busy") || herdr.IsCode(err, "agent_not_ready")) || time.Now().After(deadline) {
+		if err == nil || !(coreapi.IsCode(err, "agent_pane_busy") || coreapi.IsCode(err, "agent_not_ready")) || time.Now().After(deadline) {
 			return err
 		}
 		time.Sleep(500 * time.Millisecond)
@@ -427,13 +427,13 @@ var ErrNotSubmitted = errors.New("your message was pasted into the terminal but 
 // agent_left), or a paste left unsubmitted.
 func refused(err error) error {
 	switch {
-	case herdr.IsCode(err, "agent_blocked"):
+	case coreapi.IsCode(err, "agent_blocked"):
 		return ErrAgentBusy
-	case herdr.IsCode(err, "agent_working"):
+	case coreapi.IsCode(err, "agent_working"):
 		return ErrAgentWorking
-	case herdr.IsCode(err, "agent_not_found"), herdr.IsCode(err, "agent_not_ready"), herdr.IsCode(err, "agent_left"):
+	case coreapi.IsCode(err, "agent_not_found"), coreapi.IsCode(err, "agent_not_ready"), coreapi.IsCode(err, "agent_left"):
 		return ErrNoAgent
-	case herdr.IsCode(err, "not_submitted"):
+	case coreapi.IsCode(err, "not_submitted"):
 		return ErrNotSubmitted
 	}
 	return err
@@ -472,7 +472,7 @@ func (in *Input) FirstPrompt(client Prompter, ref events.PaneRef, text string, t
 		switch {
 		case err == nil:
 			return nil
-		case herdr.IsCode(err, "agent_not_ready") || herdr.IsCode(err, "agent_not_found") || herdr.IsCode(err, "agent_working") || herdr.IsCode(err, "agent_blocked"):
+		case coreapi.IsCode(err, "agent_not_ready") || coreapi.IsCode(err, "agent_not_found") || coreapi.IsCode(err, "agent_working") || coreapi.IsCode(err, "agent_blocked"):
 			last = err
 		default:
 			return refused(err)
@@ -481,7 +481,7 @@ func (in *Input) FirstPrompt(client Prompter, ref events.PaneRef, text string, t
 			break
 		}
 	}
-	if herdr.IsCode(last, "agent_blocked") {
+	if coreapi.IsCode(last, "agent_blocked") {
 		return errors.New("the agent asks something first (its dialog is on the screen); answer it and send the text yourself")
 	}
 	return fmt.Errorf("the agent did not come up within %s (%v)", timeout.Round(time.Second), last)
@@ -509,7 +509,7 @@ func (in *Input) SubmitToFolder(machineID, dir, text string) (string, error) {
 	if pane == nil {
 		return "", fmt.Errorf("no agent is running in %s on %s", dir, mc.Label())
 	}
-	if pane.AgentStatus == herdr.StatusWorking {
+	if pane.AgentStatus == coreapi.StatusWorking {
 		return pane.DisplayTitle(), ErrAgentWorking
 	}
 	if err := in.SubmitToAgent(client, events.PaneRef{Machine: machineID, Pane: pane.PaneID}, text); err != nil {

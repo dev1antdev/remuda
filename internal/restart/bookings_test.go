@@ -6,13 +6,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/events"
-	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/state"
 )
 
-func settledPane(paneID, session string) herdr.PaneInfo {
-	return herdr.PaneInfo{PaneID: paneID, Agent: "claude", AgentStatus: "idle", AgentSession: &herdr.AgentSession{Kind: "id", Value: session}}
+func settledPane(paneID, session string) coreapi.PaneInfo {
+	return coreapi.PaneInfo{PaneID: paneID, Agent: "claude", AgentStatus: "idle", AgentSession: &coreapi.AgentSession{Kind: "id", Value: session}}
 }
 
 // armed is the booking's timer, if one runs; stopped with the answer.
@@ -43,7 +43,7 @@ func TestABookedRestartSurvivesARestartOfRemuda(t *testing.T) {
 	if n := second.Pending("studio"); n != 1 {
 		t.Fatalf("after a restart: %d", n)
 	}
-	second.OnSnapshot(events.Snapshot{Machine: "studio", Snap: &herdr.Snapshot{Panes: []herdr.PaneInfo{settledPane("w1:p1", "a1b2c3")}}})
+	second.OnSnapshot(events.Snapshot{Machine: "studio", Snap: &coreapi.Snapshot{Panes: []coreapi.PaneInfo{settledPane("w1:p1", "a1b2c3")}}})
 	if timer := armed(second, "studio|w1:p1"); timer == nil {
 		t.Fatal("a settled chat of a loaded booking was not armed")
 	} else {
@@ -53,7 +53,7 @@ func TestABookedRestartSurvivesARestartOfRemuda(t *testing.T) {
 	// another session in the pane is not the chat the booking was made for
 	third := New(nil)
 	third.Open(dir)
-	third.OnSnapshot(events.Snapshot{Machine: "studio", Snap: &herdr.Snapshot{Panes: []herdr.PaneInfo{settledPane("w1:p1", "z9y8x7")}}})
+	third.OnSnapshot(events.Snapshot{Machine: "studio", Snap: &coreapi.Snapshot{Panes: []coreapi.PaneInfo{settledPane("w1:p1", "z9y8x7")}}})
 	if n := third.Pending("studio"); n != 0 {
 		t.Fatalf("a booking for another session stayed: %d", n)
 	}

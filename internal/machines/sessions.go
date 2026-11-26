@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/core"
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/transcript"
 )
 
@@ -63,7 +63,7 @@ func (mc *Machine) TranscriptRoots() transcript.Roots {
 }
 
 // of is the core adapter's SessionLookup: what the last read found of the process, a read booked when it is new or due.
-func (s *processSessions) of(asked core.AgentProcess) *herdr.AgentSession {
+func (s *processSessions) of(asked core.AgentProcess) *coreapi.AgentSession {
 	now := time.Now()
 	running := transcript.Running{PID: asked.PID, Agent: asked.Agent, CWD: asked.Cwd, Seen: asked.Seen, Started: asked.Started, SinceBoot: transcript.SinceBoot(asked.SinceBoot)}
 	key := processKey{terminal: asked.Terminal, held: asked.Held, pid: asked.PID}
@@ -83,7 +83,7 @@ func (s *processSessions) of(asked core.AgentProcess) *herdr.AgentSession {
 	if p.session == "" {
 		return nil
 	}
-	return &herdr.AgentSession{Kind: "id", Value: p.session}
+	return &coreapi.AgentSession{Kind: "id", Value: p.session}
 }
 
 // holders is, pid by pid, the process holding it now: the one seen take its terminal last.

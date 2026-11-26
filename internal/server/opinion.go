@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/events"
-	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/opinion"
 	"github.com/dev1antdev/remuda/internal/review"
 	"github.com/dev1antdev/remuda/internal/sessions"
@@ -134,7 +134,7 @@ func (s *Server) handleOpinionAsk(w http.ResponseWriter, r *http.Request) {
 
 // reviewedWorkspace is the workspace the reviewer's tab goes into: the pane's, when its folder is the one reviewed,
 // else the first standing on that folder.
-func reviewedWorkspace(snap *herdr.Snapshot, paneID, dir string) (string, error) {
+func reviewedWorkspace(snap *coreapi.Snapshot, paneID, dir string) (string, error) {
 	if paneID != "" {
 		pane := snap.Pane(paneID)
 		if pane == nil {

@@ -12,7 +12,7 @@ import (
 
 	"github.com/dev1antdev/remuda/internal/core"
 	"github.com/dev1antdev/remuda/internal/core/coretest"
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 )
 
 func TestTheProbeFindsRemudaCoreWhereItsInstallerPutsIt(t *testing.T) {
@@ -93,7 +93,7 @@ func TestTheLocalMachineOnCoreShowsTheCoresTerminals(t *testing.T) {
 			t.Fatalf("the snapshot never showed %s: %v %+v", running.Address, err, snap)
 		}
 	}
-	viewer, err := terminals.Open(running.Address, herdr.View{Cols: 80, Rows: 24})
+	viewer, err := terminals.Open(running.Address, coreapi.View{Cols: 80, Rows: 24})
 	if err != nil {
 		t.Fatalf("attach on remuda-core: %v", err)
 	}
@@ -114,7 +114,7 @@ func TestTheLocalMachineOnCoreShowsTheCoresTerminals(t *testing.T) {
 func TestTheLocalMachineOnCoreSaysHowToInstallIt(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 	t.Setenv("HOME", t.TempDir())
-	if found, err := herdr.FindBinary("remuda-core"); err == nil {
+	if found, err := coreapi.FindBinary("remuda-core"); err == nil {
 		t.Skipf("a remuda-core stands in a system folder (%s): dialing would reach this machine's real core", found)
 	}
 	_, err := dialLocalCore(context.Background())

@@ -10,7 +10,7 @@ import (
 
 	"github.com/dev1antdev/remuda/internal/core"
 	"github.com/dev1antdev/remuda/internal/core/coretest"
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/transcript"
 )
 
@@ -50,7 +50,7 @@ func (r *sessionReads) reads() int {
 }
 
 // ask is the lookup as a snapshot makes it: the agent's process in its terminal, as first seen there.
-func ask(s *processSessions, agent string, pid int) *herdr.AgentSession {
+func ask(s *processSessions, agent string, pid int) *coreapi.AgentSession {
 	return s.of(core.AgentProcess{Agent: agent, PID: pid, Cwd: "/work/api", Terminal: "t" + strconv.Itoa(pid), Held: firstHeld})
 }
 
@@ -340,14 +340,14 @@ func TestAnAgentOnTheLocalCoreIsNamedByItsSessionFile(t *testing.T) {
 	}
 	pane := made.RootPane.PaneID
 	for start := time.Now(); time.Since(start) < 10*time.Second; time.Sleep(200 * time.Millisecond) {
-		if err = client.AgentStart(pane, "claude"); !herdr.IsCode(err, "agent_pane_busy") {
+		if err = client.AgentStart(pane, "claude"); !coreapi.IsCode(err, "agent_pane_busy") {
 			break
 		}
 	}
 	if err != nil {
 		t.Fatal(err)
 	}
-	var p *herdr.PaneInfo
+	var p *coreapi.PaneInfo
 	for start := time.Now(); time.Since(start) < 15*time.Second; time.Sleep(200 * time.Millisecond) {
 		if snap, err := client.SessionSnapshot(); err == nil {
 			if p = snap.Pane(pane); p != nil && p.AgentSession != nil && p.AgentSession.Value == sid {

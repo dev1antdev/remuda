@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 )
 
 // take is one turn being recorded: its frames in memory until the turn ends.
@@ -45,7 +45,7 @@ func key(machineID, paneID string) string { return machineID + "|" + paneID }
 // longer an agent's is written at once, and so is one last seen Away before this snapshot (its machine was out of
 // reach), the pane at work again starting a turn of its own. Nothing here waits on a machine: the reads run in the
 // machine's own reader. The snapshot is kept for Tick, which goes on reading between snapshots (tick.go).
-func (r *Recorder) Observe(machineID string, snap *herdr.Snapshot, at time.Time) {
+func (r *Recorder) Observe(machineID string, snap *coreapi.Snapshot, at time.Time) {
 	if snap == nil {
 		return
 	}
@@ -82,7 +82,7 @@ func (r *Recorder) observeLocked(machineID string, last seenSnap, at time.Time) 
 			jobs = append(jobs, job{kind: finishJob, take: tk, reason: EndedAway})
 			tk = nil
 		}
-		if pane.AgentStatus == herdr.StatusWorking {
+		if pane.AgentStatus == coreapi.StatusWorking {
 			if tk == nil {
 				tk = r.begin(machineID, snap, pane, at)
 				r.live[k] = tk
@@ -144,7 +144,7 @@ func (r *Recorder) awayLocked(machineID string) []job {
 }
 
 // begin is a new take of a pane seen working, named after the moment.
-func (r *Recorder) begin(machineID string, snap *herdr.Snapshot, pane *herdr.PaneInfo, at time.Time) *take {
+func (r *Recorder) begin(machineID string, snap *coreapi.Snapshot, pane *coreapi.PaneInfo, at time.Time) *take {
 	meta := Meta{ID: newID(at), Machine: machineID, Pane: pane.PaneID, Agent: pane.Agent, Title: clip(pane.DisplayTitle()), Start: at}
 	if r.in.Own != nil {
 		meta.Own = new(r.in.Own(machineID, pane.WorkspaceID))

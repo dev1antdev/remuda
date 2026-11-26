@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/recipes"
 	"github.com/dev1antdev/remuda/internal/sessions"
 	"github.com/dev1antdev/remuda/internal/worktrees"
@@ -15,8 +15,8 @@ type Herdr interface {
 	sessions.Placer
 	sessions.Prompter
 	TabRename(tabID, label string) error
-	LayoutExport(tabID string) (*herdr.LayoutDescription, error)
-	LayoutApply(workspaceID, tabID, tabLabel string, root herdr.LayoutNode) (*herdr.LayoutDescription, error)
+	LayoutExport(tabID string) (*coreapi.LayoutDescription, error)
+	LayoutApply(workspaceID, tabID, tabLabel string, root coreapi.LayoutNode) (*coreapi.LayoutDescription, error)
 	PaneClose(paneID string) error
 	PaneAtPrompt(paneID string) (bool, error)
 }
@@ -25,9 +25,9 @@ type Herdr interface {
 type Machine interface {
 	ID() string
 	Label() string
-	Herdr() (Herdr, error)     // the machine's herdr, or why it cannot be reached now
-	Snapshot() *herdr.Snapshot // the watcher's last, nil before the first
-	Refresh()                  // the watcher reads the machine again
+	Herdr() (Herdr, error)       // the machine's herdr, or why it cannot be reached now
+	Snapshot() *coreapi.Snapshot // the watcher's last, nil before the first
+	Refresh()                    // the watcher reads the machine again
 	Leftovers(open []string) ([]worktrees.Leftover, error)
 	Tidy(folder string) worktrees.Outcome
 	Folder(dir string) bool // whether the folder is there: herdr opens a missing one in the home folder instead
@@ -66,7 +66,7 @@ func launchOf(step Step, recipe func(id string) (recipes.Recipe, bool)) (launch,
 
 // placeStep makes the step's tab: a new tab of the workspace open on its folder, else a new workspace on the folder;
 // laid out as the step's layout when it has one, named as the step says. The place's pane is the one its agent goes in.
-func placeStep(client Herdr, snap *herdr.Snapshot, step Step) (sessions.Place, error) {
+func placeStep(client Herdr, snap *coreapi.Snapshot, step Step) (sessions.Place, error) {
 	workspace := sessions.WorkspaceIn(snap, step.Dir)
 	if step.Layout == nil {
 		if workspace != "" {

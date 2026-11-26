@@ -8,14 +8,14 @@ import (
 	"sort"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 )
 
 // Output is a watch herdr keeps on a pane's output: a match, the rows it reads, and the key its matches come back with.
 type Output struct {
 	Key    string
 	Pane   string
-	Match  herdr.OutputMatch
+	Match  coreapi.OutputMatch
 	Lines  int
 	Person bool // one of the person's own rules: left out of the stream when herdr refuses them
 }
@@ -33,25 +33,25 @@ const lazyKind = "pane.updated"
 
 // streamSet is what one stream holds.
 type streamSet struct {
-	subs    []herdr.Subscription
+	subs    []coreapi.Subscription
 	all     []Output            // the watches asked for, as asked
 	held    []Output            // the output watches this stream holds, in subscription order
 	outputs map[string][]Output // by pane, the ones held
 	key     string              // the whole set as one string, to tell a move
 	basis   string              // the standing watches it was admitted against: a set worked out before another one was taken is worked out again
-	snap    *herdr.Snapshot     // the topology it was worked out for: a recheck re-ranks this one, not a newer one still settling
+	snap    *coreapi.Snapshot   // the topology it was worked out for: a recheck re-ranks this one, not a newer one still settling
 	person  string              // the person's own watches as one string, "" for none
 	holds   bool                // the person's watches are in it: herdr has not refused them as they stand
 }
 
 // buildSet is the subscriptions for a snapshot: the global kinds, each pane's agent status, the output watches but
 // the person's when they are the ones herdr refused.
-func buildSet(snap *herdr.Snapshot, outputs []Output, refused string) *streamSet {
+func buildSet(snap *coreapi.Snapshot, outputs []Output, refused string) *streamSet {
 	set := &streamSet{all: outputs, outputs: map[string][]Output{}, snap: snap}
 	for _, kind := range urgentKinds {
-		set.subs = append(set.subs, herdr.Subscription{Type: kind})
+		set.subs = append(set.subs, coreapi.Subscription{Type: kind})
 	}
-	set.subs = append(set.subs, herdr.Subscription{Type: lazyKind})
+	set.subs = append(set.subs, coreapi.Subscription{Type: lazyKind})
 	panes := make([]string, 0, len(snap.Panes))
 	known := map[string]bool{}
 	for i := range snap.Panes {
@@ -60,7 +60,7 @@ func buildSet(snap *herdr.Snapshot, outputs []Output, refused string) *streamSet
 	}
 	sort.Strings(panes)
 	for _, pane := range panes {
-		set.subs = append(set.subs, herdr.Subscription{Type: herdr.EventAgentStatus, PaneID: pane})
+		set.subs = append(set.subs, coreapi.Subscription{Type: coreapi.EventAgentStatus, PaneID: pane})
 	}
 	var person []Output
 	for _, o := range outputs {
@@ -75,7 +75,7 @@ func buildSet(snap *herdr.Snapshot, outputs []Output, refused string) *streamSet
 			continue
 		}
 		match := o.Match
-		set.subs = append(set.subs, herdr.Subscription{Type: herdr.EventOutputMatched, PaneID: o.Pane, Source: "recent", Lines: o.Lines, Match: &match})
+		set.subs = append(set.subs, coreapi.Subscription{Type: coreapi.EventOutputMatched, PaneID: o.Pane, Source: "recent", Lines: o.Lines, Match: &match})
 		set.outputs[o.Pane] = append(set.outputs[o.Pane], o)
 		set.held = append(set.held, o)
 	}
@@ -107,7 +107,7 @@ func (set *streamSet) heldWatches() []Output {
 // replaces the set still settling without moving that rest, so a status event cannot push a watch out. A move the
 // person asked for (`now`: a rule edited, a refusal taken again) is promoted and told at once, and so is the first
 // set.
-func (w *Watcher) noteWanted(machineID string, snap *herdr.Snapshot, now bool) {
+func (w *Watcher) noteWanted(machineID string, snap *coreapi.Snapshot, now bool) {
 	w.mu.Lock()
 	standing := w.stateFor(machineID).accepted.heldWatches() // what the stream standing took: the rules keep those
 	w.mu.Unlock()
@@ -191,7 +191,7 @@ func (w *Watcher) accept(st *machineState, set *streamSet) {
 // Resubscribe works the subscriptions out again on every machine: the watches asked for moved.
 func (w *Watcher) Resubscribe() {
 	w.mu.Lock()
-	snaps := map[string]*herdr.Snapshot{}
+	snaps := map[string]*coreapi.Snapshot{}
 	for id, st := range w.states {
 		if st.snap != nil {
 			snaps[id] = st.snap

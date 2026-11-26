@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/events"
-	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/machines"
 )
 
@@ -49,7 +49,7 @@ func TestAClosedWorkspaceIsForgottenOnlyByAWatchedSnapshot(t *testing.T) {
 	store := Open("")
 	store.put("gog", "w1", asleep(sleeper("w1:p1", "w1:t1", "claude", sidA)))
 	store.put("gog", "w2", asleep(sleeper("w2:p1", "w2:t1", "claude", sidB)))
-	only := &herdr.Snapshot{Workspaces: []herdr.WorkspaceInfo{{WorkspaceID: "w2"}}}
+	only := &coreapi.Snapshot{Workspaces: []coreapi.WorkspaceInfo{{WorkspaceID: "w2"}}}
 	// the first snapshot after the machine came back decides nothing: herdr may still be restoring
 	if store.Observe(events.Snapshot{Machine: "gog", Snap: only, First: true}) || store.Status("gog", "w1") == nil {
 		t.Fatal("forgotten on a first snapshot")
@@ -89,7 +89,7 @@ func TestAWorkspaceThatSleptInHerdrWaitsForTheCoresResume(t *testing.T) {
 	store := Open(dir)
 	store.Core = func() bool { return true }
 	store.put("gog", "ws-1", asleep(sleeper("t1", "tab-1", "claude", sidB)))
-	coreSnap := &herdr.Snapshot{Workspaces: []herdr.WorkspaceInfo{{WorkspaceID: "ws-9"}}}
+	coreSnap := &coreapi.Snapshot{Workspaces: []coreapi.WorkspaceInfo{{WorkspaceID: "ws-9"}}}
 	if !store.Observe(events.Snapshot{Machine: "gog", Snap: coreSnap}) {
 		t.Fatal("the core's own workspace, closed, is not forgotten")
 	}

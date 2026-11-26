@@ -5,15 +5,15 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
-	"github.com/dev1antdev/remuda/internal/herdr/herdrfake"
+	"github.com/dev1antdev/remuda/internal/coreapi"
+	"github.com/dev1antdev/remuda/internal/coreapi/corefake"
 	"github.com/dev1antdev/remuda/internal/opinion"
 	"github.com/dev1antdev/remuda/internal/review"
 )
 
 func opinionServer(t *testing.T) (*Server, *http.ServeMux) {
 	t.Helper()
-	s := &Server{Opinions: opinion.NewService(t.TempDir()), Machines: herdrfake.Manager(t.TempDir())}
+	s := &Server{Opinions: opinion.NewService(t.TempDir()), Machines: corefake.Manager(t.TempDir())}
 	mux := http.NewServeMux()
 	s.opinionRoutes(mux)
 	return s, mux
@@ -71,12 +71,12 @@ func TestAnOpinionIsReadDismissedAndForgotten(t *testing.T) {
 }
 
 func TestTheReviewerGoesIntoTheFoldersWorkspace(t *testing.T) {
-	snap := &herdr.Snapshot{
-		Workspaces: []herdr.WorkspaceInfo{
-			{WorkspaceID: "w1", Worktree: &herdr.WorktreeInfo{CheckoutPath: "/w/app"}},
-			{WorkspaceID: "w2", Worktree: &herdr.WorktreeInfo{CheckoutPath: "/w/tree", IsLinkedWorktree: true}},
+	snap := &coreapi.Snapshot{
+		Workspaces: []coreapi.WorkspaceInfo{
+			{WorkspaceID: "w1", Worktree: &coreapi.WorktreeInfo{CheckoutPath: "/w/app"}},
+			{WorkspaceID: "w2", Worktree: &coreapi.WorktreeInfo{CheckoutPath: "/w/tree", IsLinkedWorktree: true}},
 		},
-		Panes: []herdr.PaneInfo{
+		Panes: []coreapi.PaneInfo{
 			{PaneID: "w1:p1", WorkspaceID: "w1", CWD: "/w/app"},
 			{PaneID: "w2:p1", WorkspaceID: "w2", CWD: "/w/tree/src"},
 		},

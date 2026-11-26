@@ -8,7 +8,7 @@ import (
 
 	"github.com/dev1antdev/remuda/internal/core"
 	"github.com/dev1antdev/remuda/internal/core/coretest"
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 )
 
 func TestAnEditKeepsWhatANewerRemudaWroteInTheDocument(t *testing.T) {
@@ -19,7 +19,7 @@ func TestAnEditKeepsWhatANewerRemudaWroteInTheDocument(t *testing.T) {
 		t.Fatal(err)
 	}
 	adapter := adapterOf(t, client, core.AdapterHooks{})
-	eventually(t, adapter, func(*herdr.Snapshot) bool { return true })
+	eventually(t, adapter, func(*coreapi.Snapshot) bool { return true })
 	if err := adapter.WorkspaceRename("ws-1", "renamed"); err != nil {
 		t.Fatal(err)
 	}

@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/events"
-	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/push"
 	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/shell"
@@ -141,17 +141,17 @@ func TestAHitIsNotedAndClearedByWork(t *testing.T) {
 	}
 	changed := make(chan struct{}, 8)
 	s.Changed = func() { changed <- struct{}{} }
-	s.OnStatus(events.PaneStatus{Pane: events.PaneRef{Machine: "gog", Pane: "w1:p1"}, Kind: "claude", From: herdr.StatusWorking, To: herdr.StatusIdle})
+	s.OnStatus(events.PaneStatus{Pane: events.PaneRef{Machine: "gog", Pane: "w1:p1"}, Kind: "claude", From: coreapi.StatusWorking, To: coreapi.StatusIdle})
 	<-checked
 	<-changed
 	if p := s.PaneOf("gog", "w1:p1"); p == nil || p.HitAt == nil || !p.HitAt.Equal(hitAt) || p.Text == "" {
 		t.Fatalf("hit: %+v", p)
 	}
-	s.OnStatus(events.PaneStatus{Pane: events.PaneRef{Machine: "gog", Pane: "w1:p1"}, Kind: "claude", From: herdr.StatusIdle, To: herdr.StatusWorking})
+	s.OnStatus(events.PaneStatus{Pane: events.PaneRef{Machine: "gog", Pane: "w1:p1"}, Kind: "claude", From: coreapi.StatusIdle, To: coreapi.StatusWorking})
 	if p := s.PaneOf("gog", "w1:p1"); p != nil {
 		t.Fatalf("still noted after work began: %+v", p)
 	}
-	s.OnStatus(events.PaneStatus{Pane: events.PaneRef{Machine: "gog", Pane: "w1:p2"}, Kind: "", From: herdr.StatusWorking, To: herdr.StatusIdle})
+	s.OnStatus(events.PaneStatus{Pane: events.PaneRef{Machine: "gog", Pane: "w1:p2"}, Kind: "", From: coreapi.StatusWorking, To: coreapi.StatusIdle})
 	select {
 	case key := <-checked:
 		t.Fatalf("a shell was checked: %s", key)
@@ -163,7 +163,7 @@ func TestObserveChecksAnAgentAtRestOnce(t *testing.T) {
 	s := New(t.TempDir())
 	checked := make(chan string, 4)
 	s.Check = func(machine, pane string) (Hit, bool) { checked <- pane; return Hit{}, false }
-	snap := &herdr.Snapshot{Panes: []herdr.PaneInfo{{PaneID: "p1", Agent: "claude", AgentStatus: herdr.StatusIdle}, {PaneID: "p2", Agent: "claude", AgentStatus: herdr.StatusWorking}, {PaneID: "p3", Agent: "codex", AgentStatus: herdr.StatusIdle}}}
+	snap := &coreapi.Snapshot{Panes: []coreapi.PaneInfo{{PaneID: "p1", Agent: "claude", AgentStatus: coreapi.StatusIdle}, {PaneID: "p2", Agent: "claude", AgentStatus: coreapi.StatusWorking}, {PaneID: "p3", Agent: "codex", AgentStatus: coreapi.StatusIdle}}}
 	s.Observe("gog", snap)
 	s.Observe("gog", snap)
 	if got := <-checked; got != "p1" {
@@ -178,7 +178,7 @@ func TestObserveChecksAnAgentAtRestOnce(t *testing.T) {
 
 func TestABookingIsSaidWhenDueAndOnlyThen(t *testing.T) {
 	now := time.Date(2026, 11, 4, 10, 0, 0, 0, time.UTC)
-	place := Place{Agent: "claude", Session: "s1", Status: herdr.StatusIdle, Workspace: "api"}
+	place := Place{Agent: "claude", Session: "s1", Status: coreapi.StatusIdle, Workspace: "api"}
 	var said []string
 	var got pushes
 	dir := t.TempDir()
@@ -232,9 +232,9 @@ func TestABookingStandsDownForAnotherConversationAQuestionOrWork(t *testing.T) {
 		gone   bool
 		pushed string
 	}{
-		{"working again", Place{Agent: "claude", Session: "s1", Status: herdr.StatusWorking, Workspace: "api"}, false, ""},
-		{"a question", Place{Agent: "claude", Session: "s1", Status: herdr.StatusBlocked, Workspace: "api"}, false, "Nothing continued in api"},
-		{"another conversation", Place{Agent: "claude", Session: "s2", Status: herdr.StatusIdle, Workspace: "api"}, false, "Nothing continued in api"},
+		{"working again", Place{Agent: "claude", Session: "s1", Status: coreapi.StatusWorking, Workspace: "api"}, false, ""},
+		{"a question", Place{Agent: "claude", Session: "s1", Status: coreapi.StatusBlocked, Workspace: "api"}, false, "Nothing continued in api"},
+		{"another conversation", Place{Agent: "claude", Session: "s2", Status: coreapi.StatusIdle, Workspace: "api"}, false, "Nothing continued in api"},
 		{"the agent left", Place{Workspace: "api"}, false, "Nothing continued in api"},
 		{"closed", Place{}, true, "Nothing continued after the limit reset"},
 	} {
@@ -266,7 +266,7 @@ func TestARefusedBookingSaysWhy(t *testing.T) {
 	s.now = func() time.Time { return now }
 	s.Notify = got.notify
 	s.Pane = func(string, string) (Place, bool) {
-		return Place{Agent: "claude", Session: "s1", Status: herdr.StatusIdle, Workspace: "api"}, true
+		return Place{Agent: "claude", Session: "s1", Status: coreapi.StatusIdle, Workspace: "api"}, true
 	}
 	s.Submit = func(string, string, string) error { return errors.New("the agent is busy with a menu") }
 	s.kept.Bookings["gog|p1"] = Booking{Machine: "gog", Pane: "p1", Session: "s1", At: now, Text: "continue"}
@@ -280,7 +280,7 @@ func TestAClosedPaneTakesItsBookingAndHitWithIt(t *testing.T) {
 	s := New(t.TempDir())
 	s.hits["gog|p1"] = Hit{At: time.Now()}
 	s.kept.Bookings["gog|p1"] = Booking{Machine: "gog", Pane: "p1", At: time.Now().Add(time.Hour)}
-	s.OnStatus(events.PaneStatus{Pane: events.PaneRef{Machine: "gog", Pane: "p1"}, From: herdr.StatusIdle, To: events.Gone})
+	s.OnStatus(events.PaneStatus{Pane: events.PaneRef{Machine: "gog", Pane: "p1"}, From: coreapi.StatusIdle, To: events.Gone})
 	if s.PaneOf("gog", "p1") != nil {
 		t.Fatal("kept after the pane closed")
 	}
@@ -315,7 +315,7 @@ func TestABookingMadeBeforeASessionIdIsNeverTypedIntoAShell(t *testing.T) {
 	s.now = func() time.Time { return now }
 	s.Notify = got.notify
 	s.Submit = func(string, string, string) error { submitted = true; return nil }
-	s.Pane = func(string, string) (Place, bool) { return Place{Status: herdr.StatusIdle, Workspace: "api"}, true }
+	s.Pane = func(string, string) (Place, bool) { return Place{Status: coreapi.StatusIdle, Workspace: "api"}, true }
 	s.kept.Bookings["gog|p1"] = Booking{Machine: "gog", Pane: "p1", At: now, Text: "rm -rf build"}
 	s.Tick()
 	if submitted {

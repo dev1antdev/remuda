@@ -25,7 +25,8 @@ Three rings, and a dependency may only point inwards.
 │  schedule · search · usage · quick · recipes · scenes · code         │
 ├─ the floor ──────────────────────────────────────────────────────────┤
 │  machines   the registry; a Machine is a shell.Host with a core on it │
-│  herdr      the vocabulary of a machine: model, API / Terminals      │
+│  coreapi    the vocabulary of a machine: model, API / Terminals      │
+│  herdrollback  the herdr a machine came from, for the rollback       │
 │  core       remuda-core's client, its adapter, its terminals         │
 │  transcript the session file parser and the per-machine Reader       │
 │  shell      the port: Run / Stream, Host, Fake                       │
@@ -67,10 +68,10 @@ The contexts are the bounded contexts of the product, in its own words:
    exit 0` preludes, the portable `stat`, the separators an answer is
    cut by. `review`, `jobs`, `search` and `usage` are written this way;
    their tests run on a `shell.Fake` with a recorded answer. A package
-   that asks a machine takes `herdr.API` and `herdr.Terminals` from
+   that asks a machine takes `coreapi.API` and `coreapi.Terminals` from
    `Machine.Ready()`, never a client: remuda-core's adapter
    (`core.Adapter`) is their one implementation, its terminals
-   (`core.Terminals`) behind `herdr.Terminals`.
+   (`core.Terminals`) behind `coreapi.Terminals`.
 3. **Packages hear each other through the bus.** `watch` publishes
    `events.Snapshot`, `events.PaneStatus` and, off the machine's event
    stream, `events.OutputMatched`; `jobs` publishes

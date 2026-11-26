@@ -11,7 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 )
 
 // The terminal over plain HTTP, for viewers behind a proxy that forwards requests
@@ -25,10 +25,10 @@ const (
 
 type termStream struct {
 	id       string
-	viewer   herdr.Viewer
-	readMu   sync.Mutex // one long-poll at a time; never held by anyone else; guards grid and next
-	grid     herdr.Out  // the grid the bytes are drawn at now, once remuda-core told one
-	next     *herdr.Out // a grid that came after bytes a read already held: the next read opens with it
+	viewer   coreapi.Viewer
+	readMu   sync.Mutex   // one long-poll at a time; never held by anyone else; guards grid and next
+	grid     coreapi.Out  // the grid the bytes are drawn at now, once remuda-core told one
+	next     *coreapi.Out // a grid that came after bytes a read already held: the next read opens with it
 	lastRead atomic.Int64
 	mu       sync.Mutex
 	closed   bool
@@ -114,7 +114,7 @@ func (s *Server) handleTermOpen(w http.ResponseWriter, r *http.Request) {
 	s.Radar.Seen(mc.ID(), pane.PaneID)
 	cols, _ := strconv.Atoi(r.URL.Query().Get("cols"))
 	rows, _ := strconv.Atoi(r.URL.Query().Get("rows"))
-	viewer, err := attach.Open(pane.TerminalID, herdr.View{Cols: cols, Rows: rows, Keep: r.URL.Query().Get("keep") == "1"})
+	viewer, err := attach.Open(pane.TerminalID, coreapi.View{Cols: cols, Rows: rows, Keep: r.URL.Query().Get("keep") == "1"})
 	if err != nil {
 		httpErr(w, 409, fmt.Errorf("%s", attachRefused(err)))
 		return
@@ -151,7 +151,7 @@ func (s *Server) handleTermRead(w http.ResponseWriter, r *http.Request) {
 	if st.next != nil {
 		st.grid, st.next = *st.next, nil
 	}
-	take := func(next herdr.Out, ok bool) {
+	take := func(next coreapi.Out, ok bool) {
 		switch {
 		case !ok:
 			ended = true

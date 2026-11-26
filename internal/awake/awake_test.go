@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/shell"
 )
 
@@ -216,11 +216,11 @@ func TestSwitchesAreKept(t *testing.T) {
 }
 
 func TestWorkingCountsWorkingAgentPanes(t *testing.T) {
-	snap := &herdr.Snapshot{Panes: []herdr.PaneInfo{
-		{PaneID: "w1:p1", Agent: "claude", AgentStatus: herdr.StatusWorking},
-		{PaneID: "w1:p2", Agent: "codex", AgentStatus: herdr.StatusIdle},
-		{PaneID: "w2:p1", AgentStatus: herdr.StatusWorking},
-		{PaneID: "w3:p1", Agent: "claude", AgentStatus: herdr.StatusWorking},
+	snap := &coreapi.Snapshot{Panes: []coreapi.PaneInfo{
+		{PaneID: "w1:p1", Agent: "claude", AgentStatus: coreapi.StatusWorking},
+		{PaneID: "w1:p2", Agent: "codex", AgentStatus: coreapi.StatusIdle},
+		{PaneID: "w2:p1", AgentStatus: coreapi.StatusWorking},
+		{PaneID: "w3:p1", Agent: "claude", AgentStatus: coreapi.StatusWorking},
 	}}
 	if n := Working(snap); n != 2 {
 		t.Fatalf("working %d", n)

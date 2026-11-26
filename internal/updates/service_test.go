@@ -5,10 +5,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dev1antdev/remuda/internal/coreapi"
+	"github.com/dev1antdev/remuda/internal/coreapi/corefake"
 	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/health"
-	"github.com/dev1antdev/remuda/internal/herdr"
-	"github.com/dev1antdev/remuda/internal/herdr/herdrfake"
 	"github.com/dev1antdev/remuda/internal/jobs"
 	"github.com/dev1antdev/remuda/internal/restart"
 	"github.com/dev1antdev/remuda/internal/watch"
@@ -17,7 +17,7 @@ import (
 // TestStartRefusesWhatItCannotRun covers the refusals, each before any job starts: nothing here reaches a shell.
 func TestStartRefusesWhatItCannotRun(t *testing.T) {
 	bus := events.NewBus()
-	fleet := herdrfake.Manager(t.TempDir())
+	fleet := corefake.Manager(t.TempDir())
 	service := &Service{Health: health.New("", fleet, "dev", false), Jobs: jobs.New(bus), Restart: restart.New(fleet), Watch: watch.New(fleet, bus)}
 	local, _ := fleet.Get("")
 
@@ -51,11 +51,11 @@ func TestStartRefusesWhatItCannotRun(t *testing.T) {
 }
 
 func TestRestartPlanNamesThePanesItMeans(t *testing.T) {
-	session := &herdr.AgentSession{Kind: "id", Value: "abc"}
-	snap := &herdr.Snapshot{Panes: []herdr.PaneInfo{
-		{PaneID: "w1:p1", Agent: "claude", AgentStatus: herdr.StatusIdle, AgentSession: session},
-		{PaneID: "w1:p2", Agent: "claude", AgentStatus: herdr.StatusWorking, AgentSession: session},
-		{PaneID: "w2:p1", Agent: "codex", AgentStatus: herdr.StatusDone, AgentSession: session},
+	session := &coreapi.AgentSession{Kind: "id", Value: "abc"}
+	snap := &coreapi.Snapshot{Panes: []coreapi.PaneInfo{
+		{PaneID: "w1:p1", Agent: "claude", AgentStatus: coreapi.StatusIdle, AgentSession: session},
+		{PaneID: "w1:p2", Agent: "claude", AgentStatus: coreapi.StatusWorking, AgentSession: session},
+		{PaneID: "w2:p1", Agent: "codex", AgentStatus: coreapi.StatusDone, AgentSession: session},
 	}}
 	plan, n := restartPlan("claude", snap)
 	if n != 2 || plan.What != "restart-claude" || !strings.Contains(plan.Command, "w1:p1, w1:p2") || !strings.Contains(plan.Note, "1 of them busy") {

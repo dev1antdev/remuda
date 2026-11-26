@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/shell"
 )
 
@@ -104,7 +104,7 @@ func (t *Tracker) Going(machineID, dir string) bool {
 // Observe hears every snapshot: an agent pane at work begins a turn (a question it waits on keeps it going), one at
 // rest ends it, a pane gone ends it too. On a machine's first snapshot (first: or the first after its polls failed) a
 // pane already at work begins none until it has rested: what it did before was not watched.
-func (t *Tracker) Observe(machineID string, snap *herdr.Snapshot, at time.Time, first bool) {
+func (t *Tracker) Observe(machineID string, snap *coreapi.Snapshot, at time.Time, first bool) {
 	if snap == nil {
 		return
 	}
@@ -131,7 +131,7 @@ func (t *Tracker) Observe(machineID string, snap *herdr.Snapshot, at time.Time, 
 		k := key(machineID, pane.PaneID)
 		seen[k] = true
 		turn := t.live[k]
-		atWork := pane.AgentStatus == herdr.StatusWorking || pane.AgentStatus == herdr.StatusBlocked
+		atWork := pane.AgentStatus == coreapi.StatusWorking || pane.AgentStatus == coreapi.StatusBlocked
 		if open, ok := t.pending[k]; ok {
 			delete(t.pending, k)
 			if turn == nil && atWork && open.Dir == dir && at.Sub(open.Started) < MaxOpen {
@@ -148,7 +148,7 @@ func (t *Tracker) Observe(machineID string, snap *herdr.Snapshot, at time.Time, 
 			delete(t.unwatched, k)
 		}
 		switch {
-		case pane.AgentStatus == herdr.StatusWorking && turn == nil && !t.unwatched[k]:
+		case pane.AgentStatus == coreapi.StatusWorking && turn == nil && !t.unwatched[k]:
 			turn = &going{open: Open{ID: NewID(at), Machine: machineID, Pane: pane.PaneID, Dir: dir, Agent: pane.DisplayAgent, Started: at}}
 			if turn.open.Agent == "" {
 				turn.open.Agent = pane.Agent

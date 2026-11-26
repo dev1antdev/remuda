@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/radar"
 	"github.com/dev1antdev/remuda/internal/worktrees"
 )
@@ -19,21 +19,21 @@ const session = "0b6f3c2e-6a4d-4f6e-9a51-2f0e8c1d7a90"
 // dusk is a machine at the end of the day: an api workspace with an idle Claude Code (with a session) and a shell
 // beside it, a web workspace with a Codex at work, a Gemini asking, a Claude Code whose finish nobody saw, a Claude
 // Code with no session, a shell running a dev server, and the floating terminal's shell.
-func dusk() *herdr.Snapshot {
-	withSession := &herdr.AgentSession{Agent: "claude", Kind: "id", Value: session}
-	return &herdr.Snapshot{
-		Workspaces: []herdr.WorkspaceInfo{{WorkspaceID: "w1", Label: "api"}, {WorkspaceID: "w2", Label: "web"}, {WorkspaceID: "w99", Label: "scratch"}},
-		Tabs: []herdr.TabInfo{
+func dusk() *coreapi.Snapshot {
+	withSession := &coreapi.AgentSession{Agent: "claude", Kind: "id", Value: session}
+	return &coreapi.Snapshot{
+		Workspaces: []coreapi.WorkspaceInfo{{WorkspaceID: "w1", Label: "api"}, {WorkspaceID: "w2", Label: "web"}, {WorkspaceID: "w99", Label: "scratch"}},
+		Tabs: []coreapi.TabInfo{
 			{TabID: "w1:t1", WorkspaceID: "w1", Label: "1"}, {TabID: "w1:t2", WorkspaceID: "w1", Label: "tests"},
 			{TabID: "w2:t1", WorkspaceID: "w2", Label: "1"}, {TabID: "w99:t1", WorkspaceID: "w99"},
 		},
-		Panes: []herdr.PaneInfo{
-			{PaneID: "w1:p1", TabID: "w1:t1", WorkspaceID: "w1", Agent: "claude", AgentStatus: herdr.StatusIdle, AgentSession: withSession},
+		Panes: []coreapi.PaneInfo{
+			{PaneID: "w1:p1", TabID: "w1:t1", WorkspaceID: "w1", Agent: "claude", AgentStatus: coreapi.StatusIdle, AgentSession: withSession},
 			{PaneID: "w1:p2", TabID: "w1:t2", WorkspaceID: "w1"},
-			{PaneID: "w2:p1", TabID: "w2:t1", WorkspaceID: "w2", Agent: "codex", AgentStatus: herdr.StatusWorking, AgentSession: withSession},
-			{PaneID: "w2:p2", TabID: "w2:t1", WorkspaceID: "w2", Agent: "gemini", AgentStatus: herdr.StatusBlocked, AgentSession: withSession},
-			{PaneID: "w2:p3", TabID: "w2:t1", WorkspaceID: "w2", Agent: "claude", AgentStatus: herdr.StatusDone, AgentSession: withSession},
-			{PaneID: "w2:p4", TabID: "w2:t1", WorkspaceID: "w2", Agent: "claude", AgentStatus: herdr.StatusIdle},
+			{PaneID: "w2:p1", TabID: "w2:t1", WorkspaceID: "w2", Agent: "codex", AgentStatus: coreapi.StatusWorking, AgentSession: withSession},
+			{PaneID: "w2:p2", TabID: "w2:t1", WorkspaceID: "w2", Agent: "gemini", AgentStatus: coreapi.StatusBlocked, AgentSession: withSession},
+			{PaneID: "w2:p3", TabID: "w2:t1", WorkspaceID: "w2", Agent: "claude", AgentStatus: coreapi.StatusDone, AgentSession: withSession},
+			{PaneID: "w2:p4", TabID: "w2:t1", WorkspaceID: "w2", Agent: "claude", AgentStatus: coreapi.StatusIdle},
 			{PaneID: "w2:p5", TabID: "w2:t1", WorkspaceID: "w2"},
 			{PaneID: "w99:p1", TabID: "w99:t1", WorkspaceID: "w99"},
 		},
@@ -42,14 +42,14 @@ func dusk() *herdr.Snapshot {
 
 func duskReadings() Readings {
 	states := map[string]radar.Display{
-		"w1:p1": {State: herdr.StatusIdle, LastActive: hoursAgo(10)},
-		"w2:p1": {State: herdr.StatusWorking, LastActive: hoursAgo(0)},
-		"w2:p2": {State: herdr.StatusBlocked, LastActive: hoursAgo(12)},
-		"w2:p3": {State: herdr.StatusDone, LastActive: hoursAgo(12)},
-		"w2:p4": {State: herdr.StatusIdle, LastActive: hoursAgo(12)},
+		"w1:p1": {State: coreapi.StatusIdle, LastActive: hoursAgo(10)},
+		"w2:p1": {State: coreapi.StatusWorking, LastActive: hoursAgo(0)},
+		"w2:p2": {State: coreapi.StatusBlocked, LastActive: hoursAgo(12)},
+		"w2:p3": {State: coreapi.StatusDone, LastActive: hoursAgo(12)},
+		"w2:p4": {State: coreapi.StatusIdle, LastActive: hoursAgo(12)},
 	}
 	return Readings{
-		State:   func(_ string, pane *herdr.PaneInfo) radar.Display { return states[pane.PaneID] },
+		State:   func(_ string, pane *coreapi.PaneInfo) radar.Display { return states[pane.PaneID] },
 		Context: func(_, pane string) (int, bool) { return 85, true },
 		Scratch: func(_, workspace string) bool { return workspace == "w99" },
 	}
@@ -105,7 +105,7 @@ func TestAnActionSaysWhatGoesWithThePane(t *testing.T) {
 	if actions[0].Closes != "tab" || actions[0].Workspace != "api" || actions[0].Since != hoursAgo(10) || actions[0].ID != "close-agent|local|w1:p1" {
 		t.Fatalf("the agent's tab goes with it: %+v", actions[0])
 	}
-	alone := &herdr.Snapshot{Workspaces: []herdr.WorkspaceInfo{{WorkspaceID: "w3"}}, Tabs: []herdr.TabInfo{{TabID: "w3:t1", WorkspaceID: "w3"}}, Panes: []herdr.PaneInfo{{PaneID: "w3:p1", TabID: "w3:t1", WorkspaceID: "w3"}}}
+	alone := &coreapi.Snapshot{Workspaces: []coreapi.WorkspaceInfo{{WorkspaceID: "w3"}}, Tabs: []coreapi.TabInfo{{TabID: "w3:t1", WorkspaceID: "w3"}}, Panes: []coreapi.PaneInfo{{PaneID: "w3:p1", TabID: "w3:t1", WorkspaceID: "w3"}}}
 	if got := planPanes(Tidy{Shells: true}, "local", alone, atPrompt("w3:p1"), duskReadings(), evening); got[0].Closes != "workspace" {
 		t.Fatalf("a workspace's last pane takes it along: %+v", got)
 	}

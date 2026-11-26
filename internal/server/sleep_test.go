@@ -10,8 +10,8 @@ import (
 	"testing"
 
 	"github.com/dev1antdev/remuda/internal/core/coretest"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/events"
-	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/radar"
 	"github.com/dev1antdev/remuda/internal/review"
@@ -46,7 +46,7 @@ func TestSleepRefusesWhatHasNothingToSleep(t *testing.T) {
 	}
 	t.Cleanup(func() { client.WorkspaceClose(made.Workspace.WorkspaceID) })
 	workspace := made.Workspace.WorkspaceID
-	coreSays(t, client, func(snap *herdr.Snapshot) bool { return snap.Workspace(workspace) != nil })
+	coreSays(t, client, func(snap *coreapi.Snapshot) bool { return snap.Workspace(workspace) != nil })
 
 	watcher := watch.New(fleet, events.NewBus())
 	s := &Server{Machines: fleet, Watch: watcher, Input: sessions.NewInput(fleet, watcher), Sleep: &sleep.Service{Store: sleep.Open(t.TempDir())}}
@@ -85,10 +85,10 @@ func TestTheRosterSaysAWorkspaceIsAsleep(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(kept, "asleep.json"), raw, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	snap := &herdr.Snapshot{
-		Workspaces: []herdr.WorkspaceInfo{{WorkspaceID: "w1", Label: "api"}, {WorkspaceID: "w2", Label: "web"}},
-		Tabs:       []herdr.TabInfo{{TabID: "w1:t1", WorkspaceID: "w1", Number: 1}, {TabID: "w2:t1", WorkspaceID: "w2", Number: 1}},
-		Panes:      []herdr.PaneInfo{{PaneID: "w1:p1", TabID: "w1:t1", WorkspaceID: "w1", CWD: "/work/api"}, {PaneID: "w2:p1", TabID: "w2:t1", WorkspaceID: "w2", CWD: "/work/web"}},
+	snap := &coreapi.Snapshot{
+		Workspaces: []coreapi.WorkspaceInfo{{WorkspaceID: "w1", Label: "api"}, {WorkspaceID: "w2", Label: "web"}},
+		Tabs:       []coreapi.TabInfo{{TabID: "w1:t1", WorkspaceID: "w1", Number: 1}, {TabID: "w2:t1", WorkspaceID: "w2", Number: 1}},
+		Panes:      []coreapi.PaneInfo{{PaneID: "w1:p1", TabID: "w1:t1", WorkspaceID: "w1", CWD: "/work/api"}, {PaneID: "w2:p1", TabID: "w2:t1", WorkspaceID: "w2", CWD: "/work/web"}},
 	}
 	s := &Server{Radar: radar.New(t.TempDir(), nil), Usage: usage.NewTracker(), Review: review.New(t.TempDir()), Sleep: &sleep.Service{Store: sleep.Open(kept)}}
 	sessions := s.sessionsFromSnapshot("local", snap)

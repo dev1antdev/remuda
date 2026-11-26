@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/events"
-	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/push"
 	"github.com/dev1antdev/remuda/internal/rpath"
@@ -22,10 +22,10 @@ import (
 func (s *Server) sessionRoutes(api *http.ServeMux) {
 	api.HandleFunc("POST /api/sessions", s.handleNewWorkspace)
 	api.HandleFunc("DELETE /api/sessions/{id}", s.handleWorkspaceClose)
-	api.HandleFunc("PATCH /api/sessions/{id}", s.renameHandler(herdr.API.WorkspaceRename))
+	api.HandleFunc("PATCH /api/sessions/{id}", s.renameHandler(coreapi.API.WorkspaceRename))
 	api.HandleFunc("POST /api/tabs", s.handleNewTab)
-	api.HandleFunc("DELETE /api/tabs/{id}", s.closeHandler(herdr.API.TabClose))
-	api.HandleFunc("PATCH /api/tabs/{id}", s.renameHandler(herdr.API.TabRename))
+	api.HandleFunc("DELETE /api/tabs/{id}", s.closeHandler(coreapi.API.TabClose))
+	api.HandleFunc("PATCH /api/tabs/{id}", s.renameHandler(coreapi.API.TabRename))
 	api.HandleFunc("POST /api/worktrees", s.handleNewWorktree)
 	api.HandleFunc("POST /api/submit", s.handleSubmit)
 	api.HandleFunc("POST /api/keys", s.handleKeys)
@@ -80,7 +80,7 @@ func (s *Server) create(w http.ResponseWriter, r *http.Request, build builder) {
 }
 
 // builder makes the container an agent starts in: its id, its pane and what the answer says of it besides.
-type builder func(*machines.Machine, herdr.API, *createReq) (id string, pane *herdr.PaneInfo, extra map[string]any, err error)
+type builder func(*machines.Machine, coreapi.API, *createReq) (id string, pane *coreapi.PaneInfo, extra map[string]any, err error)
 
 // createWith is create for a request already read.
 func (s *Server) createWith(w http.ResponseWriter, r *http.Request, req *createReq, build builder) {
@@ -122,7 +122,7 @@ func (s *Server) createWith(w http.ResponseWriter, r *http.Request, req *createR
 }
 
 // firstPrompt delivers the prompt a person wrote for the agent they just started; a failure is a note in the activity, with the pane to open.
-func (s *Server) firstPrompt(client herdr.API, ref events.PaneRef, prompt, place string) error {
+func (s *Server) firstPrompt(client coreapi.API, ref events.PaneRef, prompt, place string) error {
 	err := s.Input.FirstPrompt(client, ref, prompt, sessions.FirstPromptTimeout)
 	if err == nil || s.Push == nil {
 		return err
@@ -152,7 +152,7 @@ func firstPromptPlace(req *createReq, extra map[string]any) string {
 }
 
 func (s *Server) handleNewWorkspace(w http.ResponseWriter, r *http.Request) {
-	s.create(w, r, func(_ *machines.Machine, c herdr.API, req *createReq) (string, *herdr.PaneInfo, map[string]any, error) {
+	s.create(w, r, func(_ *machines.Machine, c coreapi.API, req *createReq) (string, *coreapi.PaneInfo, map[string]any, error) {
 		res, err := c.WorkspaceCreate(req.Dir, req.Name)
 		if err != nil {
 			return "", nil, nil, err
@@ -162,9 +162,9 @@ func (s *Server) handleNewWorkspace(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleNewTab(w http.ResponseWriter, r *http.Request) {
-	s.create(w, r, func(_ *machines.Machine, c herdr.API, req *createReq) (string, *herdr.PaneInfo, map[string]any, error) {
+	s.create(w, r, func(_ *machines.Machine, c coreapi.API, req *createReq) (string, *coreapi.PaneInfo, map[string]any, error) {
 		if req.Workspace == "" {
-			return "", nil, nil, &herdr.Error{Code: "invalid_request", Message: "workspace required"}
+			return "", nil, nil, &coreapi.Error{Code: "invalid_request", Message: "workspace required"}
 		}
 		res, err := c.TabCreate(req.Workspace, req.Name)
 		if err != nil {
@@ -176,13 +176,13 @@ func (s *Server) handleNewTab(w http.ResponseWriter, r *http.Request) {
 
 // plainWorktree is a worktree on a branch and base as given, herdr's worktree.create alone: what a caller that picked
 // nothing in the New worktree dialog asks for (the API, the e2e).
-func plainWorktree(mc *machines.Machine, c herdr.API, req *createReq) (string, *herdr.PaneInfo, map[string]any, error) {
+func plainWorktree(mc *machines.Machine, c coreapi.API, req *createReq) (string, *coreapi.PaneInfo, map[string]any, error) {
 	branch, base := strings.TrimSpace(req.Branch), strings.TrimSpace(req.Base)
 	if req.Workspace == "" || branch == "" {
-		return "", nil, nil, &herdr.Error{Code: "invalid_request", Message: "workspace and branch required"}
+		return "", nil, nil, &coreapi.Error{Code: "invalid_request", Message: "workspace and branch required"}
 	}
 	if !sessions.RefOK(branch) || (base != "" && !sessions.RefOK(base)) {
-		return "", nil, nil, &herdr.Error{Code: "invalid_request", Message: "branch names: no leading dash, no spaces, no .."}
+		return "", nil, nil, &coreapi.Error{Code: "invalid_request", Message: "branch names: no leading dash, no spaces, no .."}
 	}
 	res, err := c.WorktreeCreate(req.Workspace, branch, base, req.Name)
 	if err != nil {
@@ -243,7 +243,7 @@ func (s *Server) madeWorktree(mc *machines.Machine, id string) (string, []worktr
 }
 
 // usedElsewhere says whether another workspace stands on the worktree or has a pane inside it.
-func usedElsewhere(snap *herdr.Snapshot, id, tree string) bool {
+func usedElsewhere(snap *coreapi.Snapshot, id, tree string) bool {
 	style := rpath.For(tree) // a Windows machine's herdr names it C:\Users\me\.herdr\worktrees\app\x
 	inside := func(dir string) bool { return dir != "" && style.Within(tree, dir) }
 	for i := range snap.Workspaces {
@@ -262,7 +262,7 @@ func usedElsewhere(snap *herdr.Snapshot, id, tree string) bool {
 }
 
 // closeHandler closes a workspace or tab by path id and refreshes the roster.
-func (s *Server) closeHandler(close func(herdr.API, string) error) http.HandlerFunc {
+func (s *Server) closeHandler(close func(coreapi.API, string) error) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		mc, client, _, ok := s.ready(w, r, "")
 		if !ok {
@@ -278,7 +278,7 @@ func (s *Server) closeHandler(close func(herdr.API, string) error) http.HandlerF
 }
 
 // renameHandler serves the two renames, a tab's or a workspace's label, from a JSON body {"label": …}.
-func (s *Server) renameHandler(rename func(herdr.API, string, string) error) http.HandlerFunc {
+func (s *Server) renameHandler(rename func(coreapi.API, string, string) error) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			Label   string `json:"label"`

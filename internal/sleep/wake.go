@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/restart"
 	"github.com/dev1antdev/remuda/internal/sessions"
@@ -134,7 +134,7 @@ func (s *Service) wakeOne(client Client, machineID, workspaceID string, a Agent,
 // wakeInTab starts an agent whose pane is gone in a new tab of its workspace, on its folder, else wherever a workspace
 // stands on that folder or a new one; the tab's shell is the agent's from then on, so a start that fails there is
 // tried in that same shell next time.
-func (s *Service) wakeInTab(client Client, snap *herdr.Snapshot, workspaceID string, a Agent, say func(string), keep func(string, Agent) outcome) outcome {
+func (s *Service) wakeInTab(client Client, snap *coreapi.Snapshot, workspaceID string, a Agent, say func(string), keep func(string, Agent) outcome) outcome {
 	title := restart.Title(a.Kind)
 	if ws := snap.Workspace(workspaceID); ws != nil && snap.WorkspaceDir(ws) == a.Dir {
 		res, err := client.TabCreate(workspaceID, a.TabName)

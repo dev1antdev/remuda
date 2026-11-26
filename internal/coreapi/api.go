@@ -1,8 +1,8 @@
-package herdr
+package coreapi
 
 import "time"
 
-// API is a machine's herdr as remuda asks it: its snapshot, its event stream and every request remuda sends.
+// API is a machine as remuda-core tells it: its snapshot, its event stream and every request remuda sends.
 // remuda-core's adapter (internal/core) is the one implementation, so the packages that ask a machine never name it.
 type API interface {
 	SessionSnapshot() (*Snapshot, error)

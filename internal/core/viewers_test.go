@@ -11,12 +11,12 @@ import (
 
 	"github.com/dev1antdev/remuda/internal/core"
 	"github.com/dev1antdev/remuda/internal/core/coretest"
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 )
 
 // watched is what a viewer was handed: the program's text, and the grids it was told.
 type watched struct {
-	viewer herdr.Viewer
+	viewer coreapi.Viewer
 	text   strings.Builder
 	grids  []string
 }
@@ -50,12 +50,12 @@ func TestTwoViewersShareATerminalWithoutTakingItsSize(t *testing.T) {
 		t.Fatal(err)
 	}
 	terminals := core.NewTerminals(client)
-	deskViewer, err := terminals.Open(cat.Address, herdr.View{Cols: 100, Rows: 30})
+	deskViewer, err := terminals.Open(cat.Address, coreapi.View{Cols: 100, Rows: 30})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer deskViewer.Close()
-	phoneViewer, err := terminals.Open(cat.Address, herdr.View{Cols: 40, Rows: 10, Keep: true})
+	phoneViewer, err := terminals.Open(cat.Address, coreapi.View{Cols: 40, Rows: 10, Keep: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,14 +105,14 @@ func TestAViewerThatOnlyWatchesCannotType(t *testing.T) {
 		t.Fatal(err)
 	}
 	terminals := core.NewTerminals(client)
-	linkViewer, err := terminals.Open(cat.Address, herdr.View{Cols: 80, Rows: 24, Observe: true})
+	linkViewer, err := terminals.Open(cat.Address, coreapi.View{Cols: 80, Rows: 24, Observe: true})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer linkViewer.Close()
 	link := &watched{viewer: linkViewer}
 	_ = linkViewer.Write([]byte("typed by a link\r"))
-	desk, err := terminals.Open(cat.Address, herdr.View{Cols: 80, Rows: 24})
+	desk, err := terminals.Open(cat.Address, coreapi.View{Cols: 80, Rows: 24})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,7 +137,7 @@ func TestAViewerEndsWithItsProgram(t *testing.T) {
 		t.Fatal(err)
 	}
 	terminals := core.NewTerminals(client)
-	viewer, err := terminals.Open(brief.Address, herdr.View{Cols: 80, Rows: 24})
+	viewer, err := terminals.Open(brief.Address, coreapi.View{Cols: 80, Rows: 24})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -183,7 +183,7 @@ func paintedOver(t *testing.T, script, shown, want string) {
 			t.Fatalf("%q never reached the screen", shown)
 		}
 	}
-	viewer, err := core.NewTerminals(client).Open(term.Address, herdr.View{Cols: 80, Rows: 24})
+	viewer, err := core.NewTerminals(client).Open(term.Address, coreapi.View{Cols: 80, Rows: 24})
 	if err != nil {
 		t.Fatal(err)
 	}

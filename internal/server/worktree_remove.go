@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/rpath"
 	"github.com/dev1antdev/remuda/internal/worktrees"
@@ -58,7 +58,7 @@ func removalStamp(look worktrees.Look, shared, mergedPR bool) string {
 }
 
 // sharers names the other workspaces that stand on the worktree or have a pane inside it.
-func sharers(snap *herdr.Snapshot, id, tree string) []string {
+func sharers(snap *coreapi.Snapshot, id, tree string) []string {
 	style := rpath.For(tree)
 	inside := func(dir string) bool { return dir != "" && style.Within(tree, dir) }
 	seen := map[string]bool{}

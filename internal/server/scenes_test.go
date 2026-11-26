@@ -5,14 +5,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dev1antdev/remuda/internal/herdr/herdrfake"
+	"github.com/dev1antdev/remuda/internal/coreapi/corefake"
 	"github.com/dev1antdev/remuda/internal/scenes"
 )
 
 // The scene routes: the list saved whole and checked, a machine the fleet lacks refused, a run of a scene that is not
 // there or a tidy with nothing picked refused, a run that ended long ago not found.
 func TestSceneRoutes(t *testing.T) {
-	fleet := herdrfake.Manager(t.TempDir())
+	fleet := corefake.Manager(t.TempDir())
 	runner := &scenes.Service{Store: scenes.New(t.TempDir()), Machines: func() []scenes.Machine { return nil }}
 	s := &Server{Machines: fleet, Scenes: runner}
 	mux := http.NewServeMux()

@@ -3,7 +3,7 @@ package triggers
 import (
 	"strings"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 )
 
 // MaxShown is how many matching rows a test answers.
@@ -28,7 +28,7 @@ func Try(rule Rule, text string) (Tried, error) {
 	}
 	match := func(line string) bool { return strings.Contains(line, rule.Pattern) }
 	if rule.Match == "regex" {
-		re, err := herdr.CompileRegex(rule.Pattern)
+		re, err := coreapi.CompileRegex(rule.Pattern)
 		if err != nil {
 			return Tried{}, err
 		}

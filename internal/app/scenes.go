@@ -3,8 +3,8 @@ package app
 import (
 	"errors"
 
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/feed"
-	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/push"
 	"github.com/dev1antdev/remuda/internal/radar"
@@ -36,7 +36,7 @@ func (m sceneMachine) Herdr() (scenes.Herdr, error) {
 	return client, nil
 }
 
-func (m sceneMachine) Snapshot() *herdr.Snapshot {
+func (m sceneMachine) Snapshot() *coreapi.Snapshot {
 	snap, _ := m.watch.Snapshot(m.mc.ID())
 	return snap
 }

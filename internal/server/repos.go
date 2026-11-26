@@ -7,8 +7,8 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/events"
-	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/push"
 	"github.com/dev1antdev/remuda/internal/repos"
@@ -212,7 +212,7 @@ func (s *Server) handleRunAction(w http.ResponseWriter, r *http.Request) {
 }
 
 // openRunPane is the shell an action runs in: a tab named after it, or a split of the pane (one of the workspace's).
-func openRunPane(client herdr.API, snap *herdr.Snapshot, ws *herdr.WorkspaceInfo, paneID string, action repos.Action, folder string) (string, error) {
+func openRunPane(client coreapi.API, snap *coreapi.Snapshot, ws *coreapi.WorkspaceInfo, paneID string, action repos.Action, folder string) (string, error) {
 	if action.Place == "right" || action.Place == "down" {
 		for i := range snap.Panes {
 			if p := &snap.Panes[i]; p.PaneID == paneID && p.WorkspaceID == ws.WorkspaceID {
@@ -223,7 +223,7 @@ func openRunPane(client herdr.API, snap *herdr.Snapshot, ws *herdr.WorkspaceInfo
 				return made.PaneID, nil
 			}
 		}
-		return "", &herdr.Error{Code: "pane_not_found", Message: "the pane to split beside is not in that workspace"}
+		return "", &coreapi.Error{Code: "pane_not_found", Message: "the pane to split beside is not in that workspace"}
 	}
 	made, err := client.TabCreateIn(ws.WorkspaceID, action.Name, folder, nil)
 	if err != nil {
@@ -233,7 +233,7 @@ func openRunPane(client herdr.API, snap *herdr.Snapshot, ws *herdr.WorkspaceInfo
 }
 
 // typeRun types the action's command into its new shell; a failure is a note in the activity, with the pane to open.
-func (s *Server) typeRun(mc *machines.Machine, client herdr.API, ref events.PaneRef, action repos.Action) {
+func (s *Server) typeRun(mc *machines.Machine, client coreapi.API, ref events.PaneRef, action repos.Action) {
 	if err := s.Input.TypeLine(client, ref, action.Command); err != nil && s.Push != nil {
 		s.Push.Notify(push.Payload{
 			Machine: mc.ID(), Pane: ref.Pane, Kind: "input",

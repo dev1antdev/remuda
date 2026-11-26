@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/events"
-	"github.com/dev1antdev/remuda/internal/herdr"
 )
 
 // busyReader counts the reads in flight per machine and the reads made per pane.
@@ -45,7 +45,7 @@ func TestTrackerReadsOneAtATimePerMachineAndEachFileOnce(t *testing.T) {
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
-					tr.OnStatus(events.PaneStatus{Pane: events.PaneRef{Machine: machine, Pane: pane}, Kind: "claude", From: herdr.StatusWorking, To: herdr.StatusDone})
+					tr.OnStatus(events.PaneStatus{Pane: events.PaneRef{Machine: machine, Pane: pane}, Kind: "claude", From: coreapi.StatusWorking, To: coreapi.StatusDone})
 				}()
 			}
 		}

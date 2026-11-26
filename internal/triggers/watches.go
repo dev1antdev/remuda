@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/watch"
 )
 
@@ -24,7 +24,7 @@ var (
 
 // Watches is the output watches for a machine's snapshot: the person's rules where they look, then the built-in two
 // on every pane, at most MaxWatches — standing being the watches the machine's stream subscribes to now.
-func (s *Service) Watches(machine string, snap *herdr.Snapshot, standing []watch.Output) []watch.Output {
+func (s *Service) Watches(machine string, snap *coreapi.Snapshot, standing []watch.Output) []watch.Output {
 	rules := s.Rules.List()
 	var person, builtin []watch.Output
 	for i := range snap.Panes {
@@ -35,12 +35,12 @@ func (s *Service) Watches(machine string, snap *herdr.Snapshot, standing []watch
 		}
 		for _, r := range rules {
 			if r.Covers(machine, dir, pane.Dir()) {
-				person = append(person, watch.Output{Key: rulePrefix + r.ID, Pane: pane.PaneID, Match: herdr.OutputMatch{Type: r.Match, Value: r.Pattern}, Lines: lines, Person: true})
+				person = append(person, watch.Output{Key: rulePrefix + r.ID, Pane: pane.PaneID, Match: coreapi.OutputMatch{Type: r.Match, Value: r.Pattern}, Lines: lines, Person: true})
 			}
 		}
 		builtin = append(builtin,
-			watch.Output{Key: WatchServe, Pane: pane.PaneID, Match: herdr.OutputMatch{Type: "regex", Value: ServePattern}, Lines: lines},
-			watch.Output{Key: WatchTests, Pane: pane.PaneID, Match: herdr.OutputMatch{Type: "regex", Value: TestsPattern}, Lines: lines})
+			watch.Output{Key: WatchServe, Pane: pane.PaneID, Match: coreapi.OutputMatch{Type: "regex", Value: ServePattern}, Lines: lines},
+			watch.Output{Key: WatchTests, Pane: pane.PaneID, Match: coreapi.OutputMatch{Type: "regex", Value: TestsPattern}, Lines: lines})
 	}
 	all := append(person, builtin...)
 	if len(all) > MaxWatches {

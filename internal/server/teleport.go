@@ -8,10 +8,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/feed"
 	"github.com/dev1antdev/remuda/internal/handover"
-	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/recap"
 	"github.com/dev1antdev/remuda/internal/sessions"
@@ -45,7 +45,7 @@ type teleported struct {
 }
 
 // teleportSource is the pane asked for and the folder its workspace works in.
-func (s *Server) teleportSource(mc *machines.Machine, paneID string) (*herdr.PaneInfo, string, error) {
+func (s *Server) teleportSource(mc *machines.Machine, paneID string) (*coreapi.PaneInfo, string, error) {
 	snap, err := s.Watch.Snapshot(mc.ID())
 	if snap == nil {
 		return nil, "", err
@@ -249,7 +249,7 @@ func (s *Server) handleTeleport(w http.ResponseWriter, r *http.Request) {
 }
 
 // teleportGist is the pane's conversation summed up as the handover's text; "" for a shell or one that cannot be read.
-func (s *Server) teleportGist(mc *machines.Machine, pane *herdr.PaneInfo, lastN int) string {
+func (s *Server) teleportGist(mc *machines.Machine, pane *coreapi.PaneInfo, lastN int) string {
 	if pane.Agent == "" || s.Chat == nil {
 		return ""
 	}

@@ -6,7 +6,7 @@ import (
 
 	"github.com/dev1antdev/remuda/internal/budget"
 	"github.com/dev1antdev/remuda/internal/chat"
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/limits"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/push"
@@ -125,14 +125,14 @@ func taskPane(chats *chat.Service, tracker *radar.Tracker, machineID, paneID str
 }
 
 // readTaskPane reads a task's pane as gone (ok false), not seen yet (unknown), left by its agent (idle) or the radar's.
-func readTaskPane(pane *herdr.PaneInfo, snap *herdr.Snapshot, inFleet bool, display func() radar.Display) (radar.Display, bool) {
+func readTaskPane(pane *coreapi.PaneInfo, snap *coreapi.Snapshot, inFleet bool, display func() radar.Display) (radar.Display, bool) {
 	switch {
 	case !inFleet, snap != nil && pane == nil:
 		return radar.Display{}, false
 	case snap == nil:
-		return radar.Display{State: herdr.StatusUnknown}, true
+		return radar.Display{State: coreapi.StatusUnknown}, true
 	case pane.Agent == "":
-		return radar.Display{State: herdr.StatusIdle}, true
+		return radar.Display{State: coreapi.StatusIdle}, true
 	}
 	return display(), true
 }

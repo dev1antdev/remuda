@@ -11,7 +11,7 @@ import (
 
 	"github.com/dev1antdev/remuda/internal/core"
 	"github.com/dev1antdev/remuda/internal/core/coretest"
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/shell"
 )
 
@@ -27,7 +27,7 @@ func adapterWith(t *testing.T, client *core.Client, sh shell.Shell, hooks core.A
 }
 
 // eventually asks for a snapshot until it says what want looks for.
-func eventually(t *testing.T, adapter *core.Adapter, want func(*herdr.Snapshot) bool) *herdr.Snapshot {
+func eventually(t *testing.T, adapter *core.Adapter, want func(*coreapi.Snapshot) bool) *coreapi.Snapshot {
 	t.Helper()
 	for start := time.Now(); time.Since(start) < 10*time.Second; time.Sleep(50 * time.Millisecond) {
 		snap, err := adapter.SessionSnapshot()
@@ -59,7 +59,7 @@ func TestTheAdapterShowsTheDocumentsWorkspacesAndEveryTerminal(t *testing.T) {
 	if !adapter.SnapshotFromMemory() {
 		t.Fatal("the adapter holds the machine: its snapshot is never a request")
 	}
-	snap := eventually(t, adapter, func(s *herdr.Snapshot) bool { return len(s.Panes) == 2 && len(s.Workspaces) == 2 })
+	snap := eventually(t, adapter, func(s *coreapi.Snapshot) bool { return len(s.Panes) == 2 && len(s.Workspaces) == 2 })
 	if ws := snap.Workspaces[0]; ws.WorkspaceID != "w1" || ws.Label != "api" || ws.ActiveTabID != "a" {
 		t.Fatalf("first workspace %+v", ws)
 	}
@@ -74,16 +74,16 @@ func TestTheAdapterShowsTheDocumentsWorkspacesAndEveryTerminal(t *testing.T) {
 	if _, err := client.DocSet(ctx, core.DocName, doc, 1); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Workspaces[0].Label == "api renamed" })
+	eventually(t, adapter, func(s *coreapi.Snapshot) bool { return s.Workspaces[0].Label == "api renamed" })
 	if _, err := client.Kill(ctx, loose.Address); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Pane(loose.Address) == nil })
+	eventually(t, adapter, func(s *coreapi.Snapshot) bool { return s.Pane(loose.Address) == nil })
 }
 
-func nextEvent(t *testing.T, stream herdr.EventStream, want func(herdr.Event) bool) herdr.Event {
+func nextEvent(t *testing.T, stream coreapi.EventStream, want func(coreapi.Event) bool) coreapi.Event {
 	t.Helper()
-	got := make(chan herdr.Event, 1)
+	got := make(chan coreapi.Event, 1)
 	go func() {
 		for {
 			ev, err := stream.Next()
@@ -101,7 +101,7 @@ func nextEvent(t *testing.T, stream herdr.EventStream, want func(herdr.Event) bo
 		return ev
 	case <-time.After(10 * time.Second):
 		t.Fatal("the event never came")
-		return herdr.Event{}
+		return coreapi.Event{}
 	}
 }
 
@@ -109,7 +109,7 @@ func TestAStatusTheProgramReportsReachesTheStreamAndTheSnapshot(t *testing.T) {
 	ctx := within(t, 30*time.Second)
 	client := coretest.Server(t).Client(t)
 	adapter := adapterOf(t, client, core.AdapterHooks{})
-	eventually(t, adapter, func(*herdr.Snapshot) bool { return true })
+	eventually(t, adapter, func(*coreapi.Snapshot) bool { return true })
 	stream, err := adapter.Subscribe(nil)
 	if err != nil {
 		t.Fatal(err)
@@ -119,15 +119,15 @@ func TestAStatusTheProgramReportsReachesTheStreamAndTheSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	told := nextEvent(t, stream, func(ev herdr.Event) bool { return ev.Kind == herdr.EventAgentStatus && ev.PaneID == agent.Address })
-	if told.AgentStatus != herdr.StatusWorking {
+	told := nextEvent(t, stream, func(ev coreapi.Event) bool { return ev.Kind == coreapi.EventAgentStatus && ev.PaneID == agent.Address })
+	if told.AgentStatus != coreapi.StatusWorking {
 		t.Fatalf("told %+v", told)
 	}
-	snap := eventually(t, adapter, func(s *herdr.Snapshot) bool {
+	snap := eventually(t, adapter, func(s *coreapi.Snapshot) bool {
 		p := s.Pane(agent.Address)
-		return p != nil && p.Agent == "claude" && p.AgentStatus == herdr.StatusWorking
+		return p != nil && p.Agent == "claude" && p.AgentStatus == coreapi.StatusWorking
 	})
-	if got, err := adapter.AgentGet(agent.Address); err != nil || got.Agent != "claude" || got.Status != herdr.StatusWorking {
+	if got, err := adapter.AgentGet(agent.Address); err != nil || got.Agent != "claude" || got.Status != coreapi.StatusWorking {
 		t.Fatalf("agent.get %+v %v in %+v", got, err, snap)
 	}
 }
@@ -140,22 +140,22 @@ func TestAnOutputWatchComesAsHerdrsMatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Pane(builder.Address) != nil })
-	stream, err := adapter.Subscribe([]herdr.Subscription{
-		{Type: herdr.EventAgentStatus, PaneID: builder.Address},
-		{Type: herdr.EventOutputMatched, PaneID: builder.Address, Source: "recent", Lines: 40, Match: &herdr.OutputMatch{Type: "regex", Value: `--- FAIL: \w+`}},
+	eventually(t, adapter, func(s *coreapi.Snapshot) bool { return s.Pane(builder.Address) != nil })
+	stream, err := adapter.Subscribe([]coreapi.Subscription{
+		{Type: coreapi.EventAgentStatus, PaneID: builder.Address},
+		{Type: coreapi.EventOutputMatched, PaneID: builder.Address, Source: "recent", Lines: 40, Match: &coreapi.OutputMatch{Type: "regex", Value: `--- FAIL: \w+`}},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer stream.Close()
-	told := nextEvent(t, stream, func(ev herdr.Event) bool { return ev.Kind == herdr.EventOutputMatched })
+	told := nextEvent(t, stream, func(ev coreapi.Event) bool { return ev.Kind == coreapi.EventOutputMatched })
 	if told.PaneID != builder.Address || !strings.Contains(told.MatchedLine, "--- FAIL: TestThing") {
 		t.Fatalf("told %+v", told)
 	}
 
-	_, err = adapter.Subscribe([]herdr.Subscription{{Type: herdr.EventOutputMatched, PaneID: builder.Address, Match: &herdr.OutputMatch{Type: "regex", Value: `(unclosed`}}})
-	if !herdr.IsCode(err, "invalid_regex") {
+	_, err = adapter.Subscribe([]coreapi.Subscription{{Type: coreapi.EventOutputMatched, PaneID: builder.Address, Match: &coreapi.OutputMatch{Type: "regex", Value: `(unclosed`}}})
+	if !coreapi.IsCode(err, "invalid_regex") {
 		t.Fatalf("a regex the core cannot read: %v", err)
 	}
 }
@@ -168,7 +168,7 @@ func TestReadsAnswerInHerdrsWords(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Pane(printer.Address) != nil })
+	eventually(t, adapter, func(s *coreapi.Snapshot) bool { return s.Pane(printer.Address) != nil })
 	for start := time.Now(); ; time.Sleep(50 * time.Millisecond) {
 		recent, _, err := adapter.PaneRecent(printer.Address, 3)
 		if err == nil && recent == "49\n50\nred" {
@@ -185,16 +185,16 @@ func TestReadsAnswerInHerdrsWords(t *testing.T) {
 	if err != nil || !strings.Contains(screen.Text, "\x1b[") || !strings.HasSuffix(withoutColour(screen.Text), "red") {
 		t.Fatalf("screen %q %v", screen.Text, err)
 	}
-	if _, err := adapter.PaneRead("t999"); !herdr.IsCode(err, "pane_not_found") {
+	if _, err := adapter.PaneRead("t999"); !coreapi.IsCode(err, "pane_not_found") {
 		t.Fatalf("a terminal that is not there: %v", err)
 	}
-	if _, err := adapter.AgentGet(printer.Address); !herdr.IsCode(err, "agent_not_found") {
+	if _, err := adapter.AgentGet(printer.Address); !coreapi.IsCode(err, "agent_not_found") {
 		t.Fatalf("a terminal with no agent: %v", err)
 	}
 	if pid, err := adapter.PaneShellPID(printer.Address); err != nil || pid != printer.Pid {
 		t.Fatalf("shell pid %d %v, want %d", pid, err, printer.Pid)
 	}
-	if err := adapter.AgentPrompt(printer.Address, "hi"); !herdr.IsCode(err, "agent_not_found") {
+	if err := adapter.AgentPrompt(printer.Address, "hi"); !coreapi.IsCode(err, "agent_not_found") {
 		t.Fatalf("a prompt to a terminal with no agent: %v", err)
 	}
 }
@@ -228,7 +228,7 @@ func TestTheMirrorIsReadAgainAfterTheConnectionIsLost(t *testing.T) {
 	t.Cleanup(func() { client.Close() })
 	var lost atomic.Int32
 	adapter := adapterOf(t, client, core.AdapterHooks{TransportError: func(error) { lost.Add(1) }})
-	eventually(t, adapter, func(*herdr.Snapshot) bool { return true })
+	eventually(t, adapter, func(*coreapi.Snapshot) bool { return true })
 	stream, err := adapter.Subscribe(nil)
 	if err != nil {
 		t.Fatal(err)
@@ -246,7 +246,7 @@ func TestTheMirrorIsReadAgainAfterTheConnectionIsLost(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Pane(started.Address) != nil })
+	eventually(t, adapter, func(s *coreapi.Snapshot) bool { return s.Pane(started.Address) != nil })
 	if lost.Load() == 0 {
 		t.Fatal("the machine never heard the connection was lost")
 	}

@@ -14,8 +14,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/events"
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/herdrollback"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/state"
 	"github.com/dev1antdev/remuda/internal/text"
@@ -96,7 +97,7 @@ func Resume(kind, session string) string {
 }
 
 // Chats are the panes of these kinds with a session to resume: the ready ones and the busy ones.
-func Chats(snap *herdr.Snapshot, kinds []string) (ready, busy []herdr.PaneInfo) {
+func Chats(snap *coreapi.Snapshot, kinds []string) (ready, busy []coreapi.PaneInfo) {
 	if snap == nil {
 		return nil, nil
 	}
@@ -115,7 +116,7 @@ func Chats(snap *herdr.Snapshot, kinds []string) (ready, busy []herdr.PaneInfo) 
 }
 
 // Count is Chats, counted.
-func Count(snap *herdr.Snapshot, kinds []string) (ready, busy int) {
+func Count(snap *coreapi.Snapshot, kinds []string) (ready, busy int) {
 	r, b := Chats(snap, kinds)
 	return len(r), len(b)
 }
@@ -131,12 +132,12 @@ func has(kinds []string, k string) bool {
 
 // settled: the agent is ready for input, so it can be asked to leave
 func settled(status string) bool {
-	return status == herdr.StatusIdle || status == herdr.StatusDone
+	return status == coreapi.StatusIdle || status == coreapi.StatusDone
 }
 
 // sessionOf is the pane's session id, or "" for one that does not look like one:
 // the value comes from the pane's own hooks and is about to be typed after --resume.
-func sessionOf(p *herdr.PaneInfo) string {
+func sessionOf(p *coreapi.PaneInfo) string {
 	if p.AgentSession == nil || p.AgentSession.Kind != "id" || !text.SessionID(p.AgentSession.Value) {
 		return ""
 	}
@@ -169,7 +170,7 @@ type Restarter struct {
 	Memory *Memory
 	// Typed hears every command this restarter types into a pane (an agent's exit or restart), for the activity; nil hears none.
 	Typed func(machineID, paneID, text string)
-	// Serving says whether herdr's server answers on a machine moved to remuda-core (herdr.Serving over its shell).
+	// Serving says whether herdr's server answers on a machine moved to remuda-core (herdrollback.Serving over its shell).
 	Serving func(mc *machines.Machine) (bool, error)
 
 	mu         sync.Mutex
@@ -191,7 +192,7 @@ func (r *Restarter) typed(key, paneID, text string) {
 func New(m *machines.Manager) *Restarter {
 	serving := func(mc *machines.Machine) (bool, error) {
 		bin, socket := mc.MovedHerdr()
-		return herdr.Serving(mc, bin, socket)
+		return herdrollback.Serving(mc, bin, socket)
 	}
 	return &Restarter{machines: m, Serving: serving, pending: map[string]*booking{}, last: map[string]time.Time{}}
 }
@@ -282,7 +283,7 @@ func (r *Restarter) Now(mc *machines.Machine, kinds []string, say func(string)) 
 
 // Resumable says which agent and session a pane's chat can be restarted on right now, or why not:
 // a shell, an agent remuda cannot restart, no session id, a question open, still working.
-func Resumable(p herdr.PaneInfo) (kind, session string, err error) {
+func Resumable(p coreapi.PaneInfo) (kind, session string, err error) {
 	title := firstNonEmpty(p.DisplayTitle(), p.PaneID)
 	if p.Agent == "" {
 		return "", "", fmt.Errorf("%s is a shell: nothing to restart", title)
@@ -296,9 +297,9 @@ func Resumable(p herdr.PaneInfo) (kind, session string, err error) {
 		return "", "", fmt.Errorf("%s has no session id to resume", title)
 	}
 	switch p.AgentStatus {
-	case herdr.StatusBlocked:
+	case coreapi.StatusBlocked:
 		return "", "", fmt.Errorf("%s has a question open: answer it first", title)
-	case herdr.StatusWorking:
+	case coreapi.StatusWorking:
 		return "", "", fmt.Errorf("%s is still working: wait until it settles, or send it Esc", title)
 	}
 	if !settled(p.AgentStatus) {
@@ -308,16 +309,16 @@ func Resumable(p herdr.PaneInfo) (kind, session string, err error) {
 }
 
 // Lookup is the pane in the snapshot, if it is there.
-func Lookup(snap *herdr.Snapshot, paneID string) (herdr.PaneInfo, bool) {
+func Lookup(snap *coreapi.Snapshot, paneID string) (coreapi.PaneInfo, bool) {
 	if snap == nil {
-		return herdr.PaneInfo{}, false
+		return coreapi.PaneInfo{}, false
 	}
 	for i := range snap.Panes {
 		if snap.Panes[i].PaneID == paneID {
 			return snap.Panes[i], true
 		}
 	}
-	return herdr.PaneInfo{}, false
+	return coreapi.PaneInfo{}, false
 }
 
 // Pane restarts one chat by hand, under the pane's lock: a fresh look, Resumable's refusals, then the leave and the resume.
@@ -407,7 +408,7 @@ func (r *Restarter) one(mc *machines.Machine, paneID, kind, session string, say 
 
 // swap is the restart itself: the agent's own in-place restart when it has one, else — or when it has no such
 // command here — its own exit, a wait for the shell under it, and the start with the session resumed.
-func (r *Restarter) swap(key string, client herdr.API, p herdr.PaneInfo, a agent, session string, say func(string)) error {
+func (r *Restarter) swap(key string, client coreapi.API, p coreapi.PaneInfo, a agent, session string, say func(string)) error {
 	paneID, title := p.PaneID, p.DisplayTitle()
 	r.mu.Lock()
 	r.last[key] = time.Now()
@@ -442,21 +443,21 @@ func (r *Restarter) swap(key string, client herdr.API, p herdr.PaneInfo, a agent
 	return nil
 }
 
-func pane(client herdr.API, paneID string) (herdr.PaneInfo, bool) {
+func pane(client coreapi.API, paneID string) (coreapi.PaneInfo, bool) {
 	p, found, _ := Look(client, paneID)
 	return p, found
 }
 
 // Looker is a client that can be asked for its session snapshot.
 type Looker interface {
-	SessionSnapshot() (*herdr.Snapshot, error)
+	SessionSnapshot() (*coreapi.Snapshot, error)
 }
 
 // Look is the pane in a fresh snapshot.
-func Look(client Looker, paneID string) (herdr.PaneInfo, bool, error) {
+func Look(client Looker, paneID string) (coreapi.PaneInfo, bool, error) {
 	snap, err := client.SessionSnapshot()
 	if err != nil {
-		return herdr.PaneInfo{}, false, err
+		return coreapi.PaneInfo{}, false, err
 	}
 	p, found := Lookup(snap, paneID)
 	return p, found, nil

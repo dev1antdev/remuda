@@ -1,7 +1,7 @@
 package gitsync
 
 import (
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/rpath"
 )
 
@@ -16,11 +16,11 @@ const (
 // counts when herdr names its workspace's checkout and that is this one, or, where herdr names none, when its folder
 // lies in it: a linked worktree is a checkout of its own, so an agent in one does not hold its repository's main
 // folder back. going says a turn is still ending in a workspace's folder.
-func AgentIn(snap *herdr.Snapshot, style rpath.Style, checkout string, going func(dir string) bool) (agent, doing string) {
+func AgentIn(snap *coreapi.Snapshot, style rpath.Style, checkout string, going func(dir string) bool) (agent, doing string) {
 	if snap == nil {
 		return "", ""
 	}
-	inCheckout := func(ws *herdr.WorkspaceInfo, dir string) bool {
+	inCheckout := func(ws *coreapi.WorkspaceInfo, dir string) bool {
 		if ws != nil && ws.Worktree != nil && ws.Worktree.CheckoutPath != "" {
 			return style.Equal(ws.Worktree.CheckoutPath, checkout)
 		}
@@ -28,11 +28,11 @@ func AgentIn(snap *herdr.Snapshot, style rpath.Style, checkout string, going fun
 	}
 	for i := range snap.Panes {
 		pane := &snap.Panes[i]
-		if pane.Agent == "" || (pane.AgentStatus != herdr.StatusWorking && pane.AgentStatus != herdr.StatusBlocked) {
+		if pane.Agent == "" || (pane.AgentStatus != coreapi.StatusWorking && pane.AgentStatus != coreapi.StatusBlocked) {
 			continue
 		}
 		if inCheckout(snap.Workspace(pane.WorkspaceID), pane.Dir()) {
-			if pane.AgentStatus == herdr.StatusBlocked {
+			if pane.AgentStatus == coreapi.StatusBlocked {
 				return pane.Agent, DoingAsk
 			}
 			return pane.Agent, DoingWork

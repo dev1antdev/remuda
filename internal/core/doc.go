@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 )
 
 // DocName is the document remuda keeps a machine's workspaces and tabs in: the core holds terminals only.
@@ -31,15 +31,15 @@ type DocWorkspace struct {
 	ActiveTab string   `json:"active_tab,omitempty"`
 	Tabs      []DocTab `json:"tabs"`
 	// Worktree is the git checkout the folder is, as read once when the workspace was made; nil outside git.
-	Worktree *herdr.WorktreeInfo `json:"worktree,omitempty"`
+	Worktree *coreapi.WorktreeInfo `json:"worktree,omitempty"`
 	rest     kept
 }
 
 // DocTab is one tab and its pane tree, herdr's layout shape with a terminal's address as each pane's id.
 type DocTab struct {
-	ID     string            `json:"id"`
-	Label  string            `json:"label"`
-	Layout *herdr.LayoutNode `json:"layout,omitempty"`
+	ID     string              `json:"id"`
+	Label  string              `json:"label"`
+	Layout *coreapi.LayoutNode `json:"layout,omitempty"`
 	rest   kept
 }
 

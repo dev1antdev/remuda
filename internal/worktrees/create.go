@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/repos"
 	"github.com/dev1antdev/remuda/internal/rpath"
 	"github.com/dev1antdev/remuda/internal/script"
@@ -159,13 +159,13 @@ func FolderFor(location, branch string) string {
 
 // Maker is what a create needs of herdr.
 type Maker interface {
-	WorktreeCreateAt(workspaceID, branch, base, label, path string) (*herdr.WorktreeCreateResult, error)
-	WorktreeOpen(workspaceID, path, label string) (*herdr.WorktreeCreateResult, error)
+	WorktreeCreateAt(workspaceID, branch, base, label, path string) (*coreapi.WorktreeCreateResult, error)
+	WorktreeOpen(workspaceID, path, label string) (*coreapi.WorktreeCreateResult, error)
 }
 
 // Created is a create's outcome: herdr's answer, and what of the git around it did not go through.
 type Created struct {
-	*herdr.WorktreeCreateResult
+	*coreapi.WorktreeCreateResult
 	Notes []string
 }
 
@@ -177,7 +177,7 @@ func Create(host shell.Shell, h Maker, root, workspaceID string, plan Plan, labe
 		}
 	}
 	var (
-		res *herdr.WorktreeCreateResult
+		res *coreapi.WorktreeCreateResult
 		err error
 	)
 	switch plan.Action {

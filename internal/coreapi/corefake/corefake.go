@@ -1,7 +1,7 @@
-// Package herdrfake is a machine's API, its terminals and its event stream as a test wants them: function fields for the
+// Package corefake is a machine's API, its terminals and its event stream as a test wants them: function fields for the
 // calls a test cares about, and nothing done for the rest. It stood herdrtest's socket before Core 26j: remuda asks
 // remuda-core now, so a test gives its machine this in place of a client.
-package herdrfake
+package corefake
 
 import (
 	"errors"
@@ -9,33 +9,33 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/machines"
 )
 
-// API is a herdr.API whose calls are the functions given; a call with none answers nothing and no error.
+// API is a coreapi.API whose calls are the functions given; a call with none answers nothing and no error.
 type API struct {
 	Memory     bool // the snapshot is held here, not asked of a core
-	Snapshot   func() (*herdr.Snapshot, error)
-	SubscribeF func(subs []herdr.Subscription) (herdr.EventStream, error)
+	Snapshot   func() (*coreapi.Snapshot, error)
+	SubscribeF func(subs []coreapi.Subscription) (coreapi.EventStream, error)
 
-	WorkspaceCreateF func(cwd, label string) (*herdr.WorkspaceCreateResult, error)
+	WorkspaceCreateF func(cwd, label string) (*coreapi.WorkspaceCreateResult, error)
 	WorkspaceRenameF func(workspaceID, label string) error
 	WorkspaceCloseF  func(workspaceID string) error
-	TabCreateF       func(workspaceID, label string) (*herdr.TabCreateResult, error)
-	TabCreateInF     func(workspaceID, label, cwd string, env map[string]string) (*herdr.TabCreateResult, error)
+	TabCreateF       func(workspaceID, label string) (*coreapi.TabCreateResult, error)
+	TabCreateInF     func(workspaceID, label, cwd string, env map[string]string) (*coreapi.TabCreateResult, error)
 	TabRenameF       func(tabID, label string) error
 	TabCloseF        func(tabID string) error
-	WorktreeCreateF  func(workspaceID, branch, base, label string) (*herdr.WorktreeCreateResult, error)
-	WorktreeOpenF    func(workspaceID, path, label string) (*herdr.WorktreeCreateResult, error)
-	LayoutExportF    func(tabID string) (*herdr.LayoutDescription, error)
-	LayoutApplyF     func(workspaceID, tabID, label string, root herdr.LayoutNode) (*herdr.LayoutDescription, error)
+	WorktreeCreateF  func(workspaceID, branch, base, label string) (*coreapi.WorktreeCreateResult, error)
+	WorktreeOpenF    func(workspaceID, path, label string) (*coreapi.WorktreeCreateResult, error)
+	LayoutExportF    func(tabID string) (*coreapi.LayoutDescription, error)
+	LayoutApplyF     func(workspaceID, tabID, label string, root coreapi.LayoutNode) (*coreapi.LayoutDescription, error)
 
-	PaneSplitF    func(paneID, direction, cwd string) (*herdr.PaneInfo, error)
+	PaneSplitF    func(paneID, direction, cwd string) (*coreapi.PaneInfo, error)
 	PaneCloseF    func(paneID string) error
 	PaneReadF     func(paneID string) (string, error)
 	PaneRecentF   func(paneID string, n int) (string, bool, error)
-	PaneScreenF   func(paneID string) (herdr.Screen, error)
+	PaneScreenF   func(paneID string) (coreapi.Screen, error)
 	PaneSendTextF func(paneID, text string) error
 	PaneSendKeysF func(paneID string, keys []string) error
 	PaneAtPromptF func(paneID string) (bool, error)
@@ -44,28 +44,28 @@ type API struct {
 	AgentStartF     func(paneID, kind string) error
 	AgentStartWithF func(paneID, kind, name string, args []string, timeout time.Duration) error
 	AgentPromptF    func(target, text string) error
-	AgentGetF       func(target string) (herdr.AgentInfo, error)
+	AgentGetF       func(target string) (coreapi.AgentInfo, error)
 }
 
-var _ herdr.API = (*API)(nil)
+var _ coreapi.API = (*API)(nil)
 
-func (a *API) SessionSnapshot() (*herdr.Snapshot, error) {
+func (a *API) SessionSnapshot() (*coreapi.Snapshot, error) {
 	if a.Snapshot == nil {
-		return &herdr.Snapshot{}, nil
+		return &coreapi.Snapshot{}, nil
 	}
 	return a.Snapshot()
 }
 
 func (a *API) SnapshotFromMemory() bool { return a.Memory }
 
-func (a *API) Subscribe(subs []herdr.Subscription) (herdr.EventStream, error) {
+func (a *API) Subscribe(subs []coreapi.Subscription) (coreapi.EventStream, error) {
 	if a.SubscribeF == nil {
 		return nil, nil
 	}
 	return a.SubscribeF(subs)
 }
 
-func (a *API) WorkspaceCreate(cwd, label string) (*herdr.WorkspaceCreateResult, error) {
+func (a *API) WorkspaceCreate(cwd, label string) (*coreapi.WorkspaceCreateResult, error) {
 	if a.WorkspaceCreateF == nil {
 		return nil, nil
 	}
@@ -86,14 +86,14 @@ func (a *API) WorkspaceClose(workspaceID string) error {
 	return a.WorkspaceCloseF(workspaceID)
 }
 
-func (a *API) TabCreate(workspaceID, label string) (*herdr.TabCreateResult, error) {
+func (a *API) TabCreate(workspaceID, label string) (*coreapi.TabCreateResult, error) {
 	if a.TabCreateF == nil {
 		return nil, nil
 	}
 	return a.TabCreateF(workspaceID, label)
 }
 
-func (a *API) TabCreateIn(workspaceID, label, cwd string, env map[string]string) (*herdr.TabCreateResult, error) {
+func (a *API) TabCreateIn(workspaceID, label, cwd string, env map[string]string) (*coreapi.TabCreateResult, error) {
 	if a.TabCreateInF == nil {
 		return nil, nil
 	}
@@ -114,39 +114,39 @@ func (a *API) TabClose(tabID string) error {
 	return a.TabCloseF(tabID)
 }
 
-func (a *API) WorktreeCreate(workspaceID, branch, base, label string) (*herdr.WorktreeCreateResult, error) {
+func (a *API) WorktreeCreate(workspaceID, branch, base, label string) (*coreapi.WorktreeCreateResult, error) {
 	if a.WorktreeCreateF == nil {
 		return nil, nil
 	}
 	return a.WorktreeCreateF(workspaceID, branch, base, label)
 }
 
-func (a *API) WorktreeCreateAt(workspaceID, branch, base, label, path string) (*herdr.WorktreeCreateResult, error) {
+func (a *API) WorktreeCreateAt(workspaceID, branch, base, label, path string) (*coreapi.WorktreeCreateResult, error) {
 	return a.WorktreeCreate(workspaceID, branch, base, label)
 }
 
-func (a *API) WorktreeOpen(workspaceID, path, label string) (*herdr.WorktreeCreateResult, error) {
+func (a *API) WorktreeOpen(workspaceID, path, label string) (*coreapi.WorktreeCreateResult, error) {
 	if a.WorktreeOpenF == nil {
 		return nil, nil
 	}
 	return a.WorktreeOpenF(workspaceID, path, label)
 }
 
-func (a *API) LayoutExport(tabID string) (*herdr.LayoutDescription, error) {
+func (a *API) LayoutExport(tabID string) (*coreapi.LayoutDescription, error) {
 	if a.LayoutExportF == nil {
 		return nil, nil
 	}
 	return a.LayoutExportF(tabID)
 }
 
-func (a *API) LayoutApply(workspaceID, tabID, label string, root herdr.LayoutNode) (*herdr.LayoutDescription, error) {
+func (a *API) LayoutApply(workspaceID, tabID, label string, root coreapi.LayoutNode) (*coreapi.LayoutDescription, error) {
 	if a.LayoutApplyF == nil {
 		return nil, nil
 	}
 	return a.LayoutApplyF(workspaceID, tabID, label, root)
 }
 
-func (a *API) PaneSplit(paneID, direction, cwd string) (*herdr.PaneInfo, error) {
+func (a *API) PaneSplit(paneID, direction, cwd string) (*coreapi.PaneInfo, error) {
 	if a.PaneSplitF == nil {
 		return nil, nil
 	}
@@ -174,9 +174,9 @@ func (a *API) PaneRecent(paneID string, n int) (string, bool, error) {
 	return a.PaneRecentF(paneID, n)
 }
 
-func (a *API) PaneScreen(paneID string) (herdr.Screen, error) {
+func (a *API) PaneScreen(paneID string) (coreapi.Screen, error) {
 	if a.PaneScreenF == nil {
-		return herdr.Screen{}, nil
+		return coreapi.Screen{}, nil
 	}
 	return a.PaneScreenF(paneID)
 }
@@ -230,9 +230,9 @@ func (a *API) AgentPrompt(target, text string) error {
 	return a.AgentPromptF(target, text)
 }
 
-func (a *API) AgentGet(target string) (herdr.AgentInfo, error) {
+func (a *API) AgentGet(target string) (coreapi.AgentInfo, error) {
 	if a.AgentGetF == nil {
-		return herdr.AgentInfo{}, nil
+		return coreapi.AgentInfo{}, nil
 	}
 	return a.AgentGetF(target)
 }
@@ -240,7 +240,7 @@ func (a *API) AgentGet(target string) (herdr.AgentInfo, error) {
 // Stream is an event stream a test feeds: Push hands one event to its reader, End gives it the error it ends on.
 type Stream struct {
 	mu     sync.Mutex
-	events chan herdr.Event
+	events chan coreapi.Event
 	done   chan struct{}
 	err    error
 	closed bool
@@ -248,10 +248,10 @@ type Stream struct {
 
 // NewStream is a stream with room for n events before its reader must take them.
 func NewStream(n int) *Stream {
-	return &Stream{events: make(chan herdr.Event, n), done: make(chan struct{})}
+	return &Stream{events: make(chan coreapi.Event, n), done: make(chan struct{})}
 }
 
-var _ herdr.EventStream = (*Stream)(nil)
+var _ coreapi.EventStream = (*Stream)(nil)
 
 var (
 	herdrErrClosed     = net.ErrClosed
@@ -259,7 +259,7 @@ var (
 )
 
 // Next hands the next event over, then the error the stream ended on; net.ErrClosed once it is closed here.
-func (s *Stream) Next() (herdr.Event, error) {
+func (s *Stream) Next() (coreapi.Event, error) {
 	select {
 	case ev, ok := <-s.events:
 		if ok {
@@ -271,7 +271,7 @@ func (s *Stream) Next() (herdr.Event, error) {
 		if err == nil {
 			err = herdrErrClosed
 		}
-		return herdr.Event{}, err
+		return coreapi.Event{}, err
 	case <-s.done:
 		s.mu.Lock()
 		err := s.err
@@ -279,12 +279,12 @@ func (s *Stream) Next() (herdr.Event, error) {
 		if err == nil {
 			err = herdrErrClosed
 		}
-		return herdr.Event{}, err
+		return coreapi.Event{}, err
 	}
 }
 
 // Push hands one event over.
-func (s *Stream) Push(ev herdr.Event) {
+func (s *Stream) Push(ev coreapi.Event) {
 	s.mu.Lock()
 	closed := s.closed
 	s.mu.Unlock()
@@ -314,13 +314,13 @@ func (s *Stream) Close() error {
 
 // Terminals is a machine's terminals as a test wants them: Open hands over what its function answers.
 type Terminals struct {
-	OpenF    func(termID string, view herdr.View) (herdr.Viewer, error)
+	OpenF    func(termID string, view coreapi.View) (coreapi.Viewer, error)
 	ViewersF func(termID string) int
 }
 
-var _ herdr.Terminals = (*Terminals)(nil)
+var _ coreapi.Terminals = (*Terminals)(nil)
 
-func (t *Terminals) Open(termID string, view herdr.View) (herdr.Viewer, error) {
+func (t *Terminals) Open(termID string, view coreapi.View) (coreapi.Viewer, error) {
 	if t.OpenF == nil {
 		return nil, herdrErrNoTerminal
 	}

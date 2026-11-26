@@ -3,11 +3,11 @@ package sessions
 import (
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/events"
-	"github.com/dev1antdev/remuda/internal/herdr"
 )
 
-// ScreenReader is a client whose agent can be prompted and whose pane's screen can be read: herdr.API.
+// ScreenReader is a client whose agent can be prompted and whose pane's screen can be read: coreapi.API.
 type ScreenReader interface {
 	Prompter
 	PaneRead(paneID string) (string, error)
@@ -55,9 +55,9 @@ func (h Handoff) Run() (last error, timedOut bool) {
 		switch {
 		case err == nil:
 			return nil, false
-		case herdr.IsCode(err, "agent_not_ready") || herdr.IsCode(err, "agent_not_found") || herdr.IsCode(err, "agent_working"):
+		case coreapi.IsCode(err, "agent_not_ready") || coreapi.IsCode(err, "agent_not_found") || coreapi.IsCode(err, "agent_working"):
 			last = err
-		case herdr.IsCode(err, "agent_blocked"):
+		case coreapi.IsCode(err, "agent_blocked"):
 			last = err
 			if !trusted {
 				if screen, rerr := h.Client.PaneRead(h.Ref.Pane); rerr == nil && TrustPrompt(screen, h.Dir, h.Home) {

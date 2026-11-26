@@ -7,12 +7,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/shell"
 )
 
-func snapshot(dir string, panes ...herdr.PaneInfo) *herdr.Snapshot {
-	snap := &herdr.Snapshot{Workspaces: []herdr.WorkspaceInfo{{WorkspaceID: "w1", Label: "app"}}}
+func snapshot(dir string, panes ...coreapi.PaneInfo) *coreapi.Snapshot {
+	snap := &coreapi.Snapshot{Workspaces: []coreapi.WorkspaceInfo{{WorkspaceID: "w1", Label: "app"}}}
 	for _, pane := range panes {
 		pane.WorkspaceID, pane.CWD = "w1", dir
 		snap.Panes = append(snap.Panes, pane)
@@ -20,8 +20,8 @@ func snapshot(dir string, panes ...herdr.PaneInfo) *herdr.Snapshot {
 	return snap
 }
 
-func agentPane(id, status string) herdr.PaneInfo {
-	return herdr.PaneInfo{PaneID: id, Agent: "claude", DisplayAgent: "Claude Code", AgentStatus: status}
+func agentPane(id, status string) coreapi.PaneInfo {
+	return coreapi.PaneInfo{PaneID: id, Agent: "claude", DisplayAgent: "Claude Code", AgentStatus: status}
 }
 
 // waitFor polls until done answers true, failing the test after a few seconds.
@@ -60,19 +60,19 @@ func TestTrackerKeepsATurnFromWorkToRest(t *testing.T) {
 	dir := repo(t, map[string]string{"a.txt": "one\n"})
 	tracker, store := newTracker(t)
 	at := time.Now()
-	tracker.Observe("local", snapshot(dir, agentPane("p1", herdr.StatusWorking)), at, false)
+	tracker.Observe("local", snapshot(dir, agentPane("p1", coreapi.StatusWorking)), at, false)
 	idle(t, tracker)
 	if len(store.LoadOpen()) != 1 {
 		t.Fatal("the start is not kept on the disk while the turn goes")
 	}
 	write(t, dir, "a.txt", "agent\n")
-	tracker.Observe("local", snapshot(dir, agentPane("p1", herdr.StatusDone)), at.Add(10*time.Second), false)
+	tracker.Observe("local", snapshot(dir, agentPane("p1", coreapi.StatusDone)), at.Add(10*time.Second), false)
 	if !tracker.Going("local", dir) {
 		t.Error("a turn that only just rested is not going: an undo would land in it")
 	}
-	tracker.Observe("local", snapshot(dir, agentPane("p1", herdr.StatusDone)), at.Add(10*time.Second+Settle), false)
+	tracker.Observe("local", snapshot(dir, agentPane("p1", coreapi.StatusDone)), at.Add(10*time.Second+Settle), false)
 	idle(t, tracker)
-	tracker.Observe("local", snapshot(dir, agentPane("p1", herdr.StatusDone)), at.Add(10*time.Second+Grace), false)
+	tracker.Observe("local", snapshot(dir, agentPane("p1", coreapi.StatusDone)), at.Add(10*time.Second+Grace), false)
 	idle(t, tracker)
 	turns := store.List("local", dir)
 	if len(turns) != 1 || len(turns[0].Files) != 1 || turns[0].Files[0].Path != "a.txt" || turns[0].Agent != "Claude Code" || turns[0].Pane != "p1" {
@@ -87,19 +87,19 @@ func TestTrackerTreatsABlinkAsTheSameTurn(t *testing.T) {
 	dir := repo(t, map[string]string{"a.txt": "one\n"})
 	tracker, store := newTracker(t)
 	at := time.Now()
-	tracker.Observe("local", snapshot(dir, agentPane("p1", herdr.StatusWorking)), at, false)
+	tracker.Observe("local", snapshot(dir, agentPane("p1", coreapi.StatusWorking)), at, false)
 	idle(t, tracker)
 	write(t, dir, "a.txt", "first half\n")
-	tracker.Observe("local", snapshot(dir, agentPane("p1", herdr.StatusIdle)), at.Add(time.Second), false)
-	tracker.Observe("local", snapshot(dir, agentPane("p1", herdr.StatusIdle)), at.Add(time.Second+Settle), false)
+	tracker.Observe("local", snapshot(dir, agentPane("p1", coreapi.StatusIdle)), at.Add(time.Second), false)
+	tracker.Observe("local", snapshot(dir, agentPane("p1", coreapi.StatusIdle)), at.Add(time.Second+Settle), false)
 	idle(t, tracker)
-	tracker.Observe("local", snapshot(dir, agentPane("p1", herdr.StatusWorking)), at.Add(2*time.Second+Settle), false)
+	tracker.Observe("local", snapshot(dir, agentPane("p1", coreapi.StatusWorking)), at.Add(2*time.Second+Settle), false)
 	write(t, dir, "b.txt", "second half\n")
 	rest := at.Add(10 * time.Second)
-	tracker.Observe("local", snapshot(dir, agentPane("p1", herdr.StatusDone)), rest, false)
-	tracker.Observe("local", snapshot(dir, agentPane("p1", herdr.StatusDone)), rest.Add(Settle), false)
+	tracker.Observe("local", snapshot(dir, agentPane("p1", coreapi.StatusDone)), rest, false)
+	tracker.Observe("local", snapshot(dir, agentPane("p1", coreapi.StatusDone)), rest.Add(Settle), false)
 	idle(t, tracker)
-	tracker.Observe("local", snapshot(dir, agentPane("p1", herdr.StatusDone)), rest.Add(Grace), false)
+	tracker.Observe("local", snapshot(dir, agentPane("p1", coreapi.StatusDone)), rest.Add(Grace), false)
 	idle(t, tracker)
 	turns := store.List("local", dir)
 	if len(turns) != 1 || len(turns[0].Files) != 2 {
@@ -112,13 +112,13 @@ func TestTrackerLeavesAFolderOutsideGitAlone(t *testing.T) {
 	dir := t.TempDir()
 	tracker, store := newTracker(t)
 	at := time.Now()
-	tracker.Observe("local", snapshot(dir, agentPane("p1", herdr.StatusWorking)), at, false)
+	tracker.Observe("local", snapshot(dir, agentPane("p1", coreapi.StatusWorking)), at, false)
 	idle(t, tracker)
 	if err := os.WriteFile(filepath.Join(dir, "x"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	tracker.Observe("local", snapshot(dir, agentPane("p1", herdr.StatusDone)), at.Add(time.Second), false)
-	tracker.Observe("local", snapshot(dir, agentPane("p1", herdr.StatusDone)), at.Add(time.Second+Grace), false)
+	tracker.Observe("local", snapshot(dir, agentPane("p1", coreapi.StatusDone)), at.Add(time.Second), false)
+	tracker.Observe("local", snapshot(dir, agentPane("p1", coreapi.StatusDone)), at.Add(time.Second+Grace), false)
 	idle(t, tracker)
 	if len(store.List("local", dir)) != 0 || len(store.LoadOpen()) != 0 || tracker.Going("local", dir) {
 		t.Fatal("a folder outside git got a turn")
@@ -129,11 +129,11 @@ func TestTrackerMarksTwoAgentsInOneFolderShared(t *testing.T) {
 	dir := repo(t, map[string]string{"a.txt": "one\n"})
 	tracker, store := newTracker(t)
 	at := time.Now()
-	tracker.Observe("local", snapshot(dir, agentPane("p1", herdr.StatusWorking), agentPane("p2", herdr.StatusWorking)), at, false)
+	tracker.Observe("local", snapshot(dir, agentPane("p1", coreapi.StatusWorking), agentPane("p2", coreapi.StatusWorking)), at, false)
 	idle(t, tracker)
 	write(t, dir, "a.txt", "two agents\n")
 	for _, step := range []time.Duration{time.Second, time.Second + Settle, time.Second + Grace} {
-		tracker.Observe("local", snapshot(dir, agentPane("p1", herdr.StatusDone), agentPane("p2", herdr.StatusDone)), at.Add(step), false)
+		tracker.Observe("local", snapshot(dir, agentPane("p1", coreapi.StatusDone), agentPane("p2", coreapi.StatusDone)), at.Add(step), false)
 		idle(t, tracker)
 	}
 	turns := store.List("local", dir)
@@ -149,15 +149,15 @@ func TestTrackerPicksAGoingTurnUpAfterARestart(t *testing.T) {
 	host := func(string) (shell.Host, error) { return shell.Local{Name: "local"}, nil }
 	first := NewTracker(store, Inputs{Host: host})
 	at := time.Now()
-	first.Observe("local", snapshot(dir, agentPane("p1", herdr.StatusWorking)), at, false)
+	first.Observe("local", snapshot(dir, agentPane("p1", coreapi.StatusWorking)), at, false)
 	idle(t, first)
 	first.Close()
 	write(t, dir, "a.txt", "written while remuda restarted\n")
 	again := OpenStore(stateDir)
 	second := NewTracker(again, Inputs{Host: host})
-	second.Observe("local", snapshot(dir, agentPane("p1", herdr.StatusWorking)), at.Add(time.Minute), true)
+	second.Observe("local", snapshot(dir, agentPane("p1", coreapi.StatusWorking)), at.Add(time.Minute), true)
 	for _, step := range []time.Duration{2 * time.Minute, 2*time.Minute + Settle, 2*time.Minute + Grace} {
-		second.Observe("local", snapshot(dir, agentPane("p1", herdr.StatusDone)), at.Add(step), false)
+		second.Observe("local", snapshot(dir, agentPane("p1", coreapi.StatusDone)), at.Add(step), false)
 		idle(t, second)
 	}
 	turns := again.List("local", dir)

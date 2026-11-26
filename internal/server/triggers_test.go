@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dev1antdev/remuda/internal/herdr/herdrfake"
+	"github.com/dev1antdev/remuda/internal/coreapi/corefake"
 	"github.com/dev1antdev/remuda/internal/triggers"
 )
 
@@ -19,7 +19,7 @@ func TestTriggerRoutes(t *testing.T) {
 	resubscribed := 0
 	svc := triggers.New(dir)
 	svc.Resubscribe = func() { resubscribed++ }
-	s := &Server{Triggers: svc, Machines: herdrfake.Manager(dir)}
+	s := &Server{Triggers: svc, Machines: corefake.Manager(dir)}
 	mux := http.NewServeMux()
 	s.triggerRoutes(mux)
 
@@ -65,7 +65,7 @@ func TestTriggerRoutes(t *testing.T) {
 // of that folder are named in, so a rule saved through a symlink still covers them.
 func TestARuleSavedOnASymlinkedFolderIsKeptAsTheMachineNamesIt(t *testing.T) {
 	dir := t.TempDir()
-	s := &Server{Triggers: triggers.New(dir), Machines: herdrfake.Manager(dir)}
+	s := &Server{Triggers: triggers.New(dir), Machines: corefake.Manager(dir)}
 	mux := http.NewServeMux()
 	s.triggerRoutes(mux)
 	real := t.TempDir()

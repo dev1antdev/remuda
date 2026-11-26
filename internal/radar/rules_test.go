@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 )
 
 // step is one poll of herdr (or a look from the page, seen) at so many milliseconds, and the state shown after it.
@@ -18,11 +18,11 @@ type step struct {
 
 func TestRadarRules(t *testing.T) {
 	const (
-		work  = herdr.StatusWorking
-		done  = herdr.StatusDone
-		idle  = herdr.StatusIdle
-		ask   = herdr.StatusBlocked
-		unkno = herdr.StatusUnknown
+		work  = coreapi.StatusWorking
+		done  = coreapi.StatusDone
+		idle  = coreapi.StatusIdle
+		ask   = coreapi.StatusBlocked
+		unkno = coreapi.StatusUnknown
 	)
 	cases := []struct {
 		name  string
@@ -72,18 +72,18 @@ func TestRadarRules(t *testing.T) {
 func TestRadarSinceMarksWhenTheShownStateBegan(t *testing.T) {
 	tr := New(t.TempDir(), nil)
 	start := time.Unix(1_800_000_000, 0)
-	tr.Observe("m", snap(herdr.StatusWorking, false), start)
-	tr.Observe("m", snap(herdr.StatusWorking, false), start.Add(time.Minute))
-	if d := display(tr, snap(herdr.StatusWorking, false)); d.Since != start.UnixMilli() || d.LastActive != start.Add(time.Minute).Truncate(time.Minute).UnixMilli() {
+	tr.Observe("m", snap(coreapi.StatusWorking, false), start)
+	tr.Observe("m", snap(coreapi.StatusWorking, false), start.Add(time.Minute))
+	if d := display(tr, snap(coreapi.StatusWorking, false)); d.Since != start.UnixMilli() || d.LastActive != start.Add(time.Minute).Truncate(time.Minute).UnixMilli() {
 		t.Fatalf("working: %+v", d)
 	}
-	tr.Observe("m", snap(herdr.StatusBlocked, false), start.Add(2*time.Minute))
+	tr.Observe("m", snap(coreapi.StatusBlocked, false), start.Add(2*time.Minute))
 	tr.SetAlert("m", "p1", "waiting for your answer for 15 min")
-	if eps := tr.Episodes(); len(eps) != 1 || eps[0].State != herdr.StatusBlocked || !eps[0].Since.Equal(start.Add(2*time.Minute)) {
+	if eps := tr.Episodes(); len(eps) != 1 || eps[0].State != coreapi.StatusBlocked || !eps[0].Since.Equal(start.Add(2*time.Minute)) {
 		t.Fatalf("episodes: %+v", eps)
 	}
-	tr.Observe("m", snap(herdr.StatusWorking, false), start.Add(3*time.Minute))
-	if d := display(tr, snap(herdr.StatusWorking, false)); d.Alert != "" || d.Since != start.Add(3*time.Minute).UnixMilli() {
+	tr.Observe("m", snap(coreapi.StatusWorking, false), start.Add(3*time.Minute))
+	if d := display(tr, snap(coreapi.StatusWorking, false)); d.Alert != "" || d.Since != start.Add(3*time.Minute).UnixMilli() {
 		t.Fatalf("a new state drops the note and starts its clock: %+v", d)
 	}
 }

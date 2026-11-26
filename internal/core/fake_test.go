@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 )
 
 // peer is the core's end of a pipe: the shapes a real core rarely shows on demand (events before their reply, a line
@@ -373,7 +373,7 @@ func TestAPaintThatDoesNotComeAttachesAgainWithTheScreenAlone(t *testing.T) {
 		}
 	}))
 	defer client.Close()
-	viewer, err := NewTerminals(client).Open("t1", herdr.View{Cols: 80, Rows: 24})
+	viewer, err := NewTerminals(client).Open("t1", coreapi.View{Cols: 80, Rows: 24})
 	if err != nil {
 		t.Fatal(err)
 	}

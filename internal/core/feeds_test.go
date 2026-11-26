@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 )
 
 func TestStreamsAskingForTheSameWatchesShareOneFeed(t *testing.T) {
@@ -36,9 +36,9 @@ func TestStreamsAskingForTheSameWatchesShareOneFeed(t *testing.T) {
 	if _, err := adapter.SessionSnapshot(); err != nil {
 		t.Fatal(err)
 	}
-	watching := func(value string) herdr.EventStream {
+	watching := func(value string) coreapi.EventStream {
 		t.Helper()
-		stream, err := adapter.Subscribe([]herdr.Subscription{{Type: herdr.EventOutputMatched, PaneID: "t1", Match: &herdr.OutputMatch{Type: "substring", Value: value}}})
+		stream, err := adapter.Subscribe([]coreapi.Subscription{{Type: coreapi.EventOutputMatched, PaneID: "t1", Match: &coreapi.OutputMatch{Type: "substring", Value: value}}})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -49,14 +49,14 @@ func TestStreamsAskingForTheSameWatchesShareOneFeed(t *testing.T) {
 		defer mu.Unlock()
 		core.write(channel, frameData, []byte(`{"jsonrpc":"2.0","method":"event","params":{"seq":2,"type":"output","data":{"watch":"0","line":"`+line+`","pos":42,"fresh":false}}}`+"\n"))
 	}
-	heard := func(stream herdr.EventStream, want string) {
+	heard := func(stream coreapi.EventStream, want string) {
 		t.Helper()
 		for {
 			ev, err := stream.Next()
 			if err != nil {
 				t.Fatalf("waiting for %q: %v", want, err)
 			}
-			if ev.Kind == herdr.EventOutputMatched {
+			if ev.Kind == coreapi.EventOutputMatched {
 				if ev.MatchedLine != want || ev.PaneID != "t1" || ev.Pos != 42 {
 					t.Fatalf("heard %+v, want %q at 42", ev, want)
 				}
@@ -140,10 +140,10 @@ func TestAStreamHoldsEveryStandingRowItsFeedsTellAsTheyOpen(t *testing.T) {
 	if _, err := adapter.SessionSnapshot(); err != nil {
 		t.Fatal(err)
 	}
-	var subs []herdr.Subscription
+	var subs []coreapi.Subscription
 	for pane := 1; pane <= panes; pane++ {
 		for _, value := range []string{"FAIL", "AIL"} {
-			subs = append(subs, herdr.Subscription{Type: herdr.EventOutputMatched, PaneID: fmt.Sprintf("t%d", pane), Match: &herdr.OutputMatch{Type: "substring", Value: value}, Lines: perWatch})
+			subs = append(subs, coreapi.Subscription{Type: coreapi.EventOutputMatched, PaneID: fmt.Sprintf("t%d", pane), Match: &coreapi.OutputMatch{Type: "substring", Value: value}, Lines: perWatch})
 		}
 	}
 	stream, err := adapter.Subscribe(subs)
@@ -160,7 +160,7 @@ func TestAStreamHoldsEveryStandingRowItsFeedsTellAsTheyOpen(t *testing.T) {
 		if err != nil {
 			t.Fatalf("after %d standing rows and %d live the stream ended: %v", standing, live, err)
 		}
-		if ev.Kind != herdr.EventOutputMatched {
+		if ev.Kind != coreapi.EventOutputMatched {
 			continue
 		}
 		if ev.Standing != nil && !*ev.Standing {
@@ -204,11 +204,11 @@ func TestAnEditedRuleLeavesTheOtherWatchesFeedsStanding(t *testing.T) {
 	if _, err := adapter.SessionSnapshot(); err != nil {
 		t.Fatal(err)
 	}
-	watching := func(values ...string) herdr.EventStream {
+	watching := func(values ...string) coreapi.EventStream {
 		t.Helper()
-		var subs []herdr.Subscription
+		var subs []coreapi.Subscription
 		for _, value := range values {
-			subs = append(subs, herdr.Subscription{Type: herdr.EventOutputMatched, PaneID: "t1", Match: &herdr.OutputMatch{Type: "substring", Value: value}})
+			subs = append(subs, coreapi.Subscription{Type: coreapi.EventOutputMatched, PaneID: "t1", Match: &coreapi.OutputMatch{Type: "substring", Value: value}})
 		}
 		stream, err := adapter.Subscribe(subs)
 		if err != nil {
@@ -236,7 +236,7 @@ func TestAnEditedRuleLeavesTheOtherWatchesFeedsStanding(t *testing.T) {
 		if err != nil {
 			t.Fatalf("the kept watch's row never came: %v", err)
 		}
-		if ev.Kind == herdr.EventOutputMatched {
+		if ev.Kind == coreapi.EventOutputMatched {
 			if ev.MatchedLine != "--- FAIL: TestLogin" || ev.Standing == nil || *ev.Standing {
 				t.Fatalf("heard %+v", ev)
 			}
@@ -268,9 +268,9 @@ func TestWatchesTheCoreNeverAnswersEndAfterOneSilenceOrTheAdaptersClose(t *testi
 		}
 		return adapter
 	}
-	var subs []herdr.Subscription
+	var subs []coreapi.Subscription
 	for i := 0; i < 20; i++ { // more than opensAtOnce: three rounds of eight
-		subs = append(subs, herdr.Subscription{Type: herdr.EventOutputMatched, PaneID: "t1", Match: &herdr.OutputMatch{Type: "substring", Value: fmt.Sprint("FAIL ", i)}})
+		subs = append(subs, coreapi.Subscription{Type: coreapi.EventOutputMatched, PaneID: "t1", Match: &coreapi.OutputMatch{Type: "substring", Value: fmt.Sprint("FAIL ", i)}})
 	}
 
 	joinWithin = 300 * time.Millisecond
@@ -332,9 +332,9 @@ func TestASlowCoreThatKeepsAnsweringOpensEveryWatch(t *testing.T) {
 	if _, err := adapter.SessionSnapshot(); err != nil {
 		t.Fatal(err)
 	}
-	var subs []herdr.Subscription
+	var subs []coreapi.Subscription
 	for i := 0; i < 20; i++ {
-		subs = append(subs, herdr.Subscription{Type: herdr.EventOutputMatched, PaneID: "t1", Match: &herdr.OutputMatch{Type: "substring", Value: fmt.Sprint("FAIL ", i)}})
+		subs = append(subs, coreapi.Subscription{Type: coreapi.EventOutputMatched, PaneID: "t1", Match: &coreapi.OutputMatch{Type: "substring", Value: fmt.Sprint("FAIL ", i)}})
 	}
 	start := time.Now()
 	stream, err := adapter.Subscribe(subs)
@@ -374,13 +374,13 @@ func TestARefusedRegexEndsTheJoinWithoutWaitingForTheRest(t *testing.T) {
 	if _, err := adapter.SessionSnapshot(); err != nil {
 		t.Fatal(err)
 	}
-	subs := []herdr.Subscription{{Type: herdr.EventOutputMatched, PaneID: "t1", Match: &herdr.OutputMatch{Type: "regex", Value: "("}}}
+	subs := []coreapi.Subscription{{Type: coreapi.EventOutputMatched, PaneID: "t1", Match: &coreapi.OutputMatch{Type: "regex", Value: "("}}}
 	for i := 1; i < opensAtOnce; i++ { // one round: the refusal and seven slow ones subscribed side by side
-		subs = append(subs, herdr.Subscription{Type: herdr.EventOutputMatched, PaneID: "t1", Match: &herdr.OutputMatch{Type: "substring", Value: fmt.Sprint("FAIL ", i)}})
+		subs = append(subs, coreapi.Subscription{Type: coreapi.EventOutputMatched, PaneID: "t1", Match: &coreapi.OutputMatch{Type: "substring", Value: fmt.Sprint("FAIL ", i)}})
 	}
 	start := time.Now()
 	_, err := adapter.Subscribe(subs)
-	if !herdr.IsCode(err, "invalid_regex") {
+	if !coreapi.IsCode(err, "invalid_regex") {
 		t.Fatalf("the join ended with %v, want invalid_regex", err)
 	}
 	if took := time.Since(start); took > 500*time.Millisecond {

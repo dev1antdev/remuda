@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/sessions"
 	"github.com/dev1antdev/remuda/internal/state"
@@ -43,7 +43,7 @@ type Closed struct {
 type paneFace struct{ title, workspace, tab string }
 
 // faceOf reads a pane's names off its snapshot.
-func faceOf(snap *herdr.Snapshot, p *herdr.PaneInfo) paneFace {
+func faceOf(snap *coreapi.Snapshot, p *coreapi.PaneInfo) paneFace {
 	face := paneFace{title: p.DisplayTitle(), workspace: snap.WorkspaceLabel(p.WorkspaceID)}
 	for i := range snap.Tabs {
 		if t := &snap.Tabs[i]; t.TabID == p.TabID && t.Label != strconv.Itoa(t.Number) {
@@ -132,7 +132,7 @@ func (r *Restarter) Closed() []Closed {
 // placer is what reopening needs of herdr's client: a place made for the agent, and the snapshot to find one in.
 type placer interface {
 	sessions.Placer
-	SessionSnapshot() (*herdr.Snapshot, error)
+	SessionSnapshot() (*coreapi.Snapshot, error)
 }
 
 // Reopen starts a closed agent again on its session, in a tab of the workspace on its folder or a new workspace on
@@ -206,7 +206,7 @@ func (r *Restarter) reopenWith(client placer, machineID string, c Closed) (sessi
 // workspace, unless a pane runs that session already — the agents' sessions read again first (Reread), since a
 // /resume moves one under the same process, after a look that makes an agent started a moment ago one of those read —
 // that pane comes back instead, and nothing starts.
-func startOnSession(client placer, dir, workspace, tab, kind, session string) (sessions.Place, *herdr.PaneInfo, error) {
+func startOnSession(client placer, dir, workspace, tab, kind, session string) (sessions.Place, *coreapi.PaneInfo, error) {
 	if _, err := client.SessionSnapshot(); err != nil {
 		return sessions.Place{}, nil, err
 	}
