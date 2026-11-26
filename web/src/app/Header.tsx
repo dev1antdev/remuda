@@ -4,6 +4,8 @@
 import { basename, plural } from "@/lib/text";
 import { machineLabel } from "@/features/roster/options";
 import { useRoster } from "@/features/roster/useRoster";
+import { unread } from "@/features/activity/group";
+import { usePref } from "@/lib/prefs";
 import { folderOf } from "@/features/roster/workspaces";
 import { useSharing } from "@/features/roster/useSharing";
 import { budgetTone, budgetWords, budgetsFor, graver, ratio, tightest, toneClass, type BudgetTone } from "@/features/usage/budgets";
@@ -18,7 +20,9 @@ import { actions, app, type Lens } from "./store";
 import { t } from "@/lib/i18n";
 
 export default function Header({ current }: { current: Located | null }) {
-  const { machines, budgets, viewOnly } = useRoster();
+  const { machines, budgets, viewOnly, feed } = useRoster();
+  const [seen] = usePref<number>("feed.seen", 0);
+  const news = unread(feed, seen);
   const mode = app.use((s) => s.mode);
   const lens = lensOn(app.use((s) => s.lens), current?.pane.agent ?? "");
   const drawer = app.use((s) => s.drawer);
@@ -66,6 +70,11 @@ export default function Header({ current }: { current: Located | null }) {
           <LensSwitch lens={lens} current={current} viewOnly={viewOnly} />
         </div>
       )}
+      <Tip text={t("What happened across the agents while you were away")}>
+        <button type="button" className={`icon-btn bell${news ? " has-news" : ""}`} aria-label={t("Activity")} onClick={() => actions.togglePanel("activity")}>
+          <Icon name="bell" size={18} />
+        </button>
+      </Tip>
       {!viewOnly && <Tip text={t("Search every conversation on every machine (⌘K / Ctrl+K has it too)")}>
         <button type="button" className="icon-btn bell" aria-label={t("Search")} onClick={() => actions.openSearch()}>
           <Icon name="search" size={18} />
@@ -90,7 +99,7 @@ function UsagePill({ usage, budget, limits }: { usage: NonNullable<Located["pane
       type="button"
       className={`usage-pill${cls}`}
       title={`${told}${budget ? ` ${t("Budget: {words}.", { words: budgetWords(budget) })}` : ""}${planWords ? ` ${t("Plan: {words}.", { words: planWords })}` : ""} ${t("Click for the usage report.")}`}
-      onClick={() => actions.openPanel("usage")}
+      onClick={() => actions.openDialog({ kind: "settings", section: "usage" })}
     >
       <span className="usage-pill-bar">
         <span style={{ width: `${Math.min(100, 100 * fill)}%` }} />

@@ -115,7 +115,7 @@ function useCommands(): (query: string) => Entry[] {
       for (const m of MODES) if (m.mode !== mode) command(`mode:${m.mode}`, m.title, () => actions.setMode(m.mode), { hint: m.hint, icon: m.icon, keywords: ["mode", m.mode] });
       command("update-everywhere", t("Update everywhere…"), () => actions.openDialog({ kind: "update-everywhere" }), { hint: t("every connected machine's pending updates, one after another"), icon: "refresh-cw", keywords: ["update", "upgrade", "all", "machines", "remuda-core", "claude", "codex", "release"] });
       command("fleet-setup", t("Fleet setup…"), () => actions.openDialog({ kind: "fleet-setup" }), { hint: t("how every machine is set up, side by side, the odd one out marked"), icon: "columns", keywords: ["fleet", "setup", "config", "drift", "compare", "machines", "mcp", "claude.md", "agents.md"] });
-      if (server) command("server", t("Server · {name}", { name: server.label }), () => actions.togglePanel("server"), { hint: t("its load, memory, temperature and throttling"), icon: "server", keywords: ["server", "host", "pi", "raspberry", "vitals", "temperature", "memory", "throttle"] });
+      if (server) command("server", t("Server · {name}", { name: server.label }), () => actions.openDialog({ kind: "settings", section: "server" }), { hint: t("its load, memory, temperature and throttling"), icon: "server", keywords: ["server", "host", "pi", "raspberry", "vitals", "temperature", "memory", "throttle"] });
       command("reopen", t("Reopen a closed agent…"), () => actions.openDialog({ kind: "reopen" }), { hint: `${REOPEN_KEY} · ${t("an agent whose tab or workspace closed, back on its own session")}`, icon: "refresh-cw", keywords: ["reopen", "undo", "closed", "restore", "tab", "back", "resume"] });
       if (current && !viewer) {
         const folder = folderOf(current);
@@ -213,11 +213,11 @@ function useCommands(): (query: string) => Entry[] {
         if (id) command(`scene:${id}`, t("Scene: {name}…", { name: scene.name }), () => actions.openDialog({ kind: "scene-run", id }), { hint: scene.kind === "tidy" ? t("a tidy, each action shown before it runs") : t("a set-up, its steps shown before they run"), icon: scene.kind === "tidy" ? "moon" : "sun", keywords: ["scene", scene.kind === "tidy" ? "evening" : "morning", "run"] });
       }
       command("triggers", t("Triggers…"), () => actions.openDialog({ kind: "triggers" }), { hint: t("a line a pane prints, and what it sets off: a push, a preview, a task moved"), icon: "zap", keywords: ["trigger", "triggers", "rule", "output", "match", "regex", "pattern", "watch", "tests", "dev server"] });
-      command("schedules", t("Automations"), () => actions.openPanel("schedules"), { hint: t("prompts sent to agents on a timetable"), icon: "calendar", keywords: ["cron", "timer", "prompt", "automation", "schedules"] });
-      command("repos", t("Repositories"), () => actions.openPanel("repos"), { hint: t("every repository on every machine: not pushed, not pulled; fetch, pull, push"), icon: "folder-git", keywords: ["git", "repository", "repo", "fetch", "pull", "push", "sync", "ahead", "behind", "manygit", "репозиторий"] });
+      command("schedules", t("Automations"), () => actions.openDialog({ kind: "settings", section: "automations" }), { hint: t("prompts sent to agents on a timetable"), icon: "calendar", keywords: ["cron", "timer", "prompt", "automation", "schedules"] });
+      command("repos", t("Repositories"), () => actions.openDialog({ kind: "settings", section: "repos" }), { hint: t("every repository on every machine: not pushed, not pulled; fetch, pull, push"), icon: "folder-git", keywords: ["git", "repository", "repo", "fetch", "pull", "push", "sync", "ahead", "behind", "manygit", "репозиторий"] });
       const usageOn = (tab: UsageTab) => () => {
         writePref(USAGE_TAB_KEY, tab);
-        actions.openPanel("usage");
+        actions.openDialog({ kind: "settings", section: "usage" });
       };
       command("usage", t("Usage report"), usageOn("spend"), { hint: t("what the agents cost, by day, project and session"), icon: "chart", keywords: ["cost", "tokens", "context", "money"] });
       command("scorecard", t("Models scorecard"), usageOn("models"), { hint: t("which model does your work best: finished runs, first-time approvals, merged pull requests, arenas kept, cost and time"), icon: "chart", keywords: ["model", "models", "compare", "best", "score", "quality", "approve", "merge", "opus", "sonnet", "fable", "gpt", "codex"] });

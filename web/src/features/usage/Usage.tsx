@@ -29,10 +29,11 @@ const PERIODS = [
 import { tok, usd } from "./format";
 import { plural } from "@/lib/text";
 
-export default function Usage({ machines, onClose, onOpenSession }: {
+export default function Usage({ machines, onClose, onOpenSession, embedded = false }: {
   machines: Machine[];
   onClose: () => void;
   onOpenSession: (machine: string, project: string, session: string, dir: string) => void;
+  embedded?: boolean;
 }) {
   const [days, setDays] = useState("7");
   const [machine, setMachine] = useState("all");
@@ -124,41 +125,39 @@ export default function Usage({ machines, onClose, onOpenSession }: {
     </div>
   );
 
-  if (!spend)
+  if (!spend) {
+    const scoreControls = (
+      <>
+        {tabs}
+        <Select value={String(periodOf(scoreDays))} onChange={(value) => setScoreDays(Number(value))} options={SCORE_PERIODS.map((n) => PERIODS.find((p) => p.value === String(n))!)} />
+      </>
+    );
+    const scoreBody = <ScorecardTab days={periodOf(scoreDays)} machines={machines} viewOnly={viewOnly} />;
+    if (embedded) {
+      return (
+        <section className="settings-section usage-settings">
+          <h3>{t("Usage")}</h3>
+          <div className="settings-controls">{scoreControls}</div>
+          {scoreBody}
+        </section>
+      );
+    }
     return (
-      <Dialog
-        title={t("Usage")}
-        icon="chart"
-        size="lg"
-        className="usage"
-        onClose={onClose}
-        controls={
-          <>
-            {tabs}
-            <Select value={String(periodOf(scoreDays))} onChange={(value) => setScoreDays(Number(value))} options={SCORE_PERIODS.map((n) => PERIODS.find((p) => p.value === String(n))!)} />
-          </>
-        }
-      >
-        <ScorecardTab days={periodOf(scoreDays)} machines={machines} viewOnly={viewOnly} />
+      <Dialog title={t("Usage")} icon="chart" size="lg" className="usage" onClose={onClose} controls={scoreControls}>
+        {scoreBody}
       </Dialog>
     );
-
-  return (
-    <Dialog
-      title={t("Usage")}
-      icon="chart"
-      size="lg"
-      className="usage"
-      onClose={onClose}
-      controls={
-        <>
-          {tabs}
-          <Select value={days} onChange={setDays} options={PERIODS} />
-          {several && <Select value={machine} onChange={setMachine} options={machineOptions(machines, { all: t("All machines") })} />}
-          {loading && <span className="search-busy" />}
-        </>
-      }
-    >
+  }
+  const spendControls = (
+    <>
+      {tabs}
+      <Select value={days} onChange={setDays} options={PERIODS} />
+      {several && <Select value={machine} onChange={setMachine} options={machineOptions(machines, { all: t("All machines") })} />}
+      {loading && <span className="search-busy" />}
+    </>
+  );
+  const spendBody = (
+    <>
       <Notice tone="hint">
         {t("What the agents' transcripts say they cost, at Claude Code's own API prices — on a subscription a measure of where the work went, not a bill. Each machine reads its own history.")}
       </Notice>
@@ -261,6 +260,20 @@ export default function Usage({ machines, onClose, onOpenSession }: {
           </section>
         )}
       </div>
+    </>
+  );
+  if (embedded) {
+    return (
+      <section className="settings-section usage-settings">
+        <h3>{t("Usage")}</h3>
+        <div className="settings-controls">{spendControls}</div>
+        {spendBody}
+      </section>
+    );
+  }
+  return (
+    <Dialog title={t("Usage")} icon="chart" size="lg" className="usage" onClose={onClose} controls={spendControls}>
+      {spendBody}
     </Dialog>
   );
 }

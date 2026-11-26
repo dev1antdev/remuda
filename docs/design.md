@@ -81,9 +81,11 @@ that stands out.
 
 ## Layout
 
-- **The rail** down the left: the four modes, the places, then the tools and Settings under a hairline; each an icon
-  on a pill with its name under it, whole. At 920 px and below it lies along the bottom.
-- **A pane's header** is `[burger][title — takes the slack][usage pill][lens switch][search]`. The lens
+- **The rail** down the left: the three modes (Agents, Tasks, Code), then the floating Shell and Settings under a
+  hairline; each an icon on a pill with its name under it, whole. Usage, the Automations, the Repositories, the Server
+  and the cockpit's other settings live inside Settings, not as places of their own. At 920 px and below it lies along
+  the bottom.
+- **A pane's header** is `[burger][title — takes the slack][usage pill][lens switch][activity][search]`. The lens
   buttons keep equal room; a lens that cannot open is disabled, not removed; a shell keeps the switch's room unseen
   (`.lens-switch.is-vacant`).
 - **Nothing in a bar moves when state changes.** Reserve the room a count or a second button will need (the Changes

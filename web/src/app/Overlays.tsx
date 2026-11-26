@@ -12,7 +12,6 @@ import LeftoversDialog from "@/features/roster/LeftoversDialog";
 import NoteDialog from "@/features/roster/NoteDialog";
 import PreviewsDialog from "@/features/preview/PreviewsDialog";
 import TriggersDialog from "@/features/triggers/TriggersDialog";
-import ServerPanel from "@/features/roster/ServerPanel";
 import EverywhereDialog from "@/features/updates/EverywhereDialog";
 import FleetDialog from "@/features/updates/FleetDialog";
 import ReopenDialog from "@/features/reopen/ReopenDialog";
@@ -33,7 +32,6 @@ import SettingsDialog from "@/features/settings/SettingsDialog";
 import { useAgentTargets } from "@/features/agents/useAgentTargets";
 import AlertsPanel from "@/features/alerts/AlertsPanel";
 import FileViewer from "@/features/files/FileViewer";
-import Schedules from "@/features/schedules/Schedules";
 import Search from "@/features/search/Search";
 import RecapDialog from "@/features/recap/RecapDialog";
 import HandoverDialog from "@/features/chat/HandoverDialog";
@@ -47,10 +45,8 @@ import RecipesDialog from "@/features/recipes/RecipesDialog";
 import StartFromRecipeDialog from "@/features/recipes/StartFromRecipeDialog";
 import RunSceneDialog from "@/features/scenes/RunSceneDialog";
 import ScenesDialog from "@/features/scenes/ScenesDialog";
-import ReposPanel from "@/features/repos/ReposPanel";
 import UpdatesDialog from "@/features/updates/Updates";
 import BudgetDialog from "@/features/usage/BudgetDialog";
-import Usage from "@/features/usage/Usage";
 import { encodePath, type SearchHit } from "@/features/search/api";
 import type { ScreenHit } from "@/features/terminal/timelapse/api";
 import { firstStep } from "@/features/terminal/timelapse/found";
@@ -109,20 +105,14 @@ export default function Overlays() {
     <>
       {panel === "palette" && <CommandPalette />}
       {panel === "release" && host && <UpdatesDialog machine={host} what="remuda-release" onClose={actions.closePanel} />}
-      {panel === "server" && server && <ServerPanel server={server} onClose={actions.closePanel} />}
       {dialog?.kind === "update-everywhere" && <EverywhereDialog onClose={actions.closeDialog} />}
       {dialog?.kind === "fleet-setup" && <FleetDialog onClose={actions.closeDialog} />}
       {panel === "alerts" && <AlertsPanel onClose={actions.closePanel} />}
       {panel === "activity" && <Activity onClose={actions.closePanel} />}
-      {panel === "schedules" && <Schedules machines={machines} onClose={actions.closePanel} ask={actions.ask} />}
       {panel === "search" && <Search machines={machines} initial={search} onClose={actions.closePanel} onOpen={openHit} onOpenScreen={openScreenHit} />}
       {panel === "arena" && <ArenaPanel onClose={actions.closePanel} />}
       {panel === "pr" && !viewOnly && <PRPanel onClose={actions.closePanel} />}
       {panel === "issues" && !viewOnly && <IssuesPanel onClose={actions.closePanel} />}
-      {panel === "repos" && !viewOnly && <ReposPanel onClose={actions.closePanel} />}
-      {panel === "usage" && (
-        <Usage machines={machines} onClose={actions.closePanel} onOpenSession={(machine, project, session, dir) => openHit({ machine, project, session, dir, uuid: "", ts: "", role: "assistant", snippet: "" })} />
-      )}
       {file && <FileViewer machineId={file.machineId} paneId={file.paneId} dir={file.dir} target={file.target} onClose={actions.closeFile} onRetarget={actions.retargetFile} />}
       {confirm && (
         <ConfirmDialog

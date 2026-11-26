@@ -19,10 +19,11 @@ import { sceneScheduleWords } from "./scene";
 import { useScenes } from "@/features/scenes/api";
 import { t } from "@/lib/i18n";
 
-export default function Schedules({ machines, onClose, ask }: {
+export default function Schedules({ machines, onClose, ask, embedded = false }: {
   machines: Machine[];
   onClose: () => void;
   ask: (text: string, label: string, run: () => void) => void;
+  embedded?: boolean;
 }) {
   const { agents } = useRoster();
   const scenes = useScenes(true);
@@ -43,19 +44,13 @@ export default function Schedules({ machines, onClose, ask }: {
     });
   };
 
-  return (
-    <Dialog
-      title={t("Automations")}
-      icon="calendar"
-      size="md"
-      className="schedules"
-      onClose={onClose}
-      controls={
-        <button type="button" className="btn sm" onClick={() => setEditing({ enabled: true })}>
-          <Icon name="plus" size={12} /> {t("New")}
-        </button>
-      }
-    >
+  const controls = (
+    <button type="button" className="btn sm" onClick={() => setEditing({ enabled: true })}>
+      <Icon name="plus" size={12} /> {t("New")}
+    </button>
+  );
+  const content = (
+    <>
       <Notice tone="hint">
         {t(
           "A prompt sent to the agent running in a folder, a fresh agent started in a folder with a prompt, or one of your scenes, on a timetable — in the remuda host's local time. A run is skipped and noted while the agent it would reach — or the one its last run started — is still working or waits for an answer, so nothing piles up; a minute with no agent there is noted and pushed.",
@@ -140,6 +135,27 @@ export default function Schedules({ machines, onClose, ask }: {
           }}
         />
       )}
+    </>
+  );
+  if (embedded) {
+    return (
+      <section className="settings-section schedules-settings">
+        <h3>{t("Automations")}</h3>
+        <div className="settings-controls">{controls}</div>
+        {content}
+      </section>
+    );
+  }
+  return (
+    <Dialog
+      title={t("Automations")}
+      icon="calendar"
+      size="md"
+      className="schedules"
+      onClose={onClose}
+      controls={controls}
+    >
+      {content}
     </Dialog>
   );
 }

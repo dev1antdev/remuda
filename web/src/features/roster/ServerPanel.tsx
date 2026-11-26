@@ -16,7 +16,7 @@ import { DISK_THRESHOLDS, loadThresholds, rangeOf, sparkTitle, spanWords } from 
 import { useRoster } from "./useRoster";
 import { t, tn } from "@/lib/i18n";
 
-export default function ServerPanel({ server, onClose }: { server: Machine; onClose: () => void }) {
+export default function ServerPanel({ server, onClose, embedded = false }: { server: Machine; onClose: () => void; embedded?: boolean }) {
   const { latest, version, tailscale, viewOnly } = useRoster();
   const [fresh, setFresh] = useState<Health | null>(null);
   const [busy, setBusy] = useState(false);
@@ -41,8 +41,8 @@ export default function ServerPanel({ server, onClose }: { server: Machine; onCl
   const loads = history ? history.map((s) => s.load) : [];
   const free = history ? history.map((s) => s.disk_free) : [];
   const loadRange = rangeOf(loads, 0, h?.cores ?? 0);
-  return (
-    <Dialog title={t("Server · {name}", { name: server.label })} icon="server" size="md" onClose={onClose} className="server-panel">
+  const content = (
+    <>
       {updates && <UpdatesDialog machine={server} onClose={() => setUpdates(false)} onDone={() => void refresh()} />}
       <p className="modal-hint">{t("This remuda serves the page only: the machine it runs on is none of the cockpit's, its agents run on the machines in the sidebar.")}</p>
       {error && <Notice tone="error">{error}</Notice>}
@@ -105,6 +105,12 @@ export default function ServerPanel({ server, onClose }: { server: Machine; onCl
           </button>
         </div>
       )}
+    </>
+  );
+  if (embedded) return <section className="settings-section server-settings"><h3>{t("Server")}</h3>{content}</section>;
+  return (
+    <Dialog title={t("Server · {name}", { name: server.label })} icon="server" size="md" onClose={onClose} className="server-panel">
+      {content}
     </Dialog>
   );
 }

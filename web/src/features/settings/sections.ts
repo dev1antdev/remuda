@@ -4,7 +4,7 @@
 import { t } from "@/lib/i18n";
 import type { IconName } from "@/ui/icons";
 
-export const SECTION_IDS = ["look", "sidebar", "general", "sleep", "jira", "backups", "timelapse", "devices"] as const;
+export const SECTION_IDS = ["look", "sidebar", "general", "usage", "automations", "repos", "sleep", "jira", "backups", "timelapse", "devices", "server"] as const;
 export type SectionId = (typeof SECTION_IDS)[number];
 
 export type Section = { id: SectionId; label: string; icon: IconName };
@@ -15,7 +15,7 @@ export const SECTION_PREF = "settings.section";
 export const FIRST_SECTION: SectionId = "look";
 
 // sectionGroups is the list as the dialog draws it; a viewer keeps this device's sections alone
-export function sectionGroups(viewOnly: boolean): SectionGroup[] {
+export function sectionGroups(viewOnly: boolean, hasServer = false): SectionGroup[] {
   const device: SectionGroup = {
     id: "device",
     label: t("This device"),
@@ -30,11 +30,15 @@ export function sectionGroups(viewOnly: boolean): SectionGroup[] {
     id: "cockpit",
     label: t("This cockpit"),
     sections: [
+      { id: "usage", label: t("Usage"), icon: "chart" },
+      { id: "automations", label: t("Automations"), icon: "calendar" },
+      { id: "repos", label: t("Repositories"), icon: "folder-git" },
       { id: "sleep", label: t("Sleep and resume"), icon: "moon" },
       { id: "jira", label: t("Jira"), icon: "tag" },
       { id: "backups", label: t("Backups"), icon: "archive" },
       { id: "timelapse", label: t("Timelapse"), icon: "film" },
       { id: "devices", label: t("Devices"), icon: "monitor" },
+      ...(hasServer ? [{ id: "server" as const, label: t("Server"), icon: "server" as const }] : []),
     ],
   };
   return [device, cockpit];

@@ -30,7 +30,7 @@ export default function StatusBar() {
   const windows = machine?.os === "windows";
   return (
     <footer className="status-bar" aria-label={t("Status bar")}>
-      <Limits machines={machines} remaining={prefs.remaining} onOpen={() => actions.openPanel("usage")} />
+      <Limits machines={machines} remaining={prefs.remaining} onOpen={() => actions.openDialog({ kind: "settings", section: "usage" })} />
       <Place current={current} />
       {machine && (
         <div className="status-machine-side">

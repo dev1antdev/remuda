@@ -1545,7 +1545,7 @@ async function repoScreens() {
   const openPlace = async () => {
     await palette("repos");
     // the rows of the first read stand in for the loading ones: this machine's e2e repository and GOG's dressed in
-    const read = () => evaluate(`(() => { const names = [...document.querySelectorAll(".modal.repos-panel .repo-row:not(.is-loading) .repo-name")].map((el) => el.textContent); return names.includes("app") && names.includes("web"); })()`);
+    const read = () => evaluate(`(() => { const names = [...document.querySelectorAll(".settings-dialog .repos-settings .repo-row:not(.is-loading) .repo-name")].map((el) => el.textContent); return names.includes("app") && names.includes("web"); })()`);
     if (!(await until(read, 15))) throw new Error("the Repositories place does not list this machine's repository and GOG's");
   };
   const row = async (name) => {
@@ -1569,7 +1569,7 @@ async function repoScreens() {
       check(apps === 1, `the e2e repository and its worktree are listed ${apps} times, not once`);
       check(!(await present(".repo-word.is-error")), "a workspace's folder outside git is listed as a repository");
     },
-    expect: [".modal.repos-panel .repos-machine-head", ".repo-dirty", ".repos-group-head"],
+    expect: [".settings-dialog .repos-settings .repos-machine-head", ".repo-dirty", ".repos-group-head"],
   });
   await screen("repos-menu", {
     open: async () => {
@@ -1583,7 +1583,7 @@ async function repoScreens() {
     open: async () => {
       await openPlace();
       repoFetches = 0;
-      await tap(".modal.repos-panel .repos-fetch-all");
+      await tap(".settings-dialog .repos-settings .repos-fetch-all");
       if (!(await until(() => evaluate(`/\\d+\\/\\d+/.test(document.querySelector(".repos-fetch-all")?.textContent ?? "")`), 3))) failed("Fetch all shows no count while it runs");
     },
     expect: [".repos-fetch-all"],
@@ -2919,7 +2919,7 @@ async function runPass() {
   await screen("schedule-agent", {
     open: async () => {
       await palette("schedules");
-      await tap(".modal.schedules .modal-head-controls .btn");
+      await tap(".settings-dialog .schedules-settings .settings-controls .btn");
       if (!(await until(() => present(".schedule-editor .schedule-kind button"), 4))) throw new Error("the schedule editor did not open");
       await evaluate(`[...document.querySelectorAll('.schedule-editor .schedule-kind button')][1]?.click()`); // a prompt, an agent, a scene
       await sleep(200);
@@ -2954,12 +2954,11 @@ async function runPass() {
   await screen("server-place", {
     open: async () => {
       await palette("server");
-      if (!(await until(() => evaluate(`!!document.querySelector(".server-panel .health-rows") && document.querySelector(".server-panel").textContent.includes("77.4 °C")`), 4))) failed("the Server place does not show the host's temperature");
-      check((await count(".server-panel .spark")) >= 4, `the Server place draws ${await count(".server-panel .spark")} sparklines, not the load, disk, memory and temperature`);
+      if (!(await until(() => evaluate(`!!document.querySelector(".settings-dialog .server-settings .health-rows") && document.querySelector(".settings-dialog .server-settings").textContent.includes("77.4 °C")`), 4))) failed("the Server place does not show the host's temperature");
+      check((await count(".settings-dialog .server-settings .spark")) >= 4, `the Server place draws ${await count(".settings-dialog .server-settings .spark")} sparklines, not the load, disk, memory and temperature`);
       check((await count(".server-concerns li.is-warn")) === 1, "a warm host is not said to want a look");
-      if (!pass.phone) check(await present(".rail-btn.has-warn"), "the Server place's rail icon wears no amber dot for a warm host");
     },
-    expect: [".server-panel"],
+    expect: [".settings-dialog .server-settings"],
   });
   await screen("update-everywhere", { open: async () => palette("update-everywhere"), expect: [".modal.everywhere, .everywhere"], settle: 800 });
   await screen("fleet-setup", {
@@ -3000,7 +2999,7 @@ async function runPass() {
     open: async () => {
       await palette("settings");
       if (!(await until(() => present(".settings-pane .settings-section"), 6))) return failed("Settings shows no section");
-      check((await count(".settings-nav [role=tab]")) === 8, "Settings does not list its eight sections");
+      check((await count(".settings-nav [role=tab]")) === 12, "Settings does not list its twelve sections");
       check((await count('.settings-nav [role=tab][aria-selected="true"]')) === 1 && (await count(".settings-dialog .settings-section")) === 1, "Settings does not show one section, the one picked in its list");
     },
     expect: [".settings-dialog .settings-nav", ".settings-pane .settings-section"],

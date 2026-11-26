@@ -210,14 +210,16 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ remuda-core: its 
   arguments and first prompt you chose under Options), and that workspace
   closed.
 - **The rail** — the places of the page down the left edge, each an
-  icon with its name: Agents, Tasks, Code, Review, then Usage, Automations,
-  Repositories, Activity, Shell and Settings. On a phone it lies along the
-  bottom under the thumb, with Code, the panels and Settings behind
-  More. The sidebar's head keeps two buttons: + (a workspace, a PC) and
-  ⋯ (message several agents, the order, the settings). Settings is two
-  panes: the sections down its left side — this device's (Look, Sidebar,
-  General) and this cockpit's (Sleep and resume, Jira,
-  Backups, Timelapse, Devices) — and the one you picked beside them; on a
+  icon with its name: Agents, Tasks, Code, then Shell and Settings. On a
+  phone it lies along the bottom under the thumb, with Code, Shell and
+  Settings behind More. The activity bell is beside Search in the header.
+  Usage, Automations, Repositories and the Server are sections of Settings,
+  not places of their own. The sidebar's head keeps two buttons: + (a
+  workspace, a PC) and ⋯ (message several agents, the order, the settings).
+  Settings is two panes: the sections down its left side — this device's
+  (Look, Sidebar, General) and this cockpit's (Usage, Automations,
+  Repositories, Sleep and resume, Jira, Backups, Timelapse, Devices, and
+  Server on a page host) — and the one you picked beside them; on a
   phone the sections are a row of chips. It opens where you left it, and
   the palette has a row for each ("Settings › Backups").
 - **The status bar** — a thin line along the foot of the page at a desk:
