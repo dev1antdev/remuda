@@ -1237,7 +1237,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   SSH, plus the one write: `SaveUpload`. `ResolvePath` accepts absolute, `~/`, or pane-relative
   and, on a relative miss, searches the pane folder by suffix (agents say
   `demo.mp4` for `docs/demo.mp4`); several hits come back as `candidates`.
-  `GitDiff` = `git diff --no-ext-diff --no-textconv HEAD -- file` in the file's repo (the file's own lines, which the File tab's gutter marks)
+  `GitDiff` = `git diff` in the shared patch form (`script.PatchForm`, so no colour whatever `color.diff` says) against `HEAD -- file` in the file's repo (the file's own lines, which the File tab's gutter marks)
   (`gitDiffScript`, tested: `untracked` for new files, no `repo` outside git,
   a file HEAD holds counts as tracked though `git rm` took it, read from the
   nearest folder still there when its own went with it). `ListDirs(path, hidden)` lists a folder's

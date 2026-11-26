@@ -129,6 +129,35 @@ func TestTheSummaryListsTheCommitsNotOnTheRemote(t *testing.T) {
 	}
 }
 
+func TestADiffIsReadWhateverColorTheSettingsAskFor(t *testing.T) {
+	dir, git, write := scratchCheckout(t)
+	git("config", "color.diff", "always")
+	write("a.txt", "one\n")
+	git("add", "-A")
+	git("commit", "-qm", "init")
+	git("branch", "-M", "main")
+	before := git("rev-parse", "HEAD")
+	write("a.txt", "one\ntwo\n")
+	local := shell.Local{Name: "local"}
+	store := New(t.TempDir())
+	for _, side := range []string{SideUnstaged, ""} {
+		if diff, err := store.DiffSide(local, dir, "a.txt", side); err != nil || !strings.Contains(diff, "+two") || strings.Contains(diff, "\x1b[") {
+			t.Errorf("side %q: %q %v", side, diff, err)
+		}
+	}
+	git("add", "a.txt")
+	if diff, err := store.DiffSide(local, dir, "a.txt", SideStaged); err != nil || !strings.Contains(diff, "+two") || strings.Contains(diff, "\x1b[") {
+		t.Errorf("staged: %q %v", diff, err)
+	}
+	git("commit", "-qm", "two")
+	if diff, err := CommitDiff(local, dir, git("rev-parse", "HEAD"), "a.txt"); err != nil || !strings.Contains(diff, "+two") || strings.Contains(diff, "\x1b[") {
+		t.Errorf("a commit: %q %v", diff, err)
+	}
+	if diff, err := BaseDiff(local, dir, before, "a.txt"); err != nil || !strings.Contains(diff, "+two") || strings.Contains(diff, "\x1b[") {
+		t.Errorf("the branch's work: %q %v", diff, err)
+	}
+}
+
 func TestTheBaseIsTheBranchTheWorkWasCutFrom(t *testing.T) {
 	dir, git, write := scratchCheckout(t)
 	write("a.txt", "a\n")
