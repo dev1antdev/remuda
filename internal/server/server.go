@@ -27,6 +27,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/code"
 	"github.com/dev1antdev/remuda/internal/collisions"
 	"github.com/dev1antdev/remuda/internal/complete"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/drift"
 	"github.com/dev1antdev/remuda/internal/feed"
 	"github.com/dev1antdev/remuda/internal/filetree"
@@ -35,7 +36,6 @@ import (
 	"github.com/dev1antdev/remuda/internal/gitstage"
 	"github.com/dev1antdev/remuda/internal/gitsync"
 	"github.com/dev1antdev/remuda/internal/health"
-	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/icons"
 	"github.com/dev1antdev/remuda/internal/jira"
 	"github.com/dev1antdev/remuda/internal/limits"
@@ -290,7 +290,7 @@ func httpErr(w http.ResponseWriter, code int, err error) {
 
 // rpcErr reports a failed herdr call: herdr's own refusals are the caller's problem (4xx), anything else the bridge's (502).
 func rpcErr(w http.ResponseWriter, err error) {
-	var he *herdr.Error
+	var he *coreapi.Error
 	if errors.As(err, &he) {
 		httpErr(w, http.StatusBadRequest, err)
 		return
@@ -331,7 +331,7 @@ func (s *Server) machineFor(r *http.Request, bodyID string) (*machines.Machine, 
 }
 
 // ready resolves the machine and its live client, answering 404/502 itself.
-func (s *Server) ready(w http.ResponseWriter, r *http.Request, bodyID string) (*machines.Machine, herdr.API, herdr.Terminals, bool) {
+func (s *Server) ready(w http.ResponseWriter, r *http.Request, bodyID string) (*machines.Machine, coreapi.API, coreapi.Terminals, bool) {
 	mc, err := s.machineFor(r, bodyID)
 	if err != nil {
 		httpErr(w, 404, err)
@@ -346,7 +346,7 @@ func (s *Server) ready(w http.ResponseWriter, r *http.Request, bodyID string) (*
 }
 
 // findPane is a pane from the watcher's cache, or why not.
-func (s *Server) findPane(mc *machines.Machine, paneID string) (*herdr.PaneInfo, error) {
+func (s *Server) findPane(mc *machines.Machine, paneID string) (*coreapi.PaneInfo, error) {
 	snap, err := s.Watch.Snapshot(mc.ID())
 	if snap == nil {
 		return nil, err

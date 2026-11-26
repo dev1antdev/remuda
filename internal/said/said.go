@@ -8,8 +8,8 @@ import (
 	"sync"
 	"unicode/utf8"
 
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/events"
-	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/transcript"
 )
 
@@ -99,9 +99,9 @@ func (t *Tracker) OnStatus(ev events.PaneStatus) {
 	}
 	k := key(ev.Pane.Machine, ev.Pane.Pane)
 	switch ev.To {
-	case herdr.StatusDone, herdr.StatusIdle:
+	case coreapi.StatusDone, coreapi.StatusIdle:
 		t.ask(ev.Pane.Machine, ev.Pane.Pane, true)
-	case herdr.StatusWorking:
+	case coreapi.StatusWorking:
 		t.mu.Lock()
 		t.gen[k]++
 		if e, ok := t.lines[k]; ok {
@@ -117,13 +117,13 @@ func (t *Tracker) OnStatus(ev events.PaneStatus) {
 }
 
 // Observe seeds from a snapshot: an agent pane already finished when first seen is read once.
-func (t *Tracker) Observe(machineID string, snap *herdr.Snapshot) {
+func (t *Tracker) Observe(machineID string, snap *coreapi.Snapshot) {
 	if snap == nil {
 		return
 	}
 	for i := range snap.Panes {
 		pane := &snap.Panes[i]
-		if pane.Agent == "" || (pane.AgentStatus != herdr.StatusDone && pane.AgentStatus != herdr.StatusIdle) {
+		if pane.Agent == "" || (pane.AgentStatus != coreapi.StatusDone && pane.AgentStatus != coreapi.StatusIdle) {
 			continue
 		}
 		t.mu.Lock()

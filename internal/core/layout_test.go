@@ -10,23 +10,23 @@ import (
 
 	"github.com/dev1antdev/remuda/internal/core"
 	"github.com/dev1antdev/remuda/internal/core/coretest"
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/scenes"
 )
 
 // threePanes is a scene's kind of tree: an editor on the left, two shells stacked on the right.
-func threePanes(sub string) herdr.LayoutNode {
-	return herdr.LayoutNode{Type: "split", Direction: "right", Ratio: 0.6,
-		First: &herdr.LayoutNode{Type: "pane", CWD: sub, Label: "editor"},
-		Second: &herdr.LayoutNode{Type: "split", Direction: "down", Ratio: 0.5,
-			First:  &herdr.LayoutNode{Type: "pane"},
-			Second: &herdr.LayoutNode{Type: "pane", Label: "server"},
+func threePanes(sub string) coreapi.LayoutNode {
+	return coreapi.LayoutNode{Type: "split", Direction: "right", Ratio: 0.6,
+		First: &coreapi.LayoutNode{Type: "pane", CWD: sub, Label: "editor"},
+		Second: &coreapi.LayoutNode{Type: "split", Direction: "down", Ratio: 0.5,
+			First:  &coreapi.LayoutNode{Type: "pane"},
+			Second: &coreapi.LayoutNode{Type: "pane", Label: "server"},
 		},
 	}
 }
 
 // sameShape says whether two trees split the same way with the same labels and commands, whatever their pane ids.
-func sameShape(a, b *herdr.LayoutNode) bool {
+func sameShape(a, b *coreapi.LayoutNode) bool {
 	if a == nil || b == nil {
 		return a == b
 	}
@@ -71,7 +71,7 @@ func TestALayoutIsLaidOutAsANewTabAndExportedAsItWasGiven(t *testing.T) {
 	if laid.WorkspaceID != space || laid.TabID == first || len(panes) != 3 || laid.FocusedPaneID != panes[0].PaneID || !sameShape(&laid.Root, &tree) {
 		t.Fatalf("laid %+v", laid)
 	}
-	snap := eventually(t, adapter, func(s *herdr.Snapshot) bool {
+	snap := eventually(t, adapter, func(s *coreapi.Snapshot) bool {
 		tab := s.Tab(laid.TabID)
 		return tab != nil && tab.Label == "Dev" && len(panesOfTab(s, laid.TabID)) == 3
 	})
@@ -100,7 +100,7 @@ func TestALayoutLaidInPlaceOfATabEndsItsOldPanes(t *testing.T) {
 		t.Fatal(err)
 	}
 	tab, old := made.Workspace.ActiveTabID, made.RootPane.PaneID
-	tree := herdr.LayoutNode{Type: "split", Direction: "down", Ratio: 0.3, First: &herdr.LayoutNode{Type: "pane"}, Second: &herdr.LayoutNode{Type: "pane"}}
+	tree := coreapi.LayoutNode{Type: "split", Direction: "down", Ratio: 0.3, First: &coreapi.LayoutNode{Type: "pane"}, Second: &coreapi.LayoutNode{Type: "pane"}}
 	laid, err := adapter.LayoutApply("", tab, "Two", tree)
 	if err != nil {
 		t.Fatal(err)
@@ -108,7 +108,7 @@ func TestALayoutLaidInPlaceOfATabEndsItsOldPanes(t *testing.T) {
 	if laid.TabID != tab || len(laid.Root.Panes()) != 2 {
 		t.Fatalf("laid %+v", laid)
 	}
-	eventually(t, adapter, func(s *herdr.Snapshot) bool {
+	eventually(t, adapter, func(s *coreapi.Snapshot) bool {
 		shown := s.Tab(tab)
 		return shown != nil && shown.Label == "Two" && s.Pane(old) == nil && len(panesOfTab(s, tab)) == 2
 	})
@@ -126,7 +126,7 @@ func TestAPaneTheTreeLacksIsExportedBesideItAndAnEndedOneIsLeftOut(t *testing.T)
 		t.Fatal(err)
 	}
 	space, tab := made.Workspace.WorkspaceID, made.Workspace.ActiveTabID
-	laid, err := adapter.LayoutApply("", tab, "", herdr.LayoutNode{Type: "split", Direction: "down", Ratio: 0.5, First: &herdr.LayoutNode{Type: "pane"}, Second: &herdr.LayoutNode{Type: "pane"}})
+	laid, err := adapter.LayoutApply("", tab, "", coreapi.LayoutNode{Type: "split", Direction: "down", Ratio: 0.5, First: &coreapi.LayoutNode{Type: "pane"}, Second: &coreapi.LayoutNode{Type: "pane"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,14 +137,14 @@ func TestAPaneTheTreeLacksIsExportedBesideItAndAnEndedOneIsLeftOut(t *testing.T)
 	if err := adapter.PaneClose(laid.Root.Panes()[0].PaneID); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, adapter, func(s *herdr.Snapshot) bool {
+	eventually(t, adapter, func(s *coreapi.Snapshot) bool {
 		return s.Pane(stray.Address) != nil && len(panesOfTab(s, tab)) == 2
 	})
 	exported, err := adapter.LayoutExport(tab)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := herdr.LayoutNode{Type: "split", Direction: "right", Ratio: 0.5, First: &herdr.LayoutNode{Type: "pane"}, Second: &herdr.LayoutNode{Type: "pane"}}
+	want := coreapi.LayoutNode{Type: "split", Direction: "right", Ratio: 0.5, First: &coreapi.LayoutNode{Type: "pane"}, Second: &coreapi.LayoutNode{Type: "pane"}}
 	if got := exported.Root.Panes(); !sameShape(&exported.Root, &want) || got[0].PaneID != laid.Root.Panes()[1].PaneID || got[1].PaneID != stray.Address {
 		t.Fatalf("exported %+v", exported.Root)
 	}
@@ -158,33 +158,33 @@ func TestALayoutTheCoreCannotLayOutIsRefused(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pane := herdr.LayoutNode{Type: "pane"}
+	pane := coreapi.LayoutNode{Type: "pane"}
 	stray, err := client.Run(t.Context(), core.RunParams{Labels: map[string]string{core.LabelSpace: "ws-labelled", core.LabelTab: "tab-labelled"}, Rm: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Workspace("ws-labelled") != nil })
+	eventually(t, adapter, func(s *coreapi.Snapshot) bool { return s.Workspace("ws-labelled") != nil })
 	for _, c := range []struct {
 		name, space, tab string
-		tree             herdr.LayoutNode
+		tree             coreapi.LayoutNode
 		code             string
 	}{
-		{"a split of nothing", made.Workspace.WorkspaceID, "", herdr.LayoutNode{Type: "split", Direction: "right"}, "invalid_request"},
-		{"a pane with a command, on a core that cannot start it as it is", made.Workspace.WorkspaceID, "", herdr.LayoutNode{Type: "split", Direction: "right", First: &pane,
-			Second: &herdr.LayoutNode{Type: "pane", Command: []string{"npm", "run", "dev", "--token=s3cret-sentinel"}}}, "invalid_request"},
+		{"a split of nothing", made.Workspace.WorkspaceID, "", coreapi.LayoutNode{Type: "split", Direction: "right"}, "invalid_request"},
+		{"a pane with a command, on a core that cannot start it as it is", made.Workspace.WorkspaceID, "", coreapi.LayoutNode{Type: "split", Direction: "right", First: &pane,
+			Second: &coreapi.LayoutNode{Type: "pane", Command: []string{"npm", "run", "dev", "--token=s3cret-sentinel"}}}, "invalid_request"},
 		{"a workspace only labelled, not in the document", "ws-labelled", "", pane, "workspace_not_found"},
 		{"no such workspace", "ws-none", "", pane, "workspace_not_found"},
 		{"no such tab", "", "tab-none", pane, "tab_not_found"},
 	} {
 		_, err := adapter.LayoutApply(c.space, c.tab, "", c.tree)
-		if !herdr.IsCode(err, c.code) {
+		if !coreapi.IsCode(err, c.code) {
 			t.Errorf("%s: %v, want %s", c.name, err, c.code)
 		}
 		if err != nil && strings.Contains(err.Error(), "s3cret-sentinel") {
 			t.Errorf("%s: the refusal repeats a pane's arguments: %v", c.name, err)
 		}
 	}
-	if _, err := adapter.LayoutExport("tab-none"); !herdr.IsCode(err, "tab_not_found") {
+	if _, err := adapter.LayoutExport("tab-none"); !coreapi.IsCode(err, "tab_not_found") {
 		t.Errorf("export of no tab: %v", err)
 	}
 	if _, err := client.Run(t.Context(), core.RunParams{Argv: []string{"sh"}, Literal: true}); !core.IsKind(err, "needs_update") {
@@ -231,7 +231,7 @@ func TestASceneCapturedOnACoreLaysItsLayoutOutInAnotherFolder(t *testing.T) {
 		t.Fatal(err)
 	}
 	agent := kept.AgentPane(&again.Root)
-	snap := eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Pane(agent) != nil })
+	snap := eventually(t, adapter, func(s *coreapi.Snapshot) bool { return s.Pane(agent) != nil })
 	if pane := snap.Pane(agent); pane.TabID != again.TabID || realPath(t, again.Root.Panes()[0].CWD) != filepath.Join(to, "sub") {
 		t.Fatalf("the agent's pane %+v, the tree %+v", pane, again.Root)
 	}
@@ -278,7 +278,7 @@ func TestASceneCommandIsLaidOutAsSavedThoughATemplateHasItsProgramsName(t *testi
 		t.Fatal(err)
 	}
 	space := made.Workspace.WorkspaceID
-	sceneWith := func(command ...string) herdr.LayoutNode {
+	sceneWith := func(command ...string) coreapi.LayoutNode {
 		scene := scenes.Layout{Root: scenes.Node{Type: "split", Direction: "right", Ratio: 0.5,
 			First: &scenes.Node{Type: "pane"}, Second: &scenes.Node{Type: "pane", Label: "server", Command: command}}}
 		return scene.Tree(folder)
@@ -299,7 +299,7 @@ func TestASceneCommandIsLaidOutAsSavedThoughATemplateHasItsProgramsName(t *testi
 		t.Fatalf("exported %+v, laid out %+v (%v)", exported, tree, err)
 	}
 	shell := laid.Root.Panes()[0].PaneID
-	eventually(t, adapter, func(*herdr.Snapshot) bool {
+	eventually(t, adapter, func(*coreapi.Snapshot) bool {
 		ran, _ := client.Get(t.Context(), server)
 		at, _ := adapter.PaneAtPrompt(shell)
 		return at && ran.Foreground != nil && ran.Foreground.Pid == ran.Pid
@@ -308,10 +308,10 @@ func TestASceneCommandIsLaidOutAsSavedThoughATemplateHasItsProgramsName(t *testi
 		t.Fatalf("the scene's running sh -c reads as a shell at its prompt, which a tidy would close (%v)", err)
 	}
 
-	if _, err := adapter.LayoutApply(space, "", "", sceneWith("rc-no-such-program", "--flag")); !herdr.IsCode(err, "spawn_failed") {
+	if _, err := adapter.LayoutApply(space, "", "", sceneWith("rc-no-such-program", "--flag")); !coreapi.IsCode(err, "spawn_failed") {
 		t.Fatalf("a layout of a missing program: %v", err)
 	}
-	eventually(t, adapter, func(s *herdr.Snapshot) bool { return len(s.Panes) == 3 })
+	eventually(t, adapter, func(s *coreapi.Snapshot) bool { return len(s.Panes) == 3 })
 }
 
 // A scene pane whose own command is the very shell the core starts (its argv the same) comes back after a reboot as
@@ -335,7 +335,7 @@ func TestAScenePaneGivenItsShellBackAfterARestartIsAtItsPrompt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	laid, err := adapter.LayoutApply(made.Workspace.WorkspaceID, "", "", herdr.LayoutNode{Type: "pane", Command: machineShell.Argv})
+	laid, err := adapter.LayoutApply(made.Workspace.WorkspaceID, "", "", coreapi.LayoutNode{Type: "pane", Command: machineShell.Argv})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -347,14 +347,14 @@ func TestAScenePaneGivenItsShellBackAfterARestartIsAtItsPrompt(t *testing.T) {
 
 	c.Restart(t)
 	fresh := adapterOf(t, c.Client(t), core.AdapterHooks{})
-	eventually(t, fresh, func(*herdr.Snapshot) bool {
+	eventually(t, fresh, func(*coreapi.Snapshot) bool {
 		after, _ := client.Get(t.Context(), pane)
 		at, _ := fresh.PaneAtPrompt(pane)
 		return at && after.Pid != before.Pid && slices.Equal(after.Argv, before.Argv)
 	})
 }
 
-func panesOfTab(snap *herdr.Snapshot, tab string) []string {
+func panesOfTab(snap *coreapi.Snapshot, tab string) []string {
 	var out []string
 	for _, p := range snap.Panes {
 		if p.TabID == tab {
@@ -380,7 +380,7 @@ func TestALayoutWhoseWorkspaceClosedWhileItStartedDoesNotBringItBack(t *testing.
 	if _, err := adapter.LayoutApply(space, "", "", threePanes("")); err == nil {
 		t.Fatal("a layout of a workspace closed meanwhile was laid out")
 	}
-	eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Workspace(space) == nil && len(s.Panes) == 0 })
+	eventually(t, adapter, func(s *coreapi.Snapshot) bool { return s.Workspace(space) == nil && len(s.Panes) == 0 })
 	if left, err := client.List(t.Context(), false, map[string]string{core.LabelSpace: space}); err != nil || len(left) > 0 {
 		t.Fatalf("terminals of the closed workspace still run: %+v, %v", left, err)
 	}
@@ -405,7 +405,7 @@ func TestALayoutLaidInPlaceOfATabClosedMeanwhileFails(t *testing.T) {
 	if _, err := adapter.LayoutApply("", other.Tab.TabID, "", threePanes("")); err == nil {
 		t.Fatal("a tab closed meanwhile was laid out again")
 	}
-	eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Tab(other.Tab.TabID) == nil && len(s.Panes) == 1 })
+	eventually(t, adapter, func(s *coreapi.Snapshot) bool { return s.Tab(other.Tab.TabID) == nil && len(s.Panes) == 1 })
 }
 
 func TestAWorkspaceClosedWhileALayoutIsWrittenEndsTheLayoutsPanesToo(t *testing.T) {
@@ -427,7 +427,7 @@ func TestAWorkspaceClosedWhileALayoutIsWrittenEndsTheLayoutsPanesToo(t *testing.
 	if left, err := client.List(t.Context(), false, map[string]string{core.LabelSpace: space}); err != nil || len(left) > 0 {
 		t.Fatalf("the layout's panes outlived the close: %+v, %v", left, err)
 	}
-	eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Workspace(space) == nil && len(s.Panes) == 0 })
+	eventually(t, adapter, func(s *coreapi.Snapshot) bool { return s.Workspace(space) == nil && len(s.Panes) == 0 })
 }
 
 // On a core whose record says nothing of literal (0.2.0, or one rolled back to while a scene's command runs), the
@@ -456,7 +456,7 @@ func TestARunningSceneCommandIsNoIdleShellOnACoreWhoseRecordSaysNothingOfIt(t *t
 		return run.Address
 	}
 	command, unmarked := place(map[string]string{core.LabelCommand: "1"}), place(nil)
-	eventually(t, adapter, func(*herdr.Snapshot) bool {
+	eventually(t, adapter, func(*coreapi.Snapshot) bool {
 		ran, _ := client.Get(t.Context(), command)
 		at, _ := adapter.PaneAtPrompt(unmarked)
 		return at && ran.Foreground != nil && ran.Foreground.Pid == ran.Pid

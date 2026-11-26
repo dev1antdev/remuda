@@ -7,7 +7,7 @@ import (
 
 	"github.com/dev1antdev/remuda/internal/core"
 	"github.com/dev1antdev/remuda/internal/core/coretest"
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 )
 
 // TestCoreReadsTheBuiltInWatches: the two patterns are remuda-core's to run, in its own dialect; one it refused would
@@ -32,9 +32,9 @@ func TestCoreReadsTheBuiltInWatches(t *testing.T) {
 			t.Fatal("the machine never showed the pane")
 		}
 	}
-	stream, err := adapter.Subscribe([]herdr.Subscription{
-		{Type: herdr.EventOutputMatched, PaneID: pane, Source: "recent", Lines: lines, Match: &herdr.OutputMatch{Type: "regex", Value: ServePattern}},
-		{Type: herdr.EventOutputMatched, PaneID: pane, Source: "recent", Lines: lines, Match: &herdr.OutputMatch{Type: "regex", Value: TestsPattern}},
+	stream, err := adapter.Subscribe([]coreapi.Subscription{
+		{Type: coreapi.EventOutputMatched, PaneID: pane, Source: "recent", Lines: lines, Match: &coreapi.OutputMatch{Type: "regex", Value: ServePattern}},
+		{Type: coreapi.EventOutputMatched, PaneID: pane, Source: "recent", Lines: lines, Match: &coreapi.OutputMatch{Type: "regex", Value: TestsPattern}},
 	})
 	if err != nil {
 		t.Fatalf("remuda-core refused the built-in watches: %v", err)
@@ -47,14 +47,14 @@ func TestCoreReadsTheBuiltInWatches(t *testing.T) {
 	got := map[string]bool{}
 	deadline := time.After(10 * time.Second)
 	for len(got) < 2 {
-		done := make(chan herdr.Event, 1)
+		done := make(chan coreapi.Event, 1)
 		go func() {
 			for {
 				e, err := stream.Next()
 				if err != nil {
 					return
 				}
-				if e.Kind == herdr.EventOutputMatched {
+				if e.Kind == coreapi.EventOutputMatched {
 					done <- e
 					return
 				}

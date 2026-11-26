@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 )
 
 // PaneRef names a pane across machines.
@@ -35,7 +35,7 @@ type PaneStatus struct {
 // Snapshot is a machine's session snapshot as the watcher just read it.
 type Snapshot struct {
 	Machine string
-	Snap    *herdr.Snapshot
+	Snap    *coreapi.Snapshot
 	At      time.Time
 	First   bool // the machine's first snapshot, or the first after its polls failed: what changed in between was not watched happening
 }

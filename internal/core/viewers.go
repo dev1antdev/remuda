@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 )
 
 // The live terminals of a machine on remuda-core: every viewer its own attach, so each gets the core's first paint of
@@ -42,7 +42,7 @@ type Terminals struct {
 	open   map[string]int
 }
 
-var _ herdr.Terminals = (*Terminals)(nil)
+var _ coreapi.Terminals = (*Terminals)(nil)
 
 // NewTerminals follows the terminals the client reaches.
 func NewTerminals(client *Client) *Terminals {
@@ -54,7 +54,7 @@ func NewTerminals(client *Client) *Terminals {
 // that grid — never a sequence in the bytes, which the program itself could print. It is painted up to attachHistory
 // rows of history first — fewer when the core cuts the paint to its queue — or its screen alone when that paint never
 // comes (firstPaintWithin).
-func (t *Terminals) Open(termID string, view herdr.View) (herdr.Viewer, error) {
+func (t *Terminals) Open(termID string, view coreapi.View) (coreapi.Viewer, error) {
 	v, err := t.attach(termID, view, attachHistory)
 	if err != nil {
 		return nil, err
@@ -78,10 +78,10 @@ func (t *Terminals) Open(termID string, view herdr.View) (herdr.Viewer, error) {
 	return screen, nil
 }
 
-func (t *Terminals) attach(termID string, view herdr.View, history int) (*coreViewer, error) {
+func (t *Terminals) attach(termID string, view coreapi.View, history int) (*coreViewer, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), attachWithin)
 	defer cancel()
-	v := &coreViewer{out: make(chan herdr.Out, 8), done: make(chan struct{}), painted: make(chan struct{})}
+	v := &coreViewer{out: make(chan coreapi.Out, 8), done: make(chan struct{}), painted: make(chan struct{})}
 	params := AttachParams{
 		Terminal:            termID,
 		History:             history,
@@ -90,7 +90,7 @@ func (t *Terminals) attach(termID string, view herdr.View, history int) (*coreVi
 		ResizeNotifications: view.Keep || view.Observe,
 		Resized:             v.grid, // called by the pump's Read, in order with the bytes
 	}
-	if herdr.ValidSize(view.Cols, view.Rows) {
+	if coreapi.ValidSize(view.Cols, view.Rows) {
 		params.Cols, params.Rows = uint16(view.Cols), uint16(view.Rows)
 	}
 	stream, err := t.client.Attach(ctx, params)
@@ -127,7 +127,7 @@ func (t *Terminals) Viewers(termID string) int {
 
 type coreViewer struct {
 	stream    *Stream
-	out       chan herdr.Out
+	out       chan coreapi.Out
 	done      chan struct{}
 	painted   chan struct{} // closed once the first bytes came, or the stream ended without any
 	paintCame bool          // the attach stands: its first bytes were a paint, or it ended; written before painted closes
@@ -155,7 +155,7 @@ func (v *coreViewer) pump() {
 				close(v.painted)
 			})
 		}
-		if n > 0 && !v.hand(herdr.Out{Data: append([]byte(nil), buf[:n]...)}) {
+		if n > 0 && !v.hand(coreapi.Out{Data: append([]byte(nil), buf[:n]...)}) {
 			return
 		}
 		if err != nil {
@@ -165,7 +165,7 @@ func (v *coreViewer) pump() {
 }
 
 // hand gives the viewer the next Out; false once the viewer has gone.
-func (v *coreViewer) hand(out herdr.Out) bool {
+func (v *coreViewer) hand(out coreapi.Out) bool {
 	select {
 	case v.out <- out:
 		return true
@@ -176,7 +176,7 @@ func (v *coreViewer) hand(out herdr.Out) bool {
 
 // grid tells the viewer the terminal's grid, ahead of the bytes drawn at it.
 func (v *coreViewer) grid(cols, rows uint16) {
-	v.hand(herdr.Out{Cols: int(cols), Rows: int(rows)})
+	v.hand(coreapi.Out{Cols: int(cols), Rows: int(rows)})
 }
 
 func (v *coreViewer) released() {
@@ -185,7 +185,7 @@ func (v *coreViewer) released() {
 	}
 }
 
-func (v *coreViewer) Out() <-chan herdr.Out { return v.out }
+func (v *coreViewer) Out() <-chan coreapi.Out { return v.out }
 
 // Write types into the terminal; the core ignores what a viewer that only watches sends.
 func (v *coreViewer) Write(data []byte) error {
@@ -196,7 +196,7 @@ func (v *coreViewer) Write(data []byte) error {
 // Resize tells the core this viewer's size: the terminal's when the viewer is the active one, a keep-size viewer's
 // own record, nothing for one that only watches.
 func (v *coreViewer) Resize(cols, rows int) error {
-	if !herdr.ValidSize(cols, rows) {
+	if !coreapi.ValidSize(cols, rows) {
 		return nil
 	}
 	return v.stream.Resize(uint16(cols), uint16(rows))

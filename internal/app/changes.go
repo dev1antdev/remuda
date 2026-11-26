@@ -1,8 +1,8 @@
 package app
 
 import (
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/gitstage"
-	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/rpath"
 	"github.com/dev1antdev/remuda/internal/undo"
@@ -27,7 +27,7 @@ func stageWrites(fleet *machines.Manager, watcher *watch.Watcher, turns *undo.Se
 		}
 		for i := range snap.Panes {
 			pane := &snap.Panes[i]
-			if pane.Agent == "" || (pane.AgentStatus != herdr.StatusWorking && pane.AgentStatus != herdr.StatusBlocked) {
+			if pane.Agent == "" || (pane.AgentStatus != coreapi.StatusWorking && pane.AgentStatus != coreapi.StatusBlocked) {
 				continue
 			}
 			workspaceDir := ""

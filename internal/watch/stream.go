@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/events"
-	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/machines"
 )
 
@@ -27,7 +27,7 @@ var (
 
 // liveStream is one open stream and what it holds.
 type liveStream struct {
-	stream  herdr.EventStream
+	stream  coreapi.EventStream
 	set     *streamSet
 	started time.Time
 	carried map[string]bool // "pane|key" of the output watches the stream before it held too
@@ -93,7 +93,7 @@ func (w *Watcher) stream(mc *machines.Machine, st *machineState, stop <-chan str
 			cur, last, retry = nil, cur, nil
 			st.streaming.Store(false)
 			signal(st.kick)
-			if herdr.IsCode(err, herdr.ErrEventsLost) {
+			if coreapi.IsCode(err, coreapi.ErrEventsLost) {
 				log.Printf("%s: herdr lost events of the stream; a snapshot now, a new stream", mc.ID())
 				backoff = streamRetry
 				continue
@@ -187,9 +187,9 @@ func (w *Watcher) connect(mc *machines.Machine, st *machineState, prev *liveStre
 		w.Refused(mc.ID(), nil) // taken again: herdr reads the person's watches as they stand now
 	}
 	if err != nil {
-		var he *herdr.Error
+		var he *coreapi.Error
 		switch {
-		case herdr.IsCode(err, "pane_not_found"):
+		case coreapi.IsCode(err, "pane_not_found"):
 			signal(st.kick) // the pane set moved under the subscription: the next snapshot tells the new one
 			return nil, streamRetry
 		case errors.As(err, &he):
@@ -263,7 +263,7 @@ func (w *Watcher) sayOnce(st *machineState, what string, err error) bool {
 
 // refusesWatches is herdr refusing a set for a regex of its output watches; any other refusal is of the stream itself
 // (one too old for it answers invalid_request) or of a pane that went.
-func refusesWatches(err error) bool { return herdr.IsCode(err, "invalid_regex") }
+func refusesWatches(err error) bool { return coreapi.IsCode(err, "invalid_regex") }
 
 // carryKey names a watch on a pane by what it looks for too: a rule edited to look for something else is a new watch.
 func carryKey(pane string, o Output) string {
@@ -272,9 +272,9 @@ func carryKey(pane string, o Output) string {
 
 // heard is one event of a stream: an output match goes on the bus for every watch its row matches, anything else
 // asks the loop for a snapshot.
-func (w *Watcher) heard(machineID string, st *machineState, ls *liveStream, event herdr.Event) {
+func (w *Watcher) heard(machineID string, st *machineState, ls *liveStream, event coreapi.Event) {
 	switch event.Kind {
-	case herdr.EventOutputMatched:
+	case coreapi.EventOutputMatched:
 		now := time.Now()
 		fresh := now.Sub(ls.started) < freshFor
 		if event.Standing != nil {
@@ -297,14 +297,14 @@ func (w *Watcher) heard(machineID string, st *machineState, ls *liveStream, even
 }
 
 // matches says whether a row matches a watch, as herdr would: a substring as it is, a regex in herdr's dialect.
-func (w *Watcher) matches(m herdr.OutputMatch, line string) bool {
+func (w *Watcher) matches(m coreapi.OutputMatch, line string) bool {
 	if m.Type != "regex" {
 		return strings.Contains(line, m.Value)
 	}
 	if re, ok := w.matchers.Load(m.Value); ok {
-		return re.(*herdr.Regexp) != nil && re.(*herdr.Regexp).MatchString(line)
+		return re.(*coreapi.Regexp) != nil && re.(*coreapi.Regexp).MatchString(line)
 	}
-	re, err := herdr.CompileRegex(m.Value)
+	re, err := coreapi.CompileRegex(m.Value)
 	if err != nil {
 		re = nil
 	}

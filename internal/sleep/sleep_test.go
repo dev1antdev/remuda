@@ -7,18 +7,18 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 )
 
 func TestPlanRecordsEveryAgentWithASessionAndLeavesTheRest(t *testing.T) {
 	f := newFake(
-		agentPane("w1:p1", "w1:t1", "claude", sidA, herdr.StatusIdle, "/work/api"),
-		agentPane("w1:p2", "w1:t2", "codex", sidB, herdr.StatusWorking, "/work/api"),
-		agentPane("w1:p3", "w1:t1", "gemini", sidC, herdr.StatusBlocked, ""),
-		agentPane("w1:p4", "w1:t1", "claude", "", herdr.StatusIdle, "/work/api"), // no session: nothing to resume
-		agentPane("w1:p5", "w1:t1", "pi", sidA, herdr.StatusIdle, "/work/api"),   // a kind remuda cannot bring back
+		agentPane("w1:p1", "w1:t1", "claude", sidA, coreapi.StatusIdle, "/work/api"),
+		agentPane("w1:p2", "w1:t2", "codex", sidB, coreapi.StatusWorking, "/work/api"),
+		agentPane("w1:p3", "w1:t1", "gemini", sidC, coreapi.StatusBlocked, ""),
+		agentPane("w1:p4", "w1:t1", "claude", "", coreapi.StatusIdle, "/work/api"), // no session: nothing to resume
+		agentPane("w1:p5", "w1:t1", "pi", sidA, coreapi.StatusIdle, "/work/api"),   // a kind remuda cannot bring back
 		shellPane("w1:p6", "w1:t1", "/work/api"),
-		herdr.PaneInfo{PaneID: "w2:p1", WorkspaceID: "w2", Agent: "claude", AgentStatus: "idle", AgentSession: &herdr.AgentSession{Kind: "id", Value: sidA}},
+		coreapi.PaneInfo{PaneID: "w2:p1", WorkspaceID: "w2", Agent: "claude", AgentStatus: "idle", AgentSession: &coreapi.AgentSession{Kind: "id", Value: sidA}},
 	)
 	snap, _ := f.SessionSnapshot()
 	w, busy, left, err := Plan(snap, "w1")
@@ -54,9 +54,9 @@ func TestPlanRecordsEveryAgentWithASessionAndLeavesTheRest(t *testing.T) {
 func TestSleepAsksEachAgentToLeaveAndKeepsTheOnesThatWouldNotAwake(t *testing.T) {
 	quick(t)
 	f := newFake(
-		agentPane("w1:p1", "w1:t1", "claude", sidA, herdr.StatusIdle, "/work/api"),
-		agentPane("w1:p2", "w1:t1", "codex", sidB, herdr.StatusWorking, "/work/api"),
-		agentPane("w1:p3", "w1:t1", "kimi", sidC, herdr.StatusIdle, "/work/api"),
+		agentPane("w1:p1", "w1:t1", "claude", sidA, coreapi.StatusIdle, "/work/api"),
+		agentPane("w1:p2", "w1:t1", "codex", sidB, coreapi.StatusWorking, "/work/api"),
+		agentPane("w1:p3", "w1:t1", "kimi", sidC, coreapi.StatusIdle, "/work/api"),
 	)
 	f.stubborn["w1:p3"] = true
 	snap, _ := f.SessionSnapshot()
@@ -108,7 +108,7 @@ func TestSleepAsksEachAgentToLeaveAndKeepsTheOnesThatWouldNotAwake(t *testing.T)
 
 func TestASleepNobodyLeftLeavesTheWorkspaceAwake(t *testing.T) {
 	quick(t)
-	f := newFake(agentPane("w1:p1", "w1:t1", "claude", sidA, herdr.StatusIdle, "/work/api"))
+	f := newFake(agentPane("w1:p1", "w1:t1", "claude", sidA, coreapi.StatusIdle, "/work/api"))
 	f.stubborn["w1:p1"] = true
 	snap, _ := f.SessionSnapshot()
 	w, _, _, _ := Plan(snap, "w1")
@@ -127,7 +127,7 @@ func TestASleepNobodyLeftLeavesTheWorkspaceAwake(t *testing.T) {
 // when the agent of the second sleep runs on.
 func TestASecondSleepKeepsTheSleepersOfTheFirst(t *testing.T) {
 	quick(t)
-	f := newFake(shellPane("w1:p1", "w1:t1", "/work/api"), agentPane("w1:p2", "w1:t1", "codex", sidB, herdr.StatusIdle, "/work/api"))
+	f := newFake(shellPane("w1:p1", "w1:t1", "/work/api"), agentPane("w1:p2", "w1:t1", "codex", sidB, coreapi.StatusIdle, "/work/api"))
 	f.stubborn["w1:p2"] = true
 	s := &Service{Store: Open("")}
 	s.Store.put("local", "w1", asleep(sleeper("w1:p1", "w1:t1", "claude", sidA)))
@@ -145,11 +145,11 @@ func TestASecondSleepKeepsTheSleepersOfTheFirst(t *testing.T) {
 
 func TestSleepTakesAnotherConversationAndAGonePaneAsTheyAre(t *testing.T) {
 	quick(t)
-	f := newFake(agentPane("w1:p1", "w1:t1", "claude", sidA, herdr.StatusIdle, "/work/api"), agentPane("w1:p2", "w1:t1", "claude", sidB, herdr.StatusIdle, "/work/api"))
+	f := newFake(agentPane("w1:p1", "w1:t1", "claude", sidA, coreapi.StatusIdle, "/work/api"), agentPane("w1:p2", "w1:t1", "claude", sidB, coreapi.StatusIdle, "/work/api"))
 	snap, _ := f.SessionSnapshot()
 	w, _, _, _ := Plan(snap, "w1")
 	// between the plan and the job the person resumed another conversation in one pane and closed the other
-	f.snap.Panes = []herdr.PaneInfo{agentPane("w1:p1", "w1:t1", "claude", sidC, herdr.StatusIdle, "/work/api")}
+	f.snap.Panes = []coreapi.PaneInfo{agentPane("w1:p1", "w1:t1", "claude", sidC, coreapi.StatusIdle, "/work/api")}
 	s := &Service{Store: Open("")}
 	s.Store.put("local", "w1", w)
 	err := s.sleepAll(f, "local", "w1", w, func(string) {})
@@ -171,8 +171,8 @@ func TestSleepTakesAnotherConversationAndAGonePaneAsTheyAre(t *testing.T) {
 func TestASleepLeavesAnAgentWhoseConversationMovedSinceThePlan(t *testing.T) {
 	quick(t)
 	f := newFake(
-		agentPane("w1:p1", "w1:t1", "claude", sidA, herdr.StatusIdle, "/work/api"),
-		agentPane("w1:p2", "w1:t1", "claude", sidB, herdr.StatusIdle, "/work/api"),
+		agentPane("w1:p1", "w1:t1", "claude", sidA, coreapi.StatusIdle, "/work/api"),
+		agentPane("w1:p2", "w1:t1", "claude", sidB, coreapi.StatusIdle, "/work/api"),
 	)
 	snap, _ := f.SessionSnapshot()
 	w, _, _, _ := Plan(snap, "w1")
@@ -188,7 +188,7 @@ func TestASleepLeavesAnAgentWhoseConversationMovedSinceThePlan(t *testing.T) {
 		t.Fatalf("typed: %v", f.typed)
 	}
 
-	f2 := newFake(agentPane("w1:p1", "w1:t1", "claude", sidA, herdr.StatusIdle, "/work/api"))
+	f2 := newFake(agentPane("w1:p1", "w1:t1", "claude", sidA, coreapi.StatusIdle, "/work/api"))
 	f2.rereadFails = errors.New("ssh: connection lost")
 	snap, _ = f2.SessionSnapshot()
 	w, _, _, _ = Plan(snap, "w1")

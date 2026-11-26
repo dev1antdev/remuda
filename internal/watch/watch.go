@@ -11,8 +11,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/events"
-	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/machines"
 )
 
@@ -32,7 +32,7 @@ type paneState struct {
 }
 
 type machineState struct {
-	snap    *herdr.Snapshot
+	snap    *coreapi.Snapshot
 	at      time.Time
 	err     error
 	fails   int
@@ -64,7 +64,7 @@ type Watcher struct {
 
 	// Outputs names the watches the core keeps on a machine's panes' output, for its latest snapshot, told the watches
 	// the stream subscribes to now so a standing watch is never taken for a pane that just appeared; nil for none.
-	Outputs func(machine string, snap *herdr.Snapshot, standing []Output) []Output
+	Outputs func(machine string, snap *coreapi.Snapshot, standing []Output) []Output
 	// Refused hears herdr refusing the person's own watches on a machine (nil once it takes them again).
 	Refused func(machine string, err error)
 
@@ -145,7 +145,7 @@ func closed(done <-chan struct{}) bool {
 }
 
 // poll fetches one snapshot and applies it; transport failures reach the machine through its API.
-func (w *Watcher) poll(mc *machines.Machine) (*herdr.Snapshot, error) {
+func (w *Watcher) poll(mc *machines.Machine) (*coreapi.Snapshot, error) {
 	w.mu.Lock()
 	st := w.stateFor(mc.ID())
 	w.mu.Unlock()
@@ -154,7 +154,7 @@ func (w *Watcher) poll(mc *machines.Machine) (*herdr.Snapshot, error) {
 	client, _, err := mc.Ready()
 	st.memory.Store(err == nil && client != nil && client.SnapshotFromMemory())
 	if err == nil {
-		var snap *herdr.Snapshot
+		var snap *coreapi.Snapshot
 		if snap, err = client.SessionSnapshot(); err == nil {
 			w.mu.Lock()
 			st.fails = 0
@@ -173,7 +173,7 @@ func (w *Watcher) poll(mc *machines.Machine) (*herdr.Snapshot, error) {
 // apply stores the snapshot, publishes it, and emits one event per pane whose status changed;
 // a machine's first snapshot only seeds state, so a reconnect replays no alerts. The snapshot is the watcher's before
 // it is announced: its ears ask the watcher about the panes they were told of.
-func (w *Watcher) apply(machineID string, snap *herdr.Snapshot) {
+func (w *Watcher) apply(machineID string, snap *coreapi.Snapshot) {
 	now := time.Now()
 	var changes []events.PaneStatus
 	w.mu.Lock()
@@ -202,7 +202,7 @@ func (w *Watcher) apply(machineID string, snap *herdr.Snapshot) {
 			continue
 		}
 		worked := time.Duration(0)
-		if prev.status == herdr.StatusWorking {
+		if prev.status == coreapi.StatusWorking {
 			worked = now.Sub(prev.since)
 		}
 		changes = append(changes, events.PaneStatus{
@@ -231,7 +231,7 @@ func (w *Watcher) apply(machineID string, snap *herdr.Snapshot) {
 }
 
 // Snapshot returns the machine's latest snapshot, or the error its last poll hit.
-func (w *Watcher) Snapshot(machineID string) (*herdr.Snapshot, error) {
+func (w *Watcher) Snapshot(machineID string) (*coreapi.Snapshot, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	st := w.states[machineID]
@@ -254,6 +254,6 @@ func (e watchErr) Error() string { return string(e) }
 const errNotWatched = watchErr("no snapshot yet")
 
 // Refresh polls one machine now, so the next roster read sees what the UI just changed.
-func (w *Watcher) Refresh(mc *machines.Machine) (*herdr.Snapshot, error) {
+func (w *Watcher) Refresh(mc *machines.Machine) (*coreapi.Snapshot, error) {
 	return w.poll(mc)
 }

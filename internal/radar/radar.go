@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/state"
 )
 
@@ -37,7 +37,7 @@ type Episode struct {
 }
 
 // Recover finds a last-activity time for a pane the tracker has no stamp for; zero when there is none.
-type Recover func(machineID string, p *herdr.PaneInfo) time.Time
+type Recover func(machineID string, p *coreapi.PaneInfo) time.Time
 
 type pane struct {
 	status    string // herdr's, after the grace rule
@@ -98,8 +98,8 @@ func New(dir string, recover Recover) *Tracker {
 }
 
 // Observe folds one snapshot of a machine into the tracker; its panes missing from the snapshot are forgotten.
-func (t *Tracker) Observe(machineID string, snap *herdr.Snapshot, now time.Time) {
-	var recover []herdr.PaneInfo
+func (t *Tracker) Observe(machineID string, snap *coreapi.Snapshot, now time.Time) {
+	var recover []coreapi.PaneInfo
 	t.mu.Lock()
 	live := map[string]bool{}
 	for i := range snap.Panes {
@@ -148,31 +148,31 @@ func (t *Tracker) Observe(machineID string, snap *herdr.Snapshot, now time.Time)
 	}
 }
 
-func (t *Tracker) observe(p *herdr.PaneInfo, st *pane, now time.Time) {
+func (t *Tracker) observe(p *coreapi.PaneInfo, st *pane, now time.Time) {
 	status := p.AgentStatus
-	if status == herdr.StatusWorking {
+	if status == coreapi.StatusWorking {
 		st.lastWork = now
 		t.dirty = true
 	}
 	// a blink through idle right after an observed working tick is still working (a loaded or recovered stamp is not one)
-	if (status == herdr.StatusIdle || status == herdr.StatusDone) && st.status == herdr.StatusWorking && now.Sub(st.lastWork) < idleGrace {
-		status = herdr.StatusWorking
+	if (status == coreapi.StatusIdle || status == coreapi.StatusDone) && st.status == coreapi.StatusWorking && now.Sub(st.lastWork) < idleGrace {
+		status = coreapi.StatusWorking
 	}
 	// herdr keeps reporting done until the pane is focused in herdr itself, for hours: a finish looked at here stays looked at until the agent works again
 	if !st.known {
 		// first sight (a restart, or a pane from before remuda): a finish herdr still reports from before is not news
 		st.known = true
-		if status != herdr.StatusWorking && !st.doneHeld {
+		if status != coreapi.StatusWorking && !st.doneHeld {
 			st.doneSeen = true
 		}
 		t.dirty = true
 	}
-	if status == herdr.StatusWorking {
+	if status == coreapi.StatusWorking {
 		if st.doneSeen || st.doneHeld {
 			t.dirty = true
 		}
 		st.doneSeen, st.doneHeld, st.looked = false, false, false
-	} else if !st.doneSeen && (p.AgentStatus == herdr.StatusDone || (st.status == herdr.StatusWorking && status == herdr.StatusIdle)) {
+	} else if !st.doneSeen && (p.AgentStatus == coreapi.StatusDone || (st.status == coreapi.StatusWorking && status == coreapi.StatusIdle)) {
 		if !st.doneHeld {
 			t.dirty = true
 		}
@@ -181,9 +181,9 @@ func (t *Tracker) observe(p *herdr.PaneInfo, st *pane, now time.Time) {
 	st.status = status
 
 	switch {
-	case status == herdr.StatusBlocked:
+	case status == coreapi.StatusBlocked:
 		st.blocked = true
-	case status == herdr.StatusWorking || st.lastWork.IsZero():
+	case status == coreapi.StatusWorking || st.lastWork.IsZero():
 		// working again, or it never had worked (recovery included): the dialog simply closed
 		st.blocked = false
 	}
@@ -234,7 +234,7 @@ func (t *Tracker) Looked(machineID, paneID string) bool {
 }
 
 // Display reads the pane as a person would; one not observed yet is read from herdr's status alone.
-func (t *Tracker) Display(machineID string, p *herdr.PaneInfo) Display {
+func (t *Tracker) Display(machineID string, p *coreapi.PaneInfo) Display {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	st := t.panes[key(machineID, p.PaneID)]
@@ -245,7 +245,7 @@ func (t *Tracker) Display(machineID string, p *herdr.PaneInfo) Display {
 	if !st.lastWork.IsZero() {
 		d.LastActive = st.lastWork.UnixMilli()
 		// the stamp moves every poll while it works; the roster's ETag must not
-		if st.status == herdr.StatusWorking {
+		if st.status == coreapi.StatusWorking {
 			d.LastActive = st.lastWork.Truncate(time.Minute).UnixMilli()
 		}
 	}
@@ -259,12 +259,12 @@ func (t *Tracker) Display(machineID string, p *herdr.PaneInfo) Display {
 
 func shownState(st *pane) string {
 	switch {
-	case st.status == herdr.StatusWorking:
-		return herdr.StatusWorking
+	case st.status == coreapi.StatusWorking:
+		return coreapi.StatusWorking
 	case st.blocked:
-		return herdr.StatusBlocked
+		return coreapi.StatusBlocked
 	case st.doneHeld:
-		return herdr.StatusDone
+		return coreapi.StatusDone
 	default:
 		return plain(st.status)
 	}
@@ -294,12 +294,12 @@ func (t *Tracker) SetAlert(machineID, paneID, note string) {
 // plain maps herdr's status to a display state without any holding: a done herdr let go of is idle.
 func plain(status string) string {
 	switch status {
-	case herdr.StatusWorking, herdr.StatusBlocked:
+	case coreapi.StatusWorking, coreapi.StatusBlocked:
 		return status
-	case herdr.StatusIdle, herdr.StatusDone:
-		return herdr.StatusIdle
+	case coreapi.StatusIdle, coreapi.StatusDone:
+		return coreapi.StatusIdle
 	}
-	return herdr.StatusUnknown
+	return coreapi.StatusUnknown
 }
 
 // Flush writes the stamps now (shutdown).

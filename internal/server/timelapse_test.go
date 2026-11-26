@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
-	"github.com/dev1antdev/remuda/internal/herdr/herdrfake"
+	"github.com/dev1antdev/remuda/internal/coreapi"
+	"github.com/dev1antdev/remuda/internal/coreapi/corefake"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/timelapse"
 )
@@ -33,11 +33,11 @@ func recordedIn(t *testing.T, workspace string, own bool) (*Server, *http.ServeM
 		return fmt.Sprintf("\x1b[32mstep %d\x1b[0m", reads.Add(1)), nil
 	}, Own: func(string, string) bool { return own }})
 	t.Cleanup(recorder.Close)
-	s := &Server{Machines: herdrfake.Manager(dir), Timelapse: recorder}
-	pane := func(status string) *herdr.Snapshot {
-		return &herdr.Snapshot{
-			Workspaces: []herdr.WorkspaceInfo{{WorkspaceID: "w1", Label: workspace}},
-			Panes:      []herdr.PaneInfo{{PaneID: "w1:p1", WorkspaceID: "w1", Agent: "claude", AgentStatus: status, CWD: "/repo/app"}},
+	s := &Server{Machines: corefake.Manager(dir), Timelapse: recorder}
+	pane := func(status string) *coreapi.Snapshot {
+		return &coreapi.Snapshot{
+			Workspaces: []coreapi.WorkspaceInfo{{WorkspaceID: "w1", Label: workspace}},
+			Panes:      []coreapi.PaneInfo{{PaneID: "w1:p1", WorkspaceID: "w1", Agent: "claude", AgentStatus: status, CWD: "/repo/app"}},
 		}
 	}
 	start := time.Now().Add(-3 * time.Minute)
@@ -45,7 +45,7 @@ func recordedIn(t *testing.T, workspace string, own bool) (*Server, *http.ServeM
 	for i, step := range []struct {
 		after  time.Duration
 		status string
-	}{{0, herdr.StatusWorking}, {time.Minute, herdr.StatusWorking}, {2 * time.Minute, herdr.StatusDone}, {2*time.Minute + timelapse.Grace, herdr.StatusDone}} {
+	}{{0, coreapi.StatusWorking}, {time.Minute, coreapi.StatusWorking}, {2 * time.Minute, coreapi.StatusDone}, {2*time.Minute + timelapse.Grace, coreapi.StatusDone}} {
 		recorder.Observe(machines.LocalID, pane(step.status), start.Add(step.after))
 		for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline) && int(reads.Load()) < min(i+1, 3); time.Sleep(5 * time.Millisecond) {
 		}

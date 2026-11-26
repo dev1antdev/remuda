@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/events"
-	"github.com/dev1antdev/remuda/internal/herdr"
 )
 
 // A notification takes itself back. Every question, finish and watchdog note handed to a device stands for its pane
@@ -27,11 +27,11 @@ const (
 
 // standsWhile is the pane status an alert of a kind tells of: once the pane is in another, the alert no longer stands.
 var standsWhile = map[string]string{
-	"input":   herdr.StatusBlocked,
-	"waiting": herdr.StatusBlocked,
-	"done":    herdr.StatusDone,
-	"stuck":   herdr.StatusWorking,
-	"loop":    herdr.StatusWorking,
+	"input":   coreapi.StatusBlocked,
+	"waiting": coreapi.StatusBlocked,
+	"done":    coreapi.StatusDone,
+	"stuck":   coreapi.StatusWorking,
+	"loop":    coreapi.StatusWorking,
 }
 
 // episodeTag names one alert of a pane: the machine, the pane, the kind and the moment its episode began.

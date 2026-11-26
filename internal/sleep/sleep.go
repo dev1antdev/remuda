@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/jobs"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/restart"
@@ -67,7 +67,7 @@ type BusyError struct {
 func (e *BusyError) Error() string {
 	var still []string
 	for _, b := range e.Busy {
-		still = append(still, restart.Title(b.Agent)+" is "+map[string]string{herdr.StatusWorking: "working", herdr.StatusBlocked: "asking you something"}[b.Status])
+		still = append(still, restart.Title(b.Agent)+" is "+map[string]string{coreapi.StatusWorking: "working", coreapi.StatusBlocked: "asking you something"}[b.Status])
 	}
 	return fmt.Sprintf("Sleep %s? Still busy: %s. Sleeping interrupts them. Waking resumes their conversations where they stopped.", e.Workspace, strings.Join(still, ", "))
 }
@@ -104,13 +104,13 @@ func (s *Service) release(machineID, workspaceID string) {
 
 // Plan is what a sleep of the workspace would record: every agent remuda can bring back on a session, with the ones
 // still at work or asking; the agents with no session to resume are left running, named in left.
-func Plan(snap *herdr.Snapshot, workspaceID string) (w Workspace, busy []Busy, left []string, err error) {
+func Plan(snap *coreapi.Snapshot, workspaceID string) (w Workspace, busy []Busy, left []string, err error) {
 	ws := snap.Workspace(workspaceID)
 	if ws == nil {
 		return Workspace{}, nil, nil, ErrNoWorkspace
 	}
 	w = Workspace{Name: ws.Label, Dir: snap.WorkspaceDir(ws), At: time.Now()}
-	tabs := map[string]herdr.TabInfo{}
+	tabs := map[string]coreapi.TabInfo{}
 	for _, tab := range snap.Tabs {
 		tabs[tab.TabID] = tab
 	}
@@ -134,7 +134,7 @@ func Plan(snap *herdr.Snapshot, workspaceID string) (w Workspace, busy []Busy, l
 			dir = w.Dir
 		}
 		w.Agents = append(w.Agents, Agent{Pane: p.PaneID, Tab: p.TabID, TabName: name, Kind: p.Agent, Session: session, Dir: dir, Title: p.DisplayTitle()})
-		if p.AgentStatus == herdr.StatusWorking || p.AgentStatus == herdr.StatusBlocked {
+		if p.AgentStatus == coreapi.StatusWorking || p.AgentStatus == coreapi.StatusBlocked {
 			busy = append(busy, Busy{Pane: p.PaneID, Agent: p.Agent, Status: p.AgentStatus})
 		}
 	}
@@ -276,7 +276,7 @@ func (s *Service) sleepOne(client restart.Leaver, machineID string, a Agent, say
 	}
 	say(fmt.Sprintf("· %s (%s): %s", title, a.Pane, restart.Exit(a.Kind)))
 	state, err := restart.Leave(client, a.Pane, a.Kind, exit, say)
-	if herdr.IsCode(err, "agent_blocked") { // a menu opened under the exit: closed, and the exit typed once more
+	if coreapi.IsCode(err, "agent_blocked") { // a menu opened under the exit: closed, and the exit typed once more
 		interrupt(client, a.Pane, typed, say)
 		state, err = restart.Leave(client, a.Pane, a.Kind, exit, say)
 	}
@@ -323,7 +323,9 @@ func interrupt(client restart.Leaver, paneID string, typed func(string, bool), s
 	}
 }
 
-func busy(status string) bool { return status == herdr.StatusWorking || status == herdr.StatusBlocked }
+func busy(status string) bool {
+	return status == coreapi.StatusWorking || status == coreapi.StatusBlocked
+}
 
 // refresh asks the watcher for a fresh snapshot, so the roster says what the job did.
 func (s *Service) refresh(mc *machines.Machine) {
@@ -334,11 +336,11 @@ func (s *Service) refresh(mc *machines.Machine) {
 
 // look is the pane in a fresh snapshot.
 func look(client interface {
-	SessionSnapshot() (*herdr.Snapshot, error)
-}, paneID string) (herdr.PaneInfo, bool, error) {
+	SessionSnapshot() (*coreapi.Snapshot, error)
+}, paneID string) (coreapi.PaneInfo, bool, error) {
 	snap, err := client.SessionSnapshot()
 	if err != nil {
-		return herdr.PaneInfo{}, false, err
+		return coreapi.PaneInfo{}, false, err
 	}
 	p, found := restart.Lookup(snap, paneID)
 	return p, found, nil

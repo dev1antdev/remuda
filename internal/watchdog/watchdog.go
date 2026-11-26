@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/push"
 	"github.com/dev1antdev/remuda/internal/radar"
 )
@@ -64,7 +64,7 @@ func (w *Watchdog) Sweep() {
 		var kind, note, body string
 		var actions []push.Action
 		switch ep.State {
-		case herdr.StatusWorking:
+		case coreapi.StatusWorking:
 			if age < w.QuietAfter {
 				break
 			}
@@ -80,7 +80,7 @@ func (w *Watchdog) Sweep() {
 				body = "the same " + name + " call " + fmt.Sprint(w.LoopN) + " times in a row"
 				actions = []push.Action{{Action: "open", Title: "Open"}, {Action: "esc", Title: "Send Esc"}}
 			}
-		case herdr.StatusBlocked:
+		case coreapi.StatusBlocked:
 			if age >= w.WaitAfter {
 				kind = "waiting"
 				note = "waiting for your answer for " + minutes(age)

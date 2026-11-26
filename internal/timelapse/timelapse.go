@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/state"
 )
 
@@ -89,9 +89,9 @@ type Row struct {
 
 // Inputs are what the recorder reads; the app wires them over the fleet.
 type Inputs struct {
-	Screen func(machineID, paneID string) (string, error)                     // the pane's visible screen with its colours
-	Folder func(machineID, dir string, workspace *herdr.WorkspaceInfo) string // the sidebar's folder of a workspace; nil reads dir
-	Own    func(machineID, workspaceID string) bool                           // a workspace remuda keeps for itself; nil knows none
+	Screen func(machineID, paneID string) (string, error)                       // the pane's visible screen with its colours
+	Folder func(machineID, dir string, workspace *coreapi.WorkspaceInfo) string // the sidebar's folder of a workspace; nil reads dir
+	Own    func(machineID, workspaceID string) bool                             // a workspace remuda keeps for itself; nil knows none
 }
 
 // Stats is what the folder holds, for Settings.

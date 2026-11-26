@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
-	"github.com/dev1antdev/remuda/internal/herdr/herdrfake"
+	"github.com/dev1antdev/remuda/internal/coreapi"
+	"github.com/dev1antdev/remuda/internal/coreapi/corefake"
 	"github.com/dev1antdev/remuda/internal/ports"
 	"github.com/dev1antdev/remuda/internal/radar"
 	"github.com/dev1antdev/remuda/internal/review"
@@ -33,10 +33,10 @@ func TestRosterCarriesTheWorkspacesPorts(t *testing.T) {
 	for listening.For("local", "w1") == nil && time.Now().Before(deadline) {
 		time.Sleep(5 * time.Millisecond)
 	}
-	snap := &herdr.Snapshot{
-		Workspaces: []herdr.WorkspaceInfo{{WorkspaceID: "w1", Label: "app"}, {WorkspaceID: "w2", Label: "notes"}},
-		Tabs:       []herdr.TabInfo{{TabID: "w1:t1", WorkspaceID: "w1", Number: 1}, {TabID: "w2:t1", WorkspaceID: "w2", Number: 1}},
-		Panes: []herdr.PaneInfo{
+	snap := &coreapi.Snapshot{
+		Workspaces: []coreapi.WorkspaceInfo{{WorkspaceID: "w1", Label: "app"}, {WorkspaceID: "w2", Label: "notes"}},
+		Tabs:       []coreapi.TabInfo{{TabID: "w1:t1", WorkspaceID: "w1", Number: 1}, {TabID: "w2:t1", WorkspaceID: "w2", Number: 1}},
+		Panes: []coreapi.PaneInfo{
 			{PaneID: "w1:p1", TabID: "w1:t1", WorkspaceID: "w1", CWD: "/home/me/app"},
 			{PaneID: "w2:p1", TabID: "w2:t1", WorkspaceID: "w2", CWD: "/home/me/notes"},
 		},
@@ -64,7 +64,7 @@ func TestPortsNotReadYetSayNoTime(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("a Windows machine reads no ports")
 	}
-	fleet := herdrfake.Manager(t.TempDir())
+	fleet := corefake.Manager(t.TempDir())
 	s := &Server{Machines: fleet, Ports: ports.New(func() []ports.Target { return nil }, func() map[int]bool { return nil })}
 	mux := http.NewServeMux()
 	s.resourceRoutes(mux)

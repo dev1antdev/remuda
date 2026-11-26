@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/core/coretest"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/events"
-	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/machines"
 )
 
@@ -100,29 +100,29 @@ func TestTheWatcherHearsARemudaCore(t *testing.T) {
 	})
 	var started error
 	for start := time.Now(); time.Since(start) < 10*time.Second; time.Sleep(200 * time.Millisecond) {
-		if started = client.AgentStart(pane, "claude"); !herdr.IsCode(started, "agent_pane_busy") {
+		if started = client.AgentStart(pane, "claude"); !coreapi.IsCode(started, "agent_pane_busy") {
 			break
 		}
 	}
 	if started != nil {
 		t.Fatal(started)
 	}
-	waitFor(t, "the agent's first status", func() bool { return heard(pane + " " + herdr.StatusIdle) })
+	waitFor(t, "the agent's first status", func() bool { return heard(pane + " " + coreapi.StatusIdle) })
 	waitFor(t, "the agent at rest in a snapshot", func() bool {
 		snap, _ := watcher.Snapshot(machines.LocalID)
 		if snap == nil {
 			return false
 		}
 		p := snap.Pane(pane)
-		return p != nil && p.Agent == "claude" && p.AgentStatus == herdr.StatusIdle
+		return p != nil && p.Agent == "claude" && p.AgentStatus == coreapi.StatusIdle
 	})
 	for _, c := range []struct {
 		line string
 		to   string
 	}{
-		{"work", herdr.StatusWorking},
-		{"ask", herdr.StatusBlocked},
-		{"rest", herdr.StatusIdle},
+		{"work", coreapi.StatusWorking},
+		{"ask", coreapi.StatusBlocked},
+		{"rest", coreapi.StatusIdle},
 	} {
 		mu.Lock()
 		moves = nil

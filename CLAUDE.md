@@ -177,7 +177,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   `validTime`) — the machine (none by default: nothing is copied before
   one is picked), the time, how many stay, the last run, the next, Back
   up now, the copies there; never for a viewer.
-- `internal/herdr/` — **the dictionary of a machine**, not a client any more (Core 26j). `api.go`: what a package
+- `internal/coreapi/` — **the dictionary of a machine**, not a client any more (Core 26j). `api.go`: what a package
   asks of a machine, as interfaces — `API` (the snapshot, the event stream as `EventStream`, every request),
   `Terminals` (`Open` a live terminal as one `Viewer` — what it is handed in order (`Out`: the program's bytes, or
   the terminal's grid), its keys, its size, `Close` — with a `View` of its grid, `Keep` and `Observe`; `Viewers`)
@@ -201,7 +201,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   `SocketPath`), its binary (`FindBinary`, which also finds remuda-core) and whether its server answers (`Serving`,
   `StopServing`) — for the move at the person's press. The client, its event stream, its layout and server calls,
   `keeper.go` and `herdrtest` are gone with Core 26j; a test that needs the API without a core puts
-  `internal/herdr/herdrfake` in its place (`herdrfake.API`, `herdrfake.NewStream`, `herdrfake.Terminals`), and one
+  `internal/coreapi/corefake` in its place (`corefake.API`, `corefake.NewStream`, `corefake.Terminals`), and one
   that needs a core starts `coretest.Server`.
 - `internal/core/` — **the client of remuda-core** (dev1antdev/remuda-core,
   our clone of herdr-core; its protocol in its `schema/README.md`, generation
@@ -274,7 +274,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   **The adapter** (`adapter.go`, `api.go`, `snapshot.go`, `doc.go`, tested on
   paper in `snapshot_test.go` and on a throwaway core in `adapter_test.go`):
   `core.NewAdapter(client, shell, AdapterHooks{TransportError, SessionOf})` is a
-  machine's core as `herdr.API`, so the packages that read a machine keep
+  machine's core as `coreapi.API`, so the packages that read a machine keep
   the core's model. One unfiltered subscription keeps **a mirror in memory** —
   the live terminals of this machine (not a `machine/t7` of one the core
   added, its snapshot or its events, `local`) and the `remuda` document (`DocName`), read after subscribing, again
@@ -323,7 +323,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   does not read), `Scroll` (Core 25), `Label` of a pane; what reads them takes
   the plain-folder, no-focus path.
   **The agent** (`agentOf`): the foreground process when
-  `herdr.AgentProgram` names it (the one matcher, `internal/herdr/agents.go`,
+  `coreapi.AgentProgram` names it (the one matcher, `internal/coreapi/agents.go`,
   which `preview` asks too: the program or the script an interpreter runs,
   past its flags, a Windows path and `.exe` too), none while the terminal's
   own shell holds it (`atPrompt`: a shell's own process in front, never a
@@ -455,7 +455,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   Enter; quoted for the shell at the prompt, `commandLine`: POSIX, pwsh's
   `''`, Windows PowerShell 5.1's `''` with inner double quotes as `\"` —
   5.1 drops them on the way to a program — cmd's `""`, a plain word left
-  bare; the command is `herdr.AgentCommand`, the one agent table beside
+  bare; the command is `coreapi.AgentCommand`, the one agent table beside
   `AgentProgram`, every kind `sessions.Agents` offers, `cursor-agent` for
   cursor); a shell not at its prompt is `agent_pane_busy`, which
   `sessions.StartAgent` tries again; the start counts once something else
@@ -622,7 +622,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   not a request.
   **The live terminals** (`viewers.go`, tested on a throwaway core:
   `viewers_test.go`): `core.NewTerminals(client)` is a core machine's
-  `herdr.Terminals`; `Open` attaches one viewer of its own (`AttachParams`:
+  `coreapi.Terminals`; `Open` attaches one viewer of its own (`AttachParams`:
   the grid, `KeepSize` for a viewer in keep mode, `Observe` for a viewer
   link, `ResizeNotifications` for either, the grid by the core's `ValidSize`,
   `History` up to `attachHistory` 2000 rows — as many as the page's xterm
@@ -822,7 +822,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   (`concerns.ts`, while the vitals read no `remuda_core`; Updates says why
   when the row is not offered). A Windows PC is reached the same way, and the
   Windows CI job proves it over the runner's own ssh (a person's PC is Core
-  19's). The machine's `herdr.API` is then the core
+  19's). The machine's `coreapi.API` is then the core
   adapter (`coreLink`: the client and `core.NewAdapter`, lent the machine
   as its shell for git, its transport
   errors heard by `transportError`, closed off the adapter's goroutine by
@@ -841,7 +841,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   are not the ones this remuda sees, and the move is pressed machine by
   machine (Stop herdr's server), after which the reason goes with the
   server (Core 26e). The wait is asked at the moment of the write, not read
-  from a cache: `herdr.Serving` on that machine, on the endpoint the stop
+  from a cache: `herdrollback.Serving` on that machine, on the endpoint the stop
   uses (`Machine.MovedHerdr`, so `HERDR_SOCKET_PATH` before the default
   session's, and a remote's `remote_socket`), answered running, stopped or
   none — anything else holds, and a herdr started again holds anew, since
@@ -2119,7 +2119,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   `Ping`, `Keeper` or `LocalHerdrDown` exists (Core 26j took the client
   whole): remuda never finds, starts or pings herdr's binary or server. The
   one herdr touch left is the
-  move at the person's press — `herdr.Serving` / `herdr.StopServing` on a
+  move at the person's press — `herdrollback.Serving` / `herdrollback.StopServing` on a
   machine moved to remuda-core (`internal/restart`, `handleHerdrStop`) —
   which finds `herdr` on PATH, `~/.local/bin` or Homebrew's folders and
   exports `HERDR_SOCKET_PATH` itself. `remuda setup [-host H] [-tailscale]` (`internal/setup`:
@@ -2280,9 +2280,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   Resume of one is refused while herdr's server answers on the machine
   (`Restarter.MayCarryOn` → `*HerdrRunning`, a 409 `{herdr: true}` from
   `POST /api/panes/recover`, asked again inside the job; `Restarter.Serving`
-  is `herdr.Serving` over the machine's shell, through the herdr remuda
+  is `herdrollback.Serving` over the machine's shell, through the herdr remuda
   reached there, `Machine.MovedHerdr` — this machine's, which the app hands
-  `Manager.SetMovedHerdr("", herdr.SocketPath())`: no binary of its own (the
+  `Manager.SetMovedHerdr("", coreapi.SocketPath())`: no binary of its own (the
   look falls back to `herdr` on PATH) and herdr's default socket — a
   remote's `herdr_bin` and
   `remote_socket`, else the socket remuda dials there (`herdrSocket`, which
@@ -2291,7 +2291,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   it, else under the home), so the ssh environment's `HERDR_SOCKET_PATH`
   never picks another herdr —
   else herdr found as the probe finds it
-  (`script.HerdrBin`) on its own socket, `internal/herdr/serving.go`,
+  (`script.HerdrBin`) on its own socket, `internal/herdrollback/serving.go`,
   tested on `shell.Fake` and in sh on a stand-in at an explicit path:
   only herdr's own "status: running" or "status: not running" counts, a
   binary that would not run or any other answer being an error, never a
@@ -2323,7 +2323,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   person's only — a viewer link and an agent key get a 403,
   `internal/auth/herdrstop_test.go`; refused on a scratch instance,
   `app.Options.HerdrStops`, on a machine still on herdr, and on the page's
-  own host under `-server`, whose `Ready` says so) is `herdr.StopServing`:
+  own host under `-server`, whose `Ready` says so) is `herdrollback.StopServing`:
   herdr's own `server stop` on that same herdr, then herdr's word that it
   is down waited for — anything short of it an error — herdr left
   installed. The page: the ⓘ and the toast
@@ -3767,7 +3767,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   (the cockpit's own `-addr`, 7317, the door 7318 — on a port its sshd
   picked, the door goes by that process's name — code-server's), the
   processes remuda, the core, ssh and Tailscale run, an agent's own
-  (`agentProgram`, through `herdr.AgentProgram`: claude, codex, gemini or
+  (`agentProgram`, through `coreapi.AgentProgram`: claude, codex, gemini or
   kimi as the program or the script node or python runs — Claude Code holds a loopback port in its
   workspace's folder, never a server to preview, count or stop), and any
   whose folder is `/` or unknown (a system daemon, another user's), names
@@ -3877,7 +3877,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   on a Mac (whose `pcpu` is a recent average), `/proc/[0-9]*/stat` through
   awk on Linux (whose ps tells a process's CPU over its whole life:
   cumulative ticks instead); `Parse` the `Table`; `Measure` sums each pane's
-  tree from its shell (`Root`, `herdr.API.PaneShellPID`) into its
+  tree from its shell (`Root`, `coreapi.API.PaneShellPID`) into its
   workspace, each process once, then remuda-core's own processes
   (`Usage{cores, mem_kb, total, cpu_known, workspaces, core, herdr, unread}`,
   the same weight under `herdr` too, the name a page from before Core 26k
@@ -3989,12 +3989,12 @@ components and icons as rules for whoever changes it: @docs/design.md
 - `internal/watch/` — **the only poller**: every machine's
   `SessionSnapshot` whether or not a browser is open, **asked for the
   moment the core says something moved** (`stream.go`, tested on a fake
-  `herdr.API` and its `EventStream` in `stream_test.go`,
+  `coreapi.API` and its `EventStream` in `stream_test.go`,
   `stream_fail_test.go` and `stream_quiet_test.go`, and on a throwaway
   remuda-core: `triggers_core_test.go` has a trigger fire once through new
   streams, `firesOnce` in `triggers_live_test.go`):
   one `Subscribe` per
-  machine (`herdr.API.Subscribe`) holding the global kinds — a
+  machine (`coreapi.API.Subscribe`) holding the global kinds — a
   workspace, tab, worktree or pane made, closed, renamed, moved or
   focused, an agent detected, a pane exited, a layout updated
   (`urgentKinds`) — every pane's `pane.agent_status_changed` (the core binds
@@ -4025,7 +4025,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   the loop for a snapshot (`pace.go`): `eventDebounce` 150 ms for the rest
   of its burst, never closer than `localGap` 500 ms / `remoteGap` 1 s to
   the last, the pace a client that must ask for a snapshot needs; a client
-  whose snapshot is its own (`herdr.API.SnapshotFromMemory`, which
+  whose snapshot is its own (`coreapi.API.SnapshotFromMemory`, which
   remuda-core's adapter answers) waits only `memoryDebounce` 10 ms and
   never a gap, so an agent's status reaches the roster as the core says it
   (`pace_test.go` measures both at the paces that ship). `pane.updated`,
@@ -4053,18 +4053,18 @@ components and icons as rules for whoever changes it: @docs/design.md
   noticed at once, and the reader goroutine ends with its stream.
   An output match goes on the bus as `events.OutputMatched` for every
   watch whose pattern the row matches (the core names no subscription; a row
-  remuda-core told goes to the watch that told it alone, `herdr.Event.Watch`,
+  remuda-core told goes to the watch that told it alone, `coreapi.Event.Watch`,
   so a new rule's standing copy never reaches an old rule matching the same
   row, `standing_test.go`), with
   `Fresh` (within `freshFor` 2 s of its stream's start: the core tells a match
   already standing on the screen when a watch begins — an older core's clock
-  alone; remuda-core says it of every row, `herdr.Event.Standing` from its
+  alone; remuda-core says it of every row, `coreapi.Event.Standing` from its
   `fresh`, and its word stands either way: a row it told late, a core telling
   at most 256 rows a look, still stood, and one printed live as the stream
   opened is news, `standing_test.go`) and `Carried` (the
   stream before held that watch too, looking for the same thing: a rule
   edited is a new watch), the row read again in the core's dialect
-  (`herdr.CompileRegex`). Handlers read its cache
+  (`coreapi.CompileRegex`). Handlers read its cache
   (`Snapshot` returns the last good snapshot plus the last error) and never
   ask the core inline; mutations call `Refresh`.
   It publishes `events.Snapshot` — once the snapshot is in its cache, so
@@ -4130,7 +4130,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   machine, so it meets the sessions' own folders) when the list is saved.
   `Check` refuses a pattern
   with a line break, a regex Go cannot read or the core's Rust one would not
-  or reads otherwise (`herdr.CompileRegex`: octal escapes, `\Q…\E`, `\<`,
+  or reads otherwise (`coreapi.CompileRegex`: octal escapes, `\Q…\E`, `\<`,
   nested classes and the rest), one every line matches, a task action
   without a column; `Try` and the built-in patterns read rows the way
   the core does, Unicode classes and all;
@@ -4183,7 +4183,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   one no older than `TickFor` a minute, `tick.go`, tested), queued to the machine's own reader
   goroutine (`reader.go`: `dispatch` / `drain`, one per machine, in
   order, never on the poll path) that calls `Inputs.Screen` — the
-  app's `herdr.API.PaneScreen` over the machine's client, `terminal.read`
+  app's `coreapi.API.PaneScreen` over the machine's client, `terminal.read`
   with `format: "vt"` as the screen view reads it: no attach, no slot, no
   resize, a remote's over its master — and keeps a frame only when the
   screen moved (`take.add`: the rows that did not move shared with the

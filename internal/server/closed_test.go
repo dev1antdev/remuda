@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/coreapi"
+	"github.com/dev1antdev/remuda/internal/coreapi/corefake"
 	"github.com/dev1antdev/remuda/internal/events"
-	"github.com/dev1antdev/remuda/internal/herdr"
-	"github.com/dev1antdev/remuda/internal/herdr/herdrfake"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/restart"
 	"github.com/dev1antdev/remuda/internal/updates"
@@ -19,13 +19,13 @@ import (
 
 func TestClosedListsTheAgentsWhosePanesWentAway(t *testing.T) {
 	dir := t.TempDir()
-	fleet := herdrfake.Manager(dir)
+	fleet := corefake.Manager(dir)
 	restarter := restart.New(fleet)
 	restarter.Memory = restart.OpenMemory(dir)
-	pane := herdr.PaneInfo{PaneID: "w1:p1", WorkspaceID: "w1", Agent: "claude", CWD: "/work/api", Title: "Fix the queue", AgentSession: &herdr.AgentSession{Kind: "id", Value: "9b1c2d3e-4f50-4a6b-8c7d-0e1f2a3b4c5d"}}
-	snap := &herdr.Snapshot{Workspaces: []herdr.WorkspaceInfo{{WorkspaceID: "w1", Label: "api"}}, Panes: []herdr.PaneInfo{pane}}
+	pane := coreapi.PaneInfo{PaneID: "w1:p1", WorkspaceID: "w1", Agent: "claude", CWD: "/work/api", Title: "Fix the queue", AgentSession: &coreapi.AgentSession{Kind: "id", Value: "9b1c2d3e-4f50-4a6b-8c7d-0e1f2a3b4c5d"}}
+	snap := &coreapi.Snapshot{Workspaces: []coreapi.WorkspaceInfo{{WorkspaceID: "w1", Label: "api"}}, Panes: []coreapi.PaneInfo{pane}}
 	restarter.Memory.Observe(events.Snapshot{Machine: machines.LocalID, Snap: snap, At: time.Now()})
-	restarter.Memory.Observe(events.Snapshot{Machine: machines.LocalID, Snap: &herdr.Snapshot{}, At: time.Now()})
+	restarter.Memory.Observe(events.Snapshot{Machine: machines.LocalID, Snap: &coreapi.Snapshot{}, At: time.Now()})
 
 	s := &Server{Machines: fleet, Watch: watch.New(fleet, events.NewBus()), Updates: &updates.Service{Restart: restarter}}
 	mux := http.NewServeMux()

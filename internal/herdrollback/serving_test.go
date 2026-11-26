@@ -1,4 +1,4 @@
-package herdr
+package herdrollback
 
 import (
 	"errors"

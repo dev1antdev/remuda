@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/events"
-	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/push"
 	"github.com/dev1antdev/remuda/internal/shell"
 	"github.com/dev1antdev/remuda/internal/state"
@@ -269,7 +269,7 @@ func keyResets(key string) (time.Time, bool) {
 }
 
 // Observe hears every snapshot: an agent pane first seen at rest is checked once for a limit it stopped on.
-func (s *Service) Observe(machine string, snap *herdr.Snapshot) {
+func (s *Service) Observe(machine string, snap *coreapi.Snapshot) {
 	if snap == nil {
 		return
 	}
@@ -280,7 +280,7 @@ func (s *Service) Observe(machine string, snap *herdr.Snapshot) {
 		seen := s.seeded[key]
 		s.seeded[key] = true
 		s.mu.Unlock()
-		if !seen && p.Agent == "claude" && p.AgentStatus != herdr.StatusWorking {
+		if !seen && p.Agent == "claude" && p.AgentStatus != coreapi.StatusWorking {
 			s.check(machine, p.PaneID)
 		}
 	}
@@ -304,7 +304,7 @@ func (s *Service) OnStatus(e events.PaneStatus) {
 		if hit || booked {
 			s.changed()
 		}
-	case e.To == herdr.StatusWorking:
+	case e.To == coreapi.StatusWorking:
 		s.mu.Lock()
 		_, hit := s.hits[key]
 		delete(s.hits, key)
@@ -443,9 +443,9 @@ func (s *Service) say(b Booking) {
 	case b.Session != "" && place.Session != b.Session:
 		s.notify(push.Payload{Machine: b.Machine, Pane: b.Pane, Kind: "limits", Title: "Nothing continued in " + place.Workspace, Body: "Another conversation runs there now than the one the booking was for."})
 		return
-	case place.Status == herdr.StatusWorking:
+	case place.Status == coreapi.StatusWorking:
 		return // somebody has it going again already
-	case place.Status == herdr.StatusBlocked:
+	case place.Status == coreapi.StatusBlocked:
 		s.notify(push.Payload{Machine: b.Machine, Pane: b.Pane, Kind: "limits", Title: "Nothing continued in " + place.Workspace, Body: "It waits on a question; the booking's word would land in it."})
 		return
 	}

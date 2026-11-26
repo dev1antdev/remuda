@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/radar"
 )
 
@@ -37,17 +37,17 @@ func TestWatchdogRuleEdges(t *testing.T) {
 		calls []string
 		kind  string // the push expected, "" for none
 	}{
-		{"working long with no transcript at all", herdr.StatusWorking, 40 * time.Minute, 0, nil, ""},
-		{"working long, written to a minute ago", herdr.StatusWorking, 40 * time.Minute, time.Minute, nil, ""},
-		{"working long, silent past the limit", herdr.StatusWorking, 40 * time.Minute, 20 * time.Minute, nil, "stuck"},
-		{"silent, but working for less than the limit", herdr.StatusWorking, 19 * time.Minute, 19 * time.Minute, nil, ""},
-		{"the same call six times in a row", herdr.StatusWorking, 25 * time.Minute, time.Minute, repeat(bash, 6), "loop"},
-		{"the same call five times, a different one before", herdr.StatusWorking, 25 * time.Minute, time.Minute, append([]string{"Read\x00{}"}, repeat(bash, 5)...), ""},
-		{"the same call five times only", herdr.StatusWorking, 25 * time.Minute, time.Minute, repeat(bash, 5), ""},
-		{"six alike after others", herdr.StatusWorking, 25 * time.Minute, time.Minute, append([]string{"Read\x00{}", "Grep\x00{}"}, repeat(bash, 6)...), "loop"},
-		{"waiting exactly the limit", herdr.StatusBlocked, 15 * time.Minute, 0, nil, "waiting"},
-		{"waiting a second short of it", herdr.StatusBlocked, 15*time.Minute - time.Second, 0, nil, ""},
-		{"idle for hours", herdr.StatusIdle, 5 * time.Hour, 5 * time.Hour, nil, ""},
+		{"working long with no transcript at all", coreapi.StatusWorking, 40 * time.Minute, 0, nil, ""},
+		{"working long, written to a minute ago", coreapi.StatusWorking, 40 * time.Minute, time.Minute, nil, ""},
+		{"working long, silent past the limit", coreapi.StatusWorking, 40 * time.Minute, 20 * time.Minute, nil, "stuck"},
+		{"silent, but working for less than the limit", coreapi.StatusWorking, 19 * time.Minute, 19 * time.Minute, nil, ""},
+		{"the same call six times in a row", coreapi.StatusWorking, 25 * time.Minute, time.Minute, repeat(bash, 6), "loop"},
+		{"the same call five times, a different one before", coreapi.StatusWorking, 25 * time.Minute, time.Minute, append([]string{"Read\x00{}"}, repeat(bash, 5)...), ""},
+		{"the same call five times only", coreapi.StatusWorking, 25 * time.Minute, time.Minute, repeat(bash, 5), ""},
+		{"six alike after others", coreapi.StatusWorking, 25 * time.Minute, time.Minute, append([]string{"Read\x00{}", "Grep\x00{}"}, repeat(bash, 6)...), "loop"},
+		{"waiting exactly the limit", coreapi.StatusBlocked, 15 * time.Minute, 0, nil, "waiting"},
+		{"waiting a second short of it", coreapi.StatusBlocked, 15*time.Minute - time.Second, 0, nil, ""},
+		{"idle for hours", coreapi.StatusIdle, 5 * time.Hour, 5 * time.Hour, nil, ""},
 	}
 	for _, c := range cases {
 		h, w := newHarness()
@@ -75,7 +75,7 @@ func TestWatchdogRuleEdges(t *testing.T) {
 func TestWatchdogRemindsEveryHalfHourAndForgetsAnEndedEpisode(t *testing.T) {
 	h, w := newHarness()
 	since := h.now.Add(-16 * time.Minute)
-	h.episodes = []radar.Episode{{Machine: "m", Pane: "p1", State: herdr.StatusBlocked, Since: since}}
+	h.episodes = []radar.Episode{{Machine: "m", Pane: "p1", State: coreapi.StatusBlocked, Since: since}}
 	w.Sweep()
 	h.now = h.now.Add(29 * time.Minute)
 	w.Sweep()
@@ -88,12 +88,12 @@ func TestWatchdogRemindsEveryHalfHourAndForgetsAnEndedEpisode(t *testing.T) {
 		t.Fatalf("the reminder at the half hour: %+v", h.pushed)
 	}
 
-	h.episodes = []radar.Episode{{Machine: "m", Pane: "p1", State: herdr.StatusWorking, Since: h.now}}
+	h.episodes = []radar.Episode{{Machine: "m", Pane: "p1", State: coreapi.StatusWorking, Since: h.now}}
 	w.Sweep()
 	if h.notes["p1"] != "" || len(w.fired) != 0 {
 		t.Fatalf("an ended episode keeps its note %q or its memory %v", h.notes["p1"], w.fired)
 	}
-	h.episodes = []radar.Episode{{Machine: "m", Pane: "p1", State: herdr.StatusBlocked, Since: h.now.Add(-15 * time.Minute)}}
+	h.episodes = []radar.Episode{{Machine: "m", Pane: "p1", State: coreapi.StatusBlocked, Since: h.now.Add(-15 * time.Minute)}}
 	w.Sweep()
 	if len(h.pushed) != 3 {
 		t.Fatalf("a new episode is pushed at once: %d pushes", len(h.pushed))

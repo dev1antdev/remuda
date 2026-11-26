@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/push"
 	"github.com/dev1antdev/remuda/internal/radar"
 )
@@ -38,7 +38,7 @@ func newHarness() (*harness, *Watchdog) {
 func TestQuietWorkingIsStuckOncePerEpisodeThenReminded(t *testing.T) {
 	h, w := newHarness()
 	since := h.now.Add(-25 * time.Minute)
-	h.episodes = []radar.Episode{{Machine: "m", Pane: "p1", State: herdr.StatusWorking, Since: since}}
+	h.episodes = []radar.Episode{{Machine: "m", Pane: "p1", State: coreapi.StatusWorking, Since: since}}
 	h.write = h.now.Add(-22 * time.Minute)
 	w.Sweep()
 	if len(h.pushed) != 1 || h.pushed[0].Kind != "stuck" || len(h.pushed[0].Actions) != 2 {
@@ -71,7 +71,7 @@ func TestQuietWorkingIsStuckOncePerEpisodeThenReminded(t *testing.T) {
 
 func TestWorkingWithRecentWritesIsFine(t *testing.T) {
 	h, w := newHarness()
-	h.episodes = []radar.Episode{{Machine: "m", Pane: "p1", State: herdr.StatusWorking, Since: h.now.Add(-40 * time.Minute)}}
+	h.episodes = []radar.Episode{{Machine: "m", Pane: "p1", State: coreapi.StatusWorking, Since: h.now.Add(-40 * time.Minute)}}
 	h.write = h.now.Add(-1 * time.Minute)
 	h.tools = []string{"Bash\x00a", "Bash\x00b", "Read\x00c", "Bash\x00a", "Bash\x00b", "Read\x00c"}
 	w.Sweep()
@@ -82,7 +82,7 @@ func TestWorkingWithRecentWritesIsFine(t *testing.T) {
 
 func TestLoopIsFlagged(t *testing.T) {
 	h, w := newHarness()
-	h.episodes = []radar.Episode{{Machine: "m", Pane: "p1", State: herdr.StatusWorking, Since: h.now.Add(-30 * time.Minute)}}
+	h.episodes = []radar.Episode{{Machine: "m", Pane: "p1", State: coreapi.StatusWorking, Since: h.now.Add(-30 * time.Minute)}}
 	h.write = h.now.Add(-1 * time.Minute)
 	h.tools = []string{"Bash\x00npm test", "Bash\x00npm test", "Bash\x00npm test", "Bash\x00npm test", "Bash\x00npm test", "Bash\x00npm test"}
 	w.Sweep()
@@ -93,7 +93,7 @@ func TestLoopIsFlagged(t *testing.T) {
 
 func TestLongWaitIsReminded(t *testing.T) {
 	h, w := newHarness()
-	h.episodes = []radar.Episode{{Machine: "m", Pane: "p1", State: herdr.StatusBlocked, Since: h.now.Add(-10 * time.Minute)}}
+	h.episodes = []radar.Episode{{Machine: "m", Pane: "p1", State: coreapi.StatusBlocked, Since: h.now.Add(-10 * time.Minute)}}
 	w.Sweep()
 	if len(h.pushed) != 0 {
 		t.Fatal("too early")
@@ -103,7 +103,7 @@ func TestLongWaitIsReminded(t *testing.T) {
 	if len(h.pushed) != 1 || h.pushed[0].Kind != "waiting" {
 		t.Fatalf("pushed %+v", h.pushed)
 	}
-	h.episodes = []radar.Episode{{Machine: "m", Pane: "p1", State: herdr.StatusWorking, Since: h.now}}
+	h.episodes = []radar.Episode{{Machine: "m", Pane: "p1", State: coreapi.StatusWorking, Since: h.now}}
 	w.Sweep()
 	if h.notes["p1"] != "" || len(w.fired) != 0 {
 		t.Fatalf("note %q fired %d", h.notes["p1"], len(w.fired))

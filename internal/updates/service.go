@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/health"
-	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/jobs"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/restart"
@@ -153,7 +153,7 @@ func (s *Service) Start(mc *machines.Machine, what, command string) (jobs.Job, e
 }
 
 // restartNote says what an agent update does to the chats afterwards.
-func restartNote(snap *herdr.Snapshot, kinds []string) string {
+func restartNote(snap *coreapi.Snapshot, kinds []string) string {
 	if len(kinds) == 0 {
 		return ""
 	}
@@ -169,7 +169,7 @@ func restartNote(snap *herdr.Snapshot, kinds []string) string {
 }
 
 // restartPlans offers a restart on its own for each agent with chats on the machine, for an agent that updated itself.
-func restartPlans(snap *herdr.Snapshot) []Update {
+func restartPlans(snap *coreapi.Snapshot) []Update {
 	if snap == nil {
 		return nil
 	}
@@ -183,13 +183,13 @@ func restartPlans(snap *herdr.Snapshot) []Update {
 }
 
 // restartPlan is the offer to restart one agent's chats; the panes it means are in the command text, so a Run on a stale offer is refused.
-func restartPlan(kind string, snap *herdr.Snapshot) (Update, int) {
+func restartPlan(kind string, snap *coreapi.Snapshot) (Update, int) {
 	if restart.Kinds(kind) == nil {
 		return Update{}, 0
 	}
 	ready, busy := restart.Chats(snap, []string{kind})
 	var ids []string
-	for _, p := range append(append([]herdr.PaneInfo{}, ready...), busy...) {
+	for _, p := range append(append([]coreapi.PaneInfo{}, ready...), busy...) {
 		ids = append(ids, p.PaneID)
 	}
 	n := len(ids)

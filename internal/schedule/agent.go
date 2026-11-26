@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/events"
-	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/push"
 	"github.com/dev1antdev/remuda/internal/rpath"
 	"github.com/dev1antdev/remuda/internal/sessions"
@@ -166,11 +166,11 @@ func (st *Store) previousRun(s Schedule, run Started) (why, words string) {
 	case events.Gone:
 		st.forget(s.ID, run)
 		return "", ""
-	case herdr.StatusWorking:
+	case coreapi.StatusWorking:
 		return SkipWorking, agent + " is still working"
-	case herdr.StatusBlocked:
+	case coreapi.StatusBlocked:
 		return SkipAsking, agent + " waits for an answer"
-	case herdr.StatusDone:
+	case coreapi.StatusDone:
 	default: // idle or unknown: through, if it ever worked or has an answer to show
 		if !run.Worked && (st.Agents.Answer == nil || st.Agents.Answer(run.Machine, run.Pane) == "") {
 			if st.now().Sub(run.At) < startingFor {

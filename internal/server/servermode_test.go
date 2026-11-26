@@ -8,9 +8,9 @@ import (
 	"testing"
 
 	"github.com/dev1antdev/remuda/internal/backup"
+	"github.com/dev1antdev/remuda/internal/coreapi/corefake"
 	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/health"
-	"github.com/dev1antdev/remuda/internal/herdr/herdrfake"
 	"github.com/dev1antdev/remuda/internal/jira"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/watch"
@@ -19,7 +19,7 @@ import (
 // serverModeServer is a remuda whose host serves the page only: no machine of the roster, its vitals in roster.server
 func serverModeServer(t *testing.T) *Server {
 	dir := t.TempDir()
-	fleet := herdrfake.Manager(dir)
+	fleet := corefake.Manager(dir)
 	fleet.SetServer(true)
 	return &Server{Machines: fleet, Watch: watch.New(fleet, events.NewBus()), Health: health.New("", fleet, "v-test", false), Jira: jira.New(dir)}
 }

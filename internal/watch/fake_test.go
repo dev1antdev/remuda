@@ -7,15 +7,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
-	"github.com/dev1antdev/remuda/internal/herdr/herdrfake"
+	"github.com/dev1antdev/remuda/internal/coreapi"
+	"github.com/dev1antdev/remuda/internal/coreapi/corefake"
 )
 
 // fakeHerdr is a machine's herdr as the watcher asks it: a snapshot the test sets, and one event stream a Subscribe,
 // every open stream hearing the events the test pushes — the way remuda-core answers a machine.
 type fakeHerdr struct {
 	mu          sync.Mutex
-	snap        herdr.Snapshot
+	snap        coreapi.Snapshot
 	memory      bool // the snapshot is the fake's own, as remuda-core's mirror holds one
 	snapshots   []time.Time
 	streams     []*watchedStream // open streams
@@ -24,34 +24,34 @@ type fakeHerdr struct {
 	started     int              // streams answered
 	answers     []time.Time
 	asks        int // Subscribe calls, refused or not
-	asked       chan []herdr.Subscription
-	refuse      func([]herdr.Subscription) string // a refusal's code for a subscription set, "" to take it
-	unreachable error                             // Subscribe answers this, as a core that cannot be reached
-	hold        func() error                      // a Subscribe waits for this before answering: a core slow to take a set
+	asked       chan []coreapi.Subscription
+	refuse      func([]coreapi.Subscription) string // a refusal's code for a subscription set, "" to take it
+	unreachable error                               // Subscribe answers this, as a core that cannot be reached
+	hold        func() error                        // a Subscribe waits for this before answering: a core slow to take a set
 }
 
 func newFakeHerdr(t *testing.T, panes ...string) *fakeHerdr {
 	t.Helper()
-	f := &fakeHerdr{asked: make(chan []herdr.Subscription, 32)}
+	f := &fakeHerdr{asked: make(chan []coreapi.Subscription, 32)}
 	f.setPanes(panes...)
 	return f
 }
 
-// api is the herdr.API the watcher's machine speaks.
-func (f *fakeHerdr) api() herdr.API {
-	return &herdrfake.API{Memory: f.memory, Snapshot: f.snapshot, SubscribeF: f.subscribe}
+// api is the coreapi.API the watcher's machine speaks.
+func (f *fakeHerdr) api() coreapi.API {
+	return &corefake.API{Memory: f.memory, Snapshot: f.snapshot, SubscribeF: f.subscribe}
 }
 
 func (f *fakeHerdr) setPanes(panes ...string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.snap = herdr.Snapshot{Workspaces: []herdr.WorkspaceInfo{{WorkspaceID: "w1", Label: "api"}}}
+	f.snap = coreapi.Snapshot{Workspaces: []coreapi.WorkspaceInfo{{WorkspaceID: "w1", Label: "api"}}}
 	for _, id := range panes {
-		f.snap.Panes = append(f.snap.Panes, herdr.PaneInfo{PaneID: id, WorkspaceID: "w1", Agent: "claude", AgentStatus: herdr.StatusIdle})
+		f.snap.Panes = append(f.snap.Panes, coreapi.PaneInfo{PaneID: id, WorkspaceID: "w1", Agent: "claude", AgentStatus: coreapi.StatusIdle})
 	}
 }
 
-func (f *fakeHerdr) snapshot() (*herdr.Snapshot, error) {
+func (f *fakeHerdr) snapshot() (*coreapi.Snapshot, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.snapshots = append(f.snapshots, time.Now())
@@ -59,7 +59,7 @@ func (f *fakeHerdr) snapshot() (*herdr.Snapshot, error) {
 	return &snap, nil
 }
 
-func (f *fakeHerdr) subscribe(subs []herdr.Subscription) (herdr.EventStream, error) {
+func (f *fakeHerdr) subscribe(subs []coreapi.Subscription) (coreapi.EventStream, error) {
 	f.mu.Lock()
 	hold := f.hold
 	f.mu.Unlock()
@@ -81,10 +81,10 @@ func (f *fakeHerdr) subscribe(subs []herdr.Subscription) (herdr.EventStream, err
 	}
 	if refuse != nil {
 		if code := refuse(subs); code != "" {
-			return nil, &herdr.Error{Code: code, Message: "refused"}
+			return nil, &coreapi.Error{Code: code, Message: "refused"}
 		}
 	}
-	stream := &watchedStream{Stream: herdrfake.NewStream(256), f: f}
+	stream := &watchedStream{Stream: corefake.NewStream(256), f: f}
 	f.mu.Lock()
 	f.most = max(f.most, len(f.streams)+1)
 	f.streams = append(f.streams, stream)
@@ -188,7 +188,7 @@ func (f *fakeHerdr) polledAt(from time.Time) time.Time {
 }
 
 // subscribed waits for the next Subscribe.
-func (f *fakeHerdr) subscribed(t *testing.T) []herdr.Subscription {
+func (f *fakeHerdr) subscribed(t *testing.T) []coreapi.Subscription {
 	t.Helper()
 	select {
 	case subs := <-f.asked:
@@ -202,12 +202,12 @@ func (f *fakeHerdr) subscribed(t *testing.T) []herdr.Subscription {
 // watchedStream is one stream of the fake's: the events pushed into it, counted open until its reader is handed its
 // end — by the fake, or by the watcher closing it.
 type watchedStream struct {
-	*herdrfake.Stream
+	*corefake.Stream
 	f    *fakeHerdr
 	once sync.Once
 }
 
-func (s *watchedStream) Next() (herdr.Event, error) {
+func (s *watchedStream) Next() (coreapi.Event, error) {
 	event, err := s.Stream.Next()
 	if err != nil {
 		s.done()
@@ -233,7 +233,7 @@ func (f *fakeHerdr) closedHere() int {
 func (s *watchedStream) done() { s.once.Do(func() { s.f.closed(s) }) }
 
 // parseEvent reads one line as herdr sends it: an event of the stream, or the error that ends it.
-func parseEvent(line string) (herdr.Event, error) {
+func parseEvent(line string) (coreapi.Event, error) {
 	var said struct {
 		Event string `json:"event"`
 		Data  struct {
@@ -244,19 +244,19 @@ func parseEvent(line string) (herdr.Event, error) {
 			Read        struct {
 				Text string `json:"text"`
 			} `json:"read"`
-			Standing *bool              `json:"standing"`
-			Match    *herdr.OutputMatch `json:"match"`
+			Standing *bool                `json:"standing"`
+			Match    *coreapi.OutputMatch `json:"match"`
 			Pane     struct {
 				PaneID string `json:"pane_id"`
 			} `json:"pane"`
 		} `json:"data"`
-		Error *herdr.Error `json:"error"`
+		Error *coreapi.Error `json:"error"`
 	}
 	if err := json.Unmarshal([]byte(line), &said); err != nil {
-		return herdr.Event{}, err
+		return coreapi.Event{}, err
 	}
 	if said.Error != nil {
-		return herdr.Event{}, said.Error
+		return coreapi.Event{}, said.Error
 	}
 	kind, pane := said.Event, said.Data.PaneID
 	if kind == "" {
@@ -265,7 +265,7 @@ func parseEvent(line string) (herdr.Event, error) {
 	if pane == "" {
 		pane = said.Data.Pane.PaneID
 	}
-	return herdr.Event{
+	return coreapi.Event{
 		Kind: kind, PaneID: pane, AgentStatus: said.Data.AgentStatus, MatchedLine: said.Data.MatchedLine,
 		Text: said.Data.Read.Text, Standing: said.Data.Standing, Watch: said.Data.Match,
 	}, nil
@@ -284,10 +284,10 @@ func waitFor(t *testing.T, what string, cond func() bool) {
 }
 
 // statusPanes is the panes whose agent status a subscription set follows.
-func statusPanes(subs []herdr.Subscription) string {
+func statusPanes(subs []coreapi.Subscription) string {
 	var panes []string
 	for _, s := range subs {
-		if s.Type == herdr.EventAgentStatus {
+		if s.Type == coreapi.EventAgentStatus {
 			panes = append(panes, s.PaneID)
 		}
 	}

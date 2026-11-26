@@ -12,7 +12,7 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/dev1antdev/remuda/internal/auth"
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 )
 
 // The terminal lens: bytes over a WebSocket, or over plain HTTP for a viewer behind a proxy (termhttp.go).
@@ -49,7 +49,7 @@ func attachRefused(err error) string {
 }
 
 // gridFrame is a grid as the socket tells it, a text frame between the binary ones: {"type":"grid","cols":…,"rows":…}.
-func gridFrame(o herdr.Out) []byte {
+func gridFrame(o coreapi.Out) []byte {
 	frame, _ := json.Marshal(map[string]any{"type": "grid", "cols": o.Cols, "rows": o.Rows})
 	return frame
 }
@@ -85,7 +85,7 @@ func (s *Server) handlePaneWS(w http.ResponseWriter, r *http.Request) {
 	cols, _ := strconv.Atoi(r.URL.Query().Get("cols"))
 	rows, _ := strconv.Atoi(r.URL.Query().Get("rows"))
 
-	view := herdr.View{Cols: cols, Rows: rows, Keep: r.URL.Query().Get("keep") == "1", Observe: watching}
+	view := coreapi.View{Cols: cols, Rows: rows, Keep: r.URL.Query().Get("keep") == "1", Observe: watching}
 	viewer, err := attach.Open(pane.TerminalID, view)
 
 	c, err2 := websocket.Accept(w, r, &websocket.AcceptOptions{CompressionMode: websocket.CompressionNoContextTakeover})
@@ -127,9 +127,9 @@ func (s *Server) handlePaneWS(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		defer close(done)
 		out := viewer.Out()
-		var held *herdr.Out // a grid that ended a run of bytes, sent next
+		var held *coreapi.Out // a grid that ended a run of bytes, sent next
 		for {
-			next, ok := herdr.Out{}, true
+			next, ok := coreapi.Out{}, true
 			if held != nil {
 				next, held = *held, nil
 			} else {

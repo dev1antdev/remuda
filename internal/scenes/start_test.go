@@ -6,16 +6,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/recipes"
 	"github.com/dev1antdev/remuda/internal/sessions"
 )
 
 // apiOpen is a machine with a workspace open on /home/me/api.
-func apiOpen() *herdr.Snapshot {
-	return &herdr.Snapshot{
-		Workspaces: []herdr.WorkspaceInfo{{WorkspaceID: "w2", Label: "api"}},
-		Panes:      []herdr.PaneInfo{{PaneID: "w2:p1", TabID: "w2:t1", WorkspaceID: "w2", CWD: "/home/me/api"}},
+func apiOpen() *coreapi.Snapshot {
+	return &coreapi.Snapshot{
+		Workspaces: []coreapi.WorkspaceInfo{{WorkspaceID: "w2", Label: "api"}},
+		Panes:      []coreapi.PaneInfo{{PaneID: "w2:p1", TabID: "w2:t1", WorkspaceID: "w2", CWD: "/home/me/api"}},
 	}
 }
 

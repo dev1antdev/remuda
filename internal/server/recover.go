@@ -7,7 +7,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/herdrollback"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/restart"
 )
@@ -75,7 +75,7 @@ func (s *Server) handleHerdrStop(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bin, socket := mc.MovedHerdr()
-	if err := herdr.StopServing(mc, bin, socket); err != nil {
+	if err := herdrollback.StopServing(mc, bin, socket); err != nil {
 		httpErr(w, 502, err)
 		return
 	}

@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 )
 
 func TestACoreThatFallsSilentIsDialledAgainAndItsMirrorDropped(t *testing.T) {
@@ -69,7 +69,7 @@ func TestOutputRowsTheCoreDroppedEndTheStreamAsHerdrsLostEvents(t *testing.T) {
 		if err == nil {
 			continue
 		}
-		if !herdr.IsCode(err, herdr.ErrEventsLost) {
+		if !coreapi.IsCode(err, coreapi.ErrEventsLost) {
 			t.Fatalf("the stream ended with %v", err)
 		}
 		return
@@ -92,7 +92,7 @@ func TestOutputRowsKeepTheirStandingAndTheirDropsAreLoggedOnce(t *testing.T) {
 		if err != nil {
 			t.Fatalf("the stream ended after %v: %v", rows, err)
 		}
-		if ev.Kind == herdr.EventOutputMatched {
+		if ev.Kind == coreapi.EventOutputMatched {
 			told := ""
 			if ev.Standing != nil {
 				told = map[bool]string{true: " standing", false: " live"}[*ev.Standing]
@@ -110,7 +110,7 @@ func TestOutputRowsKeepTheirStandingAndTheirDropsAreLoggedOnce(t *testing.T) {
 
 // outputStream is an adapter's stream watching t1 for "FAIL" on a fake core; tell writes what the core sends on the
 // watches' channel, 4, once the stream's subscription is answered.
-func outputStream(t *testing.T, tell func(peer)) herdr.EventStream {
+func outputStream(t *testing.T, tell func(peer)) coreapi.EventStream {
 	var subscribes atomic.Int32
 	client := New(fakeCore(`"output_watches"`, func(core peer, frame sent) {
 		switch frame.method {
@@ -131,7 +131,7 @@ func outputStream(t *testing.T, tell func(peer)) herdr.EventStream {
 	if _, err := adapter.SessionSnapshot(); err != nil {
 		t.Fatal(err)
 	}
-	stream, err := adapter.Subscribe([]herdr.Subscription{{Type: herdr.EventOutputMatched, PaneID: "t1", Match: &herdr.OutputMatch{Type: "substring", Value: "FAIL"}}})
+	stream, err := adapter.Subscribe([]coreapi.Subscription{{Type: coreapi.EventOutputMatched, PaneID: "t1", Match: &coreapi.OutputMatch{Type: "substring", Value: "FAIL"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -279,16 +279,16 @@ func TestADeliveryIsBoundFromItsFirstSightOfTheAgent(t *testing.T) {
 	var sends atomic.Int32
 	quiet := stagedOn(t, `{"address":"t1","state":"live","pid":10,"foreground":{"pid":11,"name":"claude","argv":["claude"]}}`, &sends)
 	pid, _, err := quiet.StagePrompt("t1", "the task", 0, false)
-	if !herdr.IsCode(err, "agent_not_ready") || pid != 11 {
+	if !coreapi.IsCode(err, "agent_not_ready") || pid != 11 {
 		t.Fatalf("an agent with no status yet: pid %d, %v", pid, err)
 	}
 	replaced := stagedOn(t, `{"address":"t1","state":"live","pid":10,"foreground":{"pid":12,"name":"claude","argv":["claude"]},"status":{"state":"idle","app":"claude-code"}}`, &sends)
-	if _, _, err := replaced.StagePrompt("t1", "the task", 11, false); !herdr.IsCode(err, "agent_left") {
+	if _, _, err := replaced.StagePrompt("t1", "the task", 11, false); !coreapi.IsCode(err, "agent_left") {
 		t.Fatalf("another agent in front of a bound delivery: %v", err)
 	}
 	first := seenThenGot(t, `{"address":"t1","state":"live","pid":10,"foreground":{"pid":11,"name":"claude","argv":["claude"]},"status":{"state":"idle","app":"claude-code"}}`,
 		`{"address":"t1","state":"live","pid":10,"foreground":{"pid":12,"name":"claude","argv":["claude"]},"status":{"state":"idle","app":"claude-code"}}`, &sends)
-	if _, _, err := first.StagePrompt("t1", "the task", 0, false); !herdr.IsCode(err, "agent_left") {
+	if _, _, err := first.StagePrompt("t1", "the task", 0, false); !coreapi.IsCode(err, "agent_left") {
 		t.Fatalf("a first look whose agent was replaced between the mirror and the core: %v", err)
 	}
 	if sends.Load() != 0 {

@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"github.com/dev1antdev/remuda/internal/auth"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/feed"
-	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/scratch"
 	"github.com/dev1antdev/remuda/internal/timelapse"
@@ -98,7 +98,7 @@ func (s *Server) viewerSessionPane(mc *machines.Machine, paneID, dir, session st
 	return ""
 }
 
-func (s *Server) snapshotOf(machineID string) *herdr.Snapshot {
+func (s *Server) snapshotOf(machineID string) *coreapi.Snapshot {
 	if s.Watch == nil {
 		return nil
 	}
@@ -107,7 +107,7 @@ func (s *Server) snapshotOf(machineID string) *herdr.Snapshot {
 }
 
 // paneOf is the pane as the watcher's last snapshot has it, nil when it does not.
-func (s *Server) paneOf(machineID, paneID string) (*herdr.Snapshot, *herdr.PaneInfo) {
+func (s *Server) paneOf(machineID, paneID string) (*coreapi.Snapshot, *coreapi.PaneInfo) {
 	snap := s.snapshotOf(machineID)
 	if snap == nil {
 		return nil, nil

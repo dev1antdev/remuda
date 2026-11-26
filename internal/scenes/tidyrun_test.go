@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/radar"
 	"github.com/dev1antdev/remuda/internal/worktrees"
 )
@@ -85,7 +85,7 @@ func TestATidyNamedAMachineAwayAndAnAgentBusyWithAQuestion(t *testing.T) {
 
 func TestAScheduledTidyWaitsForNobodysAgentAtWork(t *testing.T) {
 	local := &fakeMachine{id: "local", label: "This Mac", client: &fakeHerdr{}, snap: dusk()}
-	gog := &fakeMachine{id: "gog", label: "GOG", client: &fakeHerdr{}, snap: &herdr.Snapshot{}}
+	gog := &fakeMachine{id: "gog", label: "GOG", client: &fakeHerdr{}, snap: &coreapi.Snapshot{}}
 	svc, _, _ := fleetOf(t, local, gog)
 	svc.Readings = duskReadings()
 	if got := svc.AtWork(Tidy{Shells: true}); got != "This Mac" {
@@ -94,7 +94,7 @@ func TestAScheduledTidyWaitsForNobodysAgentAtWork(t *testing.T) {
 	if got := svc.AtWork(Tidy{Shells: true, Machines: []string{"gog"}}); got != "" {
 		t.Fatalf("nobody at work on GOG: %q", got)
 	}
-	svc.Readings.State = func(string, *herdr.PaneInfo) radar.Display { return radar.Display{State: herdr.StatusIdle} }
+	svc.Readings.State = func(string, *coreapi.PaneInfo) radar.Display { return radar.Display{State: coreapi.StatusIdle} }
 	if got := svc.AtWork(Tidy{Shells: true}); got != "" {
 		t.Fatalf("everyone at rest: %q", got)
 	}

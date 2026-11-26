@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 )
 
 // The fork route refuses a bad request before it looks at any machine.
@@ -30,20 +30,20 @@ func TestForkRefusesBadRequests(t *testing.T) {
 }
 
 func TestForkSession(t *testing.T) {
-	live := &herdr.AgentSession{Kind: "id", Value: "0123-abcd"}
+	live := &coreapi.AgentSession{Kind: "id", Value: "0123-abcd"}
 	cases := []struct {
 		name  string
-		pane  herdr.PaneInfo
+		pane  coreapi.PaneInfo
 		asked string
 		want  string
 		err   string
 	}{
-		{"the live one", herdr.PaneInfo{Agent: "claude", AgentSession: live}, "", "0123-abcd", ""},
-		{"the one shown", herdr.PaneInfo{Agent: "codex", AgentSession: live}, "9999-ffff", "9999-ffff", ""},
-		{"a shell", herdr.PaneInfo{}, "", "", "a shell pane"},
-		{"an agent that cannot", herdr.PaneInfo{Agent: "gemini", AgentSession: live}, "", "", "Gemini cannot start on a copy"},
-		{"no session yet", herdr.PaneInfo{Agent: "claude"}, "", "", "no session id yet"},
-		{"a path, not an id", herdr.PaneInfo{Agent: "claude", AgentSession: &herdr.AgentSession{Kind: "path", Value: "/x.jsonl"}}, "", "", "no session id yet"},
+		{"the live one", coreapi.PaneInfo{Agent: "claude", AgentSession: live}, "", "0123-abcd", ""},
+		{"the one shown", coreapi.PaneInfo{Agent: "codex", AgentSession: live}, "9999-ffff", "9999-ffff", ""},
+		{"a shell", coreapi.PaneInfo{}, "", "", "a shell pane"},
+		{"an agent that cannot", coreapi.PaneInfo{Agent: "gemini", AgentSession: live}, "", "", "Gemini cannot start on a copy"},
+		{"no session yet", coreapi.PaneInfo{Agent: "claude"}, "", "", "no session id yet"},
+		{"a path, not an id", coreapi.PaneInfo{Agent: "claude", AgentSession: &coreapi.AgentSession{Kind: "path", Value: "/x.jsonl"}}, "", "", "no session id yet"},
 	}
 	for _, c := range cases {
 		got, err := forkSession(&c.pane, c.asked)

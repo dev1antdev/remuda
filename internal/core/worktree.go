@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/rpath"
 	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/shell"
@@ -73,7 +73,7 @@ func fieldsOf(out string) map[string]string {
 }
 
 // parseCheckout reads probe's lines: nil when the folder is in no checkout.
-func parseCheckout(out string) (path string, tree *herdr.WorktreeInfo) {
+func parseCheckout(out string) (path string, tree *coreapi.WorktreeInfo) {
 	fields := fieldsOf(out)
 	top := fields["top"]
 	if top == "" || fields["common"] == "" {
@@ -81,7 +81,7 @@ func parseCheckout(out string) (path string, tree *herdr.WorktreeInfo) {
 	}
 	style := rpath.For(top)
 	main := style.Clean(cmp.Or(fields["main"], top))
-	return fields["path"], &herdr.WorktreeInfo{
+	return fields["path"], &coreapi.WorktreeInfo{
 		CheckoutPath:     style.Clean(top),
 		IsLinkedWorktree: !style.Equal(fields["own"], fields["common"]),
 		RepoKey:          style.Clean(fields["common"]),
@@ -92,7 +92,7 @@ func parseCheckout(out string) (path string, tree *herdr.WorktreeInfo) {
 
 // checkoutOf reads the checkout a folder is, once, when a workspace is made on it; nil outside git, without a shell,
 // or when the read failed (the workspace is made all the same).
-func (a *Adapter) checkoutOf(folder string) *herdr.WorktreeInfo {
+func (a *Adapter) checkoutOf(folder string) *coreapi.WorktreeInfo {
 	if a.shell == nil || folder == "" {
 		return nil
 	}
@@ -105,12 +105,12 @@ func (a *Adapter) checkoutOf(folder string) *herdr.WorktreeInfo {
 }
 
 // WorktreeCreate makes a worktree of the workspace's repository in herdr's place and opens it as a workspace.
-func (a *Adapter) WorktreeCreate(workspaceID, branch, base, label string) (*herdr.WorktreeCreateResult, error) {
+func (a *Adapter) WorktreeCreate(workspaceID, branch, base, label string) (*coreapi.WorktreeCreateResult, error) {
 	return a.WorktreeCreateAt(workspaceID, branch, base, label, "")
 }
 
 // WorktreeCreateAt is WorktreeCreate in path, "" for herdr's place; a base makes the branch new (addScript).
-func (a *Adapter) WorktreeCreateAt(workspaceID, branch, base, label, path string) (*herdr.WorktreeCreateResult, error) {
+func (a *Adapter) WorktreeCreateAt(workspaceID, branch, base, label, path string) (*coreapi.WorktreeCreateResult, error) {
 	dir, err := a.sourceDir(workspaceID)
 	if err != nil {
 		return nil, err
@@ -135,24 +135,24 @@ func (a *Adapter) WorktreeCreateAt(workspaceID, branch, base, label, path string
 	if err != nil {
 		return nil, fmt.Errorf("the worktree %s is made on %s, but its workspace did not open (New worktree opens it): %w", folder, branch, err)
 	}
-	created := &herdr.WorktreeCreateResult{Workspace: res.Workspace, RootPane: res.RootPane}
+	created := &coreapi.WorktreeCreateResult{Workspace: res.Workspace, RootPane: res.RootPane}
 	created.Worktree.Path, created.Worktree.Branch = folder, branch
 	return created, nil
 }
 
 // WorktreeOpen opens a checkout of the workspace's repository as a workspace; one open on it already is answered, as
 // herdr's already_open, from the mirror — the route's own look reads the watcher's snapshot, which may lag a moment.
-func (a *Adapter) WorktreeOpen(workspaceID, path, label string) (*herdr.WorktreeCreateResult, error) {
+func (a *Adapter) WorktreeOpen(workspaceID, path, label string) (*coreapi.WorktreeCreateResult, error) {
 	if _, err := a.sourceDir(workspaceID); err != nil {
 		return nil, err
 	}
 	tree := a.checkoutOf(path)
 	if tree == nil {
-		return nil, &herdr.Error{Code: "invalid_request", Message: path + " is not a git checkout"}
+		return nil, &coreapi.Error{Code: "invalid_request", Message: path + " is not a git checkout"}
 	}
 	a.opening.Lock()
 	defer a.opening.Unlock()
-	opened := &herdr.WorktreeCreateResult{}
+	opened := &coreapi.WorktreeCreateResult{}
 	opened.Worktree.Path = tree.CheckoutPath
 	snap, err := a.SessionSnapshot()
 	if err != nil {
@@ -174,8 +174,8 @@ func (a *Adapter) WorktreeOpen(workspaceID, path, label string) (*herdr.Worktree
 }
 
 // frontPane is a workspace's pane in its tab in front, else its first.
-func frontPane(snap *herdr.Snapshot, ws *herdr.WorkspaceInfo) herdr.PaneInfo {
-	pane := herdr.PaneInfo{WorkspaceID: ws.WorkspaceID}
+func frontPane(snap *coreapi.Snapshot, ws *coreapi.WorkspaceInfo) coreapi.PaneInfo {
+	pane := coreapi.PaneInfo{WorkspaceID: ws.WorkspaceID}
 	for _, p := range snap.Panes {
 		if p.WorkspaceID != ws.WorkspaceID {
 			continue
@@ -193,7 +193,7 @@ func frontPane(snap *herdr.Snapshot, ws *herdr.WorkspaceInfo) herdr.PaneInfo {
 // sourceDir is the folder of the workspace a worktree is made from.
 func (a *Adapter) sourceDir(workspaceID string) (string, error) {
 	if a.shell == nil {
-		return "", &herdr.Error{Code: "invalid_request", Message: "no shell to run git on this remuda-core machine"}
+		return "", &coreapi.Error{Code: "invalid_request", Message: "no shell to run git on this remuda-core machine"}
 	}
 	snap, err := a.SessionSnapshot()
 	if err != nil {

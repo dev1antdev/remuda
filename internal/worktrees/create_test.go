@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/repos"
 	"github.com/dev1antdev/remuda/internal/shell"
 	"github.com/dev1antdev/remuda/internal/text"
@@ -86,7 +86,7 @@ type gitMaker struct {
 	home string
 }
 
-func (g gitMaker) WorktreeCreateAt(_, branch, base, label, path string) (*herdr.WorktreeCreateResult, error) {
+func (g gitMaker) WorktreeCreateAt(_, branch, base, label, path string) (*coreapi.WorktreeCreateResult, error) {
 	if path == "" {
 		path = filepath.Join(Root(g.home), "app", text.Slug(branch))
 	}
@@ -95,13 +95,13 @@ func (g gitMaker) WorktreeCreateAt(_, branch, base, label, path string) (*herdr.
 		args = []string{"worktree", "add", "-q", "-b", branch, path, base}
 	}
 	gitIn(g.t, g.root, args...)
-	res := &herdr.WorktreeCreateResult{}
+	res := &coreapi.WorktreeCreateResult{}
 	res.Worktree.Path, res.Worktree.Branch = path, branch
 	return res, nil
 }
 
-func (g gitMaker) WorktreeOpen(_, path, _ string) (*herdr.WorktreeCreateResult, error) {
-	res := &herdr.WorktreeCreateResult{}
+func (g gitMaker) WorktreeOpen(_, path, _ string) (*coreapi.WorktreeCreateResult, error) {
+	res := &coreapi.WorktreeCreateResult{}
 	res.Worktree.Path = path
 	return res, nil
 }

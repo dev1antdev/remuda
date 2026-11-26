@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/events"
-	"github.com/dev1antdev/remuda/internal/herdr"
 )
 
 func TestOnAnswerHearsAFinishAndNeverASeed(t *testing.T) {
@@ -28,13 +28,13 @@ func TestOnAnswerHearsAFinishAndNeverASeed(t *testing.T) {
 		return len(heard)
 	}
 
-	tr.Observe("local", &herdr.Snapshot{Panes: []herdr.PaneInfo{{PaneID: "w1:p1", Agent: "claude", AgentStatus: herdr.StatusDone}}})
+	tr.Observe("local", &coreapi.Snapshot{Panes: []coreapi.PaneInfo{{PaneID: "w1:p1", Agent: "claude", AgentStatus: coreapi.StatusDone}}})
 	waitFor(t, "the seeded line", func() bool { return tr.Line("local", "w1:p1") == "Seeded." })
 	if count() != 0 {
 		t.Fatal("a seed from a snapshot was heard as an answer")
 	}
 
-	finish := events.PaneStatus{Pane: events.PaneRef{Machine: "local", Pane: "w1:p2"}, Kind: "claude", From: herdr.StatusWorking, To: herdr.StatusDone}
+	finish := events.PaneStatus{Pane: events.PaneRef{Machine: "local", Pane: "w1:p2"}, Kind: "claude", From: coreapi.StatusWorking, To: coreapi.StatusDone}
 	tr.OnStatus(finish)
 	waitFor(t, "the finish", func() bool { return count() == 1 })
 	mu.Lock()
@@ -43,9 +43,9 @@ func TestOnAnswerHearsAFinishAndNeverASeed(t *testing.T) {
 	}
 	mu.Unlock()
 
-	finish.To = herdr.StatusIdle
+	finish.To = coreapi.StatusIdle
 	tr.OnStatus(finish)
-	tr.OnStatus(status(herdr.StatusDone)) // the seeded pane finishes with the file it was seeded from
+	tr.OnStatus(status(coreapi.StatusDone)) // the seeded pane finishes with the file it was seeded from
 	time.Sleep(20 * time.Millisecond)
 	if count() != 1 {
 		t.Fatalf("an unchanged file was heard again: %d", count())
@@ -54,7 +54,7 @@ func TestOnAnswerHearsAFinishAndNeverASeed(t *testing.T) {
 	f.mu.Lock()
 	f.versions["local|w1:p1"], f.answers["local|w1:p1"] = "2-2", "Now really done."
 	f.mu.Unlock()
-	tr.OnStatus(status(herdr.StatusDone))
+	tr.OnStatus(status(coreapi.StatusDone))
 	waitFor(t, "the new answer", func() bool { return count() == 2 })
 	mu.Lock()
 	if heard[1] != "local|w1:p1: Now really done." {

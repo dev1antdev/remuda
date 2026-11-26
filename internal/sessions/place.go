@@ -3,8 +3,8 @@ package sessions
 import (
 	"fmt"
 
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/events"
-	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/push"
 	"github.com/dev1antdev/remuda/internal/watch"
@@ -13,8 +13,8 @@ import (
 // Placer is what making a place for an agent needs of herdr's client: a tab in a workspace, or a workspace on a folder.
 type Placer interface {
 	Starter
-	WorkspaceCreate(cwd, label string) (*herdr.WorkspaceCreateResult, error)
-	TabCreate(workspaceID, label string) (*herdr.TabCreateResult, error)
+	WorkspaceCreate(cwd, label string) (*coreapi.WorkspaceCreateResult, error)
+	TabCreate(workspaceID, label string) (*coreapi.TabCreateResult, error)
 }
 
 // Place is where an agent was started: its pane, its tab, its workspace, and whether the workspace was made for it.
@@ -28,7 +28,7 @@ type Place struct {
 // StartIn starts an agent in a folder: a new tab named tab of the folder's workspace when the snapshot has one, else a
 // new workspace on the folder named workspace ("" names it after the folder); the place comes back with the agent's
 // refusal when the tab is there but the agent is not.
-func StartIn(client Placer, snap *herdr.Snapshot, dir, workspace, tab, kind string, start Start) (Place, error) {
+func StartIn(client Placer, snap *coreapi.Snapshot, dir, workspace, tab, kind string, start Start) (Place, error) {
 	if kind == "" || kind == "shell" || !KnownAgent(kind) {
 		return Place{}, fmt.Errorf("an agent is required, not %q", kind)
 	}
@@ -53,7 +53,7 @@ func StartIn(client Placer, snap *herdr.Snapshot, dir, workspace, tab, kind stri
 }
 
 // WorkspaceIn is the id of the first workspace whose folder is dir, "" for none.
-func WorkspaceIn(snap *herdr.Snapshot, dir string) string {
+func WorkspaceIn(snap *coreapi.Snapshot, dir string) string {
 	if snap == nil {
 		return ""
 	}
@@ -140,7 +140,7 @@ type placeCloser interface {
 // closePlace takes down the workspace made for the agent, or its tab alone once the workspace holds another tab — the
 // person's own, added meanwhile; nothing when the pane is gone already, and a refusal when its tab no longer holds it.
 // Without a snapshot the place goes as it was made.
-func closePlace(client placeCloser, snap *herdr.Snapshot, place Place) error {
+func closePlace(client placeCloser, snap *coreapi.Snapshot, place Place) error {
 	if snap != nil {
 		pane := snap.Pane(place.Pane)
 		if pane == nil {
@@ -160,7 +160,7 @@ func closePlace(client placeCloser, snap *herdr.Snapshot, place Place) error {
 }
 
 // otherTabs says whether the place's workspace holds a tab beside the place's own.
-func otherTabs(snap *herdr.Snapshot, place Place) bool {
+func otherTabs(snap *coreapi.Snapshot, place Place) bool {
 	for _, tab := range snap.Tabs {
 		if tab.WorkspaceID == place.Workspace && tab.TabID != place.Tab {
 			return true

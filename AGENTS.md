@@ -45,7 +45,7 @@ merged into `release` the same day, or the next fast-forward fails.
 Tests are plain `testing` and no core has to be running before them: the ones that
 start a throwaway remuda-core (`internal/core/coretest`) skip without
 `RC_BIN` or `remuda-core` on PATH, a test that only needs a machine's API
-puts `internal/herdr/herdrfake` in place of a core, and a package
+puts `internal/coreapi/corefake` in place of a core, and a package
 that runs scripts is tested on a `shell.Fake` with a recorded answer
 (`internal/review/wire_test.go`, `internal/jobs/jobs_test.go`). The web
 side runs Vitest on its pure modules, a `*.test.ts` beside each (`lib/`,
@@ -67,7 +67,7 @@ not style.
 - **remuda-core owns every process and status.** remuda keeps no session
   state and must keep working across its own restart while agents run.
   Never spawn, kill or track an agent yourself; ask the machine's
-  remuda-core over its RPC (`herdr.API`, the adapter in `internal/core`). The one
+  remuda-core over its RPC (`coreapi.API`, the adapter in `internal/core`). The one
   exception: on a machine moved to remuda-core, herdr's server is stopped
   (`herdr server stop`; herdr stays installed) only when the person
   presses it, behind a confirm naming what stops — never from a schedule,
@@ -247,7 +247,7 @@ not style.
   package (`sessions`, `chat`, `review`, `updates`, `tasks`, …). A package
   that only runs scripts on a machine takes a `shell.Host`, never a
   `*machines.Machine`, and builds its scripts with `internal/script`. A
-  package that asks a machine takes the `herdr.API` and `herdr.Terminals`
+  package that asks a machine takes the `coreapi.API` and `coreapi.Terminals`
   that `Machine.Ready()` hands out; their one implementation is the adapter
   over the machine's remuda-core (`internal/core`).
   Packages hear each other through `internal/events`; the subscriptions
@@ -285,7 +285,7 @@ not style.
 | Who hears what | `internal/events/`, the subscriptions in `internal/app/app.go` |
 | The page's own state: the selected pane, the mode, the lens, the URL | `web/src/app/store.ts`, `url.ts`, `current.ts` |
 | How a screen reads the server | `web/src/lib/query.ts` (`useQuery`), the feature's `api.ts`; the roster through `web/src/features/roster/useRoster.tsx` |
-| The core's RPC and its model, and the client to it | `internal/herdr/` (the vocabulary), `internal/core/` (the client and adapter) |
+| The core's RPC and its model, and the client to it | `internal/coreapi/` (the vocabulary), `internal/core/` (the client and adapter) |
 | Remote machines, SSH, remote files | `internal/machines/`, `internal/sshx/` |
 | A Windows PC of the fleet: the probe, its paths, `remuda-core.exe connect` over ssh | `internal/machines/probe.go`, `internal/machines/core.go`, `internal/rpath/`; the tests on a real Windows: `internal/wintest/` and the `windows` job in ci.yml |
 | What the sidebar says about an agent | `internal/radar/`, `web/src/features/roster/` (`radar.ts` the model, `Sidebar.tsx`, `rows.tsx`) |

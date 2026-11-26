@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 )
 
 // callWithin bounds one request the adapter sends on the watcher's or a handler's behalf, as herdr's client does.
@@ -32,17 +32,17 @@ type eventStream struct {
 	feeds   []*feed // the adapter's feedMu guards it
 
 	mu    sync.Mutex
-	queue []herdr.Event
+	queue []coreapi.Event
 	err   error
 }
 
 // Subscribe opens a stream: every change of the machine, whatever the subscriptions name, and the output matches they
 // ask for. A refusal of the watches is herdr's (invalid_regex, pane_not_found).
-func (a *Adapter) Subscribe(subs []herdr.Subscription) (herdr.EventStream, error) {
+func (a *Adapter) Subscribe(subs []coreapi.Subscription) (coreapi.EventStream, error) {
 	s := &eventStream{adapter: a, wake: make(bell, 1), room: maxQueued}
 	var watches []OutputWatch
 	for _, sub := range subs {
-		if sub.Type != herdr.EventOutputMatched || sub.Match == nil {
+		if sub.Type != coreapi.EventOutputMatched || sub.Match == nil {
 			continue
 		}
 		lines := min(sub.Lines, 200)
@@ -67,7 +67,7 @@ func (a *Adapter) Subscribe(subs []herdr.Subscription) (herdr.EventStream, error
 	return s, nil
 }
 
-func (s *eventStream) Next() (herdr.Event, error) {
+func (s *eventStream) Next() (coreapi.Event, error) {
 	for {
 		s.mu.Lock()
 		if len(s.queue) > 0 {
@@ -79,7 +79,7 @@ func (s *eventStream) Next() (herdr.Event, error) {
 		err := s.err
 		s.mu.Unlock()
 		if err != nil {
-			return herdr.Event{}, err
+			return coreapi.Event{}, err
 		}
 		<-s.wake
 	}
@@ -95,13 +95,13 @@ func (s *eventStream) Close() error {
 	return nil
 }
 
-func (s *eventStream) push(ev herdr.Event) {
+func (s *eventStream) push(ev coreapi.Event) {
 	s.mu.Lock()
 	if s.err == nil {
 		if len(s.queue) < s.room {
 			s.queue = append(s.queue, ev)
 		} else {
-			s.queue, s.err = nil, &herdr.Error{Code: herdr.ErrEventsLost, Message: "the reader fell behind"}
+			s.queue, s.err = nil, &coreapi.Error{Code: coreapi.ErrEventsLost, Message: "the reader fell behind"}
 		}
 	}
 	s.mu.Unlock()
@@ -145,9 +145,9 @@ func (a *Adapter) PaneRead(paneID string) (string, error) {
 }
 
 // PaneScreen is the terminal's screen with its colours, as SGR.
-func (a *Adapter) PaneScreen(paneID string) (herdr.Screen, error) {
+func (a *Adapter) PaneScreen(paneID string) (coreapi.Screen, error) {
 	read, err := a.read(paneID, 0, "vt")
-	return herdr.Screen{Text: ScreenText(read.Text)}, err
+	return coreapi.Screen{Text: ScreenText(read.Text)}, err
 }
 
 // PaneRecent is the terminal's last n rows down to the last with text, the screen and the history above it, and
@@ -199,7 +199,7 @@ func (a *Adapter) terminal(paneID string) (Terminal, error) {
 	}
 	t := a.state.terminals[paneID]
 	if t == nil {
-		return Terminal{}, &herdr.Error{Code: "pane_not_found", Message: "no terminal " + paneID}
+		return Terminal{}, &coreapi.Error{Code: "pane_not_found", Message: "no terminal " + paneID}
 	}
 	return *t, nil
 }
@@ -223,23 +223,23 @@ func (a *Adapter) PaneShellPID(paneID string) (int, error) {
 }
 
 // AgentGet is the agent in a pane and how it stands, from the mirror.
-func (a *Adapter) AgentGet(target string) (herdr.AgentInfo, error) {
+func (a *Adapter) AgentGet(target string) (coreapi.AgentInfo, error) {
 	t, err := a.terminal(target)
 	if err != nil {
-		return herdr.AgentInfo{}, err
+		return coreapi.AgentInfo{}, err
 	}
 	agent, err := agentIn(&t, target)
 	if err != nil {
-		return herdr.AgentInfo{}, err
+		return coreapi.AgentInfo{}, err
 	}
-	return herdr.AgentInfo{Agent: agent, Status: statusOf(&t)}, nil
+	return coreapi.AgentInfo{Agent: agent, Status: statusOf(&t)}, nil
 }
 
 // agentIn is the agent a terminal runs, agent_not_found when it runs none.
 func agentIn(t *Terminal, target string) (string, error) {
 	agent := agentOf(t)
 	if agent == "" {
-		return "", &herdr.Error{Code: "agent_not_found", Message: "no agent in " + target}
+		return "", &coreapi.Error{Code: "agent_not_found", Message: "no agent in " + target}
 	}
 	return agent, nil
 }

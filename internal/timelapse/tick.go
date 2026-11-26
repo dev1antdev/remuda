@@ -3,7 +3,7 @@ package timelapse
 import (
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 )
 
 // The recorder's own clock. The watcher snapshots a machine when herdr's event stream says something moved, and only
@@ -18,7 +18,7 @@ var (
 
 // seenSnap is a machine's last snapshot and when it was taken.
 type seenSnap struct {
-	snap *herdr.Snapshot
+	snap *coreapi.Snapshot
 	at   time.Time
 }
 

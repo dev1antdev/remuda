@@ -9,8 +9,8 @@ import (
 
 	"github.com/dev1antdev/remuda/internal/core"
 	"github.com/dev1antdev/remuda/internal/core/coretest"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/events"
-	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/jobs"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/restart"
@@ -66,15 +66,15 @@ func claudeOnCore(t *testing.T) (*machines.Manager, *machines.Machine, string, s
 	if err := sessions.StartAgent(client, pane, "claude"); err != nil {
 		t.Fatal(err)
 	}
-	machineSays(t, client, func(s *herdr.Snapshot) bool {
+	machineSays(t, client, func(s *coreapi.Snapshot) bool {
 		p := s.Pane(pane)
-		return p != nil && p.Agent == "claude" && p.AgentStatus == herdr.StatusIdle && restart.SessionOf(p) == lifeSession
+		return p != nil && p.Agent == "claude" && p.AgentStatus == coreapi.StatusIdle && restart.SessionOf(p) == lifeSession
 	})
 	return fleet, mc, made.Workspace.WorkspaceID, pane
 }
 
 // machineSays asks the machine until its snapshot says what want looks for.
-func machineSays(t *testing.T, client herdr.API, want func(*herdr.Snapshot) bool) {
+func machineSays(t *testing.T, client coreapi.API, want func(*coreapi.Snapshot) bool) {
 	t.Helper()
 	for start := time.Now(); time.Since(start) < 20*time.Second; time.Sleep(100 * time.Millisecond) {
 		if snap, err := client.SessionSnapshot(); err == nil && want(snap) {
@@ -86,7 +86,7 @@ func machineSays(t *testing.T, client herdr.API, want func(*herdr.Snapshot) bool
 }
 
 // screenHas waits for the pane's screen to show the text.
-func screenHas(t *testing.T, client herdr.API, pane, text string) {
+func screenHas(t *testing.T, client coreapi.API, pane, text string) {
 	t.Helper()
 	for start := time.Now(); ; time.Sleep(100 * time.Millisecond) {
 		screen, _ := client.PaneRead(pane)
@@ -116,7 +116,7 @@ func finished(t *testing.T, runner *jobs.Runner, id string) jobs.Job {
 
 // movedOn has the agent /resume another conversation in the same process, as a person may right before a sleep or an
 // update: the session read off the process half a minute ago is no longer the one it runs.
-func movedOn(t *testing.T, client herdr.API, pane string) {
+func movedOn(t *testing.T, client coreapi.API, pane string) {
 	t.Helper()
 	if err := client.AgentPrompt(pane, "/resume "+movedSession); err != nil {
 		t.Fatal(err)
@@ -137,7 +137,7 @@ func TestAWorkspaceOnACoreSleepsAndWakesOnItsSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	finished(t, s.Jobs, started.Job)
-	machineSays(t, client, func(snap *herdr.Snapshot) bool { p := snap.Pane(pane); return p != nil && p.Agent == "" })
+	machineSays(t, client, func(snap *coreapi.Snapshot) bool { p := snap.Pane(pane); return p != nil && p.Agent == "" })
 	if !s.Store.Holds(mc.ID(), space, pane) {
 		t.Fatal("the agent that left is no sleeper")
 	}

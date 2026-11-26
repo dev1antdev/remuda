@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 )
 
 // The built-in watches every pane gets, by their keys: a dev server saying where it serves, and tests that failed.
@@ -41,8 +41,8 @@ var (
 	colonRe = regexp.MustCompile(`:(\d{2,5})\b`)
 )
 
-func mustRegex(pattern string) *herdr.Regexp {
-	re, err := herdr.CompileRegex(pattern)
+func mustRegex(pattern string) *coreapi.Regexp {
+	re, err := coreapi.CompileRegex(pattern)
 	if err != nil {
 		panic(err)
 	}

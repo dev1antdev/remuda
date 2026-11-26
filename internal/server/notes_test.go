@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/coreapi"
+	"github.com/dev1antdev/remuda/internal/coreapi/corefake"
 	"github.com/dev1antdev/remuda/internal/events"
-	"github.com/dev1antdev/remuda/internal/herdr"
-	"github.com/dev1antdev/remuda/internal/herdr/herdrfake"
 	"github.com/dev1antdev/remuda/internal/notes"
 	"github.com/dev1antdev/remuda/internal/prstatus"
 	"github.com/dev1antdev/remuda/internal/review"
@@ -19,7 +19,7 @@ import (
 // wrong is refused.
 func TestNoteRoutesKeepANotePerCheckout(t *testing.T) {
 	dir := t.TempDir()
-	fleet := herdrfake.Manager(dir)
+	fleet := corefake.Manager(dir)
 	s := &Server{Machines: fleet, Notes: notes.Open(dir), Review: review.New(dir)}
 	mux := http.NewServeMux()
 	s.noteRoutes(mux)
@@ -28,7 +28,7 @@ func TestNoteRoutesKeepANotePerCheckout(t *testing.T) {
 	if code != 200 || out["text"] != "Waiting on the API team" {
 		t.Fatalf("put: %d %v", code, out)
 	}
-	snap := &herdr.Snapshot{Workspaces: []herdr.WorkspaceInfo{{WorkspaceID: "w1", Label: "app", Worktree: &herdr.WorktreeInfo{CheckoutPath: "/w/app"}}}}
+	snap := &coreapi.Snapshot{Workspaces: []coreapi.WorkspaceInfo{{WorkspaceID: "w1", Label: "app", Worktree: &coreapi.WorktreeInfo{CheckoutPath: "/w/app"}}}}
 	if got := s.sessionsFromSnapshot("local", snap); len(got) != 1 || got[0].Note != "Waiting on the API team" {
 		t.Fatalf("the roster's session: %+v", got)
 	}
@@ -68,7 +68,7 @@ func TestNoteRoutesKeepANotePerCheckout(t *testing.T) {
 // the pane's read under way and its outcome riding on the roster.
 func TestPRRefreshReadsTheCardsRequestsAgain(t *testing.T) {
 	dir := t.TempDir()
-	fleet := herdrfake.Manager(dir)
+	fleet := corefake.Manager(dir)
 	host := &shell.Fake{Name: "local", Answer: func(string) (string, error) {
 		return `{"state":"OPEN","title":"Saved carts","isDraft":false,"mergeable":"MERGEABLE","mergeStateStatus":"CLEAN","reviewDecision":"","statusCheckRollup":[]}`, nil
 	}}

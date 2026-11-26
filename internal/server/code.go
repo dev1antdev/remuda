@@ -6,19 +6,19 @@ import (
 	"strings"
 
 	"github.com/dev1antdev/remuda/internal/code"
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 )
 
 // Code mode: a machine's code-server behind the guard.
 
 // editorFolders are the folders the machine's workspaces live in, remuda's own — the floating terminal's home-folder
 // shell — left out
-func (s *Server) editorFolders(machineID string, snap *herdr.Snapshot) []string {
+func (s *Server) editorFolders(machineID string, snap *coreapi.Snapshot) []string {
 	return s.foldersBut(machineID, snap, s.ownWorkspace)
 }
 
 // foldersBut is the folders of the snapshot's workspaces, each once, without those of the workspaces left out.
-func (s *Server) foldersBut(machineID string, snap *herdr.Snapshot, out func(machineID, workspaceID string) bool) []string {
+func (s *Server) foldersBut(machineID string, snap *coreapi.Snapshot, out func(machineID, workspaceID string) bool) []string {
 	var folders []string
 	seen := map[string]bool{}
 	for i := range snap.Workspaces {

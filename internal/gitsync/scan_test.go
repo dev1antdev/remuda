@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/rpath"
 	"github.com/dev1antdev/remuda/internal/shell"
 )
@@ -59,16 +59,16 @@ func TestTheScansAreKept(t *testing.T) {
 }
 
 func TestAPullWaitsOnlyForAnAgentInThatCheckout(t *testing.T) {
-	snap := &herdr.Snapshot{
-		Workspaces: []herdr.WorkspaceInfo{
-			{WorkspaceID: "w1", Worktree: &herdr.WorktreeInfo{CheckoutPath: "/code/app", RepoRoot: "/code/app"}},
-			{WorkspaceID: "w2", Worktree: &herdr.WorktreeInfo{CheckoutPath: "/code/app/.claude/worktrees/x", IsLinkedWorktree: true, RepoRoot: "/code/app"}},
+	snap := &coreapi.Snapshot{
+		Workspaces: []coreapi.WorkspaceInfo{
+			{WorkspaceID: "w1", Worktree: &coreapi.WorktreeInfo{CheckoutPath: "/code/app", RepoRoot: "/code/app"}},
+			{WorkspaceID: "w2", Worktree: &coreapi.WorktreeInfo{CheckoutPath: "/code/app/.claude/worktrees/x", IsLinkedWorktree: true, RepoRoot: "/code/app"}},
 			{WorkspaceID: "w3"},
 		},
-		Panes: []herdr.PaneInfo{
-			{PaneID: "w1:p1", WorkspaceID: "w1", Agent: "claude", AgentStatus: herdr.StatusIdle, CWD: "/code/app"},
-			{PaneID: "w2:p1", WorkspaceID: "w2", Agent: "codex", AgentStatus: herdr.StatusWorking, CWD: "/code/app/.claude/worktrees/x"},
-			{PaneID: "w3:p1", WorkspaceID: "w3", Agent: "gemini", AgentStatus: herdr.StatusBlocked, CWD: "/code/web/src"},
+		Panes: []coreapi.PaneInfo{
+			{PaneID: "w1:p1", WorkspaceID: "w1", Agent: "claude", AgentStatus: coreapi.StatusIdle, CWD: "/code/app"},
+			{PaneID: "w2:p1", WorkspaceID: "w2", Agent: "codex", AgentStatus: coreapi.StatusWorking, CWD: "/code/app/.claude/worktrees/x"},
+			{PaneID: "w3:p1", WorkspaceID: "w3", Agent: "gemini", AgentStatus: coreapi.StatusBlocked, CWD: "/code/web/src"},
 		},
 	}
 	style := rpath.Style{}

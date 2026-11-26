@@ -3,8 +3,8 @@ package scenes
 import (
 	"strings"
 
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/events"
-	"github.com/dev1antdev/remuda/internal/herdr"
 )
 
 // tidy does the actions of a run that the plan, read afresh, still holds; the rest are skipped with the reason.
@@ -106,7 +106,7 @@ func (s *Service) AtWork(t Tidy) string {
 			if pane.Agent == "" {
 				continue
 			}
-			if state := s.Readings.State(mc.ID(), pane).State; state == herdr.StatusWorking || state == herdr.StatusBlocked {
+			if state := s.Readings.State(mc.ID(), pane).State; state == coreapi.StatusWorking || state == coreapi.StatusBlocked {
 				return mc.Label()
 			}
 		}

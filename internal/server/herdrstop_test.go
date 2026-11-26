@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dev1antdev/remuda/internal/herdr/herdrfake"
+	"github.com/dev1antdev/remuda/internal/coreapi/corefake"
 	"github.com/dev1antdev/remuda/internal/machines"
 )
 
@@ -31,7 +31,7 @@ func TestHerdrsServerIsStoppedOnlyWhereTheFleetLeftIt(t *testing.T) {
 		t.Fatal(err)
 	}
 	pin := func(m *machines.Manager) { m.SetMovedHerdr(stub, filepath.Join(t.TempDir(), "herdr.sock")) }
-	onHerdr := herdrfake.Manager(t.TempDir())
+	onHerdr := corefake.Manager(t.TempDir())
 	t.Cleanup(onHerdr.Close)
 	pin(onHerdr)
 	if code, body := stop(&Server{Machines: onHerdr}, "local"); code != 409 || !strings.Contains(body, "scratch instance") {

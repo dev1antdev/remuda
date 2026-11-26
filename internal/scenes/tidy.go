@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/radar"
 	"github.com/dev1antdev/remuda/internal/text"
 	"github.com/dev1antdev/remuda/internal/worktrees"
@@ -58,15 +58,15 @@ type Plan struct {
 
 // Readings are what the page reads about a pane that a tidy goes by.
 type Readings struct {
-	State   func(machine string, pane *herdr.PaneInfo) radar.Display // the radar's reading: working, blocked, done, idle
-	Context func(machine, pane string) (percent int, ok bool)        // the meter's share of the window its last answer read
-	Scratch func(machine, workspace string) bool                     // the floating terminal's own shell, never tidied
+	State   func(machine string, pane *coreapi.PaneInfo) radar.Display // the radar's reading: working, blocked, done, idle
+	Context func(machine, pane string) (percent int, ok bool)          // the meter's share of the window its last answer read
+	Scratch func(machine, workspace string) bool                       // the floating terminal's own shell, never tidied
 }
 
 // planPanes is what the tidy does with one machine's panes: a shell at its prompt closed, an agent at rest for long
 // enough with a session to come back to closed, an idle Claude Code past the share compacted — never an agent that
 // works, asks, has a finish nobody looked at, or that herdr cannot say; the scratch shell left alone.
-func planPanes(t Tidy, machine string, snap *herdr.Snapshot, atPrompt func(pane string) bool, read Readings, now time.Time) []Action {
+func planPanes(t Tidy, machine string, snap *coreapi.Snapshot, atPrompt func(pane string) bool, read Readings, now time.Time) []Action {
 	var out []Action
 	for i := range snap.Panes {
 		pane := &snap.Panes[i]
@@ -82,7 +82,7 @@ func planPanes(t Tidy, machine string, snap *herdr.Snapshot, atPrompt func(pane 
 			continue
 		}
 		reading := read.State(machine, pane)
-		if reading.State != herdr.StatusIdle || (pane.AgentStatus != herdr.StatusIdle && pane.AgentStatus != herdr.StatusDone) {
+		if reading.State != coreapi.StatusIdle || (pane.AgentStatus != coreapi.StatusIdle && pane.AgentStatus != coreapi.StatusDone) {
 			continue
 		}
 		last := reading.LastActive
@@ -108,12 +108,12 @@ func planPanes(t Tidy, machine string, snap *herdr.Snapshot, atPrompt func(pane 
 }
 
 // resumable says whether a closed agent can be reopened on its session: herdr names one remuda can follow.
-func resumable(pane *herdr.PaneInfo) bool {
+func resumable(pane *coreapi.PaneInfo) bool {
 	return pane.AgentSession != nil && text.SessionID(pane.AgentSession.Value)
 }
 
 // closes says what goes with a pane when it closes: its tab when it is the tab's last, the workspace when that tab is the workspace's last.
-func closes(snap *herdr.Snapshot, pane *herdr.PaneInfo) string {
+func closes(snap *coreapi.Snapshot, pane *coreapi.PaneInfo) string {
 	for i := range snap.Panes {
 		if other := &snap.Panes[i]; other.PaneID != pane.PaneID && other.TabID == pane.TabID {
 			return ""
@@ -127,7 +127,7 @@ func closes(snap *herdr.Snapshot, pane *herdr.PaneInfo) string {
 	return "workspace"
 }
 
-func tabLabel(snap *herdr.Snapshot, tabID string) string {
+func tabLabel(snap *coreapi.Snapshot, tabID string) string {
 	for _, tab := range snap.Tabs {
 		if tab.TabID == tabID {
 			return tab.Label
@@ -208,7 +208,7 @@ func (s *Service) planMachine(t Tidy, mc Machine, now time.Time) Plan {
 }
 
 // staleWhy is why an action the person picked is no longer in the plan: its pane gone, or the agent at work or asking now.
-func staleWhy(a Action, snap *herdr.Snapshot, read Readings) string {
+func staleWhy(a Action, snap *coreapi.Snapshot, read Readings) string {
 	if a.Kind == ActWorktree {
 		return "no longer a clean leftover worktree"
 	}
@@ -226,11 +226,11 @@ func staleWhy(a Action, snap *herdr.Snapshot, read Readings) string {
 		return "an agent runs in it now"
 	}
 	switch read.State(a.Machine, pane).State {
-	case herdr.StatusWorking:
+	case coreapi.StatusWorking:
 		return "it works now"
-	case herdr.StatusBlocked:
+	case coreapi.StatusBlocked:
 		return "it asks you something now"
-	case herdr.StatusDone:
+	case coreapi.StatusDone:
 		return "it has a finish you have not looked at"
 	}
 	return "no longer to tidy"

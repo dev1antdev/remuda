@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/restart"
 )
 
@@ -25,23 +25,23 @@ func quick(t *testing.T) {
 	t.Cleanup(func() { restart.LeavePoll, interruptWait = poll, wait })
 }
 
-func agentPane(id, tab, kind, session, status, dir string) herdr.PaneInfo {
-	p := herdr.PaneInfo{PaneID: id, WorkspaceID: "w1", TabID: tab, Agent: kind, AgentStatus: status, CWD: dir, Title: "✳ " + kind}
+func agentPane(id, tab, kind, session, status, dir string) coreapi.PaneInfo {
+	p := coreapi.PaneInfo{PaneID: id, WorkspaceID: "w1", TabID: tab, Agent: kind, AgentStatus: status, CWD: dir, Title: "✳ " + kind}
 	if session != "" {
-		p.AgentSession = &herdr.AgentSession{Kind: "id", Value: session}
+		p.AgentSession = &coreapi.AgentSession{Kind: "id", Value: session}
 	}
 	return p
 }
 
-func shellPane(id, tab, dir string) herdr.PaneInfo {
-	return herdr.PaneInfo{PaneID: id, WorkspaceID: "w1", TabID: tab, CWD: dir, Title: "zsh"}
+func shellPane(id, tab, dir string) coreapi.PaneInfo {
+	return coreapi.PaneInfo{PaneID: id, WorkspaceID: "w1", TabID: tab, CWD: dir, Title: "zsh"}
 }
 
 // fakeHerdr is herdr as a sleep and a wake see it: panes whose agents leave on their exit (or not), an Esc that brings
 // a busy one to rest, shells that are free or not, tabs made, agents started.
 type fakeHerdr struct {
 	mu          sync.Mutex
-	snap        herdr.Snapshot
+	snap        coreapi.Snapshot
 	stubborn    map[string]bool   // panes whose agent never leaves, Ctrl-C or not
 	busyShell   map[string]bool   // panes whose shell runs something
 	refuse      map[string]error  // panes where a start fails
@@ -52,18 +52,18 @@ type fakeHerdr struct {
 	tabs        []string
 }
 
-func newFake(panes ...herdr.PaneInfo) *fakeHerdr {
+func newFake(panes ...coreapi.PaneInfo) *fakeHerdr {
 	return &fakeHerdr{
-		snap: herdr.Snapshot{
-			Workspaces: []herdr.WorkspaceInfo{{WorkspaceID: "w1", Label: "api", Worktree: &herdr.WorktreeInfo{CheckoutPath: "/work/api"}}},
-			Tabs:       []herdr.TabInfo{{TabID: "w1:t1", WorkspaceID: "w1", Number: 1, Label: "1"}, {TabID: "w1:t2", WorkspaceID: "w1", Number: 2, Label: "review"}},
+		snap: coreapi.Snapshot{
+			Workspaces: []coreapi.WorkspaceInfo{{WorkspaceID: "w1", Label: "api", Worktree: &coreapi.WorktreeInfo{CheckoutPath: "/work/api"}}},
+			Tabs:       []coreapi.TabInfo{{TabID: "w1:t1", WorkspaceID: "w1", Number: 1, Label: "1"}, {TabID: "w1:t2", WorkspaceID: "w1", Number: 2, Label: "review"}},
 			Panes:      panes,
 		},
 		stubborn: map[string]bool{}, busyShell: map[string]bool{}, refuse: map[string]error{},
 	}
 }
 
-func (f *fakeHerdr) pane(id string) *herdr.PaneInfo {
+func (f *fakeHerdr) pane(id string) *coreapi.PaneInfo {
 	for i := range f.snap.Panes {
 		if f.snap.Panes[i].PaneID == id {
 			return &f.snap.Panes[i]
@@ -72,11 +72,11 @@ func (f *fakeHerdr) pane(id string) *herdr.PaneInfo {
 	return nil
 }
 
-func (f *fakeHerdr) SessionSnapshot() (*herdr.Snapshot, error) {
+func (f *fakeHerdr) SessionSnapshot() (*coreapi.Snapshot, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	copied := f.snap
-	copied.Panes = append([]herdr.PaneInfo(nil), f.snap.Panes...)
+	copied.Panes = append([]coreapi.PaneInfo(nil), f.snap.Panes...)
 	return &copied, nil
 }
 
@@ -87,8 +87,8 @@ func (f *fakeHerdr) AgentPrompt(target, text string) error {
 	if p == nil || p.Agent == "" {
 		return errors.New("agent_not_found")
 	}
-	if p.AgentStatus == herdr.StatusBlocked {
-		return &herdr.Error{Code: "agent_blocked", Message: "a menu is open"}
+	if p.AgentStatus == coreapi.StatusBlocked {
+		return &coreapi.Error{Code: "agent_blocked", Message: "a menu is open"}
 	}
 	f.typed = append(f.typed, target+" "+text)
 	if !f.stubborn[target] {
@@ -102,7 +102,7 @@ func (f *fakeHerdr) PaneSendKeys(paneID string, keys []string) error {
 	defer f.mu.Unlock()
 	f.typed = append(f.typed, paneID+" "+strings.Join(keys, "+"))
 	if p := f.pane(paneID); p != nil && len(keys) == 1 && keys[0] == "esc" {
-		p.AgentStatus = herdr.StatusIdle
+		p.AgentStatus = coreapi.StatusIdle
 	}
 	return nil
 }
@@ -125,24 +125,24 @@ func (f *fakeHerdr) AgentStartWith(paneID, kind, name string, args []string, _ t
 	}
 	f.started = append(f.started, fmt.Sprintf("%s %s %s", paneID, kind, strings.Join(args, " ")))
 	if p := f.pane(paneID); p != nil {
-		p.Agent, p.AgentStatus = kind, herdr.StatusIdle
+		p.Agent, p.AgentStatus = kind, coreapi.StatusIdle
 	}
 	return nil
 }
 
-func (f *fakeHerdr) TabCreate(workspaceID, label string) (*herdr.TabCreateResult, error) {
+func (f *fakeHerdr) TabCreate(workspaceID, label string) (*coreapi.TabCreateResult, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	n := len(f.tabs) + 7
 	f.tabs = append(f.tabs, workspaceID+" "+label)
-	res := &herdr.TabCreateResult{}
+	res := &coreapi.TabCreateResult{}
 	res.Tab.TabID = fmt.Sprintf("%s:t%d", workspaceID, n)
 	res.RootPane.PaneID = fmt.Sprintf("%s:p%d", workspaceID, n)
 	f.snap.Panes = append(f.snap.Panes, shellPane(res.RootPane.PaneID, res.Tab.TabID, "/work/api"))
 	return res, nil
 }
 
-func (f *fakeHerdr) WorkspaceCreate(cwd, label string) (*herdr.WorkspaceCreateResult, error) {
+func (f *fakeHerdr) WorkspaceCreate(cwd, label string) (*coreapi.WorkspaceCreateResult, error) {
 	return nil, errors.New("no new workspace in these tests")
 }
 
@@ -153,7 +153,7 @@ func (f *fakeHerdr) RereadSessions() error {
 	defer f.mu.Unlock()
 	for pane, session := range f.moved {
 		if p := f.pane(pane); p != nil {
-			p.AgentSession = &herdr.AgentSession{Kind: "id", Value: session}
+			p.AgentSession = &coreapi.AgentSession{Kind: "id", Value: session}
 		}
 	}
 	return f.rereadFails

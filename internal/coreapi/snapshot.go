@@ -1,4 +1,4 @@
-package herdr
+package coreapi
 
 // The questions remuda asks of a snapshot, beside PaneSize: a pane by id, a
 // workspace's folder, the agent that works in a folder.

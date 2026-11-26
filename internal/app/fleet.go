@@ -5,8 +5,8 @@ import (
 
 	"github.com/dev1antdev/remuda/internal/awake"
 	"github.com/dev1antdev/remuda/internal/budget"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/health"
-	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/limits"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/placement"
@@ -30,7 +30,7 @@ type fleetPlacer struct {
 func (f *fleetPlacer) Place(a tasks.Automation, agent string) placement.Result {
 	type found struct {
 		mc   *machines.Machine
-		snap *herdr.Snapshot
+		snap *coreapi.Snapshot
 		dirs []workspaceDir
 	}
 	var connected []found
@@ -84,7 +84,7 @@ func pickDir(dirs []workspaceDir, home bool, homeDir, repository string, reposit
 }
 
 // candidate is one machine as the scoring sees it.
-func (f *fleetPlacer) candidate(mc *machines.Machine, snap *herdr.Snapshot, at workspaceDir, home bool, agent string) placement.Machine {
+func (f *fleetPlacer) candidate(mc *machines.Machine, snap *coreapi.Snapshot, at workspaceDir, home bool, agent string) placement.Machine {
 	m := placement.Machine{ID: mc.ID(), Label: mc.Label(), Dir: at.dir, Workspace: at.workspace, Home: home, Plan: -1, Working: awake.Working(snap)}
 	if r := f.vitals.Report(mc.ID()); r != nil {
 		m.PerCore, m.TempC = placement.LoadPerCore(r.Load1, r.Cores), r.TempC
@@ -108,7 +108,7 @@ func (f *fleetPlacer) candidate(mc *machines.Machine, snap *herdr.Snapshot, at w
 type workspaceDir struct{ dir, workspace string }
 
 // checkoutDirs are the folders of a machine's workspaces that are not linked worktrees, each once, in herdr's order.
-func checkoutDirs(snap *herdr.Snapshot) []workspaceDir {
+func checkoutDirs(snap *coreapi.Snapshot) []workspaceDir {
 	if snap == nil {
 		return nil
 	}

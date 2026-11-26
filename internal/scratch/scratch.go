@@ -7,7 +7,7 @@ import (
 	"log"
 	"sync"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/state"
 )
 
@@ -19,7 +19,7 @@ const (
 
 // Herdr is what the store asks of a machine's herdr
 type Herdr interface {
-	WorkspaceCreate(cwd, label string) (*herdr.WorkspaceCreateResult, error)
+	WorkspaceCreate(cwd, label string) (*coreapi.WorkspaceCreateResult, error)
 	WorkspaceClose(workspaceID string) error
 }
 
@@ -88,7 +88,7 @@ func (s *Store) Ended(machine, workspace string) bool {
 
 // Ensure is the machine's scratch shell: the kept workspace while a fresh snapshot still has it, else a new one in
 // home. The snapshot is read under the machine's lock, so a second ask that waited on the first sees the shell it made.
-func (s *Store) Ensure(machine string, client Herdr, snapshot func() (*herdr.Snapshot, error), home string) (Shell, error) {
+func (s *Store) Ensure(machine string, client Herdr, snapshot func() (*coreapi.Snapshot, error), home string) (Shell, error) {
 	lock := s.machineLock(machine)
 	lock.Lock()
 	defer lock.Unlock()
@@ -122,7 +122,7 @@ func (s *Store) Ensure(machine string, client Herdr, snapshot func() (*herdr.Sna
 var ErrNone = errors.New("no floating terminal is open on that machine")
 
 // Close ends the machine's scratch shell and forgets it; a workspace herdr no longer has is only forgotten.
-func (s *Store) Close(machine string, client Herdr, snap *herdr.Snapshot) error {
+func (s *Store) Close(machine string, client Herdr, snap *coreapi.Snapshot) error {
 	lock := s.machineLock(machine)
 	lock.Lock()
 	defer lock.Unlock()
@@ -169,7 +169,7 @@ func (s *Store) endedLocked(machine, id string) {
 func (s *Store) save() error { return state.SaveJSON(s.dir, file, s.ids) }
 
 // paneOf is the pane of the workspace the drawer attaches: the active tab's focused one, else its first, else any
-func paneOf(snap *herdr.Snapshot, workspaceID string) string {
+func paneOf(snap *coreapi.Snapshot, workspaceID string) string {
 	ws := snap.Workspace(workspaceID)
 	if ws == nil {
 		return ""

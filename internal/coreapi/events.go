@@ -1,4 +1,4 @@
-package herdr
+package coreapi
 
 // herdr's event stream (events.subscribe, protocol 22): one request on a connection that stays open, its subscriptions
 // fixed for the connection's life — a second subscribe on it closes it, so a new set is a new connection. herdr answers

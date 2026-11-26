@@ -1,4 +1,4 @@
-package herdr
+package coreapi
 
 // An output watch's regex is herdr's to read, in Rust's dialect with Unicode on: \d, \w, \s and \b go by Unicode,
 // \< and \> are a word's start and end, a class may hold a class and combine them with && -- ~~, and there is no

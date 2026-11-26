@@ -9,7 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/shell"
 	"github.com/dev1antdev/remuda/internal/sshx"
 	"github.com/dev1antdev/remuda/internal/transcript"
@@ -32,8 +32,8 @@ type Machine struct {
 	os          string // darwin | linux | windows as the connection read it, "" before a remote's first connect
 
 	conn   *sshx.Conn
-	client herdr.API       // the adapter over the machine's remuda-core, nil before it answers
-	attach herdr.Terminals // remuda-core's terminals, the adapter over the machine's own core
+	client coreapi.API       // the adapter over the machine's remuda-core, nil before it answers
+	attach coreapi.Terminals // remuda-core's terminals, the adapter over the machine's own core
 	home   string
 
 	speaksCore bool      // reached through remuda-core: a label now (Core 26i made it every machine), gone with the herdr client
@@ -160,7 +160,7 @@ func (mc *Machine) connect() {
 
 // connected makes the connection the machine's and tells whoever listens, unless the machine was removed while it
 // was made; then opens the door there. noCore is why a machine on remuda-core follows none over it.
-func (mc *Machine) connected(conn *sshx.Conn, found probe, client herdr.API, attach herdr.Terminals, link *coreLink, noCore error) {
+func (mc *Machine) connected(conn *sshx.Conn, found probe, client coreapi.API, attach coreapi.Terminals, link *coreLink, noCore error) {
 	mc.mu.Lock()
 	if mc.removed { // removed while this connect was in flight
 		mc.mu.Unlock()
@@ -202,7 +202,7 @@ func (mc *Machine) transportError(err error) {
 
 // Ready hands out the machine's client and attach manager, reconnecting a failed remote at most every 15s; a remote
 // connected without its remuda-core says why, and is looked at for one again as often.
-func (mc *Machine) Ready() (herdr.API, herdr.Terminals, error) {
+func (mc *Machine) Ready() (coreapi.API, coreapi.Terminals, error) {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
 	if mc.local && mc.serverHost {

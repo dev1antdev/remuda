@@ -24,8 +24,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/events"
-	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/state"
 	"github.com/dev1antdev/remuda/internal/transcript"
@@ -56,7 +56,7 @@ func (c Chat) in(dir string) bool {
 }
 
 // ranIn is the folder the pane's agent runs in when it is not the pane's own, else "".
-func ranIn(p *herdr.PaneInfo, dir string) string {
+func ranIn(p *coreapi.PaneInfo, dir string) string {
 	if p.ForegroundCWD != dir {
 		return p.ForegroundCWD
 	}
@@ -292,7 +292,7 @@ func herdrStopped(paneID string, c Chat) Stopped {
 }
 
 // paneDir is the folder a chat lives in: the pane's own, else its workspace's.
-func paneDir(snap *herdr.Snapshot, p *herdr.PaneInfo) string {
+func paneDir(snap *coreapi.Snapshot, p *coreapi.PaneInfo) string {
 	if dir := p.Dir(); dir != "" {
 		return dir
 	}
@@ -596,7 +596,7 @@ func sessionFileExists(mc *machines.Machine, c Chat) (bool, error) {
 
 // starter is what resuming a chat needs of herdr's client.
 type starter interface {
-	SessionSnapshot() (*herdr.Snapshot, error)
+	SessionSnapshot() (*coreapi.Snapshot, error)
 	AgentStartWith(paneID, kind, name string, args []string, timeout time.Duration) error
 }
 
@@ -735,7 +735,7 @@ func notStarted(s Stopped, line string, say func(string)) outcome {
 }
 
 // paneOnSession is the pane whose agent is on the session, nil for none.
-func paneOnSession(snap *herdr.Snapshot, session string) *herdr.PaneInfo {
+func paneOnSession(snap *coreapi.Snapshot, session string) *coreapi.PaneInfo {
 	for i := range snap.Panes {
 		if p := &snap.Panes[i]; sessionOf(p) == session {
 			return p
@@ -749,7 +749,7 @@ func startResumed(client starter, paneID, kind string, args []string) error {
 	deadline := time.Now().Add(12 * time.Second)
 	for {
 		err := client.AgentStartWith(paneID, kind, agentName(kind, paneID), args, 90*time.Second)
-		if err == nil || !(herdr.IsCode(err, "agent_pane_busy") || herdr.IsCode(err, "agent_not_ready")) || time.Now().After(deadline) {
+		if err == nil || !(coreapi.IsCode(err, "agent_pane_busy") || coreapi.IsCode(err, "agent_not_ready")) || time.Now().After(deadline) {
 			return err
 		}
 		time.Sleep(500 * time.Millisecond)

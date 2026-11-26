@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/events"
-	"github.com/dev1antdev/remuda/internal/herdr"
 )
 
 // lockedLog is the log's output while a test runs.
@@ -47,7 +47,7 @@ func TestAHerdrWithoutStreamsIsAskedAgainQuietly(t *testing.T) {
 	t.Cleanup(func() { unsupportedRetry = saved })
 	said := capturedLog(t)
 	f := newFakeHerdr(t, "w1:p1")
-	f.refuse = func([]herdr.Subscription) string { return "invalid_request" }
+	f.refuse = func([]coreapi.Subscription) string { return "invalid_request" }
 	watching(t, f, nil)
 	waitFor(t, "a few tries", func() bool { return f.subscribes() >= 4 })
 	if n := said.count("keeps no event stream"); n != 1 {
@@ -70,7 +70,7 @@ func TestAStreamThatCannotBeReachedIsTriedLessAndLessOften(t *testing.T) {
 func TestTheRefusedWatchesStayToldWhileTheyAreLeftOut(t *testing.T) {
 	quickPace(t)
 	f := newFakeHerdr(t, "w1:p1")
-	f.refuse = func(subs []herdr.Subscription) string {
+	f.refuse = func(subs []coreapi.Subscription) string {
 		if strings.Contains(fingerprint(subs), `"value":"bad"`) {
 			return "invalid_regex"
 		}
@@ -79,8 +79,8 @@ func TestTheRefusedWatchesStayToldWhileTheyAreLeftOut(t *testing.T) {
 	var mu sync.Mutex
 	var refusals []error
 	watching(t, f, func(w *Watcher) {
-		w.Outputs = func(string, *herdr.Snapshot, []Output) []Output {
-			return []Output{{Key: "rule:1", Pane: "w1:p1", Match: herdr.OutputMatch{Type: "regex", Value: "bad"}, Lines: 40, Person: true}}
+		w.Outputs = func(string, *coreapi.Snapshot, []Output) []Output {
+			return []Output{{Key: "rule:1", Pane: "w1:p1", Match: coreapi.OutputMatch{Type: "regex", Value: "bad"}, Lines: 40, Person: true}}
 		}
 		w.Refused = func(machine string, err error) {
 			mu.Lock()
@@ -108,8 +108,8 @@ func TestAStreamAfterOneThatEndedCarriesItsWatches(t *testing.T) {
 	var mu sync.Mutex
 	var heard []events.OutputMatched
 	_, _, bus := watching(t, f, func(w *Watcher) {
-		w.Outputs = func(string, *herdr.Snapshot, []Output) []Output {
-			return []Output{{Key: "tests", Pane: "w1:p1", Match: herdr.OutputMatch{Type: "substring", Value: "FAIL"}, Lines: 40}}
+		w.Outputs = func(string, *coreapi.Snapshot, []Output) []Output {
+			return []Output{{Key: "tests", Pane: "w1:p1", Match: coreapi.OutputMatch{Type: "substring", Value: "FAIL"}, Lines: 40}}
 		}
 	})
 	events.Subscribe(bus, func(e events.OutputMatched) {

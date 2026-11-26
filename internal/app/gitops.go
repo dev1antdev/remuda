@@ -3,8 +3,8 @@ package app
 import (
 	"path/filepath"
 
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/gitops"
-	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/rpath"
 	"github.com/dev1antdev/remuda/internal/undo"
 	"github.com/dev1antdev/remuda/internal/watch"
@@ -23,14 +23,14 @@ func gitWrites(watcher *watch.Watcher, turns *undo.Tracker) *gitops.Service {
 // busyCheckout names who holds git's writes on the checkout at top back in the snapshot: an agent working or asking
 // there — its workspace's folder in it, or its own pane's — else a turn still ending in a workspace folder of it; ""
 // for nobody.
-func busyCheckout(snap *herdr.Snapshot, top string, worktrees []string, real func(string) string, going func(string) bool) string {
+func busyCheckout(snap *coreapi.Snapshot, top string, worktrees []string, real func(string) string, going func(string) bool) string {
 	if snap == nil {
 		return ""
 	}
 	inCheckout := func(dir string) bool { return checkoutOf(real(dir), top, worktrees) }
 	for i := range snap.Panes {
 		pane := &snap.Panes[i]
-		if pane.Agent == "" || (pane.AgentStatus != herdr.StatusWorking && pane.AgentStatus != herdr.StatusBlocked) {
+		if pane.Agent == "" || (pane.AgentStatus != coreapi.StatusWorking && pane.AgentStatus != coreapi.StatusBlocked) {
 			continue
 		}
 		workspaceDir := ""
@@ -40,7 +40,7 @@ func busyCheckout(snap *herdr.Snapshot, top string, worktrees []string, real fun
 		if !inCheckout(workspaceDir) && !inCheckout(pane.Dir()) {
 			continue
 		}
-		if pane.AgentStatus == herdr.StatusBlocked {
+		if pane.AgentStatus == coreapi.StatusBlocked {
 			return pane.AgentName() + " is waiting for your answer"
 		}
 		return pane.AgentName() + " is at work"

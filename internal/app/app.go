@@ -22,12 +22,13 @@ import (
 	"github.com/dev1antdev/remuda/internal/chat"
 	"github.com/dev1antdev/remuda/internal/code"
 	"github.com/dev1antdev/remuda/internal/complete"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/drift"
 	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/feed"
 	"github.com/dev1antdev/remuda/internal/ghissues"
 	"github.com/dev1antdev/remuda/internal/health"
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/herdrollback"
 	"github.com/dev1antdev/remuda/internal/icons"
 	"github.com/dev1antdev/remuda/internal/jira"
 	"github.com/dev1antdev/remuda/internal/jobs"
@@ -281,7 +282,7 @@ func Run(ctx context.Context, o Options) error {
 			screen, err := client.PaneScreen(paneID)
 			return screen.Text, err
 		},
-		Folder: func(machineID, dir string, ws *herdr.WorkspaceInfo) string {
+		Folder: func(machineID, dir string, ws *coreapi.WorkspaceInfo) string {
 			return server.FolderOf(ws.Worktree, reviews.Root(machineID, dir), dir)
 		},
 		Own: ownWorkspace,
@@ -613,7 +614,7 @@ func Run(ctx context.Context, o Options) error {
 	paneTriggers.Listening = func(machineID string, port int) (string, bool) { return srv.Listening(machineID, port) }
 	paneTriggers.Changed = hub.RosterChanged
 	paneTriggers.Resubscribe = watcher.Resubscribe
-	watcher.Outputs = func(machine string, snap *herdr.Snapshot, standing []watch.Output) []watch.Output {
+	watcher.Outputs = func(machine string, snap *coreapi.Snapshot, standing []watch.Output) []watch.Output {
 		return paneTriggers.Watches(machine, snap, standing)
 	}
 	watcher.Refused = paneTriggers.Refused
@@ -850,7 +851,7 @@ func herdrStillThere(fleet *machines.Manager) func(machineID string) string {
 			return herdrUnseen
 		}
 		bin, socket := mc.MovedHerdr()
-		running, err := herdr.Serving(mc, bin, socket)
+		running, err := herdrollback.Serving(mc, bin, socket)
 		if err != nil || running {
 			return herdrUnseen
 		}

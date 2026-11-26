@@ -9,27 +9,27 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/events"
-	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/transcript"
 )
 
 const sid = "9b1c2d3e-4f50-4a6b-8c7d-0e1f2a3b4c5d"
 
-func agentPane(id, kind, dir string) herdr.PaneInfo {
-	return herdr.PaneInfo{PaneID: id, WorkspaceID: "w1", Agent: kind, AgentStatus: "idle", CWD: dir, Title: "✳ Claude Code", AgentSession: &herdr.AgentSession{Kind: "id", Value: sid}}
+func agentPane(id, kind, dir string) coreapi.PaneInfo {
+	return coreapi.PaneInfo{PaneID: id, WorkspaceID: "w1", Agent: kind, AgentStatus: "idle", CWD: dir, Title: "✳ Claude Code", AgentSession: &coreapi.AgentSession{Kind: "id", Value: sid}}
 }
 
-func shellPane(id, dir string) herdr.PaneInfo {
-	return herdr.PaneInfo{PaneID: id, WorkspaceID: "w1", CWD: dir, Title: "zsh"}
+func shellPane(id, dir string) coreapi.PaneInfo {
+	return coreapi.PaneInfo{PaneID: id, WorkspaceID: "w1", CWD: dir, Title: "zsh"}
 }
 
-func snapshot(panes ...herdr.PaneInfo) *herdr.Snapshot {
-	return &herdr.Snapshot{Workspaces: []herdr.WorkspaceInfo{{WorkspaceID: "w1", Label: "api"}}, Panes: panes}
+func snapshot(panes ...coreapi.PaneInfo) *coreapi.Snapshot {
+	return &coreapi.Snapshot{Workspaces: []coreapi.WorkspaceInfo{{WorkspaceID: "w1", Label: "api"}}, Panes: panes}
 }
 
-func observe(m *Memory, machine string, first bool, panes ...herdr.PaneInfo) {
+func observe(m *Memory, machine string, first bool, panes ...coreapi.PaneInfo) {
 	m.Observe(events.Snapshot{Machine: machine, Snap: snapshot(panes...), At: time.Now(), First: first})
 }
 
@@ -45,7 +45,7 @@ func noGrace(t *testing.T) {
 func TestStoppedWaitsOutHerdrsOwnRelaunch(t *testing.T) {
 	m := OpenMemory("")
 	at := time.Date(2026, 10, 29, 9, 0, 0, 0, time.UTC)
-	snap := func(first bool, when time.Duration, panes ...herdr.PaneInfo) {
+	snap := func(first bool, when time.Duration, panes ...coreapi.PaneInfo) {
 		m.Observe(events.Snapshot{Machine: "local", Snap: snapshot(panes...), At: at.Add(when), First: first})
 	}
 	snap(true, 0, agentPane("w1:p1", "claude", "/work/api"), agentPane("w2:p1", "codex", "/work/web"), agentPane("w3:p1", "claude", "/work/cli"), agentPane("w4:p1", "kimi", "/work/old"))
@@ -169,12 +169,12 @@ func TestMemoryIsKeptAcrossARestartOfRemuda(t *testing.T) {
 
 // fakeHerdr answers the recovery's two questions: what is in the panes now, and whether a start takes.
 type fakeHerdr struct {
-	snap    *herdr.Snapshot
+	snap    *coreapi.Snapshot
 	refuse  map[string]error
 	started []string
 }
 
-func (f *fakeHerdr) SessionSnapshot() (*herdr.Snapshot, error) { return f.snap, nil }
+func (f *fakeHerdr) SessionSnapshot() (*coreapi.Snapshot, error) { return f.snap, nil }
 func (f *fakeHerdr) AgentStartWith(paneID, kind, name string, args []string, timeout time.Duration) error {
 	if err := f.refuse[paneID]; err != nil {
 		return err
@@ -188,7 +188,7 @@ func TestResumeStartsEachStoppedChatOnItsSessionAndSaysWhyNot(t *testing.T) {
 	m := OpenMemory("")
 	r := New(nil)
 	r.Memory = m
-	var running []herdr.PaneInfo
+	var running []coreapi.PaneInfo
 	for _, id := range []string{"w1:p1", "w1:p2", "w1:p3", "w1:p4", "w1:p5", "w1:p6", "w1:p7"} {
 		running = append(running, agentPane(id, "claude", "/work/api"))
 	}
@@ -201,12 +201,12 @@ func TestResumeStartsEachStoppedChatOnItsSessionAndSaysWhyNot(t *testing.T) {
 	}
 	// by the time Resume is pressed the panes moved on in every way they can
 	fresh := snapshot(
-		shellPane("w1:p1", "/work/api"),                  // resumed
-		shellPane("w1:p2", "/work/api"),                  // the start fails: stays on the list
-		shellPane("w1:p3", "/home/me"),                   // the shell moved folders
-		herdr.PaneInfo{PaneID: "w1:p4", Agent: "gemini"}, // something else runs there
-		agentPane("w1:p5", "claude", "/work/api"),        // back already, by hand
-		shellPane("w1:p6", "/work/api"),                  // its folder is gone (the checks say so)
+		shellPane("w1:p1", "/work/api"),                    // resumed
+		shellPane("w1:p2", "/work/api"),                    // the start fails: stays on the list
+		shellPane("w1:p3", "/home/me"),                     // the shell moved folders
+		coreapi.PaneInfo{PaneID: "w1:p4", Agent: "gemini"}, // something else runs there
+		agentPane("w1:p5", "claude", "/work/api"),          // back already, by hand
+		shellPane("w1:p6", "/work/api"),                    // its folder is gone (the checks say so)
 		// w1:p7 is gone
 	)
 	client := &fakeHerdr{snap: fresh, refuse: map[string]error{"w1:p2": errors.New("agent_start_failed: no such binary")}}

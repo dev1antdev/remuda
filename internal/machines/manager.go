@@ -16,7 +16,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/dev1antdev/remuda/internal/core"
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/state"
 	"github.com/dev1antdev/remuda/internal/transcript"
 	"github.com/dev1antdev/remuda/internal/wake"
@@ -202,9 +202,9 @@ func NewManager(dir string, door *Door, server bool) *Manager {
 }
 
 // NewManagerWith is NewManager with the local machine reached through the API and terminals given instead of a core of
-// this remuda's: what a test puts in their place (internal/herdr/herdrfake), so no core of the person's is dialled. A
+// this remuda's: what a test puts in their place (internal/coreapi/corefake), so no core of the person's is dialled. A
 // host serving the page only has none of either.
-func NewManagerWith(dir string, door *Door, server bool, api herdr.API, terminals herdr.Terminals) *Manager {
+func NewManagerWith(dir string, door *Door, server bool, api coreapi.API, terminals coreapi.Terminals) *Manager {
 	local := localMachine(dir)
 	local.speaksCore = true
 	if !server {

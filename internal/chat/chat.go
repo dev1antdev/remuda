@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/rpath"
 	"github.com/dev1antdev/remuda/internal/transcript"
@@ -34,7 +34,7 @@ type Service struct {
 }
 
 // Pane is a pane from the watcher's cache with its snapshot; the pane is nil when unknown, both when the machine has no snapshot.
-func (c *Service) Pane(machineID, paneID string) (*herdr.PaneInfo, *herdr.Snapshot) {
+func (c *Service) Pane(machineID, paneID string) (*coreapi.PaneInfo, *coreapi.Snapshot) {
 	snap, _ := c.Watch.Snapshot(machineID)
 	if snap == nil {
 		return nil, nil
@@ -43,7 +43,7 @@ func (c *Service) Pane(machineID, paneID string) (*herdr.PaneInfo, *herdr.Snapsh
 }
 
 // SessionFile is the file a pane's conversation lives in now, with the machine it is on.
-func (c *Service) SessionFile(machineID string, pane *herdr.PaneInfo) (*machines.Machine, string, bool) {
+func (c *Service) SessionFile(machineID string, pane *coreapi.PaneInfo) (*machines.Machine, string, bool) {
 	if pane.AgentSession == nil {
 		return nil, "", false
 	}
@@ -59,7 +59,7 @@ func (c *Service) SessionFile(machineID string, pane *herdr.PaneInfo) (*machines
 }
 
 // LastWrite is when the pane's session file was last written.
-func (c *Service) LastWrite(machineID string, pane *herdr.PaneInfo) (time.Time, bool) {
+func (c *Service) LastWrite(machineID string, pane *coreapi.PaneInfo) (time.Time, bool) {
 	mc, path, ok := c.SessionFile(machineID, pane)
 	if !ok {
 		return time.Time{}, false
@@ -72,7 +72,7 @@ func (c *Service) LastWrite(machineID string, pane *herdr.PaneInfo) (time.Time, 
 }
 
 // LastWriteOf is LastWrite for the radar's recovery: zero when there is nothing to say.
-func (c *Service) LastWriteOf(machineID string, pane *herdr.PaneInfo) time.Time {
+func (c *Service) LastWriteOf(machineID string, pane *coreapi.PaneInfo) time.Time {
 	at, _ := c.LastWrite(machineID, pane)
 	return at
 }

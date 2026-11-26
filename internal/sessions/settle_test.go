@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/events"
-	"github.com/dev1antdev/remuda/internal/herdr"
 )
 
 // paper is a herdr client on paper: who runs in the pane, the screens it shows one after another, and every call made.
@@ -38,16 +38,16 @@ func (p *paper) next(list *[]string) string {
 	return head
 }
 
-func (p *paper) AgentGet(string) (herdr.AgentInfo, error) {
+func (p *paper) AgentGet(string) (coreapi.AgentInfo, error) {
 	p.calls = append(p.calls, "get")
 	p.gets++
 	if p.getErr != nil {
-		return herdr.AgentInfo{}, p.getErr
+		return coreapi.AgentInfo{}, p.getErr
 	}
 	if p.gets > 1 && p.leaveAfter != nil {
-		return herdr.AgentInfo{}, p.leaveAfter
+		return coreapi.AgentInfo{}, p.leaveAfter
 	}
-	return herdr.AgentInfo{Agent: p.agent, Status: p.next(&p.status)}, nil
+	return coreapi.AgentInfo{Agent: p.agent, Status: p.next(&p.status)}, nil
 }
 
 func (p *paper) PaneAtPrompt(string) (bool, error) { return p.atPrompt, p.atErr }
@@ -122,7 +122,7 @@ func TestOtherMessagesKeepHerdrsOwnSubmit(t *testing.T) {
 func TestAPictureMessageGoesOnlyWhereHerdrSubmits(t *testing.T) {
 	quick(t)
 	for code, want := range map[string]error{"agent_not_found": ErrNoAgent, "agent_not_ready": ErrNoAgent, "agent_blocked": ErrAgentBusy} {
-		p := &paper{agent: "claude", status: []string{"idle"}, promptErr: &herdr.Error{Code: code}}
+		p := &paper{agent: "claude", status: []string{"idle"}, promptErr: &coreapi.Error{Code: code}}
 		if err := submit(p, shot); !errors.Is(err, want) || strings.Join(p.calls, "|") != "prompt:"+shot {
 			t.Errorf("%s: %v, %v", code, err, p.calls)
 		}
@@ -186,8 +186,8 @@ func TestAnUnsureMessageGetsNoEnterAndIsSaidSo(t *testing.T) {
 func TestAnAgentGoneNeverGetsTheEnter(t *testing.T) {
 	quick(t)
 	for name, p := range map[string]*paper{
-		"herdr no longer names it":  {agent: "claude", status: []string{"idle"}, screens: []string{idleBox}, leaveAfter: &herdr.Error{Code: "agent_not_found"}},
-		"gone at once":              {getErr: &herdr.Error{Code: "agent_not_found"}},
+		"herdr no longer names it":  {agent: "claude", status: []string{"idle"}, screens: []string{idleBox}, leaveAfter: &coreapi.Error{Code: "agent_not_found"}},
+		"gone at once":              {getErr: &coreapi.Error{Code: "agent_not_found"}},
 		"a shell took the terminal": {agent: "claude", status: []string{"idle"}, screens: []string{idleBox}, atPrompt: true},
 		"the terminal not known":    {agent: "claude", status: []string{"idle"}, screens: []string{idleBox}, atErr: errors.New("no answer")},
 	} {

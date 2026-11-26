@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/coreapi"
+	"github.com/dev1antdev/remuda/internal/coreapi/corefake"
 	"github.com/dev1antdev/remuda/internal/events"
-	"github.com/dev1antdev/remuda/internal/herdr"
-	"github.com/dev1antdev/remuda/internal/herdr/herdrfake"
 	"github.com/dev1antdev/remuda/internal/machines"
 )
 
@@ -29,7 +29,7 @@ func quickPace(t *testing.T) {
 // watching runs the watcher on a fake machine's API until the test ends.
 func watching(t *testing.T, f *fakeHerdr, w func(*Watcher)) (*Watcher, *machines.Machine, *events.Bus) {
 	t.Helper()
-	fleet := machines.NewManagerWith(t.TempDir(), nil, false, f.api(), &herdrfake.Terminals{})
+	fleet := machines.NewManagerWith(t.TempDir(), nil, false, f.api(), &corefake.Terminals{})
 	mc, err := fleet.Get(machines.LocalID)
 	if err != nil {
 		t.Fatal(err)
@@ -62,7 +62,7 @@ func TestTheStreamSlowsThePollAndAnEventSnapshotsAtOnce(t *testing.T) {
 	watching(t, f, nil)
 
 	subs := f.subscribed(t)
-	if statusPanes(subs) != "w1:p1" || !strings.Contains(fingerprint(subs), `"pane.created"`) || strings.Contains(fingerprint(subs), herdr.EventOutputMatched) {
+	if statusPanes(subs) != "w1:p1" || !strings.Contains(fingerprint(subs), `"pane.created"`) || strings.Contains(fingerprint(subs), coreapi.EventOutputMatched) {
 		t.Fatalf("the first stream: %s", fingerprint(subs))
 	}
 	waitFor(t, "the stream to stand", func() bool { return f.open() == 1 })
@@ -183,7 +183,7 @@ func TestARuleEditPromotesASettlingSetAtOnce(t *testing.T) {
 	f.memory = true
 	var rules atomic.Pointer[[]Output]
 	watcher, _, _ := watching(t, f, func(w *Watcher) {
-		w.Outputs = func(string, *herdr.Snapshot, []Output) []Output {
+		w.Outputs = func(string, *coreapi.Snapshot, []Output) []Output {
 			if p := rules.Load(); p != nil {
 				return *p
 			}
@@ -194,14 +194,14 @@ func TestARuleEditPromotesASettlingSetAtOnce(t *testing.T) {
 	waitFor(t, "the stream to stand", func() bool { return f.open() == 1 })
 	time.Sleep(2 * memoryDebounce)
 
-	rules.Store(&[]Output{{Key: "deployed", Pane: "w1:p1", Match: herdr.OutputMatch{Type: "substring", Value: "DEPLOYED"}, Lines: 40, Person: true}})
+	rules.Store(&[]Output{{Key: "deployed", Pane: "w1:p1", Match: coreapi.OutputMatch{Type: "substring", Value: "DEPLOYED"}, Lines: 40, Person: true}})
 	seen := time.Now()
 	f.push(`{"data":{"type":"layout_updated"},"event":"layout_updated"}`)
 	waitFor(t, "the snapshot with the new rule", func() bool { return f.polls(seen) == 1 })
 
 	watcher.Resubscribe()
 	subs := f.subscribed(t) // a rest of ten seconds: the stream that arrives is the person's word, not the timer's
-	if got := fingerprint(subs); !strings.Contains(got, herdr.EventOutputMatched) || !strings.Contains(got, "DEPLOYED") {
+	if got := fingerprint(subs); !strings.Contains(got, coreapi.EventOutputMatched) || !strings.Contains(got, "DEPLOYED") {
 		t.Fatalf("the rule's watch is not in the stream: %s", got)
 	}
 }
@@ -300,12 +300,12 @@ func TestOutputMatchesGoOnTheBusWithTheirWatch(t *testing.T) {
 	f := newFakeHerdr(t, "w1:p1")
 	var mu sync.Mutex
 	var heard []events.OutputMatched
-	outputs := func(machine string, snap *herdr.Snapshot, standing []Output) []Output {
+	outputs := func(machine string, snap *coreapi.Snapshot, standing []Output) []Output {
 		var out []Output
 		for _, pane := range snap.Panes {
 			out = append(out,
-				Output{Key: "serve", Pane: pane.PaneID, Match: herdr.OutputMatch{Type: "regex", Value: `Local:\s+https?://`}, Lines: 40},
-				Output{Key: "rule:1", Pane: pane.PaneID, Match: herdr.OutputMatch{Type: "substring", Value: "DEPLOYED"}, Lines: 40, Person: true})
+				Output{Key: "serve", Pane: pane.PaneID, Match: coreapi.OutputMatch{Type: "regex", Value: `Local:\s+https?://`}, Lines: 40},
+				Output{Key: "rule:1", Pane: pane.PaneID, Match: coreapi.OutputMatch{Type: "substring", Value: "DEPLOYED"}, Lines: 40, Person: true})
 		}
 		return out
 	}
@@ -355,7 +355,7 @@ func TestOutputMatchesGoOnTheBusWithTheirWatch(t *testing.T) {
 func TestHerdrRefusingThePersonsWatchesKeepsTheStream(t *testing.T) {
 	quickPace(t)
 	f := newFakeHerdr(t, "w1:p1")
-	f.refuse = func(subs []herdr.Subscription) string {
+	f.refuse = func(subs []coreapi.Subscription) string {
 		if strings.Contains(fingerprint(subs), `"value":"bad"`) {
 			return "invalid_regex"
 		}
@@ -363,10 +363,10 @@ func TestHerdrRefusingThePersonsWatchesKeepsTheStream(t *testing.T) {
 	}
 	var mu sync.Mutex
 	var refusals []error
-	outputs := func(machine string, snap *herdr.Snapshot, standing []Output) []Output {
+	outputs := func(machine string, snap *coreapi.Snapshot, standing []Output) []Output {
 		return []Output{
-			{Key: "serve", Pane: "w1:p1", Match: herdr.OutputMatch{Type: "regex", Value: "Local:"}, Lines: 40},
-			{Key: "rule:1", Pane: "w1:p1", Match: herdr.OutputMatch{Type: "regex", Value: "bad"}, Lines: 40, Person: true},
+			{Key: "serve", Pane: "w1:p1", Match: coreapi.OutputMatch{Type: "regex", Value: "Local:"}, Lines: 40},
+			{Key: "rule:1", Pane: "w1:p1", Match: coreapi.OutputMatch{Type: "regex", Value: "bad"}, Lines: 40, Person: true},
 		}
 	}
 	watching(t, f, func(w *Watcher) {
@@ -386,7 +386,7 @@ func TestHerdrRefusingThePersonsWatchesKeepsTheStream(t *testing.T) {
 	waitFor(t, "the stream without the refused watch", func() bool { return f.open() == 1 })
 	mu.Lock()
 	defer mu.Unlock()
-	if len(refusals) != 1 || !herdr.IsCode(refusals[0], "invalid_regex") {
+	if len(refusals) != 1 || !coreapi.IsCode(refusals[0], "invalid_regex") {
 		t.Fatalf("the refusal is told once: %v", refusals)
 	}
 }
@@ -395,7 +395,7 @@ func TestTheWatcherLeavesNothingRunning(t *testing.T) {
 	quickPace(t)
 	before := runtime.NumGoroutine()
 	f := newFakeHerdr(t, "w1:p1")
-	fleet := machines.NewManagerWith(t.TempDir(), nil, false, f.api(), &herdrfake.Terminals{})
+	fleet := machines.NewManagerWith(t.TempDir(), nil, false, f.api(), &corefake.Terminals{})
 	mc, _ := fleet.Get(machines.LocalID)
 	watcher := New(fleet, events.NewBus())
 	done := make(chan struct{})
@@ -429,7 +429,7 @@ func TestASubscriptionTheCoreIsSlowToTakeKeepsTheStandingWatches(t *testing.T) {
 	defer closed.Do(func() { close(release) })
 	observed := make(chan []Output, 16)
 	watching(t, f, func(w *Watcher) {
-		w.Outputs = func(_ string, snap *herdr.Snapshot, standing []Output) []Output {
+		w.Outputs = func(_ string, snap *coreapi.Snapshot, standing []Output) []Output {
 			select {
 			case observed <- append([]Output(nil), standing...):
 			default:
@@ -499,7 +499,7 @@ func TestASwapTheCoreTakesIsWhatTheSetQueuedBehindItKeeps(t *testing.T) {
 	var closed, once sync.Once
 	defer closed.Do(func() { close(release) })
 	watching(t, f, func(w *Watcher) {
-		w.Outputs = func(_ string, snap *herdr.Snapshot, standing []Output) []Output {
+		w.Outputs = func(_ string, snap *coreapi.Snapshot, standing []Output) []Output {
 			held := map[string]bool{}
 			for _, o := range standing {
 				held[o.Pane] = true
@@ -542,10 +542,10 @@ func TestASwapTheCoreTakesIsWhatTheSetQueuedBehindItKeeps(t *testing.T) {
 }
 
 // watchedPanes is the panes a subscription set keeps output watches on.
-func watchedPanes(subs []herdr.Subscription) map[string]bool {
+func watchedPanes(subs []coreapi.Subscription) map[string]bool {
 	panes := map[string]bool{}
 	for _, s := range subs {
-		if s.Type == herdr.EventOutputMatched {
+		if s.Type == coreapi.EventOutputMatched {
 			panes[s.PaneID] = true
 		}
 	}
@@ -564,7 +564,7 @@ func TestARefusalForASupersededSetIsDropped(t *testing.T) {
 	var mu sync.Mutex
 	refused := 0
 	watching(t, f, func(w *Watcher) {
-		w.Outputs = func(_ string, snap *herdr.Snapshot, _ []Output) []Output {
+		w.Outputs = func(_ string, snap *coreapi.Snapshot, _ []Output) []Output {
 			watches := make([]Output, 0, len(snap.Panes))
 			for i := range snap.Panes {
 				watches = append(watches, Output{Key: "rule:all", Pane: snap.Panes[i].PaneID, Person: true})
@@ -585,11 +585,11 @@ func TestARefusalForASupersededSetIsDropped(t *testing.T) {
 	time.Sleep(eventDebounce)
 
 	f.mu.Lock()
-	f.refuse = func([]herdr.Subscription) string { return "invalid_regex" }
+	f.refuse = func([]coreapi.Subscription) string { return "invalid_regex" }
 	f.hold = func() error {
 		once.Do(func() { close(reached) })
 		<-release
-		return &herdr.Error{Code: "invalid_regex", Message: "refused"}
+		return &coreapi.Error{Code: "invalid_regex", Message: "refused"}
 	}
 	f.mu.Unlock()
 	f.setPanes("w1:p1", "w1:p2")
@@ -620,12 +620,12 @@ func TestARecheckWorksOutItsOwnTopology(t *testing.T) {
 	f.subscribed(t)
 	waitFor(t, "the stream to stand", func() bool { return f.open() == 1 })
 
-	mine := &herdr.Snapshot{Panes: []herdr.PaneInfo{{PaneID: "w1:p1", WorkspaceID: "w1"}}}
-	newer := &herdr.Snapshot{Panes: []herdr.PaneInfo{{PaneID: "w1:p1", WorkspaceID: "w1"}, {PaneID: "w1:p2", WorkspaceID: "w1"}}}
+	mine := &coreapi.Snapshot{Panes: []coreapi.PaneInfo{{PaneID: "w1:p1", WorkspaceID: "w1"}}}
+	newer := &coreapi.Snapshot{Panes: []coreapi.PaneInfo{{PaneID: "w1:p1", WorkspaceID: "w1"}, {PaneID: "w1:p2", WorkspaceID: "w1"}}}
 	var mu sync.Mutex
-	var asked *herdr.Snapshot
+	var asked *coreapi.Snapshot
 	watcher.mu.Lock()
-	watcher.Outputs = func(_ string, snap *herdr.Snapshot, _ []Output) []Output {
+	watcher.Outputs = func(_ string, snap *coreapi.Snapshot, _ []Output) []Output {
 		mu.Lock()
 		asked = snap
 		mu.Unlock()

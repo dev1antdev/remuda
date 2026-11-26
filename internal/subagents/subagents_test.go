@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/events"
-	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/transcript"
 )
 
@@ -94,10 +94,10 @@ func agents(statuses ...string) []transcript.Subagent {
 	return out
 }
 
-func snapshot(panes ...herdr.PaneInfo) *herdr.Snapshot { return &herdr.Snapshot{Panes: panes} }
+func snapshot(panes ...coreapi.PaneInfo) *coreapi.Snapshot { return &coreapi.Snapshot{Panes: panes} }
 
-func claude(id, status string) herdr.PaneInfo {
-	return herdr.PaneInfo{PaneID: id, Agent: "claude", AgentStatus: status}
+func claude(id, status string) coreapi.PaneInfo {
+	return coreapi.PaneInfo{PaneID: id, Agent: "claude", AgentStatus: status}
 }
 
 // tracker is a Tracker on the files with a clock of its own, and a count of its OnChange calls.
@@ -182,7 +182,7 @@ func TestNothingIsReadWhileNoPageLooks(t *testing.T) {
 	f := newFiles()
 	f.set("local|w1:p1", agents(transcript.SubagentWorking)...)
 	tr, c, _ := tracker(f)
-	tr.Observe("local", snapshot(claude("w1:p1", herdr.StatusWorking)))
+	tr.Observe("local", snapshot(claude("w1:p1", coreapi.StatusWorking)))
 	settle(t, tr, "local")
 	if f.count("local|w1:p1") != 0 || tr.Count("local", "w1:p1") != nil {
 		t.Fatal("a pane was read before any page asked for the roster")
@@ -195,7 +195,7 @@ func TestNothingIsReadWhileNoPageLooks(t *testing.T) {
 	}
 
 	c.pass(WatchedFor)
-	tr.Observe("local", snapshot(claude("w1:p1", herdr.StatusWorking)))
+	tr.Observe("local", snapshot(claude("w1:p1", coreapi.StatusWorking)))
 	settle(t, tr, "local")
 	if n := f.count("local|w1:p1"); n != 1 {
 		t.Fatalf("a page gone for WatchedFor still has the pane read: %d reads", n)
@@ -206,7 +206,7 @@ func TestAWorkingPaneIsReadMoreOftenThanAResting(t *testing.T) {
 	f := newFiles()
 	tr, c, _ := tracker(f)
 	tr.Touch()
-	panes := snapshot(claude("w1:p1", herdr.StatusWorking), claude("w1:p2", herdr.StatusIdle))
+	panes := snapshot(claude("w1:p1", coreapi.StatusWorking), claude("w1:p2", coreapi.StatusIdle))
 	observe := func() {
 		tr.Touch()
 		tr.Observe("local", panes)
@@ -247,7 +247,7 @@ func TestARestingPaneWithSubagentsAtWorkIsReadAtTheWorkingPace(t *testing.T) {
 	observe := func(d time.Duration) {
 		c.pass(d)
 		tr.Touch()
-		tr.Observe("local", snapshot(claude("w1:p1", herdr.StatusIdle)))
+		tr.Observe("local", snapshot(claude("w1:p1", coreapi.StatusIdle)))
 		settle(t, tr, "local")
 	}
 	observe(0)
@@ -273,9 +273,9 @@ func TestOnlyClaudeCodePanesAreRead(t *testing.T) {
 	tr, _, _ := tracker(f)
 	tr.Touch()
 	tr.Observe("local", snapshot(
-		herdr.PaneInfo{PaneID: "w1:p1", Agent: "codex", AgentStatus: herdr.StatusWorking},
-		herdr.PaneInfo{PaneID: "w1:p2", AgentStatus: herdr.StatusIdle},
-		claude("w1:p3", herdr.StatusIdle),
+		coreapi.PaneInfo{PaneID: "w1:p1", Agent: "codex", AgentStatus: coreapi.StatusWorking},
+		coreapi.PaneInfo{PaneID: "w1:p2", AgentStatus: coreapi.StatusIdle},
+		claude("w1:p3", coreapi.StatusIdle),
 	))
 	settle(t, tr, "local")
 	if f.count("local|w1:p1") != 0 || f.count("local|w1:p2") != 0 || f.count("local|w1:p3") != 1 {
@@ -288,7 +288,7 @@ func TestAMachineNotConnectedIsSkipped(t *testing.T) {
 	f.down["gog"] = true
 	tr, _, _ := tracker(f)
 	tr.Touch()
-	tr.Observe("gog", snapshot(claude("w1:p1", herdr.StatusWorking)))
+	tr.Observe("gog", snapshot(claude("w1:p1", coreapi.StatusWorking)))
 	settle(t, tr, "gog")
 	if f.count("gog|w1:p1") != 0 {
 		t.Fatal("a machine away was read")
@@ -308,11 +308,11 @@ func TestOneSweepAtATimePerMachine(t *testing.T) {
 	f.hold = make(chan struct{})
 	tr, _, _ := tracker(f)
 	tr.Touch()
-	tr.Observe("local", snapshot(claude("w1:p1", herdr.StatusWorking), claude("w1:p2", herdr.StatusWorking)))
+	tr.Observe("local", snapshot(claude("w1:p1", coreapi.StatusWorking), claude("w1:p2", coreapi.StatusWorking)))
 	waitFor(t, "the first read", func() bool { return f.count("local|w1:p1") == 1 })
 	for range 5 {
 		tr.Touch()
-		tr.Observe("local", snapshot(claude("w1:p1", herdr.StatusWorking), claude("w1:p2", herdr.StatusWorking)))
+		tr.Observe("local", snapshot(claude("w1:p1", coreapi.StatusWorking), claude("w1:p2", coreapi.StatusWorking)))
 	}
 	close(f.hold)
 	settle(t, tr, "local")
@@ -330,7 +330,7 @@ func TestOnChangeOnlyWhenACountMoves(t *testing.T) {
 	read := func() {
 		c.pass(WorkingEvery)
 		tr.Touch()
-		tr.Observe("local", snapshot(claude("w1:p1", herdr.StatusWorking)))
+		tr.Observe("local", snapshot(claude("w1:p1", coreapi.StatusWorking)))
 		settle(t, tr, "local")
 	}
 	read()
@@ -368,7 +368,7 @@ func TestAFailedReadKeepsTheLastCountAndComplainsOnceAnHour(t *testing.T) {
 	read := func(d time.Duration) {
 		c.pass(d)
 		tr.Touch()
-		tr.Observe("gog", snapshot(claude("w1:p1", herdr.StatusWorking), claude("w1:p2", herdr.StatusWorking)))
+		tr.Observe("gog", snapshot(claude("w1:p1", coreapi.StatusWorking), claude("w1:p2", coreapi.StatusWorking)))
 		settle(t, tr, "gog")
 	}
 	read(0)
@@ -396,8 +396,8 @@ func TestAClosedPaneAndARemovedMachineAreForgotten(t *testing.T) {
 	f.set("gog|w2:p1", agents(transcript.SubagentWorking)...)
 	tr, c, _ := tracker(f)
 	tr.Touch()
-	tr.Observe("local", snapshot(claude("w1:p1", herdr.StatusWorking)))
-	tr.Observe("gog", snapshot(claude("w2:p1", herdr.StatusIdle)))
+	tr.Observe("local", snapshot(claude("w1:p1", coreapi.StatusWorking)))
+	tr.Observe("gog", snapshot(claude("w2:p1", coreapi.StatusIdle)))
 	waitFor(t, "both counts", func() bool { return tr.Count("local", "w1:p1") != nil && tr.Count("gog", "w2:p1") != nil })
 	settle(t, tr, "local")
 
@@ -407,7 +407,7 @@ func TestAClosedPaneAndARemovedMachineAreForgotten(t *testing.T) {
 	c.pass(WorkingEvery)
 	tr.Touch()
 	waitFor(t, "a read under way", func() bool { return f.count("local|w1:p1") == 2 })
-	tr.OnStatus(events.PaneStatus{Pane: events.PaneRef{Machine: "local", Pane: "w1:p1"}, From: herdr.StatusWorking, To: events.Gone})
+	tr.OnStatus(events.PaneStatus{Pane: events.PaneRef{Machine: "local", Pane: "w1:p1"}, From: coreapi.StatusWorking, To: events.Gone})
 	close(f.hold)
 	settle(t, tr, "local")
 	if tr.Count("local", "w1:p1") != nil {
@@ -425,9 +425,9 @@ func TestAPaneNoLongerClaudeCodesIsDropped(t *testing.T) {
 	f.set("local|w1:p1", agents(transcript.SubagentWorking)...)
 	tr, _, _ := tracker(f)
 	tr.Touch()
-	tr.Observe("local", snapshot(claude("w1:p1", herdr.StatusIdle)))
+	tr.Observe("local", snapshot(claude("w1:p1", coreapi.StatusIdle)))
 	waitFor(t, "the count", func() bool { return tr.Count("local", "w1:p1") != nil })
-	tr.Observe("local", snapshot(herdr.PaneInfo{PaneID: "w1:p1", AgentStatus: herdr.StatusIdle}))
+	tr.Observe("local", snapshot(coreapi.PaneInfo{PaneID: "w1:p1", AgentStatus: coreapi.StatusIdle}))
 	if tr.Count("local", "w1:p1") != nil {
 		t.Fatal("a pane whose agent left keeps its count")
 	}
@@ -437,7 +437,7 @@ func TestAPaneNoLongerClaudeCodesIsDropped(t *testing.T) {
 func TestANilTrackerAnswersNothing(t *testing.T) {
 	var tr *Tracker
 	tr.Touch()
-	tr.Observe("local", snapshot(claude("w1:p1", herdr.StatusWorking)))
+	tr.Observe("local", snapshot(claude("w1:p1", coreapi.StatusWorking)))
 	if tr.Count("local", "w1:p1") != nil {
 		t.Fatal("a nil tracker counted")
 	}

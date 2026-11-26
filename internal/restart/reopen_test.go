@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 )
 
 // slowPlacer holds the tab it makes until let go, as a remote over a slow link does.
@@ -17,7 +17,7 @@ type slowPlacer struct {
 	release chan struct{}
 }
 
-func (f *slowPlacer) TabCreate(workspaceID, label string) (*herdr.TabCreateResult, error) {
+func (f *slowPlacer) TabCreate(workspaceID, label string) (*coreapi.TabCreateResult, error) {
 	f.asked <- struct{}{}
 	<-f.release
 	f.mu.Lock()
@@ -35,7 +35,7 @@ func TestAReopenAskedTwiceStartsTheAgentOnce(t *testing.T) {
 	r := &Restarter{Memory: OpenMemory("")}
 	c := closedOne(t, r)
 	client := &slowPlacer{asked: make(chan struct{}, 2), release: make(chan struct{})}
-	client.snap = &herdr.Snapshot{Workspaces: []herdr.WorkspaceInfo{{WorkspaceID: "w1", Label: "api", Worktree: &herdr.WorktreeInfo{CheckoutPath: "/work/api"}}}}
+	client.snap = &coreapi.Snapshot{Workspaces: []coreapi.WorkspaceInfo{{WorkspaceID: "w1", Label: "api", Worktree: &coreapi.WorktreeInfo{CheckoutPath: "/work/api"}}}}
 	first := make(chan error, 1)
 	go func() {
 		_, err := r.reopenWith(client, "local", c)

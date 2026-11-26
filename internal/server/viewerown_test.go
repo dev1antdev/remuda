@@ -13,10 +13,10 @@ import (
 
 	"github.com/dev1antdev/remuda/internal/chat"
 	"github.com/dev1antdev/remuda/internal/core/coretest"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/feed"
 	"github.com/dev1antdev/remuda/internal/health"
-	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/jira"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/recap"
@@ -63,7 +63,7 @@ func TestAViewerNeverReachesRemudasOwnWorkspaces(t *testing.T) {
 		t.Fatal(err)
 	}
 	ownPane, appPane := shell.RootPane.PaneID, app.RootPane.PaneID
-	coreSays(t, client, func(snap *herdr.Snapshot) bool { return snap.Pane(ownPane) != nil && snap.Pane(appPane) != nil })
+	coreSays(t, client, func(snap *coreapi.Snapshot) bool { return snap.Pane(ownPane) != nil && snap.Pane(appPane) != nil })
 
 	kept, _ := json.Marshal(map[string]string{machines.LocalID: shell.Workspace.WorkspaceID})
 	if err := os.WriteFile(filepath.Join(state, "scratch.json"), kept, 0o600); err != nil {

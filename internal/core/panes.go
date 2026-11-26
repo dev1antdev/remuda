@@ -5,14 +5,14 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 )
 
 // PaneSplit opens a shell beside the pane, "right" or "down", in the folder given (the pane's when none), in the
 // pane's tab.
-func (a *Adapter) PaneSplit(paneID, direction, cwd string) (*herdr.PaneInfo, error) {
+func (a *Adapter) PaneSplit(paneID, direction, cwd string) (*coreapi.PaneInfo, error) {
 	if direction != "right" && direction != "down" {
-		return nil, &herdr.Error{Code: "invalid_request", Message: fmt.Sprintf("a split is right or down, not %q", direction)}
+		return nil, &coreapi.Error{Code: "invalid_request", Message: fmt.Sprintf("a split is right or down, not %q", direction)}
 	}
 	snap, err := a.SessionSnapshot()
 	if err != nil {
@@ -20,7 +20,7 @@ func (a *Adapter) PaneSplit(paneID, direction, cwd string) (*herdr.PaneInfo, err
 	}
 	pane := snap.Pane(paneID)
 	if pane == nil {
-		return nil, &herdr.Error{Code: "pane_not_found", Message: "no pane " + paneID}
+		return nil, &coreapi.Error{Code: "pane_not_found", Message: "no pane " + paneID}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), callWithin)
 	defer cancel()
@@ -31,7 +31,7 @@ func (a *Adapter) PaneSplit(paneID, direction, cwd string) (*herdr.PaneInfo, err
 	err = a.editDoc(ctx, func(doc *Document) error {
 		ws, ok := adopt(doc, snap, pane.WorkspaceID)
 		if !ok {
-			return &herdr.Error{Code: "pane_not_found", Message: "no pane " + paneID}
+			return &coreapi.Error{Code: "pane_not_found", Message: "no pane " + paneID}
 		}
 		tab := adoptTab(ws, snap, pane.TabID)
 		tab.Layout = splitBeside(tab.Layout, paneID, t.Address, direction)
@@ -47,18 +47,18 @@ func (a *Adapter) PaneSplit(paneID, direction, cwd string) (*herdr.PaneInfo, err
 
 // splitBeside puts a new pane beside one of a tree's, half the room each; a tree that lacks it takes the new pane beside
 // the whole of it.
-func splitBeside(tree *herdr.LayoutNode, beside, added, direction string) *herdr.LayoutNode {
+func splitBeside(tree *coreapi.LayoutNode, beside, added, direction string) *coreapi.LayoutNode {
 	if tree == nil {
 		tree = leaf(beside)
 	}
 	for _, node := range tree.Panes() {
 		if node.PaneID == beside {
 			old := *node
-			*node = herdr.LayoutNode{Type: "split", Direction: direction, Ratio: 0.5, First: &old, Second: leaf(added)}
+			*node = coreapi.LayoutNode{Type: "split", Direction: direction, Ratio: 0.5, First: &old, Second: leaf(added)}
 			return tree
 		}
 	}
-	return &herdr.LayoutNode{Type: "split", Direction: direction, Ratio: 0.5, First: tree, Second: leaf(added)}
+	return &coreapi.LayoutNode{Type: "split", Direction: direction, Ratio: 0.5, First: tree, Second: leaf(added)}
 }
 
 // dropPane takes a pane out of its tab's tree in the document, saying whether the tree still places another pane.
@@ -75,7 +75,7 @@ func dropPane(doc *Document, tab, pane string) (placesOthers bool) {
 }
 
 // withoutPane is a tree with a pane taken out, its split given whole to the other side; nil once no pane is left.
-func withoutPane(tree *herdr.LayoutNode, pane string) *herdr.LayoutNode {
+func withoutPane(tree *coreapi.LayoutNode, pane string) *coreapi.LayoutNode {
 	switch {
 	case tree == nil:
 		return nil
@@ -106,7 +106,7 @@ func (a *Adapter) PaneClose(paneID string) error {
 	}
 	pane := snap.Pane(paneID)
 	if pane == nil {
-		return &herdr.Error{Code: "pane_not_found", Message: "no pane " + paneID}
+		return &coreapi.Error{Code: "pane_not_found", Message: "no pane " + paneID}
 	}
 	if err := a.kill(paneID); err != nil {
 		return err
@@ -115,7 +115,7 @@ func (a *Adapter) PaneClose(paneID string) error {
 	defer cancel()
 	ending := []string{paneID}
 	return a.editDoc(ctx, func(doc *Document) error {
-		if !dropPane(doc, pane.TabID, paneID) && !a.holds(func(p *herdr.PaneInfo) bool { return p.TabID == pane.TabID }, ending) {
+		if !dropPane(doc, pane.TabID, paneID) && !a.holds(func(p *coreapi.PaneInfo) bool { return p.TabID == pane.TabID }, ending) {
 			a.dropTab(doc, pane.TabID, ending)
 		}
 		return nil

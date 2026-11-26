@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/events"
-	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/push"
 	"github.com/dev1antdev/remuda/internal/triggers"
@@ -46,7 +46,7 @@ func firesOnce(t *testing.T, fleet *machines.Manager) {
 			mu.Unlock()
 		}
 	}
-	watcher.Outputs = func(machine string, snap *herdr.Snapshot, standing []watch.Output) []watch.Output {
+	watcher.Outputs = func(machine string, snap *coreapi.Snapshot, standing []watch.Output) []watch.Output {
 		return service.Watches(machine, snap, standing)
 	}
 	events.Subscribe(bus, service.Observe)
@@ -109,7 +109,7 @@ func firesOnce(t *testing.T, fleet *machines.Manager) {
 	if _, err := service.Replace([]triggers.Rule{{Name: "huge", Match: "regex", Pattern: `\w{1000}\w{1000}`, Action: triggers.ActionFeed, Enabled: true}}); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "the refusal", func() bool { mu.Lock(); defer mu.Unlock(); return herdr.IsCode(refused, "invalid_regex") })
+	eventually(t, "the refusal", func() bool { mu.Lock(); defer mu.Unlock(); return coreapi.IsCode(refused, "invalid_regex") })
 	eventually(t, "the stream without them", func() bool { return watcher.Streaming(machines.LocalID) })
 }
 

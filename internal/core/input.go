@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/script"
 )
 
@@ -33,16 +33,16 @@ func (a *Adapter) AgentStart(paneID, kind string) error {
 // the shell stays under the agent and comes back when it leaves. A shell not at its prompt yet is agent_pane_busy, which
 // the caller tries again. The name is herdr's to keep agents apart; the core needs none.
 func (a *Adapter) AgentStartWith(paneID, kind, name string, args []string, timeout time.Duration) error {
-	program, ok := herdr.AgentCommand(kind)
+	program, ok := coreapi.AgentCommand(kind)
 	if !ok {
-		return &herdr.Error{Code: "agent_kind_unknown", Message: fmt.Sprintf("no agent %q", kind)}
+		return &coreapi.Error{Code: "agent_kind_unknown", Message: fmt.Sprintf("no agent %q", kind)}
 	}
 	t, err := a.terminal(paneID)
 	if err != nil {
 		return err
 	}
 	if !atPrompt(&t) {
-		return &herdr.Error{Code: "agent_pane_busy", Message: paneID + " is not at its shell's prompt"}
+		return &coreapi.Error{Code: "agent_pane_busy", Message: paneID + " is not at its shell's prompt"}
 	}
 	line := commandLine(programName(t.Foreground.Name), append([]string{program}, args...))
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -156,7 +156,7 @@ func (a *Adapter) StagePrompt(target, text string, front int, asMessage bool) (i
 		front = pid // the agent this look first saw is the one it is for, to the end of the look
 	}
 	if !readyForPrompt(&t) {
-		return pid, nil, &herdr.Error{Code: "agent_not_ready", Message: "the agent in " + target + " has reported no status yet (one that never does takes no prompt on remuda-core)"}
+		return pid, nil, &coreapi.Error{Code: "agent_not_ready", Message: "the agent in " + target + " has reported no status yet (one that never does takes no prompt on remuda-core)"}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), callWithin)
 	defer cancel()
@@ -165,7 +165,7 @@ func (a *Adapter) StagePrompt(target, text string, front int, asMessage bool) (i
 		return pid, nil, a.refusal(err, "agent_not_found")
 	}
 	if promptsNeed != "" && !cn.hello.Has(promptsNeed) {
-		return pid, nil, &herdr.Error{Code: "invalid_request", Message: "a prompt to an agent waits for a remuda-core that checks, as it types, that the agent is still in front (Core 33)"}
+		return pid, nil, &coreapi.Error{Code: "invalid_request", Message: "a prompt to an agent waits for a remuda-core that checks, as it types, that the agent is still in front (Core 33)"}
 	}
 	var now Terminal
 	if err := cn.call(ctx, "terminal.get", map[string]any{"terminal": target}, &now, nil); err != nil {
@@ -178,18 +178,18 @@ func (a *Adapter) StagePrompt(target, text string, front int, asMessage bool) (i
 		return 0, nil, agentLeft(target)
 	}
 	if agentOf(&now) != agent {
-		return pid, nil, &herdr.Error{Code: "agent_not_found", Message: "the agent in " + target + " has left"}
+		return pid, nil, &coreapi.Error{Code: "agent_not_found", Message: "the agent in " + target + " has left"}
 	}
 	if now.Status == nil {
-		return pid, nil, &herdr.Error{Code: "agent_not_ready", Message: "the agent in " + target + " cleared its status, as one leaving does: nothing was sent"}
+		return pid, nil, &coreapi.Error{Code: "agent_not_ready", Message: "the agent in " + target + " cleared its status, as one leaving does: nothing was sent"}
 	}
 	if now.Foreground == nil {
-		return pid, nil, &herdr.Error{Code: "agent_not_ready", Message: "remuda-core has not seen what runs in front of " + target + " yet"}
+		return pid, nil, &coreapi.Error{Code: "agent_not_ready", Message: "remuda-core has not seen what runs in front of " + target + " yet"}
 	}
 	switch statusOf(&now) {
-	case herdr.StatusBlocked:
-		return pid, nil, &herdr.Error{Code: "agent_blocked", Message: "the agent in " + target + " asks something: answer it first, nothing was sent"}
-	case herdr.StatusWorking:
+	case coreapi.StatusBlocked:
+		return pid, nil, &coreapi.Error{Code: "agent_blocked", Message: "the agent in " + target + " asks something: answer it first, nothing was sent"}
+	case coreapi.StatusWorking:
 		if !asMessage {
 			return pid, nil, agentWorking(target)
 		}
@@ -214,7 +214,7 @@ func (a *Adapter) sendTo(call caller, target, text, agent string, now Terminal, 
 		if left != nil {
 			return left
 		}
-		if !asMessage && statusOf(&again) == herdr.StatusWorking {
+		if !asMessage && statusOf(&again) == coreapi.StatusWorking {
 			return agentWorking(target)
 		}
 		err = sendAs(call, target, text, &again, asMessage)
@@ -231,11 +231,11 @@ func (a *Adapter) sendTo(call caller, target, text, agent string, now Terminal, 
 // person's draft started.
 func sendAs(call caller, target, text string, now *Terminal, asMessage bool) error {
 	state := now.Status.State
-	named := state != "" && statusOf(now) != herdr.StatusWorking
+	named := state != "" && statusOf(now) != coreapi.StatusWorking
 	err := sendPrompt(call, target, text, now, named)
-	if named && state != herdr.StatusIdle && IsKind(err, "invalid_params") {
+	if named && state != coreapi.StatusIdle && IsKind(err, "invalid_params") {
 		if !asMessage {
-			return &herdr.Error{Code: "invalid_request", Message: "this remuda-core holds a prompt only for an agent idle or at work, not " + state + ": nothing was sent to " + target}
+			return &coreapi.Error{Code: "invalid_request", Message: "this remuda-core holds a prompt only for an agent idle or at work, not " + state + ": nothing was sent to " + target}
 		}
 		err = sendPrompt(call, target, text, now, false)
 	}
@@ -278,11 +278,11 @@ func pidIn(t *Terminal) int {
 
 // agentWorking refuses a prompt for an agent at rest to one at work: it waits for the agent's next rest.
 func agentWorking(target string) error {
-	return &herdr.Error{Code: "agent_working", Message: "the agent in " + target + " is at work, and this prompt is for it at rest: nothing was sent"}
+	return &coreapi.Error{Code: "agent_working", Message: "the agent in " + target + " is at work, and this prompt is for it at rest: nothing was sent"}
 }
 
 func agentLeft(target string) error {
-	return &herdr.Error{Code: "agent_left", Message: "the agent in " + target + " left the terminal's front as the prompt went: nothing was sent"}
+	return &coreapi.Error{Code: "agent_left", Message: "the agent in " + target + " left the terminal's front as the prompt went: nothing was sent"}
 }
 
 // inputRefusal is the core's refusal of typed input in herdr's words: a terminal still starting or between shells is
@@ -292,15 +292,15 @@ func agentLeft(target string) error {
 func (a *Adapter) inputRefusal(err error, notReady, blocked string) error {
 	switch {
 	case IsKind(err, "unavailable"):
-		return &herdr.Error{Code: notReady, Message: err.Error()}
+		return &coreapi.Error{Code: notReady, Message: err.Error()}
 	case IsKind(err, "blocked"):
-		return &herdr.Error{Code: blocked, Message: err.Error()}
+		return &coreapi.Error{Code: blocked, Message: err.Error()}
 	case IsKind(err, "status_mismatch"):
-		return &herdr.Error{Code: notReady, Message: "the agent moved as the prompt went, nothing was sent: " + err.Error()}
+		return &coreapi.Error{Code: notReady, Message: "the agent moved as the prompt went, nothing was sent: " + err.Error()}
 	case IsKind(err, "not_submitted"):
-		return &herdr.Error{Code: "not_submitted", Message: "the prompt was pasted but not submitted, look at the terminal: " + err.Error()}
+		return &coreapi.Error{Code: "not_submitted", Message: "the prompt was pasted but not submitted, look at the terminal: " + err.Error()}
 	case IsKind(err, "finished"):
-		return &herdr.Error{Code: "pane_not_found", Message: err.Error()}
+		return &coreapi.Error{Code: "pane_not_found", Message: err.Error()}
 	}
 	return a.refusal(err, "pane_not_found")
 }
@@ -327,7 +327,7 @@ func (a *Adapter) PaneSendText(paneID, text string) error {
 		return err
 	}
 	if agentOf(&t) != "" {
-		return &herdr.Error{Code: "agent_pane_busy", Message: "typing into an agent's terminal on remuda-core comes with its live terminal"}
+		return &coreapi.Error{Code: "agent_pane_busy", Message: "typing into an agent's terminal on remuda-core comes with its live terminal"}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), callWithin)
 	defer cancel()

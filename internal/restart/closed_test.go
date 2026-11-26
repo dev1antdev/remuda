@@ -6,31 +6,31 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/events"
-	"github.com/dev1antdev/remuda/internal/herdr"
 )
 
 // named puts a pane in the tab given, with the title given.
-func named(p herdr.PaneInfo, tabID, title string) herdr.PaneInfo {
+func named(p coreapi.PaneInfo, tabID, title string) coreapi.PaneInfo {
 	p.TabID, p.Title = tabID, title
 	return p
 }
 
-func snapshotWithTabs(tabs []herdr.TabInfo, panes ...herdr.PaneInfo) *herdr.Snapshot {
+func snapshotWithTabs(tabs []coreapi.TabInfo, panes ...coreapi.PaneInfo) *coreapi.Snapshot {
 	snap := snapshot(panes...)
 	snap.Tabs = tabs
 	return snap
 }
 
-func withSession(p herdr.PaneInfo, session string) herdr.PaneInfo {
-	p.AgentSession = &herdr.AgentSession{Kind: "id", Value: session}
+func withSession(p coreapi.PaneInfo, session string) coreapi.PaneInfo {
+	p.AgentSession = &coreapi.AgentSession{Kind: "id", Value: session}
 	return p
 }
 
 func TestAPaneThatWentAwayIsListedAsClosed(t *testing.T) {
 	m := OpenMemory("")
 	at := time.Date(2026, 11, 4, 9, 0, 0, 0, time.UTC)
-	tabs := []herdr.TabInfo{{TabID: "w1:t1", WorkspaceID: "w1", Number: 1, Label: "review"}, {TabID: "w1:t2", WorkspaceID: "w1", Number: 2, Label: "2"}}
+	tabs := []coreapi.TabInfo{{TabID: "w1:t1", WorkspaceID: "w1", Number: 1, Label: "review"}, {TabID: "w1:t2", WorkspaceID: "w1", Number: 2, Label: "2"}}
 	claude := named(agentPane("w1:p1", "claude", "/work/api"), "w1:t1", "Fix the queue")
 	codex := named(withSession(agentPane("w1:p2", "codex", "/work/api"), "019a2b3c-4d5e-4f60-8a1b-2c3d4e5f6a7b"), "w1:t2", "codex")
 	m.Observe(events.Snapshot{Machine: "gog", Snap: snapshotWithTabs(tabs, claude, codex), At: at})
@@ -114,14 +114,14 @@ func TestTheClosedListOutlivesARestartAndLeavesWithItsMachine(t *testing.T) {
 
 // fakePlacer is herdr's client as reopening sees it.
 type fakePlacer struct {
-	snap    *herdr.Snapshot
+	snap    *coreapi.Snapshot
 	started []string
 	tabs    []string
 	made    []string
 	fail    error
 }
 
-func (f *fakePlacer) SessionSnapshot() (*herdr.Snapshot, error) { return f.snap, nil }
+func (f *fakePlacer) SessionSnapshot() (*coreapi.Snapshot, error) { return f.snap, nil }
 func (f *fakePlacer) AgentStart(paneID, kind string) error {
 	return f.AgentStartWith(paneID, kind, kind, nil, 0)
 }
@@ -129,16 +129,16 @@ func (f *fakePlacer) AgentStartWith(paneID, kind, name string, args []string, ti
 	f.started = append(f.started, fmt.Sprintf("%s %s %v", paneID, kind, args))
 	return f.fail
 }
-func (f *fakePlacer) WorkspaceCreate(cwd, label string) (*herdr.WorkspaceCreateResult, error) {
+func (f *fakePlacer) WorkspaceCreate(cwd, label string) (*coreapi.WorkspaceCreateResult, error) {
 	f.made = append(f.made, cwd)
-	res := &herdr.WorkspaceCreateResult{}
+	res := &coreapi.WorkspaceCreateResult{}
 	res.Workspace.WorkspaceID = "w9"
 	res.RootPane.PaneID, res.RootPane.TabID = "w9:p1", "w9:t1"
 	return res, nil
 }
-func (f *fakePlacer) TabCreate(workspaceID, label string) (*herdr.TabCreateResult, error) {
+func (f *fakePlacer) TabCreate(workspaceID, label string) (*coreapi.TabCreateResult, error) {
 	f.tabs = append(f.tabs, workspaceID+" "+label)
-	res := &herdr.TabCreateResult{}
+	res := &coreapi.TabCreateResult{}
 	res.Tab.TabID = workspaceID + ":t7"
 	res.RootPane.PaneID = workspaceID + ":p7"
 	return res, nil
@@ -159,8 +159,8 @@ func TestReopenResumesInATabOfTheFoldersWorkspace(t *testing.T) {
 	r := &Restarter{Memory: OpenMemory("")}
 	c := closedOne(t, r)
 	c.Tab = "review"
-	client := &fakePlacer{snap: &herdr.Snapshot{
-		Workspaces: []herdr.WorkspaceInfo{{WorkspaceID: "w1", Label: "api", Worktree: &herdr.WorktreeInfo{CheckoutPath: "/work/api"}}},
+	client := &fakePlacer{snap: &coreapi.Snapshot{
+		Workspaces: []coreapi.WorkspaceInfo{{WorkspaceID: "w1", Label: "api", Worktree: &coreapi.WorktreeInfo{CheckoutPath: "/work/api"}}},
 	}}
 	place, err := r.reopenWith(client, "local", c)
 	if err != nil {
@@ -180,7 +180,7 @@ func TestReopenResumesInATabOfTheFoldersWorkspace(t *testing.T) {
 func TestReopenMakesAWorkspaceWhenTheFoldersIsGone(t *testing.T) {
 	r := &Restarter{Memory: OpenMemory("")}
 	c := closedOne(t, r)
-	client := &fakePlacer{snap: &herdr.Snapshot{}}
+	client := &fakePlacer{snap: &coreapi.Snapshot{}}
 	place, err := r.reopenWith(client, "local", c)
 	if err != nil || place.Pane != "w9:p1" || len(client.made) != 1 || client.made[0] != "/work/api" {
 		t.Fatalf("place %+v, err %v, made %v", place, err, client.made)
@@ -204,7 +204,7 @@ func TestReopenOfAConversationOpenAlreadyNamesItsPane(t *testing.T) {
 func TestAReopenThatFailsKeepsTheEntry(t *testing.T) {
 	r := &Restarter{Memory: OpenMemory("")}
 	c := closedOne(t, r)
-	client := &fakePlacer{snap: &herdr.Snapshot{}, fail: errors.New("agent_not_ready")}
+	client := &fakePlacer{snap: &coreapi.Snapshot{}, fail: errors.New("agent_not_ready")}
 	if _, err := r.reopenWith(client, "local", c); err == nil {
 		t.Fatal("a failed start is an error")
 	}

@@ -4,34 +4,34 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 )
 
-func snap(status string, focused bool) *herdr.Snapshot {
-	return &herdr.Snapshot{Panes: []herdr.PaneInfo{{PaneID: "p1", Agent: "claude", AgentStatus: status, Focused: focused}}}
+func snap(status string, focused bool) *coreapi.Snapshot {
+	return &coreapi.Snapshot{Panes: []coreapi.PaneInfo{{PaneID: "p1", Agent: "claude", AgentStatus: status, Focused: focused}}}
 }
 
-func display(t *Tracker, s *herdr.Snapshot) Display {
+func display(t *Tracker, s *coreapi.Snapshot) Display {
 	return t.Display("m", &s.Panes[0])
 }
 
 func TestDoneIsHeldUntilSeen(t *testing.T) {
 	tr := New(t.TempDir(), nil)
 	now := time.Now()
-	tr.Observe("m", snap(herdr.StatusWorking, false), now)
-	tr.Observe("m", snap(herdr.StatusWorking, false), now.Add(time.Second))
-	tr.Observe("m", snap(herdr.StatusDone, false), now.Add(5*time.Second))
+	tr.Observe("m", snap(coreapi.StatusWorking, false), now)
+	tr.Observe("m", snap(coreapi.StatusWorking, false), now.Add(time.Second))
+	tr.Observe("m", snap(coreapi.StatusDone, false), now.Add(5*time.Second))
 	for i := 0; i < 5; i++ {
-		s := snap(herdr.StatusIdle, false)
+		s := snap(coreapi.StatusIdle, false)
 		tr.Observe("m", s, now.Add(time.Duration(10+i)*time.Second))
-		if d := display(tr, s); d.State != herdr.StatusDone {
+		if d := display(tr, s); d.State != coreapi.StatusDone {
 			t.Fatalf("tick %d: %s, want done held", i, d.State)
 		}
 	}
 	tr.Seen("m", "p1")
-	s := snap(herdr.StatusIdle, false)
+	s := snap(coreapi.StatusIdle, false)
 	tr.Observe("m", s, now.Add(20*time.Second))
-	if d := display(tr, s); d.State != herdr.StatusIdle || d.LastActive != now.Add(time.Second).UnixMilli() {
+	if d := display(tr, s); d.State != coreapi.StatusIdle || d.LastActive != now.Add(time.Second).UnixMilli() {
 		t.Fatalf("after seen: %+v", d)
 	}
 }
@@ -39,11 +39,11 @@ func TestDoneIsHeldUntilSeen(t *testing.T) {
 func TestHerdrFocusCountsAsSeen(t *testing.T) {
 	tr := New(t.TempDir(), nil)
 	now := time.Now()
-	tr.Observe("m", snap(herdr.StatusWorking, false), now)
-	tr.Observe("m", snap(herdr.StatusIdle, false), now.Add(5*time.Second))
-	s := snap(herdr.StatusIdle, true)
+	tr.Observe("m", snap(coreapi.StatusWorking, false), now)
+	tr.Observe("m", snap(coreapi.StatusIdle, false), now.Add(5*time.Second))
+	s := snap(coreapi.StatusIdle, true)
 	tr.Observe("m", s, now.Add(6*time.Second))
-	if d := display(tr, s); d.State != herdr.StatusIdle {
+	if d := display(tr, s); d.State != coreapi.StatusIdle {
 		t.Fatalf("focused pane still %s", d.State)
 	}
 }
@@ -51,14 +51,14 @@ func TestHerdrFocusCountsAsSeen(t *testing.T) {
 func TestIdleBlinkWithinGraceIsStillWorking(t *testing.T) {
 	tr := New(t.TempDir(), nil)
 	now := time.Now()
-	tr.Observe("m", snap(herdr.StatusWorking, false), now)
-	s := snap(herdr.StatusIdle, false)
+	tr.Observe("m", snap(coreapi.StatusWorking, false), now)
+	s := snap(coreapi.StatusIdle, false)
 	tr.Observe("m", s, now.Add(time.Second))
-	if d := display(tr, s); d.State != herdr.StatusWorking {
+	if d := display(tr, s); d.State != coreapi.StatusWorking {
 		t.Fatalf("one second after working: %s, want working (grace)", d.State)
 	}
 	tr.Observe("m", s, now.Add(4*time.Second))
-	if d := display(tr, s); d.State != herdr.StatusDone {
+	if d := display(tr, s); d.State != coreapi.StatusDone {
 		t.Fatalf("after the grace: %s, want done", d.State)
 	}
 }
@@ -66,17 +66,17 @@ func TestIdleBlinkWithinGraceIsStillWorking(t *testing.T) {
 func TestQuestionIsHeldUntilItWorksAgain(t *testing.T) {
 	tr := New(t.TempDir(), nil)
 	now := time.Now()
-	tr.Observe("m", snap(herdr.StatusWorking, false), now)
-	tr.Observe("m", snap(herdr.StatusBlocked, false), now.Add(5*time.Second))
+	tr.Observe("m", snap(coreapi.StatusWorking, false), now)
+	tr.Observe("m", snap(coreapi.StatusBlocked, false), now.Add(5*time.Second))
 	// herdr may read the dialog as idle once the menu scrolls away
-	s := snap(herdr.StatusIdle, false)
+	s := snap(coreapi.StatusIdle, false)
 	tr.Observe("m", s, now.Add(10*time.Second))
-	if d := display(tr, s); d.State != herdr.StatusBlocked {
+	if d := display(tr, s); d.State != coreapi.StatusBlocked {
 		t.Fatalf("question let go: %s", d.State)
 	}
-	w := snap(herdr.StatusWorking, false)
+	w := snap(coreapi.StatusWorking, false)
 	tr.Observe("m", w, now.Add(15*time.Second))
-	if d := display(tr, w); d.State != herdr.StatusWorking {
+	if d := display(tr, w); d.State != coreapi.StatusWorking {
 		t.Fatalf("working again: %s", d.State)
 	}
 }
@@ -84,10 +84,10 @@ func TestQuestionIsHeldUntilItWorksAgain(t *testing.T) {
 func TestQuestionWithNoWorkBeforeItIsNotHeld(t *testing.T) {
 	tr := New(t.TempDir(), nil)
 	now := time.Now()
-	tr.Observe("m", snap(herdr.StatusBlocked, false), now)
-	s := snap(herdr.StatusIdle, false)
+	tr.Observe("m", snap(coreapi.StatusBlocked, false), now)
+	s := snap(coreapi.StatusIdle, false)
 	tr.Observe("m", s, now.Add(5*time.Second))
-	if d := display(tr, s); d.State != herdr.StatusIdle {
+	if d := display(tr, s); d.State != coreapi.StatusIdle {
 		t.Fatalf("a dialog that was simply closed: %s, want idle", d.State)
 	}
 }
@@ -95,8 +95,8 @@ func TestQuestionWithNoWorkBeforeItIsNotHeld(t *testing.T) {
 func TestRecoveryAndPersistence(t *testing.T) {
 	dir := t.TempDir()
 	stamp := time.Now().Add(-3 * time.Hour).Truncate(time.Millisecond)
-	tr := New(dir, func(string, *herdr.PaneInfo) time.Time { return stamp })
-	s := snap(herdr.StatusIdle, false)
+	tr := New(dir, func(string, *coreapi.PaneInfo) time.Time { return stamp })
+	s := snap(coreapi.StatusIdle, false)
 	tr.Observe("m", s, time.Now())
 	deadline := time.Now().Add(2 * time.Second)
 	for display(tr, s).LastActive == 0 && time.Now().Before(deadline) {
@@ -106,7 +106,7 @@ func TestRecoveryAndPersistence(t *testing.T) {
 		t.Fatalf("recovered %d, want %d", d.LastActive, stamp.UnixMilli())
 	}
 	tr.Flush()
-	tr2 := New(dir, func(string, *herdr.PaneInfo) time.Time { t.Fatal("recovery asked twice"); return time.Time{} })
+	tr2 := New(dir, func(string, *coreapi.PaneInfo) time.Time { t.Fatal("recovery asked twice"); return time.Time{} })
 	tr2.Observe("m", s, time.Now())
 	if d := display(tr2, s); d.LastActive != stamp.UnixMilli() {
 		t.Fatalf("after restart: %+v", d)
@@ -115,8 +115,8 @@ func TestRecoveryAndPersistence(t *testing.T) {
 
 func TestGonePanesAreForgotten(t *testing.T) {
 	tr := New(t.TempDir(), nil)
-	tr.Observe("m", snap(herdr.StatusWorking, false), time.Now())
-	tr.Observe("m", &herdr.Snapshot{}, time.Now())
+	tr.Observe("m", snap(coreapi.StatusWorking, false), time.Now())
+	tr.Observe("m", &coreapi.Snapshot{}, time.Now())
 	if _, ok := tr.panes["m|p1"]; ok {
 		t.Fatal("closed pane kept")
 	}
@@ -125,23 +125,23 @@ func TestGonePanesAreForgotten(t *testing.T) {
 func TestSeenHoldsWhileHerdrStillSaysDone(t *testing.T) {
 	tr := New(t.TempDir(), nil)
 	now := time.Now()
-	tr.Observe("m", snap(herdr.StatusWorking, false), now)
+	tr.Observe("m", snap(coreapi.StatusWorking, false), now)
 	// herdr keeps reporting done for hours after a finish
 	for i := 0; i < 3; i++ {
-		tr.Observe("m", snap(herdr.StatusDone, false), now.Add(time.Duration(5+i)*time.Second))
+		tr.Observe("m", snap(coreapi.StatusDone, false), now.Add(time.Duration(5+i)*time.Second))
 	}
 	tr.Seen("m", "p1")
 	for i := 0; i < 5; i++ {
-		s := snap(herdr.StatusDone, false)
+		s := snap(coreapi.StatusDone, false)
 		tr.Observe("m", s, now.Add(time.Duration(20+i)*time.Second))
-		if d := display(tr, s); d.State != herdr.StatusIdle {
+		if d := display(tr, s); d.State != coreapi.StatusIdle {
 			t.Fatalf("poll %d after seen: %s, want idle", i, d.State)
 		}
 	}
-	tr.Observe("m", snap(herdr.StatusWorking, false), now.Add(40*time.Second))
-	s := snap(herdr.StatusDone, false)
+	tr.Observe("m", snap(coreapi.StatusWorking, false), now.Add(40*time.Second))
+	s := snap(coreapi.StatusDone, false)
 	tr.Observe("m", s, now.Add(45*time.Second))
-	if d := display(tr, s); d.State != herdr.StatusDone {
+	if d := display(tr, s); d.State != coreapi.StatusDone {
 		t.Fatalf("a new finish: %s, want done", d.State)
 	}
 }
@@ -150,37 +150,37 @@ func TestRestartKeepsTicksAndRaisesNone(t *testing.T) {
 	dir := t.TempDir()
 	tr := New(dir, nil)
 	now := time.Now()
-	two := &herdr.Snapshot{Panes: []herdr.PaneInfo{
-		{PaneID: "p1", Agent: "claude", AgentStatus: herdr.StatusWorking},
-		{PaneID: "p2", Agent: "claude", AgentStatus: herdr.StatusWorking},
+	two := &coreapi.Snapshot{Panes: []coreapi.PaneInfo{
+		{PaneID: "p1", Agent: "claude", AgentStatus: coreapi.StatusWorking},
+		{PaneID: "p2", Agent: "claude", AgentStatus: coreapi.StatusWorking},
 	}}
 	tr.Observe("m", two, now)
-	two.Panes[0].AgentStatus, two.Panes[1].AgentStatus = herdr.StatusDone, herdr.StatusDone
+	two.Panes[0].AgentStatus, two.Panes[1].AgentStatus = coreapi.StatusDone, coreapi.StatusDone
 	tr.Observe("m", two, now.Add(5*time.Second))
 	tr.Seen("m", "p2")
 	tr.Flush()
 
 	tr2 := New(dir, nil)
-	three := &herdr.Snapshot{Panes: []herdr.PaneInfo{
-		{PaneID: "p1", Agent: "claude", AgentStatus: herdr.StatusDone},
-		{PaneID: "p2", Agent: "claude", AgentStatus: herdr.StatusDone},
-		{PaneID: "p3", Agent: "claude", AgentStatus: herdr.StatusDone},
+	three := &coreapi.Snapshot{Panes: []coreapi.PaneInfo{
+		{PaneID: "p1", Agent: "claude", AgentStatus: coreapi.StatusDone},
+		{PaneID: "p2", Agent: "claude", AgentStatus: coreapi.StatusDone},
+		{PaneID: "p3", Agent: "claude", AgentStatus: coreapi.StatusDone},
 	}}
 	tr2.Observe("m", three, now.Add(time.Minute))
-	if d := tr2.Display("m", &three.Panes[0]); d.State != herdr.StatusDone {
+	if d := tr2.Display("m", &three.Panes[0]); d.State != coreapi.StatusDone {
 		t.Fatalf("p1 (unseen before the restart): %s, want done held", d.State)
 	}
-	if d := tr2.Display("m", &three.Panes[1]); d.State != herdr.StatusIdle {
+	if d := tr2.Display("m", &three.Panes[1]); d.State != coreapi.StatusIdle {
 		t.Fatalf("p2 (seen before the restart): %s, want idle", d.State)
 	}
-	if d := tr2.Display("m", &three.Panes[2]); d.State != herdr.StatusIdle {
+	if d := tr2.Display("m", &three.Panes[2]); d.State != coreapi.StatusIdle {
 		t.Fatalf("p3 (finished before remuda ran): %s, want idle", d.State)
 	}
-	three.Panes[2].AgentStatus = herdr.StatusWorking
+	three.Panes[2].AgentStatus = coreapi.StatusWorking
 	tr2.Observe("m", three, now.Add(2*time.Minute))
-	three.Panes[2].AgentStatus = herdr.StatusDone
+	three.Panes[2].AgentStatus = coreapi.StatusDone
 	tr2.Observe("m", three, now.Add(3*time.Minute))
-	if d := tr2.Display("m", &three.Panes[2]); d.State != herdr.StatusDone {
+	if d := tr2.Display("m", &three.Panes[2]); d.State != coreapi.StatusDone {
 		t.Fatalf("p3 new finish: %s, want done", d.State)
 	}
 }
@@ -192,22 +192,22 @@ func TestAFinishLookedAtThroughRemudaIsTold(t *testing.T) {
 	var told []string
 	tr.OnSeen = func(machineID, paneID string) { told = append(told, machineID+"|"+paneID) }
 	now := time.Now()
-	tr.Observe("m", snap(herdr.StatusWorking, false), now)
+	tr.Observe("m", snap(coreapi.StatusWorking, false), now)
 	tr.Seen("m", "p1")
 	if len(told) != 0 || tr.Looked("m", "p1") {
 		t.Fatalf("a look while it works: told %v, looked %v", told, tr.Looked("m", "p1"))
 	}
-	tr.Observe("m", snap(herdr.StatusDone, false), now.Add(5*time.Second))
+	tr.Observe("m", snap(coreapi.StatusDone, false), now.Add(5*time.Second))
 	tr.Seen("m", "p1")
 	tr.Seen("m", "p1")
 	if len(told) != 1 || told[0] != "m|p1" || !tr.Looked("m", "p1") {
 		t.Fatalf("told %v, looked %v; want one word and looked", told, tr.Looked("m", "p1"))
 	}
-	tr.Observe("m", snap(herdr.StatusWorking, false), now.Add(10*time.Second))
+	tr.Observe("m", snap(coreapi.StatusWorking, false), now.Add(10*time.Second))
 	if tr.Looked("m", "p1") {
 		t.Fatal("still looked at once the agent works again")
 	}
-	tr.Observe("m", snap(herdr.StatusDone, true), now.Add(15*time.Second))
+	tr.Observe("m", snap(coreapi.StatusDone, true), now.Add(15*time.Second))
 	if tr.Looked("m", "p1") || len(told) != 1 {
 		t.Fatalf("herdr's own focus: looked %v, told %v", tr.Looked("m", "p1"), told)
 	}

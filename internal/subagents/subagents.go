@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/events"
-	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/transcript"
 )
 
@@ -175,7 +175,7 @@ func (t *Tracker) Count(machineID, paneID string) *Count {
 
 // Observe takes a machine's snapshot: its Claude Code panes and whether each works are noted, the panes gone or no
 // longer Claude Code's forgotten, and while a page looks the panes due are read in the background.
-func (t *Tracker) Observe(machineID string, snap *herdr.Snapshot) {
+func (t *Tracker) Observe(machineID string, snap *coreapi.Snapshot) {
 	if t == nil || snap == nil {
 		return
 	}
@@ -193,7 +193,7 @@ func (t *Tracker) Observe(machineID string, snap *herdr.Snapshot) {
 			p = &pane{}
 			t.panes[ref] = p
 		}
-		p.working = info.AgentStatus == herdr.StatusWorking
+		p.working = info.AgentStatus == coreapi.StatusWorking
 	}
 	for ref := range t.panes {
 		if ref.Machine == machineID && !claude[ref.Pane] {

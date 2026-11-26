@@ -9,7 +9,7 @@ import (
 
 	"github.com/dev1antdev/remuda/internal/core"
 	"github.com/dev1antdev/remuda/internal/core/coretest"
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/shell"
 )
 
@@ -54,14 +54,14 @@ func TestWorktreesAreMadeAndOpenedOnACoreMachineWhereHerdrPutsThem(t *testing.T)
 	home, repo := gitRepo(t)
 	client := coretest.Server(t).Client(t)
 	adapter := adapterWith(t, client, shell.Local{Name: "local"}, core.AdapterHooks{})
-	eventually(t, adapter, func(*herdr.Snapshot) bool { return true })
+	eventually(t, adapter, func(*coreapi.Snapshot) bool { return true })
 
 	made, err := adapter.WorkspaceCreate(repo, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	source := made.Workspace.WorkspaceID
-	want := herdr.WorktreeInfo{CheckoutPath: repo, RepoKey: filepath.Join(repo, ".git"), RepoName: "app", RepoRoot: repo}
+	want := coreapi.WorktreeInfo{CheckoutPath: repo, RepoKey: filepath.Join(repo, ".git"), RepoName: "app", RepoRoot: repo}
 	if tree := made.Workspace.Worktree; tree == nil || *tree != want {
 		t.Fatalf("the main checkout reads as %+v, want %+v", tree, want)
 	}
@@ -115,7 +115,7 @@ func TestWorktreesAreMadeAndOpenedOnACoreMachineWhereHerdrPutsThem(t *testing.T)
 
 	twice := filepath.Join(home, "twice")
 	git(t, repo, "worktree", "add", "-q", "-b", "twice", twice)
-	answers := make(chan *herdr.WorktreeCreateResult, 2)
+	answers := make(chan *coreapi.WorktreeCreateResult, 2)
 	for range 2 {
 		go func() {
 			res, err := adapter.WorktreeOpen(source, twice, "")
@@ -129,7 +129,7 @@ func TestWorktreesAreMadeAndOpenedOnACoreMachineWhereHerdrPutsThem(t *testing.T)
 	if first == nil || second == nil || first.Workspace.WorkspaceID != second.Workspace.WorkspaceID || first.AlreadyOpen == second.AlreadyOpen {
 		t.Fatalf("two opens of one checkout at once answered %+v and %+v", first, second)
 	}
-	if opened := map[bool]*herdr.WorktreeCreateResult{first.AlreadyOpen: first, second.AlreadyOpen: second}[true]; opened.RootPane.PaneID == "" {
+	if opened := map[bool]*coreapi.WorktreeCreateResult{first.AlreadyOpen: first, second.AlreadyOpen: second}[true]; opened.RootPane.PaneID == "" {
 		t.Errorf("the checkout open already is answered without its pane: %+v", opened.RootPane)
 	}
 	if _, err := adapter.WorktreeOpen(source, t.TempDir(), ""); err == nil {
@@ -141,7 +141,7 @@ func TestAWorkspaceOutsideGitHasNoCheckoutAndOneWithoutAShellMakesNoWorktree(t *
 	_, repo := gitRepo(t)
 	client := coretest.Server(t).Client(t)
 	withShell := adapterWith(t, client, shell.Local{Name: "local"}, core.AdapterHooks{})
-	eventually(t, withShell, func(*herdr.Snapshot) bool { return true })
+	eventually(t, withShell, func(*coreapi.Snapshot) bool { return true })
 
 	plain, err := withShell.WorkspaceCreate(t.TempDir(), "")
 	if err != nil {
@@ -152,7 +152,7 @@ func TestAWorkspaceOutsideGitHasNoCheckoutAndOneWithoutAShellMakesNoWorktree(t *
 	}
 
 	without := adapterOf(t, client, core.AdapterHooks{})
-	eventually(t, without, func(*herdr.Snapshot) bool { return true })
+	eventually(t, without, func(*coreapi.Snapshot) bool { return true })
 	made, err := without.WorkspaceCreate(repo, "")
 	if err != nil {
 		t.Fatal(err)
@@ -166,13 +166,13 @@ func TestTwoCreatesOfOneBranchAtOnceLeaveTheWinnersWorktree(t *testing.T) {
 	home, repo := gitRepo(t)
 	client := coretest.Server(t).Client(t)
 	adapter := adapterWith(t, client, shell.Local{Name: "local"}, core.AdapterHooks{})
-	eventually(t, adapter, func(*herdr.Snapshot) bool { return true })
+	eventually(t, adapter, func(*coreapi.Snapshot) bool { return true })
 	made, err := adapter.WorkspaceCreate(repo, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	type answer struct {
-		res *herdr.WorktreeCreateResult
+		res *coreapi.WorktreeCreateResult
 		err error
 	}
 	answers := make(chan answer, 2)

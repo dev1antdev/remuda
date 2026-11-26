@@ -7,7 +7,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/rpath"
 )
 
@@ -46,7 +46,7 @@ func (n *Node) panes() []*Node {
 
 // Capture is a tab's layout as a step keeps it: the folders made relative to dir, the agent's pane found by its id
 // (the first pane when it is not in the tab).
-func Capture(desc *herdr.LayoutDescription, dir, agentPane string) Layout {
+func Capture(desc *coreapi.LayoutDescription, dir, agentPane string) Layout {
 	layout := Layout{Root: nodeOf(&desc.Root, cleanDir(dir))}
 	for i, pane := range desc.Root.Panes() {
 		if pane.PaneID == agentPane {
@@ -57,7 +57,7 @@ func Capture(desc *herdr.LayoutDescription, dir, agentPane string) Layout {
 	return layout
 }
 
-func nodeOf(n *herdr.LayoutNode, dir string) Node {
+func nodeOf(n *coreapi.LayoutNode, dir string) Node {
 	if n.Type == "split" && n.First != nil && n.Second != nil {
 		first, second := nodeOf(n.First, dir), nodeOf(n.Second, dir)
 		return Node{Type: "split", Direction: n.Direction, Ratio: n.Ratio, First: &first, Second: &second}
@@ -100,14 +100,14 @@ func relativeTo(dir, folder string) string {
 }
 
 // Tree is the layout as herdr's layout.apply takes it, every folder absolute again under dir.
-func (l Layout) Tree(dir string) herdr.LayoutNode {
+func (l Layout) Tree(dir string) coreapi.LayoutNode {
 	return treeOf(&l.Root, cleanDir(dir))
 }
 
-func treeOf(n *Node, dir string) herdr.LayoutNode {
+func treeOf(n *Node, dir string) coreapi.LayoutNode {
 	if n.Type == "split" {
 		first, second := treeOf(n.First, dir), treeOf(n.Second, dir)
-		return herdr.LayoutNode{Type: "split", Direction: n.Direction, Ratio: n.Ratio, First: &first, Second: &second}
+		return coreapi.LayoutNode{Type: "split", Direction: n.Direction, Ratio: n.Ratio, First: &first, Second: &second}
 	}
 	folder := dir
 	if rpath.Absolute(n.Dir) {
@@ -115,11 +115,11 @@ func treeOf(n *Node, dir string) herdr.LayoutNode {
 	} else if n.Dir != "" {
 		folder = rpath.For(dir).Join(dir, n.Dir)
 	}
-	return herdr.LayoutNode{Type: "pane", CWD: folder, Label: n.Label, Command: n.Command}
+	return coreapi.LayoutNode{Type: "pane", CWD: folder, Label: n.Label, Command: n.Command}
 }
 
 // AgentPane is the pane of a laid-out tab the step's agent starts in: the one at the layout's index, else the first.
-func (l Layout) AgentPane(laid *herdr.LayoutNode) string {
+func (l Layout) AgentPane(laid *coreapi.LayoutNode) string {
 	panes := laid.Panes()
 	if len(panes) == 0 {
 		return ""

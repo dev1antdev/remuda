@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/events"
-	"github.com/dev1antdev/remuda/internal/herdr"
 )
 
 // ledger notes a fake client's calls in order; each prompt waits for a token on sends.
@@ -56,10 +56,10 @@ func (h *holder) StagePrompt(_, text string, front int, asMessage bool) (int, fu
 	pid, asks := h.pid, h.asks
 	h.mu.Unlock()
 	if front != 0 && front != pid {
-		return 0, nil, &herdr.Error{Code: "agent_left", Message: "another agent in front"}
+		return 0, nil, &coreapi.Error{Code: "agent_left", Message: "another agent in front"}
 	}
 	if asks {
-		return pid, nil, &herdr.Error{Code: "agent_blocked", Message: "asks first"}
+		return pid, nil, &coreapi.Error{Code: "agent_blocked", Message: "asks first"}
 	}
 	return pid, func() error {
 		<-h.sends
@@ -172,7 +172,7 @@ func TestAPanesStagedPromptsGoInTurn(t *testing.T) {
 // A prompt pasted but left unsubmitted is said so and kept, never taken for one that went or for nothing sent.
 func TestAPastedPromptLeftUnsubmittedIsSaidSo(t *testing.T) {
 	h, in := newHolder(), NewInput(nil, nil)
-	h.sendErr = &herdr.Error{Code: "not_submitted", Message: "pasted, no Enter"}
+	h.sendErr = &coreapi.Error{Code: "not_submitted", Message: "pasted, no Enter"}
 	h.sends <- struct{}{}
 	err := in.Submit(h, onePane, "hello")
 	if !errors.Is(err, ErrNotSubmitted) || !NotDelivered(err) || errors.Is(err, ErrNoAgent) {
@@ -229,7 +229,7 @@ func TestAFirstPromptIsNotTriedAgainOnceItsAgentLeft(t *testing.T) {
 	FirstPromptRetry = time.Millisecond
 	t.Cleanup(func() { FirstPromptRetry = retry })
 	h, in := newHolder(), NewInput(nil, nil)
-	h.sendErr = &herdr.Error{Code: "agent_left", Message: "gone from the front"}
+	h.sendErr = &coreapi.Error{Code: "agent_left", Message: "gone from the front"}
 	h.sends <- struct{}{}
 	if err := in.FirstPrompt(h, onePane, "the task", time.Minute); !errors.Is(err, ErrNoAgent) {
 		t.Fatalf("refusal %v", err)
@@ -250,15 +250,15 @@ func TestADeliveryTriedAgainNeverReachesAReplacement(t *testing.T) {
 		if refused == "at the look" {
 			h.asks = true
 		} else {
-			h.sendErr = &herdr.Error{Code: "agent_blocked", Message: "asks first"}
+			h.sendErr = &coreapi.Error{Code: "agent_blocked", Message: "asks first"}
 			h.sends <- struct{}{}
 		}
 		d := in.Deliver(h, onePane, "the task")
-		if err := d.Try(); !herdr.IsCode(err, "agent_blocked") {
+		if err := d.Try(); !coreapi.IsCode(err, "agent_blocked") {
 			t.Fatalf("%s: first try %v", refused, err)
 		}
 		h.pid, h.asks, h.sendErr = 200, false, nil
-		if err := d.Try(); !herdr.IsCode(err, "agent_left") {
+		if err := d.Try(); !coreapi.IsCode(err, "agent_left") {
 			t.Fatalf("%s: a try with another agent in front: %v", refused, err)
 		}
 		if got := h.seen(); !slices.Equal(got, want) {
@@ -303,7 +303,7 @@ func TestAHandOffNamingAPictureGetsNoEnterAfterIt(t *testing.T) {
 // quietly, and a first prompt waits it out.
 func TestAPromptForAnAgentAtRestFindingItAtWorkWaits(t *testing.T) {
 	h, in := newHolder(), NewInput(nil, nil)
-	h.sendErr = &herdr.Error{Code: "agent_working", Message: "at work"}
+	h.sendErr = &coreapi.Error{Code: "agent_working", Message: "at work"}
 	h.sends <- struct{}{}
 	if err := in.SubmitToAgent(h, onePane, "a schedule's"); !errors.Is(err, ErrAgentWorking) {
 		t.Fatalf("a schedule's prompt to an agent at work: %v", err)

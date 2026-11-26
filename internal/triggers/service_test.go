@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/events"
-	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/push"
 	"github.com/dev1antdev/remuda/internal/watch"
 )
@@ -65,12 +65,12 @@ func (h *heard) counts() (pushes, feed, moves int) {
 	return len(h.pushes), len(h.feed), len(h.moves)
 }
 
-func snapshot(first bool, at time.Time, panes ...herdr.PaneInfo) events.Snapshot {
-	return events.Snapshot{Machine: "gog", First: first, At: at, Snap: &herdr.Snapshot{
-		Workspaces: []herdr.WorkspaceInfo{{WorkspaceID: "w1", Label: "api"}}, Panes: panes}}
+func snapshot(first bool, at time.Time, panes ...coreapi.PaneInfo) events.Snapshot {
+	return events.Snapshot{Machine: "gog", First: first, At: at, Snap: &coreapi.Snapshot{
+		Workspaces: []coreapi.WorkspaceInfo{{WorkspaceID: "w1", Label: "api"}}, Panes: panes}}
 }
 
-func shell(id string) herdr.PaneInfo { return herdr.PaneInfo{PaneID: id, WorkspaceID: "w1"} }
+func shell(id string) coreapi.PaneInfo { return coreapi.PaneInfo{PaneID: id, WorkspaceID: "w1"} }
 
 func match(pane, watch, line string, fresh, carried bool, at time.Time) events.OutputMatched {
 	return events.OutputMatched{Pane: events.PaneRef{Machine: "gog", Pane: pane}, Watch: watch, Line: line, Fresh: fresh, Carried: carried, At: at}
@@ -129,14 +129,14 @@ func TestTestsSayNothingWhileTheAgentWorksOrThePersonLooks(t *testing.T) {
 	h := &heard{}
 	s := h.service(t)
 	now := time.Now()
-	agent := herdr.PaneInfo{PaneID: "w1:p1", WorkspaceID: "w1", Agent: "claude", AgentStatus: herdr.StatusWorking}
+	agent := coreapi.PaneInfo{PaneID: "w1:p1", WorkspaceID: "w1", Agent: "claude", AgentStatus: coreapi.StatusWorking}
 	s.Observe(snapshot(true, now, agent))
 	s.OnMatch(match("w1:p1", WatchTests, failed, false, false, now))
 	time.Sleep(30 * time.Millisecond)
 	if p, _, _ := h.counts(); p != 0 {
 		t.Fatal("the agent is on it")
 	}
-	agent.AgentStatus = herdr.StatusDone
+	agent.AgentStatus = coreapi.StatusDone
 	s.Observe(snapshot(false, now, agent))
 	h.mu.Lock()
 	h.viewed = true
@@ -268,7 +268,7 @@ func TestRowsThatStoodAreNoNewsWhenAStreamToldThemAgainButOneFromTheGapIs(t *tes
 
 func TestRefusalsAreKeptByMachine(t *testing.T) {
 	s := New(t.TempDir())
-	s.Refused("gog", &herdr.Error{Code: "invalid_regex", Message: "look-around is not supported"})
+	s.Refused("gog", &coreapi.Error{Code: "invalid_regex", Message: "look-around is not supported"})
 	if got := s.Refusals()["gog"]; !strings.Contains(got, "look-around") {
 		t.Fatalf("refusals: %v", s.Refusals())
 	}
@@ -276,7 +276,7 @@ func TestRefusalsAreKeptByMachine(t *testing.T) {
 	if len(s.Refusals()) != 0 {
 		t.Fatal("taken again")
 	}
-	s.Refused("gog", &herdr.Error{Code: "invalid_regex"})
+	s.Refused("gog", &coreapi.Error{Code: "invalid_regex"})
 	s.Forget("gog")
 	if len(s.Refusals()) != 0 {
 		t.Fatal("a machine removed")
@@ -291,9 +291,9 @@ func TestWatchesPutThePersonsRulesFirstAndKeepToTheCap(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	snap := &herdr.Snapshot{
-		Workspaces: []herdr.WorkspaceInfo{{WorkspaceID: "w1", Label: "api", Worktree: &herdr.WorktreeInfo{CheckoutPath: "/home/me/api"}}, {WorkspaceID: "w2", Label: "web"}},
-		Panes:      []herdr.PaneInfo{{PaneID: "w1:p1", WorkspaceID: "w1", CWD: "/home/me/api"}, {PaneID: "w2:p1", WorkspaceID: "w2", CWD: "/home/me/web"}},
+	snap := &coreapi.Snapshot{
+		Workspaces: []coreapi.WorkspaceInfo{{WorkspaceID: "w1", Label: "api", Worktree: &coreapi.WorktreeInfo{CheckoutPath: "/home/me/api"}}, {WorkspaceID: "w2", Label: "web"}},
+		Panes:      []coreapi.PaneInfo{{PaneID: "w1:p1", WorkspaceID: "w1", CWD: "/home/me/api"}, {PaneID: "w2:p1", WorkspaceID: "w2", CWD: "/home/me/web"}},
 	}
 	var got []string
 	for _, o := range s.Watches("gog", snap, nil) {
@@ -303,9 +303,9 @@ func TestWatchesPutThePersonsRulesFirstAndKeepToTheCap(t *testing.T) {
 	if strings.Join(got, ",") != want {
 		t.Fatalf("watches:\n%s\nwant\n%s", strings.Join(got, ","), want)
 	}
-	many := &herdr.Snapshot{}
+	many := &coreapi.Snapshot{}
 	for i := 0; i < MaxWatches; i++ {
-		many.Panes = append(many.Panes, herdr.PaneInfo{PaneID: "w1:p" + string(rune('a'+i%26)) + strings.Repeat("x", i/26)})
+		many.Panes = append(many.Panes, coreapi.PaneInfo{PaneID: "w1:p" + string(rune('a'+i%26)) + strings.Repeat("x", i/26)})
 	}
 	if n := len(s.Watches("gog", many, nil)); n != MaxWatches {
 		t.Fatalf("%d watches past the cap", n)
@@ -317,9 +317,9 @@ func TestANewPaneTakesNoWatchFromAPaneThatStands(t *testing.T) {
 	if _, err := s.Replace([]Rule{{ID: "all", Name: "Everywhere", Match: "substring", Pattern: "DONE", Action: ActionFeed, Enabled: true}}); err != nil {
 		t.Fatal(err)
 	}
-	var snap herdr.Snapshot
+	var snap coreapi.Snapshot
 	for i := range 66 { // 66 panes × three watches each: inside the cap, so every one of them stands
-		snap.Panes = append(snap.Panes, herdr.PaneInfo{PaneID: fmt.Sprintf("w1:p%d", i)})
+		snap.Panes = append(snap.Panes, coreapi.PaneInfo{PaneID: fmt.Sprintf("w1:p%d", i)})
 	}
 	stood := s.Watches("gog", &snap, nil)
 	if len(stood) != 198 {
@@ -327,7 +327,7 @@ func TestANewPaneTakesNoWatchFromAPaneThatStands(t *testing.T) {
 	}
 
 	// a pane appears before them all, and a second snapshot comes before the stream swaps
-	grown := herdr.Snapshot{Panes: append([]herdr.PaneInfo{{PaneID: "w1:new"}}, snap.Panes...)}
+	grown := coreapi.Snapshot{Panes: append([]coreapi.PaneInfo{{PaneID: "w1:new"}}, snap.Panes...)}
 	s.Watches("gog", &grown, stood)
 	then := s.Watches("gog", &grown, stood)
 	have, own := map[string]bool{}, 0
@@ -350,12 +350,12 @@ func TestANewPaneTakesNoWatchFromAPaneThatStands(t *testing.T) {
 func TestAtTheCapAPersonRuleKeepsItsPlace(t *testing.T) {
 	s := New(t.TempDir())
 	// 100 panes: their built-in two are the whole cap already
-	snap := &herdr.Snapshot{
-		Workspaces: []herdr.WorkspaceInfo{{WorkspaceID: "w1", Folder: "/home/me/api"}, {WorkspaceID: "w2", Folder: "/srv/other"}},
+	snap := &coreapi.Snapshot{
+		Workspaces: []coreapi.WorkspaceInfo{{WorkspaceID: "w1", Folder: "/home/me/api"}, {WorkspaceID: "w2", Folder: "/srv/other"}},
 	}
-	snap.Panes = append(snap.Panes, herdr.PaneInfo{PaneID: "w1:p0", WorkspaceID: "w1", CWD: "/home/me/api"})
+	snap.Panes = append(snap.Panes, coreapi.PaneInfo{PaneID: "w1:p0", WorkspaceID: "w1", CWD: "/home/me/api"})
 	for i := range 99 { // the rule's one pane, and ninety-nine outside its folder: built-ins are the whole cap
-		snap.Panes = append(snap.Panes, herdr.PaneInfo{PaneID: fmt.Sprintf("w2:p%d", i), WorkspaceID: "w2", CWD: "/srv/other"})
+		snap.Panes = append(snap.Panes, coreapi.PaneInfo{PaneID: fmt.Sprintf("w2:p%d", i), WorkspaceID: "w2", CWD: "/srv/other"})
 	}
 	standing := s.Watches("gog", snap, nil) // the built-ins of every pane, the whole cap
 	if len(standing) != MaxWatches {
@@ -378,7 +378,7 @@ func TestAtTheCapAPersonRuleKeepsItsPlace(t *testing.T) {
 	}
 	// the pane leaves the rule's folder for a snapshot and comes back: the rule is not lost for it
 	away := *snap
-	away.Panes = append([]herdr.PaneInfo(nil), snap.Panes...)
+	away.Panes = append([]coreapi.PaneInfo(nil), snap.Panes...)
 	away.Panes[0].WorkspaceID, away.Panes[0].CWD = "w2", "/srv/other"
 	if has(s.Watches("gog", &away, standing)) {
 		t.Fatal("the rule covers a pane in another folder")

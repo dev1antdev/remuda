@@ -1,4 +1,4 @@
-package herdr
+package coreapi
 
 // LayoutNode is a tab's pane tree as herdr's layout.export answers it and layout.apply takes it: a pane, or a split of
 // two nodes. herdr starts a pane with no command as a shell in its folder.

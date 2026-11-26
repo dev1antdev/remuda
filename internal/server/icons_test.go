@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/icons"
 	"github.com/dev1antdev/remuda/internal/review"
 )
@@ -110,10 +110,10 @@ func TestRosterCarriesTheFolderAndItsIcon(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := &Server{Icons: store, Review: review.New(t.TempDir())}
-	snap := &herdr.Snapshot{Workspaces: []herdr.WorkspaceInfo{
-		{WorkspaceID: "w1", Label: "user-profiles", Worktree: &herdr.WorktreeInfo{CheckoutPath: "/p/user-profiles", RepoKey: "/p/user-profiles/.git", RepoRoot: "/p/user-profiles"}},
-		{WorkspaceID: "w2", Label: "small", Worktree: &herdr.WorktreeInfo{CheckoutPath: "/w/small", IsLinkedWorktree: true, RepoKey: "/p/user-profiles/.git"}},
-		{WorkspaceID: "w3", Label: "games-db", Worktree: &herdr.WorktreeInfo{CheckoutPath: "/p/games-db"}},
+	snap := &coreapi.Snapshot{Workspaces: []coreapi.WorkspaceInfo{
+		{WorkspaceID: "w1", Label: "user-profiles", Worktree: &coreapi.WorktreeInfo{CheckoutPath: "/p/user-profiles", RepoKey: "/p/user-profiles/.git", RepoRoot: "/p/user-profiles"}},
+		{WorkspaceID: "w2", Label: "small", Worktree: &coreapi.WorktreeInfo{CheckoutPath: "/w/small", IsLinkedWorktree: true, RepoKey: "/p/user-profiles/.git"}},
+		{WorkspaceID: "w3", Label: "games-db", Worktree: &coreapi.WorktreeInfo{CheckoutPath: "/p/games-db"}},
 	}}
 	sessions := s.sessionsFromSnapshot("gog", snap)
 	got := map[string]string{}

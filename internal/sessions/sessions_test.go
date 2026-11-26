@@ -6,18 +6,18 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/events"
-	"github.com/dev1antdev/remuda/internal/herdr"
 )
 
 // fakeClient answers like herdr: prompts refused by code, and a record of what was typed.
 type fakeClient struct {
 	withArgs  []string // the last AgentStartWith's arguments
-	promptErr *herdr.Error
+	promptErr *coreapi.Error
 	typed     []string
 	keys      [][]string
 	starts    int
-	startErrs []*herdr.Error
+	startErrs []*coreapi.Error
 }
 
 func (f *fakeClient) AgentPrompt(target, text string) error {
@@ -62,12 +62,12 @@ func TestTextForAnAgentGoesOnlyToOne(t *testing.T) {
 			t.Errorf("%s, an agent: %v %v", name, err, agent.typed)
 		}
 		for _, code := range []string{"agent_not_found", "agent_not_ready"} {
-			pane := &fakeClient{promptErr: &herdr.Error{Code: code}}
+			pane := &fakeClient{promptErr: &coreapi.Error{Code: code}}
 			if err := send(pane, ref, "Look at the failing job\nrm -rf build"); !errors.Is(err, ErrNoAgent) || len(pane.typed) != 0 || len(pane.keys) != 0 {
 				t.Errorf("%s, %s: %v, typed %v, keys %v", name, code, err, pane.typed, pane.keys)
 			}
 		}
-		blocked := &fakeClient{promptErr: &herdr.Error{Code: "agent_blocked"}}
+		blocked := &fakeClient{promptErr: &coreapi.Error{Code: "agent_blocked"}}
 		if err := send(blocked, ref, "x"); !errors.Is(err, ErrAgentBusy) || len(blocked.typed) != 0 {
 			t.Errorf("%s, blocked: %v %v", name, err, blocked.typed)
 		}
@@ -101,20 +101,20 @@ func TestKeysAndAgents(t *testing.T) {
 	if !KnownAgent("claude") || !KnownAgent("") || !KnownAgent("shell") || KnownAgent("skynet") {
 		t.Fatal("agents")
 	}
-	client := &fakeClient{startErrs: []*herdr.Error{{Code: "agent_pane_busy"}, {Code: "agent_not_ready"}}}
+	client := &fakeClient{startErrs: []*coreapi.Error{{Code: "agent_pane_busy"}, {Code: "agent_not_ready"}}}
 	if err := StartAgent(client, "w1:p1", "claude"); err != nil || client.starts != 3 {
 		t.Fatalf("start retried %d times: %v", client.starts, err)
 	}
-	taken := &fakeClient{startErrs: []*herdr.Error{{Code: "agent_name_taken"}}}
+	taken := &fakeClient{startErrs: []*coreapi.Error{{Code: "agent_name_taken"}}}
 	if err := StartAgent(taken, "w1:p1", "claude"); err != nil || taken.starts != 2 || strings.Join(taken.withArgs, " ") != "claude claude-w1-p1" {
 		t.Fatalf("a taken name is tried once more with the pane's id: %v, starts %d, %v", err, taken.starts, taken.withArgs)
 	}
-	stillTaken := &fakeClient{startErrs: []*herdr.Error{{Code: "agent_name_taken"}, {Code: "agent_name_taken"}}}
-	if err := StartAgent(stillTaken, "w1:p1", "claude"); !herdr.IsCode(err, "agent_name_taken") || stillTaken.starts != 2 {
+	stillTaken := &fakeClient{startErrs: []*coreapi.Error{{Code: "agent_name_taken"}, {Code: "agent_name_taken"}}}
+	if err := StartAgent(stillTaken, "w1:p1", "claude"); !coreapi.IsCode(err, "agent_name_taken") || stillTaken.starts != 2 {
 		t.Fatalf("a name taken twice is final: %v", err)
 	}
-	refused := &fakeClient{startErrs: []*herdr.Error{{Code: "agent_kind_unknown"}}}
-	if err := StartAgent(refused, "w1:p1", "claude"); !herdr.IsCode(err, "agent_kind_unknown") || refused.starts != 1 {
+	refused := &fakeClient{startErrs: []*coreapi.Error{{Code: "agent_kind_unknown"}}}
+	if err := StartAgent(refused, "w1:p1", "claude"); !coreapi.IsCode(err, "agent_kind_unknown") || refused.starts != 1 {
 		t.Fatalf("another refusal is final: %v", err)
 	}
 	if got := UniqueName("codex", "w1Y:p1"); got != "codex-w1y-p1" {
@@ -229,7 +229,7 @@ type readyAfter struct {
 func (f *readyAfter) AgentPrompt(target, text string) error {
 	if f.notReady > 0 {
 		f.notReady--
-		return &herdr.Error{Code: "agent_not_ready"}
+		return &coreapi.Error{Code: "agent_not_ready"}
 	}
 	return f.fakeClient.AgentPrompt(target, text)
 }
@@ -243,16 +243,16 @@ func TestFirstPromptWaitsForTheAgent(t *testing.T) {
 	if err := in.FirstPrompt(client, ref, "build it", time.Second); err != nil || strings.Join(client.typed, ",") != "prompt:build it" {
 		t.Fatalf("delivered once the agent is up: %v %v", err, client.typed)
 	}
-	never := &fakeClient{promptErr: &herdr.Error{Code: "agent_not_ready"}}
+	never := &fakeClient{promptErr: &coreapi.Error{Code: "agent_not_ready"}}
 	if err := in.FirstPrompt(never, ref, "x", 20*time.Millisecond); err == nil || !strings.Contains(err.Error(), "did not come up") || len(never.typed) != 0 {
 		t.Fatalf("timeout: %v %v", err, never.typed)
 	}
-	blocked := &fakeClient{promptErr: &herdr.Error{Code: "agent_blocked"}}
+	blocked := &fakeClient{promptErr: &coreapi.Error{Code: "agent_blocked"}}
 	if err := in.FirstPrompt(blocked, ref, "x", 20*time.Millisecond); err == nil || !strings.Contains(err.Error(), "asks something first") || len(blocked.keys) != 0 {
 		t.Fatalf("a dialog is waited through, never answered: %v %v", err, blocked.keys)
 	}
-	broken := &fakeClient{promptErr: &herdr.Error{Code: "pane_not_found"}}
-	if err := in.FirstPrompt(broken, ref, "x", time.Second); !herdr.IsCode(err, "pane_not_found") {
+	broken := &fakeClient{promptErr: &coreapi.Error{Code: "pane_not_found"}}
+	if err := in.FirstPrompt(broken, ref, "x", time.Second); !coreapi.IsCode(err, "pane_not_found") {
 		t.Fatalf("another refusal ends the wait at once: %v", err)
 	}
 }

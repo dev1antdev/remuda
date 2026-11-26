@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/machines"
 )
 
@@ -28,7 +28,7 @@ func TestHerdrsChatsCarryOnOnTheCore(t *testing.T) {
 	dir := t.TempDir()
 	inHerdr := OpenMemory(dir)
 	codex := agentPane("w1:p2", "codex", "/work/api")
-	codex.AgentSession = &herdr.AgentSession{Kind: "id", Value: otherSid}
+	codex.AgentSession = &coreapi.AgentSession{Kind: "id", Value: otherSid}
 	observe(inHerdr, "gog", true, agentPane("w1:p1", "claude", "/work/api"), codex)
 
 	gainedAny := false
@@ -122,14 +122,14 @@ func TestHerdrsSleepersWaitWithTheRest(t *testing.T) {
 		t.Fatalf("herdr's sleepers: %+v", stopped)
 	}
 	codex := agentPane("t2", "codex", "/work/web")
-	codex.AgentSession = &herdr.AgentSession{Kind: "id", Value: otherSid}
+	codex.AgentSession = &coreapi.AgentSession{Kind: "id", Value: otherSid}
 	observe(m, "gog", false, shellPane("t1", "/home/me"), codex)
 	if stopped := m.Stopped("gog"); len(stopped) != 1 || len(woken) != 1 || woken[0] != "gog|w4:p2" {
 		t.Fatalf("one on its session in the core again: %+v, woken %v", stopped, woken)
 	}
 	r := New(nil)
 	r.Memory = m
-	r.carryOn(&fakeCore{snap: &herdr.Snapshot{}}, "gog", m.Stopped("gog"), func(Stopped, string) error { return nil }, func(string) {})
+	r.carryOn(&fakeCore{snap: &coreapi.Snapshot{}}, "gog", m.Stopped("gog"), func(Stopped, string) error { return nil }, func(string) {})
 	if len(m.Stopped("gog")) != 0 || len(woken) != 2 || woken[1] != "gog|w4:p1" {
 		t.Fatalf("carried on by Resume, the sleep is told: %+v, woken %v", m.Stopped("gog"), woken)
 	}
@@ -137,7 +137,7 @@ func TestHerdrsSleepersWaitWithTheRest(t *testing.T) {
 
 // fakeCore is remuda-core's adapter on paper: workspaces and tabs made into its own snapshot, the starts noted.
 type fakeCore struct {
-	snap    *herdr.Snapshot
+	snap    *coreapi.Snapshot
 	refuse  error
 	started []string
 	named   []string     // the workspaces made, by name
@@ -152,7 +152,7 @@ func (f *fakeCore) RereadSessions() error {
 	return f.reread()
 }
 
-func (f *fakeCore) SessionSnapshot() (*herdr.Snapshot, error) {
+func (f *fakeCore) SessionSnapshot() (*coreapi.Snapshot, error) {
 	f.looks++
 	return f.snap, nil
 }
@@ -168,22 +168,22 @@ func (f *fakeCore) AgentStartWith(paneID, kind, name string, args []string, time
 	return nil
 }
 
-func (f *fakeCore) shell(workspaceID, cwd string) herdr.PaneInfo {
-	p := herdr.PaneInfo{PaneID: fmt.Sprintf("t%d", len(f.snap.Panes)+1), WorkspaceID: workspaceID, TabID: fmt.Sprintf("tab-%d", len(f.snap.Panes)+1), CWD: cwd}
+func (f *fakeCore) shell(workspaceID, cwd string) coreapi.PaneInfo {
+	p := coreapi.PaneInfo{PaneID: fmt.Sprintf("t%d", len(f.snap.Panes)+1), WorkspaceID: workspaceID, TabID: fmt.Sprintf("tab-%d", len(f.snap.Panes)+1), CWD: cwd}
 	f.snap.Panes = append(f.snap.Panes, p)
 	return p
 }
 
-func (f *fakeCore) WorkspaceCreate(cwd, label string) (*herdr.WorkspaceCreateResult, error) {
-	ws := herdr.WorkspaceInfo{WorkspaceID: fmt.Sprintf("ws-%d", len(f.snap.Workspaces)+1), Label: label, Folder: cwd}
+func (f *fakeCore) WorkspaceCreate(cwd, label string) (*coreapi.WorkspaceCreateResult, error) {
+	ws := coreapi.WorkspaceInfo{WorkspaceID: fmt.Sprintf("ws-%d", len(f.snap.Workspaces)+1), Label: label, Folder: cwd}
 	f.snap.Workspaces = append(f.snap.Workspaces, ws)
 	f.named = append(f.named, label)
-	return &herdr.WorkspaceCreateResult{Workspace: ws, RootPane: f.shell(ws.WorkspaceID, cwd)}, nil
+	return &coreapi.WorkspaceCreateResult{Workspace: ws, RootPane: f.shell(ws.WorkspaceID, cwd)}, nil
 }
 
-func (f *fakeCore) TabCreate(workspaceID, label string) (*herdr.TabCreateResult, error) {
+func (f *fakeCore) TabCreate(workspaceID, label string) (*coreapi.TabCreateResult, error) {
 	p := f.shell(workspaceID, f.snap.WorkspaceDir(f.snap.Workspace(workspaceID)))
-	return &herdr.TabCreateResult{Tab: herdr.TabInfo{TabID: p.TabID}, RootPane: p}, nil
+	return &coreapi.TabCreateResult{Tab: coreapi.TabInfo{TabID: p.TabID}, RootPane: p}, nil
 }
 
 // TestCarryOnMakesHerdrsWorkspaceAgainWithItsAgentsAsTabs: the agents of one herdr workspace come back as tabs of one
@@ -202,8 +202,8 @@ func TestCarryOnMakesHerdrsWorkspaceAgainWithItsAgentsAsTabs(t *testing.T) {
 		"w3:p1": {Kind: "claude", Session: fourth, Dir: "/work/web", Title: "web"},
 	})
 	running := agentPane("t9", "claude", "/work/web")
-	running.AgentSession = &herdr.AgentSession{Kind: "id", Value: fourth}
-	client := &fakeCore{snap: &herdr.Snapshot{Panes: []herdr.PaneInfo{running}}}
+	running.AgentSession = &coreapi.AgentSession{Kind: "id", Value: fourth}
+	client := &fakeCore{snap: &coreapi.Snapshot{Panes: []coreapi.PaneInfo{running}}}
 	checks := func(s Stopped, _ string) error {
 		if s.chat.Dir == "/work/gone" {
 			return errors.New("its folder /work/gone is gone — nothing to resume into")
@@ -230,7 +230,7 @@ func TestCarryOnMakesHerdrsWorkspaceAgainWithItsAgentsAsTabs(t *testing.T) {
 	}
 
 	remembered(m, "gog", map[string]Chat{"w5:p1": {Kind: "claude", Session: sid, Dir: "/work/api", Title: "api"}})
-	refusing := &fakeCore{snap: &herdr.Snapshot{}, refuse: &herdr.Error{Code: "agent_start_failed", Message: "no such binary"}}
+	refusing := &fakeCore{snap: &coreapi.Snapshot{}, refuse: &coreapi.Error{Code: "agent_start_failed", Message: "no such binary"}}
 	if out := r.carryOn(refusing, "gog", m.Stopped("gog"), checks, func(string) {}); len(out.failed()) != 1 || len(m.Stopped("gog")) != 1 {
 		t.Fatalf("a refused start stays listed: %+v %+v", out, m.Stopped("gog"))
 	}
@@ -276,7 +276,7 @@ func TestCarryOnStartsWhereTheAgentRan(t *testing.T) {
 	r := New(nil)
 	r.Memory = m
 	remembered(m, "gog", map[string]Chat{"w1:p1": {Kind: "claude", Session: sid, Dir: "/work/api", Ran: "/work/api/cli", Title: "api"}})
-	client := &fakeCore{snap: &herdr.Snapshot{}}
+	client := &fakeCore{snap: &coreapi.Snapshot{}}
 	checked := ""
 	r.carryOn(client, "gog", m.Stopped("gog"), func(_ Stopped, dir string) error { checked = dir; return nil }, func(string) {})
 	if checked != "/work/api/cli" || len(client.snap.Workspaces) != 1 || client.snap.Workspaces[0].Folder != "/work/api/cli" {
@@ -293,7 +293,7 @@ func TestCarryOnForgetsNothingTheMachineCouldNotSay(t *testing.T) {
 	r.Memory = m
 	remembered(m, "gog", map[string]Chat{"w1:p1": {Kind: "claude", Session: sid, Dir: "/work/api", Title: "api"}})
 	unasked := func(Stopped, string) error { return fmt.Errorf("%w: ssh: the master is gone", ErrUnasked) }
-	client := &fakeCore{snap: &herdr.Snapshot{}}
+	client := &fakeCore{snap: &coreapi.Snapshot{}}
 	if out := r.carryOn(client, "gog", m.Stopped("gog"), unasked, func(string) {}); len(out.failed()) != 1 || len(out.notBack()) != 1 || len(m.Stopped("gog")) != 1 || len(client.started) != 0 {
 		t.Fatalf("a check unanswered: %+v %+v %v", out, m.Stopped("gog"), client.started)
 	}
@@ -308,8 +308,8 @@ func TestCarryOnForgetsNothingTheMachineCouldNotSay(t *testing.T) {
 		if client.looks == 0 { // an agent started a moment ago is read only once a look has seen it
 			return nil
 		}
-		resumed.AgentSession = &herdr.AgentSession{Kind: "id", Value: sid}
-		client.snap.Panes = []herdr.PaneInfo{resumed}
+		resumed.AgentSession = &coreapi.AgentSession{Kind: "id", Value: sid}
+		client.snap.Panes = []coreapi.PaneInfo{resumed}
 		return nil
 	}
 	if out := r.carryOn(client, "gog", m.Stopped("gog"), fine, func(string) {}); len(out.back()) != 1 || len(client.started) != 0 || len(m.Stopped("gog")) != 0 {

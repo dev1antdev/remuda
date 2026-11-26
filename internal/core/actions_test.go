@@ -12,7 +12,7 @@ import (
 
 	"github.com/dev1antdev/remuda/internal/core"
 	"github.com/dev1antdev/remuda/internal/core/coretest"
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 )
 
 // standInAgent puts a `claude` on the PATH the next core starts with: it reports itself through OSC 7501 as Claude
@@ -53,8 +53,8 @@ func screenSays(t *testing.T, adapter *core.Adapter, pane, text string) {
 	t.Fatalf("the screen never said %q:\n%s", text, screen)
 }
 
-func tabsOf(snap *herdr.Snapshot, space string) []herdr.TabInfo {
-	var tabs []herdr.TabInfo
+func tabsOf(snap *coreapi.Snapshot, space string) []coreapi.TabInfo {
+	var tabs []coreapi.TabInfo
 	for _, tab := range snap.Tabs {
 		if tab.WorkspaceID == space {
 			tabs = append(tabs, tab)
@@ -86,7 +86,7 @@ func TestAWorkspaceOnASymlinkedFolderIsNamedAsTheCoreNamesIt(t *testing.T) {
 	if _, err := adapter.WorkspaceCreate(link, ""); err != nil {
 		t.Fatal(err)
 	}
-	snap := eventually(t, adapter, func(s *herdr.Snapshot) bool { return len(s.Workspaces) == 1 && len(s.Panes) == 1 })
+	snap := eventually(t, adapter, func(s *coreapi.Snapshot) bool { return len(s.Workspaces) == 1 && len(s.Panes) == 1 })
 	ws := snap.Workspaces[0]
 	if ws.Folder != physical {
 		t.Fatalf("the workspace is on %q, not the core's spelling %q", ws.Folder, physical)
@@ -102,7 +102,7 @@ func TestAWorkspaceOnASymlinkedFolderIsNamedAsTheCoreNamesIt(t *testing.T) {
 func TestWorkspacesTabsAndPanesAreMadeRenamedAndClosedOnACore(t *testing.T) {
 	client := coretest.Server(t).Client(t)
 	adapter := adapterOf(t, client, core.AdapterHooks{})
-	eventually(t, adapter, func(*herdr.Snapshot) bool { return true })
+	eventually(t, adapter, func(*coreapi.Snapshot) bool { return true })
 	folder := t.TempDir()
 
 	made, err := adapter.WorkspaceCreate(folder, "")
@@ -117,7 +117,7 @@ func TestWorkspacesTabsAndPanesAreMadeRenamedAndClosedOnACore(t *testing.T) {
 	if ws := snap.Workspace(space); ws == nil || ws.Folder != folder || snap.Pane(first) == nil {
 		t.Fatalf("the new workspace is not in the snapshot at once: %+v", snap)
 	}
-	eventually(t, adapter, func(s *herdr.Snapshot) bool {
+	eventually(t, adapter, func(s *coreapi.Snapshot) bool {
 		at, _ := adapter.PaneAtPrompt(first)
 		return at
 	})
@@ -139,7 +139,7 @@ func TestWorkspacesTabsAndPanesAreMadeRenamedAndClosedOnACore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	snap = eventually(t, adapter, func(s *herdr.Snapshot) bool {
+	snap = eventually(t, adapter, func(s *coreapi.Snapshot) bool {
 		p := s.Pane(beside.PaneID)
 		return p != nil && p.TabID == tab.Tab.TabID && s.Workspace(space).Label == "api"
 	})
@@ -153,22 +153,22 @@ func TestWorkspacesTabsAndPanesAreMadeRenamedAndClosedOnACore(t *testing.T) {
 	if err := adapter.PaneClose(beside.PaneID); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, adapter, func(s *herdr.Snapshot) bool {
+	eventually(t, adapter, func(s *coreapi.Snapshot) bool {
 		return s.Pane(beside.PaneID) == nil && s.Pane(tab.RootPane.PaneID) != nil
 	})
 	if err := adapter.TabClose(tab.Tab.TabID); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, adapter, func(s *herdr.Snapshot) bool { return len(tabsOf(s, space)) == 1 })
+	eventually(t, adapter, func(s *coreapi.Snapshot) bool { return len(tabsOf(s, space)) == 1 })
 	if err := adapter.WorkspaceClose(space); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Workspace(space) == nil && len(s.Panes) == 0 })
+	eventually(t, adapter, func(s *coreapi.Snapshot) bool { return s.Workspace(space) == nil && len(s.Panes) == 0 })
 	doc, err := client.DocGet(within(t, 5*time.Second), core.DocName)
 	if err != nil || strings.Contains(string(doc.Value), space) {
 		t.Fatalf("the document still names the closed workspace: %s %v", doc.Value, err)
 	}
-	if err := adapter.TabClose("tab-gone"); !herdr.IsCode(err, "tab_not_found") {
+	if err := adapter.TabClose("tab-gone"); !coreapi.IsCode(err, "tab_not_found") {
 		t.Fatalf("closing a tab the machine lacks: %v", err)
 	}
 }
@@ -176,7 +176,7 @@ func TestWorkspacesTabsAndPanesAreMadeRenamedAndClosedOnACore(t *testing.T) {
 func TestTheLastPaneOfATabTakesItAndItsWorkspaceAlong(t *testing.T) {
 	client := coretest.Server(t).Client(t)
 	adapter := adapterOf(t, client, core.AdapterHooks{})
-	eventually(t, adapter, func(*herdr.Snapshot) bool { return true })
+	eventually(t, adapter, func(*coreapi.Snapshot) bool { return true })
 	made, err := adapter.WorkspaceCreate(t.TempDir(), "solo")
 	if err != nil {
 		t.Fatal(err)
@@ -184,7 +184,7 @@ func TestTheLastPaneOfATabTakesItAndItsWorkspaceAlong(t *testing.T) {
 	if err := adapter.PaneClose(made.RootPane.PaneID); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Workspace(made.Workspace.WorkspaceID) == nil })
+	eventually(t, adapter, func(s *coreapi.Snapshot) bool { return s.Workspace(made.Workspace.WorkspaceID) == nil })
 	doc, _ := client.DocGet(within(t, 5*time.Second), core.DocName)
 	if strings.Contains(string(doc.Value), made.Workspace.WorkspaceID) {
 		t.Fatalf("the document keeps the empty workspace: %s", doc.Value)
@@ -196,7 +196,7 @@ func TestTwoRemudasMakingWorkspacesAtOnceKeepEveryOne(t *testing.T) {
 	one := adapterOf(t, server.Client(t), core.AdapterHooks{})
 	two := adapterOf(t, server.Client(t), core.AdapterHooks{})
 	for _, a := range []*core.Adapter{one, two} {
-		eventually(t, a, func(*herdr.Snapshot) bool { return true })
+		eventually(t, a, func(*coreapi.Snapshot) bool { return true })
 	}
 	var made sync.Map
 	var wg sync.WaitGroup
@@ -231,7 +231,7 @@ func idleAgent(t *testing.T) (*core.Client, *core.Adapter, string) {
 	standInAgent(t)
 	client := coretest.Server(t).Client(t)
 	adapter := adapterOf(t, client, core.AdapterHooks{})
-	eventually(t, adapter, func(*herdr.Snapshot) bool { return true })
+	eventually(t, adapter, func(*coreapi.Snapshot) bool { return true })
 	made, err := adapter.WorkspaceCreate(t.TempDir(), "")
 	if err != nil {
 		t.Fatal(err)
@@ -246,16 +246,16 @@ func startStandIn(t *testing.T, adapter *core.Adapter, pane string) {
 	t.Helper()
 	var err error
 	for start := time.Now(); time.Since(start) < 10*time.Second; time.Sleep(200 * time.Millisecond) {
-		if err = adapter.AgentStart(pane, "claude"); !herdr.IsCode(err, "agent_pane_busy") {
+		if err = adapter.AgentStart(pane, "claude"); !coreapi.IsCode(err, "agent_pane_busy") {
 			break
 		}
 	}
 	if err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, adapter, func(s *herdr.Snapshot) bool {
+	eventually(t, adapter, func(s *coreapi.Snapshot) bool {
 		p := s.Pane(pane)
-		return p != nil && p.Agent == "claude" && p.AgentStatus == herdr.StatusIdle
+		return p != nil && p.Agent == "claude" && p.AgentStatus == coreapi.StatusIdle
 	})
 }
 
@@ -273,7 +273,7 @@ func TestAPromptWaitsForACoreThatChecksTheAgentAsItTypes(t *testing.T) {
 		screenSays(t, adapter, pane, "got: hello")
 		return
 	}
-	if !herdr.IsCode(err, "invalid_request") || !strings.Contains(err.Error(), "Core 33") {
+	if !coreapi.IsCode(err, "invalid_request") || !strings.Contains(err.Error(), "Core 33") {
 		t.Fatalf("a prompt through a core that does not check the agent as it types: %v", err)
 	}
 	screen, _ := adapter.PaneRead(pane)
@@ -287,29 +287,29 @@ func TestAnAgentStartsInTheShellAndTakesPromptsAndKeys(t *testing.T) {
 	standInAgent(t)
 	client := coretest.Server(t).Client(t)
 	adapter := adapterOf(t, client, core.AdapterHooks{})
-	eventually(t, adapter, func(*herdr.Snapshot) bool { return true })
+	eventually(t, adapter, func(*coreapi.Snapshot) bool { return true })
 	made, err := adapter.WorkspaceCreate(t.TempDir(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	pane := made.RootPane.PaneID
-	if err := adapter.AgentPrompt(pane, "hello"); !herdr.IsCode(err, "agent_not_found") {
+	if err := adapter.AgentPrompt(pane, "hello"); !coreapi.IsCode(err, "agent_not_found") {
 		t.Fatalf("a prompt to a shell: %v", err)
 	}
 	var started error
 	for start := time.Now(); time.Since(start) < 10*time.Second; time.Sleep(200 * time.Millisecond) {
-		if started = adapter.AgentStartWith(pane, "claude", "claude", []string{"--model", "it's opus"}, 20*time.Second); !herdr.IsCode(started, "agent_pane_busy") {
+		if started = adapter.AgentStartWith(pane, "claude", "claude", []string{"--model", "it's opus"}, 20*time.Second); !coreapi.IsCode(started, "agent_pane_busy") {
 			break
 		}
 	}
 	if started != nil {
 		t.Fatal(started)
 	}
-	eventually(t, adapter, func(s *herdr.Snapshot) bool {
+	eventually(t, adapter, func(s *coreapi.Snapshot) bool {
 		p := s.Pane(pane)
-		return p != nil && p.Agent == "claude" && p.AgentStatus == herdr.StatusIdle
+		return p != nil && p.Agent == "claude" && p.AgentStatus == coreapi.StatusIdle
 	})
-	if err := adapter.AgentStart(pane, "claude"); !herdr.IsCode(err, "agent_pane_busy") {
+	if err := adapter.AgentStart(pane, "claude"); !coreapi.IsCode(err, "agent_pane_busy") {
 		t.Fatalf("a second agent in a pane its agent holds: %v", err)
 	}
 
@@ -322,29 +322,29 @@ func TestAnAgentStartsInTheShellAndTakesPromptsAndKeys(t *testing.T) {
 		t.Fatal(err)
 	}
 	screenSays(t, adapter, pane, "got: x")
-	if err := adapter.PaneSendText(pane, "typed raw"); !herdr.IsCode(err, "agent_pane_busy") {
+	if err := adapter.PaneSendText(pane, "typed raw"); !coreapi.IsCode(err, "agent_pane_busy") {
 		t.Fatalf("raw typing into an agent's terminal: %v", err)
 	}
 
-	eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Pane(pane).AgentStatus == herdr.StatusIdle })
+	eventually(t, adapter, func(s *coreapi.Snapshot) bool { return s.Pane(pane).AgentStatus == coreapi.StatusIdle })
 	if err := adapter.AgentPrompt(pane, "ask"); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Pane(pane).AgentStatus == herdr.StatusBlocked })
-	if err := adapter.AgentPrompt(pane, "an answer typed into its dialog"); !herdr.IsCode(err, "agent_blocked") {
+	eventually(t, adapter, func(s *coreapi.Snapshot) bool { return s.Pane(pane).AgentStatus == coreapi.StatusBlocked })
+	if err := adapter.AgentPrompt(pane, "an answer typed into its dialog"); !coreapi.IsCode(err, "agent_blocked") {
 		t.Fatalf("a prompt to an agent asking something: %v", err)
 	}
 	if err := adapter.PaneSendKeys(pane, []string{"l", "e", "a", "v", "i", "n", "g", "enter"}); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, adapter, func(s *herdr.Snapshot) bool { return s.Pane(pane).AgentStatus == herdr.StatusUnknown })
+	eventually(t, adapter, func(s *coreapi.Snapshot) bool { return s.Pane(pane).AgentStatus == coreapi.StatusUnknown })
 	if err := adapter.AgentPrompt(pane, "echo typed into the shell"); err == nil {
 		t.Fatal("a prompt went to an agent that cleared its status, as one leaving does")
 	}
 	if pid, err := adapter.PaneShellPID(pane); err != nil || pid == 0 {
 		t.Fatalf("shell pid %d %v", pid, err)
 	}
-	if !slices.ContainsFunc(eventually(t, adapter, func(*herdr.Snapshot) bool { return true }).Panes, func(p herdr.PaneInfo) bool { return p.PaneID == pane }) {
+	if !slices.ContainsFunc(eventually(t, adapter, func(*coreapi.Snapshot) bool { return true }).Panes, func(p coreapi.PaneInfo) bool { return p.PaneID == pane }) {
 		t.Fatal("the pane is gone")
 	}
 }
@@ -352,13 +352,13 @@ func TestAnAgentStartsInTheShellAndTakesPromptsAndKeys(t *testing.T) {
 func TestRemudaTypesACommandLineIntoAShell(t *testing.T) {
 	client := coretest.Server(t).Client(t)
 	adapter := adapterOf(t, client, core.AdapterHooks{})
-	eventually(t, adapter, func(*herdr.Snapshot) bool { return true })
+	eventually(t, adapter, func(*coreapi.Snapshot) bool { return true })
 	made, err := adapter.WorkspaceCreate(t.TempDir(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	pane := made.RootPane.PaneID
-	eventually(t, adapter, func(*herdr.Snapshot) bool { at, _ := adapter.PaneAtPrompt(pane); return at })
+	eventually(t, adapter, func(*coreapi.Snapshot) bool { at, _ := adapter.PaneAtPrompt(pane); return at })
 	if err := adapter.PaneSendText(pane, "echo typed-$((40+2))"); err != nil {
 		t.Fatal(err)
 	}
@@ -372,21 +372,21 @@ func TestAnAgentThatCannotRunFailsItsStart(t *testing.T) {
 	t.Setenv("PATH", "/usr/bin:/bin") // no amp on it
 	client := coretest.Server(t).Client(t)
 	adapter := adapterOf(t, client, core.AdapterHooks{})
-	eventually(t, adapter, func(*herdr.Snapshot) bool { return true })
+	eventually(t, adapter, func(*coreapi.Snapshot) bool { return true })
 	made, err := adapter.WorkspaceCreate(t.TempDir(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	var started error
 	for start := time.Now(); time.Since(start) < 10*time.Second; time.Sleep(200 * time.Millisecond) {
-		if started = adapter.AgentStart(made.RootPane.PaneID, "amp"); !herdr.IsCode(started, "agent_pane_busy") {
+		if started = adapter.AgentStart(made.RootPane.PaneID, "amp"); !coreapi.IsCode(started, "agent_pane_busy") {
 			break
 		}
 	}
 	if started == nil || !strings.Contains(started.Error(), "did not start") {
 		t.Fatalf("an agent that is not there: %v", started)
 	}
-	if err := adapter.AgentStart(made.RootPane.PaneID, "no-such-agent"); !herdr.IsCode(err, "agent_kind_unknown") {
+	if err := adapter.AgentStart(made.RootPane.PaneID, "no-such-agent"); !coreapi.IsCode(err, "agent_kind_unknown") {
 		t.Fatalf("an agent remuda does not know: %v", err)
 	}
 }

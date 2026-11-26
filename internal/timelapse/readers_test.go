@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 )
 
 func TestAScreenReadNeverHoldsUpTheSnapshotsAndOneMachineReadsOneAtATime(t *testing.T) {
@@ -26,7 +26,7 @@ func TestAScreenReadNeverHoldsUpTheSnapshotsAndOneMachineReadsOneAtATime(t *test
 	done := make(chan struct{})
 	go func() {
 		for i := 0; i < 5; i++ {
-			r.Observe("gog", snap(herdr.StatusWorking, "w1:p1", "w1:p2"), t0.Add(time.Duration(i)*Interval))
+			r.Observe("gog", snap(coreapi.StatusWorking, "w1:p1", "w1:p2"), t0.Add(time.Duration(i)*Interval))
 		}
 		close(done)
 	}()

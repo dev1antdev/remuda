@@ -12,8 +12,8 @@ import (
 	"github.com/dev1antdev/remuda/internal/auth"
 	"github.com/dev1antdev/remuda/internal/awake"
 	"github.com/dev1antdev/remuda/internal/collisions"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/health"
-	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/icons"
 	"github.com/dev1antdev/remuda/internal/jira"
 	"github.com/dev1antdev/remuda/internal/limits"
@@ -146,7 +146,7 @@ type rosterServer struct {
 // FolderOf is the folder a workspace belongs to in the sidebar: its repository's main checkout — herdr's repo_root,
 // else the folder holding the shared .git, else the root the review sweep read with git (a worktree made outside
 // herdr) — or, outside a repository, the workspace's own folder. A timelapse keeps it, for the screen-sharing mode.
-func FolderOf(worktree *herdr.WorktreeInfo, root, dir string) string {
+func FolderOf(worktree *coreapi.WorktreeInfo, root, dir string) string {
 	if worktree != nil {
 		if worktree.RepoRoot != "" {
 			return worktree.RepoRoot
@@ -164,7 +164,7 @@ func FolderOf(worktree *herdr.WorktreeInfo, root, dir string) string {
 }
 
 // sessionsFromSnapshot keeps herdr's own hierarchy, workspace → tabs → panes, in herdr's order.
-func (s *Server) sessionsFromSnapshot(machineID string, snap *herdr.Snapshot) []rosterSession {
+func (s *Server) sessionsFromSnapshot(machineID string, snap *coreapi.Snapshot) []rosterSession {
 	panesByTab := map[string][]rosterPane{}
 	agentInTab := map[string]bool{}
 	for i := range snap.Panes {
@@ -176,7 +176,7 @@ func (s *Server) sessionsFromSnapshot(machineID string, snap *herdr.Snapshot) []
 			Agent:   pane.AgentName(),
 			CWD:     pane.Dir(),
 			Focused: pane.Focused || pane.PaneID == snap.FocusedPaneID,
-			Status:  herdr.UIStatus(pane.AgentStatus, pane.Agent != ""),
+			Status:  coreapi.UIStatus(pane.AgentStatus, pane.Agent != ""),
 			Cols:    cols,
 			Rows:    rows,
 		}
@@ -216,7 +216,7 @@ func (s *Server) sessionsFromSnapshot(machineID string, snap *herdr.Snapshot) []
 		tabsByWS[tab.WorkspaceID] = append(tabsByWS[tab.WorkspaceID], rosterTab{
 			ID: tab.TabID, Label: tab.Label, Number: tab.Number,
 			Named:  tabNamed(tab.Label),
-			Status: herdr.UIStatus(tab.AgentStatus, agentInTab[tab.TabID]), Panes: panes,
+			Status: coreapi.UIStatus(tab.AgentStatus, agentInTab[tab.TabID]), Panes: panes,
 		})
 		if agentInTab[tab.TabID] {
 			agentInWS[tab.WorkspaceID] = true
@@ -231,7 +231,7 @@ func (s *Server) sessionsFromSnapshot(machineID string, snap *herdr.Snapshot) []
 		session := rosterSession{
 			ID:          ws.WorkspaceID,
 			Name:        ws.Label,
-			Status:      herdr.UIStatus(ws.AgentStatus, agentInWS[ws.WorkspaceID]),
+			Status:      coreapi.UIStatus(ws.AgentStatus, agentInWS[ws.WorkspaceID]),
 			ActiveTabID: ws.ActiveTabID,
 			Tabs:        tabs,
 			Scratch:     s.Scratch != nil && s.Scratch.Is(machineID, ws.WorkspaceID),

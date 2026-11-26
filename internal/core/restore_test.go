@@ -7,7 +7,7 @@ import (
 
 	"github.com/dev1antdev/remuda/internal/core"
 	"github.com/dev1antdev/remuda/internal/core/coretest"
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/sessions"
 )
 
@@ -17,9 +17,9 @@ func startIn(t *testing.T, adapter *core.Adapter, pane, session string) {
 	if err := sessions.StartAgentWith(adapter, pane, "claude", sessions.Start{Resume: session}); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, adapter, func(s *herdr.Snapshot) bool {
+	eventually(t, adapter, func(s *coreapi.Snapshot) bool {
 		p := s.Pane(pane)
-		return p != nil && p.Agent == "claude" && p.AgentStatus == herdr.StatusIdle && !p.Restored
+		return p != nil && p.Agent == "claude" && p.AgentStatus == coreapi.StatusIdle && !p.Restored
 	})
 }
 
@@ -30,7 +30,7 @@ func TestPanesComeBackAsShellsAfterTheCoreRestartsAndTheirAgentsResumeInThem(t *
 	standInAgent(t)
 	c := coretest.Server(t)
 	adapter := adapterOf(t, c.Client(t), core.AdapterHooks{})
-	eventually(t, adapter, func(*herdr.Snapshot) bool { return true })
+	eventually(t, adapter, func(*coreapi.Snapshot) bool { return true })
 	folders := map[string]string{}
 	for range 2 {
 		folder, err := filepath.EvalSymlinks(t.TempDir())
@@ -47,7 +47,7 @@ func TestPanesComeBackAsShellsAfterTheCoreRestartsAndTheirAgentsResumeInThem(t *
 
 	c.Restart(t)
 
-	eventually(t, adapter, func(s *herdr.Snapshot) bool {
+	eventually(t, adapter, func(s *coreapi.Snapshot) bool {
 		for pane, folder := range folders {
 			p := s.Pane(pane)
 			if p == nil || p.Agent != "" || !p.Restored || p.Dir() != folder {

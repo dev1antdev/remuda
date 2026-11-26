@@ -9,14 +9,14 @@ import (
 	"maps"
 	"slices"
 
-	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/state"
 )
 
 // LayoutExport is a tab's pane tree as herdr's layout.export gives it: the document's splits and their shares, each
 // pane's folder as it stands now and the label the layout that made it gave it. A pane the tree lacks (one placed by
 // its labels alone) goes to the right of the last; one whose terminal ended is left out.
-func (a *Adapter) LayoutExport(tabID string) (*herdr.LayoutDescription, error) {
+func (a *Adapter) LayoutExport(tabID string) (*coreapi.LayoutDescription, error) {
 	snap, err := a.SessionSnapshot()
 	if err != nil {
 		return nil, err
@@ -25,7 +25,7 @@ func (a *Adapter) LayoutExport(tabID string) (*herdr.LayoutDescription, error) {
 	if tab == nil {
 		return nil, tabMissing(tabID)
 	}
-	panes := panesWhere(snap, func(p *herdr.PaneInfo) bool { return p.TabID == tabID })
+	panes := panesWhere(snap, func(p *coreapi.PaneInfo) bool { return p.TabID == tabID })
 	tree := a.docTree(tabID)
 	for _, node := range tree.Panes() {
 		if !slices.Contains(panes, node.PaneID) {
@@ -37,14 +37,14 @@ func (a *Adapter) LayoutExport(tabID string) (*herdr.LayoutDescription, error) {
 		switch {
 		case tree == nil:
 			tree = leaf(pane)
-		case !slices.ContainsFunc(leaves, func(n *herdr.LayoutNode) bool { return n.PaneID == pane }):
+		case !slices.ContainsFunc(leaves, func(n *coreapi.LayoutNode) bool { return n.PaneID == pane }):
 			tree = splitBeside(tree, leaves[len(leaves)-1].PaneID, pane, "right")
 		}
 	}
 	for _, node := range tree.Panes() {
 		node.CWD = snap.Pane(node.PaneID).CWD
 	}
-	return &herdr.LayoutDescription{WorkspaceID: tab.WorkspaceID, TabID: tabID, FocusedPaneID: tree.Panes()[0].PaneID, Root: *tree}, nil
+	return &coreapi.LayoutDescription{WorkspaceID: tab.WorkspaceID, TabID: tabID, FocusedPaneID: tree.Panes()[0].PaneID, Root: *tree}, nil
 }
 
 // LabelLayout marks the terminals one LayoutApply starts, so a layout that fails ends every one of them, a terminal
@@ -65,12 +65,12 @@ var layoutBeforeWrite = func() {}
 // older core is refused a layout with a command. The document keeps the tree with each pane's terminal and label. The
 // tab in front stays in front. The tree is taken as scenes checked it. Only a workspace or tab the document holds takes
 // a layout, and one closed while the panes started is not brought back: the layout fails and ends what it started.
-func (a *Adapter) LayoutApply(workspaceID, tabID, tabLabel string, root herdr.LayoutNode) (*herdr.LayoutDescription, error) {
+func (a *Adapter) LayoutApply(workspaceID, tabID, tabLabel string, root coreapi.LayoutNode) (*coreapi.LayoutDescription, error) {
 	panes := root.Panes()
 	if len(panes) == 0 {
-		return nil, &herdr.Error{Code: "invalid_request", Message: "a layout holds at least one pane"}
+		return nil, &coreapi.Error{Code: "invalid_request", Message: "a layout holds at least one pane"}
 	}
-	if i := slices.IndexFunc(panes, func(p *herdr.LayoutNode) bool { return len(p.Command) > 0 }); i >= 0 {
+	if i := slices.IndexFunc(panes, func(p *coreapi.LayoutNode) bool { return len(p.Command) > 0 }); i >= 0 {
 		ctx, cancel := context.WithTimeout(context.Background(), callWithin)
 		hello, err := a.client.Hello(ctx)
 		cancel()
@@ -78,7 +78,7 @@ func (a *Adapter) LayoutApply(workspaceID, tabID, tabLabel string, root herdr.La
 			return nil, a.refusal(err, "workspace_not_found")
 		}
 		if !runsLiteral(hello) {
-			return nil, &herdr.Error{Code: "invalid_request", Message: fmt.Sprintf("pane %d of the layout runs a command of its own, which waits for a remuda-core that starts a program as it is, not as a template of that name: update it (Core 35)", i+1)}
+			return nil, &coreapi.Error{Code: "invalid_request", Message: fmt.Sprintf("pane %d of the layout runs a command of its own, which waits for a remuda-core that starts a program as it is, not as a template of that name: update it (Core 35)", i+1)}
 		}
 	}
 	space, inPlace := workspaceID, tabID != ""
@@ -87,7 +87,7 @@ func (a *Adapter) LayoutApply(workspaceID, tabID, tabLabel string, root herdr.La
 			return nil, tabMissing(tabID)
 		}
 	} else if !a.inDoc(space) {
-		return nil, &herdr.Error{Code: "workspace_not_found", Message: "no workspace " + space + " in remuda's document on this core"}
+		return nil, &coreapi.Error{Code: "workspace_not_found", Message: "no workspace " + space + " in remuda's document on this core"}
 	}
 	snap, err := a.SessionSnapshot()
 	if err != nil {
@@ -95,7 +95,7 @@ func (a *Adapter) LayoutApply(workspaceID, tabID, tabLabel string, root herdr.La
 	}
 	var ending []string
 	if inPlace {
-		ending = panesWhere(snap, func(p *herdr.PaneInfo) bool { return p.TabID == tabID })
+		ending = panesWhere(snap, func(p *coreapi.PaneInfo) bool { return p.TabID == tabID })
 	} else {
 		tabID = "tab-" + state.NewID()
 	}
@@ -106,7 +106,7 @@ func (a *Adapter) LayoutApply(workspaceID, tabID, tabLabel string, root herdr.La
 
 	tree, mark := clone(&root), state.NewID()
 	var started []string
-	fail := func(err error) (*herdr.LayoutDescription, error) {
+	fail := func(err error) (*coreapi.LayoutDescription, error) {
 		if swept := a.endLabelled(map[string]string{LabelLayout: mark}); swept != nil {
 			return nil, fmt.Errorf("%w; its panes may still run, as a tab of their own: %v", err, swept)
 		}
@@ -150,7 +150,7 @@ func (a *Adapter) LayoutApply(workspaceID, tabID, tabLabel string, root herdr.La
 		}
 		return nil
 	})
-	var refused *herdr.Error
+	var refused *coreapi.Error
 	switch {
 	case err == nil:
 	case errors.As(err, &refused):
@@ -166,7 +166,7 @@ func (a *Adapter) LayoutApply(workspaceID, tabID, tabLabel string, root herdr.La
 	if err := a.kill(ending...); err != nil {
 		log.Printf("remuda-core: tab %s is laid out anew, but not all its old panes ended: %v", tabID, err)
 	}
-	return &herdr.LayoutDescription{WorkspaceID: space, TabID: tabID, FocusedPaneID: started[0], Root: *tree}, nil
+	return &coreapi.LayoutDescription{WorkspaceID: space, TabID: tabID, FocusedPaneID: started[0], Root: *tree}, nil
 }
 
 // What the core's document says of a layout's write whose answer never came.
@@ -191,7 +191,7 @@ func (a *Adapter) holdsTree(tab, pane string) int {
 	}
 	for _, ws := range doc.Workspaces {
 		for _, t := range ws.Tabs {
-			if t.ID == tab && slices.ContainsFunc(t.Layout.Panes(), func(n *herdr.LayoutNode) bool { return n.PaneID == pane }) {
+			if t.ID == tab && slices.ContainsFunc(t.Layout.Panes(), func(n *coreapi.LayoutNode) bool { return n.PaneID == pane }) {
 				return treeHeld
 			}
 		}
@@ -200,7 +200,7 @@ func (a *Adapter) holdsTree(tab, pane string) int {
 }
 
 // docTree is a copy of the tab's tree as the mirror's document holds it, nil for a tab it lacks.
-func (a *Adapter) docTree(tab string) *herdr.LayoutNode {
+func (a *Adapter) docTree(tab string) *coreapi.LayoutNode {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	for _, ws := range a.state.doc.Workspaces {
@@ -211,7 +211,7 @@ func (a *Adapter) docTree(tab string) *herdr.LayoutNode {
 	return nil
 }
 
-func clone(node *herdr.LayoutNode) *herdr.LayoutNode {
+func clone(node *coreapi.LayoutNode) *coreapi.LayoutNode {
 	if node == nil {
 		return nil
 	}

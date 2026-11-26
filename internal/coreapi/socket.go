@@ -1,7 +1,8 @@
-// Package herdr is the dictionary of a machine: the snapshot, a pane, a workspace, a tab, the layout, the statuses, the
-// events — and the few things remuda still asks about the herdr a machine came from (its socket, its binary, whether its
-// server answers), for the move at the person's press. remuda speaks to remuda-core (internal/core), never to herdr.
-package herdr
+// Package coreapi is the dictionary of a machine as remuda-core tells it: the snapshot, a pane, a workspace, a tab, the
+// layout, the statuses and the events — the port every package that asks a machine speaks. Its one implementation is
+// the adapter over the machine's remuda-core (internal/core). The herdr a machine came from: its socket and binary
+// here, and whether its server answers (and its stop) in internal/herdrollback, for the move at the person's press.
+package coreapi
 
 import (
 	"fmt"
