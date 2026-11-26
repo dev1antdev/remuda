@@ -7238,9 +7238,13 @@ components and icons as rules for whoever changes it: @docs/design.md
   shown, on the routes that read a pane by its id). **A viewer reads the
   conversation a pane on its roster reports it is in and no other**: a
   session is found by its id in every project folder and nothing says whose
-  it was, so the chat and the recap read a session id only through the pane that is
-  in it (`viewerSessionPane`, a compacted conversation's later file counting
-  as the pane's; the request is rewritten to that pane), refuse any other,
+  it was — a copy restored into another project has the same id — so a file
+  resolved outside the pane's own project is refused (`Reader.OwnsSession`:
+  Claude's encoded projects folder, Gemini's hash of the folder; Codex keeps
+  no per-project copies), and the chat and the recap read a session id only
+  through the pane that is in it (`viewerSessionPane`, a compacted
+  conversation's later file counting as the pane's; the request is rewritten
+  to that pane), refuse any other,
   answer nothing for a pane whose own session cannot be found
   (`chat.OpenOwn`), and list no folder's sessions;
   their timelapses are left out of

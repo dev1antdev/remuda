@@ -438,7 +438,7 @@ func (c *Service) open(mc *machines.Machine, paneID, sessionID, dir string, tail
 						conv.Path = session.Path
 					}
 				}
-			} else if path, err := mc.Transcripts.ResolveSession(pane.Agent, conv.Dir, "id", sessionID); err == nil && (format != transcript.Claude || strings.Contains(path, "/"+transcript.EncodePath(conv.Dir)+"/")) {
+			} else if path, err := mc.Transcripts.ResolveSession(pane.Agent, conv.Dir, "id", sessionID); err == nil && mc.Transcripts.OwnsSession(format, conv.Dir, path) {
 				conv.Path = path
 			}
 		}

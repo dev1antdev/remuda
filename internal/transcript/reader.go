@@ -649,6 +649,21 @@ func (r *Reader) ResolveSession(agent, cwd, kind, value string) (string, error) 
 	return path, nil
 }
 
+// OwnsSession says whether a resolved file is the folder's own session, for the formats that keep each folder's files
+// apart: a copy of the same id restored into another project (or the projects-wide fallback of a folder whose own has
+// gone) is not the pane's, and a viewer must not be shown it.
+func (r *Reader) OwnsSession(format Format, cwd, path string) bool {
+	home := r.host.Home()
+	style := rpath.For(home)
+	switch format {
+	case Gemini:
+		return style.Equal(style.Dir(style.Clean(path)), style.Clean(geminiChatsDir(home, cwd)))
+	case Claude:
+		return strings.Contains(style.Slash(style.Clean(path)), "/"+EncodePath(cwd)+"/")
+	}
+	return true
+}
+
 // findScript is findSessionIn as a shell line for a remote machine: the formats tried in turn, the folders of each in
 // turn, the first path printed.
 func findScript(roots Roots, format Format, home, cwd, id string) string {
