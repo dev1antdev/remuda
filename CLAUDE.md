@@ -5515,7 +5515,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   count still being read says "…"; pref `pr.view`), the branch's one
   pull request opened at once with no back button, Read GitHub again,
   the foot naming the branch and "Updated 2 min ago"; the branch read
-  every minute while open, the Repo list while it shows (and once for its
+  every minute while open, and at once when the roster says the workspace's branch moved
+  (`branchOf` in `model.ts`, read off its pane, else its folder), the Repo list while it shows (and once for its
   count), 450 ms after the typing settles; `GhProblem.tsx`;
   `PRLists.tsx` (`PRRow`: state icon, title, checks' icon, "author · age
   · where", `#n`; the loading shape rows of grey; "+ N more" pages on);

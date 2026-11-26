@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { actionQuestion, actions, blockers, cardChecks, checkCounts, checkGroups, headMoved, kindOf, prLook, searchText, splitMessage, squashMessage, stats } from "./model";
+import { actionQuestion, actions, blockers, branchOf, cardChecks, checkCounts, checkGroups, headMoved, kindOf, prLook, searchText, splitMessage, squashMessage, stats } from "./model";
 import type { Check, Detail } from "./api";
+import type { Machine } from "@/features/roster/api";
 
 const check = (name: string, over: Partial<Check> = {}): Check => ({ name, status: "COMPLETED", conclusion: "SUCCESS", ...over });
 
@@ -137,5 +138,24 @@ describe("the look and the search", () => {
     expect(searchText(" abc ")).toBe("abc");
     expect(searchText("#4")).toBe("#4");
     expect(searchText("7")).toBe("7");
+  });
+});
+
+describe("the panel's branch", () => {
+  it("reads the branch the workspace has checked out now", () => {
+    const machines = [
+      {
+        id: "m1",
+        sessions: [
+          { id: "w1", dir: "/code/app", branch: "feature", tabs: [{ id: "t", panes: [{ id: "t1" }] }] },
+          { id: "w2", dir: "/code/other", branch: "main", tabs: [] },
+        ],
+      },
+    ] as unknown as Machine[];
+    expect(branchOf(machines, "m1", "t1", "/code/app")).toBe("feature");
+    expect(branchOf(machines, "m1", "", "/code/other")).toBe("main");
+    // a pane gone from the roster falls back to the folder
+    expect(branchOf(machines, "m1", "gone", "/code/app")).toBe("feature");
+    expect(branchOf(machines, "m2", "", "/code/app")).toBe("");
   });
 });

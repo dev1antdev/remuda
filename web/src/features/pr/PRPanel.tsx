@@ -5,6 +5,7 @@
 import { useEffect, useState } from "react";
 import { app, type PRAt } from "@/app/store";
 import { folderOf, useCurrent } from "@/app/current";
+import { useRoster } from "@/features/roster/useRoster";
 import { useNow } from "@/lib/clock";
 import { usePref } from "@/lib/prefs";
 import { useQuery } from "@/lib/query";
@@ -15,7 +16,7 @@ import { fetchBranch, fetchSearch, type Card, type Problem } from "./api";
 import { BranchList, RepoList, type RepoAsk } from "./PRLists";
 import PRDetail from "./PRDetail";
 import GhProblem from "./GhProblem";
-import { searchText } from "./model";
+import { branchOf, searchText } from "./model";
 import { prFromURL } from "./links";
 
 export default function PRPanel({ onClose }: { onClose: () => void }) {
@@ -39,7 +40,9 @@ function PanelBody({ at, onClose }: { at: PRAt; onClose: () => void }) {
   const fromLink = at.url ? prFromURL(at.url) : null;
   const [open, setOpen] = useState<Opened | null>(fromLink);
   const [stamp, setStamp] = useState(0); // a refresh reads every list and the pull request open again
-  const branch = useQuery(() => fetchBranch(at.machineId, at.dir), [at.machineId, at.dir, stamp], { every: 60_000, keep: true });
+  const { machines } = useRoster();
+  const checkedOut = branchOf(machines, at.machineId, at.paneId ?? "", at.dir);
+  const branch = useQuery(() => fetchBranch(at.machineId, at.dir), [at.machineId, at.dir, checkedOut, stamp], { every: 60_000, keep: true });
   const checkout = branch.data?.checkout;
   const [remote, setRemote] = useState("");
   const repo = remote || (fromLink?.repo ?? "") || checkout?.repo || "";
