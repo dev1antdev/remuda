@@ -390,7 +390,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   kept watch's rows still on the screen as if new, nor misses one printed
   while the streams swap; a new watch's rows that stood are where things
   stood — its rows go out as
-  `pane.output_matched`, a `missed` there ending its streams with
+  `pane.output_matched` (a row's `pos`, its place in the terminal, so the same text at another place is another row),
+  a `missed` there ending its streams with
   `events_lost` (the watcher subscribes again) and a row's `lost` count
   logged once a feed, a row it says stood before the watch began
   `Standing`; the core's refusals read as the dictionary's (`not_found` →
@@ -4092,10 +4093,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   while one stands, and again every one standing when a watch's feed begins
   (a new watch, or the connection was lost) — so `OnMatch`
   remembers each row a watch matched lately (`maxStanding` 64), not only the
-  last, and a row told again as a stream opened is no news while one that came
-  in the gap is; after a lost connection a new row with the very text of one
-  matched before is taken for it, the text being all core tells (a row
-  number that survives a resubscription is task #332); `Service.Watches` is the set for a machine's snapshot — the
+  last, by its text and, from a core that tells it, its place in the terminal
+  (`pos`): a row told again as a stream opened is no news, while one that came
+  in the gap is — even with the very text of one matched before; a core older
+  than Core 34 tells no place, and the text alone is all it has; `Service.Watches` is the set for a machine's snapshot — the
   person's rules where they look, then two built-in ones on every pane, at
   most `MaxWatches` 200 a machine — past it the person's rules come before
   the built-ins and, within either class, the watches the stream holds now
