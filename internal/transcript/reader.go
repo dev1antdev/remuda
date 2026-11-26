@@ -560,7 +560,7 @@ func keepTail(tails map[string]*cachedTail, path string, tail *cachedTail, budge
 // every format): the exact id in the folder's own place first, else a search across the format's tree.
 func (r *Reader) ResolveSession(agent, cwd, kind, value string) (string, error) {
 	// opencode names a row in its own database, never a file
-	if agent == "opencode" || kind == "opencode" {
+	if agent == "opencode" || kind == "opencode" || (agent == "" && strings.HasPrefix(value, "ses_")) {
 		if kind == "path" {
 			return "", fmt.Errorf("opencode keeps no session files")
 		}

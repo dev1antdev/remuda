@@ -151,6 +151,9 @@ func TestAnOpencodeSessionListNamesOnlyItsFolder(t *testing.T) {
 	if err != nil || !IsOpencode(path) || SessionID(path) != id {
 		t.Fatalf("by id: %q, %v", path, err)
 	}
+	if byId, err := reader.ResolveSession("", dir, "id", id); err != nil || byId != path {
+		t.Fatalf("a session id with no agent: %q, %v", byId, err)
+	}
 	if _, err := reader.ResolveSession("opencode", dir, "path", "/code/app/session.jsonl"); err == nil {
 		t.Error("opencode took a session file path")
 	}
