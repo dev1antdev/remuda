@@ -86,6 +86,9 @@ func one(host shell.Host, q, dir string, since time.Time) ([]Hit, error) {
 		if err := ScanRoots(roots, q, dir, since, perMachine, &b); err != nil {
 			return nil, err
 		}
+		if err := ScanOpencode(host, q, dir, since, perMachine, &b); err != nil {
+			return nil, err
+		}
 		out = b.String()
 	} else {
 		var err error
@@ -99,6 +102,13 @@ func one(host shell.Host, q, dir string, since time.Time) ([]Hit, error) {
 	sc.Buffer(make([]byte, 64*1024), 2*lineCap)
 	for sc.Scan() {
 		line := sc.Bytes()
+		if hit, ok := opencodeHit(host.ID(), line); ok {
+			if !seen["opencode"+hit.Session+hit.UUID] {
+				seen["opencode"+hit.Session+hit.UUID] = true
+				hits = append(hits, hit)
+			}
+			continue
+		}
 		// ./<project>/<session>.jsonl:<record>, or codex:<cwd>␟<thread id>␟<record>
 		i := bytes.IndexByte(line, ':')
 		if i <= 0 {
@@ -132,6 +142,26 @@ func one(host shell.Host, q, dir string, since time.Time) ([]Hit, error) {
 		hits = hits[:perMachine]
 	}
 	return hits, sc.Err()
+}
+
+// opencodeHit reads one line the opencode scan wrote: folder, session, message, role, time and snippet, US-separated.
+func opencodeHit(machine string, line []byte) (Hit, bool) {
+	prefix := []byte("opencode" + script.US)
+	if !bytes.HasPrefix(line, prefix) {
+		return Hit{}, false
+	}
+	fields := bytes.SplitN(line[len(prefix):], []byte(script.US), 6)
+	if len(fields) != 6 {
+		return Hit{}, false
+	}
+	ts, err := time.Parse(time.RFC3339, string(fields[4]))
+	if err != nil {
+		return Hit{}, false
+	}
+	return Hit{
+		Machine: machine, Agent: "opencode", Project: transcript.EncodePath(string(fields[0])), Dir: string(fields[0]),
+		Session: string(fields[1]), UUID: string(fields[2]), Role: string(fields[3]), Ts: ts, Snippet: string(fields[5]),
+	}, true
 }
 
 // codexHit reads one line the Codex scan printed: the folder, the thread id and the record, US-separated.

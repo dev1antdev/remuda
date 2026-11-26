@@ -1001,7 +1001,19 @@ components and icons as rules for whoever changes it: @docs/design.md
   reordered), `$rewindTo`, `$set`; the legacy one-object `.json` too.
   `Reader.ResolveSession(agent, cwd, kind, value)` finds the file by the
   pane's agent (`""` tries every format, for a transcript opened by id),
-  locally and by `findScript` over ssh. **A session found by the agent's
+  locally and by `findScript` over ssh. **opencode keeps no JSONL** (`opencode.go`): its sessions are rows in
+  `$XDG_DATA_HOME/opencode/opencode.db` (else `~/.local/share/opencode/opencode.db`), read here through the SQLite
+  driver and on a remote through `sqlite3`; a session is the pseudo-path `opencode<US><dir><US><id>`, listed from
+  `session_v2.directory` and read from `session_message`/`session_part` (each assistant answer's `tokens`/`cost` is a
+  `UsageRecord`; its lowercase tools map to the page's names, and `path`/`oldString`/`newString` gain
+  `file_path`/`old_string`/`new_string`), versioned by `time_updated`; `Reader.OpencodeUsage` and `OpencodeSince` give
+  the pane's meter and the usage report the session's own sums, and `resumeFlags` continues one with `--session`.
+  Its `subagent` calls are rows too: the child sessions under `session_v2.parent_id` become `Subagent`s
+  (`opencodeSpawns` reads each call's description and the `sessionID: ses_…` its output names), with the child's tools,
+  failed calls, open call, report and status, and `OpencodeSubagent` opens a child's own conversation in the viewer.
+  Its window takes no model flag (only `opencode run` does; the TUI chooses with `/models` or its config), so the start
+  dialog offers it arguments alone and says where its model is chosen (`dialogs.tsx`).
+  **A session found by the agent's
   process** (`bypid.go`, tested on real processes in a temp HOME and on
   `shell.Fake`), for a machine whose runtime names no session (remuda-core,
   Core 12): `Reader.SessionsOf([]Running{pid, agent, cwd, seen, started, sinceBoot})` is one script
@@ -5850,12 +5862,15 @@ components and icons as rules for whoever changes it: @docs/design.md
   output, thinking or sidechains; a Codex hit is printed as
   `codex:<cwd>␟<thread id>␟<record>`, since the rollout's name carries
   neither, and comes back with `agent: "codex"` (the search panel draws
-  Codex's mark on it). Locally the scan runs in-process; on a
+  Codex's mark on it). **opencode's sessions are a database**: `ScanOpencode` asks
+  `transcript.Reader.OpencodeSearch` for the prompts and answers since, and writes each match as
+  `opencode␟<dir>␟<session>␟<message>␟<role>␟<time>␟<snippet>` (`opencodeHit`), with no tool output, as the files count none;
+  a machine without the database or `sqlite3` adds nothing. Locally the scan runs in-process; on a
   remote the script runs `~/.local/bin/remuda search …` (the same Scan,
   a hidden subcommand — `make deploy` puts the binary there; 400 MB scan
   in well under a second) and falls back to a four-pattern grep when the
-  binary is missing (BSD grep: seconds per hundred MB). Both print
-  `./<project>/<session>.jsonl:<raw line>`, one parser reads either. A
+  binary is missing (BSD grep: seconds per hundred MB). The files print
+  `./<project>/<session>.jsonl:<raw line>`, one parser reads either form. A
   hit carries `project` (the project dir name = `EncodePath` of the
   folder the agent started in; a `cd` in the session moves the record's
   `cwd` but not the file) — the UI matches it to a pane by
@@ -5918,7 +5933,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   written since, oldest first, each message id once across the files (a
   continuation's copied tail is credited to the session that made it),
   subagent files count toward their session, per day in
-  the viewer's zone, per project/model/session; `usage.Collect` asks every
+  the viewer's zone, per project/model/session; opencode has no files, so `ReadHost` asks `OpencodeSince` and
+  `mergeReports` adds its answers (days, projects, models, sessions, the year's `Daily` too), while a pane's meter comes
+  from `OpencodeUsage`'s session row and last answer; `usage.Collect` asks every
   connected host at once, and remotely the deployed binary runs `remuda
   usage -since -tz` (gated on the version, like search). UI: `features/usage/Usage.tsx` (📊 in the sidebar head, or the header pill),
   the pill in the header (fill bar · cost; its tooltip names the context as it stands, "418k of 1M", by `tokFine`; it wears a budget's tone when

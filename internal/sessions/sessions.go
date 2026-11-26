@@ -169,10 +169,11 @@ func startAgent(start func() error) error {
 
 // resumeFlags is how each agent is told which conversation to come back to; the id goes last, as the agent's own CLI wants it.
 var resumeFlags = map[string][]string{
-	"claude": {"--resume"},
-	"codex":  {"resume"},
-	"gemini": {"--resume"},
-	"kimi":   {"--session"},
+	"claude":   {"--resume"},
+	"codex":    {"resume"},
+	"gemini":   {"--resume"},
+	"kimi":     {"--session"},
+	"opencode": {"--session"},
 }
 
 // ResumeArgs is the agent's command-line arguments that resume a session, false for a kind that has none.

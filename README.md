@@ -20,11 +20,12 @@ A from-scratch, auditable replacement for
   reaches its remuda-core over one OpenSSH ControlMaster (your keys, your
   ~/.ssh/config, your tunnels) and shows its workspaces, terminals and chat
   beside the local ones. Nothing runs there but remuda-core.
-- **Read-only on your data.** The chat view reads Claude Code's, Codex's and
-  Gemini CLI's own session files, under the folder each agent was given
-  (`CLAUDE_CONFIG_DIR` and `CODEX_HOME` included, resolved through the agent's
-  process while it runs and for ten minutes after); remuda never writes them.
-  Sending a message goes through remuda-core's `terminal.send`, exactly like typing into the pane.
+- **Read-only on your data.** The chat view reads Claude Code's, Codex's,
+  Gemini CLI's and opencode's own sessions — the first three as session files
+  under the folder each agent was given (`CLAUDE_CONFIG_DIR` and `CODEX_HOME`
+  included, resolved through the agent's process while it runs and for ten
+  minutes after), opencode's from its own SQLite database; remuda never writes
+  them. Sending a message goes through remuda-core's `terminal.send`, exactly like typing into the pane.
 - **No telemetry, no third-party services.** The server talks to your
   browser, to remuda-core, and to the SSH hosts you add. That's the complete list.
 
@@ -170,7 +171,9 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ remuda-core: its 
   Claude Code's session files, Codex's rollouts and Gemini CLI's chats
   all read into the same turns, so a Codex or Gemini pane has its chat,
   recap, meter and search like a Claude Code one (Gemini's
-  reader is written from the CLI's own types and has not been seen live).
+  reader is written from the CLI's own types and has not been seen live);
+  opencode's sessions come from its SQLite database and join the same turns,
+  chat, meter, subagent rows and report.
   When Codex reverts a thread's history, its new rollout replays the part that
   stayed from the old file: the chat shows that part and what came after, never
   the reverted turns, and the session list still names the thread once.
@@ -1940,7 +1943,9 @@ and red past the limit, with the budget in its tooltip; a push comes
 once at 80 % and once when the limit is crossed, then not again until
 the next period. The spend is read every five minutes from the same
 transcripts, at the same API-equivalent prices: on a subscription a
-measure, not a bill.
+measure, not a bill. opencode's own database is read too, on the machine
+where it runs: its answers' tokens and cost join the same report and its
+pane's meter.
 
 **Plan limits:** what a subscription really runs out of — Claude's and
 Codex's 5-hour and weekly windows — at the very top of the report, in
@@ -1984,13 +1989,15 @@ amber for a watchdog note, green for a finish — so another tab or the
 dock tells you before you switch.
 
 **Search** (🔍, or the palette's last row): full text over every conversation on every
-machine, Claude Code's and Codex's — what you or an agent said, never tool output — filtered by
+machine — Claude Code's and Codex's session files, and opencode's own database — what you or an
+agent said, never tool output — filtered by
 machine, folder and period. A hit jumps to the turn in the running pane, or
-opens the old transcript read-only. No index, no database: each machine
+opens the old transcript read-only. No index: each machine
 scans its own session folders on demand — `~/.claude/projects` and `~/.codex/sessions` plus the folders its
 agents named for themselves (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`), remembered once read so an agent that stopped
 is still searched (remuda's scanner where the
-binary is deployed, grep otherwise). Above the conversations, a **Screens**
+binary is deployed, grep otherwise), and, where opencode runs, reads its SQLite database for the same words
+(a machine without the database or `sqlite3` adds nothing there). Above the conversations, a **Screens**
 part lists where the words stood on the agents' recorded screens (see
 Timelapse). Every turn of a pane's conversation
 has a **Copy link** button of its own: the address opens remuda on that

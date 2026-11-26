@@ -42,6 +42,11 @@ type Source interface {
 	Lineage(path string) []string
 }
 
+// OpencodeMeter is a machine's reader that can report an opencode session's own totals, which no file carries.
+type OpencodeMeter interface {
+	OpencodeUsage(path string) (transcript.OpencodeUsage, error)
+}
+
 // Tracker keeps a running sum per transcript file, reading only what was appended since the last look.
 type Tracker struct {
 	busy        sync.Map // machine id → a read of its snapshot is under way
@@ -51,6 +56,7 @@ type Tracker struct {
 	pred        map[string]string     // machine|path → the file it continues
 	subs        map[string][]string   // machine|path → its subagent transcripts
 	subsChecked map[string]time.Time  // machine|path → when the subagent folder was last listed
+	opencode    map[string]Display    // machine|pane → an opencode session's meter, which it keeps itself
 }
 
 type fileState struct {
@@ -69,7 +75,7 @@ const (
 )
 
 func NewTracker() *Tracker {
-	return &Tracker{files: map[string]*fileState{}, panes: map[string]string{}, pred: map[string]string{}, subs: map[string][]string{}, subsChecked: map[string]time.Time{}}
+	return &Tracker{files: map[string]*fileState{}, panes: map[string]string{}, pred: map[string]string{}, subs: map[string][]string{}, subsChecked: map[string]time.Time{}, opencode: map[string]Display{}}
 }
 
 func key(machineID, s string) string { return machineID + "|" + s }
@@ -84,10 +90,18 @@ func (t *Tracker) ObserveSnapshot(machineID string, source Source, snap *herdr.S
 		defer t.busy.Delete(machineID)
 		for i := range panes {
 			pane := &panes[i]
-			if pane.Agent == "" || pane.AgentSession == nil {
+			if pane.Agent == "" {
 				continue
 			}
-			first, err := source.ResolveSession(pane.AgentSession.Agent, pane.Dir(), pane.AgentSession.Kind, pane.AgentSession.Value)
+			var first string
+			var err error
+			if pane.AgentSession != nil {
+				first, err = source.ResolveSession(pane.AgentSession.Agent, pane.Dir(), pane.AgentSession.Kind, pane.AgentSession.Value)
+			} else if pane.Agent == "opencode" { // it names no file to the core: its newest conversation is its own
+				first, err = source.ResolveSession("opencode", pane.Dir(), "", "")
+			} else {
+				continue
+			}
 			if err != nil {
 				continue
 			}
@@ -109,12 +123,38 @@ func (t *Tracker) Observe(machineID string, files Files, paneID string, chain []
 		t.pred[key(machineID, chain[i])] = chain[i-1]
 	}
 	t.mu.Unlock()
+	if transcript.IsOpencode(live) {
+		if meter, ok := files.(OpencodeMeter); ok {
+			t.refreshOpencode(machineID, meter, paneID, live)
+		}
+		return
+	}
 	for _, p := range chain[:len(chain)-1] {
 		t.refresh(machineID, files, p, true, chain)
 	}
 	t.refresh(machineID, files, live, false, chain)
 	// Claude Code's own counter includes <session>/subagents/*.jsonl
 	t.observeSubagents(machineID, files, chain)
+}
+
+// refreshOpencode keeps an opencode pane's meter from the session's own row: a database keeps what a file would.
+func (t *Tracker) refreshOpencode(machineID string, meter OpencodeMeter, paneID, path string) {
+	usage, err := meter.OpencodeUsage(path)
+	if err != nil {
+		return
+	}
+	d := Display{
+		Model:   usage.Model,
+		Name:    usage.Model,
+		Context: usage.Context,
+		Cost:    usage.Cost,
+		Turns:   usage.Turns,
+		Tokens:  Tokens{Input: usage.Input, Output: usage.Output, CacheRead: usage.CacheRead, CacheWrite5m: usage.CacheWrite},
+		Updated: usage.Updated,
+	}
+	t.mu.Lock()
+	t.opencode[key(machineID, paneID)] = d
+	t.mu.Unlock()
 }
 
 // elsewhere is the message ids the other files of a lineage already count: a continuation file opens with a copy of
@@ -269,6 +309,9 @@ func (t *Tracker) read(machineID string, files Files, path string, v transcript.
 func (t *Tracker) Display(machineID, paneID string) (Display, bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	if d, ok := t.opencode[key(machineID, paneID)]; ok {
+		return d, true
+	}
 	path := t.panes[key(machineID, paneID)]
 	if path == "" {
 		return Display{}, false
