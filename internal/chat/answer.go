@@ -28,11 +28,12 @@ func Answer(screen string, index int, label, dialog string) ([]string, error) {
 	if got := q.Options[index].Label; !sameChoice(got, label) {
 		return nil, fmt.Errorf("the dialog changed: choice %d now reads %q", index+1, got)
 	}
-	return KeysTo(q.Options, index), nil
+	return KeysTo(q.Options, index, q.Axis == "horizontal"), nil
 }
 
-// KeysTo walks the cursor from the picked choice to the one at index and confirms it, as the question card does.
-func KeysTo(options []Option, index int) []string {
+// KeysTo walks the cursor from the picked choice to the one at index and confirms it, as the question card does: ↓/↑
+// down a list, →/← along a row like opencode's.
+func KeysTo(options []Option, index int, horizontal bool) []string {
 	picked := 0
 	for i, o := range options {
 		if o.Picked {
@@ -42,8 +43,14 @@ func KeysTo(options []Option, index int) []string {
 	}
 	steps := index - picked
 	key := "down"
+	if horizontal {
+		key = "right"
+	}
 	if steps < 0 {
-		key, steps = "up", -steps
+		key, steps = "left", -steps
+		if !horizontal {
+			key = "up"
+		}
 	}
 	keys := make([]string, 0, steps+1)
 	for range steps {

@@ -196,7 +196,9 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ remuda-core: its 
   Named keys (`Enter`, `Escape`, arrows, `Ctrl+C`) via `terminal.keys`.
 - **Answer** — while the agent waits on a dialog, the chat shows the
   question as it stands on the screen (Claude Code's permission prompts,
-  its "trust this folder", an AskUserQuestion) with a button per choice;
+  its "trust this folder", an AskUserQuestion, and opencode's "△ Permission
+  required" row — Allow once / Always allow / Reject, walked with ←/→) with
+  a button per choice;
   a tap walks the cursor there and presses Enter, Esc closes. From the
   phone too. A dialog remuda cannot read leaves
   the blind ↑ ↓ Enter Esc. Beside the composer's tools a small chip says

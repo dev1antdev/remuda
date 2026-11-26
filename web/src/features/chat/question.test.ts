@@ -17,6 +17,16 @@ describe("keysTo", () => {
     const none = options.map((o) => ({ ...o, picked: false }));
     expect(keysTo(none, 2)).toEqual(["down", "down", "enter"]);
   });
+  it("walks a row with ←/→, as opencode's permission dialog does", () => {
+    const row = [
+      { n: 1, label: "Allow once", picked: true },
+      { n: 2, label: "Always allow", picked: false },
+      { n: 3, label: "Reject", picked: false },
+    ];
+    expect(keysTo(row, 2, true)).toEqual(["right", "right", "enter"]);
+    expect(keysTo(row, 1, true)).toEqual(["right", "enter"]);
+    expect(keysTo(row.map((o, i) => ({ ...o, picked: i === 2 })), 0, true)).toEqual(["left", "left", "enter"]);
+  });
 });
 
 describe("sameDialog", () => {
@@ -31,6 +41,7 @@ describe("sameDialog", () => {
     expect(sameDialog(offered, { ...offered, text: "Bash command\n\ngit push --force\n\nDo you want to proceed?" })).toBe(false);
     expect(sameDialog(offered, { ...offered, options: options.slice(0, 2) })).toBe(false);
     expect(sameDialog(offered, { ...offered, options: options.map((o, i) => (i === 1 ? { ...o, label: "Yes, allow all edits" } : o)) })).toBe(false);
+    expect(sameDialog(offered, { ...offered, axis: "horizontal" })).toBe(false);
   });
 });
 

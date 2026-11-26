@@ -54,7 +54,7 @@ export function QuestionCard({ machineId, paneId, active, onKeys, children }: {
       // the screen read again first: the cursor may have moved, or another dialog taken this one's place, since the card
       // read it; the keys walk from where the cursor is now, and nothing goes to a dialog the card did not show
       const now = await fetchQuestion(machineId, paneId).catch(() => null);
-      if (now && choosable(now) && sameDialog(asked, now)) await pressInTurn(keysTo(now.options, index), (key) => onKeys([key]));
+      if (now && choosable(now) && sameDialog(asked, now)) await pressInTurn(keysTo(now.options, index, now.axis === "horizontal"), (key) => onKeys([key]));
     } finally {
       setSending(false);
       setTimeout(reload, 600); // the screen after the answer: the next question, or none
