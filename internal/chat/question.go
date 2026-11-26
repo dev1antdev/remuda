@@ -12,6 +12,9 @@ type Question struct {
 	Text    string   `json:"text"`
 	Options []Option `json:"options"`
 	Multi   bool     `json:"multi,omitempty"`
+	// Axis is "horizontal" for a row of choices walked with ←/→, as opencode's permission dialog draws it; empty (↑/↓)
+	// for a list like Claude Code's.
+	Axis string `json:"axis,omitempty"`
 }
 
 // Choices are the words of the choices one press answers the dialog with: none for a multi-select.
@@ -72,6 +75,9 @@ type screenLine struct {
 // numbered list in an answer, the lines typed into the input box.
 func ParseQuestion(screen string) (Question, bool) {
 	lines := screenLines(screen)
+	if q, ok := opencodePermission(lines); ok {
+		return q, true
+	}
 	at := -1
 	for i, l := range lines {
 		if strings.HasPrefix(l.text, cursor+" ") && strings.TrimSpace(l.text) != cursor {
@@ -132,6 +138,65 @@ func ParseQuestion(screen string) (Question, bool) {
 		return Question{}, false
 	}
 	return Question{Text: wordsAbove(lines, top, frame), Options: options, Multi: takesSeveral(options)}, true
+}
+
+// opencodeChoices are opencode's three answers to a permission request, in the order its dialog draws them; the first,
+// Allow once, is the one its cursor starts on.
+var opencodeChoices = []string{"Allow once", "Always allow", "Reject"}
+
+// opencodePermission reads opencode's permission dialog: a "△ Permission required" line, the action and its resource
+// below it, and the choices on one row ("Allow once   Always allow   Reject  ctrl+f fullscreen  ⇆ select  enter …")
+// walked with ←/→. The plain screen carries no colour, so the choice its cursor starts on is taken as Allow once.
+func opencodePermission(lines []screenLine) (Question, bool) {
+	marker := -1
+	for i, l := range lines {
+		if strings.Contains(l.text, "Permission required") {
+			marker = i
+			break
+		}
+	}
+	if marker < 0 {
+		return Question{}, false
+	}
+	row := -1
+	for i := marker + 1; i < len(lines) && i-marker <= questionLines; i++ {
+		for _, label := range opencodeChoices {
+			if strings.Contains(lines[i].text, label) {
+				row = i
+				break
+			}
+		}
+		if row >= 0 {
+			break
+		}
+	}
+	if row < 0 {
+		return Question{}, false
+	}
+	joined := lines[row].text
+	all := func(text string) bool {
+		for _, label := range opencodeChoices {
+			if !strings.Contains(text, label) {
+				return false
+			}
+		}
+		return true
+	}
+	for i := row + 1; i < len(lines) && i <= row+4 && !all(joined); i++ {
+		joined += " " + lines[i].text
+	}
+	options := make([]Option, 0, len(opencodeChoices))
+	for i, label := range opencodeChoices {
+		if !strings.Contains(joined, label) {
+			return Question{}, false
+		}
+		options = append(options, Option{N: i + 1, Label: label, Picked: i == 0})
+	}
+	words := make([]string, 0, row-marker)
+	for i := marker; i < row; i++ {
+		words = append(words, lines[i].text)
+	}
+	return Question{Text: strings.TrimSpace(strings.Join(words, "\n")), Options: options, Axis: "horizontal"}, true
 }
 
 // frameTop is the row of the rule a dialog drawn with its top border alone sits under, as Claude Code 2.1 draws its

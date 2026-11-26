@@ -46,6 +46,7 @@ export const chat: Dictionary = {
   "No file touched yet.": "Ни один файл ещё не тронут.",
   "No quick prompts yet.": "Быстрых промптов пока нет.",
   "No transcript for this pane's folder yet.": "Для папки этой панели расшифровки пока нет.",
+  "The agent is working: its first words will show here.": "Агент работает: его первые слова появятся здесь.",
   "Nothing pinned here yet. The pin beside a turn's link keeps that turn in this list.": "Здесь пока ничего не закреплено. Кнопка-булавка рядом со ссылкой хода оставляет его в этом списке.",
   Open: "Открыть",
   "Open the conversation at this turn": "Открыть разговор на этом ходе",

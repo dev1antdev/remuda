@@ -20,11 +20,12 @@ A from-scratch, auditable replacement for
   reaches its remuda-core over one OpenSSH ControlMaster (your keys, your
   ~/.ssh/config, your tunnels) and shows its workspaces, terminals and chat
   beside the local ones. Nothing runs there but remuda-core.
-- **Read-only on your data.** The chat view reads Claude Code's, Codex's and
-  Gemini CLI's own session files, under the folder each agent was given
-  (`CLAUDE_CONFIG_DIR` and `CODEX_HOME` included, resolved through the agent's
-  process while it runs and for ten minutes after); remuda never writes them.
-  Sending a message goes through remuda-core's `terminal.send`, exactly like typing into the pane.
+- **Read-only on your data.** The chat view reads Claude Code's, Codex's,
+  Gemini CLI's and opencode's own sessions — the first three as session files
+  under the folder each agent was given (`CLAUDE_CONFIG_DIR` and `CODEX_HOME`
+  included, resolved through the agent's process while it runs and for ten
+  minutes after), opencode's from its own SQLite database; remuda never writes
+  them. Sending a message goes through remuda-core's `terminal.send`, exactly like typing into the pane.
 - **No telemetry, no third-party services.** The server talks to your
   browser, to remuda-core, and to the SSH hosts you add. That's the complete list.
 
@@ -170,7 +171,9 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ remuda-core: its 
   Claude Code's session files, Codex's rollouts and Gemini CLI's chats
   all read into the same turns, so a Codex or Gemini pane has its chat,
   recap, meter and search like a Claude Code one (Gemini's
-  reader is written from the CLI's own types and has not been seen live).
+  reader is written from the CLI's own types and has not been seen live);
+  opencode's sessions come from its SQLite database and join the same turns,
+  chat, meter, subagent rows and report.
   When Codex reverts a thread's history, its new rollout replays the part that
   stayed from the old file: the chat shows that part and what came after, never
   the reverted turns, and the session list still names the thread once.
@@ -193,7 +196,9 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ remuda-core: its 
   Named keys (`Enter`, `Escape`, arrows, `Ctrl+C`) via `terminal.keys`.
 - **Answer** — while the agent waits on a dialog, the chat shows the
   question as it stands on the screen (Claude Code's permission prompts,
-  its "trust this folder", an AskUserQuestion) with a button per choice;
+  its "trust this folder", an AskUserQuestion, and opencode's "△ Permission
+  required" row — Allow once / Always allow / Reject, walked with ←/→) with
+  a button per choice;
   a tap walks the cursor there and presses Enter, Esc closes. From the
   phone too. A dialog remuda cannot read leaves
   the blind ↑ ↓ Enter Esc. Beside the composer's tools a small chip says
@@ -505,7 +510,9 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ remuda-core: its 
   prefixes `/grill-me`) — and **Start an agent on it**: a worktree
   branches off one of your workspaces, Claude starts there and gets the
   task once it is up (its "trust this folder" question for the new
-  worktree is answered for you), the task moves to *In progress*, and
+  worktree is answered for you); the prompt is written down before it is
+  typed, so a start remuda's own restart interrupted hands the task over
+  again once remuda is back. The task moves to *In progress*, and
   every answer the agent finishes comes back to the task as a comment
   with a push — and moves it on to *Testing*, unless you moved it first.
   A project's settings say **where its agents work** — a machine and one
@@ -562,7 +569,9 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ remuda-core: its 
   the branch *Kept* or *Deleted* (deleted once merged; a click flips
   it), and in red what would be lost — uncommitted changes, the branch's
   commits that are on no remote, a submodule's commits pushed nowhere,
-  and that a worktree has submodules at all.
+  that a worktree has submodules at all, and the ignored files a person may
+  miss (.env and the like; dependency and build folders are left out of the
+  list).
   *Remove anyway* then runs `git worktree remove --force`; *Close, keep
   the folder* closes the workspace alone, and is there too when the
   worktree cannot be looked at (its folder deleted by hand). It waits while an agent works
@@ -676,7 +685,9 @@ a Claude Code that does not have the command yet — are asked to leave
 (their own `/exit`) and started again in the same pane with the session
 resumed (`claude --resume`, `codex resume`, `gemini --resume`, `kimi
 --session`); a busy chat is restarted a little after it finishes, and a
-message half-typed in a chat's box is lost. The same restart is
+message half-typed in a chat's box is lost. A chat booked for later keeps
+its place across remuda's own restart — the booking is remembered in the
+state dir — so updating remuda in the same run does not cancel it. The same restart is
 offered on its own ("Restart Claude Code chats") for an agent that
 updated itself, and for one chat at a time from the workspace's ⋯ menu
 or the palette ("Restart Claude Code on its session…"): for an agent
@@ -966,7 +977,8 @@ Logs: `~/Library/Logs/remuda.log` (macOS) or `journalctl --user -u remuda`.
 
 Everything the cockpit keeps lives in its state dir: your tasks, the
 schedules, budgets, recipes, scenes, webhooks and settings, the signed-in devices,
-the agents' keys, the token, the push keys and its Tailscale node. On a
+the agents' keys, the push keys and its Tailscale node — but not the
+cockpit's own token. On a
 Raspberry Pi that is an SD card. **Settings › Backups** copies it every
 night (at a time you pick, in the cockpit's own zone) to another machine
 of your fleet, into that machine's remuda folder under
@@ -986,8 +998,10 @@ is aside (`…/remuda.before-restore-<time>`) rather than deleting it, and
 keeps the backups that machine holds for others. Restored on a new
 machine, the cockpit keeps its Tailscale address, so every device stays
 signed in — never run the old one and the restored one at the same time.
-A backup holds the token: it is written 0600 into a 0700 folder on your
-own machine, and nowhere else. It holds remuda's state dir alone: the
+A backup holds no cockpit token: the copy is written 0600 into a 0700
+folder on your own machine, and a restore mints a new token on its next
+start, so a page or an API client holding the old one signs in again. It
+holds remuda's state dir alone: the
 machine's own `~/.ssh` — its key and the hosts it reaches — is not in
 it, so a cockpit restored on a new machine needs that machine's key let
 in on your other machines again. A server (`-server`, below) keeps no
@@ -1243,7 +1257,9 @@ reset soft, mixed or hard, add or delete a tag, copy a name or a hash;
 double-click a branch's label to check it out. Each asks first in a
 small dialog — only a local checkout with nothing uncommitted runs at
 once — red where it loses something: a hard reset names the files it
-discards, and deleting a branch git calls unmerged asks a second time.
+discards (every one, however many), and refuses to run if they changed
+after the dialog opened; deleting a branch git calls unmerged asks a
+second time.
 When git refuses, its own words stay in the dialog. A merge, rebase,
 cherry-pick or revert that stops on conflicts is left as it is, and the
 lens says so with **Abort** and a way to the Changes lens to resolve
@@ -1938,7 +1954,9 @@ and red past the limit, with the budget in its tooltip; a push comes
 once at 80 % and once when the limit is crossed, then not again until
 the next period. The spend is read every five minutes from the same
 transcripts, at the same API-equivalent prices: on a subscription a
-measure, not a bill.
+measure, not a bill. opencode's own database is read too, on the machine
+where it runs: its answers' tokens and cost join the same report and its
+pane's meter.
 
 **Plan limits:** what a subscription really runs out of — Claude's and
 Codex's 5-hour and weekly windows — at the very top of the report, in
@@ -1982,13 +2000,15 @@ amber for a watchdog note, green for a finish — so another tab or the
 dock tells you before you switch.
 
 **Search** (🔍, or the palette's last row): full text over every conversation on every
-machine, Claude Code's and Codex's — what you or an agent said, never tool output — filtered by
+machine — Claude Code's and Codex's session files, and opencode's own database — what you or an
+agent said, never tool output — filtered by
 machine, folder and period. A hit jumps to the turn in the running pane, or
-opens the old transcript read-only. No index, no database: each machine
+opens the old transcript read-only. No index: each machine
 scans its own session folders on demand — `~/.claude/projects` and `~/.codex/sessions` plus the folders its
 agents named for themselves (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`), remembered once read so an agent that stopped
 is still searched (remuda's scanner where the
-binary is deployed, grep otherwise). Above the conversations, a **Screens**
+binary is deployed, grep otherwise), and, where opencode runs, reads its SQLite database for the same words
+(a machine without the database or `sqlite3` adds nothing there). Above the conversations, a **Screens**
 part lists where the words stood on the agents' recorded screens (see
 Timelapse). Every turn of a pane's conversation
 has a **Copy link** button of its own: the address opens remuda on that

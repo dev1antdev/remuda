@@ -10,7 +10,8 @@ export type Input = { id: string; label: string; value: string; optional?: boole
 export type Check = { id: string; label: string; value: boolean };
 export type Option = { value: string; label: string; detail: string; danger?: boolean };
 export type Choice = { id: string; label: string; value: string; options: Option[] };
-export type Spec = { title: string; detail: string; inputs?: Input[]; checks?: Check[]; choice?: Choice; confirm: string; danger?: boolean; lose?: string[] };
+export type Lose = { paths: string[]; total: number };
+export type Spec = { title: string; detail: string; inputs?: Input[]; checks?: Check[]; choice?: Choice; confirm: string; danger?: boolean; lose?: Lose };
 export type Values = Record<string, string | boolean>;
 
 // Writing is an action that changes the checkout; copy and open are the menu's own
@@ -20,17 +21,22 @@ const LOSE_SHOWN = 8;
 
 const mergeNote = (merge: boolean) => (merge ? " " + t("It is a merge commit: its changes against its first parent are used.") : "");
 
-// tracked is the uncommitted files a hard reset discards: every tracked change, the untracked files staying
-const tracked = (changes: Change[] | undefined) => (changes ?? []).map((c) => c.path);
+// tracked is the uncommitted files a hard reset discards: every tracked change, the untracked files staying. The count
+// is the checkout's own, so a list cut at 200 names them all the same.
+const tracked = (changes: Change[] | undefined, total = 0): Lose => {
+  const paths = (changes ?? []).map((c) => c.path);
+  return { paths, total: Math.max(total, paths.length) };
+};
 
 // loseWords names the files a hard reset discards, the first few and the rest counted
-export function loseWords(paths: string[]): string {
-  if (!paths.length) return t("Nothing uncommitted is lost.");
+export function loseWords(lose: Lose): string {
+  const { paths, total } = lose;
+  if (!total) return t("Nothing uncommitted is lost.");
   const named = paths.slice(0, LOSE_SHOWN).join(", ");
-  const rest = paths.length - LOSE_SHOWN;
+  const rest = total - Math.min(paths.length, LOSE_SHOWN);
   return rest > 0
-    ? tn(paths.length, "It discards the uncommitted changes to {n} file: {named} and {rest} more.", "It discards the uncommitted changes to {n} files: {named} and {rest} more.", { named, rest })
-    : tn(paths.length, "It discards the uncommitted changes to {n} file: {named}.", "It discards the uncommitted changes to {n} files: {named}.", { named });
+    ? tn(total, "It discards the uncommitted changes to {n} file: {named} and {rest} more.", "It discards the uncommitted changes to {n} files: {named} and {rest} more.", { named, rest })
+    : tn(total, "It discards the uncommitted changes to {n} file: {named}.", "It discards the uncommitted changes to {n} files: {named}.", { named });
 }
 
 // asksFirst says whether an action shows its dialog before it runs
@@ -93,7 +99,7 @@ export function specFor(action: Writing, ctx: Context, changes?: Change[], force
               ],
             },
             confirm: tc("git", "Reset"),
-            lose: tracked(changes),
+            lose: tracked(changes, ctx.tracked ?? 0),
           }
         : {
             title: tc("git", "Reset"),
@@ -109,7 +115,7 @@ export function specFor(action: Writing, ctx: Context, changes?: Change[], force
               ],
             },
             confirm: tc("git", "Reset"),
-            lose: tracked(changes),
+            lose: tracked(changes, ctx.tracked ?? 0),
           };
   }
 }
@@ -169,7 +175,7 @@ export function requestOf(action: Writing, values: Values, ctx: Context, forced 
     case "revert":
       return { op: "revert", sha: action.hash, ...seen };
     case "reset":
-      return { op: "reset", sha: action.hash, mode: values.mode as "soft" | "mixed" | "hard", ...seen };
+      return { op: "reset", sha: action.hash, mode: values.mode as "soft" | "mixed" | "hard", tree: ctx.tree ?? "", ...seen };
   }
 }
 

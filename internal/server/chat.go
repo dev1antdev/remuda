@@ -44,7 +44,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	subagent := r.URL.Query().Get("subagent")
-	if subagent != "" && !transcript.SubagentID(subagent) {
+	if subagent != "" && !transcript.SubagentID(subagent) && !transcript.OpencodeSessionID(subagent) {
 		httpErr(w, 400, fmt.Errorf("bad subagent id"))
 		return
 	}

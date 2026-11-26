@@ -138,6 +138,9 @@ func (r *Reader) Subagents(sessionPath string, now time.Time) ([]Subagent, strin
 // chat, over ssh, they never arrived. The folder is listed in one round trip and its meta files, which say which call
 // spawned which, read in one more; only the transcripts of the ones answered are read.
 func (r *Reader) SubagentsFor(sessionPath string, spawnedBy map[string]bool, now time.Time) ([]Subagent, error) {
+	if FormatOf(sessionPath) == Opencode {
+		return r.opencodeSubagents(sessionPath, spawnedBy, now)
+	}
 	if FormatOf(sessionPath) != Claude {
 		return nil, nil
 	}

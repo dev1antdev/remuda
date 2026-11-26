@@ -1,6 +1,7 @@
 package gitgraph
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -221,6 +222,29 @@ func TestPagesSayWhetherMoreFollowAndCarryOn(t *testing.T) {
 	}
 }
 
+func TestEveryTrackedFileIsCountedPastTheCapOfNames(t *testing.T) {
+	dir := history(t)
+	total := MaxChanges + 5
+	for i := 0; i < total; i++ {
+		write(t, dir, filepath.Join("many", fmt.Sprintf("f%03d.txt", i)), "one\n")
+	}
+	run(t, dir, "add", "-A")
+	run(t, dir, "commit", "-qm", "many")
+	for i := 0; i < total; i++ {
+		write(t, dir, filepath.Join("many", fmt.Sprintf("f%03d.txt", i)), "two\n")
+	}
+	st, err := ReadState(host, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Tracked != total || st.Dirty != total || len(st.Changes) != MaxChanges {
+		t.Fatalf("tracked %d, dirty %d, named %d of %d", st.Tracked, st.Dirty, len(st.Changes), total)
+	}
+	if st.Tree == "" {
+		t.Fatal("no tree checksum")
+	}
+}
+
 func TestTheFingerprintMovesWithTheRefsAndNotWithAnEdit(t *testing.T) {
 	dir := history(t)
 	before, _ := ReadState(host, dir)
@@ -230,8 +254,19 @@ func TestTheFingerprintMovesWithTheRefsAndNotWithAnEdit(t *testing.T) {
 	if edited.Fingerprint != before.Fingerprint {
 		t.Fatal("an edit in the working tree moved the refs' fingerprint")
 	}
-	if edited.Dirty != 2 || len(edited.Changes) != 1 || edited.Changes[0].Path != "README.md" || edited.Changes[0].Status != " M" {
-		t.Fatalf("the uncommitted files: %d, %+v", edited.Dirty, edited.Changes)
+	if edited.Dirty != 2 || edited.Tracked != 1 || len(edited.Changes) != 1 || edited.Changes[0].Path != "README.md" || edited.Changes[0].Status != " M" {
+		t.Fatalf("the uncommitted files: %d tracked %d, %+v", edited.Dirty, edited.Tracked, edited.Changes)
+	}
+	if edited.Tree == "" || edited.Tree == before.Tree {
+		t.Fatal("the tree checksum did not move with an edit of a tracked file")
+	}
+	run(t, dir, "add", "new.txt") // an untracked file staged after the dialog: a change it never named
+	staged, _ := ReadState(host, dir)
+	if staged.Tree == edited.Tree {
+		t.Fatal("staging an untracked file left the tree checksum as it was")
+	}
+	if staged.Tracked != 2 || staged.Dirty != 2 {
+		t.Fatalf("staged: tracked %d, dirty %d", staged.Tracked, staged.Dirty)
 	}
 	run(t, dir, "tag", "v0.2.0")
 	tagged, _ := ReadState(host, dir)

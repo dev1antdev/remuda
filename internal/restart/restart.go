@@ -17,6 +17,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/state"
 	"github.com/dev1antdev/remuda/internal/text"
 )
 
@@ -28,6 +29,9 @@ const (
 	bookingTTL = 12 * time.Hour
 	// again: a pane is not restarted twice within this
 	again = 2 * time.Minute
+	// bookingsFile keeps the booked restarts across a restart of remuda: an update's last step is remuda itself, and a
+	// chat booked after its agent's update would else wait for nothing
+	bookingsFile = "restart-bookings.json"
 )
 
 // agent is how to leave for one kind, and the command that restarts it in place with the session kept, for a kind
@@ -146,6 +150,13 @@ type booking struct {
 	timer         *time.Timer // running once the chat settled; nil while busy
 }
 
+// savedBooking is a booking as the file keeps it.
+type savedBooking struct {
+	Kind    string    `json:"kind"`
+	Session string    `json:"session"`
+	At      time.Time `json:"at"`
+}
+
 // Restarter restarts chats and remembers the busy ones.
 type Restarter struct {
 	machines *machines.Manager
@@ -165,6 +176,7 @@ type Restarter struct {
 	pending    map[string]*booking  // machine|pane
 	last       map[string]time.Time // machine|pane → when it was last restarted
 	recovering map[string]bool      // machines a recovery of the chats a reboot stopped runs on now
+	dir        string               // where the bookings are kept across a restart; "" keeps them in memory alone
 }
 
 // typed tells the activity what was just typed into the pane the key names.
@@ -182,6 +194,45 @@ func New(m *machines.Manager) *Restarter {
 		return herdr.Serving(mc, bin, socket)
 	}
 	return &Restarter{machines: m, Serving: serving, pending: map[string]*booking{}, last: map[string]time.Time{}}
+}
+
+// Open loads the bookings kept in dir, so a restart of remuda does not lose a chat booked for after its agent's update.
+// One too old is dropped; one whose pane is settled is armed by the machine's next snapshot (OnSnapshot).
+func (r *Restarter) Open(dir string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.dir = dir
+	var saved map[string]savedBooking
+	if err := state.LoadJSON(dir, bookingsFile, &saved); err != nil {
+		log.Printf("%s: %v — no booked restart remembered", bookingsFile, err)
+		return
+	}
+	now := time.Now()
+	kept := 0
+	for key, b := range saved {
+		if now.Sub(b.At) > bookingTTL || b.Kind == "" || b.Session == "" {
+			continue
+		}
+		r.pending[key] = &booking{kind: b.Kind, session: b.Session, at: b.At}
+		kept++
+	}
+	if kept != len(saved) {
+		r.saveLocked()
+	}
+}
+
+// saveLocked writes the bookings for the next start; a file that cannot be written is logged, the memory keeping them.
+func (r *Restarter) saveLocked() {
+	if r.dir == "" {
+		return
+	}
+	saved := make(map[string]savedBooking, len(r.pending))
+	for key, b := range r.pending {
+		saved[key] = savedBooking{Kind: b.kind, Session: b.session, At: b.at}
+	}
+	if err := state.SaveJSON(r.dir, bookingsFile, saved); err != nil {
+		log.Printf("restart bookings: %v", err)
+	}
 }
 
 // Now restarts the machine's ready chats of these kinds and books the busy ones for when they settle.
@@ -412,6 +463,41 @@ func (r *Restarter) book(machineID, paneID, kind, session string) {
 		b.timer.Stop()
 	}
 	r.pending[machineID+"|"+paneID] = &booking{kind: kind, session: session, at: time.Now()}
+	r.saveLocked()
+}
+
+// OnSnapshot is the watcher's hook: a booking brought back from the file is armed from the machine's snapshot, a chat
+// already settled then restarted after the same delay. A pane of another kind or session drops it.
+func (r *Restarter) OnSnapshot(ev events.Snapshot) {
+	if ev.Snap == nil {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for i := range ev.Snap.Panes {
+		p := &ev.Snap.Panes[i]
+		key := ev.Machine + "|" + p.PaneID
+		b := r.pending[key]
+		if b == nil {
+			continue
+		}
+		sid := sessionOf(p)
+		switch {
+		case time.Since(b.at) > bookingTTL, p.Agent != "" && p.Agent != b.kind, sid != "" && sid != b.session:
+			if b.timer != nil {
+				b.timer.Stop()
+			}
+			delete(r.pending, key)
+			r.saveLocked()
+		case b.timer == nil && p.Agent == b.kind && settled(p.AgentStatus):
+			status := events.PaneStatus{
+				Pane:      events.PaneRef{Machine: ev.Machine, Pane: p.PaneID},
+				Workspace: ev.Snap.WorkspaceLabel(p.WorkspaceID),
+				PaneTitle: p.DisplayTitle(), Agent: p.AgentName(), Kind: p.Agent, To: p.AgentStatus,
+			}
+			b.timer = time.AfterFunc(settleDelay, func() { r.fire(key, status) })
+		}
+	}
 }
 
 // OnStatus is the watcher's hook: a booked chat that settled is restarted a
@@ -430,6 +516,7 @@ func (r *Restarter) OnStatus(ev events.PaneStatus) {
 	}
 	if ev.To == events.Gone || ev.Kind != b.kind || time.Since(b.at) > bookingTTL {
 		delete(r.pending, key)
+		r.saveLocked()
 		return
 	}
 	if !settled(ev.To) {
@@ -447,6 +534,7 @@ func (r *Restarter) fire(key string, ev events.PaneStatus) {
 		return
 	}
 	delete(r.pending, key)
+	r.saveLocked()
 	kind, session := b.kind, b.session
 	r.mu.Unlock()
 	mc, err := r.machines.Get(ev.Pane.Machine)
@@ -471,17 +559,22 @@ func (r *Restarter) Pending(machineID string) int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	n := 0
+	dropped := false
 	for k, b := range r.pending {
 		if time.Since(b.at) > bookingTTL {
 			if b.timer != nil {
 				b.timer.Stop()
 			}
 			delete(r.pending, k)
+			dropped = true
 			continue
 		}
 		if strings.HasPrefix(k, machineID+"|") {
 			n++
 		}
+	}
+	if dropped {
+		r.saveLocked()
 	}
 	return n
 }
