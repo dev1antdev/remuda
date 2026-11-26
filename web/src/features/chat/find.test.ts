@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { setLang, t } from "@/lib/i18n";
-import { clamp, countWords, findRanges, MAX_MATCHES, revealDue, step } from "./find";
+import { clamp, countWords, findRanges, MAX_MATCHES, revealDue, scopeWords, step } from "./find";
 
 describe("findRanges", () => {
   it("finds every occurrence, case-folded, left to right", () => {
@@ -43,6 +43,13 @@ describe("step and clamp", () => {
     expect(clamp(1, 3)).toBe(1);
     expect(clamp(-2, 3)).toBe(0);
     expect(clamp(4, 0)).toBe(0);
+  });
+});
+
+describe("scopeWords", () => {
+  it("says the rows a truncated find covered, and nothing when it read them all", () => {
+    expect(scopeWords(5000, true)).toBe("last 5000 rows");
+    expect(scopeWords(5000, false)).toBe("");
   });
 });
 

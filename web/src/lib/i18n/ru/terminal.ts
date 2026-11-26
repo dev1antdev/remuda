@@ -14,6 +14,7 @@ export const terminal: Dictionary = {
   "Esc, Tab, Ctrl, the arrows and more": "Esc, Tab, Ctrl, стрелки и другие",
   "Find in the scrollback": "Найти в истории терминала",
   "A full-screen program keeps its own history: only its screen is found.": "Полноэкранная программа хранит историю сама: найдётся только её экран.",
+  "last {n} rows": "последние {n} строк",
   "{n} matches are only in older rows, which this terminal no longer shows": ["{n} совпадение есть только в старых строках, которые этот терминал уже не показывает", "{n} совпадения есть только в старых строках, которые этот терминал уже не показывает", "{n} совпадений есть только в старых строках, которые этот терминал уже не показывает"],
   "Fit the screen": "По размеру экрана",
   "Hide the key bar": "Скрыть панель клавиш",

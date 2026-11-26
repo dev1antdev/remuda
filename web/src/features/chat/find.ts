@@ -52,3 +52,8 @@ export function countWords(at: number, total: number): string {
   if (total <= 0) return t("0 of 0");
   return t("{at} of {total}", { at: at + 1, total: total >= MAX_MATCHES ? `${MAX_MATCHES}+` : total });
 }
+
+// scopeWords says how far a truncated find looked, so the bar tells "no match" from "none in the rows read".
+export function scopeWords(rows: number, truncated: boolean): string {
+  return truncated ? t("last {n} rows", { n: rows }) : "";
+}

@@ -11,16 +11,17 @@ describe("XTERM_SCROLLBACK", () => {
 describe("olderRead", () => {
   it("reads once for a pane and query, however many steps ask", async () => {
     let reads = 0;
-    const read = () => Promise.resolve(++reads);
+    const read = () => Promise.resolve({ matches: [{ row: 1, col: 0, len: 1 }].slice(0, ++reads), rows: 10, truncated: true });
     const first = olderRead(null, "m|p|err", read);
     const again = olderRead(first, "m|p|err", read);
     expect(again).toBe(first);
     expect(await again.matches).toBe(1);
+    expect((await again.found).truncated).toBe(true);
     expect(reads).toBe(1);
   });
   it("reads anew for another query or pane", () => {
     let reads = 0;
-    const read = () => Promise.resolve(++reads);
+    const read = () => { reads++; return Promise.resolve({ matches: [], rows: 10, truncated: false }); };
     const first = olderRead(null, "m|p|err", read);
     expect(olderRead(first, "m|p|warn", read)).not.toBe(first);
     expect(olderRead(first, "m|q|err", read)).not.toBe(first);
@@ -29,7 +30,7 @@ describe("olderRead", () => {
 });
 
 describe("tellsOlder", () => {
-  const read = { key: "k", matches: Promise.resolve(2), told: false };
+  const read = { key: "k", matches: Promise.resolve(2), found: Promise.resolve({ matches: [], rows: 0, truncated: false }), told: false };
   it("tells the current run once the older rows hold what the terminal's own rows do not", () => {
     expect(tellsOlder(true, read, 2, 0)).toBe(true);
   });

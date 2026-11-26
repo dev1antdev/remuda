@@ -30,10 +30,12 @@ export function useTerminalFind(api: TermApi | null, active: boolean, machineId:
   // older says once a pane and query that the query's matches are only in rows the terminal no longer holds for the
   // screen: whichever run of the query is current when the read answers, its count still zero, tells
   const older = async (q: string, id: number) => {
-    const read = (olderHeld.current = olderRead(olderHeld.current, `${machineId}|${paneId}|${q}`, () => findScrollback(machineId, paneId, q, SCROLLBACK_ROWS).then((f) => f.matches.length)));
+    const read = (olderHeld.current = olderRead(olderHeld.current, `${machineId}|${paneId}|${q}`, () => findScrollback(machineId, paneId, q, SCROLLBACK_ROWS)));
     let n = 0;
     try {
-      n = await read.matches;
+      const found = await read.found;
+      n = found.matches.length;
+      if (id === run.current) actions.foundRows(found.rows, found.truncated);
     } catch (e) {
       if (id === run.current && !read.told) actions.notify(errMsg(e), { error: true });
       read.told = true;
