@@ -173,7 +173,7 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ remuda-core: its 
   recap, meter and search like a Claude Code one (Gemini's
   reader is written from the CLI's own types and has not been seen live);
   opencode's sessions come from its SQLite database and join the same turns,
-  chat, meter and report.
+  chat, meter, subagent rows and report.
   When Codex reverts a thread's history, its new rollout replays the part that
   stayed from the old file: the chat shows that part and what came after, never
   the reverted turns, and the session list still names the thread once.

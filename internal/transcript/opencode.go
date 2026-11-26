@@ -11,6 +11,8 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -258,6 +260,214 @@ func (r *Reader) opencodeTurns(path string, v Version) ([]Turn, error) {
 		return nil, err
 	}
 	return parseOpencode(rows)
+}
+
+// OpencodeSessionID says an id is one opencode names a session with: ses_ and its letters and digits.
+func OpencodeSessionID(id string) bool { return opencodeSessionID.MatchString(id) }
+
+// opencodeSpawn is a subagent call in the parent: its tool id, the child session it started, and what it was told.
+type opencodeSpawn struct {
+	ToolID      string
+	Child       string
+	Description string
+	Kind        string
+}
+
+var (
+	opencodeSessionID   = regexp.MustCompile(`^ses_[A-Za-z0-9]+$`)
+	opencodeChildInText = regexp.MustCompile(`sessionID:\s*(ses_[A-Za-z0-9]+)`)
+)
+
+// opencodeSpawns maps the parent's subagent calls by the child session they name and by their description: the output
+// text says "sessionID: ses_…", and a child's title is the description the call was given.
+func (r *Reader) opencodeSpawns(parent string) (byChild, byDescription map[string]opencodeSpawn) {
+	byChild, byDescription = map[string]opencodeSpawn{}, map[string]opencodeSpawn{}
+	note := func(part opencodePart) {
+		if part.Name != "subagent" && part.Name != "task" {
+			return
+		}
+		var input struct {
+			Description string `json:"description"`
+			Agent       string `json:"agent"`
+		}
+		_ = json.Unmarshal(part.State.Input, &input)
+		spawn := opencodeSpawn{ToolID: part.ID, Description: input.Description, Kind: input.Agent}
+		for _, content := range part.State.Content {
+			if match := opencodeChildInText.FindStringSubmatch(content.Text); match != nil {
+				spawn.Child = match[1]
+			}
+		}
+		if spawn.Child != "" {
+			byChild[spawn.Child] = spawn
+		}
+		if spawn.Description != "" {
+			byDescription[spawn.Description] = spawn
+		}
+	}
+	if rows, err := r.opencodeRows(`SELECT call_id, data FROM session_part WHERE session_id = ? AND type = 'tool'`, parent); err == nil {
+		for _, row := range rows {
+			var part opencodePart
+			if json.Unmarshal([]byte(row["data"]), &part) == nil {
+				if part.ID == "" {
+					part.ID = row["call_id"]
+				}
+				note(part)
+			}
+		}
+	}
+	// a session from before opencode kept its parts apart carries them in the answer's content
+	if rows, err := r.opencodeRows(`SELECT data FROM session_message WHERE session_id = ? AND type = 'assistant'`, parent); err == nil {
+		for _, row := range rows {
+			var data opencodeData
+			if json.Unmarshal([]byte(row["data"]), &data) != nil {
+				continue
+			}
+			for _, part := range data.Content {
+				note(part)
+			}
+		}
+	}
+	return byChild, byDescription
+}
+
+// opencodeSubagents is SubagentsFor for opencode: the child sessions of the conversation, as they stand.
+func (r *Reader) opencodeSubagents(path string, spawnedBy map[string]bool, now time.Time) ([]Subagent, error) {
+	_, parent, ok := opencodePathParts(path)
+	if !ok {
+		return nil, nil
+	}
+	byChild, byDescription := r.opencodeSpawns(parent)
+	rows, err := r.opencodeRows(`SELECT id, title, model, time_created, time_updated, time_idle FROM session_v2 WHERE parent_id = ? ORDER BY time_created`, parent)
+	if err != nil {
+		return nil, err
+	}
+	var out []Subagent
+	for _, row := range rows {
+		child := row["id"]
+		spawn, ok := byChild[child]
+		if !ok {
+			spawn = byDescription[row["title"]]
+		}
+		updated, _ := strconv.ParseInt(row["time_updated"], 10, 64)
+		created, _ := strconv.ParseInt(row["time_created"], 10, 64)
+		idle, _ := strconv.ParseInt(row["time_idle"], 10, 64)
+		at := time.UnixMilli(updated)
+		fresh := now.Sub(at) <= QuietAfter
+		if spawn.ToolID == "" || (!spawnedBy[spawn.ToolID] && !fresh) {
+			continue
+		}
+		status := SubagentWorking
+		switch {
+		case idle > 0 && idle >= updated:
+			status = SubagentDone
+		case now.Sub(at) > QuietAfter:
+			status = SubagentQuiet
+		}
+		tools, failed := r.opencodeToolCounts(child)
+		description := row["title"]
+		if description == "" {
+			description = spawn.Description
+		}
+		out = append(out, Subagent{
+			ID: child, ToolID: spawn.ToolID, Description: description, Kind: spawn.Kind,
+			Model: opencodeModel(row["model"]).ID, Status: status,
+			Tools: tools, Failed: failed, Doing: r.opencodeDoing(child), Report: r.opencodeReport(child),
+			Started: time.UnixMilli(created).UTC().Format(time.RFC3339),
+			Ended:   at.UTC().Format(time.RFC3339),
+			Took:    float64(updated-created) / 1000,
+		})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Started != out[j].Started {
+			return out[i].Started < out[j].Started
+		}
+		return out[i].ID < out[j].ID
+	})
+	return out, nil
+}
+
+// opencodeToolCounts is how many tools a child ran and how many failed: its own parts, else the old answers' content.
+func (r *Reader) opencodeToolCounts(child string) (tools, failed int) {
+	rows, err := r.opencodeRows(`SELECT count(*) AS n, coalesce(sum(case when json_extract(data, '$.state.status') = 'error' then 1 else 0 end), 0) AS failed `+
+		`FROM session_part WHERE session_id = ? AND type = 'tool'`, child)
+	if err == nil && len(rows) > 0 {
+		tools, _ = strconv.Atoi(rows[0]["n"])
+		failed, _ = strconv.Atoi(rows[0]["failed"])
+		if tools > 0 {
+			return tools, failed
+		}
+	}
+	rows, err = r.opencodeRows(`SELECT count(*) AS n, coalesce(sum(case when json_extract(c.value, '$.state.status') = 'error' then 1 else 0 end), 0) AS failed `+
+		`FROM session_message m, json_each(m.data, '$.content') c `+
+		`WHERE m.session_id = ? AND m.type = 'assistant' AND json_extract(c.value, '$.type') = 'tool'`, child)
+	if err == nil && len(rows) > 0 {
+		tools, _ = strconv.Atoi(rows[0]["n"])
+		failed, _ = strconv.Atoi(rows[0]["failed"])
+	}
+	return tools, failed
+}
+
+// opencodeDoing is the tool call a child is on, if one is open.
+func (r *Reader) opencodeDoing(child string) *Part {
+	rows, err := r.opencodeRows(`SELECT data FROM session_part WHERE session_id = ? AND type = 'tool' AND json_extract(data, '$.state.status') NOT IN ('completed', 'error') ORDER BY time_updated DESC LIMIT 1`, child)
+	if err != nil || len(rows) == 0 {
+		return nil
+	}
+	var part opencodePart
+	if json.Unmarshal([]byte(rows[0]["data"]), &part) != nil {
+		return nil
+	}
+	doing, ok := opencodePartOf(part, "", "")
+	if !ok {
+		return nil
+	}
+	return &doing
+}
+
+// opencodeReport is the start of the text a child's last answer ended with.
+func (r *Reader) opencodeReport(child string) string {
+	rows, err := r.opencodeRows(`SELECT id, data FROM session_message WHERE session_id = ? AND type = 'assistant' ORDER BY seq DESC LIMIT 1`, child)
+	if err != nil || len(rows) == 0 {
+		return ""
+	}
+	var data opencodeData
+	_ = json.Unmarshal([]byte(rows[0]["data"]), &data)
+	var text string
+	for i := len(data.Content) - 1; i >= 0; i-- {
+		if data.Content[i].Type == "text" {
+			text = data.Content[i].Text
+			break
+		}
+	}
+	if text == "" {
+		if parts, err := r.opencodeRows(`SELECT data FROM session_part WHERE message_id = ? AND type = 'text' ORDER BY ordinal DESC LIMIT 1`, rows[0]["id"]); err == nil && len(parts) > 0 {
+			var part opencodePart
+			if json.Unmarshal([]byte(parts[0]["data"]), &part) == nil {
+				text = part.Text
+			}
+		}
+	}
+	return cutRunes(strings.TrimSpace(text), reportMax)
+}
+
+// OpencodeSubagent reads one child session on its own, for the transcript viewer: found false when it is no child of
+// the conversation.
+func (r *Reader) OpencodeSubagent(parentPath, id string) (turns []Turn, version Version, found bool, err error) {
+	dir, parent, ok := opencodePathParts(parentPath)
+	if !ok || !OpencodeSessionID(id) {
+		return nil, Version{}, false, nil
+	}
+	rows, err := r.opencodeRows(`SELECT id FROM session_v2 WHERE id = ? AND parent_id = ?`, id, parent)
+	if err != nil || len(rows) == 0 {
+		return nil, Version{}, false, err
+	}
+	child := opencodePath(dir, id)
+	version, err = r.opencodeVersion(child)
+	if err != nil {
+		return nil, version, true, err
+	}
+	turns, err = r.opencodeTurns(child, version)
+	return turns, version, true, err
 }
 
 // opencodeUsage is a session's meter, from its row and its last answer's tokens.

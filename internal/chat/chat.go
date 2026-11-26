@@ -297,7 +297,20 @@ func (conv Conversation) SubagentsOf(turns []transcript.Turn) []transcript.Subag
 
 // Subagent is one of the conversation's subagents on its own, for the viewer: its turns priced, with its file's version.
 func (conv Conversation) Subagent(id string) ([]transcript.Turn, transcript.Version, error) {
-	if conv.reader == nil || !conv.reader.HasSubagent(conv.Path, id, time.Now()) {
+	if conv.reader == nil {
+		return nil, transcript.Version{}, &NotFoundError{fmt.Errorf("subagent %s not found", id)}
+	}
+	if transcript.FormatOf(conv.Path) == transcript.Opencode {
+		turns, version, found, err := conv.reader.OpencodeSubagent(conv.Path, id)
+		if err != nil {
+			return nil, version, err
+		}
+		if !found {
+			return nil, version, &NotFoundError{fmt.Errorf("subagent %s not found", id)}
+		}
+		return usage.PriceTurns(turns), version, nil
+	}
+	if !conv.reader.HasSubagent(conv.Path, id, time.Now()) {
 		return nil, transcript.Version{}, &NotFoundError{fmt.Errorf("subagent %s not found", id)}
 	}
 	turns, version, err := conv.reader.SubagentTurns(conv.Path, id)

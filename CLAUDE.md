@@ -1007,6 +1007,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   `UsageRecord`; its lowercase tools map to the page's names, and `path`/`oldString`/`newString` gain
   `file_path`/`old_string`/`new_string`), versioned by `time_updated`; `Reader.OpencodeUsage` and `OpencodeSince` give
   the pane's meter and the usage report the session's own sums, and `resumeFlags` continues one with `--session`.
+  Its `subagent` calls are rows too: the child sessions under `session_v2.parent_id` become `Subagent`s
+  (`opencodeSpawns` reads each call's description and the `sessionID: ses_…` its output names), with the child's tools,
+  failed calls, open call, report and status, and `OpencodeSubagent` opens a child's own conversation in the viewer.
   **A session found by the agent's
   process** (`bypid.go`, tested on real processes in a temp HOME and on
   `shell.Fake`), for a machine whose runtime names no session (remuda-core,
