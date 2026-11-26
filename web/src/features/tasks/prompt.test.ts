@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { branchFor, dueLabel, endOfToday, toLocalInput } from "./prompt";
+import { branchFor, dueLabel, endOfToday, guardForTask, toLocalInput } from "./prompt";
+import { GUARD } from "@/lib/guard";
 
 describe("branchFor", () => {
   it("slugs the title after the id", () => {
@@ -28,6 +29,15 @@ describe("dueLabel", () => {
     expect(dueLabel(at(new Date(2026, 9, 13, 9, 0)), now)?.over).toBe(true);
     expect(dueLabel(at(new Date(2026, 9, 13, 18, 0)), now)?.over).toBe(false);
     expect(dueLabel({ due_date: "" }, now)).toBeNull();
+  });
+});
+
+describe("the guard", () => {
+  it("ends a task made from an issue, and a plain one without it", () => {
+    const issue = '<p>Issue: <a href="https://github.com/acme/widgets/issues/41">https://github.com/acme/widgets/issues/41</a> · by sam</p><p>Crash on start.</p>';
+    expect(guardForTask(issue)).toBe("\n\n" + GUARD);
+    expect(guardForTask("<p>Do it.</p>")).toBe("");
+    expect(guardForTask(undefined)).toBe("");
   });
 });
 

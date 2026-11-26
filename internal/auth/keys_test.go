@@ -4,6 +4,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -17,6 +18,32 @@ func openKeys(t *testing.T, dir string) *Keys {
 		t.Fatal(err)
 	}
 	return keys
+}
+
+func TestAKeyTheFileCouldNotLoseStillWorks(t *testing.T) {
+	dir := t.TempDir()
+	keys := openKeys(t, dir)
+	key, rec, err := keys.Mint("GOG")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
+	if ok, err := keys.Revoke(rec.ID); err == nil || ok {
+		t.Fatalf("a revoke the file could not take answered %v, %v", ok, err)
+	}
+	if err := os.Chmod(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := keys.Check(key); !ok {
+		t.Fatal("the key stopped working though its file was never written")
+	}
+	again := openKeys(t, dir)
+	if _, ok := again.Check(key); !ok {
+		t.Fatal("the key came back revoked after a reload")
+	}
 }
 
 func TestKeysMintCheckRevoke(t *testing.T) {
@@ -63,8 +90,11 @@ func TestKeysMintCheckRevoke(t *testing.T) {
 	if _, ok := reloaded.Check(again); !ok {
 		t.Fatal("the key did not survive a reload of the file")
 	}
-	if !reloaded.Revoke(rec2.ID) || reloaded.Revoke(rec2.ID) {
-		t.Fatal("Revoke answers true once")
+	if ok, err := reloaded.Revoke(rec2.ID); err != nil || !ok {
+		t.Fatalf("Revoke answers true once: %v %v", ok, err)
+	}
+	if ok, err := reloaded.Revoke(rec2.ID); err != nil || ok {
+		t.Fatalf("Revoke answers true once: %v %v", ok, err)
 	}
 	if _, ok := reloaded.Check(again); ok {
 		t.Fatal("a revoked key still passes")
@@ -193,7 +223,9 @@ func TestGuardLetsAKeyReachTasksOnly(t *testing.T) {
 	if code, body := withKey(h, "/api/roster", testToken); code != 200 || body != "caller= device=" {
 		t.Fatalf("the token: %d %q", code, body)
 	}
-	keys.Revoke(rec.ID)
+	if _, err := keys.Revoke(rec.ID); err != nil {
+		t.Fatal(err)
+	}
 	if code, _ := withKey(h, "/api/tasks", key); code != 401 {
 		t.Fatalf("a revoked key: %d", code)
 	}

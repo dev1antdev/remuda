@@ -96,8 +96,9 @@ type Service struct {
 	priv    string
 	subject string
 
-	mu   sync.Mutex
-	subs map[string]*Subscription // by endpoint
+	mu     sync.Mutex
+	saveMu sync.Mutex               // one write of the file at a time, so an older snapshot never lands after a newer one
+	subs   map[string]*Subscription // by endpoint
 
 	timers map[events.PaneRef][]*time.Timer
 	send   func(sub *Subscription, p Payload) error
@@ -199,6 +200,8 @@ func (s *Service) list() []*Subscription {
 }
 
 func (s *Service) saveSubs() {
+	s.saveMu.Lock()
+	defer s.saveMu.Unlock()
 	b, _ := json.MarshalIndent(s.list(), "", "  ")
 	if err := state.WriteFile(filepath.Join(s.dir, "push-subscriptions.json"), b); err != nil {
 		log.Printf("push: save subscriptions: %v", err)

@@ -441,15 +441,12 @@ func TestDoorScriptKeepsALiveDoor(t *testing.T) {
 	}
 }
 
-// TestDoorScriptGoesOneAtATime: of cockpits placing their live doors together exactly one wins, the others finding its
-// door. The health check is a stub here, answering at once, and the clock is fixed: a real health check under a busy
-// machine may miss its two seconds, and a real clock crossing a half-minute may put the script in another slot — both
-// would place a second door for a reason this test is not about.
+// TestDoorScriptGoesOneAtATime: a live lock keeps every cockpit out, four asking together; released, the next places
+// and a second cockpit finds its door taken. The health check is a stub and the clock fixed: the test is about the
+// lock, not a runner's speed, its clock or a live door's two seconds.
 func TestDoorScriptGoesOneAtATime(t *testing.T) {
 	home := newDoorHome(t)
 	tools := t.TempDir()
-	// a fixed clock, so the four scripts cannot land in two half-minute slots on a slow runner, and a health check
-	// that answers at once: the test is about the lock, not a runner's speed or its clock
 	for name, body := range map[string]string{
 		"date": "#!/bin/sh\necho 3000\n",
 		"curl": "#!/bin/sh\nprintf '%s' '{\"ok\":true}'\n",
@@ -459,6 +456,24 @@ func TestDoorScriptGoesOneAtATime(t *testing.T) {
 		}
 	}
 	t.Setenv("PATH", tools+string(os.PathListSeparator)+os.Getenv("PATH"))
+	if out, err := exec.Command("date", "+%s").Output(); err != nil || strings.TrimSpace(string(out)) != "3000" {
+		t.Fatalf("the date stub is not first on PATH: %q %v", out, err)
+	}
+	if out, err := exec.Command("curl", "x").Output(); err != nil || strings.TrimSpace(string(out)) != `{"ok":true}` {
+		t.Fatalf("the curl stub is not first on PATH: %q %v", out, err)
+	}
+	run := func(url string) string {
+		cmd := exec.Command("sh", "-c", DoorScript(url))
+		cmd.Stdin = strings.NewReader("rk_new\n")
+		out, _ := cmd.Output()
+		return strings.TrimSpace(string(out))
+	}
+
+	// a live lock, as another cockpit holds it: no answer but busy, however many ask together
+	lock := filepath.Join(home.dir, "agent-door.lock.100")
+	if err := os.MkdirAll(filepath.Join(lock, "owner.1.100"), 0o700); err != nil {
+		t.Fatal(err)
+	}
 	urls := []string{liveDoor(t), liveDoor(t), liveDoor(t), liveDoor(t)}
 	answers := make([]string, len(urls))
 	var cockpits sync.WaitGroup
@@ -466,31 +481,31 @@ func TestDoorScriptGoesOneAtATime(t *testing.T) {
 		cockpits.Add(1)
 		go func() {
 			defer cockpits.Done()
-			for {
-				cmd := exec.Command("sh", "-c", DoorScript(url))
-				cmd.Stdin = strings.NewReader("rk_new\n")
-				out, err := cmd.Output()
-				if answers[i] = strings.TrimSpace(string(out)); err != nil || answers[i] != doorBusy {
-					return
-				}
-				time.Sleep(10 * time.Millisecond)
-			}
+			answers[i] = run(url)
 		}()
 	}
 	cockpits.Wait()
-	winner := ""
-	for i, answer := range answers {
-		if answer == doorPlaced {
-			if winner != "" {
-				t.Fatalf("two doors placed: %v", answers)
-			}
-			winner = urls[i]
-		} else if answer != doorTaken {
-			t.Fatalf("answers: %v", answers)
+	for _, answer := range answers {
+		if answer != doorBusy {
+			t.Fatalf("a live lock answered %v, want every cockpit busy", answers)
 		}
 	}
-	if winner == "" || home.read("agent-url") != winner || home.read("agent-door-moved") != winner {
-		t.Fatalf("winner %q, url %q, moved %q", winner, home.read("agent-url"), home.read("agent-door-moved"))
+	if err := os.RemoveAll(lock); err != nil {
+		t.Fatal(err)
+	}
+
+	first, second := liveDoor(t), liveDoor(t)
+	if got := run(first); got != doorPlaced {
+		t.Fatalf("the free lock answered %q, want %q", got, doorPlaced)
+	}
+	if url, moved := home.read("agent-url"), home.read("agent-door-moved"); url != first || moved != first {
+		t.Fatalf("url %q moved %q, want %q", url, moved, first)
+	}
+	if got := run(second); got != doorTaken {
+		t.Fatalf("a live door answered %q, want %q", got, doorTaken)
+	}
+	if url := home.read("agent-url"); url != first {
+		t.Fatalf("the live door was replaced: %q", url)
 	}
 }
 

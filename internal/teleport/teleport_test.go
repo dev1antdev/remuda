@@ -1,6 +1,7 @@
 package teleport
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -248,6 +249,72 @@ func TestMoveSendsTheWholeBranchWhenTheTargetLacksItsBase(t *testing.T) {
 	}
 	if read(t, filepath.Join(landed.Dir, "a.txt")) != "a\n" || read(t, filepath.Join(landed.Dir, "b.txt")) != "b\n" {
 		t.Fatal("the commits did not all arrive")
+	}
+}
+
+func TestTheWholeBranchIsSentAgainAndBeforeLandIsAskedAgain(t *testing.T) {
+	needGit(t)
+	_, source, target := clones(t)
+	mirror := filepath.Join(t.TempDir(), "mirror.git")
+	git(t, filepath.Dir(mirror), "init", "-q", "--bare", mirror)
+	git(t, source, "checkout", "-qb", "feature/y")
+	write(t, source, "a.txt", "a\n")
+	git(t, source, "add", "a.txt")
+	git(t, source, "commit", "-qm", "a")
+	git(t, source, "remote", "add", "mirror", mirror)
+	git(t, source, "push", "-q", "mirror", "feature/y")
+	write(t, source, "b.txt", "b\n")
+	git(t, source, "add", "b.txt")
+	git(t, source, "commit", "-qm", "b")
+
+	asked := 0
+	landed, err := Move{Source: newMachine(t, "mac", "Mac"), SourceDir: source, Target: newMachine(t, "gog", "GOG"), TargetDir: target,
+		BeforeLand: func() error { asked++; return nil },
+		Start:      func(Landed, Source) error { return nil }}.Run(func(string) {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if asked != 2 {
+		t.Fatalf("BeforeLand asked %d times, want once before the bundle landing and once before the whole-branch retry", asked)
+	}
+	if read(t, filepath.Join(landed.Dir, "a.txt")) != "a\n" || read(t, filepath.Join(landed.Dir, "b.txt")) != "b\n" {
+		t.Fatal("the commits did not all arrive")
+	}
+}
+
+func TestARefusedBeforeLandTouchesNothingAndStartsNothing(t *testing.T) {
+	needGit(t)
+	_, source, target := clones(t)
+	working(t, source)
+	before := git(t, target, "status", "--porcelain")
+	branches := git(t, target, "branch", "--format=%(refname:short)")
+	tmp := t.TempDir()
+	t.Setenv("TMPDIR", tmp)
+
+	refused := errors.New("herdr came up on the target: nothing may land")
+	asked, started := 0, false
+	var lines []string
+	from, to := newMachine(t, "mac", "This Mac"), newMachine(t, "gog", "GOG")
+	_, err := Move{
+		Source: from, SourceDir: source,
+		Target: to, TargetDir: target,
+		BeforeLand: func() error { asked++; return refused },
+		Start:      func(Landed, Source) error { started = true; return nil },
+	}.Run(func(line string) { lines = append(lines, line) })
+	if !errors.Is(err, refused) || asked != 1 || started {
+		t.Fatalf("err %v, asked %d, started %v\n%s", err, asked, started, strings.Join(lines, "\n"))
+	}
+	if after := git(t, target, "status", "--porcelain"); after != before {
+		t.Fatalf("the target checkout changed: %q → %q", before, after)
+	}
+	if after := git(t, target, "branch", "--format=%(refname:short)"); after != branches {
+		t.Fatalf("the target's branches changed: %q → %q", branches, after)
+	}
+	if left, _ := os.ReadDir(tmp); len(left) != 0 {
+		t.Errorf("the pack was left on the target: %v", left)
+	}
+	if _, err := os.Stat(filepath.Join(to.home, ".herdr", "worktrees", "app")); !os.IsNotExist(err) {
+		t.Fatalf("a worktree was made in a refused move: %v", err)
 	}
 }
 
