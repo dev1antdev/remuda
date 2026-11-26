@@ -2148,7 +2148,11 @@ components and icons as rules for whoever changes it: @docs/design.md
   it is sent next is the person's (a booked "continue" too). Idle/done chats
   go at once; working/blocked/unknown ones are booked and restarted after
   the watcher sees them settle (`events.PaneStatus` → `Restarter.OnStatus`,
-  a 25 s timer, then its own job via `Restarter.Later`). A pane without a session id
+  a 25 s timer, then its own job via `Restarter.Later`). A booking is kept
+  in `<state>/restart-bookings.json` (`Restarter.Open`), so an update whose
+  last step is remuda's own restart does not lose it: the next start arms
+  it from the machine's first snapshot once the chat is settled
+  (`Restarter.OnSnapshot`). A pane without a session id
   is left alone; a pane that closes with its agent is reported. `what =
   restart-<kind>` runs the restart alone. A restart holds the pane
   (`sessions.Input.Hold`: the pane's prompts' lock, then its typing lock,
@@ -6890,9 +6894,14 @@ components and icons as rules for whoever changes it: @docs/design.md
   comment by remuda says what came), the
   agent in it (`sessions.StartAgent` retries the core's `agent_pane_busy`
   while the new pane's shell comes up — the generic create path uses it
-  too), a `task_runs` row and the task moved to its project's `on_start`
+  too), a `task_runs` row holding the prompt before anything is typed
+  (`Run.Prompt`) and the task moved to its project's `on_start`
   column (`StartRun`) — all of it `tasks.Launcher.Start` (start.go); then
-  the delivery in a goroutine: `AgentPrompt` every 2 s until the agent takes it. Claude
+  the delivery in a goroutine: `AgentPrompt` every 2 s until the agent takes it.
+  `RunWatch.ResumeStarting`, once as remuda comes up, hands a starting
+  run's saved prompt over again (`Launcher.Redeliver`, the window then
+  counting from the hand-over), so a restart in the middle of a start does
+  not leave the task failed with a worktree and no agent at work. Claude
   Code's "trust this folder" question for that very worktree is answered
   yes (`PaneRead` → `isTrustPrompt` → keys down+enter, noted as a comment);
   any other question of the agent's gets one push and waits; five minutes

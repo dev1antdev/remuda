@@ -505,7 +505,9 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ remuda-core: its 
   prefixes `/grill-me`) — and **Start an agent on it**: a worktree
   branches off one of your workspaces, Claude starts there and gets the
   task once it is up (its "trust this folder" question for the new
-  worktree is answered for you), the task moves to *In progress*, and
+  worktree is answered for you); the prompt is written down before it is
+  typed, so a start remuda's own restart interrupted hands the task over
+  again once remuda is back. The task moves to *In progress*, and
   every answer the agent finishes comes back to the task as a comment
   with a push — and moves it on to *Testing*, unless you moved it first.
   A project's settings say **where its agents work** — a machine and one
@@ -676,7 +678,9 @@ a Claude Code that does not have the command yet — are asked to leave
 (their own `/exit`) and started again in the same pane with the session
 resumed (`claude --resume`, `codex resume`, `gemini --resume`, `kimi
 --session`); a busy chat is restarted a little after it finishes, and a
-message half-typed in a chat's box is lost. The same restart is
+message half-typed in a chat's box is lost. A chat booked for later keeps
+its place across remuda's own restart — the booking is remembered in the
+state dir — so updating remuda in the same run does not cancel it. The same restart is
 offered on its own ("Restart Claude Code chats") for an agent that
 updated itself, and for one chat at a time from the workspace's ⋯ menu
 or the palette ("Restart Claude Code on its session…"): for an agent
