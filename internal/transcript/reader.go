@@ -330,6 +330,9 @@ func (r *Reader) open(path string) (*os.File, error) {
 
 // Version stats the session file; the version doubles as the ETag.
 func (r *Reader) Version(path string) (Version, error) {
+	if IsOpencode(path) {
+		return r.opencodeVersion(path)
+	}
 	if r.host.Local() {
 		f, err := r.open(path)
 		if err != nil {
@@ -450,6 +453,9 @@ func (r *Reader) readSession(path string) ([]byte, error) {
 
 // Turns parses the session file at the given version, remotely from a cached tail grown by delta.
 func (r *Reader) Turns(path string, v Version) ([]Turn, error) {
+	if IsOpencode(path) {
+		return r.opencodeTurns(path, v)
+	}
 	if FormatOf(path) == Codex {
 		return parseCodexHistory(path, r.readSession) // a revert's history_base may lie in another root or on ssh
 	}
@@ -553,6 +559,13 @@ func keepTail(tails map[string]*cachedTail, path string, tail *cachedTail, budge
 // ResolveSession finds the session file of herdr's agent_session for an agent kind (claude, codex, gemini; "" tries
 // every format): the exact id in the folder's own place first, else a search across the format's tree.
 func (r *Reader) ResolveSession(agent, cwd, kind, value string) (string, error) {
+	// opencode names a row in its own database, never a file
+	if agent == "opencode" || kind == "opencode" {
+		if kind == "path" {
+			return "", fmt.Errorf("opencode keeps no session files")
+		}
+		return r.opencodeResolve(cwd, value)
+	}
 	// the agent's own hooks chose these: a path only under one of the session roots, an id only what looks like one
 	if kind == "path" {
 		clean := rpath.For(r.host.Home()).Clean(value)

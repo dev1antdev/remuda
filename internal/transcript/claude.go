@@ -69,6 +69,9 @@ func SessionID(path string) string {
 		return CodexSessionID(path)
 	case Gemini:
 		return GeminiSessionID(path)
+	case Opencode:
+		_, id, _ := opencodePathParts(path)
+		return id
 	}
 	return strings.TrimSuffix(filepath.Base(path), ".jsonl")
 }
@@ -95,6 +98,9 @@ func EncodePath(cwd string) string {
 // Sessions is the session files of one format for a working directory in the folders this machine's reader knows, its
 // agents' own included, newest first.
 func (r *Reader) Sessions(format Format, cwd string) ([]SessionInfo, error) {
+	if format == Opencode {
+		return r.opencodeSessions(cwd)
+	}
 	return sessionsIn(r.Roots(), r.host.Home(), format, cwd)
 }
 

@@ -432,7 +432,7 @@ func (c *Service) open(mc *machines.Machine, paneID, sessionID, dir string, tail
 		if conv.Path == "" && pane.AgentSession != nil {
 			conv.Path, _ = mc.Transcripts.ResolveSession(pane.AgentSession.Agent, conv.Dir, pane.AgentSession.Kind, pane.AgentSession.Value)
 		}
-		if conv.Path == "" && mc.Local() && newest {
+		if conv.Path == "" && (mc.Local() || format == transcript.Opencode) && newest {
 			if conv.Sessions == nil {
 				conv.Sessions, _ = mc.Transcripts.Sessions(format, conv.Dir)
 			}
@@ -455,7 +455,7 @@ func (c *Service) open(mc *machines.Machine, paneID, sessionID, dir string, tail
 	conv.Version = version
 	conv.ID = transcript.SessionID(conv.Path)
 	conv.stamp = mc.Transcripts.SubagentsStamp(conv.Path, time.Now())
-	if conv.Sessions == nil && mc.Local() && paneID != "" && !tail {
+	if conv.Sessions == nil && (mc.Local() || transcript.FormatOf(conv.Path) == transcript.Opencode) && paneID != "" && !tail {
 		conv.Sessions, _ = mc.Transcripts.Sessions(transcript.FormatOf(conv.Path), conv.Dir)
 	}
 	return conv, nil

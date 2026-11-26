@@ -1000,7 +1000,14 @@ components and icons as rules for whoever changes it: @docs/design.md
   reordered), `$rewindTo`, `$set`; the legacy one-object `.json` too.
   `Reader.ResolveSession(agent, cwd, kind, value)` finds the file by the
   pane's agent (`""` tries every format, for a transcript opened by id),
-  locally and by `findScript` over ssh. **A session found by the agent's
+  locally and by `findScript` over ssh. **opencode keeps no JSONL** (`opencode.go`): its sessions are rows in
+  `$XDG_DATA_HOME/opencode/opencode.db` (else `~/.local/share/opencode/opencode.db`), read here through the SQLite
+  driver and on a remote through `sqlite3`; a session is the pseudo-path `opencode<US><dir><US><id>`, listed from
+  `session_v2.directory` and read from `session_message`/`session_part` (each assistant answer's `tokens`/`cost` is a
+  `UsageRecord`; its lowercase tools map to the page's names, and `path`/`oldString`/`newString` gain
+  `file_path`/`old_string`/`new_string`), versioned by `time_updated`; `Reader.OpencodeUsage` and `OpencodeSince` give
+  the pane's meter and the usage report the session's own sums, and `resumeFlags` continues one with `--session`.
+  **A session found by the agent's
   process** (`bypid.go`, tested on real processes in a temp HOME and on
   `shell.Fake`), for a machine whose runtime names no session (remuda-core,
   Core 12): `Reader.SessionsOf([]Running{pid, agent, cwd, seen, started, sinceBoot})` is one script
@@ -5906,7 +5913,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   written since, oldest first, each message id once across the files (a
   continuation's copied tail is credited to the session that made it),
   subagent files count toward their session, per day in
-  the viewer's zone, per project/model/session; `usage.Collect` asks every
+  the viewer's zone, per project/model/session; opencode has no files, so `ReadHost` asks `OpencodeSince` and
+  `mergeReports` adds its answers (days, projects, models, sessions, the year's `Daily` too), while a pane's meter comes
+  from `OpencodeUsage`'s session row and last answer; `usage.Collect` asks every
   connected host at once, and remotely the deployed binary runs `remuda
   usage -since -tz` (gated on the version, like search). UI: `features/usage/Usage.tsx` (📊 in the sidebar head, or the header pill),
   the pill in the header (fill bar · cost; its tooltip names the context as it stands, "418k of 1M", by `tokFine`; it wears a budget's tone when
