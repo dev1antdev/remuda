@@ -13,6 +13,7 @@ export const activity: Dictionary = {
   "Questions": "Вопросы",
   "Review": "Ревью",
   "Schedules": "Расписания",
+  "Automations": "Автоматизации",
   "Sent": "Отправлено",
   "Show everything": "Показать всё",
   "Tasks": "Задачи",

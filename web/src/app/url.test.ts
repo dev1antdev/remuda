@@ -29,12 +29,12 @@ describe("addressFor", () => {
 
 describe("readURL", () => {
   it("reads the pane, the mode, the lens, a panel and a turn's link off the address", () => {
-    g.location = { search: "?machine=gog&pane=w1%3Ap1&mode=review&lens=chat&panel=usage&session=abc&turn=u1" };
+    g.location = { search: "?machine=gog&pane=w1%3Ap1&mode=review&lens=chat&panel=activity&session=abc&turn=u1" };
     expect(readURL()).toEqual({
       requested: { machineId: "gog", paneId: "w1:p1" },
       mode: "review",
       lens: "chat",
-      panel: "usage",
+      panel: "activity",
       turn: { machineId: "gog", paneId: "w1:p1", session: "abc", turn: "u1" },
     });
   });

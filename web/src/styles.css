@@ -12369,6 +12369,14 @@ body:has(.status-bar) .toasts {
   gap: 8px;
 }
 
+/* a panel moved into Settings keeps its own controls above the section: the usage tabs and period, New on Automations */
+.settings-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 /* the section's name heads its pane; a long one's groups each get a quiet label */
 .settings-section h3 {
   margin: 0 0 6px;

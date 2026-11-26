@@ -8,7 +8,7 @@ import type { Lens, Mode, Panel, Selection } from "./store";
 
 const LENSES: Lens[] = ["chat", "terminal", "changes", "git"];
 const MODES: Mode[] = ["herdr", "tasks", "code", "review"];
-const PANELS: Panel[] = ["search", "alerts", "activity", "schedules", "usage", "pr", "issues", "repos"];
+const PANELS: Panel[] = ["search", "alerts", "activity", "pr", "issues"];
 
 // panelOf keeps a value only when it names a panel a link may open
 export function panelOf(value: unknown): Panel {

@@ -3,7 +3,7 @@ import { listedIds, SECTION_IDS, sectionGroups, shownSection, stepSection } from
 
 describe("sectionGroups", () => {
   it("lists every section once, this device's before the cockpit's", () => {
-    const groups = sectionGroups(false);
+    const groups = sectionGroups(false, true);
     expect(groups.map((group) => group.id)).toEqual(["device", "cockpit"]);
     expect([...listedIds(groups)].sort()).toEqual([...SECTION_IDS].sort());
     expect(listedIds(groups).slice(0, 3)).toEqual(["look", "sidebar", "general"]);

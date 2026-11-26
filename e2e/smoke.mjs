@@ -142,18 +142,22 @@ try {
   if (await present(".lens-pane:not([hidden]) .composer textarea")) fail("a shell pane shows a chat composer");
   step("a shell pane has its terminal alone");
 
-  if (!(await clickText(".rail-btn", "Review"))) fail("no Review button on the rail");
+  const mac = await evaluate(`/mac/i.test(navigator.platform)`);
+  // Review is no longer a rail place: the palette opens the mode, the rail keeps the three modes and Settings
+  await key("k", "KeyK", mac ? 4 : 2);
+  await until("the palette", () => present(".palette-row"));
+  await send("Input.insertText", { text: "go to review" });
+  await until("the Review row", async () => /review/i.test((await evaluate(`document.querySelector('.palette-row .palette-title')?.innerText ?? ''`))));
+  await key("Enter", "Enter", 0, "\r");
   await until("the Review queue", () => present(".queue-head"));
   step("the Review mode", await evaluate(`document.querySelector('.queue-head')?.innerText.replace(/\\s+/g, ' ').trim()`));
 
-  if (!(await clickText(".rail-btn", "Activity"))) fail("no Activity button on the rail");
+  if (!(await click('[aria-label="Activity"]'))) fail("no Activity button in the header");
   await until("the Activity panel", () => present(".activity-dialog"));
   step("the Activity panel opens");
   await shot("activity");
   await key("Escape", "Escape");
   await until("the Activity panel closed", async () => !(await present(".activity-dialog")));
-
-  const mac = await evaluate(`/mac/i.test(navigator.platform)`);
   await key("k", "KeyK", mac ? 4 : 2);
   await until("the palette", () => present(".palette-row"));
   await send("Input.insertText", { text: "go to tasks" });

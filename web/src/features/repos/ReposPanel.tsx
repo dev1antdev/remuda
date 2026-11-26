@@ -24,7 +24,7 @@ import { useRepoSync } from "./useRepoSync";
 
 export const READ_EVERY = 30_000;
 
-export default function ReposPanel({ onClose }: { onClose: () => void }) {
+export default function ReposPanel({ onClose, embedded = false }: { onClose: () => void; embedded?: boolean }) {
   const { machines } = useRoster();
   const query = useQuery(() => listRepos(), [], { every: READ_EVERY });
   const sync = useRepoSync(query.mutate, query.reload);
@@ -59,8 +59,8 @@ export default function ReposPanel({ onClose }: { onClose: () => void }) {
       </button>
     </>
   );
-  return (
-    <Dialog title={t("Repositories")} icon="folder-git" size="lg" onClose={onClose} className="repos-panel" controls={controls}>
+  const content = (
+    <>
       <p className="modal-hint">{t("Every repository your workspaces stand on, on every machine, and those in a folder you scan. A row's menu fetches, pulls (a fast-forward, never a merge) and pushes (never forced); nothing waits for a login.")}</p>
       {query.error && <Notice tone="error">{query.error}</Notice>}
       <div className="repos-list">
@@ -71,6 +71,20 @@ export default function ReposPanel({ onClose }: { onClose: () => void }) {
       </div>
       {scanning && <ScanDialog machineId={scanning.id} machineName={scanning.label} scan={scanning.scan} onClose={() => setScanning(null)} onSaved={query.reload} />}
       {sync.held && <PushHeldDialog held={sync.held} name={nameOf(sync.held.machineId, sync.held.repo)} onClose={sync.dropHeld} onPush={() => sync.held && void sync.act(sync.held.machineId, sync.held.repo, "push", sync.held.outcome)} />}
+    </>
+  );
+  if (embedded) {
+    return (
+      <section className="settings-section repos-settings">
+        <h3>{t("Repositories")}</h3>
+        <div className="settings-controls">{controls}</div>
+        {content}
+      </section>
+    );
+  }
+  return (
+    <Dialog title={t("Repositories")} icon="folder-git" size="lg" onClose={onClose} className="repos-panel" controls={controls}>
+      {content}
     </Dialog>
   );
 }

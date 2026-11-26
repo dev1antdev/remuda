@@ -18,7 +18,7 @@ export const FAMILIES: Family[] = [
   { key: "finished", label: "Finished", icon: "circle-check", kinds: ["done", "finish"] },
   { key: "watchdog", label: "Watchdog", icon: "clock", kinds: ["stuck", "waiting", "loop"] },
   { key: "tasks", label: "Tasks", icon: "list", kinds: ["task"] },
-  { key: "schedules", label: "Schedules", icon: "calendar", kinds: ["schedule"] },
+  { key: "schedules", label: "Automations", icon: "calendar", kinds: ["schedule"] },
   { key: "budgets", label: "Budgets & limits", icon: "chart", kinds: ["budget", "limits"] },
   { key: "review", label: "Review", icon: "eye", kinds: ["review", "collision"] },
   { key: "machines", label: "Machines", icon: "monitor", kinds: ["machine", "backup", "signin"] },

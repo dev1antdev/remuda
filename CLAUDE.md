@@ -1448,28 +1448,27 @@ components and icons as rules for whoever changes it: @docs/design.md
   anchor is set on mousedown, the head follows the pointer, our select()
   ends xterm's own drag; a click that never moves is left to xterm. The ⬚ selection layer (phone long-press) is screen-only.
 - **Nothing in a bar moves when state changes.** The page's places are
-  **the rail** (`app/Rail.tsx`) down the left edge: the four modes, then
-  Usage, Schedules, Repositories (panel `repos`, "Repos"
-  under its icon; see `internal/gitsync`), Activity (a dot for news), Shell, in server
-  mode **Server** (panel `server`, `features/roster/ServerPanel.tsx`:
-  the host's load, disk, memory, temperature, clock and throttling with
-  the day's sparklines, its versions and tailnet address, what wants a
-  look, Read again, Updates…, Fleet setup…, Update everywhere…; an amber or red dot
-  from `serverTone` in `concerns.ts`, tested; the palette's "Server ·
-  <name>", a viewer's too) and Settings,
-  each an icon on a pill (`.rail-icon`: a soft one under the pointer, the
-  accent's for the place the page is on) with its name under it and a
-  tooltip, the tools at the rail's foot under a hairline (the name whole: a
-  language whose word is too long there gives a shorter one through
-  `tc("rail", …)`, "События" for Activity, and the e2e display suite
-  fails a cut one; `.rail-label`'s own line-height 1.25 under the
-  button's 1, so g, y, р and у keep their descenders — the suite fails
-  any one-line `overflow: hidden` label whose glyphs, a text range's
-  box, overrun it); under 920 px it
-  lies along the bottom with Agents, Tasks, Review and More (a
-  menu with Code, the panels and Settings), and yields while the
-  composer has the keyboard. The header is `[burger][title — takes the
-  slack][usage pill][lens switch][search]`: the lens group is
+  **the rail** (`app/Rail.tsx`) down the left edge: the three modes
+  (Agents, Tasks, Code — Code at a desk alone), then the floating Shell and
+  Settings, each an icon on a pill (`.rail-icon`: a soft one under the
+  pointer, the accent's for the place the page is on) with its name under it
+  and a tooltip, the tools at the rail's foot under a hairline (the name
+  whole: a language whose word is too long there gives a shorter one through
+  `tc("rail", …)`, and the e2e display suite fails a cut one; `.rail-label`'s
+  own line-height 1.25 under the button's 1, so g, y, р and у keep their
+  descenders — the suite fails any one-line `overflow: hidden` label whose
+  glyphs, a text range's box, overrun it); under 920 px it lies along the
+  bottom with Agents, Tasks and More (a menu with Code, the Shell and
+  Settings), and yields while the composer has the keyboard. **Usage, the
+  Automations, the Repositories, the Server and the cockpit's other
+  settings live inside Settings** (`features/settings`): its sections carry
+  the Usage report and the models scorecard, the Automations list, the
+  Repositories panel and, on a `-server` host, the Server's vitals, each
+  embedded in the settings pane (`Usage`, `Schedules`, `ReposPanel`,
+  `ServerPanel` take `embedded`); their palette rows and the header's usage
+  pill open Settings on that section, not a panel of their own. The activity
+  feed keeps its own panel, opened by the bell beside Search. The header is `[burger][title — takes the
+  slack][usage pill][lens switch][activity][search]`: the lens group is
   anchored right, the pill grows leftwards into the title's slack, the
   four lens buttons (Chat, Terminal, Changes, Git) keep the room of the
   Changes count while there is none (`.lens-badge.empty`), so a count
@@ -5844,7 +5843,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   routes `GET/PUT /api/schedules`, `GET /api/schedules/next?cron=` (the
   next three runs on the host's clock, `Store.Upcoming`; a 400 with the
   parser's reason), `DELETE /api/schedules/{id}`, `POST
-  /api/schedules/{id}/run`. `features/schedules/Schedules.tsx` is the
+  /api/schedules/{id}/run`. `features/schedules/Schedules.tsx` is the Automations panel:
   panel behind the calendar button in the sidebar head (a row says its
   cron in words, its next run through `whenAhead` in `lib/time.ts`, and a
   skipped run quietly in the page's words — `runs.ts`; `cron.ts` the
