@@ -475,9 +475,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   would cancel a prompt already typed; `StagePrompt` is the look and the
   send apart, so `sessions.Input` holds the pane's lock for the look alone
   and keys and answers pass a prompt the core holds, #329; one the core
-  pasted and then left unsubmitted, the agent gone from the front before
-  its Enter, keeps the core's `not_submitted` — the text may sit in the
-  input line of whatever runs there, `sessions.ErrNotSubmitted` says to
+  pasted and then left unsubmitted, the agent gone from the front or
+  asking something before its Enter, keeps the core's `not_submitted` — the
+  text may sit in the input line of whatever runs there,
+  `sessions.ErrNotSubmitted` says to
   look at the terminal — and one through a terminal whose holder is older
   than the core (`needs_update`, nothing typed) is `invalid_request` with
   the core's words, that a terminal started since takes it):
