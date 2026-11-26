@@ -217,3 +217,46 @@ func TestAContinuationOpeningOnACopiedTailIsNoFork(t *testing.T) {
 		t.Errorf("predecessor script printed %q", got)
 	}
 }
+
+func TestAForkOfACompactionContinuesNothingAndPrecedesNothing(t *testing.T) {
+	dir := t.TempDir()
+	now := time.Now().Truncate(time.Second)
+	const (
+		first = "0a0a0a0a-0a0a-4a0a-8a0a-0a0a0a0a0a01"
+		one   = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1"
+		tail  = "cccccccc-cccc-4ccc-8ccc-ccccccccccc1"
+		bLine = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1"
+		fLine = "ffffffff-ffff-4fff-8fff-fffffffffff1"
+	)
+	old := writeSession(t, dir, oldID, now.Add(-3*time.Minute),
+		`{"parentUuid":null,"type":"user","uuid":"`+first+`","timestamp":"2026-10-06T20:00:00Z","message":{"role":"user","content":"build it"}}`,
+		`{"parentUuid":"`+first+`","type":"assistant","uuid":"`+one+`","timestamp":"2026-10-06T20:00:05Z","message":{"role":"assistant","content":[{"type":"text","text":"Done."}]}}`)
+	// an older Claude Code compacted into this file without a continued-in record: it opens on a tail record of old
+	compacted := writeSession(t, dir, newID, now.Add(-2*time.Minute),
+		`{"parentUuid":"`+one+`","isCompactSummary":true,"type":"user","uuid":"`+tail+`","timestamp":"2026-10-06T21:17:49Z","message":{"role":"user","content":"This session is being continued."}}`,
+		`{"parentUuid":"`+tail+`","type":"assistant","uuid":"`+bLine+`","timestamp":"2026-10-06T21:18:00Z","message":{"role":"assistant","content":[{"type":"text","text":"Carrying on."}]}}`)
+	// and that file was forked: the fork copies it from its first record, so it has the same first parent
+	fork := writeSession(t, dir, "33333333-3333-4333-8333-333333333333", now.Add(-time.Minute),
+		`{"parentUuid":"`+one+`","isCompactSummary":true,"type":"user","uuid":"`+tail+`","timestamp":"2026-10-06T21:17:49Z","message":{"role":"user","content":"This session is being continued."}}`,
+		`{"parentUuid":"`+tail+`","type":"assistant","uuid":"`+bLine+`","timestamp":"2026-10-06T21:18:00Z","message":{"role":"assistant","content":[{"type":"text","text":"Carrying on."}]}}`,
+		`{"parentUuid":"`+bLine+`","type":"user","uuid":"`+fLine+`","timestamp":"2026-10-06T21:19:00Z","message":{"role":"user","content":"and now another way"}}`)
+
+	if got := Continuation(old); got != compacted {
+		t.Fatalf("Continuation(old) = %q, want the compaction, not its fork %q", got, fork)
+	}
+	if got := Predecessor(fork); got != "" {
+		t.Fatalf("Predecessor(fork) = %q, want none: a fork continues nothing", got)
+	}
+	if got := Predecessor(compacted); got != old {
+		t.Fatalf("Predecessor(compaction) = %q, want %q", got, old)
+	}
+	if got := runScript(t, ContinuationScript(script.Quote(old))); got != compacted {
+		t.Fatalf("continuation script printed %q, want %q", got, compacted)
+	}
+	if got := runScript(t, PredecessorScript(script.Quote(fork))); got != "" {
+		t.Fatalf("predecessor script printed %q for a fork", got)
+	}
+	if got := runScript(t, PredecessorScript(script.Quote(compacted))); got != old {
+		t.Fatalf("predecessor script printed %q, want %q", got, old)
+	}
+}

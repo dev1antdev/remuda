@@ -1134,7 +1134,11 @@ components and icons as rules for whoever changes it: @docs/design.md
   one — read in its first 64 KB, which a big snapshot record can fill —
   unless the new file holds the old one's first record: a fork copies the
   conversation it began from whole, a compaction a tail at most, so a fork
-  continues nothing and has no predecessor (`forkOf`)) while the core keeps
+  continues nothing and has no predecessor (`forkOf`); and a fork of a
+  compaction copies a sibling that starts with the same parent, so the
+  older of the two is the real one and the copy is skipped, in both
+  directions (`forkCopy`: by first parent, the copy's first record and
+  mtime)) while the core keeps
   naming the old id, so the chat follows `Reader.Live(path)` —
   `transcript.Continuation` locally, `ContinuationScript` over ssh (its
   listing, like Gemini's find, read a line at a time with `while read`,
