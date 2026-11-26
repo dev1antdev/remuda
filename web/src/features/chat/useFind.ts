@@ -26,6 +26,7 @@ export function useFind(logRef: RefObject<HTMLDivElement | null>, { active, chat
     if (!active || !open || !log) return;
     ranges.current = rangesIn(log, query);
     actions.foundMatches(ranges.current.length);
+    actions.foundRows(0, false); // the chat finds in the whole log, not a terminal's last rows
     const registry = highlights();
     if (registry) {
       const all = new Highlight();
