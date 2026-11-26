@@ -13,6 +13,7 @@ import (
 // fakeClient answers like herdr: prompts refused by code, and a record of what was typed.
 type fakeClient struct {
 	withArgs  []string // the last AgentStartWith's arguments
+	screen    string
 	promptErr *herdr.Error
 	typed     []string
 	keys      [][]string
@@ -37,6 +38,8 @@ func (f *fakeClient) PaneSendKeys(paneID string, keys []string) error {
 	f.keys = append(f.keys, keys)
 	return nil
 }
+
+func (f *fakeClient) PaneRead(paneID string) (string, error) { return f.screen, nil }
 
 func (f *fakeClient) AgentStartWith(paneID, kind, name string, args []string, timeout time.Duration) error {
 	f.withArgs = append([]string{kind, name}, args...)
