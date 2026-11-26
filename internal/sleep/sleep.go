@@ -256,7 +256,7 @@ func (s *Service) sleepOne(client restart.Leaver, machineID string, a Agent, say
 		say(fmt.Sprintf("· %s (%s): %v", title, a.Pane, err))
 		return "its session could not be read"
 	}
-	p, found, err := look(client, a.Pane)
+	p, found, err := restart.Look(client, a.Pane)
 	switch {
 	case err != nil:
 		say(fmt.Sprintf("· %s (%s): herdr did not answer: %v", title, a.Pane, err))
@@ -316,7 +316,7 @@ func interrupt(client restart.Leaver, paneID string, typed func(string, bool), s
 	deadline := time.Now().Add(interruptWait)
 	for time.Now().Before(deadline) {
 		time.Sleep(restart.LeavePoll)
-		p, found, err := look(client, paneID)
+		p, found, err := restart.Look(client, paneID)
 		if err == nil && (!found || p.Agent == "" || !busy(p.AgentStatus)) {
 			return
 		}
@@ -330,18 +330,6 @@ func (s *Service) refresh(mc *machines.Machine) {
 	if s.Watch != nil {
 		s.Watch.Refresh(mc)
 	}
-}
-
-// look is the pane in a fresh snapshot.
-func look(client interface {
-	SessionSnapshot() (*herdr.Snapshot, error)
-}, paneID string) (herdr.PaneInfo, bool, error) {
-	snap, err := client.SessionSnapshot()
-	if err != nil {
-		return herdr.PaneInfo{}, false, err
-	}
-	p, found := restart.Lookup(snap, paneID)
-	return p, found, nil
 }
 
 func agentsWord(n int) string {
