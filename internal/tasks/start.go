@@ -35,10 +35,11 @@ type StartRequest struct {
 
 // Launcher starts an agent on a task: a worktree off a workspace, the agent in it, the prompt handed over in the background.
 type Launcher struct {
-	Store  *Store
-	Input  *sessions.Input
-	Watch  *watch.Watcher
-	Notify func(push.Payload)
+	Store    *Store
+	Input    *sessions.Input
+	Watch    *watch.Watcher
+	Machines *machines.Manager // where a starting run's prompt is handed over again after remuda restarted
+	Notify   func(push.Payload)
 }
 
 // Normalize fills the agent in, trims the names and refuses what cannot start: an unknown agent, no workspace or branch, a branch git would misread.
@@ -86,13 +87,6 @@ func (l *Launcher) Start(mc *machines.Machine, client herdr.API, task Task, req 
 	if len(project.Automation.Stages) > 0 {
 		run.Pipeline = PipelineOn
 	}
-	run, err = l.Store.StartRun(run)
-	if err != nil {
-		return Task{}, err
-	}
-	if note := includeNote(included, includeErr); note != "" {
-		_, _ = l.Store.AddComment(task.ID, "remuda", note)
-	}
 	prompt := strings.TrimSpace(req.Prompt)
 	if prompt == "" {
 		prompt = Prompt(task, project, req.Groom)
@@ -101,6 +95,14 @@ func (l *Launcher) Start(mc *machines.Machine, client herdr.API, task Task, req 
 	}
 	if run.Pipeline == PipelineOn {
 		prompt += "\n\n" + StageAsk
+	}
+	run.Prompt = prompt
+	run, err = l.Store.StartRun(run)
+	if err != nil {
+		return Task{}, err
+	}
+	if note := includeNote(included, includeErr); note != "" {
+		_, _ = l.Store.AddComment(task.ID, "remuda", note)
 	}
 	go l.deliver(mc, client, run, task, prompt)
 	return l.Store.Get(task.ID)
@@ -129,7 +131,7 @@ func (l *Launcher) StartStage(mc *machines.Machine, client herdr.API, prev Run, 
 		return Run{}, fmt.Errorf("%w: %v", ErrAgentStart, err)
 	}
 	l.Watch.Refresh(mc)
-	run, err := l.Store.StartStageRun(prev, index, stage, pane)
+	run, err := l.Store.StartStageRun(prev, index, stage, pane, prompt)
 	if err != nil {
 		return Run{}, err
 	}
@@ -198,6 +200,39 @@ func (l *Launcher) deliver(mc *machines.Machine, client herdr.API, run Run, task
 		msg += " (" + last.Error() + ")"
 	}
 	l.fail(run, "The task could not be handed to the agent: "+msg+". The worktree is there; send it by hand.")
+}
+
+// Redeliver hands a starting run's saved prompt over again after a restart of remuda cut the delivery short: the run is
+// written with its prompt before anything is typed, so nothing is lost and the task does not fail with a worktree and
+// no agent at work. A prompt already taken is noted as running before the restart, so only the moment between the send
+// and that note can type it twice.
+func (l *Launcher) Redeliver(run Run) {
+	if run.Prompt == "" || l.Machines == nil {
+		return
+	}
+	mc, err := l.Machines.Get(run.Machine)
+	if err != nil {
+		return
+	}
+	task, err := l.Store.Get(run.TaskID)
+	if err != nil {
+		return
+	}
+	go func() {
+		// the run's window is six minutes: a minute for the machine to answer after remuda comes up, the delivery's five
+		deadline := time.Now().Add(time.Minute)
+		for {
+			if client, _, err := mc.Ready(); err == nil {
+				l.deliver(mc, client, run, task, run.Prompt)
+				return
+			}
+			if time.Now().After(deadline) {
+				l.fail(run, "The task could not be handed to the agent: "+mc.Label()+" did not answer in a minute. The worktree is there; send it by hand.")
+				return
+			}
+			time.Sleep(2 * time.Second)
+		}
+	}()
 }
 
 // fail closes a starting run as failed, unless the sweep closed it meanwhile.

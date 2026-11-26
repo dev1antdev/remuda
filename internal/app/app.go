@@ -371,6 +371,7 @@ func Run(ctx context.Context, o Options) error {
 	vitals.OnRead = signinWarnings(signins, fleet)
 	runner := jobs.New(bus)
 	restarter := restart.New(fleet)
+	restarter.Open(o.Dir) // the chats an update booked for after it restarts remuda are not lost with it
 	restarter.Later = func(mc *machines.Machine, title string, fn func(say func(string)) error) {
 		runner.Run(mc, title, "", fn)
 	}
@@ -525,6 +526,7 @@ func Run(ctx context.Context, o Options) error {
 		}
 	})
 	events.Subscribe(bus, restarter.Observe)
+	events.Subscribe(bus, restarter.OnSnapshot)
 	events.Subscribe(bus, func(e events.Snapshot) { hub.RosterChanged() })
 	events.Subscribe(bus, func(e events.MachineRemoved) {
 		tracker.Forget(e.Machine)
@@ -655,7 +657,7 @@ func Run(ctx context.Context, o Options) error {
 		Notify:  pushSvc.Notify,
 		PRTouch: requests.TouchPane,
 	}
-	launcher := &tasks.Launcher{Store: taskStore, Input: input, Watch: watcher, Notify: pushSvc.Notify}
+	launcher := &tasks.Launcher{Store: taskStore, Input: input, Watch: watcher, Machines: fleet, Notify: pushSvc.Notify}
 	// a pipeline's next stage: its agent in a new tab of the worktree, through the launcher on the run's machine
 	runWatch.Advance = func(prev tasks.Run, index int, stage tasks.Stage, prompt string) error {
 		mc, err := fleet.Get(prev.Machine)
@@ -669,6 +671,8 @@ func Run(ctx context.Context, o Options) error {
 		_, err = launcher.StartStage(mc, client, prev, index, stage, prompt)
 		return err
 	}
+	runWatch.Redeliver = launcher.Redeliver
+	runWatch.ResumeStarting() // a start the restart cut short hands its prompt over again, before the sweep's window
 	go runWatch.Loop(15 * time.Second)
 	offers.queue = taskQueue(taskStore, fleet, watcher, launcher, tracker, chats, planLimits, budgets, placer, offers, pushSvc.Notify)
 	go offers.queue.Loop(30 * time.Second)

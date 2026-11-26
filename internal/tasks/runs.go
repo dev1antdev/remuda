@@ -27,12 +27,16 @@ type RunWatch struct {
 	// Advance starts a pipeline's next stage after the previous run's agent said it is done: the agent in a new tab of
 	// the worktree with the prompt, the run recorded (Launcher.StartStage).
 	Advance func(prev Run, index int, stage Stage, prompt string) error
+	// Redeliver hands a starting run's saved prompt over again after a restart of remuda cut the delivery short
+	// (Launcher.Redeliver); nil leaves such a run to the start window.
+	Redeliver func(run Run)
 	// Denied is what the pane's conversation was denied without asking after a record ("" for all of it), and whether
 	// its latest turn stopped on such a call.
 	Denied func(machine, pane, after string) transcript.Denials
 	Now    func() time.Time
 
 	missing map[int64]time.Time
+	resumed map[int64]time.Time // starting runs this process handed over again, so the window counts from then
 }
 
 // startWindow is how long a starting run may wait for its prompt before it is given up.
@@ -75,10 +79,15 @@ func (w *RunWatch) Sweep() {
 			w.PRTouch(r.Machine, r.Pane)
 		}
 		if r.State == RunStarting {
-			if now().Sub(started) > startWindow {
+			from := started
+			if at, ok := w.resumed[r.ID]; ok {
+				from = at
+			}
+			if now().Sub(from) > startWindow {
 				_ = w.Store.SetRun(r.ID, RunFailed, "the prompt was never delivered")
 				_, _ = w.Store.AddComment(r.TaskID, "remuda", "The task was never handed to the agent. The worktree is there; send it by hand.")
 				_ = w.Store.StopPipeline(r.ID, "the prompt never reached the agent")
+				delete(w.resumed, r.ID)
 			}
 			continue
 		}
@@ -182,6 +191,32 @@ func (w *RunWatch) noteUsage(r Run, started, now time.Time) {
 		return
 	}
 	_ = w.Store.SetRunUsage(r.ID, cost, tokens, model, took)
+}
+
+// ResumeStarting hands every starting run's saved prompt over again, once as remuda comes up: the goroutine that would
+// have delivered it did not survive the restart. The start window counts from now for those runs.
+func (w *RunWatch) ResumeStarting() {
+	if w.Redeliver == nil {
+		return
+	}
+	runs, err := w.Store.OpenRuns()
+	if err != nil {
+		return
+	}
+	now := time.Now
+	if w.Now != nil {
+		now = w.Now
+	}
+	for _, r := range runs {
+		if r.State != RunStarting || r.Prompt == "" {
+			continue
+		}
+		if w.resumed == nil {
+			w.resumed = map[int64]time.Time{}
+		}
+		w.resumed[r.ID] = now()
+		w.Redeliver(r)
+	}
 }
 
 // Loop sweeps forever.
