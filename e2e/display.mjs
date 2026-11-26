@@ -242,7 +242,7 @@ const CHECKS = `(() => {
   for (const el of document.querySelectorAll(".rail-label")) {
     if (shown(el) && el.scrollWidth > el.clientWidth + 1) problems.push(name(el.parentElement) + " has its name cut: " + el.scrollWidth + " px in " + el.clientWidth);
   }
-  for (const el of document.querySelectorAll(".lens-switch > button, .mode-switch button, .fv-tabs button, .tasks-view button")) {
+  for (const el of document.querySelectorAll(".lens-switch > button, .fv-tabs button, .tasks-view button")) {
     if (shown(el) && el.scrollWidth > el.clientWidth + 1) problems.push(name(el) + " spills out of its button: " + el.scrollWidth + " px in " + el.clientWidth);
   }
   // a one-line label whose box clips its text: overflow hidden with a line-height under the font's own height cuts

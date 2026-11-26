@@ -6809,7 +6809,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   `StartAgentDialog.tsx`, `prompt.ts`, `html.tsx`, `pieces.tsx`, `api.ts`);
   descriptions are rendered through an allow-list into React nodes (never
   innerHTML) and edited as plain text that goes back as paragraphs. The
-  top-bar `mode-switch` (Agents | Tasks | Code | Review) is a per-device pref.
+  rail's three modes (Agents | Tasks | Code) are a per-device pref.
   **Workflow**: every project has its columns (`statuses`: title, colour,
   `kind` open|done, position, the flags `on_agent` / `on_new` / `on_start` /
   `on_finish` on at most one column each) — Proposed / New / In progress /

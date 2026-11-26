@@ -1265,8 +1265,7 @@ a.btn {
 }
 
 /* the button family: quiet by default, .primary filled, .danger red, .ghost bare, .sm and .lg sizes */
-.btn,
-.sidebar-head-btn {
+.btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1284,8 +1283,7 @@ a.btn {
   transition: background var(--fast) var(--ease), border-color var(--fast) var(--ease), filter var(--fast) var(--ease), transform var(--fast) var(--ease);
 }
 
-.btn:hover:not(:disabled),
-.sidebar-head-btn:hover {
+.btn:hover:not(:disabled) {
   background: var(--bg-quiet-hover);
 }
 
@@ -1298,8 +1296,7 @@ a.btn {
   cursor: default;
 }
 
-.btn.sm,
-.sidebar-head-btn {
+.btn.sm {
   height: var(--ctl-sm);
   padding: 0 10px;
   font-size: var(--fs-13);
@@ -1499,7 +1496,6 @@ input[type="checkbox"]:hover:not(:checked) {
 }
 
 /* the segmented control: a well with one raised segment */
-.mode-switch,
 .lens-switch,
 .fv-tabs,
 .tasks-view,
@@ -1513,7 +1509,6 @@ input[type="checkbox"]:hover:not(:checked) {
   flex-shrink: 0;
 }
 
-.mode-switch button,
 .lens-switch button,
 .fv-tabs button,
 .tasks-view button,
@@ -1533,7 +1528,6 @@ input[type="checkbox"]:hover:not(:checked) {
   transition: background var(--fast) var(--ease), color var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
 }
 
-.mode-switch button:hover,
 .lens-switch button:hover,
 .fv-tabs button:hover,
 .tasks-view button:hover,
@@ -1550,16 +1544,6 @@ input[type="checkbox"]:hover:not(:checked) {
   box-shadow: var(--shadow-sm);
 }
 
-.mode-switch button {
-  font-weight: 600;
-}
-
-.mode-switch button.on {
-  background: var(--accent);
-  color: var(--on-accent);
-  box-shadow: var(--inset-top), var(--shadow-sm);
-}
-
 .tabs-tools .kb-toggle {
   width: 28px;
   padding: 0;
@@ -1573,16 +1557,6 @@ input[type="checkbox"]:hover:not(:checked) {
 
 .viewer-bar .view-btn {
   margin-left: 4px;
-}
-
-.tabs-tools .kb-toggle:has(.kb-toggle-num) {
-  width: auto;
-  padding: 0 8px 0 6px;
-}
-
-.kb-toggle-num {
-  font-size: var(--fs-11);
-  font-family: var(--mono);
 }
 
 .tabs-tools .kb-toggle.on {
@@ -1662,39 +1636,11 @@ input[type="checkbox"]:hover:not(:checked) {
   color: var(--accent);
 }
 
-.row-menu.width-menu,
 .row-menu.radar-settings,
 .row-menu.split-menu,
 .row-menu.label-menu,
 .row-menu.color-menu {
   transform: none;
-}
-
-.pill {
-  display: inline-flex;
-  align-items: center;
-  height: 22px;
-  padding: 0 9px;
-  border: 0;
-  border-radius: 99px;
-  font: inherit;
-  font-size: var(--fs-12);
-  font-weight: 500;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.pill-off {
-  background: var(--red-soft);
-  color: var(--red);
-}
-
-.pill-warn {
-  background: var(--amber-soft);
-  color: var(--amber);
-  max-width: 40vw;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .notice {
@@ -2172,29 +2118,11 @@ body.is-resizing iframe {
   gap: 4px;
 }
 
-.sidebar-head .icon-btn,
-.sidebar-head .sidebar-head-btn {
+.sidebar-head .icon-btn {
   height: var(--ctl-xs);
+  width: var(--ctl-xs);
   text-transform: none;
   letter-spacing: 0;
-}
-
-.sidebar-head .icon-btn {
-  width: var(--ctl-xs);
-}
-
-.sidebar-head .sidebar-head-btn {
-  padding: 0 7px;
-  border-color: transparent;
-  background: transparent;
-  color: var(--fg-dim);
-  font-size: var(--fs-12);
-}
-
-.sidebar-head .sidebar-head-btn:hover {
-  border-color: transparent;
-  background: var(--bg-hover);
-  color: var(--fg);
 }
 
 /* ---- machines ---- */
@@ -4843,8 +4771,7 @@ div.turn-note,
   margin-top: 8px;
 }
 
-.part-thinking summary,
-.part-tool summary {
+.part-thinking summary {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -4861,8 +4788,7 @@ div.turn-note,
   transition: background var(--fast) var(--ease), color var(--fast) var(--ease);
 }
 
-.part-thinking summary:hover,
-.part-tool summary:hover {
+.part-thinking summary:hover {
   background: var(--bg-raised);
   color: var(--fg);
 }
@@ -4870,30 +4796,6 @@ div.turn-note,
 .part-tool-icon {
   color: var(--fg-faint);
   transition: transform var(--fast) var(--ease);
-}
-
-.part-tool[open] > summary .part-tool-icon {
-  transform: rotate(90deg);
-}
-
-.part-tool-error summary,
-.part-tool-error .part-tool-icon {
-  color: var(--red);
-}
-
-.part-tool summary .part-hint,
-.part-tool summary .path-link {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.part-took {
-  margin-left: auto;
-  padding-left: 8px;
-  flex-shrink: 0;
-  font-size: var(--fs-11);
-  color: var(--fg-faint);
 }
 
 .part-image {
@@ -5501,16 +5403,6 @@ ul.pick-list {
 .path-link:hover {
   color: var(--accent);
   text-decoration-color: var(--accent);
-}
-
-.part-tool summary .path-link {
-  color: var(--fg-dim);
-  direction: rtl; /* a path too long for the line loses its start, never the file's name */
-  text-align: left;
-}
-
-.part-tool summary .path-link:hover {
-  color: var(--accent);
 }
 
 /* ---- file viewer ---- */
@@ -6896,24 +6788,6 @@ ul.pick-list {
 }
 
 /* ---- schedules ---- */
-
-.sidebar-head-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: var(--ctl-sm);
-  padding: 0 10px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--r-md);
-  background: var(--bg-input);
-  color: var(--fg);
-  font-size: var(--fs-13);
-  font-weight: 500;
-}
-
-.sidebar-head-btn:hover {
-  background: var(--bg-hover);
-}
 
 .schedules-list {
   display: flex;
@@ -8560,15 +8434,6 @@ rect.ribbon-s.is-shown {
   animation: pulse 1.4s ease-in-out infinite;
 }
 
-.quick-label {
-  flex: 1;
-  min-width: 0;
-}
-
-.quick-menu .notice {
-  padding: 6px 9px;
-}
-
 .quick-list {
   display: flex;
   flex-direction: column;
@@ -8805,10 +8670,6 @@ rect.ribbon-s.is-shown {
     transform: none;
   }
 
-  .mode-switch button {
-    padding: 0 9px;
-  }
-
   .tasks-detail {
     position: fixed;
     inset: 0;
@@ -8925,13 +8786,11 @@ rect.ribbon-s.is-shown {
     height: var(--ctl-sm);
   }
 
-  .btn.sm,
-  .sidebar-head-btn {
+  .btn.sm {
     height: var(--ctl);
   }
 
   /* a segment of a switch is a thumb's: the lens switch is how a phone moves between the lenses */
-  .mode-switch button,
   .lens-switch button,
   .fv-tabs button,
   .tasks-view button,
@@ -8986,12 +8845,6 @@ rect.ribbon-s.is-shown {
 .linkish:focus-visible {
   outline: 2px solid var(--accent-ring);
   outline-offset: 1px;
-}
-
-@media (max-width: 920px) {
-  .tabs-tools .kb-font {
-    display: none;
-  }
 }
 
 /* ---- the status bar: the plan limits, the pane's place, its machine's load and ports, along the foot of the main
@@ -11536,8 +11389,7 @@ body:has(.status-bar) .toasts {
   }
 }
 @media (max-width: 920px) {
-  .footprint,
-  .fp-toggle {
+  .footprint {
     display: none;
   }
 }
@@ -11911,19 +11763,6 @@ body:has(.status-bar) .toasts {
 
 .plan-item.is-completed .plan-mark {
   color: var(--green);
-}
-
-.part-plan {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 2px 4px;
-  margin: 0 -4px;
-  font-size: var(--fs-13);
-  color: var(--fg-dim);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* ---- subagents: a row per agent a turn spawned, under the call ---- */
@@ -15182,15 +15021,6 @@ button.pr-line:hover {
 
 .tasks-start-list li.quiet {
   color: var(--fg-faint);
-}
-
-/* ---- wake: the machine menu names the kept MAC address beside its row ---- */
-.machine-menu .menu-hint {
-  margin-left: auto;
-  padding-left: 12px;
-  font-size: var(--fs-11);
-  color: var(--fg-faint);
-  font-family: var(--mono);
 }
 
 /* ---- activity filters: the chip row and the machine select at the panel's top ---- */
