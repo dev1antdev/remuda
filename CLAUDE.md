@@ -1286,7 +1286,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   Nothing is written. Route `GET /api/fs/tree?machine&dir&path`
   (`internal/server/files.go`, the `trees` field of the server, ready at its
   zero value): a viewer's within its reach alone (`viewer.Reach`, see the
-  viewer links; `viewerRoutes`), an agent key never. The page: the files rail's **Project**
+  viewer links; `viewerRoutes`) — on a remote machine the path is resolved there first (`Machine.RealPath`): its
+  folder followed by `pwd -P`, a final link refused, so a `leak -> ~/.ssh/…` in a repository reaches nothing — an
+  agent key never. The page: the files rail's **Project**
   tab — `app/FilesRail.tsx` (the rail: its two tabs, `fv-tabs`, pref
   `footprint.tab` per device, Agent `features/chat/AgentFiles.tsx` — the files
   the agent touched as before, their icons now, its count "…" while read — or
