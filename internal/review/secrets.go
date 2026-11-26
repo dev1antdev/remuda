@@ -100,6 +100,7 @@ func readScan(output string, push bool) (SecretScan, error) {
 	var file, commit string
 	var number int
 	header, ended, attrs := false, false, false
+	plain := false                 // inside a "\036text" section: the new side of a file git called binary, read as its lines
 	converted := map[string]bool{} // converted in the working tree: its bytes alone say nothing of what a commit carries
 	skipped := map[Skipped]bool{}  // a file the work and the index both carry is said once
 	skip := func(path, why string) {
@@ -146,6 +147,11 @@ func readScan(output string, push bool) (SecretScan, error) {
 			case "file": // an untracked file's lines follow, numbered from the first
 				file, header, number = value, false, 1
 				read[file] = true
+			case "text": // the new side of a file git called binary: its lines follow, numbered from the first
+				file, header, number, plain = value, false, 1, true
+				read[file] = true
+			case "endtext":
+				file, plain = "", false
 			case "binary":
 				binary(value)
 			case "binarymerge": // what a merge brought in it cannot be told: a keystore is a finding, the rest stays unread
@@ -175,6 +181,9 @@ func readScan(output string, push bool) (SecretScan, error) {
 			case "end":
 				ended = true
 			}
+		case plain && file != "":
+			collector.Line(file, number, line, commit)
+			number++
 		case strings.HasPrefix(line, "diff --git "):
 			file, header = "", true
 		case strings.HasPrefix(line, "@@ "):
