@@ -490,9 +490,8 @@ func parseOpencode(rows []map[string]string) ([]Turn, error) {
 			if data.Text != "" {
 				out = append(out, Part{Type: "text", Text: data.Text, At: ts})
 			}
-			if len(out) > 0 || data.Text != "" {
-				turns = append(turns, Turn{Role: "user", Ts: ts, IDs: []string{id}, Parts: out, ended: ts})
-			}
+			// the prompt itself starts the answer, even with no words: an image alone is still a turn
+			turns = append(turns, Turn{Role: "user", Ts: ts, IDs: []string{id}, Parts: out, ended: ts})
 		case "assistant":
 			if len(turns) == 0 || turns[len(turns)-1].Role != "assistant" {
 				turns = append(turns, Turn{Role: "assistant", Ts: ts, ended: ts})
