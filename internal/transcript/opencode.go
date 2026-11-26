@@ -470,6 +470,97 @@ func (r *Reader) OpencodeSubagent(parentPath, id string) (turns []Turn, version 
 	return turns, version, true, err
 }
 
+// OpencodeHit is one message of an opencode conversation that holds a search's words.
+type OpencodeHit struct {
+	Session string
+	Dir     string
+	UUID    string
+	Role    string
+	At      time.Time
+	Snippet string
+}
+
+// OpencodeSearch finds q in the prompts and answers of opencode's sessions since a moment, newest first, up to limit:
+// the same words the file formats' search reads, and no tool output, as their MatchLine reads none.
+func (r *Reader) OpencodeSearch(q, dir string, since time.Time, limit int) ([]OpencodeHit, error) {
+	needle := strings.ToLower(strings.TrimSpace(q))
+	if needle == "" {
+		return nil, nil
+	}
+	rows, err := r.opencodeRows(`SELECT m.id AS message_id, m.session_id AS session_id, m.type AS message_type, m.time_created AS at, m.data AS message_data, s.directory AS dir, `+
+		`p.ordinal AS part_ordinal, p.type AS part_type, p.data AS part_data `+
+		`FROM session_message m JOIN session_v2 s ON s.id = m.session_id LEFT JOIN session_part p ON p.message_id = m.id `+
+		`WHERE m.type IN ('user', 'assistant') AND m.time_created >= ? ORDER BY m.time_created DESC, p.ordinal`, since.UnixMilli())
+	if err != nil {
+		return nil, err
+	}
+	style := rpath.For(r.host.Home())
+	parts := map[string][]opencodePart{}
+	type message struct {
+		id, session, kind, dir string
+		at                     int64
+		data                   opencodeData
+	}
+	var messages []message
+	seen := map[string]bool{}
+	for _, row := range rows {
+		id := row["message_id"]
+		if row["part_data"] != "" {
+			var part opencodePart
+			if json.Unmarshal([]byte(row["part_data"]), &part) == nil {
+				parts[id] = append(parts[id], part)
+			}
+		}
+		if id == "" || seen[id] {
+			continue
+		}
+		seen[id] = true
+		var data opencodeData
+		if json.Unmarshal([]byte(row["message_data"]), &data) != nil {
+			continue
+		}
+		at, _ := strconv.ParseInt(row["at"], 10, 64)
+		messages = append(messages, message{id: id, session: row["session_id"], kind: row["message_type"], dir: row["dir"], at: at, data: data})
+	}
+	var out []OpencodeHit
+	for _, m := range messages {
+		if dir != "" && !style.Equal(m.dir, dir) {
+			continue
+		}
+		var texts []string
+		switch m.kind {
+		case "user":
+			texts = append(texts, m.data.Text)
+		case "assistant":
+			for _, part := range parts[m.id] {
+				if part.Type == "text" || part.Type == "reasoning" {
+					texts = append(texts, part.Text)
+				}
+			}
+			for _, part := range m.data.Content {
+				if part.Type == "text" || part.Type == "reasoning" {
+					texts = append(texts, part.Text)
+				}
+			}
+		}
+		for _, text := range texts {
+			i := strings.Index(strings.ToLower(text), needle)
+			if i < 0 {
+				continue
+			}
+			out = append(out, OpencodeHit{
+				Session: m.session, Dir: m.dir, UUID: m.id, Role: m.kind,
+				At: time.UnixMilli(m.at), Snippet: snippet(text, i, len(needle)),
+			})
+			break
+		}
+		if len(out) >= limit {
+			break
+		}
+	}
+	return out, nil
+}
+
 // opencodeUsage is a session's meter, from its row and its last answer's tokens.
 func (r *Reader) OpencodeUsage(path string) (OpencodeUsage, error) {
 	_, id, ok := opencodePathParts(path)

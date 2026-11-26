@@ -1010,6 +1010,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   Its `subagent` calls are rows too: the child sessions under `session_v2.parent_id` become `Subagent`s
   (`opencodeSpawns` reads each call's description and the `sessionID: ses_…` its output names), with the child's tools,
   failed calls, open call, report and status, and `OpencodeSubagent` opens a child's own conversation in the viewer.
+  Its window takes no model flag (only `opencode run` does; the TUI chooses with `/models` or its config), so the start
+  dialog offers it arguments alone and says where its model is chosen (`dialogs.tsx`).
   **A session found by the agent's
   process** (`bypid.go`, tested on real processes in a temp HOME and on
   `shell.Fake`), for a machine whose runtime names no session (remuda-core,
@@ -5848,12 +5850,15 @@ components and icons as rules for whoever changes it: @docs/design.md
   output, thinking or sidechains; a Codex hit is printed as
   `codex:<cwd>␟<thread id>␟<record>`, since the rollout's name carries
   neither, and comes back with `agent: "codex"` (the search panel draws
-  Codex's mark on it). Locally the scan runs in-process; on a
+  Codex's mark on it). **opencode's sessions are a database**: `ScanOpencode` asks
+  `transcript.Reader.OpencodeSearch` for the prompts and answers since, and writes each match as
+  `opencode␟<dir>␟<session>␟<message>␟<role>␟<time>␟<snippet>` (`opencodeHit`), with no tool output, as the files count none;
+  a machine without the database or `sqlite3` adds nothing. Locally the scan runs in-process; on a
   remote the script runs `~/.local/bin/remuda search …` (the same Scan,
   a hidden subcommand — `make deploy` puts the binary there; 400 MB scan
   in well under a second) and falls back to a four-pattern grep when the
-  binary is missing (BSD grep: seconds per hundred MB). Both print
-  `./<project>/<session>.jsonl:<raw line>`, one parser reads either. A
+  binary is missing (BSD grep: seconds per hundred MB). The files print
+  `./<project>/<session>.jsonl:<raw line>`, one parser reads either form. A
   hit carries `project` (the project dir name = `EncodePath` of the
   folder the agent started in; a `cd` in the session moves the record's
   `cwd` but not the file) — the UI matches it to a pane by

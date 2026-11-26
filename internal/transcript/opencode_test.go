@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -188,6 +189,30 @@ func TestAnOpencodeSessionNamesItsSubagentsUnderTheirCall(t *testing.T) {
 	}
 	if _, _, found, _ := reader.OpencodeSubagent(path, "ses_other"); found {
 		t.Error("a session that is no child of this one opened as one")
+	}
+}
+
+func TestAnOpencodeSessionIsSearchedByPromptAndAnswer(t *testing.T) {
+	_, dir, id := opencodeCheckout(t)
+	reader := NewReader(shell.Local{Name: "local"})
+	since := time.UnixMilli(opencodeTestBase - 1000)
+	hits, err := reader.OpencodeSearch("DO THE THING", dir, since, 20)
+	if err != nil || len(hits) != 1 || hits[0].Session != id || hits[0].Role != "user" || !strings.Contains(strings.ToLower(hits[0].Snippet), "do the thing") {
+		t.Fatalf("the prompt: %+v, %v", hits, err)
+	}
+	hits, err = reader.OpencodeSearch("done", dir, since, 20)
+	if err != nil || len(hits) != 1 || hits[0].Role != "assistant" || hits[0].UUID != "msg_a2" {
+		// msg_a2's text is "done", the last answer: newest first
+		t.Fatalf("the answer: %+v, %v", hits, err)
+	}
+	if hits, _ := reader.OpencodeSearch("thinking about", dir, since, 20); len(hits) != 1 || hits[0].Role != "assistant" {
+		t.Fatalf("the reasoning: %+v", hits)
+	}
+	if hits, _ := reader.OpencodeSearch("done", dir, time.UnixMilli(opencodeTestBase+5000), 20); len(hits) != 0 {
+		t.Errorf("an answer before the moment: %+v", hits)
+	}
+	if hits, _ := reader.OpencodeSearch("done", t.TempDir(), since, 20); len(hits) != 0 {
+		t.Errorf("another folder: %+v", hits)
 	}
 }
 

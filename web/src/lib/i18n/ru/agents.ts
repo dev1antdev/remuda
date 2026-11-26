@@ -35,6 +35,7 @@ export const agents: Dictionary = {
   Edit: "Изменить",
   "Every agent that would take a message": "Все агенты, которые примут сообщение",
   "Extra arguments": "Дополнительные аргументы",
+  "opencode picks its model in its own window: /models, or its config; remuda starts it with the default.": "opencode выбирает модель в своём окне: /models или в конфиге; remuda запускает его с моделью по умолчанию.",
   "Flat, by activity": "Плоско, по активности",
   Folder: "Папка",
   "Folder on {machine}": "Папка на {machine}",

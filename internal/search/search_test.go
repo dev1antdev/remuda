@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/shell"
 	"github.com/dev1antdev/remuda/internal/transcript"
 )
@@ -21,6 +22,18 @@ func (h rootedHost) TranscriptRoots() transcript.Roots { return h.roots }
 
 func remoteScript(home, q, dir string, since time.Time) string {
 	return remoteScriptRoots(transcript.RootsOf(home), home, q, dir, since)
+}
+
+func TestOpencodeLinesBecomeHits(t *testing.T) {
+	line := "opencode" + script.US + "/p/a" + script.US + "ses_1" + script.US + "msg_1" + script.US + "assistant" + script.US + "2026-11-26T10:00:00Z" + script.US + "a snippet"
+	hit, ok := opencodeHit("m", []byte(line))
+	if !ok || hit.Agent != "opencode" || hit.Project != transcript.EncodePath("/p/a") || hit.Dir != "/p/a" ||
+		hit.Session != "ses_1" || hit.UUID != "msg_1" || hit.Role != "assistant" || !hit.Ts.Equal(time.Date(2026, 11, 26, 10, 0, 0, 0, time.UTC)) || hit.Snippet != "a snippet" {
+		t.Fatalf("hit %+v, %v", hit, ok)
+	}
+	if _, ok := opencodeHit("m", []byte("opencode nope")); ok {
+		t.Error("a line that is no opencode hit was read as one")
+	}
 }
 
 func TestScanNewestFirstWithFilters(t *testing.T) {

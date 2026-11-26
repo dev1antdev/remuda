@@ -1987,13 +1987,15 @@ amber for a watchdog note, green for a finish — so another tab or the
 dock tells you before you switch.
 
 **Search** (🔍, or the palette's last row): full text over every conversation on every
-machine, Claude Code's and Codex's — what you or an agent said, never tool output — filtered by
+machine — Claude Code's and Codex's session files, and opencode's own database — what you or an
+agent said, never tool output — filtered by
 machine, folder and period. A hit jumps to the turn in the running pane, or
-opens the old transcript read-only. No index, no database: each machine
+opens the old transcript read-only. No index: each machine
 scans its own session folders on demand — `~/.claude/projects` and `~/.codex/sessions` plus the folders its
 agents named for themselves (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`), remembered once read so an agent that stopped
 is still searched (remuda's scanner where the
-binary is deployed, grep otherwise). Above the conversations, a **Screens**
+binary is deployed, grep otherwise), and, where opencode runs, reads its SQLite database for the same words
+(a machine without the database or `sqlite3` adds nothing there). Above the conversations, a **Screens**
 part lists where the words stood on the agents' recorded screens (see
 Timelapse). Every turn of a pane's conversation
 has a **Copy link** button of its own: the address opens remuda on that
