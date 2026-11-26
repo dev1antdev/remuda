@@ -17,6 +17,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/shell"
 	"github.com/dev1antdev/remuda/internal/state"
 	"github.com/dev1antdev/remuda/internal/tasks"
+	"github.com/dev1antdev/remuda/internal/text"
 	"github.com/dev1antdev/remuda/internal/watch"
 	"github.com/dev1antdev/remuda/internal/worktrees"
 )
@@ -389,7 +390,7 @@ func (s *Service) discard(a Arena, lane Lane) (patch, note string) {
 	if lane.Dir != "" && lane.Base != "" {
 		out, err := shell.Text(mc, PatchScript(lane.Dir, lane.Base), ScriptTimeout)
 		if err != nil {
-			return "", "kept: its work could not be saved (" + lastLine(out, err.Error()) + ")"
+			return "", "kept: its work could not be saved (" + text.LastLine(out, err.Error()) + ")"
 		}
 		patch, err = s.savePatch(a, lane, out)
 		if err != nil {
@@ -433,16 +434,4 @@ func (s *Service) savePatch(a Arena, lane Lane, diff string) (string, error) {
 	}
 	path := filepath.Join(dir, fmt.Sprintf("arena-%d-lane-%d-%s.patch", a.ID, lane.ID, lane.Agent))
 	return path, state.WriteFile(path, []byte(diff))
-}
-
-// lastLine is a script's complaint: its last printed line, else the fallback.
-func lastLine(text, fallback string) string {
-	text = strings.TrimSpace(text)
-	if text == "" {
-		return fallback
-	}
-	if i := strings.LastIndex(text, "\n"); i >= 0 {
-		return strings.TrimSpace(text[i+1:])
-	}
-	return text
 }

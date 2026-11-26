@@ -14,6 +14,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/shell"
 	"github.com/dev1antdev/remuda/internal/teleport"
+	"github.com/dev1antdev/remuda/internal/text"
 )
 
 // ReadTimeout is how long a repository's read may take; FetchTimeout a fetch from origin.
@@ -84,7 +85,7 @@ func SourceScript(folder string) string {
 func ParseSource(out string) (Source, error) {
 	parts := script.Sections(out)
 	if len(parts) < 6 {
-		return Source{}, errors.New(lastLine(out, "git answered nothing"))
+		return Source{}, errors.New(text.LastLine(out, "git answered nothing"))
 	}
 	root := strings.TrimSpace(parts[0])
 	style := rpath.For(root)
@@ -167,7 +168,7 @@ func GitHubRepo(remote string) string {
 func Read(host shell.Shell, folder string) (Source, error) {
 	out, err := shell.Text(host, SourceScript(folder), ReadTimeout)
 	if err != nil {
-		return Source{}, errors.New(lastLine(out, err.Error()))
+		return Source{}, errors.New(text.LastLine(out, err.Error()))
 	}
 	return ParseSource(out)
 }
@@ -182,19 +183,7 @@ func FetchScript(root string) string {
 func Fetch(host shell.Shell, root string) error {
 	out, err := shell.Text(host, FetchScript(root), FetchTimeout)
 	if err != nil {
-		return errors.New(lastLine(out, err.Error()))
+		return errors.New(text.LastLine(out, err.Error()))
 	}
 	return nil
-}
-
-// lastLine is a tool's complaint: the last line it printed, else the fallback.
-func lastLine(text, fallback string) string {
-	text = strings.TrimSpace(text)
-	if text == "" {
-		return fallback
-	}
-	if i := strings.LastIndex(text, "\n"); i >= 0 {
-		text = text[i+1:]
-	}
-	return strings.TrimSpace(text)
 }
