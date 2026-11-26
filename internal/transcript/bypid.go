@@ -36,6 +36,13 @@ type SinceBoot struct {
 // same says whether the process the machine tells by its boot, the lookup's time namespace and its start in ticks is
 // the one told, and whether that can be known: not untold, nor read in another time namespace, whose boot-time offset
 // shifts the ticks, or in one either side could not name.
+// pidSession is the session a process with a pid was in: the since-boot that made it that very process, so a file it
+// left is not taken for a later process the pid went to.
+type pidSession struct {
+	since   SinceBoot
+	session string
+}
+
 func (s SinceBoot) same(bootID, timeNS, ticks string) (same, known bool) {
 	if s.BootID == "" || bootID == "" {
 		return false, false
@@ -67,6 +74,20 @@ func (r *Reader) SessionsOf(procs []Running) (map[int]string, error) {
 		}
 		found, paths, unsure = parseSessionsByPID(out, procs, rpath.For(r.host.Home()), clock)
 	}
+	r.mu.Lock()
+	for _, p := range procs {
+		old, seen := r.pidSessions[p.PID]
+		if !seen || p.SinceBoot.BootID == "" || old.since == p.SinceBoot || found[p.PID] != old.session {
+			continue
+		}
+		found[p.PID] = "" // the file the process before this one, given the same pid, left
+	}
+	for _, p := range procs {
+		if found[p.PID] != "" && p.SinceBoot.BootID != "" {
+			r.pidSessions[p.PID] = pidSession{since: p.SinceBoot, session: found[p.PID]}
+		}
+	}
+	r.mu.Unlock()
 	answer := map[int]string{}
 	for _, p := range procs {
 		if (clockErr == nil || !needsClock(p)) && !unsure[p.PID] {

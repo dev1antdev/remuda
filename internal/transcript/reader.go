@@ -36,6 +36,7 @@ type Reader struct {
 	store        *RootStore
 	keptAt       time.Time // when the kept folders were last checked to be there
 	active       map[string]activeSession
+	pidSessions  map[int]pidSession // the session a process with this pid was in, and the since-boot that made it that one
 	rootVersion  uint64
 	subTails     map[string]*cachedTail // remote subagent files by path
 	subagents    map[string]*subagentEntry
@@ -88,6 +89,7 @@ func NewReader(host shell.Host) *Reader {
 		learnedRoots: map[Format]map[string]time.Time{},
 		kept:         KeptRoots{Roots: map[Format][]string{}, Sessions: map[string]string{}},
 		active:       map[string]activeSession{},
+		pidSessions:  map[int]pidSession{},
 		subTails:     map[string]*cachedTail{}, subagents: map[string]*subagentEntry{}, subDirs: map[string]dirListing{}, metas: map[string]cachedMeta{}}
 }
 

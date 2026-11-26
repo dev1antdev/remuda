@@ -886,3 +886,37 @@ func TestASessionUnderItsOwnCODEXHOMEIsOpenedToo(t *testing.T) {
 		t.Fatalf("the folder's sessions = %+v, %v; want %s", sessions, err, path)
 	}
 }
+
+// A file an earlier process with the pid left is not taken for a later one, even when a step of the clock made its wall
+// times match: the pid's since-boot and the session it was seen in remember it.
+func TestASessionLeftByAnEarlierProcessWithThePidIsNotTaken(t *testing.T) {
+	const start = "Thu Nov 19 00:36:10 2026"
+	const boot, ns = "6f1c0d2e-4b7a-4c1e-9a1b-2f3e4d5c6b7a", "time:[4026531834]"
+	began := time.Date(2026, 11, 19, 0, 36, 10, 108_000_000, time.UTC)
+	stepped := "system" + script.US + "Linux" + script.US + "1795046400" + script.US + "2170.40" + script.US +
+		strconv.FormatInt(began.UnixMilli()+50, 10) + script.US + strconv.FormatInt(began.UnixMilli(), 10) + script.US + "100" + script.RS + "\n"
+	since := "since" + script.US + boot + script.US + ns + script.RS + "\n"
+	record := func(ticks string) string {
+		return "7" + script.US + "claude" + script.US + start + script.US + "/a" + script.US +
+			`{"pid":7,"sessionId":"id-1","cwd":"/a","procStart":"` + start + `","startedAt":` + strconv.FormatInt(began.Add(time.Second).UnixMilli(), 10) + `}` +
+			script.US + start + script.US + ticks + script.RS + "\n"
+	}
+	calls := 0
+	host := &shell.Fake{Name: "gog", Remote: true, Answer: func(string) (string, error) {
+		calls++
+		if calls == 1 {
+			return stepped + since + record("216940"), nil
+		}
+		return stepped + since + record("216980"), nil
+	}}
+	reader := NewReader(host)
+	first := Running{PID: 7, Agent: "claude", CWD: "/a", Started: began.UnixMilli(), SinceBoot: SinceBoot{BootID: boot, TimeNS: ns, Ticks: 216940}}
+	if got, err := reader.SessionsOf([]Running{first}); err != nil || got[7] != "id-1" {
+		t.Fatalf("the first process: got %v, %v", got, err)
+	}
+	second := first
+	second.SinceBoot.Ticks = 216980
+	if got, err := reader.SessionsOf([]Running{second}); err != nil || got[7] != "" {
+		t.Fatalf("a file the earlier process left was taken: got %v, %v", got, err)
+	}
+}
