@@ -1638,7 +1638,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   the build: what the binary embeds; the dev tools' `--audit-level=high`
   runs `continue-on-error`, a report — a ReDoS in picomatch with no fixed
   release, 2026-11-18, came only through vite and vitest) and gitleaks on every push to main or
-  release and every pull request, and on `release` (and by hand,
+  release and every pull request (`.gitleaks.toml` allows just the auth tests' fixed token
+  of 29f9b8e7, by path and value), and on `release` (and by hand,
   `workflow_dispatch`) the end-to-end smoke too: `make e2e` is
   `scripts/e2e.sh` — a throwaway remuda-core on a socket and HOME of its
   own (Core 26e: the only backend), the agents' CLIs (`claude`, `codex`,
