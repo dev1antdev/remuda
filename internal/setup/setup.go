@@ -18,6 +18,7 @@ import (
 
 	"github.com/dev1antdev/remuda/internal/proc"
 	"github.com/dev1antdev/remuda/internal/script"
+	"github.com/dev1antdev/remuda/internal/sshx"
 )
 
 //go:embed scripts/install-service.sh
@@ -282,22 +283,22 @@ func sameFile(a, b string) (bool, error) {
 	return os.SameFile(sa, sb), nil
 }
 
-// run hands a script to `sh -c`, here or on the host over ssh, by argument and
-// not stdin: a child that reads stdin (an installer's prompt) must not eat the rest.
+// run hands a script to `sh -c` here, or to the host over ssh on the session's stdin as every other script goes
+// (`sshx.Remote`): the loader reads the script whole before anything runs, so an installer's own prompt cannot eat it.
 func run(host string, env []string, script string, args []string, out io.Writer) error {
 	return command(host, env, script, args, out).Run()
 }
 
 // command is run's process, not started yet.
-func command(host string, env []string, script string, args []string, out io.Writer) *exec.Cmd {
+func command(host string, env []string, body string, args []string, out io.Writer) *exec.Cmd {
 	// a secret never goes on a command line (ps shows it, on both ends): the
 	// Tailscale auth key travels on stdin, the one line the script reads first
-	var stdin io.Reader
+	var input io.Reader
 	kept := make([]string, 0, len(env))
 	for _, kv := range env {
 		if v, ok := strings.CutPrefix(kv, "TS_AUTHKEY="); ok && v != "" {
-			script = "IFS= read -r TS_AUTHKEY; export TS_AUTHKEY; " + script
-			stdin = strings.NewReader(v + "\n")
+			body = "IFS= read -r TS_AUTHKEY; export TS_AUTHKEY; " + body
+			input = strings.NewReader(v + "\n")
 			continue
 		}
 		kept = append(kept, kv)
@@ -305,28 +306,32 @@ func command(host string, env []string, script string, args []string, out io.Wri
 	env = kept
 	var cmd *exec.Cmd
 	if host == "" {
-		cmd = exec.Command("sh", append([]string{"-c", script, "sh"}, args...)...)
+		cmd = exec.Command("sh", append([]string{"-c", body, "sh"}, args...)...)
 		cmd.Env = append(os.Environ(), env...)
+		cmd.Stdin = input
 	} else {
-		words := append([]string{"env"}, quoteAll(env)...)
-		words = append(words, "sh", "-c", quote(script), "sh")
-		for _, a := range args {
-			words = append(words, quote(a))
+		// the environment and the arguments go inside the script: the line sshd hands the login shell is read as it
+		// is written, whatever shell that is
+		if len(env) > 0 || len(args) > 0 {
+			var prefix strings.Builder
+			for _, kv := range env {
+				if k, v, ok := strings.Cut(kv, "="); ok {
+					prefix.WriteString("export " + k + "=" + script.Quote(v) + "\n")
+				}
+			}
+			if len(args) > 0 {
+				prefix.WriteString("set --")
+				for _, a := range args {
+					prefix.WriteString(" " + script.Quote(a))
+				}
+				prefix.WriteString("\n")
+			}
+			body = prefix.String() + body
 		}
-		cmd = exec.Command("ssh", "-o", "BatchMode=yes", host, strings.Join(words, " "))
+		line, stdin := sshx.RemoteWithInput(body, input)
+		cmd = exec.Command("ssh", "-o", "BatchMode=yes", host, line)
+		cmd.Stdin = stdin
 	}
-	cmd.Stdin = stdin // nil: /dev/null
 	cmd.Stdout, cmd.Stderr = out, out
 	return cmd
-}
-
-func quote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
-
-func quoteAll(ss []string) []string {
-	out := make([]string, 0, len(ss))
-	for _, s := range ss {
-		k, v, _ := strings.Cut(s, "=")
-		out = append(out, k+"="+quote(v))
-	}
-	return out
 }

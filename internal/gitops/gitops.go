@@ -33,6 +33,7 @@ type Request struct {
 	Force     bool   `json:"force,omitempty"`    // a branch deleted though it is not merged
 	Head      string `json:"head"`
 	Branch    string `json:"branch"`
+	Tree      string `json:"tree,omitempty"`      // a hard reset's: the tracked uncommitted checksum the dialog was shown
 	Operation string `json:"operation,omitempty"` // for an abort: the op the page saw stopped
 }
 
@@ -70,6 +71,10 @@ func (e *BusyError) Error() string {
 
 // ErrStale is an op on a checkout whose HEAD or branch moved since the page drew them.
 var ErrStale = errors.New("the checkout's branch or HEAD moved since the graph was drawn: look at it again first")
+
+// ErrTreeMoved is a hard reset whose tracked uncommitted files changed after its dialog opened: the files it names are
+// no longer the ones it would discard.
+var ErrTreeMoved = errors.New("the uncommitted files changed since the dialog opened: look at the checkout again first")
 
 // ErrNotRepository is a folder outside git, or gone.
 var ErrNotRepository = errors.New("this folder is not inside a git repository")
@@ -281,11 +286,14 @@ func runScript(dir string, req Request) string {
 	if req.Op == "abort" {
 		guard = ""
 	}
+	if req.Op == "reset" && req.Mode == "hard" && req.Tree != "" {
+		guard += `[ "$(treeSum)" = ` + q(req.Tree) + ` ] || { printf '\036tree_moved\n'; exit 0; }; `
+	}
 	mainline := ""
 	if req.Op == "cherry-pick" || req.Op == "revert" {
 		mainline = `mainline=; [ "$(g rev-list --parents -n 1 ` + q(req.Sha) + ` 2>/dev/null | wc -w)" -gt 2 ] && mainline="-m 1"; `
 	}
-	return script.PATH + "; " + gitgraph.Read +
+	return script.PATH + "; " + gitgraph.Read + gitgraph.TreeSum +
 		`w() { GIT_TERMINAL_PROMPT=0 GIT_EDITOR=true GIT_SEQUENCE_EDITOR=true GIT_MERGE_AUTOEDIT=no LC_ALL=C git -c core.editor=true -c color.ui=never --no-pager "$@"; }; ` +
 		`cd ` + q(dir) + ` 2>/dev/null || { printf '\036gone\n'; exit 0; }; ` + guard + mainline +
 		`out=$(` + Command(req) + ` 2>&1); code=$?; printf '\036code %s\n' "$code"; printf '%s\n' "$out" | tail -n 40; ` +
@@ -307,6 +315,8 @@ func parseRun(out string) (Result, error) {
 			return Result{}, ErrNotRepository
 		case "stale":
 			return Result{}, ErrStale
+		case "tree_moved":
+			return Result{}, ErrTreeMoved
 		case "code":
 			code, _ = strconv.Atoi(args)
 			result.Output = gitgraph.LastLines(body, 8)

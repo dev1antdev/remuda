@@ -67,6 +67,9 @@ export const worktrees: Dictionary = {
   "Click to keep it": "Нажмите, чтобы оставить",
   "Click to delete it": "Нажмите, чтобы удалить",
   "Uncommitted changes in this worktree will be lost.": "Незакоммиченные изменения в этом worktree пропадут.",
+  "Ignored file {names} goes with the folder.": "Игнорируемый файл {names} пропадёт вместе с папкой.",
+  "Ignored files go with the folder: {names}.": "Игнорируемые файлы пропадут вместе с папкой: {names}.",
+  "and {n} more": "и ещё {n}",
   "{n} commits on {branch} are on no remote and in no other branch: deleting the branch loses them.": [
     "{n} коммит в {branch} нет ни на одном remote и ни в одной другой ветке: с веткой он пропадёт.",
     "{n} коммита в {branch} нет ни на одном remote и ни в одной другой ветке: с веткой они пропадут.",

@@ -12,6 +12,40 @@ import (
 	"github.com/dev1antdev/remuda/internal/shell"
 )
 
+func TestTheDiffIsReadWhateverColorTheSettingsAskFor(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("no git")
+	}
+	config := filepath.Join(t.TempDir(), "gitconfig")
+	if err := os.WriteFile(config, []byte("[color]\n\tdiff = always\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GIT_CONFIG_GLOBAL", config)
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	dir := t.TempDir()
+	run := func(args ...string) {
+		cmd := exec.Command("git", append([]string{"-c", "user.email=t@remuda.invalid", "-c", "user.name=t"}, args...)...)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	file := filepath.Join(dir, "notes.txt")
+	if err := os.WriteFile(file, []byte("one\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run("init", "-q")
+	run("add", "-A")
+	run("commit", "-q", "-m", "init")
+	if err := os.WriteFile(file, []byte("one\ntwo\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, err := shell.Text(shell.Local{}, gitDiffScript(dir, script.Quote(file)), 20*time.Second)
+	if err != nil || !strings.Contains(out, "+two") || strings.Contains(out, "\x1b[") {
+		t.Fatalf("a coloured diff: %q %v", out, err)
+	}
+}
+
 func TestTheDiffOfAFileGoneWithItsFolderIsReadFromTheFolderStillThere(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("no git")

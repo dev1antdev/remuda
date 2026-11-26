@@ -93,6 +93,10 @@ func TestTheSecretCheckReadsTheScriptsAnswer(t *testing.T) {
 		"+DB_PASSWORD=" + fakeKey(7, 24),
 		script.RS + "binary keys/new.p12",
 		script.RS + "binary photo.jpg",
+		script.RS + "text notes.md",
+		"hello",
+		"export NPM_TOKEN=" + "npm_" + fakeKey(9, 36),
+		script.RS + "endtext",
 		script.RS + "unread later.txt",
 		script.RS + "staged",
 		"diff --git a/src/server.go b/src/server.go",
@@ -145,6 +149,7 @@ func TestTheSecretCheckReadsTheScriptsAnswer(t *testing.T) {
 		{"notes/new é.md", secrets.RuleGitLab, "", 3},
 		{"b/q\"uote.env", secrets.RuleAssigned, "", 2},
 		{"keys/new.p12", secrets.RuleKeyFile, "", 0},
+		{"notes.md", secrets.RuleNPM, "", 2},
 		{".env", secrets.RuleStripe, secrets.Staged, 1},
 		{"deploy.sh", secrets.RuleNPM, "abc1234", 5},
 	}
@@ -168,7 +173,7 @@ func TestTheSecretCheckReadsTheScriptsAnswer(t *testing.T) {
 		counted[SkipMany] != 7 || counted[SkipOlder] != 5 {
 		t.Errorf("skipped: %+v", scan.Skipped)
 	}
-	if scan.Files != 6 || scan.Commits != 1 || !scan.Push {
+	if scan.Files != 7 || scan.Commits != 1 || !scan.Push {
 		t.Errorf("read %d files, %d commits, push %v", scan.Files, scan.Commits, scan.Push)
 	}
 	if !scan.Incomplete {
@@ -1045,6 +1050,25 @@ func TestAnEncodedWorkingTreeFileIsRead(t *testing.T) {
 	}
 	if len(scan.Findings) != 1 || scan.Findings[0].File != "run.ps1" {
 		t.Errorf("%+v", scan)
+	}
+}
+
+func TestAFileTurnedFromBinaryToTextIsRead(t *testing.T) {
+	ownGitConfig(t)
+	dir, git, write := scratchCheckout(t)
+	write("notes.md", "h\x00e\x00l\x00l\x00o\x00\n\x00")
+	git("add", "-A")
+	git("commit", "-qm", "init")
+	write("notes.md", "hello\nexport NPM_TOKEN="+"npm_"+fakeKey(40, 36)+"\n")
+	scan, err := ScanWork(shell.Local{Name: "local"}, dir, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(scan.Findings) != 1 || scan.Findings[0].File != "notes.md" || scan.Findings[0].Line != 2 {
+		t.Errorf("findings %+v, skipped %+v", scan.Findings, scan.Skipped)
+	}
+	if scan.Incomplete {
+		t.Errorf("a text file read is still called unread: %+v", scan.Skipped)
 	}
 }
 

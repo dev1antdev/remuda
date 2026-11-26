@@ -14,6 +14,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/rpath"
 	"github.com/dev1antdev/remuda/internal/search"
 	"github.com/dev1antdev/remuda/internal/setup"
+	"github.com/dev1antdev/remuda/internal/shell"
 	"github.com/dev1antdev/remuda/internal/state"
 	"github.com/dev1antdev/remuda/internal/transcript"
 	"github.com/dev1antdev/remuda/internal/usage"
@@ -84,6 +85,10 @@ func searchCmd(args []string) {
 	}
 	home, _ := os.UserHomeDir()
 	if err := search.ScanRoots(rootsFor(home, extra), *q, *dir, since, *limit, os.Stdout); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	if err := search.ScanOpencode(shell.Local{Name: "local"}, *q, *dir, since, *limit, os.Stdout); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
