@@ -42,25 +42,41 @@ function MenuRows({ items }: { items: MenuItem[] }) {
             {item.heading}
           </DropdownMenu.Label>
         ) : (
-          <DropdownMenu.Item
-            key={i}
-            className={`menu-item${item.danger ? " danger" : ""}${item.checked ? " checked" : ""}`}
-            disabled={item.disabled}
-            onSelect={(e) => {
-              if (item.keepOpen) e.preventDefault();
-              item.onSelect();
-            }}
-          >
-            <span className="menu-icon">{item.checked ? <Icon name="check" size={14} /> : item.icon ? <Icon name={item.icon} size={14} /> : null}</span>
-            <span className="menu-text">
-              {item.label}
-              {item.hint && <small>{item.hint}</small>}
-            </span>
-            {item.shortcut && <kbd className="menu-kbd">{item.shortcut}</kbd>}
-          </DropdownMenu.Item>
+          <Row key={i} item={item} />
         ),
       )}
     </>
+  );
+}
+
+// Row is a menu's one item: a CheckboxItem when the row carries a mark, so a screen reader hears whether it is on.
+function Row({ item }: { item: Exclude<MenuItem, { sep: true } | { heading: string }> }) {
+  const className = `menu-item${item.danger ? " danger" : ""}${item.checked ? " checked" : ""}`;
+  const onSelect = (e: Event) => {
+    if (item.keepOpen) e.preventDefault();
+    item.onSelect();
+  };
+  const body = (
+    <>
+      <span className="menu-icon">{item.checked ? <Icon name="check" size={14} /> : item.icon ? <Icon name={item.icon} size={14} /> : null}</span>
+      <span className="menu-text">
+        {item.label}
+        {item.hint && <small>{item.hint}</small>}
+      </span>
+      {item.shortcut && <kbd className="menu-kbd">{item.shortcut}</kbd>}
+    </>
+  );
+  if (item.checked === undefined) {
+    return (
+      <DropdownMenu.Item className={className} disabled={item.disabled} onSelect={onSelect}>
+        {body}
+      </DropdownMenu.Item>
+    );
+  }
+  return (
+    <DropdownMenu.CheckboxItem className={className} checked={item.checked} disabled={item.disabled} onSelect={onSelect}>
+      {body}
+    </DropdownMenu.CheckboxItem>
   );
 }
 

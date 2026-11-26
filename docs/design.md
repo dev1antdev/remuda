@@ -104,14 +104,16 @@ that stands out.
   (`.keybar .key`).
 - **An icon-only button says what it does through `Tip` and an `aria-label`**, never a `title` alone.
 - **A set of actions is a `Menu` with words** (`.menu`, `.menu-item`: an icon, the words, a hint, a shortcut), not a
-  row of icons. A panel behind a button is a `Popover` (`.popover`), a tooltip a `Tip` (`.tip`).
+  row of icons; a row carrying a mark is a checkbox item, its state read aloud. A panel behind a button is a `Popover`
+  (`.popover`), a tooltip a `Tip` (`.tip`).
 - **Fields** share one rule — every input, textarea and `.sel`, with `.sm` and `.bare`: the `--bg-field` well, a
   `--line-strong` border, `--r-md`, `--ctl` tall, `--fs-13`; focus is an `--accent` border and a 3 px `--accent-soft`
   ring; placeholders are `--fg-faint`. Every native `<select>` is the `Select` from `ui/Select.tsx`.
 - Rows share a radius, a hover and a focus ring. Cards are `.card`, counts `.badge` (`.quiet`), state dots
   `.dot.dot-<status>` and `.dot.machine-state.is-<state>`.
 - A place with nothing to show says so through `Empty` (`.empty-state`: an icon on a soft tile, one line, a hint and
-  a button where they help). A loading shape wears the one shimmer of `.bone`.
+  a button where they help). A loading shape wears the one shimmer of `.git-loading-bar`, `.tree-skeleton` and
+  `.issue-bone`.
 - `Dialog` is the only modal: one scrim, a head with icon, title, controls and ×, Escape, focus in and back out,
   `#root` inert while open. `FormDialog` and `ConfirmDialog` build on it. A note in place is a `Notice` (tones error,
   success, warn, info, hint); a passing word is a toast.

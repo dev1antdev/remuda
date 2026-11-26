@@ -1227,7 +1227,7 @@ const STOPPED = [
 // sleepScreens: the sleeping card and its Wake, the confirm a sleep of busy agents asks first (cancelled, so nothing
 // sleeps), Resume after restart over a dressed reboot (left by Not now), and the switches in Settings
 async function sleepScreens() {
-  const menuItem = (en, ru) => `[...document.querySelectorAll("[role=menu] [role=menuitem]")].find((item) => item.textContent.includes(${JSON.stringify(pass.lang === "ru" ? ru : en)}))`;
+  const menuItem = (en, ru) => `[...document.querySelectorAll("[role=menu] [role=menuitem], [role=menu] [role=menuitemcheckbox]")].find((item) => item.textContent.includes(${JSON.stringify(pass.lang === "ru" ? ru : en)}))`;
   // the vitals' popover a screen before stands over the cards: Esc takes it down, as closeAll leaves popovers be
   const noPopover = async () => {
     for (let i = 0; i < 3 && (await present(".popover")); i++) {
@@ -1514,8 +1514,8 @@ async function cardScreens() {
       open: async () => {
         await sidebarOpen();
         await tap(await mark(`${card(0)}?.querySelector('.ws-menu-btn')`, "card-menu"));
-        if (!(await until(() => present("[role=menu] [role=menuitem]"), 3))) throw new Error("the card's menu did not open");
-        await tap("[role=menu] [role=menuitem]"); // Details, the first row on a touch screen
+        if (!(await until(() => present("[role=menu] [role=menuitem], [role=menu] [role=menuitemcheckbox]"), 3))) throw new Error("the card's menu did not open");
+        await tap("[role=menu] [role=menuitem], [role=menu] [role=menuitemcheckbox]"); // Details, the first row on a touch screen
         if (!(await until(() => present(".hover-card .hc-note"), 4))) throw new Error("Details opened no popover");
       },
       expect: [".hover-card .hc-port", ".hover-card .hc-item"],
@@ -2643,8 +2643,8 @@ async function runPass() {
       await hover(await mark(folderHead("app"), "folder"));
       await sleep(150);
       await tap(await mark(folderHead("app") + "?.querySelector('.ws-folder-menu')", "folder-menu"));
-      if (!(await until(() => present("[role=menu] [role=menuitem]"), 3))) throw new Error("the folder's menu did not open");
-      await tap("[role=menu] [role=menuitem]");
+      if (!(await until(() => present("[role=menu] [role=menuitem], [role=menu] [role=menuitemcheckbox]"), 3))) throw new Error("the folder's menu did not open");
+      await tap("[role=menu] [role=menuitem], [role=menu] [role=menuitemcheckbox]");
       if (!(await until(() => evaluate(`[...document.querySelectorAll(".modal input")].some((i) => i.value.startsWith("worktree/"))`), 4))) failed("a repository folder's new workspace is not a worktree on a branch of its own");
     },
     expect: [".modal"],
