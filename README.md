@@ -562,7 +562,9 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ remuda-core: its 
   the branch *Kept* or *Deleted* (deleted once merged; a click flips
   it), and in red what would be lost — uncommitted changes, the branch's
   commits that are on no remote, a submodule's commits pushed nowhere,
-  and that a worktree has submodules at all.
+  that a worktree has submodules at all, and the ignored files a person may
+  miss (.env and the like; dependency and build folders are left out of the
+  list).
   *Remove anyway* then runs `git worktree remove --force`; *Close, keep
   the folder* closes the workspace alone, and is there too when the
   worktree cannot be looked at (its folder deleted by hand). It waits while an agent works

@@ -5195,8 +5195,11 @@ components and icons as rules for whoever changes it: @docs/design.md
   stamp and what a confirmed delete goes by), a checksum of the uncommitted
   work's contents, submodules included (`Changes`, in the stamp, and read
   again by the script that removes with `--force`, after the close), whether that HEAD holds the branch
-  (`merged`), a `.gitmodules`, and every submodule (`git submodule
-  foreach --recursive`) whose HEAD, branches or stash hold a commit on no remote — plus, from the
+  (`merged`), a `.gitmodules`, every submodule (`git submodule
+  foreach --recursive`) whose HEAD, branches or stash hold a commit on no remote, and the ignored files and folders
+  that would go with the folder (`git ls-files --others --ignored --exclude-standard --directory`: dependency and
+  build output folders left out by name, at most 20 named and the rest counted, `Ignored`/`IgnoredMore`, both in the
+  stamp) — plus, from the
   server (`internal/server/worktree_remove.go`), the other workspaces on
   the checkout or with a pane in it (`sharers`), an agent working or
   asking there or a turn still ending (`busyIn`: `undo.Service.Working`
@@ -5221,7 +5224,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   and the palette, the merged request's menu, and the close of a made one): a red trash tile, the
   table — Folder *Deleted*, Branch *Kept* or *Deleted* (deleted by default
   once merged, a click flips it) — the losses in red (any submodule among them, since a nested or
-  deinitialized one cannot be looked into), *Remove* / *Remove
+  deinitialized one cannot be looked into; ignored files a person may miss), *Remove* / *Remove
   anyway* (`btn danger`), *Close, keep the folder* beside a loss and when
   the look failed (`keepFolderOffered`: the one way left to close a
   workspace whose folder is gone), *Close

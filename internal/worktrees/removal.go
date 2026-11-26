@@ -34,6 +34,8 @@ type Look struct {
 	Changes       string   `json:"-"`                        // a checksum of the uncommitted work's contents
 	HasSubmodules bool     `json:"has_submodules,omitempty"` // named by .gitmodules, or kept in the worktree's git folder
 	Submodules    []string `json:"submodules,omitempty"`     // the ones with commits pushed nowhere
+	Ignored       []string `json:"ignored,omitempty"`        // ignored files and folders that go with it, build and dependency folders left out
+	IgnoredMore   int      `json:"ignored_more,omitempty"`   // further ignored entries, beyond the ones named
 }
 
 // LookScript reads the worktree: its branch and repository, its status, the branch's reach, its submodules.
@@ -53,7 +55,8 @@ func LookScript(path string) string {
 		"else printf '0\\n0\\nopen\\n'; fi\nprintf '\\036\\n'\n" +
 		"{ [ -f .gitmodules ] || [ -n \"$(ls -A \"$(" + git + " rev-parse --git-path modules)\" 2>/dev/null)\" ]; } && echo submodules\n" +
 		git + " submodule foreach --quiet --recursive 'if [ -n \"$(git rev-list -n1 HEAD --branches $(git rev-parse -q --verify refs/stash) --not --remotes 2>/dev/null)\" ]; then printf \"lost %s\\n\" \"$displaypath\"; fi' 2>/dev/null\n" +
-		"printf '\\036\\n'\n" + changesScript() + "\n"
+		"printf '\\036\\n'\n" + changesScript() + "\nprintf '\\036\\n'\n" +
+		git + " ls-files -z --others --ignored --exclude-standard --directory 2>/dev/null | tr '\\0' '\\n'\n"
 }
 
 // changesScript prints a checksum of the uncommitted work in the folder it runs in and in its submodules: staged,
@@ -108,7 +111,56 @@ func ParseLook(path, out string) (Look, error) {
 	if len(parts) > 4 {
 		look.Changes = strings.TrimSpace(parts[4])
 	}
+	if len(parts) > 5 {
+		look.Ignored, look.IgnoredMore = shownIgnored(script.Lines(parts[5]))
+	}
 	return look, nil
+}
+
+// maxIgnoredShown bounds the ignored entries the dialog names: the rest is a count, so a worktree full of local files
+// still reads as one line.
+const maxIgnoredShown = 20
+
+// buildFolders are the dependency and build output folders a worktree is expected to lose: their ignored contents are
+// not worth a line in the dialog, which is about the files a person may miss.
+var buildFolders = map[string]bool{
+	"node_modules": true, "bower_components": true, "jspm_packages": true, "vendor": true,
+	"target": true, "build": true, "dist": true, "out": true, "bin": true, "obj": true,
+	"coverage": true, ".nyc_output": true, ".cache": true, ".parcel-cache": true, ".turbo": true,
+	".next": true, ".nuxt": true, ".svelte-kit": true, ".output": true, ".vercel": true, ".netlify": true,
+	".expo": true, ".dart_tool": true, ".gradle": true, ".idea": true, ".vscode": true,
+	"__pycache__": true, ".pytest_cache": true, ".mypy_cache": true, ".ruff_cache": true, ".tox": true,
+	".venv": true, "venv": true, "virtualenv": true, "pods": true, "deriveddata": true, ".swiftpm": true,
+	".terraform": true, ".serverless": true, ".aws-sam": true, ".yarn": true, ".pnpm-store": true,
+	".bun": true, "cmake-build-debug": true, "cmake-build-release": true,
+}
+
+// buildOutput says whether an ignored entry is dependency or build output, which a worktree is expected to lose whole.
+func buildOutput(entry string) bool {
+	for _, segment := range strings.Split(strings.TrimSuffix(entry, "/"), "/") {
+		if buildFolders[strings.ToLower(segment)] {
+			return true
+		}
+	}
+	return false
+}
+
+// shownIgnored names the ignored entries a person may not want to lose, up to maxIgnoredShown, and counts the rest.
+func shownIgnored(entries []string) ([]string, int) {
+	var shown []string
+	more := 0
+	for _, line := range entries {
+		entry := strings.TrimSpace(line)
+		if entry == "" || buildOutput(entry) {
+			continue
+		}
+		if len(shown) >= maxIgnoredShown {
+			more++
+			continue
+		}
+		shown = append(shown, entry)
+	}
+	return shown, more
 }
 
 // LookAt reads the worktree on its machine.
@@ -122,11 +174,14 @@ func LookAt(host shell.Shell, path string) (Look, error) {
 
 // Stamp is what the person was shown of the risk; a removal finding another refuses until it is seen.
 func (l Look) Stamp() string {
-	return strings.Join([]string{strconv.Itoa(l.Dirty), l.First, strconv.Itoa(l.Unmerged), l.Branch, l.Tip, l.Changes, strconv.FormatBool(l.HasSubmodules), strings.Join(l.Submodules, ",")}, "|")
+	return strings.Join([]string{strconv.Itoa(l.Dirty), l.First, strconv.Itoa(l.Unmerged), l.Branch, l.Tip, l.Changes, strconv.FormatBool(l.HasSubmodules), strings.Join(l.Submodules, ","), strings.Join(l.Ignored, ","), strconv.Itoa(l.IgnoredMore)}, "|")
 }
 
-// Loses says whether removing the folder loses work: uncommitted changes, or a submodule's commits pushed nowhere.
-func (l Look) Loses() bool { return l.Dirty > 0 || len(l.Submodules) > 0 }
+// Loses says whether removing the folder loses work: uncommitted changes, a submodule's commits pushed nowhere, or
+// ignored files a person may miss (dependency and build output left out).
+func (l Look) Loses() bool {
+	return l.Dirty > 0 || len(l.Submodules) > 0 || len(l.Ignored) > 0 || l.IgnoredMore > 0
+}
 
 // ForceScript removes the worktree, --force when it holds what the look showed, and deletes its branch when asked, as it
 // stood when looked at, since the person was told what of it is on no remote.
