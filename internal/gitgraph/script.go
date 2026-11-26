@@ -12,6 +12,14 @@ import (
 // shell function g.
 const Read = `g() { git --no-pager --no-optional-locks --literal-pathspecs -c core.fsmonitor=false -c diff.autoRefreshIndex=false -c core.quotepath=off -c color.ui=never "$@"; }; `
 
+// StatusLines is git status as one entry a line: a line break inside a path becomes \001 and every NUL a line, so awk
+// reads one entry a line.
+const StatusLines = `g status --porcelain=v1 -z --no-renames --untracked-files=all 2>/dev/null | tr '\n\000' '\001\n'`
+
+// TreeSum is the shell function that prints a checksum of the tracked entries of git status: what a hard reset discards.
+// A reset's dialog carries the checksum it was shown, and the write refuses a tree that moved since.
+const TreeSum = `treeSum() { ` + StatusLines + ` | awk 'substr($0, 1, 2) != "??"' | cksum | cut -d' ' -f1; }; `
+
 // logFormat is seven NUL-ended fields a commit: hash, parents, author, e-mail, time, labels, subject.
 const logFormat = `%H%x00%P%x00%an%x00%ae%x00%at%x00%D%x00%s`
 
@@ -28,9 +36,9 @@ func stateScript(dir string) string {
 		`print=$({ printf '%s %s %s\n' "$head" "$branch" "$op"; g for-each-ref --format='%(objectname) %(refname)' refs/heads refs/tags refs/remotes 2>/dev/null; } | cksum); ` +
 		`printf 'repo\n%s\n%s\n%s\n%s\n%s\n' "$top" "$head" "$branch" "$op" "$print"; ` +
 		`printf '\036status\n'; ` +
-		// a line break inside a path becomes \001 and every NUL a line, so awk reads one entry a line
-		`g status --porcelain=v1 -z --no-renames --untracked-files=all 2>/dev/null | tr '\n\000' '\001\n' | ` +
-		`awk -v max=` + strconv.Itoa(MaxChanges) + ` '{ n++; x = substr($0, 1, 2); if (x ~ /U/ || x == "AA" || x == "DD") c++; if (x != "??" && kept < max) { print; kept++ } } END { printf "\036count %d %d\n", n, c }'; `
+		`s=$(` + StatusLines + `); ` +
+		`printf '%s' "$s" | awk -v max=` + strconv.Itoa(MaxChanges) + ` '{ n++; x = substr($0, 1, 2); if (x ~ /U/ || x == "AA" || x == "DD") c++; if (x != "??") { t++; if (kept < max) { print; kept++ } } } END { printf "\036count %d %d %d\n", n, c, t }'; ` +
+		`printf '\036tree %s\n' "$({ [ -n "$s" ] && printf '%s\n' "$s"; } | awk 'substr($0, 1, 2) != "??"' | cksum | cut -d' ' -f1)"; `
 }
 
 // logScope is the walk: every local branch, tag and (asked for) remote branch with HEAD, or HEAD alone. Never --all,

@@ -3484,8 +3484,11 @@ components and icons as rules for whoever changes it: @docs/design.md
   progress (the per-worktree git dir's markers), the refs' fingerprint
   (`cksum` of HEAD, the branch, the op and `for-each-ref` over heads,
   tags and remotes), `git status --porcelain -z` counted (untracked
-  files too, `Dirty`; `Conflicts`) and its tracked entries named, at most
-  `MaxChanges` 200, for a hard reset's confirm. `ReadLog` is the state and
+  files too, `Dirty`; `Conflicts`; `Tracked`, every tracked entry), its
+  tracked entries named, at most `MaxChanges` 200, and a `Tree` checksum of
+  all of them — for a hard reset's confirm, which counts every file and
+  refuses a tree whose tracked changes moved since the dialog opened.
+  `ReadLog` is the state and
   a page: `git log -z --date-order --decorate=full --skip -n<limit+1>` over
   `--branches --tags [--remotes] --ignore-missing HEAD` (All branches) or
   `HEAD` (Current) — never `--all`, other tools' private refs — seven
@@ -7825,8 +7828,11 @@ components and icons as rules for whoever changes it: @docs/design.md
   pull, push, a worktree removed — each runs only when the person presses
   it on the page and, where it loses or rewrites anything, confirms it in
   a dialog naming what happens (a hard reset names the files it
-  discards, a branch delete that git refuses as unmerged asks a second
-  time in red); never from a schedule, a queue, a trigger, an agent's key
+  discards, every tracked one even past the named 200, and refuses the
+  write when any of them changed after the dialog opened — `ErrTreeMoved`,
+  the `Tree` checksum in the run script; a branch delete that git refuses
+  as unmerged asks a second time in red); never from a schedule, a queue,
+  a trigger, an agent's key
   or a viewer link (403); refused while an agent works, asks or a turn is
   ending in that checkout (the watcher's snapshot and `undo.Tracker.Going`,
   `gitWrites` in `internal/app`, the refusal naming who), and refused when
