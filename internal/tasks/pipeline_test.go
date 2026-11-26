@@ -117,7 +117,7 @@ func newPipe(st *Store) *pipeHere {
 				prompt string
 			}{index, prompt})
 			pane := "w1:p" + string(rune('1'+index))
-			r, err := st.StartStageRun(prev, index, stage, pane)
+			r, err := st.StartStageRun(prev, index, stage, pane, prompt)
 			if err == nil {
 				_ = st.SetRun(r.ID, RunRunning, "")
 				h.states[pane] = "working"
@@ -322,7 +322,7 @@ func TestAnAgentsKeyKeepsARunningPipelinesCardAsItIs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	run, err := st.StartStageRun(Run{TaskID: card.ID}, 1, Stage{}, "w1:p2")
+	run, err := st.StartStageRun(Run{TaskID: card.ID}, 1, Stage{}, "w1:p2", "x")
 	if err != nil {
 		t.Fatal(err)
 	}

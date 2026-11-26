@@ -442,14 +442,21 @@ func TestDoorScriptKeepsALiveDoor(t *testing.T) {
 }
 
 // TestDoorScriptGoesOneAtATime: of cockpits placing their live doors together exactly one wins, the others finding its
-// door. The health check is a stub here, answering at once: a real one under a busy machine may miss its two seconds,
-// and a door nobody could ask is placed over by design — that side is TestDoorScriptKeepsALiveDoor's — which would put
-// a second door here for a reason this test is not about.
+// door. The health check is a stub here, answering at once, and the clock is fixed: a real health check under a busy
+// machine may miss its two seconds, and a real clock crossing a half-minute may put the script in another slot — both
+// would place a second door for a reason this test is not about.
 func TestDoorScriptGoesOneAtATime(t *testing.T) {
 	home := newDoorHome(t)
 	tools := t.TempDir()
-	if err := os.WriteFile(filepath.Join(tools, "curl"), []byte("#!/bin/sh\nprintf '%s' '{\"ok\":true}'\n"), 0o755); err != nil {
-		t.Fatal(err)
+	// a fixed clock, so the four scripts cannot land in two half-minute slots on a slow runner, and a health check
+	// that answers at once: the test is about the lock, not a runner's speed or its clock
+	for name, body := range map[string]string{
+		"date": "#!/bin/sh\necho 3000\n",
+		"curl": "#!/bin/sh\nprintf '%s' '{\"ok\":true}'\n",
+	} {
+		if err := os.WriteFile(filepath.Join(tools, name), []byte(body), 0o755); err != nil {
+			t.Fatal(err)
+		}
 	}
 	t.Setenv("PATH", tools+string(os.PathListSeparator)+os.Getenv("PATH"))
 	urls := []string{liveDoor(t), liveDoor(t), liveDoor(t), liveDoor(t)}

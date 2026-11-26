@@ -44,6 +44,34 @@ func continuedFiles() memFiles {
 	}
 }
 
+func TestAnOpencodeSessionMetersFromItsOwnRow(t *testing.T) {
+	source := opencodeSource{memFiles: memFiles{}, usage: transcript.OpencodeUsage{
+		Model: "deepseek-v4.1-flash", Context: 150, Input: 300, Output: 40, CacheRead: 700, CacheWrite: 20,
+		Cost: 1.5, Turns: 2, Updated: 1795000000000,
+	}}
+	tr := NewTracker()
+	tr.Observe("m", source, "p1", []string{"opencode\x1f/code/app\x1fses_1"})
+	d, ok := tr.Display("m", "p1")
+	if !ok || d.Model != "deepseek-v4.1-flash" || d.Context != 150 || d.Cost != 1.5 || d.Turns != 2 ||
+		d.Tokens.Input != 300 || d.Tokens.Output != 40 || d.Tokens.CacheRead != 700 || d.Tokens.CacheWrite5m != 20 || d.Updated != 1795000000000 {
+		t.Fatalf("display %+v %v", d, ok)
+	}
+}
+
+// opencodeSource is a machine whose opencode sessions answer from a row, not a file.
+type opencodeSource struct {
+	memFiles
+	usage transcript.OpencodeUsage
+}
+
+func (s opencodeSource) ResolveSession(string, string, string, string) (string, error) {
+	return "opencode\x1f/code/app\x1fses_1", nil
+}
+func (opencodeSource) Lineage(path string) []string { return []string{path} }
+func (s opencodeSource) OpencodeUsage(string) (transcript.OpencodeUsage, error) {
+	return s.usage, nil
+}
+
 func TestLineageCountsACopiedResponseOnce(t *testing.T) {
 	tr := NewTracker()
 	tr.Observe("m", continuedFiles(), "p1", []string{oldFile, liveFile})

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dev1antdev/remuda/internal/gitgraph"
 	"github.com/dev1antdev/remuda/internal/shell"
 )
 
@@ -181,6 +182,29 @@ func TestAMergeThatStopsOnConflictsIsLeftInProgressAndAborted(t *testing.T) {
 	}
 	if aborted := do(t, dir, Request{Op: "abort", Operation: "merge"}); !aborted.OK || aborted.Operation != "" || read(t, dir, "a.txt") != "one\ntwo\n" {
 		t.Fatalf("the abort: %+v", aborted)
+	}
+}
+
+func TestAHardResetRefusesATreeThatMovedSinceItsDialogOpened(t *testing.T) {
+	dir := repository(t)
+	write(t, dir, "a.txt", "dirty\n")
+	drawn, err := gitgraph.ReadState(host, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := seen(t, dir, Request{Op: "reset", Sha: run(t, dir, "rev-parse", "HEAD~1"), Mode: "hard", Tree: drawn.Tree})
+	write(t, dir, "new.txt", "late\n") // a change the dialog never named
+	run(t, dir, "add", "new.txt")
+	if _, err := (&Service{}).Run(host, dir, req); !errors.Is(err, ErrTreeMoved) {
+		t.Fatalf("a hard reset over a tree that moved: %v", err)
+	}
+	if read(t, dir, "a.txt") != "dirty\n" {
+		t.Fatal("the stale reset ran")
+	}
+	now, _ := gitgraph.ReadState(host, dir)
+	req.Tree = now.Tree
+	if r := do(t, dir, req); !r.OK || read(t, dir, "a.txt") != "one\n" {
+		t.Fatalf("a hard reset on the tree the dialog showed: %+v, %q", r, read(t, dir, "a.txt"))
 	}
 }
 
