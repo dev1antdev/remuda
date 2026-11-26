@@ -793,6 +793,38 @@ func forkOf(later, earlier string) bool {
 	return first != "" && hasRecord(later, first)
 }
 
+// forkCopy says path copies an older sibling that starts the same way — the same first parent — from its first record
+// on: a fork of that sibling, which continues nothing. The file it copies appeared first, which is the one sign a fork
+// leaves that its content does not.
+func forkCopy(path, parent string) bool {
+	if parent == "" {
+		return false
+	}
+	st, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	dir := filepath.Dir(path)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false
+	}
+	for _, e := range entries {
+		sibling := filepath.Join(dir, e.Name())
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".jsonl") || sibling == path {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil || !info.ModTime().Before(st.ModTime()) || firstParent(sibling) != parent {
+			continue
+		}
+		if forkOf(path, sibling) {
+			return true
+		}
+	}
+	return false
+}
+
 // firstInHead is the first match of re in a session file's first 64 KB.
 func firstInHead(path string, re *regexp.Regexp) string {
 	f, err := OpenSession(path)
@@ -880,7 +912,8 @@ func Continuation(path string) string {
 	}
 	sort.Slice(cands, func(i, j int) bool { return cands[i].mod.Before(cands[j].mod) })
 	for _, c := range cands {
-		if p := firstParent(c.path); p != "" && hasRecord(path, p) && !forkOf(c.path, path) {
+		p := firstParent(c.path)
+		if p != "" && hasRecord(path, p) && !forkOf(c.path, path) && !forkCopy(c.path, p) {
 			return c.path
 		}
 	}
@@ -910,7 +943,7 @@ func Predecessor(path string) string {
 		}
 	}
 	parent := firstParent(path)
-	if parent == "" {
+	if parent == "" || forkCopy(path, parent) {
 		return ""
 	}
 	for _, p := range siblings {
@@ -926,6 +959,10 @@ func PredecessorScript(quotedPath string) string {
 	return `new=` + quotedPath + `; dir=$(dirname "$new"); id=$(basename "$new" .jsonl); ` +
 		`for f in "$dir"/*.jsonl; do [ "$f" = "$new" ] && continue; if tail -c 65536 "$f" 2>/dev/null | grep -qF "\"continuedInSessionId\":\"$id\""; then printf %s "$f"; exit 0; fi; done; ` +
 		`p=$(head -c 65536 "$new" | grep -o '"parentUuid":"[0-9a-f-]*"' | head -1 | cut -d'"' -f4); [ -n "$p" ] || exit 0; ` +
+		`for f in "$dir"/*.jsonl; do [ "$f" = "$new" ] && continue; [ "$f" -ot "$new" ] || continue; ` +
+		`fp=$(head -c 65536 "$f" | grep -o '"parentUuid":"[0-9a-f-]*"' | head -1 | cut -d'"' -f4); [ "$fp" = "$p" ] || continue; ` +
+		`u=$(head -c 65536 "$f" | grep -o '"uuid":"[0-9a-f-]*"' | head -1 | cut -d'"' -f4); [ -n "$u" ] || continue; ` +
+		`grep -q "\"uuid\":\"$u\"" "$new" && exit 0; done; ` +
 		`for f in "$dir"/*.jsonl; do [ "$f" = "$new" ] && continue; grep -q "\"uuid\":\"$p\"" "$f" 2>/dev/null || continue; ` +
 		`u=$(head -c 65536 "$f" | grep -o '"uuid":"[0-9a-f-]*"' | head -1 | cut -d'"' -f4); ` +
 		`if [ -n "$u" ] && grep -q "\"uuid\":\"$u\"" "$new"; then continue; fi; printf %s "$f"; exit 0; done`
@@ -941,7 +978,11 @@ func ContinuationScript(quotedPath string) string {
 		`ls -t "$dir"/*.jsonl 2>/dev/null | while IFS= read -r f; do ` +
 		`[ "$f" = "$old" ] && break; [ "$f" -nt "$old" ] || continue; ` +
 		`p=$(head -c 65536 "$f" | grep -o '"parentUuid":"[0-9a-f-]*"' | head -1 | cut -d'"' -f4); [ -n "$p" ] || continue; ` +
-		`grep -q "\"uuid\":\"$p\"" "$old" || continue; if [ -n "$u" ] && grep -q "\"uuid\":\"$u\"" "$f"; then continue; fi; printf %s "$f"; break; done`
+		`grep -q "\"uuid\":\"$p\"" "$old" || continue; if [ -n "$u" ] && grep -q "\"uuid\":\"$u\"" "$f"; then continue; fi; ` +
+		`cp=; for g in "$dir"/*.jsonl; do [ "$g" = "$f" ] && continue; [ "$g" -ot "$f" ] || continue; ` +
+		`gp=$(head -c 65536 "$g" | grep -o '"parentUuid":"[0-9a-f-]*"' | head -1 | cut -d'"' -f4); [ "$gp" = "$p" ] || continue; ` +
+		`gu=$(head -c 65536 "$g" | grep -o '"uuid":"[0-9a-f-]*"' | head -1 | cut -d'"' -f4); [ -n "$gu" ] || continue; ` +
+		`grep -q "\"uuid\":\"$gu\"" "$f" && { cp=1; break; }; done; [ -n "$cp" ] && continue; printf %s "$f"; break; done`
 }
 
 // ---- what a turn ended with ----
