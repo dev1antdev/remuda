@@ -142,9 +142,14 @@ func (n *Node) run(h http.Handler) {
 		if err != nil {
 			return
 		}
-		_ = http.Serve(ln, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			http.Redirect(w, r, url+r.URL.RequestURI(), http.StatusTemporaryRedirect)
-		}))
+		redirect := &http.Server{
+			Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				http.Redirect(w, r, url+r.URL.RequestURI(), http.StatusTemporaryRedirect)
+			}),
+			ReadHeaderTimeout: 10 * time.Second,
+			IdleTimeout:       time.Minute,
+		}
+		_ = redirect.Serve(ln)
 	}()
 	ln, err := n.srv.ListenTLS("tcp", ":443")
 	if err != nil {

@@ -259,7 +259,16 @@ func (g *Guard) viewerLink(w http.ResponseWriter, r *http.Request, presented str
 const maxLoginForm = 4 << 10
 
 // HandleLogin signs the browser in with a posted token.
+// loginReadTimeout is how long a client has to send its sign-in form: a connection dripping one byte at a time is cut,
+// so it holds no goroutine and no descriptor.
+var loginReadTimeout = 10 * time.Second
+
 func (g *Guard) HandleLogin(w http.ResponseWriter, r *http.Request) {
+	// a client dripping its form must not hold the goroutine and the descriptor: the body is read under a deadline,
+	// and the next request on a kept-alive connection starts without it
+	rc := http.NewResponseController(w)
+	_ = rc.SetReadDeadline(time.Now().Add(loginReadTimeout))
+	defer func() { _ = rc.SetReadDeadline(time.Time{}) }()
 	r.Body = http.MaxBytesReader(w, r.Body, maxLoginForm)
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
