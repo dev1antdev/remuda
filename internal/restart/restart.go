@@ -339,7 +339,7 @@ func (r *Restarter) Pane(mc *machines.Machine, paneID string, say func(string)) 
 	if err := Reread(client); err != nil {
 		return err
 	}
-	p, found, err := look(client, paneID)
+	p, found, err := Look(client, paneID)
 	if err != nil {
 		return err
 	}
@@ -444,11 +444,17 @@ func (r *Restarter) swap(key string, client coreapi.API, p coreapi.PaneInfo, a a
 }
 
 func pane(client coreapi.API, paneID string) (coreapi.PaneInfo, bool) {
-	p, found, _ := look(client, paneID)
+	p, found, _ := Look(client, paneID)
 	return p, found
 }
 
-func look(client coreapi.API, paneID string) (coreapi.PaneInfo, bool, error) {
+// Looker is a client that can be asked for its session snapshot.
+type Looker interface {
+	SessionSnapshot() (*coreapi.Snapshot, error)
+}
+
+// Look is the pane in a fresh snapshot.
+func Look(client Looker, paneID string) (coreapi.PaneInfo, bool, error) {
 	snap, err := client.SessionSnapshot()
 	if err != nil {
 		return coreapi.PaneInfo{}, false, err

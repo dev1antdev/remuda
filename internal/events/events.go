@@ -47,6 +47,7 @@ type OutputMatched struct {
 	Pane    PaneRef
 	Watch   string // the watch's key, as the one who asked for it named it
 	Line    string // the first row that matched
+	Pos     uint64 // its place in the terminal, 0 when the server does not say
 	Text    string // the rows herdr read
 	Fresh   bool
 	Carried bool

@@ -6,6 +6,7 @@
 package watch
 
 import (
+	"errors"
 	"log"
 	"sync"
 	"sync/atomic"
@@ -252,6 +253,9 @@ type watchErr string
 func (e watchErr) Error() string { return string(e) }
 
 const errNotWatched = watchErr("no snapshot yet")
+
+// NotWatched says err is the watcher's "no snapshot yet" of a machine it has not polled, not a poll's failure.
+func NotWatched(err error) bool { return errors.Is(err, errNotWatched) }
 
 // Refresh polls one machine now, so the next roster read sees what the UI just changed.
 func (w *Watcher) Refresh(mc *machines.Machine) (*coreapi.Snapshot, error) {

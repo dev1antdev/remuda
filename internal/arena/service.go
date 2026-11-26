@@ -17,6 +17,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/shell"
 	"github.com/dev1antdev/remuda/internal/state"
 	"github.com/dev1antdev/remuda/internal/tasks"
+	"github.com/dev1antdev/remuda/internal/text"
 	"github.com/dev1antdev/remuda/internal/watch"
 	"github.com/dev1antdev/remuda/internal/worktrees"
 )
@@ -185,55 +186,36 @@ func (s *Service) startLane(a Arena, lane Lane) error {
 // deliver hands the prompt to a lane's fresh agent; Claude Code's "trust this folder" question for that very worktree
 // is answered yes, as a task's start does, any other question is pushed to the person once and waited for.
 func (s *Service) deliver(mc *machines.Machine, client coreapi.API, a Arena, laneID int, pane, dir string) {
-	lock := s.Input.Lock(mc.ID(), pane)
-	deadline := s.now().Add(DeliverTimeout)
-	nudged, trusted := false, false
-	var last error
-	delivery := s.Input.Deliver(client, events.PaneRef{Machine: mc.ID(), Pane: pane}, a.Prompt)
-	for s.now().Before(deadline) {
-		time.Sleep(DeliverRetry)
-		err := delivery.Try()
-		switch {
-		case err == nil:
-			s.settle(a.ID, laneID, LaneRunning, "")
-			return
-		case coreapi.IsCode(err, "agent_not_ready") || coreapi.IsCode(err, "agent_not_found") || coreapi.IsCode(err, "agent_working"):
-			last = err
-		case coreapi.IsCode(err, "agent_blocked"):
-			last = err
-			if !trusted {
-				if screen, rerr := client.PaneRead(pane); rerr == nil && tasks.TrustPrompt(screen, dir, mc.Home()) {
-					trusted = true
-					lock.Lock()
-					if !tasks.CursorOnYes(screen) {
-						_ = client.PaneSendKeys(pane, []string{"down"})
-						time.Sleep(150 * time.Millisecond)
-					}
-					_ = client.PaneSendKeys(pane, []string{"enter"})
-					lock.Unlock()
-					continue
-				}
+	handoff := sessions.Handoff{
+		Input: s.Input, Client: client, Ref: events.PaneRef{Machine: mc.ID(), Pane: pane},
+		Prompt: a.Prompt, Dir: dir, Home: mc.Home(),
+		Retry: DeliverRetry, Timeout: DeliverTimeout, Now: s.now,
+		Notify: func() {
+			if s.Notify == nil {
+				return
 			}
-			if !nudged && s.Notify != nil {
-				nudged = true
-				s.Notify(push.Payload{
-					Machine: mc.ID(), Pane: pane, Kind: "input",
-					Title:   fmt.Sprintf("Arena #%d: an agent asks something first", a.ID),
-					Body:    "Answer it in the pane and the prompt follows.",
-					Tag:     fmt.Sprintf("arena|%d|%d", a.ID, laneID),
-					Actions: []push.Action{{Action: "open", Title: "Open"}},
-				})
-			}
-		default:
-			s.settle(a.ID, laneID, LaneFailed, "the prompt was refused: "+err.Error())
-			return
+			s.Notify(push.Payload{
+				Machine: mc.ID(), Pane: pane, Kind: "input",
+				Title:   fmt.Sprintf("Arena #%d: an agent asks something first", a.ID),
+				Body:    "Answer it in the pane and the prompt follows.",
+				Tag:     fmt.Sprintf("arena|%d|%d", a.ID, laneID),
+				Actions: []push.Action{{Action: "open", Title: "Open"}},
+			})
+		},
+	}
+	last, timedOut := handoff.Run()
+	switch {
+	case last == nil && !timedOut:
+		s.settle(a.ID, laneID, LaneRunning, "")
+	case timedOut:
+		note := "the agent did not take the prompt within five minutes"
+		if last != nil {
+			note += " (" + last.Error() + ")"
 		}
+		s.settle(a.ID, laneID, LaneFailed, note+"; the worktree is there, send it by hand")
+	default:
+		s.settle(a.ID, laneID, LaneFailed, "the prompt was refused: "+last.Error())
 	}
-	note := "the agent did not take the prompt within five minutes"
-	if last != nil {
-		note += " (" + last.Error() + ")"
-	}
-	s.settle(a.ID, laneID, LaneFailed, note+"; the worktree is there, send it by hand")
 }
 
 // settle moves a lane out of starting; a lane the person kept or closed meanwhile stays as it is.
@@ -389,7 +371,7 @@ func (s *Service) discard(a Arena, lane Lane) (patch, note string) {
 	if lane.Dir != "" && lane.Base != "" {
 		out, err := shell.Text(mc, PatchScript(lane.Dir, lane.Base), ScriptTimeout)
 		if err != nil {
-			return "", "kept: its work could not be saved (" + lastLine(out, err.Error()) + ")"
+			return "", "kept: its work could not be saved (" + text.LastLine(out, err.Error()) + ")"
 		}
 		patch, err = s.savePatch(a, lane, out)
 		if err != nil {
@@ -433,16 +415,4 @@ func (s *Service) savePatch(a Arena, lane Lane, diff string) (string, error) {
 	}
 	path := filepath.Join(dir, fmt.Sprintf("arena-%d-lane-%d-%s.patch", a.ID, lane.ID, lane.Agent))
 	return path, state.WriteFile(path, []byte(diff))
-}
-
-// lastLine is a script's complaint: its last printed line, else the fallback.
-func lastLine(text, fallback string) string {
-	text = strings.TrimSpace(text)
-	if text == "" {
-		return fallback
-	}
-	if i := strings.LastIndex(text, "\n"); i >= 0 {
-		return strings.TrimSpace(text[i+1:])
-	}
-	return text
 }

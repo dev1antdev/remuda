@@ -14,6 +14,7 @@ import (
 
 	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/shell"
+	"github.com/dev1antdev/remuda/internal/text"
 )
 
 // GitHubTimeout is how long gh may take; ListLimit how many of each list are read.
@@ -84,21 +85,21 @@ var closesRef = regexp.MustCompile(`(?i)\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd
 func ParseLists(out string) (Lists, error) {
 	parts := script.Sections(out)
 	if len(parts) < 2 {
-		return Lists{}, errors.New(lastLine(out, "gh answered nothing"))
+		return Lists{}, errors.New(text.LastLine(out, "gh answered nothing"))
 	}
 	lists := Lists{Issues: []Issue{}, PRs: []PR{}}
 	issueAnswer, prAnswer := strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1])
 	issuesRefused, prsRefused := strings.HasPrefix(issueAnswer, "!"), strings.HasPrefix(prAnswer, "!")
 	if issuesRefused && prsRefused {
-		return Lists{}, errors.New(lastLine(issueAnswer[1:], "gh answered nothing"))
+		return Lists{}, errors.New(text.LastLine(issueAnswer[1:], "gh answered nothing"))
 	}
 	if issuesRefused {
-		lists.IssuesTrouble = lastLine(issueAnswer[1:], "gh read no issues")
+		lists.IssuesTrouble = text.LastLine(issueAnswer[1:], "gh read no issues")
 	} else if err := json.Unmarshal([]byte(issueAnswer), &lists.Issues); err != nil {
 		return Lists{}, fmt.Errorf("gh's issue list: %w", err)
 	}
 	if prsRefused {
-		lists.PRsTrouble = lastLine(prAnswer[1:], "gh read no pull requests")
+		lists.PRsTrouble = text.LastLine(prAnswer[1:], "gh read no pull requests")
 		return lists, nil
 	}
 	var prs []struct {
@@ -160,7 +161,7 @@ func ParseLookup(number int, out string) (Found, error) {
 	parts := script.Sections(out)
 	fields := strings.SplitN(strings.TrimSpace(parts[0]), "\t", 3)
 	if len(fields) < 3 {
-		return Found{}, errors.New(lastLine(out, "gh answered nothing"))
+		return Found{}, errors.New(text.LastLine(out, "gh answered nothing"))
 	}
 	found := Found{Kind: "issue", Number: number, State: strings.ToLower(fields[1]), Title: fields[2]}
 	if fields[0] != "true" {
@@ -198,5 +199,5 @@ func ghError(out string, err error) error {
 	if errors.As(err, &exit) && exit.Code == 4 {
 		return ErrNoGH
 	}
-	return errors.New(lastLine(out, err.Error()))
+	return errors.New(text.LastLine(out, err.Error()))
 }

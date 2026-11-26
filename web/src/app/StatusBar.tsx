@@ -48,4 +48,4 @@ export default function StatusBar() {
   );
 }
 
-const stateWords = (state: string) => (state === "connected" ? t("connected") : state === "connecting" ? t("connecting") : t("away"));
+const stateWords = (state: string) => (state === "connected" ? t("connected") : state === "connecting" ? t("connecting") : state === "error" ? t("not answering") : t("away"));

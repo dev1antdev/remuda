@@ -150,56 +150,38 @@ func includeNote(included worktrees.Included, err error) string {
 // deliver waits for the fresh agent and hands it the task; Claude Code's "trust this folder"
 // question for the new worktree is answered yes, any other question is pushed to the person and waited for.
 func (l *Launcher) deliver(mc *machines.Machine, client coreapi.API, run Run, task Task, prompt string) {
-	lock := l.Input.Lock(mc.ID(), run.Pane)
-	deadline := time.Now().Add(5 * time.Minute)
-	nudged, trusted := false, false
-	var last error
-	delivery := l.Input.Deliver(client, events.PaneRef{Machine: mc.ID(), Pane: run.Pane}, prompt)
-	for time.Now().Before(deadline) {
-		time.Sleep(2 * time.Second)
-		err := delivery.Try()
-		switch {
-		case err == nil:
-			_ = l.Store.SetRun(run.ID, RunRunning, "")
-			return
-		case coreapi.IsCode(err, "agent_not_ready") || coreapi.IsCode(err, "agent_not_found") || coreapi.IsCode(err, "agent_working"):
-			last = err
-		case coreapi.IsCode(err, "agent_blocked"):
-			last = err
-			if !trusted {
-				if screen, rerr := client.PaneRead(run.Pane); rerr == nil && isTrustPrompt(screen, run.Dir, mc.Home()) {
-					trusted = true
-					lock.Lock()
-					if !cursorOnYes(screen) { // "No, exit" sits first and focused; older builds put Yes first
-						_ = client.PaneSendKeys(run.Pane, []string{"down"})
-						time.Sleep(150 * time.Millisecond)
-					}
-					_ = client.PaneSendKeys(run.Pane, []string{"enter"})
-					lock.Unlock()
-					_, _ = l.Store.AddComment(run.TaskID, "remuda", "Answered Claude Code's trust question for the new worktree `"+run.Dir+"`.")
-					continue
-				}
+	handoff := sessions.Handoff{
+		Input: l.Input, Client: client, Ref: events.PaneRef{Machine: mc.ID(), Pane: run.Pane},
+		Prompt: prompt, Dir: run.Dir, Home: mc.Home(),
+		Notify: func() {
+			if l.Notify == nil {
+				return
 			}
-			if !nudged && l.Notify != nil {
-				nudged = true
-				l.Notify(push.Payload{
-					Machine: mc.ID(), Pane: run.Pane, Kind: "input",
-					Title:   "Task " + task.Identifier + ": the agent asks something first",
-					Body:    "Answer it in the pane and the task follows.",
-					Tag:     fmt.Sprintf("task|%d", run.TaskID),
-					Actions: []push.Action{{Action: "open", Title: "Open"}},
-				})
-			}
-		default:
-			l.fail(run, "The task could not be handed to the agent: "+err.Error())
-			return
+			l.Notify(push.Payload{
+				Machine: mc.ID(), Pane: run.Pane, Kind: "input",
+				Title:   "Task " + task.Identifier + ": the agent asks something first",
+				Body:    "Answer it in the pane and the task follows.",
+				Tag:     fmt.Sprintf("task|%d", run.TaskID),
+				Actions: []push.Action{{Action: "open", Title: "Open"}},
+			})
+		},
+		Trusted: func() {
+			_, _ = l.Store.AddComment(run.TaskID, "remuda", "Answered Claude Code's trust question for the new worktree `"+run.Dir+"`.")
+		},
+	}
+	last, timedOut := handoff.Run()
+	switch {
+	case last == nil && !timedOut:
+		_ = l.Store.SetRun(run.ID, RunRunning, "")
+	case timedOut:
+		msg := "the agent did not take the prompt within five minutes"
+		if last != nil {
+			msg += " (" + last.Error() + ")"
 		}
+		l.fail(run, "The task could not be handed to the agent: "+msg+". The worktree is there; send it by hand.")
+	default:
+		l.fail(run, "The task could not be handed to the agent: "+last.Error())
 	}
-	msg := "the agent did not take the prompt within five minutes"
-	if last != nil {
-		msg += " (" + last.Error() + ")"
-	}
-	l.fail(run, "The task could not be handed to the agent: "+msg+". The worktree is there; send it by hand.")
 }
 
 // Redeliver hands a starting run's saved prompt over again after a restart of remuda cut the delivery short: the run is
@@ -243,48 +225,4 @@ func (l *Launcher) fail(run Run, note string) {
 	_ = l.Store.SetRun(run.ID, RunFailed, note)
 	_, _ = l.Store.AddComment(run.TaskID, "remuda", note)
 	_ = l.Store.StopPipeline(run.ID, "the prompt never reached the agent")
-}
-
-// isTrustPrompt recognises Claude Code's "do you trust this folder" screen for the given folder, nothing else.
-// The dialog is boxed and wrapped at the pane's width, so whitespace and box runes are dropped; the path may start with ~.
-func isTrustPrompt(screen, dir, home string) bool {
-	flat := squash(screen)
-	if !strings.Contains(flat, "trustthisfolder") || !strings.Contains(flat, "Accessingworkspace") {
-		return false
-	}
-	if dir == "" {
-		return true
-	}
-	want := []string{squash(dir)}
-	if home != "" && (dir == home || strings.HasPrefix(dir, home+"/")) {
-		want = append(want, squash("~"+strings.TrimPrefix(dir, home)))
-	}
-	for _, w := range want {
-		if strings.Contains(flat, w) {
-			return true
-		}
-	}
-	return false
-}
-
-// cursorOnYes says whether the dialog's cursor already sits on the yes line.
-func cursorOnYes(screen string) bool {
-	for _, line := range strings.Split(screen, "\n") {
-		if strings.Contains(line, "❯") && strings.Contains(line, "Yes, I trust") {
-			return true
-		}
-	}
-	return false
-}
-
-// squash drops whitespace and box-drawing runes.
-func squash(s string) string {
-	var b strings.Builder
-	for _, r := range s {
-		if r == ' ' || r == '\n' || r == '\r' || r == '\t' || (r >= 0x2500 && r <= 0x257F) {
-			continue
-		}
-		b.WriteRune(r)
-	}
-	return b.String()
 }

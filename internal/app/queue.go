@@ -36,8 +36,20 @@ func taskQueue(store *tasks.Store, fleet *machines.Manager, watcher *watch.Watch
 			}
 			return ""
 		},
+		NotAnswering: func(id string) string {
+			if _, err := watcher.Snapshot(id); err != nil && !watch.NotWatched(err) {
+				if mc, e := fleet.Get(id); e == nil {
+					return mc.Label() + " is not answering"
+				}
+				return "the machine is not answering"
+			}
+			return ""
+		},
 		Workspace: func(machineID, dir string) string {
-			snap, _ := watcher.Snapshot(machineID)
+			snap, err := watcher.Snapshot(machineID)
+			if err != nil {
+				return ""
+			}
 			for _, d := range checkoutDirs(snap) {
 				if d.dir == dir {
 					return d.workspace

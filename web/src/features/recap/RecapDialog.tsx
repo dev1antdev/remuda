@@ -6,14 +6,13 @@ import { useQuery } from "@/lib/query";
 import { Dialog, Icon, Notice } from "@/ui";
 import { fetchRecap } from "./api";
 import { RecapBody } from "./RecapBody";
-import { recapMarkdown } from "./recap";
 import { t } from "@/lib/i18n";
 
 export default function RecapDialog({ machineId, paneId, session, dir, title, onClose }: { machineId: string; paneId: string; session: string | null; dir: string; title: string; onClose: () => void }) {
   const { data, error, loading } = useQuery(() => fetchRecap(machineId, paneId, session, dir), [machineId, paneId, session, dir]);
   const copy = async () => {
     if (!data) return;
-    if (await copyText(recapMarkdown(title, data.recap, dir))) actions.notify(t("Copied the recap as Markdown"), { brief: true });
+    if (await copyText(data.markdown)) actions.notify(t("Copied the recap as Markdown"), { brief: true });
     else actions.notify(t("Could not copy"), { error: true });
   };
   // a stretch of the strip opens the conversation at that turn: the pane's chat, or the viewer for a transcript on its own

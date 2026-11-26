@@ -71,7 +71,7 @@ export type Viewer = Pick<SearchHit, "machine" | "dir" | "session"> & { subagent
 // the find bar over the conversation shown: the bar writes the query and the step, the chat writes the count;
 // opened counts the ⌘F presses, so each one puts the focus back in the field; steps counts the bar's steps and by
 // says which way the last one went, for a lens whose matches are walked outside the page (the terminal's)
-export type Find = { query: string; at: number; total: number; opened: number; steps: number; by: 1 | -1 };
+export type Find = { query: string; at: number; total: number; rows: number; truncated: boolean; opened: number; steps: number; by: 1 | -1 };
 
 export type AppState = {
   requested: Selection | null; // the selection is a request; the pane shown is derived from it, never fixed up in an effect
@@ -270,16 +270,20 @@ export const actions = {
   },
   // the find bar: opened again, it keeps its query and takes the focus back
   openFind() {
-    app.set((s) => ({ find: { query: s.find?.query ?? "", at: s.find?.at ?? 0, total: s.find?.total ?? 0, opened: (s.find?.opened ?? 0) + 1, steps: s.find?.steps ?? 0, by: s.find?.by ?? 1 } }));
+    app.set((s) => ({ find: { query: s.find?.query ?? "", at: s.find?.at ?? 0, total: s.find?.total ?? 0, rows: s.find?.rows ?? 0, truncated: s.find?.truncated ?? false, opened: (s.find?.opened ?? 0) + 1, steps: s.find?.steps ?? 0, by: s.find?.by ?? 1 } }));
   },
   closeFind() {
     app.set({ find: null });
   },
   setFindQuery(query: string) {
-    app.set((s) => (s.find ? { find: { ...s.find, query, at: 0 } } : {}));
+    app.set((s) => (s.find ? { find: { ...s.find, query, at: 0, rows: 0, truncated: false } } : {}));
   },
   stepFind(by: 1 | -1) {
     app.set((s) => (s.find ? { find: { ...s.find, at: step(s.find.at, s.find.total, by), steps: s.find.steps + 1, by } } : {}));
+  },
+  // the terminal's older rows were read for the query: how many, and whether rows before them were not
+  foundRows(rows: number, truncated: boolean) {
+    app.set((s) => (s.find && (s.find.rows !== rows || s.find.truncated !== truncated) ? { find: { ...s.find, rows, truncated } } : {}));
   },
   // the lens counted the matches of the query shown; the terminal says which one it stands on too
   foundMatches(total: number, at?: number) {

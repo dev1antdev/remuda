@@ -41,7 +41,10 @@ func (f *fleetPlacer) Place(a tasks.Automation, agent string) placement.Result {
 		if !runsAgents(mc) {
 			continue
 		}
-		snap, _ := f.watcher.Snapshot(mc.ID())
+		snap, err := f.watcher.Snapshot(mc.ID())
+		if err != nil && !watch.NotWatched(err) {
+			continue // its core is not answering: its last snapshot is not where a card starts
+		}
 		dirs := checkoutDirs(snap)
 		folders := make([]string, 0, len(dirs)+1)
 		if mc.ID() == a.Machine {

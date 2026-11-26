@@ -32,6 +32,7 @@ type Event struct {
 	MatchedLine string       // pane.output_matched: the first row that matched
 	Text        string       // pane.output_matched: the rows herdr read
 	Standing    *bool        // pane.output_matched: whether the row stood before the watch began, as remuda-core says; nil from herdr
+	Pos         uint64       // pane.output_matched: the row's place in the terminal, as remuda-core says; 0 from herdr
 	Watch       *OutputMatch // pane.output_matched: the watch that told it, as remuda-core says; nil from herdr, which names none
 }
 

@@ -285,7 +285,7 @@ func (w *Watcher) heard(machineID string, st *machineState, ls *liveStream, even
 				continue // a watch the server named is the one that told it; herdr names none, so its row goes to each it matches
 			}
 			events.Publish(w.bus, events.OutputMatched{
-				Pane: events.PaneRef{Machine: machineID, Pane: event.PaneID}, Watch: o.Key, Line: event.MatchedLine, Text: event.Text,
+				Pane: events.PaneRef{Machine: machineID, Pane: event.PaneID}, Watch: o.Key, Line: event.MatchedLine, Pos: event.Pos, Text: event.Text,
 				Fresh: fresh, Carried: ls.carried[carryKey(event.PaneID, o)], At: now,
 			})
 		}

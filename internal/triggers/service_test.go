@@ -387,3 +387,23 @@ func TestAtTheCapAPersonRuleKeepsItsPlace(t *testing.T) {
 		t.Fatal("a pane that left the folder for a moment took the rule with it")
 	}
 }
+
+func TestTheSameRowAtANewPlaceIsANewRow(t *testing.T) {
+	s := New(t.TempDir())
+	now := time.Now()
+	k := key("gog", "w1:p1") + "|" + WatchTests
+	first := match("w1:p1", WatchTests, failed, false, false, now)
+	first.Pos = 10
+	s.OnMatch(first)
+	s.OnMatch(first) // the same row through two streams that overlap
+	if got := len(s.standing[k]); got != 1 {
+		t.Fatalf("the same place kept as %d rows", got)
+	}
+	moved := first
+	moved.Pos = 11
+	moved.At = now.Add(time.Second)
+	s.OnMatch(moved)
+	if got := len(s.standing[k]); got != 2 {
+		t.Fatalf("a new place kept as %d rows, want 2", got)
+	}
+}

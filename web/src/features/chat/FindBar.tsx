@@ -7,7 +7,7 @@ import { useEffect, useRef, type KeyboardEvent } from "react";
 import { actions, app } from "@/app/store";
 import { isMac } from "@/lib/prefs";
 import { Icon, Tip, tipLines } from "@/ui";
-import { countWords } from "./find";
+import { countWords, scopeWords } from "./find";
 import { t } from "@/lib/i18n";
 
 const SHORTCUT = isMac ? "⌘F" : "Ctrl+F";
@@ -52,6 +52,7 @@ export function FindTool({ what = t("in this conversation"), shortcut = SHORTCUT
           />
           <span className="find-count" aria-live="polite">
             {find.query ? countWords(find.at, find.total) : ""}
+            {find.query && find.truncated ? ` · ${scopeWords(find.rows, find.truncated)}` : ""}
           </span>
           <Tip text={t("Previous match (Shift+Enter)")}>
             <button type="button" className="icon-btn sm" aria-label={t("Previous match")} disabled={find.total === 0} onClick={() => actions.stepFind(-1)}>

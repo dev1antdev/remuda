@@ -4,6 +4,7 @@
 import type { Dictionary } from "../../i18n";
 
 export const statusbar: Dictionary = {
+  "not answering": "не отвечает",
   "What the machine's terminals weigh on {machine}": "Сколько терминалы машины нагружают {machine}",
   "No terminal runs anything on this machine now.": "Сейчас на этой машине не работает ни один терминал.",
   "the terminal runtime itself": "сама среда терминалов",
