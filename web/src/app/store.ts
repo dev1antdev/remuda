@@ -103,7 +103,7 @@ export type AppState = {
   float: { machineId: string } | null; // the floating terminal's drawer, open on that machine's scratch shell; null while hidden
   prAt: PRAt | null; // where the pull request panel looks, null for the pane on screen
   issuesAt: { machineId: string; dir: string } | null; // the folder the issues panel was opened on (a folder's ⋯), else it follows the pane
-  issueClosed: { machineId: string; repo: string; number: number; reason: "completed" | "not_planned" } | null; // an issue just closed from the page: a toast offers Reopen
+  issueClosed: { machineId: string; repo: string; number: number; id: string; reason: "completed" | "not_planned" } | null; // an issue just closed from the page: a toast offers Reopen
 };
 
 const fromURL = readURL();

@@ -120,9 +120,9 @@ export default function IssuesPanel({ onClose }: { onClose: () => void }) {
       view: (item) => setViewing([{ repo, number: item.number }]),
       start: (item) => start(item.number, item.title),
       open: (item) => open(item.number),
-      assign: (item, me) => void rowWrite(item, () => assignIssue(machineId, repo, item.number, me)),
-      close: (item, reason) => void rowWrite(item, () => closeIssue(machineId, repo, item.number, reason), () => actions.setIssueClosed({ machineId, repo, number: item.number, reason })),
-      reopen: (item) => void rowWrite(item, () => reopenIssue(machineId, repo, item.number)),
+      assign: (item, me) => void rowWrite(item, () => assignIssue(machineId, repo, item.number, me, item.id)),
+      close: (item, reason) => void rowWrite(item, () => closeIssue(machineId, repo, item.number, reason, "", item.id), () => actions.setIssueClosed({ machineId, repo, number: item.number, id: item.id, reason })),
+      reopen: (item) => void rowWrite(item, () => reopenIssue(machineId, repo, item.number, "", item.id)),
       task: (item) => {
         onClose();
         actions.openDialog({ kind: "import-issue", url: item.url, machineId });

@@ -13,7 +13,7 @@ import (
 // asked for, then the conditional request's status and headers, then the reads it decided are needed. A 304 ends the
 // script there: nothing moved, so nothing more is asked.
 
-const listFields = "number,title,author,state,stateReason,labels,assignees,updatedAt,url"
+const listFields = "id,number,title,author,state,stateReason,labels,assignees,updatedAt,url"
 
 // prelude is every script's start: the package managers' bin dirs, and a missing gh said in words gh's absence would not.
 func prelude() string {
@@ -106,9 +106,14 @@ func commentScript(repo string, number int, file string) string {
 	return withBody(file, commentCall(repo, number))
 }
 
-// closeScript closes the issue for the reason, the comment posted first when there is one, as GitHub's Close with comment does.
-func closeScript(repo string, number int, reason, file string) string {
+// closeScript closes the issue for the reason, the comment posted first when there is one, as GitHub's Close with comment
+// does. An id closes by the issue the person saw, whatever its repository is called now; without one it falls back to
+// the number, which a renamed repository can point elsewhere.
+func closeScript(repo string, number int, id, reason, file string) string {
 	closing := ghIssue("close", repo, number, "--reason", script.Quote(reason))
+	if id != "" {
+		closing = closeByID(id, reason)
+	}
 	if file == "" {
 		return withBody("", closing)
 	}
@@ -116,8 +121,11 @@ func closeScript(repo string, number int, reason, file string) string {
 }
 
 // reopenScript reopens the issue, the comment posted first when there is one.
-func reopenScript(repo string, number int, file string) string {
+func reopenScript(repo string, number int, id, file string) string {
 	reopening := ghIssue("reopen", repo, number)
+	if id != "" {
+		reopening = reopenByID(id)
+	}
 	if file == "" {
 		return withBody("", reopening)
 	}
@@ -125,12 +133,44 @@ func reopenScript(repo string, number int, file string) string {
 }
 
 // assignScript adds or removes the signed-in account among the issue's assignees.
-func assignScript(repo string, number int, me bool) string {
+func assignScript(repo string, number int, id string, me bool) string {
+	if id != "" {
+		return assignByID(id, me)
+	}
 	flag := "--remove-assignee"
 	if me {
 		flag = "--add-assignee"
 	}
 	return withBody("", ghIssue("edit", repo, number, flag, "@me"))
+}
+
+// The GraphQL mutations take the node id the panel showed: a renamed repository whose old name another now holds
+// cannot send a write to that other repository's issue of the same number.
+
+const closeMutation = `mutation($id: ID!, $reason: IssueClosedStateReason!) { closeIssue(input: {issueId: $id, stateReason: $reason}) { issue { number } } }`
+const reopenMutation = `mutation($id: ID!) { reopenIssue(input: {issueId: $id}) { issue { number } } }`
+
+func closeByID(id, reason string) string {
+	state := "COMPLETED"
+	if reason == "not planned" {
+		state = "NOT_PLANNED"
+	}
+	return "gh api graphql -f query=" + script.Quote(closeMutation) + " -f id=" + script.Quote(id) + " -f reason=" + state
+}
+
+func reopenByID(id string) string {
+	return "gh api graphql -f query=" + script.Quote(reopenMutation) + " -f id=" + script.Quote(id)
+}
+
+// assignByID reads the signed-in login first: GraphQL takes a login among the assignees, not @me.
+func assignByID(id string, me bool) string {
+	mutation, field := "addAssigneesToAssignable", "assignees"
+	if !me {
+		mutation, field = "removeAssigneesFromAssignable", "assignees"
+	}
+	query := fmt.Sprintf(`mutation($id: ID!, $login: String!) { %s(input: {assignableId: $id, %s: [$login]}) { clientMutationId } }`, mutation, field)
+	return prelude() + "login=$(gh api user --jq .login) || exit $?\n" +
+		"gh api graphql -f query=" + script.Quote(query) + " -f id=" + script.Quote(id) + " -f login=\"$login\" 2>&1\n"
 }
 
 var (

@@ -6686,8 +6686,15 @@ components and icons as rules for whoever changes it: @docs/design.md
   file removed by a trap whatever happens — never on a command line, at
   most `MaxBody` 64 KB), `Close` (`--reason "completed" | "not planned"`,
   the comment posted first as GitHub's Close with comment does), `Reopen`
-  (the same), `Assign` (`gh issue edit --add-assignee @me` /
-  `--remove-assignee @me`); a refusal is `*Refused` with gh's own words —
+  (the same), `Assign` (the signed-in account among the assignees). Close,
+  reopen and assign take the issue's **node id** from the list or the
+  detail (`Item.ID`, `Detail.ID`, gh's `id` / `node_id`) and write through
+  GraphQL (`closeIssue`, `reopenIssue`, `addAssigneesToAssignable`, the
+  login read first, since GraphQL takes no `@me`), so a renamed repository
+  whose old name another now holds cannot send the write to that other
+  repository's issue of the same number; without an id they fall back to
+  the number (`gh issue close|reopen|edit`), which an older client and the
+  Reopen toast may have. A refusal is `*Refused` with gh's own words —
   a close or a reopen refused after its comment went (the script prints
   `postedMark` between them; anyone may comment on a public repository's
   issue, few may close it) is `*Partly`, "the comment is posted, but…",
@@ -6699,7 +6706,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   `GET /api/issues?machine&repo&q&fresh=1`, `GET
   /api/issues/{number}?machine&repo&fresh=1` (a read gh cannot answer is
   `{trouble}` with a 200, for the panel to say with what to run), `POST
-  /api/issues/{number}/comment|close|reopen|assign {machine, repo, body,
+  /api/issues/{number}/comment|close|reopen|assign {machine, repo, id, body,
   reason, comment, me}`. The page: `features/issues/` — panel `issues`
   (`?panel=issues`; the palette's "GitHub issues…" and a repository
   folder's ⋯ "Issues…", which opens it on that folder through store field
@@ -6715,8 +6722,8 @@ components and icons as rules for whoever changes it: @docs/design.md
   page, `PER_PAGE`; a foot with the count, "read 2 minutes ago" and the
   pager; skeleton rows while a repository's first list is read; read every
   minute while on screen; rows and failures show only for the machine and
-  repository they were asked about, `answerAt`, since a row's actions go
-  by number to the one on screen); `IssueRow.tsx` (72 px after Orca: the number pill, the
+  repository they were asked about, `answerAt`, since a row's actions
+  name the issue it showed); `IssueRow.tsx` (72 px after Orca: the number pill, the
   title over its author and labels, the assignees' faces with a Menu to
   assign or unassign yourself, the state pill with its Menu — Close as
   completed / not planned, or Reopen — `agoWords`, **Start** or, when a

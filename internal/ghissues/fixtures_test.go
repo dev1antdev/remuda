@@ -4,18 +4,18 @@ package ghissues
 // people named alice, bob and carol, nothing read from GitHub itself.
 
 const listJSON = `[
-  {"number": 41, "title": "Crash on start", "author": {"login": "bob", "is_bot": false}, "state": "OPEN", "stateReason": "",
+  {"id": "I_41", "number": 41, "title": "Crash on start", "author": {"login": "bob", "is_bot": false}, "state": "OPEN", "stateReason": "",
    "labels": [{"name": "bug", "color": "d73a4a", "description": "Something isn't working"}], "assignees": [{"login": "alice"}],
    "updatedAt": "2026-11-13T09:00:00Z", "url": "https://github.com/acme/widgets/issues/41"},
-  {"number": 42, "title": "Dark mode", "author": {"login": "app/renovate", "is_bot": true}, "state": "CLOSED", "stateReason": "NOT_PLANNED",
+  {"id": "I_42", "number": 42, "title": "Dark mode", "author": {"login": "app/renovate", "is_bot": true}, "state": "CLOSED", "stateReason": "NOT_PLANNED",
    "labels": [], "assignees": [], "updatedAt": "2026-11-13T10:00:00Z", "url": "https://github.com/acme/widgets/issues/42"},
-  {"number": 40, "title": "Docs", "author": {"login": "carol"}, "state": "CLOSED", "stateReason": "COMPLETED",
+  {"id": "I_40", "number": 40, "title": "Docs", "author": {"login": "carol"}, "state": "CLOSED", "stateReason": "COMPLETED",
    "labels": [{"name": "docs", "color": "#0075CA"}, {"name": "odd", "color": "nothex"}], "assignees": [],
    "updatedAt": "2026-11-12T10:00:00Z", "url": "https://github.com/acme/widgets/issues/40"}
 ]`
 
 const issueJSON = `{
-  "number": 41, "title": "Crash on start", "body": "It crashes. See #40.", "html_url": "https://github.com/acme/widgets/issues/41",
+  "node_id": "I_41", "number": 41, "title": "Crash on start", "body": "It crashes. See #40.", "html_url": "https://github.com/acme/widgets/issues/41",
   "user": {"login": "bob", "type": "User"}, "state": "open", "state_reason": null, "author_association": "CONTRIBUTOR",
   "labels": [{"name": "bug", "color": "d73a4a", "description": "Something isn't working"}],
   "assignees": [{"login": "alice", "type": "User"}], "milestone": {"title": "v1.2", "html_url": "https://github.com/acme/widgets/milestone/3"},

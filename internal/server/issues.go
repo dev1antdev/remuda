@@ -132,6 +132,7 @@ func (s *Server) handleIssueWrite(what string) http.HandlerFunc {
 		var req struct {
 			Machine string `json:"machine"`
 			Repo    string `json:"repo"`
+			ID      string `json:"id"`
 			Body    string `json:"body"`
 			Reason  string `json:"reason"`
 			Comment string `json:"comment"`
@@ -153,11 +154,11 @@ func (s *Server) handleIssueWrite(what string) http.HandlerFunc {
 		case "comment":
 			err = s.Issues.Comment(mc.ID(), req.Repo, number, req.Body)
 		case "close":
-			err = s.Issues.Close(mc.ID(), req.Repo, number, req.Reason, req.Comment)
+			err = s.Issues.Close(mc.ID(), req.Repo, number, req.ID, req.Reason, req.Comment)
 		case "reopen":
-			err = s.Issues.Reopen(mc.ID(), req.Repo, number, req.Comment)
+			err = s.Issues.Reopen(mc.ID(), req.Repo, number, req.ID, req.Comment)
 		case "assign":
-			err = s.Issues.Assign(mc.ID(), req.Repo, number, req.Me)
+			err = s.Issues.Assign(mc.ID(), req.Repo, number, req.ID, req.Me)
 		}
 		issueWritten(w, err)
 	}

@@ -130,12 +130,12 @@ export default function IssueViewer({ machineId, folder, at, back, onBack, onGo,
                 onOpenFile={openFile}
                 onComment={(body) => write(t("Commenting…"), () => commentIssue(machineId, at.repo, at.number, body))}
                 onClose={(reason, body) =>
-                  write(t("Closing…"), () => closeIssue(machineId, at.repo, at.number, reason, body), () => actions.setIssueClosed({ machineId, repo: at.repo, number: at.number, reason }))
+                  write(t("Closing…"), () => closeIssue(machineId, at.repo, at.number, reason, body, issue.id), () => actions.setIssueClosed({ machineId, repo: at.repo, number: at.number, id: issue.id, reason }))
                 }
-                onReopen={(body) => write(t("Reopening…"), () => reopenIssue(machineId, at.repo, at.number, body))}
+                onReopen={(body) => write(t("Reopening…"), () => reopenIssue(machineId, at.repo, at.number, body, issue.id))}
               />
             </div>
-            <IssueSide issue={issue} repo={at.repo} busy={!!busy} onAssign={(me) => void write(me ? t("Assigning…") : t("Unassigning…"), () => assignIssue(machineId, at.repo, at.number, me))} />
+            <IssueSide issue={issue} repo={at.repo} busy={!!busy} onAssign={(me) => void write(me ? t("Assigning…") : t("Unassigning…"), () => assignIssue(machineId, at.repo, at.number, me, issue.id))} />
           </div>
         </>
       )}

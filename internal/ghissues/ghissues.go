@@ -27,6 +27,7 @@ type Label struct {
 
 // Item is one issue as the list shows it.
 type Item struct {
+	ID        string    `json:"id"`
 	Number    int       `json:"number"`
 	Title     string    `json:"title"`
 	Author    Person    `json:"author"`
