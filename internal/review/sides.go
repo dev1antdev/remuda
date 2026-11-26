@@ -22,8 +22,9 @@ const (
 // maxDiff is how much of one diff a read sends.
 const maxDiff = 600000
 
-// diffGit is a diff as the lens reads it: git's own, no external driver or text conversion, no colour.
-const diffGit = readGit + ` -c color.ui=never diff --no-ext-diff --no-textconv --relative`
+// diffGit is a diff as the lens reads it: git's own, the shared patch form whatever the person's settings say of colour,
+// an external driver or text conversion, relative to the folder.
+const diffGit = readGit + ` diff ` + script.PatchForm + ` --relative`
 
 // DiffSide is one file's diff on one side of the index; no side is the lens's usual diff since the last look.
 func (store *Store) DiffSide(host shell.Host, dir, path, side string) (string, error) {
@@ -49,7 +50,7 @@ func CommitDiff(host shell.Host, dir, sha, path string) (string, error) {
 	if !CommitOK(sha) {
 		return "", errors.New("not a commit")
 	}
-	return shell.Text(host, script.InDir(dir)+readGit+` -c color.ui=never show --format= -m --first-parent --no-ext-diff --no-textconv --no-renames --relative `+sha+` -- `+script.Quote(path)+` | head -c `+strconv.Itoa(maxDiff)+`; exit 0`, 60*time.Second)
+	return shell.Text(host, script.InDir(dir)+readGit+` show --format= -m --first-parent `+script.PatchForm+` --no-renames --relative `+sha+` -- `+script.Quote(path)+` | head -c `+strconv.Itoa(maxDiff)+`; exit 0`, 60*time.Second)
 }
 
 // CommitView is one commit as the lens opens it: who made it and when, its message, and the files it changed.

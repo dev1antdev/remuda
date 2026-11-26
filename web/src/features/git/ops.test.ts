@@ -49,8 +49,12 @@ describe("the dialogs and requests", () => {
     expect(dangerous(spec, values)).toBe(false);
     expect(dangerous(spec, { ...values, mode: "hard" })).toBe(true);
     expect(loseWords(spec.lose!)).toBe("It discards the uncommitted changes to 2 files: a.go, b.go.");
-    expect(loseWords(Array.from({ length: 10 }, (_, i) => `f${i}`))).toMatch(/10 files: f0, .*f7 and 2 more\.$/);
-    expect(loseWords([])).toBe("Nothing uncommitted is lost.");
+    expect(loseWords({ paths: Array.from({ length: 10 }, (_, i) => `f${i}`), total: 10 })).toMatch(/10 files: f0, .*f7 and 2 more\.$/);
+    expect(loseWords({ paths: [], total: 0 })).toBe("Nothing uncommitted is lost.");
+    const many = specFor({ type: "reset", hash: OTHER }, { ...ctx, tracked: 500 }, Array.from({ length: 200 }, (_, i) => ({ status: " M", path: `f${i}` })));
+    expect(many.lose!.total).toBe(500);
+    expect(loseWords(many.lose!)).toMatch(/^It discards the uncommitted changes to 500 files: f0, .*f7 and 492 more\.$/);
+    expect(requestOf({ type: "reset", hash: OTHER }, { mode: "hard" }, { ...ctx, tree: "abc" }).tree).toBe("abc");
   });
 
   it("asks a second time, in red, before deleting a branch git says is not merged", () => {

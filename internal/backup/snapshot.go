@@ -61,7 +61,7 @@ func skipped(rel string) bool {
 	return tempName.MatchString(name)
 }
 
-// Snapshot packs the state dir as one gzipped tar: every file the cockpit keeps, each SQLite database copied through
+// Snapshot packs the state dir as one gzipped tar: every file the cockpit keeps but its own token, each SQLite database copied through
 // SQLite itself (VACUUM INTO: a consistent copy of a database a running remuda writes to), a manifest at the root. A
 // dir reached through a symlink is walked where it leads, and one without a token is refused: a copy of an empty or a
 // wrong folder would count as a good night and push the real copies out.
@@ -131,7 +131,10 @@ func Snapshot(dir, host, version string, now time.Time) ([]byte, Manifest, error
 		if err != nil {
 			return fmt.Errorf("%s: %w", rel, err)
 		}
-		sawToken = sawToken || rel == "token"
+		if rel == "token" {
+			sawToken = true
+			return nil // the cockpit's own token is not copied: the restore mints a new one
+		}
 		return add(rel, info.Mode(), info.ModTime(), data)
 	})
 	if err != nil {

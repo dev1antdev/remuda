@@ -1,6 +1,7 @@
 package setup
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"net"
@@ -75,6 +76,33 @@ func write(t *testing.T, path, content string, mode os.FileMode) {
 	}
 	if err := os.WriteFile(path, []byte(content), mode); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestAHostScriptGoesOnStdinWithItsVariablesAndArguments(t *testing.T) {
+	dir := home(t)
+	bin := filepath.Join(dir, "bin")
+	write(t, filepath.Join(bin, "ssh"), "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$HOME/ssh-args\"\nfor a; do line=$a; done\nexec sh -c \"$line\"\n", 0o755)
+	t.Setenv("PATH", bin+":/usr/bin:/bin")
+	var out bytes.Buffer
+	if err := run("pc", []string{"K=it's here"}, `printf '%s|%s\n' "$K" "$1"`, []string{"a b"}, &out); err != nil {
+		t.Fatalf("a script on a host: %v\n%s", err, out.String())
+	}
+	if out.String() != "it's here|a b\n" {
+		t.Errorf("the script read %q", out.String())
+	}
+	if args, _ := os.ReadFile(filepath.Join(dir, "ssh-args")); strings.Contains(string(args), "printf") {
+		t.Errorf("the script went on the ssh line, not on its stdin: %s", args)
+	}
+	out.Reset()
+	if err := run("pc", []string{"TS_AUTHKEY=sk-test"}, `printf 'key=%s\n' "$TS_AUTHKEY"`, nil, &out); err != nil {
+		t.Fatalf("a script with its secret: %v\n%s", err, out.String())
+	}
+	if out.String() != "key=sk-test\n" {
+		t.Errorf("the secret read as %q", out.String())
+	}
+	if args, _ := os.ReadFile(filepath.Join(dir, "ssh-args")); strings.Contains(string(args), "sk-test") {
+		t.Errorf("the secret went on the ssh line: %s", args)
 	}
 }
 

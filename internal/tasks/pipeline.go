@@ -90,7 +90,7 @@ func StagePrompt(stage Stage, t Task, project Project, previous, branch string) 
 
 // StartStageRun records the next stage's agent in its new tab: a run on the same worktree and branch, the previous
 // one passed, the card moved to the stage's column when it names one of the project's.
-func (st *Store) StartStageRun(prev Run, index int, stage Stage, pane string) (Run, error) {
+func (st *Store) StartStageRun(prev Run, index int, stage Stage, pane, prompt string) (Run, error) {
 	t, err := st.Get(prev.TaskID)
 	if err != nil {
 		return Run{}, err
@@ -100,7 +100,7 @@ func (st *Store) StartStageRun(prev Run, index int, stage Stage, pane string) (R
 		return Run{}, err
 	}
 	r := Run{TaskID: prev.TaskID, Machine: prev.Machine, Workspace: prev.Workspace, Pane: pane, Dir: prev.Dir, Branch: prev.Branch,
-		Agent: agentOr(stage.Agent), State: RunStarting, Started: st.stamp(), ByQueue: prev.ByQueue, Stage: index, Pipeline: PipelineOn, Expect: t.StatusID}
+		Agent: agentOr(stage.Agent), State: RunStarting, Started: st.stamp(), Prompt: prompt, ByQueue: prev.ByQueue, Stage: index, Pipeline: PipelineOn, Expect: t.StatusID}
 	column := statusByID(ss, stage.StatusID)
 	if column != nil && column.OnQueue {
 		column = nil // only the person puts a card in the Queued column
@@ -113,8 +113,8 @@ func (st *Store) StartStageRun(prev Run, index int, stage Stage, pane string) (R
 		return Run{}, err
 	}
 	defer tx.Rollback()
-	res, err := tx.Exec(`INSERT INTO task_runs (task_id, machine, workspace, pane, dir, branch, agent, state, started, by_queue, stage, pipeline, expect_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		r.TaskID, r.Machine, r.Workspace, r.Pane, r.Dir, r.Branch, r.Agent, r.State, r.Started, r.ByQueue, r.Stage, r.Pipeline, r.Expect)
+	res, err := tx.Exec(`INSERT INTO task_runs (task_id, machine, workspace, pane, dir, branch, agent, state, started, prompt, by_queue, stage, pipeline, expect_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		r.TaskID, r.Machine, r.Workspace, r.Pane, r.Dir, r.Branch, r.Agent, r.State, r.Started, r.Prompt, r.ByQueue, r.Stage, r.Pipeline, r.Expect)
 	if err != nil {
 		return Run{}, err
 	}

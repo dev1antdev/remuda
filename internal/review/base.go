@@ -258,7 +258,7 @@ func BaseDiff(host shell.Host, dir, mergeBase, path string) (string, error) {
 	return shell.Text(host, script.InDir(dir)+
 		`if `+readGit+` ls-files --error-unmatch -- `+quoted+` >/dev/null 2>&1 || git cat-file -e `+mergeBase+`:./`+quoted+` 2>/dev/null; then `+
 		diffGit+` `+mergeBase+` -- `+quoted+` | head -c `+strconv.Itoa(maxDiff)+`; `+
-		`else git -c color.ui=never diff --no-ext-diff --no-index -- /dev/null `+quoted+` | head -c `+strconv.Itoa(maxDiff)+`; fi; exit 0`, 60*time.Second)
+		`else git diff `+script.PatchForm+` --no-index -- /dev/null `+quoted+` | head -c `+strconv.Itoa(maxDiff)+`; fi; exit 0`, 60*time.Second)
 }
 
 // RefOK reports whether name may reach git as a branch's name: no option, no range, no blank or control character.

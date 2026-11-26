@@ -367,7 +367,7 @@ func (store *Store) Diff(host shell.Host, dir, path string) (string, error) {
 		// the script prints the temp file's name first; the diff headers carry it
 		fromBlob := script.InDir(dir) + `t=$(mktemp "${TMPDIR:-/tmp}/remuda-seen.XXXXXX") || exit 0; printf '%s\n' "$t"; ` +
 			`p=` + quotedPath + `; [ -e "$p" ] || p=/dev/null; ` + // a reviewed file the agent deleted since: the diff is its removal
-			`if git cat-file -p ` + reviewedBlob + ` > "$t" 2>/dev/null; then ` + readGit + ` -c color.ui=never diff --no-ext-diff --no-index -- "$t" "$p" | head -c 600000; fi; rm -f "$t"; exit 0`
+			`if git cat-file -p ` + reviewedBlob + ` > "$t" 2>/dev/null; then ` + readGit + ` diff ` + script.PatchForm + ` --no-index -- "$t" "$p" | head -c 600000; fi; rm -f "$t"; exit 0`
 		output, err := shell.Text(host, fromBlob, 60*time.Second)
 		if err != nil {
 			return output, err
@@ -380,8 +380,8 @@ func (store *Store) Diff(host shell.Host, dir, path string) (string, error) {
 	}
 	fromHead := script.InDir(dir) +
 		`if ` + readGit + ` ls-files --error-unmatch -- ` + quotedPath + ` >/dev/null 2>&1 || git cat-file -e "HEAD:./"` + quotedPath + ` 2>/dev/null; then ` +
-		readGit + ` -c color.ui=never diff --no-ext-diff --relative HEAD -- ` + quotedPath + ` | head -c 600000; ` +
-		`else ` + readGit + ` -c color.ui=never diff --no-ext-diff --no-index -- /dev/null ` + quotedPath + ` | head -c 600000; fi; exit 0`
+		readGit + ` diff ` + script.PatchForm + ` --relative HEAD -- ` + quotedPath + ` | head -c 600000; ` +
+		`else ` + readGit + ` diff ` + script.PatchForm + ` --no-index -- /dev/null ` + quotedPath + ` | head -c 600000; fi; exit 0`
 	return shell.Text(host, fromHead, 60*time.Second)
 }
 
