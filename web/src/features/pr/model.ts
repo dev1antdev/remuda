@@ -4,10 +4,19 @@
 
 import type { IconName } from "@/ui/icons";
 import { t, tc, tn } from "@/lib/i18n";
+import type { Machine } from "@/features/roster/api";
 import type { Card, Check, Detail, Problem } from "./api";
 
 // Tone is how a figure or a state is coloured: red, amber, green, the quiet colour, or nothing to say
 export type Tone = "bad" | "warn" | "good" | "dim" | "none";
+
+// branchOf is the branch the workspace at a pane — else the one on a folder — has checked out now, as the roster
+// reads it: the panel asks for that branch's pull requests again as soon as it moves.
+export function branchOf(machines: Machine[], machineId: string, paneId: string, dir: string): string {
+  const sessions = machines.find((machine) => machine.id === machineId)?.sessions ?? [];
+  const byPane = sessions.find((session) => session.tabs.some((tab) => tab.panes.some((pane) => pane.id === paneId)));
+  return (byPane ?? sessions.find((session) => session.dir === dir))?.branch ?? "";
+}
 
 export type Look = { label: string; icon: IconName; tone: Tone | "merged" };
 
