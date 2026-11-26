@@ -16,13 +16,17 @@ import (
 type Format string
 
 const (
-	Claude Format = "claude"
-	Codex  Format = "codex"
-	Gemini Format = "gemini"
+	Claude   Format = "claude"
+	Codex    Format = "codex"
+	Gemini   Format = "gemini"
+	Opencode Format = "opencode" // a database, not a file: its path is the pseudo-path opencodePath makes
 )
 
 // FormatOf is the format of a session file by its path.
 func FormatOf(path string) Format {
+	if IsOpencode(path) {
+		return Opencode
+	}
 	name := path
 	if i := strings.LastIndexAny(name, `/\`); i >= 0 {
 		name = name[i+1:]
@@ -48,6 +52,8 @@ func FormatOfAgent(agent string) Format {
 		return Codex
 	case "gemini":
 		return Gemini
+	case "opencode":
+		return Opencode
 	}
 	return ""
 }

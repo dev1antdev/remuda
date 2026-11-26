@@ -261,7 +261,10 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
         <div className="chat-log" ref={logRef} onScroll={follow.onScroll}>
           {turns.length === 0 && chat === null && <div className="empty chat-empty">{t("Loading…")}</div>}
           {turns.length === 0 && chat !== null && readOnly && <Empty icon="message" title={t("This transcript is empty.")} />}
-          {turns.length === 0 && chat !== null && !readOnly && (
+          {turns.length === 0 && chat !== null && !readOnly && busy && (
+            <div className="empty chat-empty">{t("The agent is working: its first words will show here.")}</div>
+          )}
+          {turns.length === 0 && chat !== null && !readOnly && !busy && (
             <Empty
               icon="message"
               title={t("No transcript for this pane's folder yet.")}

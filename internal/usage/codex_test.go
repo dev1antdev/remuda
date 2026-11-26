@@ -37,6 +37,8 @@ func (h rootedHost) TranscriptRoots() transcript.Roots { return h.roots }
 // handed them as -root flags.
 func TestReadHostCountsASessionUnderItsOwnRoot(t *testing.T) {
 	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_DATA_HOME", filepath.Join(home, ".local", "share"))
 	own := filepath.Join(home, "profile")
 	dir := filepath.Join(own, "projects", "-work-app")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
