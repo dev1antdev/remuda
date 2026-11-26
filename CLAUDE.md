@@ -119,7 +119,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   state dir as one gzipped tar in memory — the dir followed through a
   symlink, and refused when it holds no `token`, since a copy of an empty
   or a wrong folder would count as a good night and push the real copies
-  out: every file, each SQLite
+  out: every file but the cockpit's own `token` — left out, so a copy on
+  another machine does not sign anyone in as the cockpit; the next start's
+  `LoadOrCreateToken` mints one — each SQLite
   database through SQLite itself (`VACUUM INTO` over a read-only
   connection, its path escaped as a URI by `databaseURI`, a `#` or `?` in
   a folder's name else ending it early: a consistent copy of a `tasks.db`

@@ -1,8 +1,10 @@
 // Package backup keeps a copy of the cockpit's state dir on another machine of the fleet: the tasks, the schedules,
-// the budgets, the recipes, the webhooks, the prefs, the review baselines, the devices, the agents' keys, the token, the
-// push keys and the tailnet node — what an SD card that dies takes with it. A snapshot (snapshot.go) is taken nightly
-// at the person's time and on demand, written into the target machine's remuda state dir under backups/<cockpit>/, the
-// newest Keep kept there; `remuda restore` puts one back (restore.go). A failure is pushed once per run of failures.
+// the budgets, the recipes, the webhooks, the prefs, the review baselines, the devices, the agents' keys, the push keys
+// and the tailnet node — what an SD card that dies takes with it; the cockpit's own token is left out and minted anew
+// at restore, so a copy on another machine does not sign anyone in as the cockpit. A snapshot (snapshot.go) is taken
+// nightly at the person's time and on demand, written into the target machine's remuda state dir under
+// backups/<cockpit>/, the newest Keep kept there; `remuda restore` puts one back (restore.go). A failure is pushed once
+// per run of failures.
 package backup
 
 import (
