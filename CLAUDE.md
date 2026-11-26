@@ -7055,7 +7055,10 @@ components and icons as rules for whoever changes it: @docs/design.md
   is offered once to the person to run now on the other vendor, `Offer`,
   see `internal/limits`), no
   budget over the machine and folder is spent, and a workspace is open on
-  the repository folder to branch off; one start per project per sweep.
+  the repository folder to branch off; one start per project per sweep. A
+  machine whose core does not answer waits with its own reason
+  (`Queue.NotAnswering`: its last snapshot came with an error) rather than
+  starting from that snapshot.
   A refused start notes `tasks.queue_refused` with a comment and a push
   and is not tried again until the card moves (`Update` clears it). What
   the queue does is `Project.queue` (`QueueNote{State idle | waiting |
@@ -7069,7 +7072,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   `internal/placement`) weighs every connected machine of the fleet —
   never a `-server` host — holding a workspace on that very folder (on
   the home machine) or on a checkout of the same repository by its remote
-  (`placement.Remotes`); the pick starts the card on its own workspace,
+  (`placement.Remotes`); a machine whose snapshot came with an error is no
+  candidate (`watch.NotWatched` tells "not polled yet" from a failure); the
+  pick starts the card on its own workspace,
   `QueueNote.Fleet` says where the next one goes and how the others stood
   (the page's words in `features/tasks/fleet.ts`, tested), a slot taken
   still saying where next; none with room is a wait with every reason

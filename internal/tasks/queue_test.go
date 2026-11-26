@@ -528,3 +528,27 @@ func TestAStageNeverMovesTheCardIntoTheQueuedColumn(t *testing.T) {
 		t.Fatalf("the stage moved the card from %d to %d, the Queued column", before.StatusID, got.StatusID)
 	}
 }
+
+func TestTheQueueWaitsForAMachineWhoseCoreDoesNotAnswer(t *testing.T) {
+	st := open(t)
+	p := queued(t, st, 1)
+	queue := column(p, func(s Status) bool { return s.OnQueue })
+	card := into(t, st, p.ID, "Wait for the core", queue)
+	h := newQueue(st)
+	h.q.NotAnswering = func(string) string { return "Studio is not answering" }
+	h.q.Sweep()
+	if len(h.starts) != 0 {
+		t.Fatalf("started on a machine that does not answer: %+v", h.starts)
+	}
+	if n := note(t, st, p.ID); n.State != "waiting" || n.Reason != "Studio is not answering" {
+		t.Fatalf("note %+v", n)
+	}
+	if got, _ := st.Get(card.ID); got.Refused != "" {
+		t.Fatalf("the card was refused: %q", got.Refused)
+	}
+	h.q.NotAnswering = nil
+	h.q.Sweep()
+	if len(h.starts) != 1 {
+		t.Fatalf("the queue did not start once the core answered: %+v", h.starts)
+	}
+}

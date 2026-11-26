@@ -59,6 +59,8 @@ type Queue struct {
 	Machine func(id string) (label string, connected bool)
 	// Unusable is why no agent can ever work on the machine — the host of a remuda that only serves the page — or "".
 	Unusable func(id string) string
+	// NotAnswering is why the machine's core does not answer now — its last snapshot came with an error — or "".
+	NotAnswering func(id string) string
 	// Workspace is the workspace open on the machine's folder that worktrees branch off, "" when none is.
 	Workspace func(machine, dir string) string
 	// PaneState is the radar's state of a pane (working | blocked | done | idle | unknown); ok is false once it is gone.
@@ -138,6 +140,12 @@ func (q *Queue) step(p Project) QueueNote {
 	if label, connected := q.Machine(a.Machine); !connected {
 		note.Reason = label + " is away"
 		return note
+	}
+	if q.NotAnswering != nil {
+		if why := q.NotAnswering(a.Machine); why != "" {
+			note.Reason = why
+			return note
+		}
 	}
 	if working >= a.Max {
 		note.Reason = fmt.Sprintf("every slot is taken: %d of %d working", working, a.Max)
