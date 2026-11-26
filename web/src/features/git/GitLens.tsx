@@ -39,7 +39,7 @@ export function GitLens({ machineId, dir, active, viewOnly, onChanges }: { machi
   const colors = useMemo(() => laneColors(ansiPalette(flavor).colors), [flavor]);
   const now = useNow(60_000);
   const sync = useSync(machineId, dir, refresh);
-  const ctx: Context = { branch: state?.branch ?? "", head: state?.head ?? "", branches: history?.log.branches ?? [], dirty: state?.dirty ?? 0 };
+  const ctx: Context = { branch: state?.branch ?? "", head: state?.head ?? "", branches: history?.log.branches ?? [], dirty: state?.dirty ?? 0, tracked: state?.tracked ?? 0, tree: state?.tree ?? "" };
 
   const finished = useCallback(
     (action: Writing, values: Values, result: OpResult) => {

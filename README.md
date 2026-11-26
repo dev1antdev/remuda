@@ -1243,7 +1243,9 @@ reset soft, mixed or hard, add or delete a tag, copy a name or a hash;
 double-click a branch's label to check it out. Each asks first in a
 small dialog — only a local checkout with nothing uncommitted runs at
 once — red where it loses something: a hard reset names the files it
-discards, and deleting a branch git calls unmerged asks a second time.
+discards (every one, however many), and refuses to run if they changed
+after the dialog opened; deleting a branch git calls unmerged asks a
+second time.
 When git refuses, its own words stay in the dialog. A merge, rebase,
 cherry-pick or revert that stops on conflicts is left as it is, and the
 lens says so with **Abort** and a way to the Changes lens to resolve

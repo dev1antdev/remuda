@@ -58,7 +58,9 @@ type State struct {
 	Operation   string   `json:"operation,omitempty"`
 	Fingerprint string   `json:"fingerprint,omitempty"`
 	Dirty       int      `json:"dirty"`             // the files git status lists, untracked ones too
+	Tracked     int      `json:"tracked"`           // the tracked ones: what a hard reset discards, even past MaxChanges
 	Conflicts   int      `json:"conflicts"`         // the files still unmerged
+	Tree        string   `json:"tree,omitempty"`    // a checksum of the tracked uncommitted entries, for a hard reset's confirm
 	Changes     []Change `json:"changes,omitempty"` // the tracked ones, at most MaxChanges
 }
 
@@ -173,10 +175,16 @@ func parseState(parts sections) State {
 	}
 	if count, ok := parts.get("count"); ok {
 		fields := strings.Fields(count.args)
-		if len(fields) == 2 {
+		if len(fields) >= 2 {
 			st.Dirty, _ = strconv.Atoi(fields[0])
 			st.Conflicts, _ = strconv.Atoi(fields[1])
 		}
+		if len(fields) >= 3 {
+			st.Tracked, _ = strconv.Atoi(fields[2])
+		}
+	}
+	if tree, ok := parts.get("tree"); ok {
+		st.Tree = strings.TrimSpace(tree.args)
 	}
 	return st
 }
