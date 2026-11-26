@@ -3120,6 +3120,64 @@ async function runPass() {
     expect: [".modal .timelapse-screen .screen-line.is-current .m", ".timelapse-find input"],
     settle: 500,
   });
+  await terminalWrapFind();
+}
+
+// terminalWrapFind is the find over the terminal across a word a long line split at the edge: on the screen, then in
+// the rows above it once they are pushed off, and both after a reattach paints the screen again. The core's paint keeps
+// the wrap a program's long line made, so the search crosses it; a core that breaks the row into two finds nothing.
+async function terminalWrapFind() {
+  const word = "SPLITWORD";
+  const pane = paneA1;
+  const attach = async () => {
+    await send("Page.navigate", { url: `${base}/?machine=local&pane=${encodeURIComponent(pane)}&lens=terminal` });
+    if (!(await until(() => present(".lens-pane:not([hidden]) .xterm-screen"), 15))) throw new Error("the terminal did not come up for its find");
+    await sleep(500);
+    await tap(".lens-pane:not([hidden]) .xterm .xterm-screen");
+    await evaluate(`document.querySelector('.lens-pane:not([hidden]) .xterm-helper-textarea')?.focus()`);
+    await key("u", "KeyU", 2); // Ctrl-U: the line cleared of what the terminal answered to the page's queries while attaching
+  };
+  // the find's field took the focus and its close leaves none: put it back on the terminal before every line, the
+  // line cleared of what it answered to the page's queries meanwhile
+  const focus = async () => {
+    await tap(".lens-pane:not([hidden]) .xterm .xterm-screen");
+    await evaluate(`document.querySelector('.lens-pane:not([hidden]) .xterm-helper-textarea')?.focus()`);
+    await key("u", "KeyU", 2);
+  };
+  const submit = async (text) => {
+    await focus();
+    await send("Input.insertText", { text });
+    await key("Enter", "Enter", 0, "\r");
+  };
+  const find = async () => {
+    await key("f", "KeyF", CMD);
+    if (!(await until(() => evaluate(`document.activeElement?.matches?.(".find-bar input") === true`), 4))) throw new Error("the shortcut did not put the focus in the find bar");
+    await send("Input.insertText", { text: word });
+  };
+  const counted = () => evaluate(`document.querySelector(".find-count")?.textContent ?? ""`);
+  const screenOf = async (which) => (await api("GET", `/api/screen?machine=local&pane=${encodeURIComponent(which)}`).catch(() => ({ text: "" }))).text ?? "";
+
+  await attach();
+  // the word starts four columns before the terminal's edge, so a line as wide as the terminal splits it; the pieces
+  // are written apart, so the command's own echo holds no whole word for the find to take instead
+  await submit(`cols=$(tput cols 2>/dev/null || echo 80); w="SPLIT""WORD"; printf '%*s%s\\n' "$((cols-4))" '' "$w"`);
+  if (!(await until(async () => /SPLI/.test(await screenOf(pane)), 10))) failed("the wrapped word never reached the terminal's screen");
+
+  await attach(); // the reattach paints the rows again
+  await find();
+  if (!(await until(async () => /(^|\D)1(\D|$)/.test(await counted()), 8))) failed(`the find does not cross the wrap on the screen: ${JSON.stringify(await counted())}`);
+  await key("Escape", "Escape");
+
+  // past the 2000 rows xterm keeps, so the word is only in the core's own history and the find must read it there
+  await submit("seq 1 2600; echo WRAPFIND-DONE");
+  if (!(await until(async () => /WRAPFIND-DONE/.test(await screenOf(pane)), 20))) failed("the rows that push the word out of the page's scrollback never came");
+  await find();
+  const older = await until(() => evaluate(`[...document.querySelectorAll(".toast")].some((toast) => /older rows|старых строках/.test(toast.textContent || ""))`), 10);
+  if (!older) {
+    const toasts = await evaluate(`[...document.querySelectorAll(".toast")].map((toast) => toast.textContent || "")`);
+    failed(`the find does not say the wrapped word is in the rows above the screen: ${JSON.stringify(await counted())} toasts ${JSON.stringify(toasts)}`);
+  }
+  await key("Escape", "Escape");
 }
 
 let code = 0;
