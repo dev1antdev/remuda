@@ -41,7 +41,9 @@ const attrsDiff = readGit + ` ` + ownAttrs + ` -c diff.relative=false diff ` + p
 // them (retryScript). The list of those is a --numstat without -U0, which would add the whole patch to it.
 var workDiff = attrsDiff + ` --relative "$base" 2>/dev/null || printf '\036failed work\n'; ` +
 	`if [ -n "$A" ]; then export A base; { ` + readGit + ` ` + ownAttrs + ` -c diff.relative=false diff ` + script.PatchForm + ` --no-renames --numstat -z --relative "$base" || printf 'failed\000'; } 2>/dev/null | ` +
-	`xargs -0 -r sh -c ` + script.Quote(retryScript) + ` sh || printf '\036failed work\n'; fi; `
+	`xargs -0 -r sh -c ` + script.Quote(retryScript) + ` sh || printf '\036failed work\n'; fi; ` +
+	`{ ` + readGit + ` ` + noAttrs + ` -c diff.relative=false diff ` + script.PatchForm + ` --no-renames --numstat -z --relative "$base" 2>/dev/null || printf 'failed\000'; } | ` +
+	`xargs -0 -r sh -c ` + script.Quote(binaryText) + ` sh; `
 
 // retryScript is given, in xargs's batches, the records of --numstat -z. The files git called binary ("-\t-\t<path>")
 // it reads again without the repository's attributes, first saying which of them an attribute converts in the working
@@ -56,6 +58,23 @@ var retryScript = `t=$(printf '\t'); for r; do case $r in failed) printf '\036fa
 	`END { if (f != "6f6b" || n % 3) print "\036failed work" }'; ` +
 	`for p; do shift; set -- "$@" ":(literal)$p"; done; ` +
 	gitDiff + ` --relative "$base" -- "$@" 2>/dev/null || printf '\036failed work\n'`
+
+// binaryText reads the working tree's side of the paths git called binary, given as --numstat -z records, and prints
+// the text ones as a "\036text <path>" section: a file that held a NUL (UTF-16, say) and is text now carries what a
+// commit would, and git cannot diff it. A file still binary, or over scanPerFile, is left as it was.
+var binaryText = `t=$(printf '\t'); for r; do case $r in failed) printf '\036failed work\n';; "-$t-$t"*) p=${r#-$t-$t}; ` +
+	`if [ -n "$p" ] && [ -f "./$p" ] && [ -z "$(head -c 8000 "./$p" 2>/dev/null | LC_ALL=C tr -dc '\000')" ]; then ` +
+	`printf '\036text %s\n' "$p"; head -c ` + strconv.Itoa(scanPerFile) + ` "./$p" 2>/dev/null; printf '\n'; ` +
+	`if [ "$(wc -c < "./$p" 2>/dev/null | tr -d ' ')" -gt ` + strconv.Itoa(scanPerFile) + ` ]; then printf '\036partly\n'; fi; ` +
+	`printf '\036endtext\n'; fi;; esac; shift; done`
+
+// stagedText is binaryText for the index: the side a commit would carry, read from the blob, not the working tree.
+var stagedText = `t=$(printf '\t'); for r; do case $r in "-$t-$t"*) p=${r#-$t-$t}; ` +
+	`if [ -n "$p" ]; then n=$(` + readGit + ` cat-file -s ":$p" 2>/dev/null); ` +
+	`if [ "${n:-0}" -gt 0 ] && [ -z "$(` + readGit + ` cat-file blob ":$p" 2>/dev/null | head -c 8000 | LC_ALL=C tr -dc '\000')" ]; then ` +
+	`printf '\036text %s\n' "$p"; ` + readGit + ` cat-file blob ":$p" 2>/dev/null | head -c ` + strconv.Itoa(scanPerFile) + `; printf '\n'; ` +
+	`if [ "${n:-0}" -gt ` + strconv.Itoa(scanPerFile) + ` ]; then printf '\036partly\n'; fi; ` +
+	`printf '\036endtext\n'; fi; fi;; esac; shift; done`
 
 // capScript cuts the stream on its way out: a diff's removed lines go, nothing to find in them, and each file's lines at scanPerFile (a line "\036partly" says where), and
 // every file once scanTotal is spent, the commits having a scanTotal of their own so the work beside them cannot use it up (each named on a line "\036budget <path>", "\036unread <path>" for an untracked
@@ -73,6 +92,9 @@ function untracked(   at, path, text, size, mark) {
 	if (n > per) { cut = 1; print "\036partly"; return }
 	print "+" text
 }
+/^\036text / { text = 1; print; next }
+/^\036endtext/ { text = 0; print; next }
+text { print; next }
 /^\036untracked$/ { grep = 1; next }
 /^\036commit / { if (!commits) { commits = 1; sum = 0 } }
 /^\036/ { grep = 0; print; next }
@@ -161,5 +183,7 @@ func secretScript(dir string, push bool) string {
 		`printf '\036staged\n'; ` + gitDiff + ` --cached --relative "$base" 2>/dev/null || printf '\036failed work\n'; ` +
 		// a folder inside the repository commits the whole index: what is staged outside it is read too, named from the top
 		`p=$(git rev-parse --show-prefix 2>/dev/null); if [ -n "$p" ]; then ` + gitDiff + ` --cached "$base" -- ':(top)' ":(top,literal,exclude)$p" 2>/dev/null || printf '\036failed work\n'; fi; ` +
+		`{ ` + readGit + ` ` + noAttrs + ` -c diff.relative=false diff ` + script.PatchForm + ` --no-renames --numstat -z --cached "$base" -- ':(top)' 2>/dev/null || printf 'failed\000'; } | ` +
+		`xargs -0 -r sh -c ` + script.Quote(stagedText) + ` sh; ` +
 		commits + `printf '\036end\n'; } | ` + capScript
 }

@@ -126,6 +126,7 @@ export function StartOptionsFields({ kind, draft, agents, machine = "", onChange
               <input value={draft.custom} placeholder={modelPlaceholder(kind)} spellCheck={false} onChange={(e) => set({ custom: e.target.value })} />
             </label>
           )}
+          {kind === "opencode" && <p className="modal-hint">{t("opencode picks its model in its own window: /models, or its config; remuda starts it with the default.")}</p>}
           <label>
             {t("Extra arguments")}
             <input value={draft.args} placeholder={t("--permission-mode plan")} spellCheck={false} onChange={(e) => set({ args: e.target.value })} />

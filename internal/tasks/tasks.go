@@ -117,6 +117,7 @@ type Run struct {
 	State      string `json:"state"`
 	Started    string `json:"started"`
 	PromptSent string `json:"prompt_sent,omitempty"`
+	Prompt     string `json:"-"` // what was to be typed once the agent was up, kept so a restart of remuda hands it over again
 	Finished   string `json:"finished,omitempty"`
 	Reported   string `json:"-"` // the transcript record the reported finish ended with
 	Error      string `json:"error,omitempty"`
@@ -271,6 +272,7 @@ CREATE TABLE IF NOT EXISTS task_runs (
   state TEXT NOT NULL,
   started TEXT NOT NULL,
   prompt_sent TEXT NOT NULL DEFAULT '',
+  prompt TEXT NOT NULL DEFAULT '',
   finished TEXT NOT NULL DEFAULT '',
   reported TEXT NOT NULL DEFAULT '',
   error TEXT NOT NULL DEFAULT '',
@@ -333,7 +335,7 @@ CREATE TABLE IF NOT EXISTS task_fields (
 	if err := st.addColumn("projects", "proposed_seeded", "INTEGER NOT NULL DEFAULT 0"); err != nil {
 		return err
 	}
-	for col, def := range map[string]string{"cost": "REAL NOT NULL DEFAULT 0", "tokens": "INTEGER NOT NULL DEFAULT 0", "model": "TEXT NOT NULL DEFAULT ''", "took": "INTEGER NOT NULL DEFAULT 0"} {
+	for col, def := range map[string]string{"cost": "REAL NOT NULL DEFAULT 0", "tokens": "INTEGER NOT NULL DEFAULT 0", "model": "TEXT NOT NULL DEFAULT ''", "took": "INTEGER NOT NULL DEFAULT 0", "prompt": "TEXT NOT NULL DEFAULT ''"} {
 		if err := st.addColumn("task_runs", col, def); err != nil {
 			return err
 		}
@@ -1627,11 +1629,11 @@ func (st *Store) List(q Query) ([]Task, int, error) {
 
 // ---- runs and comments ----
 
-const runCols = `id, task_id, machine, workspace, pane, dir, branch, agent, state, started, prompt_sent, finished, reported, error, cost, tokens, model, took, pr_url, pr_label, by_queue, stage, pipeline, expect_status, merged`
+const runCols = `id, task_id, machine, workspace, pane, dir, branch, agent, state, started, prompt_sent, prompt, finished, reported, error, cost, tokens, model, took, pr_url, pr_label, by_queue, stage, pipeline, expect_status, merged`
 
 func scanRun(sc interface{ Scan(...any) error }) (Run, error) {
 	var r Run
-	err := sc.Scan(&r.ID, &r.TaskID, &r.Machine, &r.Workspace, &r.Pane, &r.Dir, &r.Branch, &r.Agent, &r.State, &r.Started, &r.PromptSent, &r.Finished, &r.Reported, &r.Error, &r.Cost, &r.Tokens, &r.Model, &r.Took, &r.PRURL, &r.PRLabel, &r.ByQueue, &r.Stage, &r.Pipeline, &r.Expect, &r.Merged)
+	err := sc.Scan(&r.ID, &r.TaskID, &r.Machine, &r.Workspace, &r.Pane, &r.Dir, &r.Branch, &r.Agent, &r.State, &r.Started, &r.PromptSent, &r.Prompt, &r.Finished, &r.Reported, &r.Error, &r.Cost, &r.Tokens, &r.Model, &r.Took, &r.PRURL, &r.PRLabel, &r.ByQueue, &r.Stage, &r.Pipeline, &r.Expect, &r.Merged)
 	return r, err
 }
 
@@ -1670,8 +1672,8 @@ func (st *Store) StartRun(r Run) (Run, error) {
 	if s := flagged(ss, func(x Status) bool { return x.OnStart }); s != nil {
 		r.Expect = s.ID
 	}
-	res, err := tx.Exec(`INSERT INTO task_runs (task_id, machine, workspace, pane, dir, branch, agent, state, started, by_queue, stage, pipeline, expect_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		r.TaskID, r.Machine, r.Workspace, r.Pane, r.Dir, r.Branch, r.Agent, r.State, r.Started, r.ByQueue, r.Stage, r.Pipeline, r.Expect)
+	res, err := tx.Exec(`INSERT INTO task_runs (task_id, machine, workspace, pane, dir, branch, agent, state, started, prompt, by_queue, stage, pipeline, expect_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		r.TaskID, r.Machine, r.Workspace, r.Pane, r.Dir, r.Branch, r.Agent, r.State, r.Started, r.Prompt, r.ByQueue, r.Stage, r.Pipeline, r.Expect)
 	if err != nil {
 		return r, err
 	}

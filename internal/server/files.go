@@ -23,8 +23,16 @@ import (
 // errViewerOutside refuses a viewer a file beyond what its link reaches.
 var errViewerOutside = errors.New("this link is for viewing only: the file is outside the workspaces")
 
-// viewerMay says a viewer may read the path: within its reach, and in no folder a remuda serves from.
+// viewerMay says a viewer may read the path: within its reach, and in no folder a remuda serves from. On a remote
+// machine the path is resolved there first, so a link in the repository cannot reach outside it.
 func viewerMay(mc *machines.Machine, reach viewer.Reach, path string) bool {
+	if !mc.Local() {
+		real, err := mc.RealPath(path)
+		if err != nil {
+			return false
+		}
+		path = real
+	}
 	return reach.Allows(path) && !mc.InStateDir(path)
 }
 

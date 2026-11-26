@@ -3,6 +3,7 @@ package worktrees
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -36,6 +37,59 @@ func TestALookSaysWhatARemovalWouldLose(t *testing.T) {
 	}
 	if dirty.Stamp() == clean.Stamp() {
 		t.Error("two different risks stamp the same")
+	}
+}
+
+func TestALookNamesTheIgnoredFilesThatGoWithTheFolder(t *testing.T) {
+	host, main, trees := madeRepo(t, "kept")
+	write(t, filepath.Join(main, ".git", "info", "exclude"), ".env*\nnode_modules/\nbuild/\n")
+	write(t, filepath.Join(trees["kept"], ".env"), "SECRET=1\n")
+	if err := os.MkdirAll(filepath.Join(trees["kept"], "node_modules", "x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(trees["kept"], "node_modules", "x", "index.js"), "x\n")
+	if err := os.MkdirAll(filepath.Join(trees["kept"], "build"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(trees["kept"], "build", "out.bin"), "x\n")
+
+	look, err := LookAt(host, trees["kept"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if look.Dirty != 0 {
+		t.Errorf("ignored files count as uncommitted work: %+v", look)
+	}
+	if len(look.Ignored) != 1 || look.Ignored[0] != ".env" || look.IgnoredMore != 0 {
+		t.Errorf("the ignored files look %+v", look)
+	}
+	if !look.Loses() {
+		t.Error("an ignored .env is not counted as lost")
+	}
+	was := look.Stamp()
+	write(t, filepath.Join(trees["kept"], ".env.local"), "TOKEN=1\n")
+	look, _ = LookAt(host, trees["kept"])
+	if look.Stamp() == was {
+		t.Error("an ignored file that appeared did not move the stamp")
+	}
+	if len(look.Ignored) != 2 || look.Ignored[1] != ".env.local" {
+		t.Errorf("the second look's ignored files are %+v", look)
+	}
+}
+
+func TestBuildOutputStaysOutOfTheIgnoredList(t *testing.T) {
+	shown, more := shownIgnored([]string{".env", "node_modules/", "config/local.json", "web/.next/", "target/", "secrets/", ".cache/"})
+	if strings.Join(shown, "|") != ".env|config/local.json|secrets/" || more != 0 {
+		t.Errorf("shown %q more %d", shown, more)
+	}
+	var many []string
+	for i := 0; i < maxIgnoredShown+5; i++ {
+		many = append(many, "local/file-"+strconv.Itoa(i))
+	}
+	many = append(many, "node_modules/")
+	shown, more = shownIgnored(many)
+	if len(shown) != maxIgnoredShown || more != 5 {
+		t.Errorf("a wide list shows %d and counts %d more", len(shown), more)
 	}
 }
 

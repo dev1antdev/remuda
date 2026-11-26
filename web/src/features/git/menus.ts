@@ -29,7 +29,7 @@ export type Target =
   | { kind: "commit"; hash: string; subject: string; parents: string[] };
 
 // Context is where the checkout stands as the graph last read it
-export type Context = { branch: string; head: string; branches: string[]; dirty: number };
+export type Context = { branch: string; head: string; branches: string[]; dirty: number; tracked?: number; tree?: string };
 
 export type Row = { label: string; icon: IconName; action: Action; danger?: boolean } | { sep: true };
 

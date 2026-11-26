@@ -521,7 +521,7 @@ func TestAStageNeverMovesTheCardIntoTheQueuedColumn(t *testing.T) {
 		t.Fatal(err)
 	}
 	before, _ := st.Get(tk.ID)
-	if _, err := st.StartStageRun(first, 1, Stage{Name: "Tests", Prompt: "x", StatusID: review.ID}, "w1:p2"); err != nil {
+	if _, err := st.StartStageRun(first, 1, Stage{Name: "Tests", Prompt: "x", StatusID: review.ID}, "w1:p2", "x"); err != nil {
 		t.Fatal(err)
 	}
 	if got, _ := st.Get(tk.ID); got.StatusID != before.StatusID || st.QueueColumn(p.ID, got.StatusID) {

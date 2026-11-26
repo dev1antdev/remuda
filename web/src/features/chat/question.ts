@@ -7,17 +7,19 @@ export function choosable(question: Question): boolean {
   return !question.multi && question.options.length > 0;
 }
 
-// sameDialog says the dialog read now is the one a choice was offered on: the same words and the same choices, wherever
-// the cursor sits among them now
+// sameDialog says the dialog read now is the one a choice was offered on: the same words, the same choices and the same
+// way of walking them, wherever the cursor sits among them now
 export function sameDialog(offered: Question, now: Question): boolean {
-  return offered.text === now.text && offered.options.length === now.options.length && offered.options.every((option, i) => option.label === now.options[i]!.label);
+  return offered.text === now.text && (offered.axis ?? "") === (now.axis ?? "") && offered.options.length === now.options.length && offered.options.every((option, i) => option.label === now.options[i]!.label);
 }
 
-// keysTo walks the cursor from the picked choice to the one at index and confirms it.
-export function keysTo(options: QuestionOption[], index: number): string[] {
+// keysTo walks the cursor from the picked choice to the one at index and confirms it: ↓/↑ down a list, →/← along a row.
+export function keysTo(options: QuestionOption[], index: number, horizontal = false): string[] {
   const picked = Math.max(0, options.findIndex((o) => o.picked));
   const steps = index - picked;
-  const keys: string[] = Array.from({ length: Math.abs(steps) }, () => (steps > 0 ? "down" : "up"));
+  const back = horizontal ? "left" : "up";
+  const forward = horizontal ? "right" : "down";
+  const keys: string[] = Array.from({ length: Math.abs(steps) }, () => (steps > 0 ? forward : back));
   keys.push("enter");
   return keys;
 }

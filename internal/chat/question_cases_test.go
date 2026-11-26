@@ -25,9 +25,15 @@ func TestKeysToWalksFromTheCursor(t *testing.T) {
 		{3, 1, "up up enter"},
 	}
 	for _, c := range cases {
-		if got := strings.Join(KeysTo(four(c.picked), c.index), " "); got != c.want {
+		if got := strings.Join(KeysTo(four(c.picked), c.index, false), " "); got != c.want {
 			t.Errorf("from %d to %d: %q, want %q", c.picked+1, c.index+1, got, c.want)
 		}
+	}
+	if got := strings.Join(KeysTo(four(0), 2, true), " "); got != "right right enter" {
+		t.Errorf("along a row: %q", got)
+	}
+	if got := strings.Join(KeysTo(four(3), 0, true), " "); got != "left left left enter" {
+		t.Errorf("along a row back: %q", got)
 	}
 }
 

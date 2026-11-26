@@ -77,12 +77,17 @@ func TestASnapshotHoldsTheStateAndLeavesTheRestOut(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Host != "rp-orange" || got.Version != "v0.12.5" || !got.At.Equal(at) || got.Files != manifest.Files || manifest.Files != 4 {
+	if got.Host != "rp-orange" || got.Version != "v0.12.5" || !got.At.Equal(at) || got.Files != manifest.Files || manifest.Files != 3 {
 		t.Fatalf("manifest %+v, packed %+v", got, manifest)
 	}
-	want := "schedules.json tailscale/ tailscale/tailscaled.state tasks.db token"
+	want := "schedules.json tailscale/ tailscale/tailscaled.state tasks.db"
 	if strings.Join(names(entries), " ") != want {
 		t.Fatalf("entries %v, want %s", names(entries), want)
+	}
+	for _, e := range entries {
+		if e.Name == "token" {
+			t.Fatal("the cockpit's own token was packed")
+		}
 	}
 	for _, e := range entries {
 		if e.Name != "tasks.db" {
@@ -165,7 +170,7 @@ func TestAStateDirBehindASymlinkOrWithAnOddNameIsCopiedWhole(t *testing.T) {
 		t.Fatal(err)
 	}
 	archive, manifest, err := Snapshot(link, "rp-orange", "v", time.Now())
-	if err != nil || manifest.Files != 4 || copiedTitle(t, archive) != "kept through the WAL" {
+	if err != nil || manifest.Files != 3 || copiedTitle(t, archive) != "kept through the WAL" {
 		t.Fatalf("through a symlink: %d files, %v", manifest.Files, err)
 	}
 
@@ -183,7 +188,7 @@ func TestAStateDirBehindASymlinkOrWithAnOddNameIsCopiedWhole(t *testing.T) {
 		}
 	}
 	archive, manifest, err = Snapshot(odd, "rp-orange", "v", time.Now())
-	if err != nil || manifest.Files != 2 || copiedTitle(t, archive) != "under an odd name" {
+	if err != nil || manifest.Files != 1 || copiedTitle(t, archive) != "under an odd name" {
 		t.Fatalf("under %q: %d files, %v", odd, manifest.Files, err)
 	}
 	left, _ := os.ReadDir(parent)
@@ -264,8 +269,8 @@ func TestARestoreSetsTheOldDirAsideAndKeepsTheBackupsHere(t *testing.T) {
 	if aside != dir+".before-restore-20261105T090000Z" {
 		t.Fatalf("aside at %s", aside)
 	}
-	if b, _ := os.ReadFile(filepath.Join(dir, "token")); string(b) != "secret-token\n" {
-		t.Fatalf("token %q", b)
+	if _, err := os.Stat(filepath.Join(dir, "token")); !os.IsNotExist(err) {
+		t.Fatalf("the archive's token was restored: %v", err)
 	}
 	if b, _ := os.ReadFile(filepath.Join(aside, "token")); string(b) != "another token\n" {
 		t.Fatalf("the old dir's token %q", b)
@@ -357,7 +362,7 @@ func TestRunsGoToTheTargetAndTheOldestArePruned(t *testing.T) {
 	}
 	for i := 0; i < 3; i++ {
 		result, err := s.Run(false)
-		if err != nil || result.Size == 0 || result.Files != 5 { // the four of the dir and backup.json
+		if err != nil || result.Size == 0 || result.Files != 4 { // the three of the dir and backup.json
 			t.Fatalf("run %d: %+v %v", i, result, err)
 		}
 		now = now.Add(24 * time.Hour)
