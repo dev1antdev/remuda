@@ -6798,7 +6798,9 @@ components and icons as rules for whoever changes it: @docs/design.md
   change drops the values, shrunk options prune them — `fit`); a task
   moved to another project keeps the values whose field there has the
   same name and kind (`carryFields`). `Prompt(task, project, groom)` adds
-  a `Title: value` line per `in_prompt` field with a value. UI:
+  a `Title: value` line per `in_prompt` field with a value, and a task whose description is `ImportIssue`'s ends with
+  `prstatus.GuardOf(url)`; the web's `taskPrompt` and the issue's own first prompt end with the same guard
+  (`lib/guard.ts`, the one `features/pr/messages.ts` re-exports). UI:
   `Board.tsx` — a column per status, each a well of the board's whole
   height, cards as raised surfaces that lift under the pointer, HTML5 drag-and-drop on a
   mouse, a ⋯ "Move to…" menu on touch, swipe-snapped columns a screen
