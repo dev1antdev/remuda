@@ -115,7 +115,9 @@ func revokedWhileWatching(t *testing.T, argv []string) {
 		seen.Write(data)
 	}
 
-	keys.Revoke(rec.ID)
+	if _, err := keys.Revoke(rec.ID); err != nil {
+		t.Fatal(err)
+	}
 	revokedAt := time.Now()
 	readCtx, readCancel := context.WithTimeout(ctx, 3*time.Second)
 	defer readCancel()

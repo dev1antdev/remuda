@@ -155,6 +155,38 @@ func TestLegacyCookieUpgraded(t *testing.T) {
 	}
 }
 
+func TestADeviceTheFileCouldNotLoseStaysSignedIn(t *testing.T) {
+	dir := t.TempDir()
+	devices, err := OpenDevices(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cookie, device, err := devices.Mint("10.0.0.2", chromeMac)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
+	if ok, err := devices.Revoke(device.ID); err == nil || ok {
+		t.Fatalf("a revoke the file could not take answered %v, %v", ok, err)
+	}
+	if err := os.Chmod(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := devices.Check(cookie); !ok {
+		t.Fatal("the device was forgotten though its file was never written")
+	}
+	again, err := OpenDevices(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := again.Check(cookie); !ok {
+		t.Fatal("the device came back revoked after a reload")
+	}
+}
+
 func TestRevokedCookieRefusedAtOnce(t *testing.T) {
 	g, h := newGuard(t)
 	cookie, device, err := g.Devices.Mint("10.0.0.2", chromeMac)
@@ -165,8 +197,11 @@ func TestRevokedCookieRefusedAtOnce(t *testing.T) {
 	if res := get(h, "/api/roster", c, ""); res.StatusCode != 200 {
 		t.Fatalf("before revoking: %d", res.StatusCode)
 	}
-	if !g.Devices.Revoke(device.ID) || g.Devices.Revoke(device.ID) {
-		t.Fatal("revoke should succeed once")
+	if ok, err := g.Devices.Revoke(device.ID); err != nil || !ok {
+		t.Fatalf("revoke should succeed once: %v %v", ok, err)
+	}
+	if ok, err := g.Devices.Revoke(device.ID); err != nil || ok {
+		t.Fatalf("revoke should succeed once: %v %v", ok, err)
 	}
 	start := time.Now()
 	res := get(h, "/api/roster", c, "")
@@ -270,8 +305,8 @@ func TestStoreReloadRenameAndRevokeOthers(t *testing.T) {
 	if renamed, _ := again.Rename(a.ID, ""); renamed.Name != "Chrome on macOS" {
 		t.Fatalf("an empty name should fall back to the kind, got %q", renamed.Name)
 	}
-	if gone := again.RevokeOthers(a.ID); gone != 1 {
-		t.Fatalf("RevokeOthers removed %d", gone)
+	if gone, err := again.RevokeOthers(a.ID); err != nil || gone != 1 {
+		t.Fatalf("RevokeOthers removed %d, %v", gone, err)
 	}
 	if _, ok := again.Check(second); ok {
 		t.Fatal("the second cookie should be refused after RevokeOthers")

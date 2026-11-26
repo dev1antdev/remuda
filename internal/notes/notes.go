@@ -111,15 +111,28 @@ func (s *Store) Set(machine, folder, text string) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	k := key(machine, folder)
+	old, had := s.notes[k]
 	if kept == "" {
-		if _, ok := s.notes[k]; !ok {
+		if !had {
 			return "", nil
 		}
 		delete(s.notes, k)
-		return "", s.saveLocked()
+		if err := s.saveLocked(); err != nil {
+			s.notes[k] = old
+			return "", err
+		}
+		return "", nil
 	}
 	s.notes[k] = Note{Machine: machine, Dir: Clean(folder), Text: kept, At: s.now().UTC()}
-	return kept, s.saveLocked()
+	if err := s.saveLocked(); err != nil {
+		if had {
+			s.notes[k] = old
+		} else {
+			delete(s.notes, k)
+		}
+		return "", err
+	}
+	return kept, nil
 }
 
 // Remove drops the folder's note; a folder with none is no error.

@@ -156,63 +156,76 @@ func (d *Devices) Rename(id, name string) (Device, error) {
 	if name == "" {
 		name = device.Kind()
 	}
+	was := device.Name
 	device.Name = cutBetweenLetters(name, 80)
 	if err := d.saveLocked(); err != nil {
+		device.Name = was
 		return Device{}, err
 	}
 	return *device, nil
 }
 
-// Revoke forgets a device, so its cookie is refused from then on; false for an id the store does not hold.
-func (d *Devices) Revoke(id string) bool {
+// Revoke forgets a device, so its cookie is refused from then on; false for an id the store does not hold. A device the
+// file could not lose stays signed in: the error says so.
+func (d *Devices) Revoke(id string) (bool, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if _, ok := d.list[id]; !ok {
-		return false
+	device, ok := d.list[id]
+	if !ok {
+		return false, nil
 	}
 	delete(d.list, id)
 	if err := d.saveLocked(); err != nil {
-		log.Printf("devices: %v", err)
+		d.list[id] = device
+		return false, err
 	}
-	return true
+	return true, nil
 }
 
 // RevokeByKey forgets every device a viewer key signed in and says how many went: a revoked link takes its screens with it.
-func (d *Devices) RevokeByKey(keyID string) int {
+func (d *Devices) RevokeByKey(keyID string) (int, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	gone := 0
+	gone := map[string]*Device{}
 	for id, device := range d.list {
 		if device.Viewer && device.Key == keyID {
+			gone[id] = device
 			delete(d.list, id)
-			gone++
 		}
 	}
-	if gone > 0 {
-		if err := d.saveLocked(); err != nil {
-			log.Printf("devices: %v", err)
-		}
+	if len(gone) == 0 {
+		return 0, nil
 	}
-	return gone
+	if err := d.saveLocked(); err != nil {
+		for id, device := range gone {
+			d.list[id] = device
+		}
+		return 0, err
+	}
+	return len(gone), nil
 }
 
 // RevokeOthers forgets every device but the one to keep and says how many went.
-func (d *Devices) RevokeOthers(keep string) int {
+func (d *Devices) RevokeOthers(keep string) (int, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	gone := 0
-	for id := range d.list {
+	gone := map[string]*Device{}
+	for id, device := range d.list {
 		if id != keep {
+			gone[id] = device
 			delete(d.list, id)
-			gone++
 		}
 	}
-	if gone > 0 {
-		if err := d.saveLocked(); err != nil {
-			log.Printf("devices: %v", err)
-		}
+	if len(gone) == 0 {
+		return 0, nil
 	}
-	return gone
+	if err := d.saveLocked(); err != nil {
+		for id, device := range gone {
+			d.list[id] = device
+		}
+		return 0, err
+	}
+	return len(gone), nil
 }
 
 func (d *Devices) saveLocked() error {

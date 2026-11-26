@@ -28,7 +28,9 @@ func EnsureDoor(dir string, keys *Keys, name, url string) error {
 	current := strings.TrimSpace(string(have))
 	if rec, ok := keys.Check(current); !ok || rec.Name != name {
 		if ok {
-			keys.Revoke(rec.ID) // the machine was renamed: the key under the old name goes with the file's
+			if _, err := keys.Revoke(rec.ID); err != nil { // the machine was renamed: the key under the old name goes with the file's
+				return fmt.Errorf("door: %w", err)
+			}
 		}
 		key, _, err := keys.Mint(name)
 		if err != nil {

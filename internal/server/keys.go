@@ -57,7 +57,12 @@ func (s *Server) handleAgentKeyRevoke(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := r.PathValue("id")
-	if !store.Revoke(id) {
+	ok, err := store.Revoke(id)
+	if err != nil {
+		httpErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	if !ok {
 		httpErr(w, 404, errors.New("no such key"))
 		return
 	}

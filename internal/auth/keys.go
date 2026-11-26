@@ -109,14 +109,19 @@ func (k *Keys) mint(prefix, scope, name string, replacing bool) (key string, rec
 	rec = Key{ID: state.NewID(), Hash: hashOf(key), Name: strings.TrimSpace(name), Scope: scope, Created: now, LastUsed: now}
 	k.mu.Lock()
 	defer k.mu.Unlock()
+	replaced := map[string]*Key{}
 	for id, had := range k.list {
 		if replacing && had.Scope == scope && had.Name == rec.Name {
+			replaced[id] = had
 			delete(k.list, id)
 		}
 	}
 	k.list[rec.ID] = &rec
 	if err := k.saveLocked(); err != nil {
 		delete(k.list, rec.ID)
+		for id, had := range replaced {
+			k.list[id] = had
+		}
 		return "", Key{}, err
 	}
 	return key, rec, nil
@@ -175,18 +180,21 @@ func (k *Keys) Has(id string) bool {
 	return ok
 }
 
-// Revoke forgets a key, so it is refused from then on; false for an id the store does not hold.
-func (k *Keys) Revoke(id string) bool {
+// Revoke forgets a key, so it is refused from then on; false for an id the store does not hold. One the file could not
+// lose still works: the error says so.
+func (k *Keys) Revoke(id string) (bool, error) {
 	k.mu.Lock()
 	defer k.mu.Unlock()
-	if _, ok := k.list[id]; !ok {
-		return false
+	rec, ok := k.list[id]
+	if !ok {
+		return false, nil
 	}
 	delete(k.list, id)
 	if err := k.saveLocked(); err != nil {
-		log.Printf("agent keys: %v", err)
+		k.list[id] = rec
+		return false, err
 	}
-	return true
+	return true, nil
 }
 
 // Allows says whether a key of this scope may make a request: a tasks key reaches the task routes with any method,
