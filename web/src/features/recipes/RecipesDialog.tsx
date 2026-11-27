@@ -10,7 +10,7 @@ import { useRoster } from "@/features/roster/useRoster";
 import RetiredNotice from "@/features/usage/RetiredNotice";
 import { useQuery } from "@/lib/query";
 import { errMsg } from "@/lib/text";
-import { Dialog, Icon, Logo, Notice, Select } from "@/ui";
+import { Dialog, Icon, Logo, Notice, Select, Tip } from "@/ui";
 import { fetchRecipes, saveRecipes, type Recipe } from "./api";
 import RecipeMark from "./RecipeMark";
 import { draftOf, recipeOf, recipeWords } from "./recipes";
@@ -116,9 +116,11 @@ export default function RecipesDialog({ initial, onClose, onSaved }: { initial?:
               >
                 {t("Edit")}
               </button>
-              <button type="button" className="icon-btn danger" title={t("Remove")} aria-label={t("Remove")} onClick={() => remove(i)}>
-                <Icon name="trash" size={14} />
-              </button>
+              <Tip text={t("Remove")}>
+                <button type="button" className="icon-btn danger" aria-label={t("Remove")} onClick={() => remove(i)}>
+                  <Icon name="trash" size={14} />
+                </button>
+              </Tip>
             </div>
           ),
         )}
