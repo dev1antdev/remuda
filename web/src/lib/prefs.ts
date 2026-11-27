@@ -54,16 +54,55 @@ export function applyPref(key: string, value: unknown, at: string): void {
   setStamp(key, at);
 }
 
-// store writes a pref and wakes its hooks; cached keeps the value as the hooks' copy, else they read storage again
+// store writes a pref and wakes its hooks; cached keeps the value as the hooks' copy, else they read storage again.
+// A full disk drops the largest prefs first and tries once more: a composer's history was quietly the whole quota, and
+// the theme written after it never landed.
 function store(key: string, value: unknown, cached = true): void {
+  const text = JSON.stringify(value);
   try {
-    localStorage.setItem(`remuda.${key}`, JSON.stringify(value));
+    localStorage.setItem(`remuda.${key}`, text);
   } catch {
-    /* private mode etc. */
+    try {
+      evict(text.length);
+      localStorage.setItem(`remuda.${key}`, text);
+    } catch {
+      storageProblem(key);
+    }
   }
   if (cached) values.set(key, value);
   else values.delete(key);
   for (const notify of listeners.get(key) ?? []) notify();
+}
+
+// evict makes room by dropping the largest prefs, twice the room needed: histories and drafts, not the theme or the mode
+function evict(need: number): void {
+  const sizes: { key: string; size: number }[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key || !key.startsWith("remuda.") || key === STAMPS) continue;
+    sizes.push({ key, size: (localStorage.getItem(key) ?? "").length });
+  }
+  sizes.sort((a, b) => b.size - a.size);
+  let freed = 0;
+  for (const { key, size } of sizes) {
+    if (freed >= need * 2) break;
+    localStorage.removeItem(key);
+    freed += size;
+  }
+}
+
+// storageProblem says a pref could not be kept even after eviction: the page says so through whatever listens.
+const problems = new Set<(key: string) => void>();
+export function onStorageProblem(fn: (key: string) => void): () => void {
+  problems.add(fn);
+  return () => {
+    problems.delete(fn);
+  };
+}
+
+function storageProblem(key: string): void {
+  console.warn(`remuda: no room to keep "${key}"; the oldest histories were dropped`);
+  for (const fn of problems) fn(key);
 }
 
 // the moment each shared key was last set, kept beside the prefs so a sync can tell which copy is newer

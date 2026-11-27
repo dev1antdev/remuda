@@ -17,6 +17,10 @@ const MaxCheckpoint = 32 << 20
 // MaxCommits is the most commits a turn may make and still be reverted.
 const MaxCommits = 50
 
+// maxCheckpointFile is the size past which an untracked file is not copied into a checkpoint: its path is said instead,
+// and an undo leaves it as the turn did.
+const maxCheckpointFile = 8 << 20
+
 // ReadTimeout bounds one read of a folder on its machine.
 var ReadTimeout = 90 * time.Second
 
@@ -49,19 +53,20 @@ type Commit struct {
 // Read is a folder as one script found it: its repository, HEAD, the uncommitted work and, against a base commit,
 // what the commits since it changed.
 type Read struct {
-	Root   string           `json:"root"`
-	Head   string           `json:"head"`
-	Branch string           `json:"branch,omitempty"`
-	Busy   string           `json:"busy,omitempty"`  // a merge, rebase, cherry-pick or revert in progress
-	At     int64            `json:"at,omitempty"`    // the machine's own clock when it read, in Unix seconds
-	Files  map[string]Entry `json:"files"`           // every path the working tree holds otherwise than HEAD
-	Since  string           `json:"since,omitempty"` // against the base: linear (base is in HEAD's history), rewritten, gone
-	Moved  map[string]Entry `json:"moved,omitempty"` // the paths the commits from the base to HEAD changed
-	Made   []Commit         `json:"made,omitempty"`  // those commits, newest first, at most MaxCommits+1
-	Staged []string         `json:"-"`               // the paths the person's index stages against HEAD
-	Pushed []string         `json:"-"`               // the remote-tracking branches holding the commit asked about
-	Patch  string           `json:"-"`
-	Cut    bool             `json:"cut,omitempty"` // the patch ran past MaxCheckpoint: its last file's section is gone
+	Root    string           `json:"root"`
+	Head    string           `json:"head"`
+	Branch  string           `json:"branch,omitempty"`
+	Busy    string           `json:"busy,omitempty"`    // a merge, rebase, cherry-pick or revert in progress
+	At      int64            `json:"at,omitempty"`      // the machine's own clock when it read, in Unix seconds
+	Files   map[string]Entry `json:"files"`             // every path the working tree holds otherwise than HEAD
+	Since   string           `json:"since,omitempty"`   // against the base: linear (base is in HEAD's history), rewritten, gone
+	Moved   map[string]Entry `json:"moved,omitempty"`   // the paths the commits from the base to HEAD changed
+	Made    []Commit         `json:"made,omitempty"`    // those commits, newest first, at most MaxCommits+1
+	Staged  []string         `json:"-"`                 // the paths the person's index stages against HEAD
+	Pushed  []string         `json:"-"`                 // the remote-tracking branches holding the commit asked about
+	Skipped []string         `json:"skipped,omitempty"` // untracked files too big to checkpoint: an undo leaves them as the turn did
+	Patch   string           `json:"-"`
+	Cut     bool             `json:"cut,omitempty"` // the patch ran past MaxCheckpoint: its last file's section is gone
 }
 
 // Patch directions a read takes
@@ -123,14 +128,29 @@ printf '\036\n'
 	}
 	b.WriteString("printf '\\036\\n'\n")
 	b.WriteString(`d=$(mktemp -d "${TMPDIR:-/tmp}/remuda-undo.XXXXXX") || { echo 'no temporary folder on the machine' >&2; exit 4; }
+# a checkpoint cut off by a signal ends through the trap too, and a folder a killed run left is cleared after an hour
 trap 'rm -rf "$d"' EXIT
+trap 'exit 129' HUP; trap 'exit 130' INT; trap 'exit 143' TERM
+for old in "${TMPDIR:-/tmp}"/remuda-undo.*; do [ -d "$old" ] && [ "$old" != "$d" ] && [ -n "$(find "$old" -maxdepth 0 -mmin +60 2>/dev/null)" ] && rm -rf "$old"; done
 objects=$(cd "$(git rev-parse --git-path objects)" && pwd -P) || exit 4
 index=$(git rev-parse --git-path index)
 mkdir "$d/objects" || exit 4
 GIT_INDEX_FILE="$d/index"; GIT_OBJECT_DIRECTORY="$d/objects"; GIT_ALTERNATE_OBJECT_DIRECTORIES="$objects"
 export GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES
-{ cp "$index" "$d/index" 2>/dev/null && git add -A 2>/dev/null; } || { rm -f "$d/index"; git read-tree HEAD && git add -A; } || { echo 'git could not read the work' >&2; exit 4; }
+# the untracked files past the size a checkpoint takes are left out by a pathspec, not hashed: a 200 MB file in tmpfs
+# was the whole of a Pi's memory
+: > "$d/big"; : > "$d/exclude"; printf '.\0' > "$d/exclude"
+git ls-files --others --exclude-standard -z 2>/dev/null | tr '\0' '\n' | while IFS= read -r f; do
+  [ -f "$f" ] || continue
+  size=$(wc -c < "$f" 2>/dev/null | tr -d ' ')
+  [ -n "$size" ] && [ "$size" -gt ` + strconv.Itoa(maxCheckpointFile) + ` ] || continue
+  printf '%s\n' "$f" >> "$d/big"
+  printf ':(exclude)%s\0' "$f" >> "$d/exclude"
+done
+{ cp "$index" "$d/index" 2>/dev/null && git add -A --pathspec-from-file="$d/exclude" --pathspec-file-nul 2>/dev/null; } || { rm -f "$d/index"; git read-tree HEAD && git add -A --pathspec-from-file="$d/exclude" --pathspec-file-nul; } || { echo 'git could not read the work' >&2; exit 4; }
 git -c core.quotepath=off diff-index --cached -z --no-renames --no-abbrev --ignore-submodules=all HEAD
+printf '\036\n'
+tr '\n' '\0' < "$d/big"
 printf '\036\n'
 `)
 	switch o.patch {
@@ -161,7 +181,7 @@ func parseRead(out string, limit int) (Read, error) {
 	if strings.TrimSpace(out) == "" {
 		return Read{}, ErrNotRepo
 	}
-	sections := strings.SplitN(out, script.RS+"\n", 8)
+	sections := strings.SplitN(out, script.RS+"\n", 9)
 	if len(sections) < 7 {
 		return Read{}, fmt.Errorf("the folder's answer was cut short")
 	}
@@ -188,8 +208,15 @@ func parseRead(out string, limit int) (Read, error) {
 	}
 	r.Pushed = script.Lines(sections[5])
 	r.Files = parseRaw(sections[6])
-	if len(sections) == 8 {
-		r.Patch = sections[7]
+	if len(sections) > 7 {
+		for _, path := range strings.Split(strings.TrimPrefix(sections[7], "\n"), "\x00") {
+			if path != "" {
+				r.Skipped = append(r.Skipped, path)
+			}
+		}
+	}
+	if len(sections) == 9 {
+		r.Patch = sections[8]
 		if len(r.Patch) > limit {
 			r.Patch, r.Cut = r.Patch[:limit], true
 		}

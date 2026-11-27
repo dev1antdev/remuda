@@ -18,7 +18,11 @@ func HeadScript(dir string) string {
 // throwaway stages the worktree in an index of its own, over the base's tree: $t is the index inside the temporary
 // folder $d, which the caller removes through cleanup. Without a folder nothing else runs.
 func throwaway(base string) string {
-	return `d=$(mktemp -d "${TMPDIR:-/tmp}/remuda-arena.XXXXXX") && t="$d/index" && ` +
+	// the index starts from the base's tree, so only the lane's own work is hashed, and the new objects go into the
+	// temporary folder with the repository's own borrowed as an alternate: nothing of the lane's lands in the person's .git
+	return `d=$(mktemp -d "${TMPDIR:-/tmp}/remuda-arena.XXXXXX") && t="$d/index" && mkdir "$d/objects" && ` +
+		`GIT_OBJECT_DIRECTORY="$d/objects" && GIT_ALTERNATE_OBJECT_DIRECTORIES="$(cd "$(git rev-parse --git-path objects)" && pwd -P)" && ` +
+		`export GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES && ` +
 		`GIT_INDEX_FILE="$t" git read-tree ` + script.Quote(base) + ` 2>/dev/null && GIT_INDEX_FILE="$t" git add -A 2>/dev/null`
 }
 

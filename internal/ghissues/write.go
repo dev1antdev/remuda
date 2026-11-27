@@ -91,7 +91,7 @@ func (s *Service) write(machineID, repo string, number int, text string, build f
 		if _, rest, posted := strings.Cut(string(out), postedMark); posted {
 			return &Partly{Refused{Machine: host.Label(), Output: firstText(rest, err)}}
 		}
-		if trouble := troubleOf(host.Label(), repo, firstText(string(out), err)); trouble.Kind != "failed" {
+		if trouble := troubleOf(host.Label(), repo, firstText(string(out), err), err); trouble.Kind != "failed" {
 			return trouble
 		}
 		return &Refused{Machine: host.Label(), Output: firstText(string(out), err)}

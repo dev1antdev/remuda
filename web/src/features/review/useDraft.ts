@@ -36,12 +36,15 @@ export function useDraft({ machineId, dir, agent, review, files, onError, onDone
     return out;
   }, [comments]);
   const where = () => place(dir, review);
+  // what this look showed: the baseline records it, not the disk at the press, so an agent's edit made while the person
+  // read stays fresh
+  const shown = () => (review ? { head: review.head, blobs: review.blobs } : undefined);
   const message = () => commentsMessage(comments, where());
 
   const markSilently = async (after: () => void) => {
     setMarking(true);
     try {
-      await markReviewed(machineId, dir);
+      await markReviewed(machineId, dir, undefined, shown());
       after();
       onDone(t("Reviewed — the next look starts from here."));
     } catch (failure) {
@@ -65,7 +68,7 @@ export function useDraft({ machineId, dir, agent, review, files, onError, onDone
   };
   const sendVerdict = async (verdict: Verdict, target: Target, note: string, ask: VerdictAsk, after: () => void) => {
     await submitPrompt(target.machineId, target.paneId, verdictMessage(verdict, note, comments, where(), ask));
-    await markReviewed(machineId, dir, verdict);
+    await markReviewed(machineId, dir, verdict, shown());
     setComments([]);
     setOpenVerdict(null);
     after();

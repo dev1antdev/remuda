@@ -28,7 +28,8 @@ func packScript(dir string, full bool) string {
 	if full {
 		scope = `refs/heads/"$branch"`
 	}
-	return script.InRepo(dir) + `cd "$root" || exit 1; ` +
+	return `LC_ALL=C; COPYFILE_DISABLE=1; export LC_ALL COPYFILE_DISABLE; ` + // git's words in English, and no ._files from a Mac's tar
+		script.InRepo(dir) + `cd "$root" || exit 1; ` +
 		`t=$(mktemp -d "${TMPDIR:-/tmp}/remuda-teleport.XXXXXX") || exit 1; trap 'rm -rf "$t"' EXIT; ` +
 		`branch=$(git symbolic-ref --short -q HEAD) || { echo "the checkout is on no branch" >&2; exit 1; }; ` +
 		`printf '%s\n%s\n' "$branch" "$(git rev-parse HEAD)" > "$t/meta"; ` +
@@ -37,7 +38,7 @@ func packScript(dir string, full bool) string {
 		`rm -f "$t/err"; d='--binary --no-ext-diff --no-textconv --no-color --src-prefix=a/ --dst-prefix=b/'; ` + // a patch git apply takes, whatever the person's diff settings
 		script.ReadGit + ` diff $d --cached > "$t/staged.patch" && ` + script.ReadGit + ` diff $d > "$t/unstaged.patch" || exit 1; ` +
 		script.ReadGit + ` ls-files -z --others --exclude-standard > "$t/untracked.list"; ` +
-		`if [ -s "$t/untracked.list" ]; then tar -cf "$t/untracked.tar" --null -T "$t/untracked.list" || { echo "the new files could not be packed" >&2; exit 1; }; fi; rm -f "$t/untracked.list"; ` +
+		`if [ -s "$t/untracked.list" ]; then tar -cf "$t/untracked.tar" --exclude=.git --null -T "$t/untracked.list" || { echo "the new files could not be packed" >&2; exit 1; }; fi; rm -f "$t/untracked.list"; ` +
 		`kb=$(du -sk "$t" | cut -f1); [ "$kb" -le ` + strconv.Itoa(MaxPack/1024) + ` ] || { echo "the work weighs $kb KB, more than remuda carries (` + strconv.Itoa(MaxPack>>20) + ` MB)" >&2; exit 1; }; ` +
 		`tar -cf - -C "$t" .`
 }
@@ -65,7 +66,7 @@ const needFull = "remuda-teleport: need the whole branch"
 func landScript(dir, pack, worktrees, suffix string) string {
 	fail := func(what string) string { return `{ echo ` + script.Quote("error: "+what) + `; exit 1; }` }
 	named := `"$branch-"` + script.Quote(suffix)
-	return `pk=` + script.Quote(pack) + `; trap 'rm -f "$pk"' EXIT; ` +
+	return `LC_ALL=C; COPYFILE_DISABLE=1; export LC_ALL COPYFILE_DISABLE; pk=` + script.Quote(pack) + `; trap 'rm -f "$pk"' EXIT; ` +
 		`cd ` + script.Quote(dir) + ` 2>/dev/null && root=$(git rev-parse --show-toplevel 2>/dev/null) || ` + fail("the folder is not a git checkout") + `; cd "$root" || exit 1; ` +
 		`t=$(mktemp -d "${TMPDIR:-/tmp}/remuda-teleport.XXXXXX") || exit 1; trap 'rm -rf "$t"; rm -f "$pk"' EXIT; ` +
 		`tar -xf "$pk" -C "$t" || ` + fail("the work did not unpack") + `; ` +

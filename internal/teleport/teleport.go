@@ -87,7 +87,9 @@ func Inspect(host shell.Host, dir string) (Source, error) {
 		return Source{}, fmt.Errorf("%s on %s is not a git checkout", dir, host.Label())
 	}
 	number := func(s string) int { n, _ := strconv.Atoi(strings.TrimSpace(s)); return n }
-	src := Source{Root: fields[0], Branch: fields[1], Head: fields[2], Remote: fields[3], FirstRoot: fields[4], Ahead: number(fields[5]),
+	// a remote may carry its token in the address (https://x-access-token:…@github.com/o/r): what the page and the
+	// task log show is the address without it
+	src := Source{Root: fields[0], Branch: fields[1], Head: fields[2], Remote: scrubRemote(fields[3]), FirstRoot: fields[4], Ahead: number(fields[5]),
 		Staged: number(fields[6]), Unstaged: number(fields[7]), Untracked: number(fields[8]), state: fields[9], unmerged: number(fields[10])}
 	switch {
 	case src.Head == "":
@@ -100,6 +102,19 @@ func Inspect(host shell.Host, dir string) (Source, error) {
 		return src, fmt.Errorf("%d file(s) have unresolved conflicts: resolve them first", src.unmerged)
 	}
 	return src, nil
+}
+
+// scrubRemote is a remote's address without the credentials some remotes put in it.
+func scrubRemote(remote string) string {
+	i := strings.Index(remote, "://")
+	if i < 0 {
+		return remote
+	}
+	rest := remote[i+3:]
+	if at := strings.IndexByte(rest, '@'); at >= 0 && !strings.Contains(rest[:at], "/") {
+		return remote[:i+3] + rest[at+1:]
+	}
+	return remote
 }
 
 // Words is what the source holds, for the log and the dialog: "feature-x · 3 commits on no remote · 2 staged · 5 changed · 1 new file".

@@ -58,8 +58,9 @@ func ReviewScript(url string) string {
 	if !ok {
 		return ""
 	}
+	// every page of line comments, one JSON object a line: 100 was the first page alone, and the newest round sat past it
 	comments := fmt.Sprintf("repos/%s/%s/pulls/%d/comments?per_page=100", owner, repo, number)
-	return script.PATH + "\nexport GH_HOST=github.com\ngh pr view " + script.Quote(url) + " --json reviews 2>&1; printf '\\036\\n'; gh api " + script.Quote(comments) + " 2>&1"
+	return script.PATH + "\nexport GH_HOST=github.com\ngh pr view " + script.Quote(url) + " --json reviews 2>&1; printf '\\036\\n'; gh api --paginate " + script.Quote(comments) + " --jq '.[]' 2>&1"
 }
 
 type ghReview struct {
@@ -95,8 +96,25 @@ func ParseReview(out string) (Review, error) {
 		return Review{}, err
 	}
 	var raw []ghComment
-	if err := jsonAt(sections[1], "[", &raw); err != nil {
-		return Review{}, err
+	trimmed := strings.TrimSpace(sections[1])
+	switch {
+	case strings.HasPrefix(trimmed, "["): // one array, as an older gh prints a page
+		if err := jsonAt(sections[1], "[", &raw); err != nil {
+			return Review{}, err
+		}
+	case strings.HasPrefix(trimmed, "{"): // one JSON object a line, as --paginate --jq '.[]' prints every page
+		for _, line := range strings.Split(trimmed, "\n") {
+			line = strings.TrimSpace(line)
+			if !strings.HasPrefix(line, "{") {
+				continue
+			}
+			var c ghComment
+			if json.Unmarshal([]byte(line), &c) == nil {
+				raw = append(raw, c)
+			}
+		}
+	case trimmed != "":
+		return Review{}, errors.New(firstLine(trimmed, "gh answered nothing"))
 	}
 	var review Review
 	for _, r := range view.Reviews {

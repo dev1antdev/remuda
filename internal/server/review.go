@@ -3,6 +3,7 @@ package server
 import (
 	"errors"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/dev1antdev/remuda/internal/machines"
@@ -70,6 +71,23 @@ func (s *Server) handleReview(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, summary)
 }
 
+var hashOK = regexp.MustCompile(`^[0-9a-f]{40,64}$`)
+
+// seenBlobsOK checks what a page says it showed: a commit hash or none, and every file a blob hash, "gone" or a
+// size: fingerprint — nothing else is written as the baseline.
+func seenBlobsOK(head string, blobs map[string]string) bool {
+	if head != "" && !hashOK.MatchString(head) {
+		return false
+	}
+	for _, blob := range blobs {
+		if blob == "gone" || strings.HasPrefix(blob, "size:") || hashOK.MatchString(blob) {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
 // handleReviewDiff answers GET /api/review/diff?machine=&dir=&path= with one file's unified diff: since the last look,
 // on one side of the index (side=staged|unstaged), in one commit (commit=<sha>), or from a merge base (base=<sha>).
 func (s *Server) handleReviewDiff(w http.ResponseWriter, r *http.Request) {
@@ -105,9 +123,11 @@ func (s *Server) handleReviewDiff(w http.ResponseWriter, r *http.Request) {
 // handleReviewSeen answers POST /api/review/seen {machine, dir, verdict?}: the baseline moves to now.
 func (s *Server) handleReviewSeen(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Machine string `json:"machine"`
-		Dir     string `json:"dir"`
-		Verdict string `json:"verdict"`
+		Machine string            `json:"machine"`
+		Dir     string            `json:"dir"`
+		Verdict string            `json:"verdict"`
+		Head    string            `json:"head"`
+		Blobs   map[string]string `json:"blobs"`
 	}
 	if !decode(w, r, &req) {
 		return
@@ -116,11 +136,21 @@ func (s *Server) handleReviewSeen(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 400, errors.New("the verdict is approved, changes, or none"))
 		return
 	}
+	if req.Blobs != nil && !seenBlobsOK(req.Head, req.Blobs) {
+		httpErr(w, 400, errors.New("the blobs a look showed are blob hashes, size: fingerprints or gone"))
+		return
+	}
 	m, ok := s.reviewTarget(w, r, req.Machine, req.Dir)
 	if !ok {
 		return
 	}
-	b, err := s.Review.MarkSeen(m, req.Dir, req.Verdict)
+	var b review.Baseline
+	var err error
+	if req.Blobs != nil {
+		b, err = s.Review.MarkSeenShown(m, req.Dir, req.Verdict, req.Head, req.Blobs)
+	} else {
+		b, err = s.Review.MarkSeen(m, req.Dir, req.Verdict)
+	}
 	if err != nil {
 		httpErr(w, 502, err)
 		return

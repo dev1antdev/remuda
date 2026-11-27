@@ -39,6 +39,7 @@ export type Review = {
   outgoing?: Outgoing; // none without a remote to compare with
   busy?: string; // the agent at work in the checkout as the server saw it: a write would land under its feet
   error?: string;
+  blobs?: Record<string, string>; // what this look showed, by path: sent back with "seen", so an edit while reading stays fresh
 };
 export const fetchReview = (machineId: string, dir: string): Promise<Review> => getJSON(withMachine(`/api/review?dir=${encodeURIComponent(dir)}`, machineId));
 // DiffFrom is which diff of a file is read: since the last look (none), one side of the index, a commit's, or from a merge base
@@ -48,8 +49,14 @@ const diffQuery = (from: DiffFrom) => `${from.side ? `&side=${from.side}` : ""}$
 export type DiffRead = { diff: string; truncated?: boolean };
 export const fetchReviewDiff = (machineId: string, dir: string, path: string, from: DiffFrom = {}): Promise<DiffRead> =>
   getJSON<DiffRead>(withMachine(`/api/review/diff?dir=${encodeURIComponent(dir)}&path=${encodeURIComponent(path)}${diffQuery(from)}`, machineId));
-export const markReviewed = (machineId: string, dir: string, verdict?: Verdict): Promise<void> =>
-  sendJSON("POST", "/api/review/seen", { machine: machineId, dir, ...(verdict ? { verdict } : {}) });
+export const markReviewed = (machineId: string, dir: string, verdict?: Verdict, shown?: { head?: string; blobs?: Record<string, string> }): Promise<void> =>
+  sendJSON("POST", "/api/review/seen", {
+    machine: machineId,
+    dir,
+    ...(verdict ? { verdict } : {}),
+    ...(shown?.head ? { head: shown.head } : {}),
+    ...(shown?.blobs ? { blobs: shown.blobs } : {}),
+  });
 // the secret check of what a commit of the work would carry, and with push of the commits a push would send
 export const fetchSecrets = (machineId: string, dir: string, push: boolean): Promise<SecretScan> =>
   getJSON(withMachine(`/api/review/secrets?dir=${encodeURIComponent(dir)}${push ? "&push=1" : ""}`, machineId));

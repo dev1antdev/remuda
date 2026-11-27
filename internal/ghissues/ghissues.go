@@ -10,6 +10,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/dev1antdev/remuda/internal/shell"
 )
 
 // Person is a GitHub account as an issue names it.
@@ -115,9 +117,27 @@ func Reason(word string) (string, bool) {
 	return "", false
 }
 
+// ranGh says whether gh itself answered: its own non-zero exit, or none. Anything else — a timeout, a lost ssh — is
+// no word from gh, and its script held words like "not installed" that must not be read as its complaint.
+func ranGh(err error) bool {
+	if err == nil {
+		return true
+	}
+	var exit *shell.ExitError
+	return errors.As(err, &exit)
+}
+
 // troubleOf reads gh's complaint on a machine: gh missing, not signed in, a repository it cannot see, else its last line.
-func troubleOf(machine, repo, out string) *Trouble {
+// A run that gave no answer in time is told as such, with its warning that the request may still have gone through.
+func troubleOf(machine, repo, out string, err error) *Trouble {
 	text := strings.TrimSpace(out)
+	if !ranGh(err) {
+		words := "gh on " + machine + " did not answer in time"
+		if text != "" {
+			words += ": " + strings.TrimSpace(strings.Split(text, "\n")[0])
+		}
+		return &Trouble{Kind: "timeout", Text: words + ". Its request may still have gone through — look at " + repo + " there before pressing again."}
+	}
 	low := strings.ToLower(text)
 	switch {
 	case strings.Contains(low, "gh: command not found"):

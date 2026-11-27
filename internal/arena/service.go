@@ -368,6 +368,17 @@ func (s *Service) discard(a Arena, lane Lane) (patch, note string) {
 	if err != nil {
 		return "", "kept: the machine is away (" + err.Error() + ")"
 	}
+	// an agent still at work may write between the patch and the worktree's removal, and those writes are lost with it
+	if lane.Pane != "" {
+		if snap, err := client.SessionSnapshot(); err == nil && snap != nil {
+			for i := range snap.Panes {
+				p := &snap.Panes[i]
+				if p.PaneID == lane.Pane && (p.AgentStatus == coreapi.StatusWorking || p.AgentStatus == coreapi.StatusBlocked) {
+					return "", "kept: its agent is still at work — discard it once it settles"
+				}
+			}
+		}
+	}
 	if lane.Dir != "" && lane.Base != "" {
 		out, err := shell.Text(mc, PatchScript(lane.Dir, lane.Base), ScriptTimeout)
 		if err != nil {
