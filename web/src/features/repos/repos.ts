@@ -124,6 +124,7 @@ export function machineWords(listed: Listed | undefined): string {
   if (listed.away === "connecting") return t("connecting…");
   if (listed.away) return t("away · {why}", { why: listed.away });
   if (listed.error) return t("could not be read · {why}", { why: listed.error });
+  if (listed.cut) return tn(listed.repos.length, "{n} repository", "{n} repositories") + t(" · read stopped early: {why}", { why: listed.cut });
   return tn(listed.repos.length, "{n} repository", "{n} repositories");
 }
 

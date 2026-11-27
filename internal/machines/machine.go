@@ -24,6 +24,8 @@ type Machine struct {
 	state       string
 	errMsg      string
 	lastAttempt time.Time
+	failures    int       // failed connects in a row: each one pushes the next further off
+	nextTry     time.Time // before this, no reconnect is attempted
 	lastAlive   time.Time // last `ssh -O check`, so transport errors don't spawn one each
 	removed     bool      // taken out of the registry; never reconnect, pollers stop
 	serverHost  bool      // the local one, when remuda serves the page only: its herdr is never asked (Manager.SetServer)
@@ -65,6 +67,7 @@ type tcpForward struct {
 	conn *sshx.Conn
 	port int
 	addr string
+	last time.Time // when something last asked for it: one nobody asks for again is taken down
 }
 
 // hostRe accepts ssh destinations (host, user@host, [v6]:port) and nothing ssh would read as an option.
@@ -99,6 +102,10 @@ func (mc *Machine) fail(err error) {
 	was := mc.state
 	mc.state = StateError
 	mc.errMsg = err.Error()
+	// a broken ssh or a refused key would be a full login every 15 s, forever, and fail2ban counts them: the wait
+	// doubles up to ten minutes and starts over on the first connection that holds
+	mc.failures++
+	mc.nextTry = time.Now().Add(retryAfter(mc.failures))
 	conn, link := mc.conn, mc.link
 	mc.conn, mc.client, mc.attach, mc.link, mc.noCore = nil, nil, nil, nil, nil
 	hook := mc.onState
@@ -177,6 +184,7 @@ func (mc *Machine) connected(conn *sshx.Conn, found probe, client coreapi.API, a
 	mc.os = found.os
 	mc.state = StateConnected
 	mc.errMsg = ""
+	mc.failures, mc.nextTry = 0, time.Time{} // a connection that holds clears the backoff
 	hook := mc.onState
 	mc.mu.Unlock()
 	go mc.openDoor(conn)
@@ -229,12 +237,24 @@ func (mc *Machine) Ready() (coreapi.API, coreapi.Terminals, error) {
 	}
 }
 
-// tryAgain starts try in the background once 15 s have passed since the last attempt; called under mu.
+// tryAgain starts try in the background once the wait after the last failure is over; called under mu.
 func (mc *Machine) tryAgain(try func()) {
+	if time.Now().Before(mc.nextTry) {
+		return
+	}
 	if time.Since(mc.lastAttempt) > 15*time.Second {
 		mc.lastAttempt = time.Now()
 		go try()
 	}
+}
+
+// retryAfter is the wait after the nth failure in a row: 15 s, doubling, ten minutes at most.
+func retryAfter(failures int) time.Duration {
+	wait := 15 * time.Second
+	for i := 1; i < failures && wait < 10*time.Minute; i++ {
+		wait *= 2
+	}
+	return min(wait, 10*time.Minute)
 }
 
 // CodeAddr is where this machine's code-server (127.0.0.1:port on the machine itself) is reachable from here.
@@ -259,6 +279,7 @@ func (mc *Machine) ForwardHostAddr(host string, port int) (string, error) {
 	defer mc.fwdMu.Unlock()
 	mc.mu.Lock()
 	if f := mc.fwds[to]; f != nil && f.conn == conn {
+		f.last = time.Now()
 		mc.mu.Unlock()
 		return f.addr, nil
 	}
@@ -271,9 +292,30 @@ func (mc *Machine) ForwardHostAddr(host string, port int) (string, error) {
 	if mc.fwds == nil {
 		mc.fwds = map[forwardTo]*tcpForward{}
 	}
-	mc.fwds[to] = &tcpForward{conn: conn, port: port, addr: addr}
+	mc.fwds[to] = &tcpForward{conn: conn, port: port, addr: addr, last: time.Now()}
 	mc.mu.Unlock()
 	return addr, nil
+}
+
+// forwardIdle is how long a forward nothing asks for stays: a preview closed and a code-server stopped leave one behind.
+const forwardIdle = 30 * time.Minute
+
+// cancelIdleForwards takes down the forwards nothing has asked for since forwardIdle: the master keeps every -L for the
+// life of the connection otherwise, and each is a listener anyone of the machine's users can reach.
+func (mc *Machine) cancelIdleForwards(now time.Time) {
+	mc.mu.Lock()
+	var stale []forwardTo
+	var gone []*tcpForward
+	for to, f := range mc.fwds {
+		if now.Sub(f.last) > forwardIdle {
+			stale, gone = append(stale, to), append(gone, f)
+			delete(mc.fwds, to)
+		}
+	}
+	mc.mu.Unlock()
+	for i, to := range stale {
+		_ = gone[i].conn.CancelForward(to.host, gone[i].port, gone[i].addr)
+	}
 }
 
 // ---- remote execution ----

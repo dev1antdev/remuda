@@ -1,6 +1,7 @@
 package gitsync
 
 import (
+	"strings"
 	"sync"
 	"time"
 
@@ -44,6 +45,7 @@ type Listed struct {
 	Label       string    `json:"label"`
 	Away        string    `json:"away,omitempty"`  // not connected: why
 	Error       string    `json:"error,omitempty"` // the read failed: why
+	Cut         string    `json:"cut,omitempty"`   // the read stopped early (a timeout): what is here is what came
 	Scan        *Scan     `json:"scan,omitempty"`
 	ScanWhere   string    `json:"scan_where,omitempty"`   // the scan's folder with the home said as ~
 	ScanMissing bool      `json:"scan_missing,omitempty"` // the folder to scan is not there
@@ -101,14 +103,20 @@ func (s *Service) read(host shell.Host, fresh bool) Listed {
 	if s.Folders != nil {
 		folders = s.Folders(host.ID())
 	}
-	output, err := shell.Text(host, ReadScript(style, folders, scan), Timeout)
-	if err != nil {
+	// the answer is taken as it comes: a machine with hundreds of checkouts passes the timeout, and the records read
+	// before it are what the page shows, with the cut said instead of everything gone
+	var out strings.Builder
+	err := host.Stream(ReadScript(style, folders, scan), Timeout, func(b []byte) { out.Write(b) })
+	if err != nil && out.Len() == 0 {
 		listed.Error = err.Error()
 	} else {
-		found := ParseRead(style, host.Home(), output)
+		found := ParseRead(style, host.Home(), out.String())
 		listed.Repos, listed.More, listed.ScanMissing = found.Repos, found.More, found.ScanMissing
 		if listed.Repos == nil {
 			listed.Repos = []Repo{}
+		}
+		if err != nil {
+			listed.Cut = err.Error()
 		}
 	}
 	s.mu.Lock()

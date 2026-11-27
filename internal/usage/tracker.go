@@ -57,6 +57,7 @@ type Tracker struct {
 	subs        map[string][]string   // machine|path → its subagent transcripts
 	subsChecked map[string]time.Time  // machine|path → when the subagent folder was last listed
 	opencode    map[string]Display    // machine|pane → an opencode session's meter, which it keeps itself
+	pruned      time.Time             // when prune last ran
 }
 
 type fileState struct {
@@ -84,6 +85,16 @@ func key(machineID, s string) string { return machineID + "|" + s }
 func (t *Tracker) ObserveSnapshot(machineID string, source Source, snap *coreapi.Snapshot) {
 	if _, running := t.busy.LoadOrStore(machineID, true); running {
 		return
+	}
+	now := time.Now()
+	t.mu.Lock()
+	due := now.Sub(t.pruned) > time.Hour
+	if due {
+		t.pruned = now
+	}
+	t.mu.Unlock()
+	if due {
+		t.prune(now) // a pane closed yesterday left its state behind; this is where it goes
 	}
 	panes := append([]coreapi.PaneInfo(nil), snap.Panes...)
 	go func() {
@@ -176,8 +187,12 @@ func (t *Tracker) elsewhere(machineID string, chain []string, path string) map[s
 	return counted
 }
 
-// observeSubagents keeps the live file's subagents current; a fork's transcript opens with a copy of the response that
-// spawned it, which the file that made it counts.
+// subagentMost is how many of a session's subagents the meter reads: a long session may hold hundreds, and the ones still
+// moving are the newest.
+const subagentMost = 12
+
+// observeSubagents keeps the live file's recent subagents current; a fork's transcript opens with a copy of the response
+// that spawned it, which the file that made it counts.
 func (t *Tracker) observeSubagents(machineID string, files Files, chain []string) {
 	live := chain[len(chain)-1]
 	k := key(machineID, live)
@@ -195,9 +210,15 @@ func (t *Tracker) observeSubagents(machineID string, files Files, chain []string
 	if err != nil {
 		return
 	}
-	paths := make([]string, 0, len(vers))
+	// the newest subagents alone: a session that spawned two hundred leaves two hundred files behind, and reading them
+	// all after a restart brought about a gigabyte over the ssh
+	paths := make([]string, 0, min(len(vers), subagentMost))
 	for p := range vers {
 		paths = append(paths, p)
+	}
+	sort.Slice(paths, func(i, j int) bool { return vers[paths[i]].MTime > vers[paths[j]].MTime })
+	if len(paths) > subagentMost {
+		paths = paths[:subagentMost]
 	}
 	sort.Strings(paths)
 	counted := append(append([]string(nil), chain...), paths...)
@@ -306,6 +327,62 @@ func (t *Tracker) read(machineID string, files Files, path string, v transcript.
 }
 
 // Display is a pane's meter, or false when nothing was read yet.
+// Forgets are what a machine or a pane leaves behind: a removed machine's files and meters, and a pane closed for good.
+// Called by the app when the fleet says so.
+func (t *Tracker) ForgetMachine(machineID string) {
+	prefix := machineID + "|"
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	for k := range t.files {
+		if strings.HasPrefix(k, prefix) {
+			delete(t.files, k)
+		}
+	}
+	for k := range t.panes {
+		if strings.HasPrefix(k, prefix) {
+			delete(t.panes, k)
+		}
+	}
+	for k := range t.pred {
+		if strings.HasPrefix(k, prefix) {
+			delete(t.pred, k)
+		}
+	}
+	for k := range t.subs {
+		if strings.HasPrefix(k, prefix) {
+			delete(t.subs, k)
+		}
+	}
+	for k := range t.subsChecked {
+		if strings.HasPrefix(k, prefix) {
+			delete(t.subsChecked, k)
+		}
+	}
+	for k := range t.opencode {
+		if strings.HasPrefix(k, prefix) {
+			delete(t.opencode, k)
+		}
+	}
+}
+
+// prune forgets the files no pane has looked at for a day: a pane closed yesterday left its state in these maps, and
+// nothing else takes it out.
+func (t *Tracker) prune(now time.Time) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	watched := map[string]bool{}
+	for _, path := range t.panes {
+		watched[path] = true
+	}
+	for k, st := range t.files {
+		if !watched[k] && now.Sub(st.checked) > day {
+			delete(t.files, k)
+		}
+	}
+}
+
+const day = 24 * time.Hour
+
 func (t *Tracker) Display(machineID, paneID string) (Display, bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()

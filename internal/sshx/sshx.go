@@ -610,6 +610,20 @@ func (c *Conn) ForwardTCPTo(host string, remotePort int) (string, error) {
 	return local, nil
 }
 
+// CancelForward takes one -L forward down again, when nothing has asked for it for a while.
+func (c *Conn) CancelForward(host string, remotePort int, local string) error {
+	if strings.Contains(host, ":") {
+		host = "[" + host + "]"
+	}
+	cmd := c.cmd("-O", "cancel", "-L", fmt.Sprintf("%s:%s:%d", local, host, remotePort), c.Host)
+	var errb bytes.Buffer
+	cmd.Stderr = &errb
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("ssh cancel forward: %s", strings.TrimSpace(errb.String()))
+	}
+	return nil
+}
+
 // DialExec runs a remote command over the master and exposes its stdin/stdout as a net.Conn: the RPC transport for an
 // sshd that refuses unix-socket forwarding (`nc -U <socket>` bridges to herdr), and remuda-core's `connect`. Its
 // session is a script's — no terminal, the stdin kept whatever the host's ssh config says — since the command's stdin

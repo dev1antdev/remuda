@@ -13,6 +13,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 	"unicode/utf8"
 
 	"github.com/dev1antdev/remuda/internal/core"
@@ -43,20 +44,22 @@ type Config struct {
 }
 
 type Manager struct {
-	mu       sync.Mutex
-	machines map[string]*Machine
-	order    []string
-	path     string // machines.json
-	dir      string // the state dir, where labels.json and herdr-stopped.json live
-	names    map[string]string
-	macs     map[string]string                     // the MAC addresses, for the magic packet that wakes a sleeping machine
-	placed   []string                              // the person's order of the machines, by id (order.json); order is the arrival's
-	door     *Door                                 // how every remote's agents reach the tasks here; nil opens none
-	saveMu   sync.Mutex                            // writes of machines.json, one at a time
-	onState  func(id, label, state, reason string) // hears every remote's connection move, set by OnState
-	server   bool                                  // the host serves the page only: no machine of the fleet (SetServer)
-	core     bool                                  // every machine is reached through remuda-core (NewCoreManager)
-	roots    *transcript.RootStore                 // the folders and conversations its agents named, kept across restarts
+	mu        sync.Mutex
+	machines  map[string]*Machine
+	order     []string
+	path      string // machines.json
+	dir       string // the state dir, where labels.json and herdr-stopped.json live
+	names     map[string]string
+	macs      map[string]string                     // the MAC addresses, for the magic packet that wakes a sleeping machine
+	placed    []string                              // the person's order of the machines, by id (order.json); order is the arrival's
+	door      *Door                                 // how every remote's agents reach the tasks here; nil opens none
+	saveMu    sync.Mutex                            // writes of machines.json, one at a time
+	onState   func(id, label, state, reason string) // hears every remote's connection move, set by OnState
+	server    bool                                  // the host serves the page only: no machine of the fleet (SetServer)
+	core      bool                                  // every machine is reached through remuda-core (NewCoreManager)
+	roots     *transcript.RootStore                 // the folders and conversations its agents named, kept across restarts
+	sweepDone chan struct{}                         // ends the forward sweeper with Close
+	closeOnce sync.Once                             // Close may be called again (a test's cleanup and the app's)
 	// herdr's machines, never saved, were read once since the start, or there is no herdr: the fleet is whole (Gone)
 }
 
@@ -238,7 +241,10 @@ func newManager(dir string, door *Door, local *Machine, speaksCore bool) *Manage
 		door:     door,
 		core:     speaksCore,
 		roots:    transcript.OpenRootStore(dir),
+
+		sweepDone: make(chan struct{}),
 	}
+	go m.sweepForwards()
 	local.Transcripts = local.Transcripts.Keeping(m.roots)
 	_ = state.LoadJSON(m.dir, labelsFile, &m.names)
 	if m.names == nil {
@@ -290,18 +296,39 @@ func (m *Manager) writeMachines(cfgs []Config) error {
 }
 
 func (m *Manager) add(cfg Config) *Machine {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.addLocked(cfg)
+}
+
+// addLocked puts a machine in the registry; the caller holds m.mu.
+func (m *Manager) addLocked(cfg Config) *Machine {
 	mc := newRemote(cfg)
 	mc.Transcripts = mc.Transcripts.Keeping(m.roots)
 	mc.door = m.door
 	mc.onState = m.stateMoved
 	mc.speaksCore = m.core
-	m.mu.Lock()
 	mc.setLabel(m.names[cfg.ID])
 	m.machines[cfg.ID] = mc
 	m.order = append(m.order, cfg.ID)
-	m.mu.Unlock()
 	go mc.connect()
 	return mc
+}
+
+// addIfNew registers a machine unless the fleet has its id or its host already, check and insert under one lock: two Add
+// presses at once made two machines of one id, and the order named it twice.
+func (m *Manager) addIfNew(cfg Config) (*Machine, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.machines[cfg.ID] != nil {
+		return nil, fmt.Errorf("machine %q already exists", cfg.ID)
+	}
+	for _, other := range m.machines {
+		if other.Cfg.Host == cfg.Host {
+			return nil, fmt.Errorf("a machine for %s already exists", cfg.Host)
+		}
+	}
+	return m.addLocked(cfg), nil
 }
 
 func newRemote(cfg Config) *Machine {
@@ -392,10 +419,10 @@ func (m *Manager) Add(label, host string) (*Machine, error) {
 	if id == "" || id == LocalID || m.has(id) {
 		id = slug(host)
 	}
-	if m.has(id) {
-		return nil, fmt.Errorf("machine %q already exists", id)
+	mc, err := m.addIfNew(Config{ID: id, Label: label, Host: host})
+	if err != nil {
+		return nil, err
 	}
-	mc := m.add(Config{ID: id, Label: label, Host: host})
 	return mc, m.save()
 }
 
@@ -462,7 +489,9 @@ func (m *Manager) List() []*Machine {
 		if m.server && id == LocalID {
 			continue
 		}
-		out = append(out, m.machines[id])
+		if mc := m.machines[id]; mc != nil { // an id of the order with no machine behind it is no row
+			out = append(out, mc)
+		}
 	}
 	return out
 }
@@ -473,12 +502,32 @@ func (m *Manager) All() []*Machine {
 	defer m.mu.Unlock()
 	out := make([]*Machine, 0, len(m.order))
 	for _, id := range m.order {
-		out = append(out, m.machines[id])
+		if mc := m.machines[id]; mc != nil {
+			out = append(out, mc)
+		}
 	}
 	return out
 }
 
+// sweepForwards takes down, every few minutes, the TCP forwards nothing has asked for lately: a preview closed and a
+// code-server stopped leave one behind, and the master keeps each for its whole life.
+func (m *Manager) sweepForwards() {
+	t := time.NewTicker(5 * time.Minute)
+	defer t.Stop()
+	for {
+		select {
+		case <-m.sweepDone:
+			return
+		case now := <-t.C:
+			for _, mc := range m.All() {
+				mc.cancelIdleForwards(now)
+			}
+		}
+	}
+}
+
 func (m *Manager) Close() {
+	m.closeOnce.Do(func() { close(m.sweepDone) })
 	for _, mc := range m.All() {
 		mc.mu.Lock()
 		conn, link := mc.conn, mc.link

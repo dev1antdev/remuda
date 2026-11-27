@@ -71,11 +71,23 @@ func (Local) Home() string {
 	return home
 }
 
+// localScript is the sh a script runs in: one argument as long as a command line takes (128 KB per argument on Linux),
+// the script itself on stdin past that — the way sshx.Remote sends one, and for the same reason.
+func localScript(ctx context.Context, script string) *exec.Cmd {
+	if len(script) <= 64<<10 {
+		return exec.CommandContext(ctx, "sh", "-c", script)
+	}
+	cmd := exec.CommandContext(ctx, "sh", "-s")
+	cmd.Stdin = strings.NewReader(script)
+	return cmd
+}
+
 func (Local) Run(script string, timeout time.Duration) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "sh", "-c", script)
-	cmd.WaitDelay = 2 * time.Second // a killed sh may leave children on the pipes; do not wait for them
+	cmd := localScript(ctx, script)
+	proc.Group(cmd, syscall.SIGTERM) // its own group: a timeout ends the children too, not only the sh that started them
+	cmd.WaitDelay = 2 * time.Second  // a killed sh may leave children on the pipes; do not wait for them
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errb
 	err := cmd.Run()
@@ -94,7 +106,7 @@ func (Local) Run(script string, timeout time.Duration) ([]byte, error) {
 func (Local) Stream(script string, timeout time.Duration, sink func([]byte)) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "sh", "-c", script)
+	cmd := localScript(ctx, script)
 	proc.Group(cmd, syscall.SIGTERM) // its own group: a timeout ends the children too
 	cmd.WaitDelay = 2 * time.Second
 	pipeReader, pipeWriter := io.Pipe()

@@ -286,6 +286,26 @@ func sameFile(a, b string) (bool, error) {
 // run hands a script to `sh -c` here, or to the host over ssh on the session's stdin as every other script goes
 // (`sshx.Remote`): the loader reads the script whole before anything runs, so an installer's own prompt cannot eat it.
 func run(host string, env []string, script string, args []string, out io.Writer) error {
+	// a command line has a limit per argument on Linux (128 KB), and the uninstaller with its checksums is close: past
+	// this, the script goes in a file of its own, read by the shell as a script
+	if host == "" && len(script) > 64<<10 {
+		f, err := os.CreateTemp("", "remuda-script-*.sh")
+		if err != nil {
+			return err
+		}
+		defer os.Remove(f.Name())
+		if _, err := f.WriteString(script); err != nil {
+			f.Close()
+			return err
+		}
+		if err := f.Close(); err != nil {
+			return err
+		}
+		cmd := exec.Command("sh", append([]string{f.Name()}, args...)...)
+		cmd.Env = append(os.Environ(), env...)
+		cmd.Stdout, cmd.Stderr = out, out
+		return cmd.Run()
+	}
 	return command(host, env, script, args, out).Run()
 }
 
@@ -328,8 +348,13 @@ func command(host string, env []string, body string, args []string, out io.Write
 			}
 			body = prefix.String() + body
 		}
+		// the body always travels on the session's stdin, never as the command line: a 16 KB uninstall.sh is past what
+		// Dropbear takes there even quoted, and the loader line itself is a few bytes
+		if input == nil {
+			input = strings.NewReader("")
+		}
 		line, stdin := sshx.RemoteWithInput(body, input)
-		cmd = exec.Command("ssh", "-o", "BatchMode=yes", host, line)
+		cmd = exec.Command("ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=20", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=4", host, line)
 		cmd.Stdin = stdin
 	}
 	cmd.Stdout, cmd.Stderr = out, out

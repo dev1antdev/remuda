@@ -56,3 +56,17 @@ func TestFakeAnswersAndRemembers(t *testing.T) {
 		t.Fatalf("scripts: %q", s)
 	}
 }
+
+func TestALongScriptRunsFromStdin(t *testing.T) {
+	if testing.Short() {
+		t.Skip("a big script")
+	}
+	script := strings.Repeat("# a line of noise to pass a command line's limit\n", 4000) + "printf done\n"
+	if len(script) <= 64<<10 {
+		t.Fatalf("the script is not long enough: %d", len(script))
+	}
+	out, err := Text(Local{Name: "local"}, script, 30*time.Second)
+	if err != nil || strings.TrimSpace(out) != "done" {
+		t.Fatalf("%q %v", out, err)
+	}
+}
