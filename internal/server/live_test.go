@@ -47,3 +47,30 @@ func TestEventsSocketLetsGoOfAPageThatDoesNotAnswerPings(t *testing.T) {
 		t.Fatal("the stream of a page that answers no ping still stands")
 	}
 }
+
+// A quiet stream still says it is alive: the page's watchdog has nothing else to tell a half-open link from an idle one.
+func TestEventsSocketTellsAQuietPageItIsAlive(t *testing.T) {
+	quickPings(t)
+	s := &Server{Live: live.New(live.Inputs{})}
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /ws/events", func(w http.ResponseWriter, r *http.Request) { s.handleEventsWS(w, r) })
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	c, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(srv.URL, "http")+"/ws/events", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.CloseNow()
+	for {
+		typ, data, err := c.Read(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if typ == websocket.MessageText && string(data) == liveHeartbeat {
+			return
+		}
+	}
+}

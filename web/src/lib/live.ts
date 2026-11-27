@@ -16,6 +16,13 @@ const state = createStore<{ connected: boolean }>({ connected: false });
 export const useLiveConnected = (): boolean => state.use((s) => s.connected);
 export const liveConnected = (): boolean => state.get().connected;
 
+// LIVE_QUIET is how long a page waits for the stream's word before it takes a silent link for a dead one: the server
+// pings and says so every 30 s, and a half-open link gives neither a close nor a word.
+export const LIVE_QUIET = 45_000;
+export function quietTooLong(lastSeen: number, now: number): boolean {
+  return now - lastSeen > LIVE_QUIET;
+}
+
 // backoffDelay is the pause before the attempt-th reconnect: a second, doubling, half a minute at most
 export function backoffDelay(attempt: number): number {
   return Math.min(30000, 1000 * 2 ** Math.max(0, Math.min(attempt, 10)));
@@ -114,6 +121,8 @@ function sendFrame() {
 
 let socket: WebSocket | null = null;
 let attempt = 0;
+let lastSeen = 0;
+let watchdog: ReturnType<typeof setInterval> | null = null;
 let retry: ReturnType<typeof setTimeout> | null = null;
 let started = false;
 
@@ -132,15 +141,25 @@ function connect() {
   socket = ws;
   ws.onopen = () => {
     attempt = 0;
+    lastSeen = Date.now();
     state.set({ connected: true });
     sendFrame();
+    if (watchdog) clearInterval(watchdog);
+    watchdog = setInterval(() => {
+      if (quietTooLong(lastSeen, Date.now())) ws.close(); // onclose reconnects
+    }, 5000);
   };
   ws.onmessage = (message) => {
+    lastSeen = Date.now();
     const event = parseEvent(String(message.data));
     if (event) dispatch(event);
   };
   ws.onclose = () => {
     if (socket === ws) socket = null;
+    if (watchdog) {
+      clearInterval(watchdog);
+      watchdog = null;
+    }
     state.set({ connected: false });
     scheduleReconnect();
   };

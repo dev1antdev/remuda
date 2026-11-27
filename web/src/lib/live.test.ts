@@ -1,10 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { backoffDelay, onEvent, paneKey, parseEvent, slowerPoll, subscriptionFrame, watchPane } from "./live";
+import { backoffDelay, LIVE_QUIET, onEvent, paneKey, parseEvent, quietTooLong, slowerPoll, subscriptionFrame, watchPane } from "./live";
 
 describe("backoffDelay", () => {
   it("doubles from a second and stops at half a minute", () => {
     expect([0, 1, 2, 3, 4, 5, 6, 20].map(backoffDelay)).toEqual([1000, 2000, 4000, 8000, 16000, 30000, 30000, 30000]);
     expect(backoffDelay(-3)).toBe(1000);
+  });
+});
+
+describe("quietTooLong", () => {
+  it("takes a stream with no word for longer than the quiet limit for dead", () => {
+    expect(quietTooLong(1000, 1000 + LIVE_QUIET)).toBe(false);
+    expect(quietTooLong(1000, 1001 + LIVE_QUIET)).toBe(true);
   });
 });
 
