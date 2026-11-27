@@ -69,7 +69,7 @@ emit() {
   esac
   cwd_of "$3"; known_cwd=$cwd
   if [ -d "/proc/$3" ]; then
-    ppid=$(awk '{print $4}' "/proc/$3/stat" 2>/dev/null)
+    ppid=$(sed 's/.*) //' "/proc/$3/stat" 2>/dev/null | cut -d' ' -f2)
   else
     ppid=$(ps -o ppid= -p "$3" 2>/dev/null | tr -d ' ')
   fi

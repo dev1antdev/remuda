@@ -22,7 +22,8 @@ const read = script.ReadGit
 // GIT_ASKPASS goes with it (an empty one is set, so neither core.askPass nor SSH_ASKPASS is tried); ssh gets
 // BatchMode on top of whatever command the repository or the person names for it.
 const quietNetwork = `GCM_INTERACTIVE=0 GIT_TERMINAL_PROMPT=0 GIT_ASKPASS= SSH_ASKPASS=; export GCM_INTERACTIVE GIT_TERMINAL_PROMPT GIT_ASKPASS SSH_ASKPASS; ` +
-	`sshc=$(git config --get core.sshCommand 2>/dev/null); GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-${sshc:-ssh}} -o BatchMode=yes"; export GIT_SSH_COMMAND; `
+	// GIT_SSH names a program of the person's own (plink and its like take no -o): it is left to speak for itself
+	`sshc=$(git config --get core.sshCommand 2>/dev/null); if [ -z "${GIT_SSH:-}" ]; then GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-${sshc:-ssh}} -o BatchMode=yes"; export GIT_SSH_COMMAND; fi; `
 
 // lastLines is git's own words at the end of what it printed, without its hints or its progress: what a failure shows.
 func lastLines(output string, n int) string {
