@@ -30,7 +30,7 @@ describe("keysTo", () => {
 });
 
 describe("sameDialog", () => {
-  const offered = { text: "Bash command\n\nrm -rf build\n\nDo you want to proceed?", options };
+  const offered = { text: "Bash command\n\nrm -rf build\n\nDo you want to proceed?", key: "k", options };
   it("is the dialog the choice was offered on, wherever the cursor has moved since", () => {
     const moved = { ...offered, options: options.map((o, i) => ({ ...o, picked: i === 0 })) };
     expect(sameDialog(offered, moved)).toBe(true);
@@ -64,9 +64,9 @@ describe("pressInTurn", () => {
 
 describe("choosable", () => {
   it("takes one press for a single choice, never for a multi-select", () => {
-    expect(choosable({ text: "Proceed?", options })).toBe(true);
-    expect(choosable({ text: "Which features?", options, multi: true })).toBe(false);
-    expect(choosable({ text: "Nothing to pick", options: [] })).toBe(false);
+    expect(choosable({ text: "Proceed?", key: "k", options })).toBe(true);
+    expect(choosable({ text: "Which features?", key: "k", options, multi: true })).toBe(false);
+    expect(choosable({ text: "Nothing to pick", key: "k", options: [] })).toBe(false);
   });
 });
 

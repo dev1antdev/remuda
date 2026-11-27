@@ -3,11 +3,11 @@ import { MAX_ASKING, askedOf, questionLine, sameQuestions } from "./questions";
 
 describe("questionLine", () => {
   it("holds up the dialog's head and the first line of its detail", () => {
-    expect(questionLine({ text: "Bash command\nrm -rf build\nclean the build\nDo you want to proceed?", options: [] })).toBe("Bash command · rm -rf build");
+    expect(questionLine({ text: "Bash command\nrm -rf build\nclean the build\nDo you want to proceed?", key: "k", options: [] })).toBe("Bash command · rm -rf build");
   });
 
   it("holds the asking line when the dialog has no head, nothing without a dialog", () => {
-    expect(questionLine({ text: "Which database?", options: [] })).toBe("Which database?");
+    expect(questionLine({ text: "Which database?", key: "k", options: [] })).toBe("Which database?");
     expect(questionLine(null)).toBe("");
   });
 

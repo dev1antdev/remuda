@@ -103,7 +103,11 @@ export const handOver = (req: { machine: string; pane: string; session: string |
 export type QuestionOption = { n: number; label: string; picked: boolean };
 // Question is the dialog on the pane's screen: its words, and its choices with the cursor on one; multi when it takes several;
 // axis "horizontal" when the choices sit in a row walked with ←/→, as opencode's permission dialog draws them.
-export type Question = { text: string; options: QuestionOption[]; multi?: boolean; axis?: "horizontal" };
+export type Question = { text: string; key: string; options: QuestionOption[]; multi?: boolean; axis?: "horizontal" };
+// answerQuestion picks one choice through the server: it re-reads the dialog, checks the key and the label, and presses
+// the keys under the pane's lock, a 409 when the dialog is no longer the one the card showed
+export const answerQuestion = (machineId: string, paneId: string, index: number, label: string, dialog: string): Promise<{ chosen: string }> =>
+  sendJSON("POST", "/api/question/answer", { machine: machineId, pane: paneId, index, label, dialog });
 export const fetchQuestion = (machineId: string, paneId: string): Promise<Question | null> =>
   getJSON<{ question: Question | null }>(`/api/question?${new URLSearchParams({ machine: machineId, pane: paneId })}`).then((r) => r.question);
 // Progress is what Claude Code's spinner says while it works: "✻ Refactoring… (2m 14s · ↓ 6.8k tokens)"

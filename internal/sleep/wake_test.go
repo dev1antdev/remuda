@@ -23,12 +23,12 @@ func noChecks(Agent) error { return nil }
 
 func TestWakeResumesEachAgentInItsShellAndSaysWhatStaysAsleep(t *testing.T) {
 	w := asleep(
-		sleeper("w1:p1", "w1:t1", "claude", sidA), // its shell is free: resumed there
-		sleeper("w1:p2", "w1:t1", "codex", sidB),  // something runs in its shell
-		sleeper("w1:p3", "w1:t1", "gemini", sidC), // its shell moved to another folder
-		sleeper("w1:p4", "w1:t1", "kimi", sidA),   // the person started Claude Code there by hand
-		sleeper("w1:p5", "w1:t1", "claude", sidB), // back already, resumed by hand
-		sleeper("w1:p6", "w1:t1", "claude", sidC), // its session file is gone: it can never come back
+		sleeper("w1:p1", "w1:t1", "claude", sidA),                                   // its shell is free: resumed there
+		sleeper("w1:p2", "w1:t1", "codex", sidB),                                    // its conversation is open in p5: never a second agent on one file
+		sleeper("w1:p3", "w1:t1", "gemini", sidC),                                   // its shell moved to another folder
+		sleeper("w1:p4", "w1:t1", "kimi", sidA),                                     // the person started Claude Code there by hand
+		sleeper("w1:p5", "w1:t1", "claude", sidB),                                   // back already, resumed by hand
+		sleeper("w1:p6", "w1:t1", "claude", "2a3b4c5d-6e7f-4081-92a3-b4c5d6e7f809"), // its session file is gone: it can never come back
 	)
 	f := newFake(
 		shellPane("w1:p1", "w1:t1", "/work/api"),
@@ -52,7 +52,7 @@ func TestWakeResumesEachAgentInItsShellAndSaysWhatStaysAsleep(t *testing.T) {
 	if err == nil || !strings.HasPrefix(err.Error(), "api is still partly asleep · not restarted (busy or gone): ") {
 		t.Fatalf("wake: %v", err)
 	}
-	for _, want := range []string{"Codex in w1:p2 (something runs in its shell)", "Gemini CLI in w1:p3 (its shell is in another folder now)", "Kimi Code in w1:p4 (Claude Code runs in its pane now)"} {
+	for _, want := range []string{"Gemini CLI in w1:p3 (its shell is in another folder now)", "Kimi Code in w1:p4 (Claude Code runs in its pane now)"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("the partial wake does not name %q: %v", want, err)
 		}
@@ -68,8 +68,11 @@ func TestWakeResumesEachAgentInItsShellAndSaysWhatStaysAsleep(t *testing.T) {
 	for _, a := range record.Agents {
 		panes = append(panes, a.Pane)
 	}
-	if strings.Join(panes, " ") != "w1:p2 w1:p3 w1:p4" {
+	if strings.Join(panes, " ") != "w1:p3 w1:p4" {
 		t.Fatalf("still asleep: %v", panes)
+	}
+	if !strings.Contains(strings.Join(log, "\n"), "· Codex (w1:p2): its conversation runs in w1:p5 already") {
+		t.Fatalf("the agent whose conversation is open elsewhere is not said:\n%s", strings.Join(log, "\n"))
 	}
 	if !strings.Contains(strings.Join(log, "\n"), "forgotten, since they cannot come back: Claude Code in w1:p6 (its session file is gone") {
 		t.Fatalf("the agent that can never come back is not said:\n%s", strings.Join(log, "\n"))

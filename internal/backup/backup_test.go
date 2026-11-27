@@ -448,3 +448,24 @@ func TestTheHostFolderIsAPlainName(t *testing.T) {
 		t.Fatalf("list %+v", list)
 	}
 }
+
+func TestANameWindowsWouldReadAsAPathOutIsRefused(t *testing.T) {
+	for _, name := range []string{`..\\escape`, `a\\..\\..\\b`, `C:\\Windows`, "C:/Windows"} {
+		if _, _, err := Read(tarball(t, true, map[string]string{name: "x"})); err == nil {
+			t.Errorf("%q was read", name)
+		}
+	}
+}
+
+func TestARestoredDirIsPrivateWhateverTheArchiveSays(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "remuda")
+	archive := tarball(t, true, map[string]string{"token": "x", "folder/file": "y"})
+	if _, _, err := Restore(archive, dir, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{dir, filepath.Join(dir, "folder")} {
+		if info, err := os.Stat(p); err != nil || info.Mode().Perm() != 0o700 {
+			t.Fatalf("%s: %v %v", p, info, err)
+		}
+	}
+}

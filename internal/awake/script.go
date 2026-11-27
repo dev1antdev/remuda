@@ -89,7 +89,8 @@ case "$tool" in
      [ -n "$pid" ] || { printf 'none %s\n' "$os"; exit 0; } ;;
 esac
 printf '%s\n' "$pid" > "$f"
-printf 'started %s\n' "$pid"`
+# an inhibitor that died at once (no logind, no permission) is no hold: the file stays only for one that runs
+if ours; then printf 'started %s\n' "$pid"; else rm -f "$f"; printf 'none %s\n' "$(uname -s)"; fi`
 }
 
 // ReleaseScript ends the inhibitor the pidfile names, when it still is one, and removes the file.

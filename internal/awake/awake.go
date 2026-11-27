@@ -20,6 +20,10 @@ const file = "awake.json"
 // Grace is how long the hold stands after the last agent settled, so a pause between two prompts keeps it.
 var Grace = 2 * time.Minute
 
+// dropRetry is the wait before a hold that could not be let go is tried again: an inhibitor left running is a machine
+// kept awake for good.
+const dropRetry = 2 * time.Minute
+
 // Reassert is how often a hold that stands is taken again while agents still work, so an inhibitor that died
 // (a reboot) comes back, and how long a failed hold waits before it is tried again.
 var Reassert = 5 * time.Minute
@@ -195,7 +199,7 @@ func (s *Service) Wait() { s.wg.Wait() }
 func (s *Service) settle(id string, m *machine) {
 	switch {
 	case m.busy:
-	case !m.on && m.held:
+	case !m.on && m.held && m.timer == nil:
 		s.drop(id, m)
 	case m.on && m.working > 0 && !m.held:
 		if time.Since(m.triedAt) >= Reassert {
@@ -215,8 +219,8 @@ func (s *Service) lapse(id string) {
 		return
 	}
 	m.timer = nil
-	if m.on && m.working == 0 && m.held && !m.busy {
-		s.drop(id, m)
+	if m.held && !m.busy {
+		s.drop(id, m) // the grace ran out, or a release that failed is due again
 	}
 }
 
@@ -255,10 +259,17 @@ func (s *Service) drop(id string, m *machine) {
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		m.busy = false
-		m.held = false
 		if err != nil {
-			log.Printf("awake: %s: the hold could not be let go: %v", id, err)
+			// still held, and tried again: letting this go as held left caffeinate running with nothing to stop it
+			log.Printf("awake: %s: the hold could not be let go, trying again in %s: %v", id, dropRetry, err)
+			m.err = err.Error()
+			if m.timer == nil {
+				m.timer = time.AfterFunc(dropRetry, func() { s.lapse(id) })
+			}
+			s.settle(id, m)
+			return
 		}
+		m.held, m.err = false, ""
 		s.settle(id, m)
 	}()
 }

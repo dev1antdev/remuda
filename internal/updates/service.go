@@ -6,6 +6,7 @@ import (
 	"os"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/coreapi"
@@ -28,7 +29,17 @@ type Service struct {
 	Scratch  bool              // a second instance beside the real one: its release would replace the real remuda, so none is offered
 
 	runs batches // Update everywhere's recent runs
+
+	mu     sync.Mutex
+	active map[string]string // machine|what → the job running it, or startingBusy while it is being launched
 }
+
+// startingBusy marks a start that has been let through and whose job is not made yet: a second press in that instant
+// waits rather than starting the same update again.
+const startingBusy = "starting"
+
+// ErrBusy is a start of an update that is already running on that machine.
+var ErrBusy = errors.New("this update is already running there: its job is under the machine's jobs")
 
 // StaleError is a run whose command is no longer the one shown: the person should look again.
 type StaleError struct{ Reason string }
@@ -102,8 +113,56 @@ func (s *Service) RestartPane(mc *machines.Machine, paneID string) (jobs.Job, er
 	return s.Jobs.Run(mc, title, command, func(say func(string)) error { return s.Restart.Pane(mc, paneID, say) }), nil
 }
 
-// Start runs the update called what on the machine; the command must be the one shown, or the run is a StaleError.
+// Start runs the update called what on the machine; the command must be the one shown, or the run is a StaleError. A
+// second press while the first run still goes is ErrBusy: one update, one job.
 func (s *Service) Start(mc *machines.Machine, what, command string) (jobs.Job, error) {
+	if err := s.begin(mc, what); err != nil {
+		return jobs.Job{}, err
+	}
+	job, err := s.start(mc, what, command)
+	if err != nil {
+		s.forget(mc, what)
+		return jobs.Job{}, err
+	}
+	s.claimed(mc, what, job.ID)
+	return job, nil
+}
+
+// begin refuses a second start of what on the machine while the first job still goes.
+func (s *Service) begin(mc *machines.Machine, what string) error {
+	key := mc.ID() + "|" + what
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.active == nil {
+		s.active = map[string]string{}
+	}
+	id := s.active[key]
+	if id == startingBusy {
+		return ErrBusy
+	}
+	if id != "" {
+		if job, ok := s.Jobs.Get(id); ok && !job.Done {
+			return ErrBusy
+		}
+	}
+	s.active[key] = startingBusy
+	return nil
+}
+
+func (s *Service) claimed(mc *machines.Machine, what, jobID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.active[mc.ID()+"|"+what] = jobID
+}
+
+func (s *Service) forget(mc *machines.Machine, what string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.active, mc.ID()+"|"+what)
+}
+
+// start is Start's own work, once the update is known not to be running there.
+func (s *Service) start(mc *machines.Machine, what, command string) (jobs.Job, error) {
 	if command == "" { // the promise is "what was shown is what runs": a run without the shown text is refused
 		return jobs.Job{}, fmt.Errorf("the command shown must come back with the request")
 	}

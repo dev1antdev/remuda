@@ -453,3 +453,24 @@ func mustRead(t *testing.T, path string) []byte {
 	}
 	return b
 }
+
+func TestAGarbageDeviceCookieIsNeverRemembered(t *testing.T) {
+	g, h := newGuard(t)
+	for _, value := range []string{"d." + strings.Repeat("z", 1<<20) + ".x", "d.abc.def", "d..", "d."} {
+		if res := get(h, "/api/roster", &http.Cookie{Name: CookieName, Value: value}, ""); res.StatusCode != http.StatusUnauthorized {
+			t.Fatalf("%q: %d", value[:min(len(value), 20)], res.StatusCode)
+		}
+	}
+	n := 0
+	g.stale.Range(func(any, any) bool { n++; return true })
+	if n != 0 {
+		t.Fatalf("a cookie of no device's shape was remembered: %d ids", n)
+	}
+	// one of the shape, unknown to the store: the browser's device is gone, and that is said once
+	signed := "d." + strings.Repeat("a", 12) + "." + strings.Repeat("b", 64)
+	get(h, "/api/roster", &http.Cookie{Name: CookieName, Value: signed}, "")
+	g.stale.Range(func(any, any) bool { n++; return true })
+	if n != 1 {
+		t.Fatalf("a vanished device's cookie was not remembered: %d", n)
+	}
+}

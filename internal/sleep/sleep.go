@@ -173,7 +173,10 @@ func (s *Service) Sleep(mc *machines.Machine, workspaceID string, anyway bool) (
 	if err := s.claim(mc.ID(), workspaceID, "sleep"); err != nil {
 		return Started{}, err
 	}
-	s.Store.put(mc.ID(), workspaceID, w)
+	// the record is on disk before an agent is asked to leave: a full disk here would stop agents nothing could wake
+	if err := s.Store.put(mc.ID(), workspaceID, w); err != nil {
+		return Started{}, err
+	}
 	var lines []string
 	for _, a := range w.Agents {
 		lines = append(lines, fmt.Sprintf("%s in %s   (%s)", restart.Title(a.Kind), a.Pane, restart.Resume(a.Kind, a.Session)))
@@ -185,13 +188,13 @@ func (s *Service) Sleep(mc *machines.Machine, workspaceID string, anyway bool) (
 		if len(left) > 0 {
 			say("left running, with no session to resume: " + strings.Join(left, ", "))
 		}
-		return s.sleepAll(client, mc.ID(), workspaceID, w, say)
+		return s.sleepAll(client, mc.ID(), workspaceID, w, anyway, say)
 	})
 	return Started{Job: job.ID, Agents: len(w.Agents)}, nil
 }
 
 // sleepAll asks every recorded agent to leave, side by side; one that would not stays awake and off the record.
-func (s *Service) sleepAll(client restart.Leaver, machineID, workspaceID string, w Workspace, say func(string)) error {
+func (s *Service) sleepAll(client restart.Leaver, machineID, workspaceID string, w Workspace, anyway bool, say func(string)) error {
 	var (
 		mu      sync.Mutex
 		wg      sync.WaitGroup
@@ -204,7 +207,7 @@ func (s *Service) sleepAll(client restart.Leaver, machineID, workspaceID string,
 			defer wg.Done()
 			var lines []string
 			note := func(line string) { lines = append(lines, line) }
-			why := s.sleepOne(client, machineID, a, note)
+			why := s.sleepOne(client, machineID, a, anyway, note)
 			mu.Lock()
 			defer mu.Unlock()
 			for _, line := range lines {
@@ -239,7 +242,7 @@ func (s *Service) sleepAll(client restart.Leaver, machineID, workspaceID string,
 
 // sleepOne makes one agent leave under its pane's lock: a fresh look, an Esc for one at work or asking, its own exit;
 // "" once it left, else why it still runs.
-func (s *Service) sleepOne(client restart.Leaver, machineID string, a Agent, say func(string)) string {
+func (s *Service) sleepOne(client restart.Leaver, machineID string, a Agent, anyway bool, say func(string)) string {
 	if s.Lock != nil {
 		l := s.Lock(machineID, a.Pane)
 		l.Lock()
@@ -272,6 +275,12 @@ func (s *Service) sleepOne(client restart.Leaver, machineID string, a Agent, say
 		return "another conversation runs there now"
 	}
 	if busy(p.AgentStatus) {
+		// the look is fresh and the confirmation was about the moment before it: an agent that started working since
+		// is not interrupted without the person saying so again
+		if !anyway {
+			say(fmt.Sprintf("· %s (%s): started working since the confirm — left as it is", title, a.Pane))
+			return "it started working since the confirm"
+		}
 		interrupt(client, a.Pane, typed, say)
 	}
 	say(fmt.Sprintf("· %s (%s): %s", title, a.Pane, restart.Exit(a.Kind)))

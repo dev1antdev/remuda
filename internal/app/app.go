@@ -451,6 +451,7 @@ func Run(ctx context.Context, o Options) error {
 		return mc, true
 	}, awake.ShellHolder{Dir: o.Dir, Name: strings.TrimSuffix(hostname, ".local")})
 	defer keepAwake.Close()
+	fleet.SetBeforeRemove(func(id string, _ *machines.Machine) { keepAwake.Forget(id) }) // its inhibitor let go while the machine is still reachable
 	// the cockpit's state dir copied to a machine of the fleet the person picked, nightly and on demand
 	backups := backup.Open(o.Dir, hostname, o.Version)
 	backups.Target = func(id string) (backup.Target, error) {

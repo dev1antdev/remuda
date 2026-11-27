@@ -43,20 +43,24 @@ type Config struct {
 }
 
 type Manager struct {
-	mu       sync.Mutex
-	machines map[string]*Machine
-	order    []string
-	path     string // machines.json
-	dir      string // the state dir, where labels.json and herdr-stopped.json live
-	names    map[string]string
-	macs     map[string]string                     // the MAC addresses, for the magic packet that wakes a sleeping machine
-	placed   []string                              // the person's order of the machines, by id (order.json); order is the arrival's
-	door     *Door                                 // how every remote's agents reach the tasks here; nil opens none
-	saveMu   sync.Mutex                            // writes of machines.json, one at a time
-	onState  func(id, label, state, reason string) // hears every remote's connection move, set by OnState
-	server   bool                                  // the host serves the page only: no machine of the fleet (SetServer)
-	core     bool                                  // every machine is reached through remuda-core (NewCoreManager)
-	roots    *transcript.RootStore                 // the folders and conversations its agents named, kept across restarts
+	mu           sync.Mutex
+	machines     map[string]*Machine
+	order        []string
+	path         string // machines.json
+	dir          string // the state dir, where labels.json and herdr-stopped.json live
+	names        map[string]string
+	macs         map[string]string                     // the MAC addresses, for the magic packet that wakes a sleeping machine
+	placed       []string                              // the person's order of the machines, by id (order.json); order is the arrival's
+	door         *Door                                 // how every remote's agents reach the tasks here; nil opens none
+	saveMu       sync.Mutex                            // writes of machines.json, one at a time
+	onState      func(id, label, state, reason string) // hears every remote's connection move, set by OnState
+	beforeRemove func(id string, mc *Machine)          // hears a removal while the machine is still there, set by SetBeforeRemove
+	server       bool                                  // the host serves the page only: no machine of the fleet (SetServer)
+	core         bool                                  // every machine is reached through remuda-core (NewCoreManager)
+	roots        *transcript.RootStore                 // the folders and conversations its agents named, kept across restarts
+	sweepDone    chan struct{}                         // ends the forward sweeper with Close
+	closeOnce    sync.Once                             // Close may be called again (a test's cleanup and the app's)
+
 	// herdr's machines, never saved, were read once since the start, or there is no herdr: the fleet is whole (Gone)
 }
 
@@ -98,6 +102,13 @@ func (m *Manager) OnState(fn func(id, label, state, reason string)) {
 	m.mu.Lock()
 	m.onState = fn
 	m.mu.Unlock()
+}
+
+// SetBeforeRemove names what hears a machine's removal while it is still in the registry: a keep-awake to let go.
+func (m *Manager) SetBeforeRemove(fn func(id string, mc *Machine)) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.beforeRemove = fn
 }
 
 // stateMoved hands a machine's move to whoever OnState named, once there is one.
@@ -402,6 +413,16 @@ func (m *Manager) Add(label, host string) (*Machine, error) {
 func (m *Manager) Remove(id string) error {
 	if id == LocalID {
 		return fmt.Errorf("cannot remove the local machine")
+	}
+	// what the machine holds is let go first, while it can still be reached: a keep-awake let go after the removal has
+	// no host to reach, and the inhibitor stays running
+	if mc, err := m.Get(id); err == nil {
+		m.mu.Lock()
+		hook := m.beforeRemove
+		m.mu.Unlock()
+		if hook != nil {
+			hook(id, mc)
+		}
 	}
 	gone, err := m.removeFromFleet(id)
 	if err != nil {

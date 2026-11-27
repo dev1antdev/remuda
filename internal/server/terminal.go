@@ -201,7 +201,13 @@ func (s *Server) handlePaneWS(w http.ResponseWriter, r *http.Request) {
 		switch msg.Type {
 		case "input":
 			if msg.Data != "" {
-				if err := viewer.Write([]byte(msg.Data)); err != nil {
+				// under the pane's typing lock: a handoff's paste and its Enter are one stretch, and bytes from another
+				// device must not land between them
+				lock := s.Input.Lock(mc.ID(), paneID)
+				lock.Lock()
+				err := viewer.Write([]byte(msg.Data))
+				lock.Unlock()
+				if err != nil {
 					log.Printf("input %s/%s: %v", mc.ID(), paneID, err)
 				}
 			}

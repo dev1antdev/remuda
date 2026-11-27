@@ -43,7 +43,10 @@ func Read(archive []byte) (Manifest, []Entry, error) {
 			return manifest, nil, fmt.Errorf("the backup is damaged: %w", err)
 		}
 		name := strings.TrimSuffix(head.Name, "/")
-		if name == "" || path.IsAbs(name) || path.Clean(name) != name || name == ".." || strings.HasPrefix(name, "../") {
+		// on Windows a backslash is a separator path.Clean does not know, and "C:" is a drive: either would lead out
+		// of the state dir there, and the archive travels between the fleet's systems
+		if name == "" || path.IsAbs(name) || path.Clean(name) != name || name == ".." || strings.HasPrefix(name, "../") ||
+			strings.ContainsAny(name, `\:`) {
 			return manifest, nil, fmt.Errorf("the backup names %q, a path outside the state dir", head.Name)
 		}
 		switch head.Typeflag {
@@ -85,6 +88,13 @@ func Restore(archive []byte, dir string, now time.Time) (Manifest, string, error
 	if err != nil {
 		return manifest, "", err
 	}
+	// a state dir that is a symlink (a small disk's /var is one) is restored where it points: a rename of the link
+	// would leave the real dir in place, and the next start would serve what restore meant to replace
+	if fi, err := os.Lstat(dir); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+		if real, err := filepath.EvalSymlinks(dir); err == nil {
+			dir = real
+		}
+	}
 	aside := ""
 	if _, err := os.Stat(dir); err == nil {
 		aside = dir + ".before-restore-" + now.UTC().Format("20060102T150405Z")
@@ -107,7 +117,7 @@ func Restore(archive []byte, dir string, now time.Time) (Manifest, string, error
 	for _, entry := range entries {
 		target := filepath.Join(dir, filepath.FromSlash(strings.TrimSuffix(entry.Name, "/")))
 		if entry.Mode.IsDir() {
-			if err := os.MkdirAll(target, entry.Mode.Perm()|0o700); err != nil {
+			if err := os.MkdirAll(target, 0o700); err != nil { // the person's own alone, whatever the archive said
 				return undo(err)
 			}
 			continue
@@ -115,7 +125,7 @@ func Restore(archive []byte, dir string, now time.Time) (Manifest, string, error
 		if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
 			return undo(err)
 		}
-		if err := os.WriteFile(target, entry.Data, entry.Mode.Perm()&0o700|0o600); err != nil {
+		if err := writeSynced(target, entry.Data, entry.Mode.Perm()&0o700|0o600); err != nil {
 			return undo(err)
 		}
 	}
@@ -129,6 +139,24 @@ func Restore(archive []byte, dir string, now time.Time) (Manifest, string, error
 		}
 	}
 	return manifest, aside, nil
+}
+
+// writeSynced writes a restored file and puts it on the disk before the answer: a power cut right after a restore must
+// not leave its state half written.
+func writeSynced(path string, data []byte, mode os.FileMode) error {
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, mode)
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		f.Close()
+		return err
+	}
+	return f.Close()
 }
 
 func dirExists(path string) bool {
