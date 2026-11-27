@@ -250,14 +250,16 @@ describe("typing over the HTTP transport", () => {
     transport.close();
   });
 
-  it("waits longer for a big paste", async () => {
-    const { transport, lost, wait } = typing([never]);
+  it("cuts a big paste into requests the server takes, in order", async () => {
+    const { transport, posted, lost, wait } = typing([]);
     await wait(3000);
     transport.input("x".repeat(500_000));
-    await wait(10_000);
-    expect(lost()).toBe(0);
-    await wait(10_000);
-    expect(lost()).toBe(1);
+    await wait(100);
+    if (lost() !== 0) throw new Error("a paste within the limits was lost");
+    if (posted.length < 2 || posted.join("").length !== 500_000) {
+      throw new Error(`posted ${posted.length} requests of ${posted.map((p) => p.length).join("+")}`);
+    }
+    if (posted.some((p) => p.length > 64 * 1024)) throw new Error("a request past the server's 1 MiB limit");
     transport.close();
   });
 

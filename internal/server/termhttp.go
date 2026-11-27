@@ -189,6 +189,9 @@ func (s *Server) handleTermRead(w http.ResponseWriter, r *http.Request) {
 	w.Write(out)
 }
 
+// termInputMax is the most one input request carries: a paste, not a file.
+const termInputMax = 1 << 20
+
 // handleTermInput is POST /api/term/input?sid: the body is what the keyboard typed.
 func (s *Server) handleTermInput(w http.ResponseWriter, r *http.Request) {
 	st := s.streams.get(r.URL.Query().Get("sid"))
@@ -196,9 +199,14 @@ func (s *Server) handleTermInput(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, http.StatusGone, fmt.Errorf("stream expired"))
 		return
 	}
-	data, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+	// one byte past the bound tells a body that was cut from one that fit: a paste's tail must not vanish into a 204
+	data, err := io.ReadAll(io.LimitReader(r.Body, termInputMax+1))
 	if err != nil {
 		httpErr(w, 400, err)
+		return
+	}
+	if len(data) > termInputMax {
+		httpErr(w, http.StatusRequestEntityTooLarge, fmt.Errorf("that is more than %d KB of typing at once: paste it in smaller pieces", termInputMax>>10))
 		return
 	}
 	if len(data) > 0 {

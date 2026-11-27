@@ -49,8 +49,10 @@ export type SharedPrefs = Record<string, Stamped>;
 
 // fetchPrefs reads the server's copy; undefined means unchanged since the ETag given
 export async function fetchPrefs(etag: string): Promise<{ prefs: SharedPrefs; etag: string } | undefined> {
-  const res = await check(await fetch("/api/prefs", { headers: etag ? { "If-None-Match": etag } : undefined }));
+  // 304 before check: a check throws on it, and every unchanged poll was an error that stalled the sync
+  const res = await fetch("/api/prefs", { headers: etag ? { "If-None-Match": etag } : undefined });
   if (res.status === 304) return undefined;
+  await check(res);
   return { prefs: (await res.json()) as SharedPrefs, etag: res.headers.get("ETag") ?? "" };
 }
 

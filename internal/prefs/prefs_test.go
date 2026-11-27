@@ -65,28 +65,34 @@ func TestNullDeletesAndMissingStampIsNow(t *testing.T) {
 	}
 }
 
-func TestRefusesBadKeysAndBigValues(t *testing.T) {
+func TestLeavesOutBadKeysAndBigValuesAndKeepsTheRest(t *testing.T) {
 	st := New(t.TempDir())
-	for _, key := range []string{"", "tab\tkey", "line\nbreak", "bell\x07", strings.Repeat("k", MaxKey+1)} {
-		if _, err := st.Put(map[string]Entry{key: {Value: json.RawMessage(`1`)}}); err == nil {
-			t.Fatalf("key %q was accepted", key)
-		}
+	// one key the server cannot take is left out, and the good keys of the batch go: a folder's bookmarks past the bound
+	// must not stop every shared setting on every device from syncing
+	out, err := st.Put(map[string]Entry{
+		"":                                       {Value: json.RawMessage(`1`)},
+		"tab\tkey":                               {Value: json.RawMessage(`1`)},
+		"line\nbreak":                            {Value: json.RawMessage(`1`)},
+		"bell\x07":                               {Value: json.RawMessage(`1`)},
+		strings.Repeat("k", MaxKey+1):            {Value: json.RawMessage(`1`)},
+		"panel.sidebar":                          {Value: json.RawMessage(`268`)},
+		"pins:local|/Users/me/My Project (2026)": {Value: json.RawMessage(`[]`)},
+		"wall":                                   {Value: json.RawMessage(`"` + strings.Repeat("x", MaxValue) + `"`)},
+		"junk":                                   {Value: json.RawMessage(`{not json`)},
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
-	// a folder's pins live under a key made of the machine and the folder: whatever the folder is called travels with it
-	if _, err := st.Put(map[string]Entry{"panel.sidebar": {Value: json.RawMessage(`268`)}, "pins:local|/Users/me/My Project (2026)": {Value: json.RawMessage(`[]`)}}); err != nil {
-		t.Fatalf("a pins key with a folder was refused: %v", err)
+	if len(out) != 2 {
+		t.Fatalf("the good keys did not go through: %v", out)
+	}
+	if _, ok := out["pins:local|/Users/me/My Project (2026)"]; !ok {
+		t.Fatalf("a pins key with a folder was left out: %v", out)
 	}
 	if _, err := st.Put(map[string]Entry{"theme.dark": {Value: json.RawMessage(`"mocha"`)}}); err != nil {
 		t.Fatalf("good keys refused: %v", err)
 	}
-	big := json.RawMessage(`"` + strings.Repeat("x", MaxValue) + `"`)
-	if _, err := st.Put(map[string]Entry{"wall": {Value: big}}); err == nil {
-		t.Fatal("a value over the cap was accepted")
-	}
-	if _, err := st.Put(map[string]Entry{"wall": {Value: json.RawMessage(`{not json`)}}); err == nil {
-		t.Fatal("a value that is not JSON was accepted")
-	}
 	if len(st.All()) != 3 {
-		t.Fatalf("a refused put changed the store: %+v", st.All())
+		t.Fatalf("the store: %+v", st.All())
 	}
 }

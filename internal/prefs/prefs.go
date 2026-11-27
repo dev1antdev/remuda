@@ -72,17 +72,22 @@ func copyOf(all map[string]Entry) map[string]Entry {
 // deletes the key, a missing stamp reads as now. The merged whole comes back.
 func (st *Store) Put(in map[string]Entry) (map[string]Entry, error) {
 	now := st.now()
+	// one key the server cannot take is left out, and the rest of the batch goes: a folder's bookmarks past the bound
+	// once refused every shared setting on every device, and none of them synced again
+	valid := make(map[string]Entry, len(in))
 	for key, e := range in {
-		if !keyShape.MatchString(key) {
-			return nil, fmt.Errorf("key %q: printable characters only, up to %d", key, MaxKey)
-		}
-		if len(e.Value) > MaxValue {
-			return nil, fmt.Errorf("key %q: the value is over %d bytes", key, MaxValue)
-		}
-		if len(e.Value) > 0 && !json.Valid(e.Value) {
-			return nil, fmt.Errorf("key %q: the value is not JSON", key)
+		switch {
+		case !keyShape.MatchString(key):
+			log.Printf("prefs: %q left out: printable characters only, up to %d", key, MaxKey)
+		case len(e.Value) > MaxValue:
+			log.Printf("prefs: %q left out: the value is over %d bytes", key, MaxValue)
+		case len(e.Value) > 0 && !json.Valid(e.Value):
+			log.Printf("prefs: %q left out: the value is not JSON", key)
+		default:
+			valid[key] = e
 		}
 	}
+	in = valid
 	st.mu.Lock()
 	defer st.mu.Unlock()
 	merged := copyOf(st.all)
@@ -103,8 +108,22 @@ func (st *Store) Put(in map[string]Entry) (map[string]Entry, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(b) > MaxFile {
-		return nil, fmt.Errorf("the shared settings would be over %d bytes", MaxFile)
+	// the whole file has a bound too: the largest keys give way until it fits, which is said, and the rest syncs
+	for len(b) > MaxFile {
+		var biggest string
+		for key := range merged {
+			if len(merged[key].Value) > len(merged[biggest].Value) {
+				biggest = key
+			}
+		}
+		if biggest == "" {
+			return nil, fmt.Errorf("the shared settings would be over %d bytes", MaxFile)
+		}
+		log.Printf("prefs: %q left out: the shared settings would be over %d bytes", biggest, MaxFile)
+		delete(merged, biggest)
+		if b, err = json.MarshalIndent(merged, "", "  "); err != nil {
+			return nil, err
+		}
 	}
 	if err := state.SaveJSON(st.dir, file, merged); err != nil {
 		return nil, err

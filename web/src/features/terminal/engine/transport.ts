@@ -3,6 +3,10 @@
 
 import { createSender } from "./sender";
 
+// INPUT_CHUNK is the most one input message carries: the server's socket reads 1 MiB, and a paste past it closed the
+// connection (1009) with the screen blank.
+const INPUT_CHUNK = 64 * 1024;
+
 export type Transport = {
   input(data: string): void;
   resize(cols: number, rows: number): void;
@@ -59,10 +63,14 @@ export function gridHeader(value: string | null): { cols: number; rows: number }
 // typedIn is how much of the text the person typed.
 const typedIn = (text: string) => text.replace(REPORTS, "").length;
 
-// Once WebSockets prove unusable, every terminal on this page uses HTTP without trying again.
-let preferHTTP = false;
+// When WebSockets prove unusable (a proxy that drops them), every terminal on this page uses HTTP — for a minute, then
+// a socket is tried again: a relay that was down, or a network that changed, must not cost the page its live terminals
+// until a reload.
+const HTTP_FALLBACK_MS = 60_000;
+let preferHTTPUntil = 0;
 let wsFailures = 0;
 let wsRetry = 0;
+const preferHTTP = () => Date.now() < preferHTTPUntil;
 
 // connect opens the stream and keeps it open; the transport behind the handle may change.
 export function connect(stream: Stream): Transport {
@@ -124,7 +132,7 @@ export function connect(stream: Stream): Transport {
         if (would && stream.wsOnly) {
           stream.note("this network drops WebSockets, which a viewing link's live terminal needs");
         } else if (would && ++wsFailures >= 2) {
-          preferHTTP = true;
+          preferHTTPUntil = Date.now() + HTTP_FALLBACK_MS;
           stream.note("WebSocket unavailable here — using the HTTP transport");
           current = connectHTTP();
           return;
@@ -133,7 +141,9 @@ export function connect(stream: Stream): Transport {
       });
     };
     return {
-      input: (data) => send({ type: "input", data }),
+      input: (data) => {
+        for (let at = 0; at < data.length; at += INPUT_CHUNK) send({ type: "input", data: data.slice(at, at + INPUT_CHUNK) });
+      },
       resize: (cols, rows) => send({ type: "resize", cols, rows }),
       close: () => {
         if (retryTimer) clearTimeout(retryTimer);
@@ -272,8 +282,12 @@ export function connect(stream: Stream): Transport {
     void loop();
     return {
       input: (data) => {
-        if (type) type(data);
-        else if (typedIn(data) > 0) lost();
+        if (!type) {
+          if (typedIn(data) > 0) lost();
+          return;
+        }
+        // the server takes 1 MiB a request: a paste is handed over in pieces, in order
+        for (let at = 0; at < data.length; at += INPUT_CHUNK) type(data.slice(at, at + INPUT_CHUNK));
       },
       resize: (cols, rows) => {
         if (sid) void fetch(`/api/term/resize?sid=${sid}&cols=${cols}&rows=${rows}`, { method: "POST" });
@@ -286,7 +300,7 @@ export function connect(stream: Stream): Transport {
     };
   };
 
-  current = preferHTTP && !stream.wsOnly ? connectHTTP() : connectWS();
+  current = preferHTTP() && !stream.wsOnly ? connectHTTP() : connectWS();
   return {
     input: (data) => current?.input(data),
     resize: (cols, rows) => current?.resize(cols, rows),
