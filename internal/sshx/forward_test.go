@@ -14,7 +14,7 @@ func TestForwardBackAsksTheMasterForAReverseForward(t *testing.T) {
 	c := &Conn{Host: "gog.remote", ctl: "/tmp/remuda-ssh-test.ctl"}
 	args := c.forwardBackCmd(7318, 7317).Args
 	joined := strings.Join(args, " ")
-	if !strings.Contains(joined, "-S /tmp/remuda-ssh-test.ctl") || !strings.Contains(joined, "BatchMode=yes") {
+	if !strings.Contains(joined, "-S /tmp/remuda-ssh-test.ctl") || !strings.Contains(joined, "BatchMode=yes") || !strings.Contains(joined, "RemoteCommand=none") || !strings.Contains(joined, "RequestTTY=no") {
 		t.Fatalf("not on the master, or interactive: %s", joined)
 	}
 	if !strings.HasSuffix(joined, "-O forward -R 127.0.0.1:7318:127.0.0.1:7317 gog.remote") {
