@@ -203,7 +203,7 @@ func summaryScript(dir, baselineHead string) string {
 func blobsScript() string {
 	return `{ ` + readGit + ` diff --no-renames --relative --numstat HEAD 2>/dev/null | cut -f3-; ` + readGit + ` ls-files --others --exclude-standard 2>/dev/null; } | ` +
 		`{ t=$(mktemp 2>/dev/null) || t=/tmp/remuda-blobs.$$; : > "$t"; while IFS= read -r f; do if [ -f "$f" ]; then printf '%s\n' "$f" >> "$t"; else printf '%s\037gone\n' "$f"; fi; done; ` +
-		`if [ -s "$t" ]; then git -c core.quotepath=off hash-object --stdin-paths < "$t" 2>/dev/null | paste -d "$(printf '\037')" "$t" -; fi; rm -f "$t"; }`
+		`while IFS= read -r f; do h=$(git -c core.quotepath=off hash-object -- "$f" 2>/dev/null) && printf '%s\037%s\n' "$f" "$h"; done < "$t"; rm -f "$t"; }`
 }
 
 // Summary reviews one folder against its baseline.
@@ -227,7 +227,9 @@ func (store *Store) Summary(host shell.Host, dir string) Summary {
 	summary.Repo = headLines[0]
 	if len(headLines) > 1 {
 		summary.Branch = headLines[1]
-		if summary.Branch != "HEAD" { // a detached HEAD keeps the short hash the sweep read for the sidebar
+		if summary.Branch == "HEAD" { // a detached HEAD, or a branch with no commit yet: no name to show
+			summary.Branch = ""
+		} else { // a detached HEAD keeps the short hash the sweep read for the sidebar
 			store.setBranch(key(host.ID(), dir), summary.Branch)
 		}
 	}
