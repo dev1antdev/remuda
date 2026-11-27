@@ -5,11 +5,47 @@ const CACHE = "remuda-v2";
 
 self.addEventListener("install", () => self.skipWaiting());
 
+// buildAssets is the JS and CSS one build's shell names: the index is the build's manifest, so a cached shell can be
+// kept whole and an older build's files dropped.
+async function buildAssets(cache) {
+  let html;
+  try {
+    const res = await fetch("/", { cache: "no-store" });
+    if (!res.ok) return null;
+    html = await res.text();
+    await cache.put("/", new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8" } }));
+  } catch {
+    return null;
+  }
+  const assets = new Set([...html.matchAll(/\/assets\/[^"'\s]+\.(?:js|css)/g)].map((m) => m[0]));
+  await Promise.all(
+    [...assets].map(async (path) => {
+      if (await cache.match(path)) return;
+      try {
+        const res = await fetch(path);
+        if (res.ok) await cache.put(path, res);
+      } catch {
+        /* offline: whatever is cached is kept */
+      }
+    }),
+  );
+  return assets;
+}
+
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     (async () => {
       const names = await caches.keys();
       await Promise.all(names.filter((n) => n !== CACHE).map((n) => caches.delete(n)));
+      const cache = await caches.open(CACHE);
+      const current = await buildAssets(cache);
+      // an older build's hashed files go; the shell's own build and the icons stay
+      if (current) {
+        for (const req of await cache.keys()) {
+          const path = new URL(req.url).pathname;
+          if (path.startsWith("/assets/") && !current.has(path)) await cache.delete(req);
+        }
+      }
       await self.clients.claim();
     })(),
   );
@@ -40,7 +76,9 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  if (url.pathname.startsWith("/assets/") || url.pathname.startsWith("/icons/")) {
+  // the build's code and the icons: a hashed name never changes its bytes, so a hit is always the right file
+  const code = url.pathname.startsWith("/assets/") && /\.(js|css)$/.test(url.pathname);
+  if (code || url.pathname.startsWith("/icons/")) {
     event.respondWith(
       (async () => {
         const cached = await caches.match(event.request);
