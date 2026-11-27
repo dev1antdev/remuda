@@ -848,7 +848,7 @@ probe, the vitals, the door, keep-awake, the Changes lens, the file viewer, the 
 
 The long way, piece by piece:
 
-Requirements: Go 1.27.4+, Node 22.13+ (22.x, build only), remuda-core 0.2.4+ installed
+Requirements: Go 1.27.4+, Node 22.13+ (22.x, build only), remuda-core 0.2.5+ installed
 (its core need not be running: `rc connect` starts one where remuda reaches).
 
 ```bash
@@ -1442,7 +1442,7 @@ issue and the cause is half found.
 
 ## Status / roadmap
 
-Working today (verified against remuda-core 0.2.4, local + a real remote
+Working today (verified against remuda-core 0.2.5, local + a real remote
 machine): multi-machine roster with its agent statuses, live
 terminal (one attach per viewer, input, resize, find, touch key bar) on local **and
 remote** panes, chat (the exact session file, remote transcripts
