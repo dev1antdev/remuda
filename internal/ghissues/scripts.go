@@ -17,7 +17,7 @@ const listFields = "id,number,title,author,state,stateReason,labels,assignees,up
 
 // prelude is every script's start: the package managers' bin dirs, and a missing gh said in words gh's absence would not.
 func prelude() string {
-	return script.PATH + "\ncommand -v gh >/dev/null 2>&1 || { echo 'gh: command not found'; exit 127; }\n"
+	return script.PATH + "\nexport GH_HOST=github.com\ncommand -v gh >/dev/null 2>&1 || { echo 'gh: command not found'; exit 127; }\n"
 }
 
 // loginSection prints gh's signed-in login, or nothing; the section is there either way so the others keep their places.

@@ -72,8 +72,8 @@ func TestFailureMessageNamesTheChecksAndCarriesTheLogs(t *testing.T) {
 		"- build, test, scan: https://github.com/o/r/actions/runs/40693613487/job/1229",
 		"- external: https://ci.example.com/build/7",
 		"The failed steps of run 40693613487, the end of their log:\n\n```\ntest\tgo test\t2026-10-29T10:00:00Z FAIL: TestX\n```",
-		"  Read its failed steps with: gh run view 40693613487 --job 1229 --log-failed -R github.com/o/r",
-		"  Read its failed steps with: gh run view 40693613499 --job 1231 --log-failed -R github.com/o/r",
+		"  Read its failed steps with: gh run view 40693613487 --job 1229 --log-failed -R 'github.com/o/r'",
+		"  Read its failed steps with: gh run view 40693613499 --job 1231 --log-failed -R 'github.com/o/r'",
 		"Find the cause and fix it on the branch, then say what you changed.\n\n" + Guard,
 	} {
 		if !strings.Contains(msg, want) {
