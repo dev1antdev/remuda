@@ -5,7 +5,7 @@ import { actions } from "@/app/store";
 import { usePref } from "@/lib/prefs";
 import { Dialog, Icon, Notice, Tip } from "@/ui";
 import { pinKey, pinWords, type Pin } from "./pins";
-import { t } from "@/lib/i18n";
+import { t, tn } from "@/lib/i18n";
 
 export default function PinsDialog({ machineId, paneId, dir, shown, title, onClose }: {
   machineId: string;
@@ -21,7 +21,7 @@ export default function PinsDialog({ machineId, paneId, dir, shown, title, onClo
     actions.jumpTo(machineId, paneId, pin.session, pin.turn);
   };
   const unpin = (pin: Pin) => setPins((prev) => prev.filter((p) => p.turn !== pin.turn));
-  const clear = () => actions.ask(t("Remove all {n} pins of {title}? The turns themselves stay.", { n: pins.length, title }), t("Remove all"), () => setPins([]));
+  const clear = () => actions.ask(tn(pins.length, "Remove all {n} pin of {title}? The turns themselves stay.", "Remove all {n} pins of {title}? The turns themselves stay.", { title }), t("Remove all"), () => setPins([]));
   return (
     <Dialog title={t("Pins")} icon="pin" size="md" onClose={onClose}>
       <h3 className="dialog-title">{title}</h3>

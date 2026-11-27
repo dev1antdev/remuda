@@ -5,6 +5,7 @@
 
 import { useEffect } from "react";
 import { applyPref, sharedPrefs, usePref, watchWrites } from "@/lib/prefs";
+import { LANG_KEY } from "@/lib/i18n";
 import { plan, type Stamped } from "@/lib/syncKeys";
 import { pageVisible } from "@/lib/visibility";
 import { fetchPrefs, putPrefs } from "./api";
@@ -26,6 +27,8 @@ export function useSyncPrefs(enabled = true): void {
     const apply = (remote: Record<string, Stamped>) => {
       const { apply: newer, push } = plan(sharedPrefs(), remote, new Date().toISOString());
       for (const [key, { value, at }] of Object.entries(newer)) applyPref(key, value, at);
+      // a language change rereads every table: the pref's own setting reloads the page, and so does one that arrives
+      if (LANG_KEY in newer) location.reload();
       return push;
     };
 
