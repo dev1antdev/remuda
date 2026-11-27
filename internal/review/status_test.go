@@ -123,7 +123,7 @@ func TestTheSummaryListsTheCommitsNotOnTheRemote(t *testing.T) {
 	if err != nil || view.Subject != "On the feature" || len(view.Files) != 1 || view.Files[0].Path != "b.txt" || view.Files[0].Status != "A" || view.Files[0].Added != 1 {
 		t.Fatalf("the commit: %+v %v", view, err)
 	}
-	diff, err := CommitDiff(shell.Local{Name: "local"}, dir, git("rev-parse", "HEAD"), "b.txt")
+	diff, _, err := CommitDiff(shell.Local{Name: "local"}, dir, git("rev-parse", "HEAD"), "b.txt")
 	if err != nil || !strings.Contains(diff, "+b") {
 		t.Fatalf("the commit's diff: %q %v", diff, err)
 	}
@@ -141,19 +141,19 @@ func TestADiffIsReadWhateverColorTheSettingsAskFor(t *testing.T) {
 	local := shell.Local{Name: "local"}
 	store := New(t.TempDir())
 	for _, side := range []string{SideUnstaged, ""} {
-		if diff, err := store.DiffSide(local, dir, "a.txt", side); err != nil || !strings.Contains(diff, "+two") || strings.Contains(diff, "\x1b[") {
+		if diff, _, err := store.DiffSide(local, dir, "a.txt", side); err != nil || !strings.Contains(diff, "+two") || strings.Contains(diff, "\x1b[") {
 			t.Errorf("side %q: %q %v", side, diff, err)
 		}
 	}
 	git("add", "a.txt")
-	if diff, err := store.DiffSide(local, dir, "a.txt", SideStaged); err != nil || !strings.Contains(diff, "+two") || strings.Contains(diff, "\x1b[") {
+	if diff, _, err := store.DiffSide(local, dir, "a.txt", SideStaged); err != nil || !strings.Contains(diff, "+two") || strings.Contains(diff, "\x1b[") {
 		t.Errorf("staged: %q %v", diff, err)
 	}
 	git("commit", "-qm", "two")
-	if diff, err := CommitDiff(local, dir, git("rev-parse", "HEAD"), "a.txt"); err != nil || !strings.Contains(diff, "+two") || strings.Contains(diff, "\x1b[") {
+	if diff, _, err := CommitDiff(local, dir, git("rev-parse", "HEAD"), "a.txt"); err != nil || !strings.Contains(diff, "+two") || strings.Contains(diff, "\x1b[") {
 		t.Errorf("a commit: %q %v", diff, err)
 	}
-	if diff, err := BaseDiff(local, dir, before, "a.txt"); err != nil || !strings.Contains(diff, "+two") || strings.Contains(diff, "\x1b[") {
+	if diff, _, err := BaseDiff(local, dir, before, "a.txt"); err != nil || !strings.Contains(diff, "+two") || strings.Contains(diff, "\x1b[") {
 		t.Errorf("the branch's work: %q %v", diff, err)
 	}
 }
@@ -191,7 +191,7 @@ func TestTheBaseIsTheBranchTheWorkWasCutFrom(t *testing.T) {
 	if err != nil || pinned.Base != "main" || pinned.Detected != "feature" || pinned.Ahead != 2 || len(pinned.Files) != 3 {
 		t.Fatalf("pinned to main: %+v %v", pinned, err)
 	}
-	diff, err := BaseDiff(shell.Local{Name: "local"}, dir, pinned.MergeBase, "f.txt")
+	diff, _, err := BaseDiff(shell.Local{Name: "local"}, dir, pinned.MergeBase, "f.txt")
 	if err != nil || !strings.Contains(diff, "+f") {
 		t.Fatalf("the base diff: %q %v", diff, err)
 	}

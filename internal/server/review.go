@@ -85,20 +85,21 @@ func (s *Server) handleReviewDiff(w http.ResponseWriter, r *http.Request) {
 	}
 	query := r.URL.Query()
 	var diff string
+	var truncated bool
 	var err error
 	switch {
 	case query.Get("commit") != "":
-		diff, err = review.CommitDiff(mc, dir, query.Get("commit"), path)
+		diff, truncated, err = review.CommitDiff(mc, dir, query.Get("commit"), path)
 	case query.Get("base") != "":
-		diff, err = review.BaseDiff(mc, dir, query.Get("base"), path)
+		diff, truncated, err = review.BaseDiff(mc, dir, query.Get("base"), path)
 	default:
-		diff, err = s.Review.DiffSide(mc, dir, path, query.Get("side"))
+		diff, truncated, err = s.Review.DiffSide(mc, dir, path, query.Get("side"))
 	}
 	if err != nil {
 		httpErr(w, 502, err)
 		return
 	}
-	writeJSON(w, map[string]string{"diff": diff})
+	writeJSON(w, map[string]any{"diff": diff, "truncated": truncated})
 }
 
 // handleReviewSeen answers POST /api/review/seen {machine, dir, verdict?}: the baseline moves to now.

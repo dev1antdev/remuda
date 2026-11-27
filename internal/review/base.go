@@ -249,16 +249,19 @@ func (store *Store) Base(host shell.Host, dir, pinned string) (BaseView, error) 
 	return BaseView{}, errors.New("the branch kept moving while it was read")
 }
 
-// BaseDiff is one file's change from the merge base to the working tree; an untracked file whole.
-func BaseDiff(host shell.Host, dir, mergeBase, path string) (string, error) {
+// BaseDiff is one file's change from the merge base to the working tree; an untracked file whole. It says when the
+// diff was longer than a read sends.
+func BaseDiff(host shell.Host, dir, mergeBase, path string) (string, bool, error) {
 	if !CommitOK(mergeBase) {
-		return "", errors.New("not a commit")
+		return "", false, errors.New("not a commit")
 	}
 	quoted := script.Quote(path)
-	return shell.Text(host, script.InDir(dir)+
+	out, err := shell.Text(host, script.InDir(dir)+
 		`if `+readGit+` ls-files --error-unmatch -- `+quoted+` >/dev/null 2>&1 || git cat-file -e `+mergeBase+`:./`+quoted+` 2>/dev/null; then `+
-		diffGit+` `+mergeBase+` -- `+quoted+` | head -c `+strconv.Itoa(maxDiff)+`; `+
-		`else git diff `+script.PatchForm+` --no-index -- /dev/null `+quoted+` | head -c `+strconv.Itoa(maxDiff)+`; fi; exit 0`, 60*time.Second)
+		diffGit+` `+mergeBase+` -- `+quoted+` | head -c `+strconv.Itoa(diffRead)+`; `+
+		`else git diff `+script.PatchForm+` --no-index -- /dev/null `+quoted+` | head -c `+strconv.Itoa(diffRead)+`; fi; exit 0`, 60*time.Second)
+	diff, truncated := cut(out)
+	return diff, truncated, err
 }
 
 // RefOK reports whether name may reach git as a branch's name: no option, no range, no blank or control character.

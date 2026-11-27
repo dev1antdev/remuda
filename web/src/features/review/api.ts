@@ -44,8 +44,10 @@ export const fetchReview = (machineId: string, dir: string): Promise<Review> => 
 // DiffFrom is which diff of a file is read: since the last look (none), one side of the index, a commit's, or from a merge base
 export type DiffFrom = { side?: "staged" | "unstaged"; commit?: string; base?: string };
 const diffQuery = (from: DiffFrom) => `${from.side ? `&side=${from.side}` : ""}${from.commit ? `&commit=${from.commit}` : ""}${from.base ? `&base=${from.base}` : ""}`;
-export const fetchReviewDiff = (machineId: string, dir: string, path: string, from: DiffFrom = {}): Promise<string> =>
-  getJSON<{ diff: string }>(withMachine(`/api/review/diff?dir=${encodeURIComponent(dir)}&path=${encodeURIComponent(path)}${diffQuery(from)}`, machineId)).then((d) => d.diff);
+// DiffRead is one file's diff, and whether there was more of it than the lens reads
+export type DiffRead = { diff: string; truncated?: boolean };
+export const fetchReviewDiff = (machineId: string, dir: string, path: string, from: DiffFrom = {}): Promise<DiffRead> =>
+  getJSON<DiffRead>(withMachine(`/api/review/diff?dir=${encodeURIComponent(dir)}&path=${encodeURIComponent(path)}${diffQuery(from)}`, machineId));
 export const markReviewed = (machineId: string, dir: string, verdict?: Verdict): Promise<void> =>
   sendJSON("POST", "/api/review/seen", { machine: machineId, dir, ...(verdict ? { verdict } : {}) });
 // the secret check of what a commit of the work would carry, and with push of the commits a push would send

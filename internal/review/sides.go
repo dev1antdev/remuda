@@ -19,25 +19,42 @@ const (
 	SideUnstaged = "unstaged"
 )
 
-// maxDiff is how much of one diff a read sends.
-const maxDiff = 600000
+// maxDiff is how much of one diff a read sends, and diffRead the byte past it that tells it was cut.
+const (
+	maxDiff  = 600000
+	diffRead = maxDiff + 1
+)
 
 // diffGit is a diff as the lens reads it: git's own, the shared patch form whatever the person's settings say of colour,
 // an external driver or text conversion, relative to the folder.
 const diffGit = readGit + ` diff ` + script.PatchForm + ` --relative`
 
-// DiffSide is one file's diff on one side of the index; no side is the lens's usual diff since the last look.
-func (store *Store) DiffSide(host shell.Host, dir, path, side string) (string, error) {
+// cut is the diff as sent, and whether there was more of it than a read sends.
+func cut(diff string) (string, bool) {
+	if len(diff) > maxDiff {
+		return diff[:maxDiff], true
+	}
+	return diff, false
+}
+
+// DiffSide is one file's diff on one side of the index; no side is the lens's usual diff since the last look. It says
+// when the diff was longer than a read sends.
+func (store *Store) DiffSide(host shell.Host, dir, path, side string) (string, bool, error) {
 	quoted := script.Quote(path)
+	var line string
 	switch side {
 	case "":
 		return store.Diff(host, dir, path)
 	case SideStaged:
-		return shell.Text(host, script.InDir(dir)+diffGit+` --cached -- `+quoted+` | head -c `+strconv.Itoa(maxDiff)+`; exit 0`, 60*time.Second)
+		line = script.InDir(dir) + diffGit + ` --cached -- ` + quoted + ` | head -c ` + strconv.Itoa(diffRead) + `; exit 0`
 	case SideUnstaged:
-		return shell.Text(host, script.InDir(dir)+diffGit+` -- `+quoted+` | head -c `+strconv.Itoa(maxDiff)+`; exit 0`, 60*time.Second)
+		line = script.InDir(dir) + diffGit + ` -- ` + quoted + ` | head -c ` + strconv.Itoa(diffRead) + `; exit 0`
+	default:
+		return "", false, errors.New("the side is staged, unstaged, or none")
 	}
-	return "", errors.New("the side is staged, unstaged, or none")
+	out, err := shell.Text(host, line, 60*time.Second)
+	diff, truncated := cut(out)
+	return diff, truncated, err
 }
 
 var commitRe = regexp.MustCompile(`^[0-9a-f]{4,64}$`)
@@ -45,12 +62,15 @@ var commitRe = regexp.MustCompile(`^[0-9a-f]{4,64}$`)
 // CommitOK reports whether sha reads as a commit's hash, whole or short.
 func CommitOK(sha string) bool { return commitRe.MatchString(sha) }
 
-// CommitDiff is one file's change in one commit, against its first parent (none for a root commit).
-func CommitDiff(host shell.Host, dir, sha, path string) (string, error) {
+// CommitDiff is one file's change in one commit, against its first parent (none for a root commit), and whether it is
+// longer than a read sends.
+func CommitDiff(host shell.Host, dir, sha, path string) (string, bool, error) {
 	if !CommitOK(sha) {
-		return "", errors.New("not a commit")
+		return "", false, errors.New("not a commit")
 	}
-	return shell.Text(host, script.InDir(dir)+readGit+` show --format= -m --first-parent `+script.PatchForm+` --no-renames --relative `+sha+` -- `+script.Quote(path)+` | head -c `+strconv.Itoa(maxDiff)+`; exit 0`, 60*time.Second)
+	out, err := shell.Text(host, script.InDir(dir)+readGit+` show --format= -m --first-parent `+script.PatchForm+` --no-renames --relative `+sha+` -- `+script.Quote(path)+` | head -c `+strconv.Itoa(diffRead)+`; exit 0`, 60*time.Second)
+	diff, truncated := cut(out)
+	return diff, truncated, err
 }
 
 // CommitView is one commit as the lens opens it: who made it and when, its message, and the files it changed.
