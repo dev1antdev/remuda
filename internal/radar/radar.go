@@ -17,7 +17,7 @@ import (
 
 const (
 	idleGrace    = 2500 * time.Millisecond // idle must persist this long after working to count
-	saveInterval = 5 * time.Second
+	saveInterval = time.Minute             // the disk may be a Pi's SD card: a stamp lost to a crash costs a minute of "last active"
 	activityFile = "activity.json"
 )
 
@@ -126,8 +126,9 @@ func (t *Tracker) Observe(machineID string, snap *coreapi.Snapshot, now time.Tim
 			t.dirty = true
 		}
 	}
-	t.saveLocked(now, false)
+	pending := t.saveLocked(now, false)
 	t.mu.Unlock()
+	t.writeActivity(pending)
 
 	// a stat, over ssh for a remote: off the poller, and only where nothing arrived since
 	if t.recover != nil && len(recover) > 0 {
@@ -184,7 +185,8 @@ func (t *Tracker) observe(p *coreapi.PaneInfo, st *pane, now time.Time) {
 	case status == coreapi.StatusBlocked:
 		st.blocked = true
 	case status == coreapi.StatusWorking || st.lastWork.IsZero():
-		// working again, or it never had worked (recovery included): the dialog simply closed
+		// working again, or it never had worked (recovery included): the dialog simply closed. Idle and done keep it:
+		// herdr reads a dialog as idle once its menu scrolls away, and the rule below is held until work resumes
 		st.blocked = false
 	}
 	if p.Focused && st.doneHeld {
@@ -305,13 +307,23 @@ func plain(status string) string {
 // Flush writes the stamps now (shutdown).
 func (t *Tracker) Flush() {
 	t.mu.Lock()
-	defer t.mu.Unlock()
-	t.saveLocked(time.Now(), true)
+	pending := t.saveLocked(time.Now(), true)
+	t.mu.Unlock()
+	t.writeActivity(pending)
 }
 
-func (t *Tracker) saveLocked(now time.Time, force bool) {
-	if !t.dirty || (!force && now.Sub(t.lastSave) < saveInterval) {
+// writeActivity puts the stamps on disk outside the lock: the fsync must not hold back every snapshot waiting on it.
+func (t *Tracker) writeActivity(b []byte) {
+	if len(b) == 0 {
 		return
+	}
+	_ = state.WriteFile(filepath.Join(t.dir, activityFile), b)
+}
+
+// saveLocked gathers the stamps to write and says when they were taken, or nil when nothing is due.
+func (t *Tracker) saveLocked(now time.Time, force bool) []byte {
+	if !t.dirty || (!force && now.Sub(t.lastSave) < saveInterval) {
+		return nil
 	}
 	stamps := map[string]stamp{}
 	for k, st := range t.panes {
@@ -324,7 +336,6 @@ func (t *Tracker) saveLocked(now time.Time, force bool) {
 		}
 	}
 	b, _ := json.Marshal(stamps)
-	if state.WriteFile(filepath.Join(t.dir, activityFile), b) == nil {
-		t.lastSave, t.dirty = now, false
-	}
+	t.lastSave, t.dirty = now, false
+	return b
 }

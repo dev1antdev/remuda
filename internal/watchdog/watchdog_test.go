@@ -109,3 +109,14 @@ func TestLongWaitIsReminded(t *testing.T) {
 		t.Fatalf("note %q fired %d", h.notes["p1"], len(w.fired))
 	}
 }
+
+func TestAQuestionTheConversationMovedPastIsNotWaitedOn(t *testing.T) {
+	h, w := newHarness()
+	since := h.now.Add(-25 * time.Minute)
+	h.episodes = []radar.Episode{{Machine: "m", Pane: "p1", State: coreapi.StatusBlocked, Since: since}}
+	h.write = since.Add(time.Minute) // Esc or No closed the dialog: the turn went on, then ended
+	w.Sweep()
+	if len(h.pushed) != 0 {
+		t.Fatalf("a question already answered was pushed again: %+v", h.pushed)
+	}
+}

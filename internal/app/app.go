@@ -499,6 +499,10 @@ func Run(ctx context.Context, o Options) error {
 		Close: func(run schedule.Started) error {
 			return scouts.Close(run.Machine, sessions.Place{Pane: run.Pane, Tab: run.Tab, Workspace: run.Workspace, MadeWorkspace: run.MadeWorkspace})
 		},
+		Exists: func(machine string) bool {
+			_, err := fleet.Get(machine)
+			return err == nil
+		},
 		Answer: func(machine, pane string) string {
 			answer, _ := chats.LastAnswer(machine, pane)
 			return answer

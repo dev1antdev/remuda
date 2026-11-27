@@ -208,7 +208,11 @@ func (st *Store) Put(s Schedule) (Schedule, error) {
 	if s.ID == "" {
 		s.ID = state.NewID()
 	} else if old != nil {
-		s.LastRun, s.LastResult, s.LastOK, s.Skipped, s.LastPane, s.LastDenied = old.LastRun, old.LastResult, old.LastOK, old.Skipped, old.LastPane, old.LastDenied
+		s.LastRun, s.LastResult, s.LastOK, s.Skipped, s.LastDenied = old.LastRun, old.LastResult, old.LastOK, old.Skipped, old.LastDenied
+		s.LastPane = old.LastPane
+		if old.Machine != s.Machine {
+			s.LastPane = nil // another machine: the pane it watched is that one's, and closing it later would close a stranger's tab
+		}
 	}
 	cp := s
 	st.items[s.ID] = &cp
