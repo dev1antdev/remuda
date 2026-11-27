@@ -4,7 +4,7 @@ import Icon from "@/ui/icons";
 import type { Modifier, TermApi } from "@/features/terminal/engine/types";
 import { t } from "@/lib/i18n";
 
-type Key = { id: string; label: ReactNode; title?: string; wide?: boolean } & ({ seq: string } | { arrow: "A" | "B" | "C" | "D" } | { mod: Exclude<Modifier, null> } | { find: true });
+type Key = { id: string; label: ReactNode; title?: string; wide?: boolean } & ({ seq: string } | { arrow: "A" | "B" | "C" | "D" } | { cur: "H" | "F" } | { mod: Exclude<Modifier, null> } | { find: true });
 
 // ROW1 is what a phone keyboard lacks and an agent TUI needs constantly, ROW2 the rest of a
 // keyboard; the sequences are what a terminal sends, arrows following DECCKM.
@@ -24,8 +24,8 @@ const ROW1: Key[] = [
 const ROW2: Key[] = [
   { id: t("Alt"), label: t("Alt"), mod: "alt", title: t("Hold Alt for the next key") },
   { id: "Shift+Tab", label: "⇤", seq: "\x1b[Z", title: "Shift+Tab" },
-  { id: t("Home"), label: t("Home"), seq: "\x1b[H" },
-  { id: t("End"), label: t("End"), seq: "\x1b[F" },
+  { id: t("Home"), label: t("Home"), cur: "H" },
+  { id: t("End"), label: t("End"), cur: "F" },
   { id: "PgUp", label: "PgUp", seq: "\x1b[5~" },
   { id: "PgDn", label: "PgDn", seq: "\x1b[6~" },
   { id: t("Backspace"), label: "⌫", seq: "\x7f", title: t("Backspace") },
@@ -61,7 +61,7 @@ export default function KeyBar({
       actions.openFind();
       return;
     }
-    term.input("arrow" in k ? (term.appCursor() ? "\x1bO" : "\x1b[") + k.arrow : k.seq);
+    term.input("arrow" in k || "cur" in k ? (term.appCursor() ? "\x1bO" : "\x1b[") + ("arrow" in k ? k.arrow : k.cur) : k.seq);
   };
 
   const row = (keys: Key[]) =>

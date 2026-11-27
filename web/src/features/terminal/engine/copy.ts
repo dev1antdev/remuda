@@ -55,8 +55,8 @@ export function installCopy(
     }
     if (ev.type !== "keydown") return true;
     if (!mac && ev.key === "v" && ev.ctrlKey && !ev.altKey) return false;
-    // copy: Cmd+C on a Mac, Ctrl+Shift+C elsewhere, Ctrl+C with a selection
-    if ((ev.key === "c" || ev.key === "C") && (ev.metaKey || (ev.ctrlKey && (ev.shiftKey || term.hasSelection())))) {
+    // copy: Cmd+C on a Mac, Ctrl+Shift+C elsewhere, Ctrl+C with a selection off a Mac — Ctrl+C on a Mac interrupts
+    if ((ev.key === "c" || ev.key === "C") && (ev.metaKey || (!mac && ev.ctrlKey && (ev.shiftKey || term.hasSelection())))) {
       if (copySelection()) {
         ev.preventDefault();
         return false;
