@@ -22,6 +22,10 @@ func (s *Server) liveRoutes(api *http.ServeMux) {
 // livePing is how often a quiet stream is pinged, so a dead page is let go of; livePongWait how long its answer may take.
 var livePing, livePongWait = 30 * time.Second, 10 * time.Second
 
+// liveHeartbeat rides with every ping: a page cannot see a protocol ping, and a half-open link looks like a quiet
+// stream; this is the word that tells its watchdog the stream is alive.
+const liveHeartbeat = `{"type":"heartbeat"}`
+
 type liveClientMsg struct {
 	Sub []string `json:"sub"` // the panes the page shows, "machine|pane"
 }
@@ -70,6 +74,9 @@ func (s *Server) handleEventsWS(w http.ResponseWriter, r *http.Request) {
 				cancel()
 				if err != nil {
 					c.CloseNow() // a ping unanswered leaves the read waiting on a connection nobody answers: it ends here
+					return
+				}
+				if err := c.Write(wctx, websocket.MessageText, []byte(liveHeartbeat)); err != nil {
 					return
 				}
 			case <-wctx.Done():
