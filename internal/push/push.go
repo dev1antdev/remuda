@@ -263,7 +263,7 @@ func (s *Service) Send(sub *Subscription, p Payload) error {
 		s.Sockets.Deliver(sub.Endpoint, p)
 		return nil
 	}
-	body, _ := json.Marshal(p)
+	body, _ := json.Marshal(fit(p))
 	urgency := webpush.UrgencyNormal
 	if p.Kind == "input" {
 		urgency = webpush.UrgencyHigh
@@ -292,6 +292,38 @@ func (s *Service) Send(sub *Subscription, p Payload) error {
 		return fmt.Errorf("push service answered %d", resp.StatusCode)
 	}
 	return nil
+}
+
+// maxPayload is what a push service takes: RFC 8291's 4096 bytes less the encryption's own overhead.
+const maxPayload = 3900
+
+// fit is the payload a push service takes: a question whose choices are long gives way — the buttons stay, the choices
+// shorten, then go, then the body — and a payload still too big keeps its title and where it points alone.
+func fit(p Payload) Payload {
+	body, _ := json.Marshal(p)
+	if len(body) <= maxPayload {
+		return p
+	}
+	p.Body = cutRunes(p.Body, 200)
+	for i, choice := range p.Choices {
+		p.Choices[i] = cutRunes(choice, 80)
+	}
+	if len(p.Choices) > 3 {
+		p.Choices = p.Choices[:3]
+	}
+	body, _ = json.Marshal(p)
+	if len(body) <= maxPayload {
+		return p
+	}
+	p.Choices, p.Dialog = nil, ""
+	body, _ = json.Marshal(p)
+	if len(body) <= maxPayload {
+		return p
+	}
+	small := p
+	small.Body, small.Actions, small.Withdraw, small.Offer = "", nil, nil, ""
+	small.Title = cutRunes(small.Title, 120)
+	return small
 }
 
 // topic collapses pending pushes for the same pane; the Topic header allows 32 URL-safe chars.

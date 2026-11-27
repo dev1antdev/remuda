@@ -112,40 +112,51 @@ func scan(files []scanFile, q string, since time.Time, limit int, w io.Writer) e
 			pats = append(pats, []byte(v))
 		}
 	}
-	out := bufio.NewWriter(w)
-	defer out.Flush()
-	n := 0
+	// the newest hits are what the page shows, and a transcript's lines come oldest first: a bounded set keeps the
+	// newest as it goes instead of stopping at the first limit lines of the oldest session
+	kept := make([]scanHit, 0, max(limit, 1))
 	for _, f := range files {
 		fh, err := transcript.OpenSession(f.path)
 		if err != nil {
 			continue
 		}
-		done := false
+		where := f.rel + ":"
+		if f.format == transcript.Codex {
+			where = "codex:" + f.cwd + script.US + f.id + script.US
+		}
 		_ = transcript.Lines(fh, lineCap, func(line []byte) { // lines past lineCap are dropped: the parser on the other end reads up to it
-			if done || !anyOf(line, pats) {
+			if !anyOf(line, pats) {
 				return
 			}
 			m, ok := matchLine(f.format, line, q)
 			if !ok || (!since.IsZero() && m.Ts.Before(since)) {
 				return
 			}
-			if f.format == transcript.Codex {
-				out.WriteString("codex:" + f.cwd + script.US + f.id + script.US)
-			} else {
-				out.WriteString(f.rel + ":")
-			}
-			out.Write(line)
-			out.WriteByte('\n')
-			if n++; n >= limit {
-				done = true
+			kept = append(kept, scanHit{ts: m.Ts, line: where + string(line)})
+			if len(kept) > 2*limit {
+				sort.Slice(kept, func(i, j int) bool { return kept[i].ts.After(kept[j].ts) })
+				kept = kept[:limit]
 			}
 		})
 		fh.Close()
-		if done {
-			return nil
-		}
+	}
+	sort.Slice(kept, func(i, j int) bool { return kept[i].ts.After(kept[j].ts) })
+	if len(kept) > limit {
+		kept = kept[:limit]
+	}
+	out := bufio.NewWriter(w)
+	defer out.Flush()
+	for _, h := range kept {
+		out.WriteString(h.line)
+		out.WriteByte('\n')
 	}
 	return nil
+}
+
+// scanHit is one hit as the scan hands it on: when it was said, and the line it prints.
+type scanHit struct {
+	ts   time.Time
+	line string
 }
 
 func matchLine(format transcript.Format, line []byte, q string) (transcript.Match, bool) {

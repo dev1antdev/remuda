@@ -321,8 +321,9 @@ func (s *Service) refresh() {
 // alert fires the thresholds a budget crossed in its current period and not yet announced — the higher one alone
 // when both are crossed in one reading — and forgets the periods before it.
 func (s *Service) alert(hosts []shell.Host, now time.Time) {
+	// the lock is the budgets' own: a push to every device waits outside it, or a page reading its budgets waits for
+	// every phone's push service
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	changed := false
 	var fire []push.Payload
 	for i := range s.all {
@@ -368,6 +369,7 @@ func (s *Service) alert(hosts []shell.Host, now time.Time) {
 			log.Printf("budgets: %v", err)
 		}
 	}
+	s.mu.Unlock()
 	if s.Notify != nil {
 		for _, p := range fire {
 			s.Notify(p)

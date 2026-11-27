@@ -111,8 +111,15 @@ func parseAnswer(text string) (answer, bool) {
 // run is one gh call on the machine, its stdout when it ended well; a gh not installed or signed out is a Problem,
 // anything else gh's own words.
 func run(host shell.Shell, args []string, input string) (string, error) {
-	return runKept(host, args, input, "", "", Timeout)
+	return runKept(host, args, input, "", firstBytes(maxAnswer), Timeout)
 }
+
+// maxAnswer is the most of one GitHub answer remuda takes into memory: a pull request with a huge conversation, or a
+// diff of a generated folder, must not cost the cockpit hundreds of megabytes.
+const maxAnswer = 16 << 20
+
+// errTooBig names an answer GitHub gave longer than remuda reads.
+var errTooBig = errors.New("its answer was longer than this page reads (16 MB): open it on GitHub")
 
 // runText is run for a write that carries the person's text: its input goes to the machine as a file first, so the
 // text is never part of the script, whose commands' arguments are command lines there — read by any other
@@ -233,6 +240,9 @@ func gql(host shell.Shell, query string, variables map[string]any, v any) error 
 			Message string `json:"message"`
 		} `json:"errors"`
 	}
+	if len(out) >= maxAnswer {
+		return errTooBig
+	}
 	if out == "" || json.Unmarshal([]byte(out), &body) != nil {
 		if runErr != nil {
 			return runErr
@@ -267,6 +277,9 @@ func rest(host shell.Shell, method, path string, body any, v any) error {
 	}
 	if v == nil || strings.TrimSpace(out) == "" {
 		return nil
+	}
+	if len(out) >= maxAnswer {
+		return errTooBig
 	}
 	return json.Unmarshal([]byte(out), v)
 }

@@ -138,3 +138,25 @@ func TestSearchLooksInASessionFolderAnAgentNamed(t *testing.T) {
 		t.Fatalf("the folder the agent named is not searched: %+v", result)
 	}
 }
+
+func TestALimitKeepsTheNewestHitsOfOneSession(t *testing.T) {
+	projects := t.TempDir()
+	rec := func(uuid, ts string) string {
+		return `{"type":"user","uuid":"` + uuid + `","cwd":"/p/a","timestamp":"` + ts + `","message":{"role":"user","content":"needle ` + uuid + `"}}` + "\n"
+	}
+	body := rec("early", "2026-10-01T00:00:00Z") + rec("middle", "2026-10-02T00:00:00Z") + rec("late", "2026-10-03T00:00:00Z")
+	p := filepath.Join(projects, "-p-a", "one.jsonl")
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var b strings.Builder
+	if err := Scan(projects, "needle", "", time.Time{}, 1, &b); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(b.String(), "late") || strings.Contains(b.String(), "early ") {
+		t.Fatalf("the oldest hit was kept: %q", b.String())
+	}
+}
