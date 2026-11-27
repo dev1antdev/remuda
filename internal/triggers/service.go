@@ -154,17 +154,21 @@ func (s *Service) OnMatch(e events.OutputMatched) {
 		delete(rows, oldest(rows))
 	}
 	view := s.machines[e.Pane.Machine][e.Pane.Pane]
+	var pane paneView
+	seen := view != nil
+	if seen {
+		pane = *view
+	}
 	s.mu.Unlock()
 	if had && (e.Fresh || e.At.Sub(prev) < dupWindow) {
 		return
 	}
-	if view == nil {
+	if !seen {
 		return // a pane no snapshot showed yet: its first snapshot comes before anything it printed is news
 	}
-	if e.Fresh && !e.Carried && !(view.born && e.At.Sub(view.firstSeen) < newFor) {
+	if e.Fresh && !e.Carried && !(pane.born && e.At.Sub(pane.firstSeen) < newFor) {
 		return
 	}
-	pane := *view
 	go s.act(e, pane)
 }
 
