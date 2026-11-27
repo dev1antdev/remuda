@@ -357,16 +357,8 @@ export default function Composer({ machineId, paneId, working, dir, agent = "", 
               </Tip>
             )}
             <button type="button" className="btn primary composer-send" disabled={sending || att.uploading || !draft.trim()} onClick={() => void send()} title={isTouch ? t("Send") : t("Send (Enter)")}>
-              {sending ? (
-                "…"
-              ) : att.uploading ? (
-                t("Uploading…")
-              ) : (
-                <>
-                  <span>{t("Send")}</span>
-                  <Icon name="send" size={14} />
-                </>
-              )}
+              <span>{sending ? "…" : att.uploading ? t("Uploading…") : t("Send")}</span>
+              <Icon name="send" size={14} />
             </button>
           </div>
         </div>

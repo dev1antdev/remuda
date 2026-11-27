@@ -4979,6 +4979,11 @@ div.turn-note,
   border-radius: 99px;
 }
 
+/* the longest word it says is "Uploading…": its room is kept, so the row does not move as a send goes */
+.composer-send {
+  min-width: 120px;
+}
+
 .composer-stop {
   margin-right: 6px;
 }
@@ -8613,6 +8618,10 @@ rect.ribbon-s.is-shown {
     padding: 0 10px;
   }
 
+  .composer-send {
+    min-width: 0;
+  }
+
   .burger {
     display: inline-grid;
   }
@@ -9436,8 +9445,13 @@ body:has(.status-bar) .toasts {
 
 .toast .spinner,
 .notice .spinner {
+  display: inline-block;
   width: 12px;
   height: 12px;
+  border: 2px solid var(--line-strong);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
   vertical-align: -2px;
   margin-right: 4px;
 }
@@ -10563,18 +10577,6 @@ body:has(.status-bar) .toasts {
   color: var(--fg-dim);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-}
-
-.notice .spinner {
-  width: 12px;
-  height: 12px;
-  border: 2px solid var(--line-strong);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: spin 0.9s linear infinite;
-  display: inline-block;
-  vertical-align: -2px;
-  margin-right: 4px;
 }
 
 .health-list li {
