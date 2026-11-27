@@ -235,28 +235,6 @@ func realPath(t *testing.T, p string) string {
 	}
 	return real
 }
-<<<<<<< Updated upstream
-||||||| Stash base
-
-func TestADiffPastTheReadSaysItWasCut(t *testing.T) {
-	if text, truncated := cut(strings.Repeat("x", maxDiff)); truncated || len(text) != maxDiff {
-		t.Fatalf("a diff at the bound: %d %v", len(text), truncated)
-	}
-	if text, truncated := cut(strings.Repeat("x", maxDiff+1)); !truncated || len(text) != maxDiff {
-		t.Fatalf("a diff past it: %d %v", len(text), truncated)
-	}
-}
-=======
-
-func TestADiffPastTheReadSaysItWasCut(t *testing.T) {
-	if text, truncated := cut(strings.Repeat("x", maxDiff)); truncated || len(text) != maxDiff {
-		t.Fatalf("a diff at the bound: %d %v", len(text), truncated)
-	}
-	if text, truncated := cut(strings.Repeat("x", maxDiff+1)); !truncated || len(text) != maxDiff {
-		t.Fatalf("a diff past it: %d %v", len(text), truncated)
-	}
-}
-
 func TestAnUntrackedNameWithAQuoteIsOneFileAndItsBlob(t *testing.T) {
 	dir, git, write := scratchCheckout(t)
 	write("plain.txt", "one\n")
@@ -282,4 +260,3 @@ func TestAnUntrackedNameWithAQuoteIsOneFileAndItsBlob(t *testing.T) {
 		t.Fatalf("its blob: %q in %v", hash, blobs)
 	}
 }
->>>>>>> Stashed changes
