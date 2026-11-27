@@ -31,12 +31,13 @@ func FormatOf(path string) Format {
 	if i := strings.LastIndexAny(name, `/\`); i >= 0 {
 		name = name[i+1:]
 	}
+	slash := strings.ReplaceAll(path, `\`, "/")
 	switch {
 	case strings.HasPrefix(name, "rollout-"):
 		return Codex
-	case strings.Contains(path, "/.codex/"):
+	case strings.Contains(slash, "/.codex/"):
 		return Codex
-	case strings.Contains(path, "/.gemini/"):
+	case strings.Contains(slash, "/.gemini/"):
 		return Gemini
 	}
 	return Claude
