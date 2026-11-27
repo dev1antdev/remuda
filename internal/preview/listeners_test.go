@@ -198,3 +198,15 @@ func TestACutRecordIsNoListenerAndAFolderIsItself(t *testing.T) {
 		t.Fatalf("a known folder is not the folder it was: %+v", again)
 	}
 }
+
+func TestAnAgentUnderAFolderWithASpaceIsStillAnAgent(t *testing.T) {
+	if !agentProgram(`"/Users/me/My Agent/claude" --resume`) {
+		t.Fatal("a quoted path with a space hid the agent")
+	}
+	if !agentProgram(`/Users/me/Applications/Claude.app/Contents/MacOS/claude`) {
+		t.Fatal("a plain path hid the agent")
+	}
+	if agentProgram(`/usr/local/bin/node /Users/me/app/server.js`) {
+		t.Fatal("a person's own node server was taken for an agent")
+	}
+}

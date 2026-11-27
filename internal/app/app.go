@@ -106,9 +106,10 @@ func Run(ctx context.Context, o Options) error {
 	if err != nil {
 		return fmt.Errorf("ui assets: %w", err)
 	}
-	// the state dir is held while served, so `remuda restore` knows to refuse
+	// the state dir is held while served, and only one remuda serves it: a second one would run the schedules, the
+	// queue and the backups twice
 	if release, err := state.Hold(o.Dir); err != nil {
-		log.Printf("WARNING: %v; a restore cannot tell that this remuda serves it", err)
+		return err
 	} else {
 		defer release()
 	}

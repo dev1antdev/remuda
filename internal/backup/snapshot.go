@@ -140,7 +140,8 @@ func Snapshot(dir, host, version string, now time.Time) ([]byte, Manifest, error
 	if err != nil {
 		return nil, manifest, err
 	}
-	if !sawToken {
+	// a token from the environment leaves no file behind: the dir is still a remuda's
+	if !sawToken && strings.TrimSpace(os.Getenv("REMUDA_TOKEN")) == "" {
 		return nil, manifest, fmt.Errorf("%s holds no token: no remuda state dir, so no copy was taken", dir)
 	}
 	head, _ := json.MarshalIndent(manifest, "", "  ")

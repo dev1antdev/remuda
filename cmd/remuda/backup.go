@@ -37,13 +37,13 @@ func backupCmd(args []string) {
 	if err != nil {
 		fail(err)
 	}
-	token, err := os.ReadFile(filepath.Join(dir, "token"))
+	token, err := authToken(dir)
 	if err != nil {
-		fail(fmt.Errorf("no token in %s: %w", dir, err))
+		fail(err)
 	}
 	call := func(method, path string, out any) {
 		req, _ := http.NewRequest(method, "http://"+*addr+path, nil)
-		req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(string(token)))
+		req.Header.Set("Authorization", "Bearer "+token)
 		client := &http.Client{Timeout: backup.Timeout*2 + 30*time.Second}
 		res, err := client.Do(req)
 		if err != nil {
@@ -127,6 +127,18 @@ func restoreCmd(args []string) {
 	}
 	fmt.Println("restored into", dir, "— start the service again:", startHint())
 	fmt.Println("the copy holds remuda's state alone: on a new machine, set up its ~/.ssh (its key let in on the other machines, the hosts in its config) before the machines connect")
+}
+
+// authToken is the token the running service answers to: REMUDA_TOKEN when it is set, else the state dir's file.
+func authToken(dir string) (string, error) {
+	if t := strings.TrimSpace(os.Getenv("REMUDA_TOKEN")); t != "" {
+		return t, nil
+	}
+	b, err := os.ReadFile(filepath.Join(dir, "token"))
+	if err != nil {
+		return "", fmt.Errorf("no token in %s: %w", dir, err)
+	}
+	return strings.TrimSpace(string(b)), nil
 }
 
 // stopHint and startHint are the service's own commands on this system, as install-service.sh sets it up

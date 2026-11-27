@@ -158,7 +158,38 @@ var infrastructure = map[string]bool{"remuda": true, "herdr": true, "remuda-core
 // and a port one of them holds (Claude Code keeps one on the loopback, in its workspace's folder) is no server of the
 // person's to preview, count or stop
 func agentProgram(args string) bool {
-	return coreapi.AgentProgram(strings.Fields(args)) != ""
+	return coreapi.AgentProgram(commandWords(args)) != ""
+}
+
+// commandWords splits a command line at its spaces, keeping a quoted stretch whole: an agent installed under a folder
+// with a space in its name ("/Users/me/My Agent/claude") is still that program, its path one word.
+func commandWords(line string) []string {
+	var words []string
+	var word strings.Builder
+	quote := rune(0)
+	for _, r := range line {
+		switch {
+		case quote != 0:
+			if r == quote {
+				quote = 0
+				continue
+			}
+			word.WriteRune(r)
+		case r == '\'' || r == '"':
+			quote = r
+		case r == ' ' || r == '\t' || r == '\n':
+			if word.Len() > 0 {
+				words = append(words, word.String())
+				word.Reset()
+			}
+		default:
+			word.WriteRune(r)
+		}
+	}
+	if word.Len() > 0 {
+		words = append(words, word.String())
+	}
+	return words
 }
 
 // Parse reads the script's lines into the listeners worth a preview: one per port, never one in skip (the cockpit's
