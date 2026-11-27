@@ -354,3 +354,19 @@ func TestTheResumeCheckJudgesTheFolderTheShellStandsIn(t *testing.T) {
 		t.Fatalf("the folder the agent ran in: %v", err)
 	}
 }
+
+func TestTheFirstSnapshotAfterAMachineReturnsClosesNothing(t *testing.T) {
+	m := OpenMemory("")
+	observe(m, "box", false, agentPane("p1", "claude", "/api"))
+	if len(m.Closed()) != 0 {
+		t.Fatalf("a chat closed while its pane stood: %+v", m.Closed())
+	}
+	observe(m, "box", true) // back, with no pane listed yet
+	if closed := m.Closed(); len(closed) != 0 {
+		t.Fatalf("the first snapshot back closed %d chats: %+v", len(closed), closed)
+	}
+	observe(m, "box", false)
+	if closed := m.Closed(); len(closed) != 1 {
+		t.Fatalf("a chat whose pane is gone is not closed on the next snapshot: %+v", closed)
+	}
+}
