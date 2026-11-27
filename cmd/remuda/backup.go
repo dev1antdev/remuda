@@ -2,9 +2,11 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -82,10 +84,10 @@ func backupCmd(args []string) {
 
 // restoreCmd is `remuda restore <file>`: refused while a remuda serves the state dir; the dir as it is moved aside first.
 func restoreCmd(args []string) {
-	fs := flag.NewFlagSet("restore", flag.ExitOnError)
-	sure := fs.Bool("yes", false, "restore without being asked")
-	_ = fs.Parse(args)
-	if fs.NArg() != 1 {
+	flags := flag.NewFlagSet("restore", flag.ExitOnError)
+	sure := flags.Bool("yes", false, "restore without being asked")
+	_ = flags.Parse(args)
+	if flags.NArg() != 1 {
 		fmt.Fprint(os.Stderr, backupUsage)
 		os.Exit(2)
 	}
@@ -93,10 +95,18 @@ func restoreCmd(args []string) {
 	if err != nil {
 		fail(err)
 	}
-	if state.Held(dir) {
-		fail(fmt.Errorf("a remuda serves %s now; stop it first: %s", dir, stopHint()))
+	// the lock is taken, not just looked at: a remuda starting in the middle of a restore would serve half of it
+	release, err := state.Hold(dir)
+	if errors.Is(err, fs.ErrNotExist) {
+		if err = os.MkdirAll(dir, 0o700); err == nil {
+			release, err = state.Hold(dir)
+		}
 	}
-	archive, err := os.ReadFile(fs.Arg(0))
+	if err != nil {
+		fail(fmt.Errorf("%w; stop it first: %s", err, stopHint()))
+	}
+	defer release()
+	archive, err := os.ReadFile(flags.Arg(0))
 	if err != nil {
 		fail(err)
 	}
@@ -104,7 +114,7 @@ func restoreCmd(args []string) {
 	if err != nil {
 		fail(err)
 	}
-	fmt.Printf("%s: %d files from %s, taken %s by remuda %s\n", fs.Arg(0), manifest.Files, manifest.Host, manifest.At.Local().Format("2006-01-02 15:04"), manifest.Version)
+	fmt.Printf("%s: %d files from %s, taken %s by remuda %s\n", flags.Arg(0), manifest.Files, manifest.Host, manifest.At.Local().Format("2006-01-02 15:04"), manifest.Version)
 	if !*sure && !confirm(fmt.Sprintf("Put it in place of %s? The dir as it is now is moved aside, not deleted. [y/N] ", dir)) {
 		os.Exit(1)
 	}

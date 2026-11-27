@@ -85,7 +85,7 @@ func (s *Server) handleViewerKeyRevoke(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := r.PathValue("id")
-	ok, err := store.Revoke(id)
+	ok, err := store.RevokeScoped(id, auth.ScopeViewer)
 	if err != nil {
 		httpErr(w, http.StatusInternalServerError, err)
 		return

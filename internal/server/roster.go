@@ -330,7 +330,9 @@ func (s *Server) handleRoster(w http.ResponseWriter, r *http.Request) {
 	s.Subagents.Touch() // and the subagents the conversations run
 	s.Ports.Touch()     // and the ports the workspaces' processes listen on
 	viewer := auth.IsViewer(r.Context())
-	body, etag := s.rosterFor(viewer)
+	// login_url binds the cockpit's node to whoever opens it first: a viewer or an agent key gets the state alone
+	restricted := viewer || auth.CallerName(r.Context()) != ""
+	body, etag := s.rosterFor(viewer, restricted)
 	w.Header().Set("X-Remuda-Version", buildversion.Build) // a page older than the server offers a reload
 	if viewer {
 		w.Header().Set("X-Remuda-Viewer", "1") // a viewer link signed this page in: it draws, and hides every control that would type or change
@@ -352,10 +354,12 @@ func (s *Server) RosterETag() string {
 }
 
 // rosterBody is the roster as the person gets it, with its ETag, from the caches alone.
-func (s *Server) rosterBody() ([]byte, string) { return s.rosterFor(false) }
+func (s *Server) rosterBody() ([]byte, string) { return s.rosterFor(false, false) }
 
-// rosterFor is the roster as served: a viewer's leaves out the workspaces remuda keeps for itself, under an ETag of its own.
-func (s *Server) rosterFor(viewer bool) ([]byte, string) {
+// rosterFor is the roster as served: a viewer's leaves out the workspaces remuda keeps for itself, under an ETag of its
+// own, and a restricted caller — a viewer or an agent key — is told the tailnet's state without the login URL that
+// would join it to their own.
+func (s *Server) rosterFor(viewer, restricted bool) ([]byte, string) {
 	list := s.Machines.List()
 	out := make([]rosterMachine, 0, len(list))
 	for _, mc := range list {
@@ -420,7 +424,11 @@ func (s *Server) rosterFor(viewer bool) ([]byte, string) {
 		}
 	}
 	if s.Tailscale != nil {
-		roster["tailscale"] = s.Tailscale()
+		tailnet := s.Tailscale()
+		if restricted {
+			tailnet.LoginURL = ""
+		}
+		roster["tailscale"] = tailnet
 	}
 	if s.Budgets != nil {
 		roster["budgets"] = s.Budgets.Status() // from the cache: the pill and the rows know the limits without another poll
