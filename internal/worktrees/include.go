@@ -75,6 +75,9 @@ func IncludeScript(worktree string) string {
 		"  up=$dir; while [ ! -d \"$up\" ] && [ \"$up\" != / ]; do up=$(dirname \"$up\"); done\n" +
 		"  real=$(cd \"$up\" 2>/dev/null && pwd -P) || real=\n" +
 		"  case \"$real/\" in \"$wt\"/*) ;; *) " + skip("its folder in the worktree leads out of it") + ";; esac\n" +
+		// ignored in the main checkout, but the branch may carry another .gitignore: a file the new worktree would show as
+		// ?? is one the agent's `git add -A` commits, .env and all
+		"  if ! ( cd \"$wt\" && " + script.ReadGit + " check-ignore -q -- \"$f\" 2>/dev/null ); then " + skip("the new branch does not ignore it") + "; fi\n" +
 		"  mkdir -p \"$dir\" 2>/dev/null || { " + skip("its folder could not be made") + "; }\n" +
 		"  if cp -pP \"$src\" \"$dst\" 2>/dev/null; then printf 'copied\\037%s\\n' \"$f\"; else " + skip("it could not be copied") + "; fi\n" +
 		"done < \"$list\"\n" +

@@ -76,7 +76,7 @@ export const unstageFiles = (machineId: string, dir: string, paths: string[], bu
 export type DiscardKind = "unstaged" | "all" | "untracked";
 export const discardFile = (machineId: string, dir: string, path: string, kind: DiscardKind): Promise<void> => sendJSON("POST", "/api/review/discard", { machine: machineId, dir, path, kind });
 // no_verify skips the repository's pre-commit and commit-msg hooks (git commit --no-verify); the secret check stands
-export type CommitAsk = { message: string; stage?: string[]; amend?: boolean; head?: string; no_verify?: boolean };
+export type CommitAsk = { message: string; stage?: string[]; amend?: boolean; head?: string; no_verify?: boolean; anyway?: boolean };
 export type Committed = { sha: string; short: string; subject: string; skipped?: string[] };
 export const commitWork = (machineId: string, dir: string, ask: CommitAsk): Promise<Committed> => sendJSON("POST", "/api/review/commit", { machine: machineId, dir, ...ask });
 export const fetchLastCommit = (machineId: string, dir: string): Promise<{ head: string; message: string }> => getJSON(withMachine(`/api/review/last-commit?dir=${encodeURIComponent(dir)}`, machineId));

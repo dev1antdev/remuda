@@ -7,9 +7,10 @@ import (
 
 // What an agent in a checkout is doing that holds a pull back.
 const (
-	DoingWork   = "working"
-	DoingAsk    = "asking"
-	DoingEnding = "ending" // its turn has stopped but is not read to its end yet
+	DoingWork    = "working"
+	DoingAsk     = "asking"
+	DoingEnding  = "ending"  // its turn has stopped but is not read to its end yet
+	DoingUnknown = "unknown" // the machine has not said — a restart, a reconnect: the write waits
 )
 
 // AgentIn is the agent of the snapshot at work or asking in the checkout, and which of the two; "" for none. An agent
@@ -18,13 +19,15 @@ const (
 // folder back. going says a turn is still ending in a workspace's folder.
 func AgentIn(snap *coreapi.Snapshot, style rpath.Style, checkout string, going func(dir string) bool) (agent, doing string) {
 	if snap == nil {
-		return "", ""
+		// nothing said yet (a restart, a reconnect): a write waits rather than guessing nobody works
+		return "the machine", DoingUnknown
 	}
 	inCheckout := func(ws *coreapi.WorkspaceInfo, dir string) bool {
 		if ws != nil && ws.Worktree != nil && ws.Worktree.CheckoutPath != "" {
 			return style.Equal(ws.Worktree.CheckoutPath, checkout)
 		}
-		return dir != "" && style.Within(checkout, dir)
+		// its folder in the checkout, or a folder holding the checkout: an agent in ~/code can write in ~/code/repo
+		return dir != "" && (style.Within(checkout, dir) || style.Within(dir, checkout))
 	}
 	for i := range snap.Panes {
 		pane := &snap.Panes[i]

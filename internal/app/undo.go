@@ -3,6 +3,7 @@ package app
 import (
 	"github.com/dev1antdev/remuda/internal/coreapi"
 	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/rpath"
 	"github.com/dev1antdev/remuda/internal/shell"
 	"github.com/dev1antdev/remuda/internal/undo"
 	"github.com/dev1antdev/remuda/internal/watch"
@@ -45,14 +46,22 @@ func turnUndo(dir string, fleet *machines.Manager, watcher *watch.Watcher, recor
 		Working: func(machineID, folder string) string {
 			snap, _ := watcher.Snapshot(machineID)
 			if snap == nil {
-				return ""
+				return "the machine" // nothing said yet: not nobody at work
 			}
+			style := rpath.For(folder)
+			// by the checkout, not by the same string: an agent in /repo/web holds an undo of /repo, and one in /code holds
+			// an undo of /code/repo — it can write there too
+			inCheckout := func(dir string) bool { return dir != "" && (style.Within(folder, dir) || style.Within(dir, folder)) }
 			for i := range snap.Panes {
 				pane := &snap.Panes[i]
 				if pane.Agent == "" || (pane.AgentStatus != coreapi.StatusWorking && pane.AgentStatus != coreapi.StatusBlocked) {
 					continue
 				}
-				if ws := snap.Workspace(pane.WorkspaceID); ws != nil && snap.WorkspaceDir(ws) == folder {
+				workspaceDir := ""
+				if ws := snap.Workspace(pane.WorkspaceID); ws != nil {
+					workspaceDir = snap.WorkspaceDir(ws)
+				}
+				if inCheckout(workspaceDir) || inCheckout(pane.Dir()) {
 					return pane.AgentName()
 				}
 			}

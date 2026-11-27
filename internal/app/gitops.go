@@ -25,9 +25,21 @@ func gitWrites(watcher *watch.Watcher, turns *undo.Tracker) *gitops.Service {
 // for nobody.
 func busyCheckout(snap *coreapi.Snapshot, top string, worktrees []string, real func(string) string, going func(string) bool) string {
 	if snap == nil {
-		return ""
+		// no word yet on what its agents do — after a restart, a reconnect: the write waits for the next snapshot rather
+		// than landing under an agent's feet
+		return "the machine has not said what its agents do yet: try again in a moment"
 	}
-	inCheckout := func(dir string) bool { return checkoutOf(real(dir), top, worktrees) }
+	inCheckout := func(dir string) bool {
+		if checkoutOf(real(dir), top, worktrees) {
+			return true
+		}
+		// an agent whose folder holds the checkout (~/code beside ~/code/repo) can write in it too
+		if dir == "" {
+			return false
+		}
+		style := rpath.For(top)
+		return style.Within(real(dir), top)
+	}
 	for i := range snap.Panes {
 		pane := &snap.Panes[i]
 		if pane.Agent == "" || (pane.AgentStatus != coreapi.StatusWorking && pane.AgentStatus != coreapi.StatusBlocked) {

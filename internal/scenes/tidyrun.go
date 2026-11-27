@@ -48,6 +48,10 @@ func (s *Service) act(action Action, by string) (Machine, string, string) {
 		return nil, StateAway, err.Error()
 	}
 	if action.Kind == ActWorktree {
+		// a worktree is removed at the person's press and never from a schedule, whatever scene a schedule runs
+		if strings.HasPrefix(by, "the schedule") {
+			return mc, StateRefused, "a schedule never removes a worktree: run the tidy yourself"
+		}
 		outcome := mc.Tidy(action.Path)
 		if !outcome.Removed {
 			return mc, StateRefused, outcome.Kept

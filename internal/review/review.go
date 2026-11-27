@@ -187,7 +187,7 @@ func summaryScript(dir, baselineHead string) string {
 	return script.InRepo(dir) +
 		`printf '%s\n' "$root"; git rev-parse --abbrev-ref HEAD 2>/dev/null; git rev-parse HEAD 2>/dev/null; printf '\036\n'; ` +
 		`base=` + script.Quote(baselineHead) + `; if [ -n "$base" ] && git cat-file -e "$base^{commit}" 2>/dev/null; then :; else base=HEAD; fi; ` +
-		`if [ "$base" != HEAD ]; then git log --first-parent -n ` + strconv.Itoa(maxCommits) + ` --format='%h%x1f%s%x1f%ct' "$base"..HEAD 2>/dev/null; fi; printf '\036\n'; ` +
+		`if [ "$base" != HEAD ]; then git -c log.showSignature=false log --first-parent -n ` + strconv.Itoa(maxCommits) + ` --format='%h%x1f%s%x1f%ct' "$base"..HEAD 2>/dev/null; fi; printf '\036\n'; ` +
 		readGit + ` -c core.quotepath=off diff --no-renames --relative --numstat -z HEAD 2>/dev/null | tr '\0' '\n'; printf '\036\n'; ` +
 		readGit + ` -c core.quotepath=off ls-files --others --exclude-standard -z 2>/dev/null | tr '\0' '\n'; printf '\036\n'; ` +
 		blobsScript() + `; printf '\036\n'; ` +

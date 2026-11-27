@@ -33,6 +33,9 @@ type Service struct {
 	// Advisory says the same for a look at the lens, cheaply: a reader says who is at work, never asks another
 	// runtime, and nil reads Busy.
 	Advisory func(machineID, dir, top string) string
+	// Check is the secret check a commit runs on the folder just before it is made, "" when clear and the words to stop
+	// on when not: the page's own scan may be a minute old, and must not be the only thing standing in the way
+	Check func(host shell.Host, dir string) (string, error)
 
 	mu    sync.Mutex
 	locks map[string]*sync.Mutex

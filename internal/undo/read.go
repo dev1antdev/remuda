@@ -109,7 +109,7 @@ if [ -n "$base" ] && [ "$base" != "$head" ]; then
     printf '\036\n'
     git -c core.quotepath=off diff-tree -r -z --no-renames --no-abbrev --ignore-submodules=all "$base" "$head"
     printf '\036\n'
-    git log --first-parent -n ` + strconv.Itoa(MaxCommits+1) + ` --format='%H%x1f%P%x1f%ct%x1f%s' "$base..$head" --
+    git -c log.showSignature=false log --first-parent -n ` + strconv.Itoa(MaxCommits+1) + ` --format='%H%x1f%P%x1f%ct%x1f%s' "$base..$head" --
   fi
 else printf '\036\n\036\n'; fi
 printf '\036\n'

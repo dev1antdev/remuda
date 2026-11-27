@@ -147,6 +147,7 @@ type CommitRequest struct {
 	Amend    bool     `json:"amend,omitempty"`
 	Head     string   `json:"head,omitempty"`
 	NoVerify bool     `json:"no_verify,omitempty"`
+	Anyway   bool     `json:"anyway,omitempty"` // commit past the secret check the server runs itself
 }
 
 // Committed is the commit made.
@@ -194,6 +195,13 @@ func (s *Service) Commit(host shell.Host, dir string, req CommitRequest) (Commit
 	if req.Amend && !found.hasHead {
 		return Committed{}, &Refusal{Why: "there is no commit yet to amend"}
 	}
+	if s.Check != nil && !req.Anyway {
+		if held, err := s.Check(host, dir); err != nil {
+			return Committed{}, &Refusal{Why: "the secret check could not run: " + err.Error()}
+		} else if held != "" {
+			return Committed{}, &Refusal{Why: held}
+		}
+	}
 	take, skipped := split(req.Stage, found.conflicts)
 	var body strings.Builder
 	if req.Amend {
@@ -213,7 +221,7 @@ func (s *Service) Commit(host shell.Host, dir string, req CommitRequest) (Commit
 	}
 	body.WriteString(`t=$(mktemp "${TMPDIR:-/tmp}/remuda-commit.XXXXXX") || exit 1; printf '%s\n' ` + script.Quote(message) + ` > "$t"; ` +
 		writeGit + ` commit -q` + flags + ` -F "$t"; c=$?; rm -f "$t"; [ "$c" = 0 ] || exit "$c"; ` +
-		`printf '\035'; git log -1 --format='%H%x1f%h%x1f%s'`)
+		`printf '\035'; git -c log.showSignature=false log -1 --format='%H%x1f%h%x1f%s'`)
 	output, err := run(host, dir, body.String(), commitFor)
 	switch {
 	case strings.Contains(output, movedMark):
@@ -233,7 +241,7 @@ func (s *Service) Commit(host shell.Host, dir string, req CommitRequest) (Commit
 
 // LastCommit is HEAD and its whole message, which Amend loads into an empty box.
 func LastCommit(host shell.Host, dir string) (head, message string, err error) {
-	output, err := shell.Text(host, script.InDir(dir)+`git log -1 --format='%H%x00%B' 2>/dev/null`, writeFor)
+	output, err := shell.Text(host, script.InDir(dir)+`git -c log.showSignature=false log -1 --format='%H%x00%B' 2>/dev/null`, writeFor)
 	if err != nil {
 		return "", "", err
 	}

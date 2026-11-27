@@ -48,6 +48,8 @@ function refusedWords(o: Outcome, name: string): string {
       });
     case "busy":
       return busyWords(o, name);
+    case "other-name":
+      return t("{branch} tracks {upstream}, a branch of another name: a push would rewrite that one, so nothing was pushed. Push it from a terminal with the name you mean.", { branch: o.branch ?? "", upstream: o.upstream ?? "" });
     case "moved":
       return t("{name} has new commits since its secret check: nothing was pushed. Push again to check them too.", { name });
   }
