@@ -49,7 +49,7 @@ func TestOnWindowsTheChangesLensReadsAWindowsRepository(t *testing.T) {
 	if summary.Error != "" || summary.Branch != "main" || len(summary.Files) != 2 {
 		t.Fatalf("the summary of %s: %+v", dir, summary)
 	}
-	diff, err := store.Diff(host, dir, "main.go")
+	diff, _, err := store.Diff(host, dir, "main.go")
 	if err != nil || !strings.Contains(diff, "+func main() {}") {
 		t.Fatalf("the diff: %v\n%s", err, diff)
 	}

@@ -275,3 +275,16 @@ func TestKeysUnderConcurrentUse(t *testing.T) {
 		t.Fatal("the GOG key did not survive Roofr's minting")
 	}
 }
+
+func TestAKeyIsRevokedOnlyFromItsOwnRoute(t *testing.T) {
+	keys := openKeys(t, t.TempDir())
+	if _, viewer, err := keys.MintViewer("the office TV"); err != nil {
+		t.Fatal(err)
+	} else if ok, err := keys.RevokeScoped(viewer.ID, ScopeTasks); err != nil || ok {
+		t.Fatalf("an agent key's route revoked a viewer link: %v %v", ok, err)
+	} else if !keys.Has(viewer.ID) {
+		t.Fatal("the viewer link was taken away by the wrong route")
+	} else if ok, err := keys.RevokeScoped(viewer.ID, ScopeViewer); err != nil || !ok {
+		t.Fatalf("its own route: %v %v", ok, err)
+	}
+}

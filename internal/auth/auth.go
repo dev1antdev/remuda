@@ -20,8 +20,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/dev1antdev/remuda/internal/state"
 )
 
 const CookieName = "remuda_token"
@@ -45,7 +43,23 @@ func LoadOrCreateToken(dir string) (token string, created bool, err error) {
 		return "", false, err
 	}
 	t := hex.EncodeToString(buf)
-	if err := state.WriteFile(path, []byte(t+"\n")); err != nil {
+	// two remudas starting at once must agree on one token: the file is made with O_EXCL and the loser reads it
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		if b, readErr := os.ReadFile(path); readErr == nil {
+			if made := strings.TrimSpace(string(b)); made != "" {
+				return made, false, nil
+			}
+		}
+		return "", false, err
+	}
+	if _, err := f.WriteString(t + "\n"); err != nil {
+		f.Close()
+		os.Remove(path)
+		return "", false, err
+	}
+	if err := f.Close(); err != nil {
+		os.Remove(path)
 		return "", false, err
 	}
 	return t, true, nil
@@ -211,7 +225,9 @@ func (g *Guard) Middleware(next http.Handler) http.Handler {
 			return
 		}
 		if who.stale {
-			g.staleCookie(w, r)
+			g.staleCookie(w, r) // at once: the browser is a person who was signed out, and the drop says so
+		} else if r.Header.Get("Authorization") != "" {
+			g.refused(r) // a bearer that is not the token and not a key: the same slow, logged no as a wrong token
 		}
 		if strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/ws/") {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
@@ -345,7 +361,7 @@ func (g *Guard) strayedKey(key Key, r *http.Request) {
 
 // refused logs a wrong token with its address and makes the caller wait, so guessing is slow.
 func (g *Guard) refused(r *http.Request) {
-	log.Printf("auth: wrong token from %s", r.RemoteAddr)
+	log.Printf("auth: a refused sign-in from %s", r.RemoteAddr)
 	time.Sleep(500 * time.Millisecond)
 }
 

@@ -182,11 +182,15 @@ func (k *Keys) Has(id string) bool {
 
 // Revoke forgets a key, so it is refused from then on; false for an id the store does not hold. One the file could not
 // lose still works: the error says so.
-func (k *Keys) Revoke(id string) (bool, error) {
+func (k *Keys) Revoke(id string) (bool, error) { return k.RevokeScoped(id, "") }
+
+// RevokeScoped is Revoke for a key of that scope alone: an agent key's id on a viewer link's route (or the other way)
+// is not found there, and the key stays.
+func (k *Keys) RevokeScoped(id, scope string) (bool, error) {
 	k.mu.Lock()
 	defer k.mu.Unlock()
 	rec, ok := k.list[id]
-	if !ok {
+	if !ok || (scope != "" && rec.Scope != scope) {
 		return false, nil
 	}
 	delete(k.list, id)

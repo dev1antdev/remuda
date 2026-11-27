@@ -360,8 +360,9 @@ func (store *Store) setBadge(storeKey string, against Baseline, badge Badge) {
 }
 
 // Diff is one file's unified diff since the viewer looked: from the blob
-// the baseline recorded for it, else against HEAD; an untracked file whole.
-func (store *Store) Diff(host shell.Host, dir, path string) (string, error) {
+// the baseline recorded for it, else against HEAD; an untracked file whole. It says whether the diff is longer than a
+// read sends.
+func (store *Store) Diff(host shell.Host, dir, path string) (string, bool, error) {
 	baseline, _ := store.baseline(host.ID(), dir)
 	quotedPath := script.Quote(path)
 	reviewedBlob := baseline.Blobs[path]
@@ -369,22 +370,25 @@ func (store *Store) Diff(host shell.Host, dir, path string) (string, error) {
 		// the script prints the temp file's name first; the diff headers carry it
 		fromBlob := script.InDir(dir) + `t=$(mktemp "${TMPDIR:-/tmp}/remuda-seen.XXXXXX") || exit 0; printf '%s\n' "$t"; ` +
 			`p=` + quotedPath + `; [ -e "$p" ] || p=/dev/null; ` + // a reviewed file the agent deleted since: the diff is its removal
-			`if git cat-file -p ` + reviewedBlob + ` > "$t" 2>/dev/null; then ` + readGit + ` diff ` + script.PatchForm + ` --no-index -- "$t" "$p" | head -c 600000; fi; rm -f "$t"; exit 0`
+			`if git cat-file -p ` + reviewedBlob + ` > "$t" 2>/dev/null; then ` + readGit + ` diff ` + script.PatchForm + ` --no-index -- "$t" "$p" | head -c ` + strconv.Itoa(diffRead) + `; fi; rm -f "$t"; exit 0`
 		output, err := shell.Text(host, fromBlob, 60*time.Second)
 		if err != nil {
-			return output, err
+			return output, false, err
 		}
 		tempFile, diff, ok := strings.Cut(output, "\n")
 		if !ok {
-			return "", nil
+			return "", false, nil
 		}
-		return strings.ReplaceAll(diff, "a"+tempFile, "a/"+path), nil
+		text, truncated := cut(diff)
+		return strings.ReplaceAll(text, "a"+tempFile, "a/"+path), truncated, nil
 	}
 	fromHead := script.InDir(dir) +
 		`if ` + readGit + ` ls-files --error-unmatch -- ` + quotedPath + ` >/dev/null 2>&1 || git cat-file -e "HEAD:./"` + quotedPath + ` 2>/dev/null; then ` +
-		readGit + ` diff ` + script.PatchForm + ` --relative HEAD -- ` + quotedPath + ` | head -c 600000; ` +
-		`else ` + readGit + ` diff ` + script.PatchForm + ` --no-index -- /dev/null ` + quotedPath + ` | head -c 600000; fi; exit 0`
-	return shell.Text(host, fromHead, 60*time.Second)
+		readGit + ` diff ` + script.PatchForm + ` --relative HEAD -- ` + quotedPath + ` | head -c ` + strconv.Itoa(diffRead) + `; ` +
+		`else ` + readGit + ` diff ` + script.PatchForm + ` --no-index -- /dev/null ` + quotedPath + ` | head -c ` + strconv.Itoa(diffRead) + `; fi; exit 0`
+	out, err := shell.Text(host, fromHead, 60*time.Second)
+	diff, truncated := cut(out)
+	return diff, truncated, err
 }
 
 var hexRe = regexp.MustCompile(`^[0-9a-f]{40,64}$`)

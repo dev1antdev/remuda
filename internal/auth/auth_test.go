@@ -392,3 +392,64 @@ func TestALoginFormDrippedOneByteAtATimeIsCut(t *testing.T) {
 		t.Fatalf("answer %d after %s", res.StatusCode, time.Since(start))
 	}
 }
+
+func TestTwoRemudasStartingAtOnceAgreeOnOneToken(t *testing.T) {
+	dir := t.TempDir()
+	first, created, err := LoadOrCreateToken(dir)
+	if err != nil || !created {
+		t.Fatalf("the first: %q %v %v", first, created, err)
+	}
+	second, created, err := LoadOrCreateToken(dir)
+	if err != nil || created || second != first {
+		t.Fatalf("the second read another token: %q %v %v (was %q)", second, created, err, first)
+	}
+	if strings.TrimSpace(string(mustRead(t, filepath.Join(dir, "token")))) != first {
+		t.Fatal("the token on disk is not the one handed out")
+	}
+}
+
+func TestAKeyKeepsTheNewestViewerDevicesOfItsOwn(t *testing.T) {
+	dir := t.TempDir()
+	devices, err := OpenDevices(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	at := time.Now()
+	devices.now = func() time.Time { return at }
+	for i := 0; i < viewerDevices+4; i++ {
+		at = at.Add(time.Minute)
+		if _, _, err := devices.MintViewer("10.0.0.9", chromeMac, "rk_office"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, _, err := devices.MintViewer("10.0.0.9", chromeMac, "rk_other"); err != nil {
+		t.Fatal(err)
+	}
+	kept, all := 0, 0
+	for _, device := range devices.list {
+		all++
+		if device.Key == "rk_office" {
+			kept++
+		}
+	}
+	if kept != viewerDevices || all != viewerDevices+1 {
+		t.Fatalf("the key kept %d of its own and %d devices in all", kept, all)
+	}
+	// a viewer device unseen for a month goes with the next mint
+	at = at.Add(viewerAged + time.Hour)
+	if _, _, err := devices.MintViewer("10.0.0.9", chromeMac, "rk_office"); err != nil {
+		t.Fatal(err)
+	}
+	if len(devices.list) != 1 {
+		t.Fatalf("the forgotten devices stayed: %d", len(devices.list))
+	}
+}
+
+func mustRead(t *testing.T, path string) []byte {
+	t.Helper()
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
+}

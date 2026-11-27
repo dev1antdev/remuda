@@ -24,12 +24,13 @@ const (
 )
 
 // probeFunc prints the checkout a folder is — its top, git's common and own folders, the repository's main folder as
-// the sidebar's sweep reads it (script.MainFolder) — or nothing outside git (or on a git before 2.31, which has no
-// --path-format).
-const probeFunc = `probe() ( cd "$1" 2>/dev/null || exit 0
+// the sidebar's sweep reads it (script.MainFolder) — or nothing outside git. Git's own answer is made absolute here
+// rather than by --path-format, which a git before 2.31 does not know.
+const probeFunc = `absolute() { case "$1" in /*|[A-Za-z]:[\\/]*) printf '%s' "$1" ;; *) ( cd "$1" 2>/dev/null && pwd -P ) ;; esac; }
+probe() ( cd "$1" 2>/dev/null || exit 0
   top=$(` + script.ReadGit + ` rev-parse --show-toplevel 2>/dev/null) || exit 0
-  common=$(` + script.ReadGit + ` rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || exit 0
-  own=$(` + script.ReadGit + ` rev-parse --path-format=absolute --git-dir 2>/dev/null) || exit 0
+  common=$(absolute "$(` + script.ReadGit + ` rev-parse --git-common-dir 2>/dev/null)") || exit 0
+  own=$(absolute "$(` + script.ReadGit + ` rev-parse --git-dir 2>/dev/null)") || exit 0
   printf 'top %s\ncommon %s\nown %s\nmain %s\n' "$top" "$common" "$own" "$(` + script.MainFolder + `)"
 )
 `

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 import { useQuery } from "@/lib/query";
 import { basename, dirname, errMsg, plural } from "@/lib/text";
 import { FileIcon, Icon, Notice, Tip } from "@/ui";
-import type { DiffFrom, ReviewFile, Stat } from "./api";
+import type { DiffFrom, DiffRead, ReviewFile, Stat } from "./api";
 import { fileLines, surround, whyNotUnfold, type Unfold } from "./context";
 import { draftOnRow, type DraftComment } from "./draft";
 import { Hunk, Note, type NewComment } from "./Hunk";
@@ -37,7 +37,7 @@ export function FileRow({ file, look = {}, open, split, onToggle, load, loadSour
   open: boolean;
   split: boolean;
   onToggle: () => void;
-  load: (path: string, from: DiffFrom) => Promise<string>;
+  load: (path: string, from: DiffFrom) => Promise<DiffRead>;
   loadSource: (path: string) => Promise<SourceRead>; // the file itself, for the lines around a hunk
   onLoaded?: (path: string) => void; // the diff is on screen
   canComment: boolean;
@@ -56,11 +56,11 @@ export function FileRow({ file, look = {}, open, split, onToggle, load, loadSour
   const [attempt, setAttempt] = useState(0);
   const { side, commit, base } = look.from ?? {};
   const reads = !look.body && open;
-  const { data: diff, error } = useQuery(() => (reads ? load(file.path, { side, commit, base }) : Promise.resolve(undefined)), [reads, load, file.path, side, commit, base, attempt], { enabled: reads, keep: true });
+  const { data: read, error } = useQuery(() => (reads ? load(file.path, { side, commit, base }) : Promise.resolve(undefined)), [reads, load, file.path, side, commit, base, attempt], { enabled: reads, keep: true });
   const key = look.key ?? file.path;
   useEffect(() => {
-    if (open && (look.body || diff !== null)) onLoaded?.(key);
-  }, [open, diff]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (open && (look.body || read !== null)) onLoaded?.(key);
+  }, [open, read]); // eslint-disable-line react-hooks/exhaustive-deps
   const stat = look.stat === undefined ? { added: file.added, removed: file.removed } : look.stat;
   return (
     <div className={`review-file${file.fresh ? " fresh" : ""}${open ? " open" : ""}${look.conflict ? " conflict" : ""}`} data-key={key} style={look.depth ? ({ "--depth": look.depth } as CSSProperties) : undefined}>
@@ -140,10 +140,10 @@ export function FileRow({ file, look = {}, open, split, onToggle, load, loadSour
           >
             {error}
           </Notice>
-        ) : diff === null ? (
+        ) : read === null ? (
           <div className="empty">{t("Loading…")}</div>
         ) : (
-          <Diff text={diff} split={split} canComment={canComment} draft={draft} file={file.path} loadSource={loadSource} onComment={onComment} onRemove={onRemove} opinions={opinions} secrets={secrets} />
+          <Diff text={read.diff} truncated={read.truncated} split={split} canComment={canComment} draft={draft} file={file.path} loadSource={loadSource} onComment={onComment} onRemove={onRemove} opinions={opinions} secrets={secrets} />
         ))}
     </div>
   );
@@ -155,8 +155,9 @@ type Unfolds = { forText: string; by: Record<number, Unfold>; lines: string[] | 
 const folded = (text: string): Unfolds => ({ forText: text, by: {}, lines: null, blocked: null });
 const FOLDED = folded("");
 
-function Diff({ text, split, canComment, draft, file, loadSource, onComment, onRemove, opinions, secrets }: {
+function Diff({ text, truncated, split, canComment, draft, file, loadSource, onComment, onRemove, opinions, secrets }: {
   text: string;
+  truncated?: boolean;
   split: boolean;
   canComment: boolean;
   draft: DraftComment[];
@@ -238,6 +239,7 @@ function Diff({ text, split, canComment, draft, file, loadSource, onComment, onR
           secrets={secrets}
         />
       ))}
+      {truncated && <Notice tone="hint">{t("The change is longer than the lens reads: open the file to see the rest.")}</Notice>}
       {strayOpinions.length > 0 && (
         <div className="review-orphans">
           <Notice tone="hint">{t("{agent}'s comments on lines this diff does not show:", { agent: opinions.reviewer })}</Notice>

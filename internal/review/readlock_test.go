@@ -30,11 +30,11 @@ func TestTheLensReadsLeaveTheIndexAlone(t *testing.T) {
 			t.Fatal(err)
 		}
 		for _, side := range []string{SideUnstaged, SideStaged} {
-			if _, err := store.DiffSide(local, dir, "edited.txt", side); err != nil {
+			if _, _, err := store.DiffSide(local, dir, "edited.txt", side); err != nil {
 				t.Fatal(err)
 			}
 		}
-		if diff, err := BaseDiff(local, dir, strings.TrimSpace(head), "edited.txt"); err != nil || !strings.Contains(diff, "+two") {
+		if diff, _, err := BaseDiff(local, dir, strings.TrimSpace(head), "edited.txt"); err != nil || !strings.Contains(diff, "+two") {
 			t.Fatalf("the branch's diff: %v %q", err, diff)
 		}
 		if _, err := ScanWork(local, dir, true); err != nil {

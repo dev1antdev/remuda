@@ -333,3 +333,20 @@ func TestPathsTravelInChunksAndStayInTheFolder(t *testing.T) {
 		t.Errorf("a relative folder: %v", err)
 	}
 }
+
+func TestAChunkEndsAtItsPathCountOrAtItsLength(t *testing.T) {
+	short := make([]string, chunk+5)
+	for i := range short {
+		short[i] = fmt.Sprintf("f%d", i)
+	}
+	if n := strings.Count(inChunks("git add", short), "|| exit 1;"); n != 2 {
+		t.Fatalf("a chunk past the count: %d commands", n)
+	}
+	long := make([]string, 6)
+	for i := range long {
+		long[i] = strings.Repeat("a", maxArgs/3)
+	}
+	if n := strings.Count(inChunks("git add", long), "|| exit 1;"); n < 2 {
+		t.Fatalf("a chunk past the length: %d commands", n)
+	}
+}

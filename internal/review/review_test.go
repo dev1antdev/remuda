@@ -129,7 +129,7 @@ func TestAMergeBringsNoFilesOfItsOwn(t *testing.T) {
 	if summary.Baseline == nil || summary.Baseline.Verdict != VerdictApproved {
 		t.Fatalf("baseline: %+v", summary.Baseline)
 	}
-	diff, err := store.Diff(machine, dir, "own.txt")
+	diff, _, err := store.Diff(machine, dir, "own.txt")
 	if err != nil || !strings.Contains(diff, "-o\n+o2\n") {
 		t.Fatalf("diff: %v\n%s", err, diff)
 	}
@@ -258,5 +258,14 @@ func TestAnUntrackedNameWithAQuoteIsOneFileAndItsBlob(t *testing.T) {
 	}
 	if hash := blobs[`q"uote.txt`]; hash == "" || hash == "gone" {
 		t.Fatalf("its blob: %q in %v", hash, blobs)
+	}
+}
+
+func TestADiffPastTheReadSaysItWasCut(t *testing.T) {
+	if text, truncated := cut(strings.Repeat("x", maxDiff)); truncated || len(text) != maxDiff {
+		t.Fatalf("a diff at the bound: %d %v", len(text), truncated)
+	}
+	if text, truncated := cut(strings.Repeat("x", maxDiff+1)); !truncated || len(text) != maxDiff {
+		t.Fatalf("a diff past it: %d %v", len(text), truncated)
 	}
 }
