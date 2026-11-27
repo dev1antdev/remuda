@@ -55,8 +55,8 @@ func IncludeScript(worktree string) string {
 		"if [ \"$main\" = \"$wt\" ] || [ ! -f " + IncludeFile + " ]; then echo none; exit 0; fi\n" +
 		"printf 'main\\037%s\\n' \"$main\"\n" +
 		"list=$(mktemp \"${TMPDIR:-/tmp}/remuda-include.XXXXXX\") || { echo 'no temporary file'; exit 4; }\n" +
-		script.ReadGit + " -c core.quotepath=off ls-files --others --ignored --exclude-from=" + IncludeFile + " 2>/dev/null | " +
-		script.ReadGit + " -c core.quotepath=off check-ignore --stdin 2>/dev/null > \"$list\"\n" +
+		script.ReadGit + " -c core.quotepath=off ls-files -z --others --ignored --exclude-from=" + IncludeFile + " 2>/dev/null | " +
+		script.ReadGit + " -c core.quotepath=off check-ignore -z --stdin 2>/dev/null | tr '\\0' '\\n' > \"$list\"\n" +
 		"n=$(wc -l < \"$list\" | tr -d ' ')\n" +
 		"if [ \"$n\" -gt " + strconv.Itoa(MaxInclude) + " ]; then printf 'toomany\\037%s\\n' \"$n\"; rm -f \"$list\"; exit 0; fi\n" +
 		"while IFS= read -r f; do\n" +

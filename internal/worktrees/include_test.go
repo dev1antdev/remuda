@@ -58,6 +58,7 @@ func TestIncludeCopiesTheIgnoredFilesTheListNames(t *testing.T) {
 		"config/local/a.json":  "{}\n",
 		"config/local/b/c.yml": "x: 1\n",
 		"secrets/key.pem":      "pem\n",
+		"secrets/od\"d.pem":    "quoted\n",
 		"build/out.js":         "built\n",
 		"not-ignored.txt":      "untracked, not ignored\n",
 	})
@@ -81,7 +82,7 @@ func TestIncludeCopiesTheIgnoredFilesTheListNames(t *testing.T) {
 	}
 	copied := append([]string(nil), in.Copied...)
 	sort.Strings(copied)
-	if want := []string{".env", "config/local/a.json", "config/local/b/c.yml", "secrets/key.pem"}; strings.Join(copied, ",") != strings.Join(want, ",") {
+	if want := []string{".env", "config/local/a.json", "config/local/b/c.yml", "secrets/key.pem", "secrets/od\"d.pem"}; strings.Join(copied, ",") != strings.Join(want, ",") {
 		t.Fatalf("copied = %v, want %v", copied, want)
 	}
 	skipped := map[string]string{}
@@ -107,7 +108,7 @@ func TestIncludeCopiesTheIgnoredFilesTheListNames(t *testing.T) {
 	if body, _ := os.ReadFile(filepath.Join(worktree, "tracked.env")); string(body) != "tracked\n" {
 		t.Fatalf("the tracked file is git's own copy: %q", body)
 	}
-	if words := in.Words(); !strings.Contains(words, "Copied 4 files") || !strings.Contains(words, ".env.outside (a link out of the repository)") {
+	if words := in.Words(); !strings.Contains(words, "Copied 5 files") || !strings.Contains(words, ".env.outside (a link out of the repository)") {
 		t.Fatalf("words = %q", words)
 	}
 }
@@ -201,7 +202,7 @@ func TestIncludeReadsTheAnswerAndSaysWhatHappened(t *testing.T) {
 	if !in.Listed || in.Main != "/home/me/repo" || len(in.Copied) != 2 || in.Skipped[0].Why != "already in the worktree" {
 		t.Fatalf("included = %+v", in)
 	}
-	if s := host.Scripts()[0]; !strings.Contains(s, "cd '/home/me/repo-wt'") || !strings.Contains(s, "--exclude-from=.worktreeinclude") || !strings.Contains(s, "check-ignore --stdin") || !strings.Contains(s, "cp -pP") {
+	if s := host.Scripts()[0]; !strings.Contains(s, "cd '/home/me/repo-wt'") || !strings.Contains(s, "--exclude-from=.worktreeinclude") || !strings.Contains(s, "check-ignore -z --stdin") || !strings.Contains(s, "cp -pP") {
 		t.Fatalf("script = %q", s)
 	}
 	if words := in.Words(); words != "Copied 2 files the repository's .worktreeinclude names into the new worktree: .env, config/local.json. Left out: .env.local (already in the worktree)." {
