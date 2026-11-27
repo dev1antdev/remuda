@@ -309,7 +309,15 @@ async function screen(name, { open, expect = [], close = closeAll, settle = 350 
 
 // ---- the workspaces and the dressed roster ----
 
-const git = (cwd, ...args) => execFileSync("git", ["-c", "user.email=e2e@remuda.invalid", "-c", "user.name=e2e", ...args], { cwd, stdio: "pipe" });
+// git is the fixtures' own: no global config, so a person's commit.gpgSign, hooks or template never reaches a test
+// commit, and no prompt can stop it
+const gitEnv = { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_SYSTEM: "/dev/null", GIT_TERMINAL_PROMPT: "0" };
+const git = (cwd, ...args) =>
+  execFileSync(
+    "git",
+    ["-c", "user.email=e2e@remuda.invalid", "-c", "user.name=e2e", "-c", "commit.gpgsign=false", "-c", "tag.gpgsign=false", "-c", "core.hooksPath=/dev/null", ...args],
+    { cwd, stdio: "pipe", env: gitEnv },
+  );
 const appDir = `${tmp}/display/app`;
 const notesDir = `${tmp}/display/notes`;
 mkdirSync(appDir, { recursive: true });

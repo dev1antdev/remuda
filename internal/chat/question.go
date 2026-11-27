@@ -10,6 +10,7 @@ import (
 // A multi-select takes several: Enter ticks the row under the cursor and a Submit row under the choices sends them.
 type Question struct {
 	Text    string   `json:"text"`
+	Key     string   `json:"key"` // DialogKey of its words: what an answer sends back, so no later dialog takes it
 	Options []Option `json:"options"`
 	Multi   bool     `json:"multi,omitempty"`
 	// Axis is "horizontal" for a row of choices walked with ←/→, as opencode's permission dialog draws it; empty (↑/↓)
@@ -137,7 +138,8 @@ func ParseQuestion(screen string) (Question, bool) {
 	if len(options) < 2 || !consecutive(options) {
 		return Question{}, false
 	}
-	return Question{Text: wordsAbove(lines, top, frame), Options: options, Multi: takesSeveral(options)}, true
+	text := wordsAbove(lines, top, frame)
+	return Question{Text: text, Key: DialogKey(text), Options: options, Multi: takesSeveral(options)}, true
 }
 
 // opencodeChoices are opencode's three answers to a permission request, in the order its dialog draws them; the first,
@@ -196,7 +198,8 @@ func opencodePermission(lines []screenLine) (Question, bool) {
 	for i := marker; i < row; i++ {
 		words = append(words, lines[i].text)
 	}
-	return Question{Text: strings.TrimSpace(strings.Join(words, "\n")), Options: options, Axis: "horizontal"}, true
+	text := strings.TrimSpace(strings.Join(words, "\n"))
+	return Question{Text: text, Key: DialogKey(text), Options: options, Axis: "horizontal"}, true
 }
 
 // frameTop is the row of the rule a dialog drawn with its top border alone sits under, as Claude Code 2.1 draws its

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -132,8 +133,12 @@ func (d *Devices) pruneViewersLocked(now time.Time) {
 	}
 }
 
+// deviceCookie is the shape a device cookie has: the prefix, the id NewID makes (12 hex), a dot, and the secret's 64
+// hex. A cookie of any other shape is no device's, and never reaches the store or the log.
+var deviceCookie = regexp.MustCompile(`^d\.[0-9a-f]{12}\.[0-9a-f]{64}$`)
+
 // IsDeviceCookie says whether a cookie value names a device rather than holding the token itself.
-func IsDeviceCookie(value string) bool { return strings.HasPrefix(value, cookiePrefix) }
+func IsDeviceCookie(value string) bool { return deviceCookie.MatchString(value) }
 
 // Check verifies a device cookie against the stored hash in constant time and notes the device was seen, at most once a minute.
 func (d *Devices) Check(cookie string) (Device, bool) {

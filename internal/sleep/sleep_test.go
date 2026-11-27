@@ -73,7 +73,7 @@ func TestSleepAsksEachAgentToLeaveAndKeepsTheOnesThatWouldNotAwake(t *testing.T)
 	}}
 	store.put("local", "w1", w)
 	var log []string
-	err := s.sleepAll(f, "local", "w1", w, func(line string) { log = append(log, line) })
+	err := s.sleepAll(f, "local", "w1", w, true, func(line string) { log = append(log, line) })
 	if err == nil || !strings.Contains(err.Error(), "api is asleep, but 1 agent did not stop: Kimi Code in w1:p3") {
 		t.Fatalf("sleep: %v", err)
 	}
@@ -114,7 +114,7 @@ func TestASleepNobodyLeftLeavesTheWorkspaceAwake(t *testing.T) {
 	w, _, _, _ := Plan(snap, "w1")
 	s := &Service{Store: Open("")}
 	s.Store.put("local", "w1", w)
-	err := s.sleepAll(f, "local", "w1", w, func(string) {})
+	err := s.sleepAll(f, "local", "w1", w, true, func(string) {})
 	if err == nil || !strings.HasPrefix(err.Error(), "api did not go to sleep") {
 		t.Fatalf("sleep: %v", err)
 	}
@@ -134,7 +134,7 @@ func TestASecondSleepKeepsTheSleepersOfTheFirst(t *testing.T) {
 	snap, _ := f.SessionSnapshot()
 	w, _, _, _ := Plan(snap, "w1")
 	s.Store.put("local", "w1", w)
-	if err := s.sleepAll(f, "local", "w1", w, func(string) {}); err == nil || !strings.HasPrefix(err.Error(), "api did not go to sleep") {
+	if err := s.sleepAll(f, "local", "w1", w, true, func(string) {}); err == nil || !strings.HasPrefix(err.Error(), "api did not go to sleep") {
 		t.Fatalf("sleep: %v", err)
 	}
 	record, ok := s.Store.Of("local", "w1")
@@ -152,7 +152,7 @@ func TestSleepTakesAnotherConversationAndAGonePaneAsTheyAre(t *testing.T) {
 	f.snap.Panes = []coreapi.PaneInfo{agentPane("w1:p1", "w1:t1", "claude", sidC, coreapi.StatusIdle, "/work/api")}
 	s := &Service{Store: Open("")}
 	s.Store.put("local", "w1", w)
-	err := s.sleepAll(f, "local", "w1", w, func(string) {})
+	err := s.sleepAll(f, "local", "w1", w, true, func(string) {})
 	if err == nil || !strings.Contains(err.Error(), "another conversation runs there now") {
 		t.Fatalf("sleep: %v", err)
 	}
@@ -180,7 +180,7 @@ func TestASleepLeavesAnAgentWhoseConversationMovedSinceThePlan(t *testing.T) {
 	s := &Service{Store: Open("")}
 	s.Store.put("local", "w1", w)
 	var log []string
-	err := s.sleepAll(f, "local", "w1", w, func(line string) { log = append(log, line) })
+	err := s.sleepAll(f, "local", "w1", w, true, func(line string) { log = append(log, line) })
 	if err == nil || !strings.Contains(err.Error(), "Claude Code in w1:p1 (another conversation runs there now)") {
 		t.Fatalf("sleep: %v\n%s", err, strings.Join(log, "\n"))
 	}
@@ -192,7 +192,24 @@ func TestASleepLeavesAnAgentWhoseConversationMovedSinceThePlan(t *testing.T) {
 	f2.rereadFails = errors.New("ssh: connection lost")
 	snap, _ = f2.SessionSnapshot()
 	w, _, _, _ = Plan(snap, "w1")
-	if err := s.sleepAll(f2, "local", "w1", w, func(string) {}); err == nil || len(f2.typed) != 0 {
+	if err := s.sleepAll(f2, "local", "w1", w, true, func(string) {}); err == nil || len(f2.typed) != 0 {
 		t.Fatalf("a sleep whose fresh read failed: %v, typed %v", err, f2.typed)
+	}
+}
+
+func TestAnAgentThatStartedWorkingSinceTheConfirmIsNotInterrupted(t *testing.T) {
+	quick(t)
+	f := newFake(agentPane("w1:p1", "w1:t1", "claude", sidA, coreapi.StatusWorking, "/work/api"))
+	snap, _ := f.SessionSnapshot()
+	w, _, _, _ := Plan(snap, "w1")
+	s := &Service{Store: Open("")}
+	err := s.sleepAll(f, "local", "w1", w, false, func(string) {})
+	if err == nil || !strings.Contains(err.Error(), "started working since the confirm") {
+		t.Fatalf("sleep: %v", err)
+	}
+	for _, sent := range f.typed {
+		if sent == "w1:p1 esc" {
+			t.Fatal("an agent at work was interrupted without a new confirmation")
+		}
 	}
 }

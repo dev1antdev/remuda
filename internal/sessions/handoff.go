@@ -60,15 +60,21 @@ func (h Handoff) Run() (last error, timedOut bool) {
 		case coreapi.IsCode(err, "agent_blocked"):
 			last = err
 			if !trusted {
-				if screen, rerr := h.Client.PaneRead(h.Ref.Pane); rerr == nil && TrustPrompt(screen, h.Dir, h.Home) {
+				// the screen is read under the pane's typing lock, the whole look and answer one stretch: read outside
+				// it, a draft the person typed since looked like the trust question, and Enter went into their text
+				lock.Lock()
+				screen, rerr := h.Client.PaneRead(h.Ref.Pane)
+				answer := rerr == nil && TrustPrompt(screen, h.Dir, h.Home)
+				if answer {
 					trusted = true
-					lock.Lock()
 					if !CursorOnYes(screen) { // "No, exit" sits first and focused; older builds put Yes first
 						_ = h.Client.PaneSendKeys(h.Ref.Pane, []string{"down"})
 						time.Sleep(150 * time.Millisecond)
 					}
 					_ = h.Client.PaneSendKeys(h.Ref.Pane, []string{"enter"})
-					lock.Unlock()
+				}
+				lock.Unlock()
+				if answer {
 					if h.Trusted != nil {
 						h.Trusted()
 					}

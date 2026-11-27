@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -66,12 +67,13 @@ func LoadOrCreateToken(dir string) (token string, created bool, err error) {
 }
 
 type Guard struct {
-	token   string
-	host    string
-	Devices *Devices // the signed-in browsers; nil keeps the token itself in the cookie, as before devices
-	Keys    *Keys    // the agents' keys; nil refuses every rk_ bearer
-	stale   sync.Map // ids of revoked devices whose cookie was already logged
-	strayed sync.Map // key ids whose reach past their scope was logged, with when
+	token     string
+	host      string
+	Devices   *Devices     // the signed-in browsers; nil keeps the token itself in the cookie, as before devices
+	Keys      *Keys        // the agents' keys; nil refuses every rk_ bearer
+	stale     sync.Map     // ids of revoked devices whose cookie was already logged
+	staleSize atomic.Int64 // how many ids stale holds, for its bound
+	strayed   sync.Map     // key ids whose reach past their scope was logged, with when
 }
 
 // NewGuard guards with one token; with a Devices store every signed-in browser gets a secret of its own instead,
@@ -344,10 +346,20 @@ func (g *Guard) staleCookie(w http.ResponseWriter, r *http.Request) {
 	if rest, ok := strings.CutPrefix(id, cookiePrefix); ok {
 		id, _, _ = strings.Cut(rest, ".")
 	}
+	// the ids are the shape a device cookie carries, and the map is bounded: a scanner trying a fresh id a second must
+	// not fill the cockpit's memory (nor its log, which keeps one line per id)
 	if _, seen := g.stale.LoadOrStore(id, true); !seen {
-		log.Printf("auth: device %s is no longer signed in (from %s)", id, r.RemoteAddr)
+		if g.staleSize.Add(1) > maxStale {
+			g.stale.Range(func(k, _ any) bool { g.stale.Delete(k); return true })
+			g.staleSize.Store(1)
+		}
+		log.Printf("auth: device %.12s is no longer signed in (from %s)", id, r.RemoteAddr)
 	}
 }
+
+// maxStale is how many refused device ids are remembered: past it the set is emptied, and a vanished device is logged
+// again, which costs a line and no memory.
+const maxStale = 4096
 
 // strayedKey logs an agent key reaching past its scope, once an hour per key: a misconfigured agent, not a guess at the token.
 func (g *Guard) strayedKey(key Key, r *http.Request) {

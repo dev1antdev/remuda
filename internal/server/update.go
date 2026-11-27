@@ -122,8 +122,8 @@ func (s *Server) handleMachineUpdate(w http.ResponseWriter, r *http.Request) {
 	job, err := s.Updates.Start(mc, req.What, req.Command)
 	var stale *updates.StaleError
 	switch {
-	case errors.As(err, &stale):
-		httpErr(w, http.StatusConflict, err)
+	case errors.As(err, &stale), errors.Is(err, updates.ErrBusy):
+		httpErr(w, http.StatusConflict, err) // what was shown is no longer, or is already running there
 		return
 	case err != nil:
 		httpErr(w, 400, err)

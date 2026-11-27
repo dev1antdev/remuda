@@ -111,6 +111,12 @@ func (s *Service) wakeOne(client Client, machineID, workspaceID string, a Agent,
 		say(fmt.Sprintf("· %s (%s): its shell is in %s now, not %s", title, a.Pane, p.Dir(), a.Dir))
 		return keep("its shell is in another folder now", a)
 	}
+	// another pane may hold the conversation already — a resume in a new tab, or a sleep whose wake raced this one:
+	// starting it here too would have two agents writing the same session file
+	if other := restart.PaneOnSession(snap, a.Session); other != nil && other.PaneID != a.Pane {
+		say(fmt.Sprintf("· %s (%s): its conversation runs in %s already", title, a.Pane, other.PaneID))
+		return outcome{back: true}
+	}
 	if err := checks(a); errors.Is(err, restart.ErrUnasked) {
 		say(fmt.Sprintf("· %s (%s): %v", title, a.Pane, err))
 		return keep(err.Error(), a)

@@ -7,6 +7,7 @@ package sleep
 
 import (
 	"cmp"
+	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -117,7 +118,7 @@ func (s *Store) Holds(machineID, workspaceID, paneID string) bool {
 }
 
 // put records a workspace asleep; the agents a record of it held already stay, the newer word for a pane winning.
-func (s *Store) put(machineID, workspaceID string, w Workspace) {
+func (s *Store) put(machineID, workspaceID string, w Workspace) error {
 	w.Core = s.Core != nil && s.Core()
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -129,7 +130,7 @@ func (s *Store) put(machineID, workspaceID string, w Workspace) {
 		s.asleep[machineID] = map[string]Workspace{}
 	}
 	s.asleep[machineID][workspaceID] = w
-	s.saveLocked()
+	return s.saveLocked()
 }
 
 // merged is the agents of both lists, one per pane, the later list's word for a pane kept.
@@ -161,7 +162,7 @@ func (s *Store) keep(machineID, workspaceID string, agents []Agent) {
 		w.Agents = agents
 		s.asleep[machineID][workspaceID] = w
 	}
-	s.saveLocked()
+	_ = s.saveLocked()
 }
 
 // awake takes these panes off the workspace's record, the others staying asleep; none left wakes it.
@@ -188,7 +189,7 @@ func (s *Store) awakeLocked(machineID, workspaceID string, panes map[string]bool
 		w.Agents = kept
 		s.asleep[machineID][workspaceID] = w
 	}
-	s.saveLocked()
+	_ = s.saveLocked()
 }
 
 func (s *Store) dropLocked(machineID, workspaceID string) {
@@ -216,7 +217,7 @@ func (s *Store) Observe(e events.Snapshot) bool {
 		}
 	}
 	if changed {
-		s.saveLocked()
+		_ = s.saveLocked()
 	}
 	return changed
 }
@@ -259,17 +260,19 @@ func (s *Store) Forget(machineID string) {
 	defer s.mu.Unlock()
 	if _, ok := s.asleep[machineID]; ok {
 		delete(s.asleep, machineID)
-		s.saveLocked()
+		_ = s.saveLocked()
 	}
 }
 
-func (s *Store) saveLocked() {
+func (s *Store) saveLocked() error {
 	if s.dir == "" {
-		return
+		return nil
 	}
 	if err := state.SaveJSON(s.dir, asleepFile, s.asleep); err != nil {
 		log.Printf("%s: %v", asleepFile, err)
+		return fmt.Errorf("the workspace's sleep could not be kept: %w", err)
 	}
+	return nil
 }
 
 // Settings are the two switches as they stand.

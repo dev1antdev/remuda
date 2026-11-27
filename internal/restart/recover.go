@@ -737,6 +737,14 @@ func notStarted(s Stopped, line string, say func(string)) outcome {
 }
 
 // paneOnSession is the pane whose agent is on the session, nil for none.
+// PaneOnSession is the pane a conversation runs in, nil for none: a resume of it would have two agents writing one file.
+func PaneOnSession(snap *coreapi.Snapshot, session string) *coreapi.PaneInfo {
+	if session == "" {
+		return nil
+	}
+	return paneOnSession(snap, session)
+}
+
 func paneOnSession(snap *coreapi.Snapshot, session string) *coreapi.PaneInfo {
 	for i := range snap.Panes {
 		if p := &snap.Panes[i]; sessionOf(p) == session {
