@@ -2895,6 +2895,7 @@ async function runPass() {
     expect: [".plan-limits .limit-forecast"],
     close: async () => {
       const before = planOfferRuns;
+      await evaluate(`document.querySelector(".plan-limits .limit-offer .btn.primary")?.scrollIntoView({ block: "center" })`);
       await tap(".plan-limits .limit-offer .btn.primary");
       if (!(await until(() => planOfferRuns > before, 4))) failed("the offer's button ran nothing");
       if (!(await until(() => present('[data-toast="notice"]'), 4))) failed("the offer's run says nothing");
@@ -3015,8 +3016,10 @@ async function runPass() {
       const picked = pass.look["theme.dark"] ?? pass.look["theme.light"];
       check(await present(`.theme-card.on[data-flavor="${picked}"][aria-checked="true"]`), `the ${picked} card is not the one picked`);
       const other = pass.look.theme === "dark" ? "dracula" : "github-light";
+      await evaluate(`document.querySelector('.theme-card[data-flavor="${other}"]')?.scrollIntoView({ block: "center" })`);
       await tap(`.theme-card[data-flavor="${other}"]`);
       if (!(await until(async () => (await evaluate("document.documentElement.dataset.flavor")) === other, 3))) failed(`a tap on the ${other} card did not dress the page in it`);
+      await evaluate(`document.querySelector('.theme-card[data-flavor="${picked}"]')?.scrollIntoView({ block: "center" })`);
       await tap(`.theme-card[data-flavor="${picked}"]`);
       if (!(await until(async () => (await evaluate("document.documentElement.dataset.flavor")) === picked, 3))) failed(`a tap on the ${picked} card did not dress the page back`);
     },

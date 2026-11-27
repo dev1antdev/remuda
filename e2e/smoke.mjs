@@ -143,7 +143,9 @@ try {
   step("a shell pane has its terminal alone");
 
   const mac = await evaluate(`/mac/i.test(navigator.platform)`);
-  // Review is no longer a rail place: the palette opens the mode, the rail keeps the three modes and Settings
+  // Review is no longer a rail place: the palette opens the mode, the rail keeps the three modes and Settings; the
+  // terminal took the focus when it was typed into, and off a Mac it keeps Ctrl+K, so let it go first
+  await evaluate(`(() => { const el = document.activeElement; if (el instanceof HTMLIFrameElement || el?.closest?.(".xterm")) el.blur(); })()`);
   await key("k", "KeyK", mac ? 4 : 2);
   await until("the palette", () => present(".palette-row"));
   await send("Input.insertText", { text: "go to review" });
@@ -158,6 +160,7 @@ try {
   await shot("activity");
   await key("Escape", "Escape");
   await until("the Activity panel closed", async () => !(await present(".activity-dialog")));
+  await evaluate(`(() => { const el = document.activeElement; if (el instanceof HTMLIFrameElement || el?.closest?.(".xterm")) el.blur(); })()`);
   await key("k", "KeyK", mac ? 4 : 2);
   await until("the palette", () => present(".palette-row"));
   await send("Input.insertText", { text: "go to tasks" });
