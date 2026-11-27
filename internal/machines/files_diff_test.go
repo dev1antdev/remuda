@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/rpath"
 	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/shell"
 )
@@ -119,5 +120,16 @@ func TestTheDiffIsOfTheFileItselfWhateverTextconvIsSet(t *testing.T) {
 	}
 	if !strings.Contains(out, "@@ -1,3 +1,3 @@\n one\n two\n-three\n+THREE\n") {
 		t.Fatalf("the diff's lines are not the file's: %q", out)
+	}
+}
+
+func TestAFindPatternEscapesGlobsAndReadsNulSeparatedNames(t *testing.T) {
+	script := findScript(rpath.POSIX, "/repo", "app/[id]/page.tsx")
+	if !strings.Contains(script, `-path '*/app/\[id\]/page.tsx'`) || !strings.Contains(script, "-print0") {
+		t.Fatalf("the find script: %s", script)
+	}
+	found := readFound(rpath.POSIX, "/repo/app/[id]/page.tsx\x00/repo/it's \"quoted\".txt\x00/repo/line\nbreak.txt\x00")
+	if len(found) != 3 || found[0] != "/repo/app/[id]/page.tsx" || found[1] != "/repo/it's \"quoted\".txt" || found[2] != "/repo/line\nbreak.txt" {
+		t.Fatalf("found %q", found)
 	}
 }

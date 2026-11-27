@@ -246,6 +246,7 @@ export default function FileViewer({
               {drawnAs === "mermaid" ? <FileDiagram source={text.text} /> : <Markdown text={text.text} onOpenFile={onRetarget} diagrams />}
             </div>
           )}
+          {shown === "changes" && diff?.truncated && <Notice tone="hint">{t("The change is longer than the viewer reads: the rest is on the machine.")}</Notice>}
           {info?.kind === "text" && shown !== "changes" && text?.truncated && (
             <div className="empty">
               {t("… cut at {cut} of {size}", { cut: fmtSize(text.max), size: fmtSize(info.size) })}
