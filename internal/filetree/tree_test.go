@@ -436,3 +436,31 @@ func TestAFileAddedWithIntentToAddReadsAsAdded(t *testing.T) {
 		t.Errorf("a file git add -N named reads %q", got)
 	}
 }
+
+func TestSeveralFoldersAreReadInOneSession(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"app", "app/src", "app/docs"} {
+		if err := os.MkdirAll(filepath.Join(dir, name), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(dir, "app", "README.md"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var scripts []string
+	host := &shell.Fake{Name: "gog", Dir: dir, Answer: func(script string) (string, error) {
+		scripts = append(scripts, script)
+		return "", nil
+	}}
+	s := &Service{}
+	listings, err := s.ListMany(host, dir, []string{"", "app", "app/src"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(scripts) == 0 || len(listings) != 3 {
+		t.Fatalf("scripts %d, listings %d", len(scripts), len(listings))
+	}
+	if _, ok := listings["app/src"]; !ok {
+		t.Fatalf("listings %v", listings)
+	}
+}

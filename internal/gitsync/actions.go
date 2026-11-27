@@ -110,7 +110,7 @@ func (s *Service) Push(machineID, dir string, ask PushAsk) Outcome {
 		}
 		outcome := Outcome{Action: ActPush, Remote: remote, Branch: p.branch, Upstream: p.upstream, Ahead: p.ahead, Head: p.head, NoVerify: ask.NoVerify}
 		if !ask.Anyway && s.Check != nil {
-			scan, err := s.Check(host, p.top)
+			scan, err := s.Check(host, p.top, p.head) // what this push sends, not whatever HEAD is now
 			if err != nil {
 				outcome.State, outcome.Reason, outcome.Output = Held, ReasonCheckFailed, err.Error()
 				return outcome

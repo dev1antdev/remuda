@@ -25,10 +25,10 @@ type Machine struct {
 // Service is the Repositories place: every machine's repositories read side by side, and the actions on one.
 type Service struct {
 	Fleet   func() []Machine
-	Host    func(machineID string) (shell.Host, error)                   // a connected machine, or why not
-	Folders func(machineID string) []string                              // the machine's workspace folders, each its repository's main folder once known
-	Busy    func(machineID, checkout string) (agent, doing string)       // the agent at work, asking or ending a turn in the checkout (AgentIn), "" for none
-	Check   func(host shell.Host, dir string) (review.SecretScan, error) // the secret check before a push
+	Host    func(machineID string) (shell.Host, error)                         // a connected machine, or why not
+	Folders func(machineID string) []string                                    // the machine's workspace folders, each its repository's main folder once known
+	Busy    func(machineID, checkout string) (agent, doing string)             // the agent at work, asking or ending a turn in the checkout (AgentIn), "" for none
+	Check   func(host shell.Host, dir, head string) (review.SecretScan, error) // the secret check before a push, of the commit it sends
 	Scans   *Scans
 
 	mu      sync.Mutex

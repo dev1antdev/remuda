@@ -101,7 +101,7 @@ export type FolderIconRef = { emoji?: string; image?: string };
 
 // Overlap is one file two checkouts of a repository both change against its main branch: whether their hunks touch
 // the same lines (or lines side by side), and where in the base, from..to; no from is the whole file
-export type Overlap = { path: string; lines: boolean; from?: number; to?: number };
+export type Overlap = { path: string; lines: boolean; from?: number; to?: number; bases?: boolean };
 
 // Collision is what a workspace's work shares with another checkout of its repository, and which of the two should
 // land first and why: a pull request open, its agents at rest, the smaller change, else the name

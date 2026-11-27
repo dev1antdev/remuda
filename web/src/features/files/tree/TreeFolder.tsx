@@ -5,7 +5,7 @@ import { useEffect, useRef } from "react";
 import { useQuery } from "@/lib/query";
 import type { MenuItem } from "@/ui";
 import { t } from "@/lib/i18n";
-import { fsTree } from "../api";
+import { treeBatch } from "./batch";
 import TreeRow from "./TreeRow";
 import { childOf, INDENT, moreWords, type TreeEntry } from "./tree";
 
@@ -21,7 +21,7 @@ export type TreeContext = {
 };
 
 export default function TreeFolder({ rel, depth, ctx }: { rel: string; depth: number; ctx: TreeContext }) {
-  const { data, error, loading, reload } = useQuery(() => fsTree(ctx.machineId, ctx.dir, rel), [ctx.machineId, ctx.dir, rel], { enabled: ctx.active, keep: true });
+  const { data, error, loading, reload } = useQuery(() => treeBatch(ctx.machineId, ctx.dir, rel), [ctx.machineId, ctx.dir, rel], { enabled: ctx.active, keep: true });
   const seen = useRef(ctx.tick);
   useEffect(() => {
     if (seen.current === ctx.tick) return;

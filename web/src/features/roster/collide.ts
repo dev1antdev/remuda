@@ -7,6 +7,7 @@ import type { Collision, Overlap } from "./api";
 
 // whereWords is one file both change and where: its lines in the base, the whole file, or only the file
 export function whereWords(file: Overlap): string {
+  if (!file.lines && file.bases) return t("{path} (their bases differ)", { path: file.path });
   if (!file.lines) return t("{path} (other lines)", { path: file.path });
   if (!file.from) return t("{path} (the whole file)", { path: file.path });
   if (file.from === file.to) return t("{path}, line {line}", { path: file.path, line: file.from });

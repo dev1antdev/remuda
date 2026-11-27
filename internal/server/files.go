@@ -58,6 +58,7 @@ func (s *Server) fileRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/fs/stat", s.handleFsStat)
 	api.HandleFunc("GET /api/fs/dirs", s.handleFsDirs)
 	api.HandleFunc("GET /api/fs/tree", s.handleFsTree)
+	api.HandleFunc("POST /api/fs/trees", s.handleFsTrees)
 	api.HandleFunc("GET /api/fs/file", s.handleFsFile)
 	api.HandleFunc("GET /api/fs/diff", s.handleFsDiff)
 	api.HandleFunc("POST /api/fs/upload", s.handleFsUpload)
@@ -144,6 +145,46 @@ func (s *Server) handleFsTree(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, listing)
+}
+
+// handleFsTrees answers POST /api/fs/trees {machine, dir, paths}: several folders of the tree in one go, one session on
+// the machine for all of them — a tree with a dozen folders open read them one at a time before.
+func (s *Server) handleFsTrees(w http.ResponseWriter, r *http.Request) {
+	mc, err := s.machineFor(r, "")
+	if err != nil {
+		httpErr(w, 404, err)
+		return
+	}
+	var req struct {
+		Dir   string   `json:"dir"`
+		Paths []string `json:"paths"`
+	}
+	if !decode(w, r, &req) {
+		return
+	}
+	if len(req.Paths) > 200 {
+		httpErr(w, 400, fmt.Errorf("200 folders at once at most"))
+		return
+	}
+	reach, isViewer := s.viewerReachOn(r.Context(), mc)
+	for _, rel := range req.Paths {
+		folder, err := filetree.Folder(mc.Paths(), req.Dir, rel)
+		if err != nil {
+			httpErr(w, 400, err)
+			return
+		}
+		if isViewer && !viewerMay(mc, reach, folder) {
+			httpErr(w, http.StatusForbidden, errViewerOutside)
+			return
+		}
+	}
+	listings, err := s.trees.ListMany(mc, req.Dir, req.Paths)
+	if err != nil {
+		httpErr(w, 502, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, map[string]any{"listings": listings})
 }
 
 // handleFsFile serves the bytes: text always as text/plain whatever the extension claims, sandboxed and never cached.

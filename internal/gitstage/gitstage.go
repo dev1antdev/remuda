@@ -13,6 +13,8 @@ import (
 
 	"github.com/dev1antdev/remuda/internal/rpath"
 	"github.com/dev1antdev/remuda/internal/script"
+
+	checkoutlock "github.com/dev1antdev/remuda/internal/checkout"
 	"github.com/dev1antdev/remuda/internal/shell"
 )
 
@@ -101,11 +103,12 @@ func (s *Service) prepare(host shell.Host, dir string) (checkout, func(), error)
 			return checkout{}, nil, &Refusal{Why: agent + " is working in this checkout: wait until it rests, or ask it to stop"}
 		}
 	}
-	lock := s.lock(host.ID() + "|" + found.top)
-	if !lock.TryLock() {
+	// the lock every service that writes into a checkout shares: a commit must not land between a merge's check and its run
+	release, ok := checkoutlock.TryLock(host.ID(), found.top)
+	if !ok {
 		return checkout{}, nil, &Refusal{Why: "another change to this checkout is still running"}
 	}
-	return found, lock.Unlock, nil
+	return found, release, nil
 }
 
 func (s *Service) lock(key string) *sync.Mutex {

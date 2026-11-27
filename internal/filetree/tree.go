@@ -115,6 +115,53 @@ func (s *Service) List(host shell.Host, root, rel string) (Listing, error) {
 	return listing, nil
 }
 
+// ListMany reads several folders of the tree rooted at root in one script on the host — one ssh session instead of a
+// burst of them when the tree opens a dozen folders — and the checkout's status once for all of them. A folder that
+// cannot be read is an entry with its Err; the others come whole.
+func (s *Service) ListMany(host shell.Host, root string, rels []string) (map[string]Listing, error) {
+	style := rpath.For(host.Home())
+	var b strings.Builder
+	b.WriteString(script.PATH + "\n")
+	for _, rel := range rels {
+		folder, err := Folder(style, root, rel)
+		if err != nil {
+			return nil, err
+		}
+		b.WriteString(listScript(style.Slash(folder)) + "\nprintf '\\036\\n'\n")
+	}
+	out, err := shell.Text(host, b.String(), listTimeout)
+	if err != nil {
+		return nil, err
+	}
+	status, serr := s.status(host, style.Slash(style.Clean(root)))
+	sections := strings.Split(out, "\x1e\n")
+	listings := make(map[string]Listing, len(rels))
+	for i, rel := range rels {
+		l := Listing{Path: rel, Entries: []Entry{}}
+		if i < len(sections) {
+			entries, more, perr := ParseListing(sections[i])
+			switch {
+			case perr != nil:
+				l.Git = perr.Error()
+			default:
+				l.Entries, l.More = entries, more
+			}
+		}
+		if serr != nil {
+			l.Git = serr.Error()
+		} else {
+			l.Repo = status.Repo
+			if l.Git == "" {
+				l.Git = status.Err
+			}
+			l.Entries = status.Apply(rel, l.Entries, l.More)
+		}
+		sortEntries(l.Entries)
+		listings[rel] = l
+	}
+	return listings, nil
+}
+
 // status is the checkout's git status for the tree at root, read once for every folder asked within StatusFor.
 func (s *Service) status(host shell.Host, root string) (Status, error) {
 	key := host.ID() + "|" + root

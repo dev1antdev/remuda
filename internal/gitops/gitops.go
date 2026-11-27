@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/checkout"
 	"github.com/dev1antdev/remuda/internal/gitgraph"
 	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/sessions"
@@ -262,6 +263,13 @@ func (s *Service) Run(host shell.Host, dir string, req Request) (Result, error) 
 	}
 	at, err := Inspect(host, dir)
 	if err != nil {
+		return Result{}, err
+	}
+	// one write per checkout across every service: the check below and the run are one stretch, and a commit or an
+	// undo from another device waits its turn rather than landing between them
+	release := checkout.Lock(host.ID(), at.Top)
+	defer release()
+	if at, err = Inspect(host, dir); err != nil { // read again under the lock: the branch may have moved while it was queued
 		return Result{}, err
 	}
 	if s.Busy != nil {
