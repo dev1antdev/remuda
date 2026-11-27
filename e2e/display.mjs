@@ -3175,16 +3175,10 @@ async function terminalWrapFind() {
   await key("Escape", "Escape");
 
   // past the 2000 rows xterm keeps, so the word is only in the core's own history and the find must read it there;
-  // the marker is computed, so the command's own echo does not stand for its output. A line lost to a focus race is
-  // typed again once, and a failure says where the focus was and what the screen ended with.
-  const rowsCame = async () => {
-    for (let attempt = 0; attempt < 2; attempt++) {
-      await submit("seq 1 2600; echo $((1234+1))");
-      if (await until(async () => /(?<!\d)1235(?!\d)/.test(await screenOf(pane)), 20)) return true;
-    }
-    return false;
-  };
-  if (!(await rowsCame())) {
+  // the marker is computed, so the command's own echo does not stand for its output. Typed once: a second run would
+  // push the word past the read's 5000 rows as well.
+  await submit("seq 1 2600; echo $((1234+1))");
+  if (!(await until(async () => /(?<!\d)1235(?!\d)/.test(await screenOf(pane)), 60))) {
     const tail = (await screenOf(pane)).slice(-200);
     failed(`the rows that push the word out of the page's scrollback never came: focus ${await evaluate("document.activeElement?.className")} screen ${JSON.stringify(tail)}`);
   }
