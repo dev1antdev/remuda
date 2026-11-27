@@ -10,7 +10,7 @@ export type FileInfo = {
   candidates?: string[];
 };
 
-export type FileDiff = { repo?: string; untracked?: boolean; diff: string };
+export type FileDiff = { repo?: string; untracked?: boolean; diff: string; truncated?: boolean };
 
 // fsStat resolves a path on a machine: relative to the pane's folder, or to dir when there is no pane (a transcript on its own, a task's comments)
 export const fsStat = (machineId: string, paneId: string, path: string, dir = ""): Promise<FileInfo> =>

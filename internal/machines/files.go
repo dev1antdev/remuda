@@ -311,16 +311,22 @@ func findScript(style rpath.Style, root, rel string) string {
 		prune = append(prune, "-name "+script.Quote(d)+" -prune -o")
 	}
 	sort.Strings(prune)
+	// the path is a glob to find: a name holding * ? or [ is escaped, and the answer comes NUL-separated so a name
+	// with a newline stays one name
+	pattern := "*/" + strings.NewReplacer(`\`, `\\`, `*`, `\*`, `?`, `\?`, `[`, `\[`, `]`, `\]`).Replace(rel)
 	return `find ` + script.Quote(style.Slash(root)) + ` ` + strings.Join(prune, " ") +
-		` -type f -path ` + script.Quote("*/"+rel) + ` -print 2>/dev/null | head -` + strconv.Itoa(maxFind)
+		` -type f -path ` + script.Quote(pattern) + ` -print0 2>/dev/null | head -c 65536`
 }
 
 // readFound reads findScript's answer, each path in the machine's spelling.
 func readFound(style rpath.Style, out string) []string {
 	var found []string
-	for _, l := range strings.Split(strings.TrimSpace(out), "\n") {
-		if l = strings.TrimRight(l, "\r"); l != "" {
+	for _, l := range strings.Split(out, "\x00") {
+		if l = strings.TrimRight(l, "\r\n"); l != "" {
 			found = append(found, cleanPath(style, l))
+			if len(found) >= maxFind {
+				break
+			}
 		}
 	}
 	return found
@@ -443,6 +449,7 @@ type Diff struct {
 	Repo      string `json:"repo,omitempty"`
 	Untracked bool   `json:"untracked,omitempty"`
 	Diff      string `json:"diff"`
+	Truncated bool   `json:"truncated,omitempty"` // the change is longer than the read: the rest is on the machine
 }
 
 // GitDiff is the file's uncommitted change against HEAD in its repository, git's own diff of the file's own lines whatever
@@ -458,7 +465,11 @@ func (mc *Machine) GitDiff(p string) (Diff, error) {
 	}
 	root, rest, _ := strings.Cut(out, "\n")
 	state, diff, _ := strings.Cut(rest, "\n")
-	return Diff{Repo: style.Clean(strings.TrimSpace(root)), Untracked: strings.TrimSpace(state) == "untracked", Diff: diff}, nil
+	truncated := false
+	if len(diff) > 400000 {
+		diff, truncated = diff[:400000], true
+	}
+	return Diff{Repo: style.Clean(strings.TrimSpace(root)), Untracked: strings.TrimSpace(state) == "untracked", Diff: diff, Truncated: truncated}, nil
 }
 
 // gitDiffScript prints the repository's root, then tracked or untracked, then the diff: a file HEAD holds counts as
@@ -467,5 +478,5 @@ func gitDiffScript(folder, quotedPath string) string {
 	return `d=` + script.Quote(folder) + `; while [ ! -d "$d" ]; do up=$(dirname "$d"); [ "$up" = "$d" ] && exit 0; d=$up; done; ` +
 		`cd "$d" 2>/dev/null || exit 0; root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; ` +
 		`printf '%s\n' "$root"; if ` + script.ReadGit + ` ls-files --error-unmatch -- ` + quotedPath + ` >/dev/null 2>&1 || [ -n "$(git ls-tree --name-only HEAD -- ` + quotedPath + ` 2>/dev/null)" ]; then echo tracked; ` +
-		script.ReadGit + ` diff ` + script.PatchForm + ` HEAD -- ` + quotedPath + ` | head -c 400000; else echo untracked; fi`
+		script.ReadGit + ` diff ` + script.PatchForm + ` HEAD -- ` + quotedPath + ` | head -c 400001; else echo untracked; fi`
 }
