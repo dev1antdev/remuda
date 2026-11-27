@@ -27,7 +27,7 @@ type scanNote struct {
 }
 
 // numstatScript prints git's added and removed lines per file changed against HEAD, relative to the folder.
-const numstatScript = readGit + ` diff --no-ext-diff --no-renames --relative --numstat HEAD 2>/dev/null`
+const numstatScript = readGit + ` -c core.quotepath=off diff --no-ext-diff --no-renames --relative --numstat -z HEAD 2>/dev/null | tr '\0' '\n'`
 
 // newBytesScript prints the untracked files' bytes and how many they are: wc reads a file's size off its inode, so
 // the files are not read; a name starting with a dash reaches it as ./-name.
