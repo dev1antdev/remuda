@@ -77,9 +77,6 @@ func (s *Service) Push(machineID, dir string, ask PushAsk) Outcome {
 		if p.branch == "" {
 			return refused(ActPush, ReasonDetached)
 		}
-		if ask.Anyway && ask.Head != "" && ask.Head != p.head {
-			return Outcome{Action: ActPush, State: Refused, Reason: ReasonMoved, Branch: p.branch}
-		}
 		remote, target, setUpstream := p.remote, p.merge, false
 		switch {
 		case p.remote == ".":
@@ -92,6 +89,10 @@ func (s *Service) Push(machineID, dir string, ask PushAsk) Outcome {
 			if remote == "" {
 				return Outcome{Action: ActPush, State: Refused, Reason: ReasonWhichRemote, Branch: p.branch}
 			}
+		}
+		// an anyway names the head its hold showed: without it, both the secret check and the moved-branch check are skipped
+		if ask.Anyway && (ask.Head == "" || ask.Head != p.head) {
+			return Outcome{Action: ActPush, State: Refused, Reason: ReasonMoved, Branch: p.branch, Remote: remote}
 		}
 		outcome := Outcome{Action: ActPush, Remote: remote, Branch: p.branch, Upstream: p.upstream, Ahead: p.ahead, Head: p.head, NoVerify: ask.NoVerify}
 		if !ask.Anyway && s.Check != nil {

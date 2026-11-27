@@ -496,6 +496,9 @@ func Parse(expr string) (Cron, error) {
 			}
 			for v := a; v <= b; v += step {
 				allowed[v] = true
+				if step > b-v { // a step past the field's end would overflow v, not just stop
+					break
+				}
 			}
 		}
 		if i == 4 && allowed[7] { // Sunday twice

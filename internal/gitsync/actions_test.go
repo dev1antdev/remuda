@@ -221,7 +221,7 @@ func TestTheSecretCheckHoldsAPushUntilTheyPushAnyway(t *testing.T) {
 	if outcome := work.Push("local", mine, PushAsk{}); outcome.State != Done {
 		t.Fatalf("a big file the push does not carry held it: %+v", outcome)
 	}
-	if outcome := place.Push("local", mine, PushAsk{Anyway: true}); outcome.State != Done {
+	if outcome := place.Push("local", mine, PushAsk{Anyway: true, Head: gitIn(t, mine, "rev-parse", "HEAD")}); outcome.State != Done {
 		t.Fatalf("push anyway: %+v", outcome)
 	}
 	if gitIn(t, bare, "rev-parse", "main") == before {

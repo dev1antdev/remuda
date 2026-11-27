@@ -203,7 +203,12 @@ func Command(req Request) string {
 		if req.NoFF {
 			noff = "--no-ff "
 		}
-		return "w merge --no-edit " + noff + q(target)
+		// a branch and a tag may share a name: a merge of a branch means the branch, and the person's merge.autoStash
+		// must not stash the uncommitted work the busy checks were told about
+		if !gitgraph.HashOK(target) && !strings.Contains(target, "/") {
+			target = "refs/heads/" + target
+		}
+		return "w -c merge.autoStash=false merge --no-edit " + noff + q(target)
 	case "rebase":
 		return "w rebase " + q(target)
 	case "cherry-pick":

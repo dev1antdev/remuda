@@ -264,3 +264,18 @@ func TestNamesAndHashesThatGitWouldReadOtherwiseAreRefused(t *testing.T) {
 		}
 	}
 }
+
+func TestAMergeMeansTheBranchAndNeverStashesThePersonsWork(t *testing.T) {
+	dir := repository(t)
+	run(t, dir, "tag", "side", "main") // a tag standing on the branch's name: the branch is what a merge means
+	if r := do(t, dir, Request{Op: "merge", Ref: "side"}); !r.OK || read(t, dir, "b.txt") != "side\n" {
+		t.Fatalf("a merge of a branch whose name a tag also carries: %+v", r)
+	}
+
+	other := repository(t)
+	run(t, other, "config", "merge.autoStash", "true")
+	write(t, other, "b.txt", "not committed yet\n")
+	if r := do(t, other, Request{Op: "merge", Ref: "side"}); r.OK || read(t, other, "b.txt") != "not committed yet\n" {
+		t.Fatalf("the person's merge.autoStash stashed uncommitted work into a merge: %+v", r)
+	}
+}
