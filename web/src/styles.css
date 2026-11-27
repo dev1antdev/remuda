@@ -1369,6 +1369,12 @@ a.btn {
   border: 0;
 }
 
+.btn.danger:hover:not(:disabled),
+.primary.danger:hover:not(:disabled) {
+  background: var(--red);
+  filter: brightness(1.08);
+}
+
 .btn.danger.soft {
   background: var(--red-soft);
   color: var(--red);
@@ -3913,6 +3919,8 @@ body.is-resizing iframe {
 .tasks-field .sel {
   height: var(--ctl-sm);
   max-width: 100%;
+  min-width: 0;
+  flex: 0 1 auto;
 }
 
 /* ---- status dots ---- */
@@ -6083,6 +6091,7 @@ ul.pick-list {
   gap: 10px;
   font-size: var(--fs-13);
   min-height: var(--ctl-sm);
+  min-width: 0;
 }
 
 .tasks-field.labels {
@@ -8683,6 +8692,11 @@ rect.ribbon-s.is-shown {
 
   .tasks-head {
     flex-wrap: wrap;
+  }
+
+  /* the title takes the first row whole: the view toggle and the done box would leave it a letter */
+  .tasks-head h1 {
+    flex-basis: 100%;
   }
 
   /* the search takes a row of its own with the head's icon buttons beside it, never a row each */
@@ -17794,6 +17808,8 @@ button.pr-line:hover {
   display: flex;
   align-items: center;
   gap: 2px;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .btn.issue-page {
@@ -18321,6 +18337,7 @@ button.pr-line:hover {
 
   .issue-status {
     justify-self: start;
+    min-width: 0;
   }
 
   .issue-when-inline {
@@ -18334,6 +18351,18 @@ button.pr-line:hover {
 
   .issue-repo-btn {
     max-width: 100%;
+  }
+}
+
+/* a phone's width: a six-digit id and a Russian status chip leave the buttons no room beside them, so the buttons
+   take a row of their own rather than lying over the status */
+@media (max-width: 420px) {
+  .issue-row {
+    grid-template-areas: "id main main" "people status status" "actions actions actions";
+  }
+
+  .issue-actions {
+    justify-content: flex-start;
   }
 }
 

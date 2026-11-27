@@ -104,10 +104,12 @@ export default function Tasks() {
   }, [page, pages]);
   const replace = (t: Task) => list.mutate((d) => d && { ...d, tasks: d.tasks.map((x) => (x.id === t.id ? t : x)) });
 
-  // the open task in full (its comments), re-read while an agent is on it
-  const open = openId === null ? null : (tasks.find((t) => t.id === openId) ?? null);
-  const live = !!open?.run && open.run.state !== "gone" && open.run.state !== "failed";
+  // the open task in full (its comments), re-read while an agent is on it; one the page was asked to open may sit on a
+  // page the list is not showing, so the detail's own answer stands in for a row that is not there
+  const listed = openId === null ? null : (tasks.find((t) => t.id === openId) ?? null);
+  const live = !!listed?.run && listed.run.state !== "gone" && listed.run.state !== "failed";
   const detail = useQuery(() => (openId === null ? Promise.resolve(undefined) : getTask(openId)), [openId], { enabled: openId !== null, every: live ? 10000 : undefined });
+  const open = listed ?? detail.data ?? null;
   useEffect(() => {
     if (detail.data) replace(detail.data);
   }, [detail.data]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -156,13 +158,20 @@ export default function Tasks() {
     if (was && (was.project_id !== t.project_id || was.due_date !== t.due_date)) refresh();
     else if (was && was.status_id !== t.status_id) list.reload();
   };
+  // a view that hides done tasks loses a row the moment it is ticked: replacing it in place would leave it listed
+  const hidesDone = !board && !withDone;
   const toggleDone = async (t: Task) => {
     const want = !t.done;
-    replace({ ...t, done: want });
+    if (want && hidesDone) dropRows([t.id]);
+    else replace({ ...t, done: want });
     try {
-      replace(await patchTask(t.id, { done: want }));
+      const saved = await patchTask(t.id, { done: want });
+      if (want && hidesDone) return;
+      replace(saved);
+      if (want && !hidesDone) replaceOrMove(saved);
     } catch (e) {
       replace(t);
+      if (want && hidesDone) refresh();
       setActionError(errMsg(e));
     }
   };

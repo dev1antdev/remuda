@@ -90,7 +90,11 @@ function TextField({ field, value, onCommit }: { field: Field; value: FieldValue
   const shown = value === undefined || value === null ? "" : String(value);
   const [local, setLocal] = useState(shown);
   useEffect(() => setLocal(shown), [shown]);
-  const commit = () => {
+  // a number field mid-entry ("1e", "-") reports an empty value: that is not a cleared field, and sending null would
+  // erase what is stored
+  const badNumber = (el: HTMLInputElement | null) => el !== null && el.validity.badInput;
+  const commit = (el: HTMLInputElement | null) => {
+    if (field.kind === "number" && badNumber(el)) return setLocal(shown);
     const v = local.trim();
     if (v === shown) return;
     if (field.kind === "number") {
@@ -110,7 +114,7 @@ function TextField({ field, value, onCommit }: { field: Field; value: FieldValue
       placeholder={field.kind === "link" ? t("https://…") : "—"}
       spellCheck={field.kind === "text"}
       onChange={(e) => setLocal(e.target.value)}
-      onBlur={commit}
+      onBlur={(e) => commit(e.target)}
       onKeyDown={(e) => {
         if (e.key === "Enter") (e.target as HTMLInputElement).blur();
         if (e.key === "Escape") setLocal(shown);
