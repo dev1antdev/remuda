@@ -85,8 +85,8 @@ func TestAPullWaitsOnlyForAnAgentInThatCheckout(t *testing.T) {
 	if agent, doing := AgentIn(snap, style, "/code/app", going); agent != "claude" || doing != DoingEnding {
 		t.Fatalf("a turn still ending: %q %q", agent, doing)
 	}
-	if agent, _ := AgentIn(nil, style, "/code/app", going); agent != "" {
-		t.Fatal("no snapshot is no agent")
+	if agent, doing := AgentIn(nil, style, "/code/app", going); agent == "" || doing != DoingUnknown {
+		t.Fatalf("a machine that has not said yet: %q %q", agent, doing)
 	}
 }
 

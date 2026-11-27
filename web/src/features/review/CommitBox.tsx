@@ -85,7 +85,7 @@ export function CommitBox({ machineId, dir, groups, busy, outgoing, subfolder, l
     setFailure("");
     const sent = message;
     try {
-      const made = await commitWork(machineId, dir, { message: sent, stage: mode === "commit" && state.staged === 0 ? toStage : undefined, amend: mode === "amend", head: amend.head ?? undefined, no_verify: noVerify || undefined });
+      const made = await commitWork(machineId, dir, { message: sent, stage: mode === "commit" && state.staged === 0 ? toStage : undefined, amend: mode === "amend", head: amend.head ?? undefined, no_verify: noVerify || undefined, anyway: anyway || undefined });
       setMessage((current) => (current === sent ? "" : current));
       setMode("commit");
       setAmend(NO_AMEND);

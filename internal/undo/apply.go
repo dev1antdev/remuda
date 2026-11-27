@@ -147,13 +147,13 @@ func runSteps(host Host, turn Turn, st steps) (string, error) {
 		_, _ = host.Run("rm -f "+script.Quote(inbox), 30*time.Second)
 		return "", fmt.Errorf("the undo could not be copied to %s: %w", host.Label(), err)
 	}
-	out, err := host.Run(applyScript(turn.Root, inbox, len(st.end), len(st.start), st.reverts), ApplyTimeout)
+	out, err := host.Run(applyScript(turn.Root, turn.Branch, inbox, len(st.end), len(st.start), st.reverts), ApplyTimeout)
 	return string(out), err
 }
 
 // applyScript is the undo on the machine. The patches are checked whole before anything changes; a revert git stops
 // on is aborted and, when no revert went through yet, the files are put back as the turn left them.
-func applyScript(root, inbox string, endBytes, startBytes int, reverts []Commit) string {
+func applyScript(root, expectedBranch, inbox string, endBytes, startBytes int, reverts []Commit) string {
 	var b strings.Builder
 	b.WriteString(script.PATH + "\n")
 	b.WriteString("f=" + script.Quote(inbox) + "\n")
@@ -161,6 +161,11 @@ func applyScript(root, inbox string, endBytes, startBytes int, reverts []Commit)
 trap 'rm -rf "$d"; rm -f "$f"' EXIT
 `)
 	b.WriteString("cd " + script.Quote(root) + " 2>/dev/null || { echo 'the folder is not there'; exit 3; }\n")
+	// the copy took its time, and the person may have switched the checkout to another branch under it: the undo lands
+	// on the turn's branch or nowhere. A commit of other files on that branch is the plan's to weigh, by the turn's files.
+	if expectedBranch != "" {
+		b.WriteString(`now=$(git symbolic-ref --short -q HEAD 2>/dev/null); [ "$now" = ` + script.Quote(expectedBranch) + ` ] || { echo 'the checkout is on another branch now: nothing was undone'; exit 7; }` + "\n")
+	}
 	b.WriteString("head -c " + strconv.Itoa(endBytes) + ` "$f" > "$d/end"` + "\n")
 	b.WriteString("tail -c +" + strconv.Itoa(endBytes+1) + ` "$f" | head -c ` + strconv.Itoa(startBytes) + ` > "$d/start"` + "\n")
 	b.WriteString("tail -c +" + strconv.Itoa(endBytes+startBytes+1) + ` "$f" > "$d/index"` + "\n")

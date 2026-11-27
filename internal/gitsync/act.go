@@ -46,6 +46,7 @@ const (
 	ReasonSecretsFound    = "secrets"          // a push the secret check found something in
 	ReasonCheckIncomplete = "check-incomplete" // a push whose commits the secret check could not read whole
 	ReasonMoved           = "moved"            // a push anyway of a branch that moved since the check the person saw
+	ReasonOtherName       = "other-name"       // the branch tracks a remote branch of another name: git push would rewrite that one
 )
 
 // Outcome is what one action came to, in fields the page puts in its own words.

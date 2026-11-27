@@ -49,6 +49,11 @@ func (s *Service) Pull(machineID, dir string) Outcome {
 
 // busyPull is a pull's refusal while an agent works, asks or ends a turn in the checkout.
 func (s *Service) busyPull(machineID string, p probe) (Outcome, bool) {
+	return s.busyFor(ActPull, machineID, p)
+}
+
+// busyFor is an action's refusal while an agent works, asks or ends a turn in the checkout.
+func (s *Service) busyFor(action, machineID string, p probe) (Outcome, bool) {
 	if s.Busy == nil {
 		return Outcome{}, false
 	}
@@ -56,7 +61,7 @@ func (s *Service) busyPull(machineID string, p probe) (Outcome, bool) {
 	if agent == "" {
 		return Outcome{}, false
 	}
-	return Outcome{Action: ActPull, State: Refused, Reason: ReasonBusy, Agent: agent, Doing: doing, Branch: p.branch}, true
+	return Outcome{Action: action, State: Refused, Reason: ReasonBusy, Agent: agent, Doing: doing, Branch: p.branch}, true
 }
 
 // PushAsk is a push as the person asked for it: Anyway past the secret check that held it, naming Head, the commit its
@@ -89,6 +94,15 @@ func (s *Service) Push(machineID, dir string, ask PushAsk) Outcome {
 			if remote == "" {
 				return Outcome{Action: ActPush, State: Refused, Reason: ReasonWhichRemote, Branch: p.branch}
 			}
+		}
+		// git push itself refuses a branch whose upstream is another name (push.default=simple) rather than rewriting that
+		// branch: the same here, naming the target
+		if p.tracks() && p.merge != "" && p.merge != "refs/heads/"+p.branch && p.hasRemote(remote) {
+			return Outcome{Action: ActPush, State: Refused, Reason: ReasonOtherName, Branch: p.branch, Remote: remote, Upstream: p.upstream}
+		}
+		// the work of a turn half sent is no push: refused while an agent works, asks or ends a turn there
+		if refusal, busy := s.busyFor(ActPush, machineID, p); busy {
+			return refusal
 		}
 		// an anyway names the head its hold showed: without it, both the secret check and the moved-branch check are skipped
 		if ask.Anyway && (ask.Head == "" || ask.Head != p.head) {

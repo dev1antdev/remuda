@@ -10,7 +10,7 @@ import (
 // Read is git as every read here runs it: no lock taken on the index, no fsmonitor woken, no refreshed index written
 // back, a pathspec taken as the very path, paths printed as they are, never a colour, never a pager. Defined as the
 // shell function g.
-const Read = `g() { git --no-pager --no-optional-locks --literal-pathspecs -c core.fsmonitor=false -c diff.autoRefreshIndex=false -c core.quotepath=off -c color.ui=never "$@"; }; `
+const Read = `g() { git --no-pager --no-optional-locks --literal-pathspecs -c core.fsmonitor=false -c diff.autoRefreshIndex=false -c core.quotepath=off -c color.ui=never -c log.showSignature=false -c log.showRoot=true "$@"; }; `
 
 // StatusLines is git status as one entry a line: a line break inside a path becomes \001 and every NUL a line, so awk
 // reads one entry a line.

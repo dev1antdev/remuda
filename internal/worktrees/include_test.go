@@ -226,3 +226,29 @@ func TestIncludeReadsTheAnswerAndSaysWhatHappened(t *testing.T) {
 		t.Fatal(someOf([]string{"a", "b", "c"}, 2))
 	}
 }
+
+func TestIncludeCopiesNothingTheNewBranchStopsIgnoring(t *testing.T) {
+	_, worktree := repoWithWorktree(t, map[string]string{
+		".gitignore":       "*.env\n",
+		".worktreeinclude": ".env\n",
+		"tracked.env":      "tracked\n", // the helper stages this one, and a tracked file is never copied
+		".env":             "TOKEN=1\n",
+	})
+	// the branch the worktree stands on no longer ignores it (a .gitignore edited there, a file gone): it would show as ??
+	if err := os.Remove(filepath.Join(worktree, ".gitignore")); err != nil {
+		t.Fatal(err)
+	}
+	in, err := Include(shell.Local{Name: "local"}, worktree)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(in.Copied) != 0 {
+		t.Fatalf("copied = %v: a file the new branch does not ignore would be committed by git add -A", in.Copied)
+	}
+	if len(in.Skipped) != 1 || in.Skipped[0].Path != ".env" || in.Skipped[0].Why != "the new branch does not ignore it" {
+		t.Fatalf("skipped = %+v", in.Skipped)
+	}
+	if _, err := os.Stat(filepath.Join(worktree, ".env")); err == nil {
+		t.Fatal(".env was written into the worktree")
+	}
+}

@@ -38,7 +38,7 @@ var outgoingScript = `a=; n=$(git rev-parse --abbrev-ref --symbolic-full-name '@
 	`[ -n "$n" ] && a=$(git merge-base HEAD "$n" 2>/dev/null); fi; ` +
 	`if [ -n "$a" ]; then printf '%s\037%s\n' "$n" "$up"; git rev-list --count "$a"..HEAD 2>/dev/null || echo 0; ` +
 	`if [ "$up" = 1 ]; then git rev-list --count HEAD.."$a" 2>/dev/null || echo 0; else echo 0; fi; ` +
-	`git log -n ` + strconv.Itoa(maxOutgoing) + ` --format='%H%x1f%h%x1f%an%x1f%ct%x1f%s' "$a"..HEAD 2>/dev/null; fi`
+	`git -c log.showSignature=false log -n ` + strconv.Itoa(maxOutgoing) + ` --format='%H%x1f%h%x1f%an%x1f%ct%x1f%s' "$a"..HEAD 2>/dev/null; fi`
 
 // readOutgoing reads outgoingScript's answer; nil when there is no remote to compare with.
 func readOutgoing(section string) *Outgoing {
