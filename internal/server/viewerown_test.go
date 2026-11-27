@@ -24,6 +24,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/scratch"
 	"github.com/dev1antdev/remuda/internal/sent"
 	"github.com/dev1antdev/remuda/internal/transcript"
+	"github.com/dev1antdev/remuda/internal/tsnetx"
 	"github.com/dev1antdev/remuda/internal/usage"
 	"github.com/dev1antdev/remuda/internal/watch"
 )
@@ -111,8 +112,15 @@ func TestAViewerNeverReachesRemudasOwnWorkspaces(t *testing.T) {
 		}
 	}
 
-	person, personTag := s.rosterFor(false)
-	viewer, viewerTag := s.rosterFor(true)
+	s.Tailscale = func() tsnetx.Status {
+		return tsnetx.Status{State: "needs_login", LoginURL: "https://login.tailscale.example/a"}
+	}
+	person, personTag := s.rosterFor(false, false)
+	viewer, viewerTag := s.rosterFor(true, true)
+	// the login URL joins the node to whoever opens it first: the person's roster alone carries it
+	if !strings.Contains(string(person), "login.tailscale.example") || strings.Contains(string(viewer), "login.tailscale.example") {
+		t.Errorf("a viewer's roster carries the tailnet's login URL: %s", viewer)
+	}
 	if !strings.Contains(string(person), shell.Workspace.WorkspaceID) {
 		t.Fatalf("the person's roster lost the floating terminal: %s", person)
 	}
@@ -207,7 +215,7 @@ func TestAViewerNeverReachesRemudasOwnWorkspaces(t *testing.T) {
 	if code, _ := fileCall(h, "/api/screen?machine=local&pane="+url.QueryEscape(ownPane), true); code != http.StatusNotFound {
 		t.Errorf("the floating terminal just ended: %d", code)
 	}
-	if ended, _ := s.rosterFor(true); strings.Contains(string(ended), ownPane) {
+	if ended, _ := s.rosterFor(true, true); strings.Contains(string(ended), ownPane) {
 		t.Errorf("a viewer's roster shows the floating terminal just ended: %s", ended)
 	}
 	if s.ownFolder(machines.LocalID, shellDir) != true {

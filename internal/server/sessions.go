@@ -383,6 +383,11 @@ func (s *Server) handleSeen(w http.ResponseWriter, r *http.Request) {
 	if req.Machine == "" {
 		req.Machine = machines.LocalID
 	}
-	s.Radar.Seen(req.Machine, req.Pane)
+	mc, err := s.machineFor(r, req.Machine)
+	if err != nil {
+		httpErr(w, 404, err)
+		return
+	}
+	s.Radar.Seen(mc.ID(), req.Pane)
 	w.WriteHeader(http.StatusNoContent)
 }

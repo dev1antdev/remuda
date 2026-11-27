@@ -22,6 +22,13 @@ const devicesFile = "devices.json"
 // cookiePrefix tells a device cookie from a legacy one holding the token itself.
 const cookiePrefix = "d."
 
+// A kiosk that reloads a viewer link makes a device on every visit: a key keeps the newest viewerDevices of them, and a
+// viewer device unseen for viewerAged is forgotten.
+const (
+	viewerDevices = 8
+	viewerAged    = 30 * 24 * time.Hour
+)
+
 // Device is one signed-in browser: a secret of its own in its cookie (only its hash is kept), a name, when and where it was last seen.
 type Device struct {
 	ID       string    `json:"id"`
@@ -90,11 +97,39 @@ func (d *Devices) mint(ip, agent, viewerKey string) (cookie string, device Devic
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.list[device.ID] = &device
+	if viewerKey != "" {
+		d.pruneViewersLocked(now)
+	}
 	if err := d.saveLocked(); err != nil {
 		delete(d.list, device.ID)
 		return "", Device{}, err
 	}
 	return cookiePrefix + device.ID + "." + raw, device, nil
+}
+
+// pruneViewersLocked forgets the viewer devices of every key past its newest viewerDevices, and those unseen for
+// viewerAged: a kiosk that reloads its link does not fill devices.json.
+func (d *Devices) pruneViewersLocked(now time.Time) {
+	byKey := map[string][]*Device{}
+	for id, device := range d.list {
+		if !device.Viewer {
+			continue
+		}
+		if now.Sub(device.LastSeen) > viewerAged {
+			delete(d.list, id)
+			continue
+		}
+		byKey[device.Key] = append(byKey[device.Key], device)
+	}
+	for _, devices := range byKey {
+		if len(devices) <= viewerDevices {
+			continue
+		}
+		sort.Slice(devices, func(i, j int) bool { return devices[i].Created.After(devices[j].Created) })
+		for _, old := range devices[viewerDevices:] {
+			delete(d.list, old.ID)
+		}
+	}
 }
 
 // IsDeviceCookie says whether a cookie value names a device rather than holding the token itself.

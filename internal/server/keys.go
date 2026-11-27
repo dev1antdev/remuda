@@ -57,7 +57,7 @@ func (s *Server) handleAgentKeyRevoke(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := r.PathValue("id")
-	ok, err := store.Revoke(id)
+	ok, err := store.RevokeScoped(id, auth.ScopeTasks)
 	if err != nil {
 		httpErr(w, http.StatusInternalServerError, err)
 		return
