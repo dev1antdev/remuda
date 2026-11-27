@@ -101,3 +101,38 @@ func (c *Collector) remember(id string, r Report) {
 	}
 	c.historyWritten = seq
 }
+
+// Forget drops everything kept of a removed machine: its report, its read lock, its sign-in and its samples, so a
+// machine added again under the same id does not inherit a day it did not live.
+func (c *Collector) Forget(machineID string) {
+	c.mu.Lock()
+	delete(c.reports, machineID)
+	delete(c.locks, machineID)
+	delete(c.logins, machineID)
+	_, kept := c.history[machineID]
+	var seq uint64
+	var snapshot history
+	if kept {
+		delete(c.history, machineID)
+		c.historySeq++
+		seq = c.historySeq
+		snapshot = make(history, len(c.history))
+		for k, v := range c.history {
+			snapshot[k] = append([]Sample(nil), v...)
+		}
+	}
+	c.mu.Unlock()
+	if !kept || c.dir == "" {
+		return
+	}
+	c.historyWrite.Lock()
+	defer c.historyWrite.Unlock()
+	if seq < c.historyWritten {
+		return
+	}
+	if err := state.SaveJSON(c.dir, HistoryFile, snapshot); err != nil {
+		log.Printf("health: %s not written: %v", HistoryFile, err)
+		return
+	}
+	c.historyWritten = seq
+}
