@@ -3153,7 +3153,8 @@ async function terminalWrapFind() {
     await key("Enter", "Enter", 0, "\r");
   };
   const find = async () => {
-    await key("f", "KeyF", CMD);
+    // the terminal's find is ⌘F on a Mac, Ctrl+Shift+F elsewhere: Ctrl+F over a shell is the shell's
+    await key("f", "KeyF", mac ? 4 : 2 | 8);
     if (!(await until(() => evaluate(`document.activeElement?.matches?.(".find-bar input") === true`), 4))) throw new Error("the shortcut did not put the focus in the find bar");
     await send("Input.insertText", { text: word });
   };
