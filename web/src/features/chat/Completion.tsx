@@ -9,6 +9,7 @@ import { commandItems, pathItems, type Command, type Item, type Token } from "./
 import { t } from "@/lib/i18n";
 
 const KEEP = 60_000;
+const MOST = 40; // folders kept at once: a long day of panes must not hold every path list in memory
 type Loaded = { commands?: Command[]; paths?: string[]; cut?: boolean };
 const loads = new Map<string, { at: number; promise: Promise<Loaded> }>();
 
@@ -19,7 +20,13 @@ function load(kind: Token["kind"], machineId: string, dir: string, agent: string
   if (had && Date.now() - had.at < KEEP) return had.promise;
   const promise = kind === "command" ? fetchCommands(machineId, dir, agent).then((commands) => ({ commands })) : fetchPaths(machineId, dir).then((r) => ({ paths: r.paths, cut: r.cut }));
   promise.catch(() => loads.delete(key));
+  // the newest first, in insertion order, and the oldest folders past MOST forgotten with whatever they hold
+  loads.delete(key);
   loads.set(key, { at: Date.now(), promise });
+  for (const [old, entry] of loads) {
+    if (loads.size <= MOST && Date.now() - entry.at < KEEP) break;
+    loads.delete(old);
+  }
   return promise;
 }
 

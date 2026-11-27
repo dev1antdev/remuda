@@ -4,7 +4,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { errMsg } from "./text";
-import { pageVisible } from "./visibility";
+import { documentVisible, pageVisible } from "./visibility";
 
 export type Query<T> = {
   data: T | null;
@@ -19,9 +19,10 @@ export type QueryOptions = {
   every?: number; // poll this many ms apart while enabled and the tab is visible
   enabled?: boolean; // false pauses the polling and the reloads; the data stays, and true again reads at once
   keep?: boolean; // changed inputs keep the old data on screen until the new answer comes
+  hidden?: boolean; // keep polling while this document is hidden — the Mac app's menu bar draws its roster then
 };
 
-export function useQuery<T>(fn: () => Promise<T | undefined>, deps: unknown[], { every, enabled = true, keep = false }: QueryOptions = {}): Query<T> {
+export function useQuery<T>(fn: () => Promise<T | undefined>, deps: unknown[], { every, enabled = true, keep = false, hidden = false }: QueryOptions = {}): Query<T> {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -91,7 +92,9 @@ export function useQuery<T>(fn: () => Promise<T | undefined>, deps: unknown[], {
   useEffect(() => {
     if (!every || !enabled) return;
     const tick = () => {
-      if (pageVisible()) void run();
+      // a screen nobody is looking at reads nothing: the chat, the screen and the tree polled all night in a hidden Mac
+      // window, each over ssh or the core
+      if (hidden ? pageVisible() : documentVisible()) void run();
     };
     const timer = setInterval(tick, every);
     document.addEventListener("visibilitychange", tick);

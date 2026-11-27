@@ -4,6 +4,10 @@ import type { Modifier } from "./types";
 
 export const MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
 
+// CTRL_CHARS are the bytes a Ctrl combination has: xterm's table, where letters fold and these seven stand as they
+// are. Any other printable key passes through: Ctrl+- is not Enter, Ctrl+3 is not XOFF.
+const CTRL_CHARS = new Set([..."@[\\]^_?"]);
+
 // applyModifier encodes a printable character or an arrow under a one-shot Ctrl or Alt (an arrow
 // as the modified CSI form, ESC [ 1 ; 5 A for Ctrl, ; 3 for Alt); anything else passes through.
 export function applyModifier(mod: Modifier, seq: string): string {
@@ -11,7 +15,11 @@ export function applyModifier(mod: Modifier, seq: string): string {
   const arrow = /^\x1b[[O]([ABCD])$/.exec(seq);
   if (arrow) return `\x1b[1;${mod === "ctrl" ? 5 : 3}${arrow[1]}`;
   if (seq.length !== 1 || seq < " " || seq > "~") return seq;
-  return mod === "ctrl" ? String.fromCharCode(seq.toUpperCase().charCodeAt(0) & 0x1f) : "\x1b" + seq;
+  if (mod === "alt") return "\x1b" + seq;
+  const upper = seq.toUpperCase();
+  if (!/[A-Z]/.test(upper) && !CTRL_CHARS.has(seq)) return seq;
+  if (seq === "?") return "\x7f"; // DEL, the one the table does not fold
+  return String.fromCharCode(upper.charCodeAt(0) & 0x1f);
 }
 
 // isFindKey is the find bar's key in the terminal lens — ⌘F on a Mac, Ctrl+Shift+F elsewhere, where Ctrl+F is the

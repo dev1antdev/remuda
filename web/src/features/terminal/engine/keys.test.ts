@@ -41,3 +41,14 @@ describe("bracketed", () => {
     expect(bracketed("a\r\nb\nc")).toBe("\x1b[200~a\rb\rc\x1b[201~");
   });
 });
+
+describe("a one-shot Ctrl is xterm's table", () => {
+  it("folds a letter and keeps the seven characters of the table", () => {
+    expect(applyModifier("ctrl", "c")).toBe("\x03");
+    expect(applyModifier("ctrl", "@")).toBe("\x00");
+    expect(applyModifier("ctrl", "?")).toBe("\x7f");
+  });
+  it("passes anything else through: Ctrl+- is not Enter, Ctrl+3 not XOFF", () => {
+    for (const key of ["-", "$", "3", "1", " ", ".", "/"]) expect(applyModifier("ctrl", key)).toBe(key);
+  });
+});

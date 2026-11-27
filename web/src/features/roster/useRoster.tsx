@@ -49,7 +49,7 @@ export function RosterProvider({ children }: { children: ReactNode }) {
       return res.roster;
     },
     [],
-    { every: connected ? 15000 : 3000 },
+    { every: connected ? 15000 : 3000, hidden: true },
   );
   useEffect(() => setRosterRefresh(reload), [reload]);
   useEffect(() => {

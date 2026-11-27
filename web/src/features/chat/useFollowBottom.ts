@@ -67,8 +67,21 @@ export function useFollowBottom(logRef: RefObject<HTMLDivElement | null>, { acti
     const resized = new ResizeObserver(() => {
       if (activeRef.current && !pinning.current && follows(log)) toBottom(log);
     });
+    const watched = new Set<Element>();
     const watchTurns = () => {
-      for (const turn of log.children) resized.observe(turn);
+      const here = new Set<Element>(Array.from(log.children));
+      for (const turn of watched) {
+        if (!here.has(turn)) {
+          resized.unobserve(turn); // a turn the conversation dropped: no longer watched, and no longer held here
+          watched.delete(turn);
+        }
+      }
+      for (const turn of here) {
+        if (!watched.has(turn)) {
+          resized.observe(turn);
+          watched.add(turn);
+        }
+      }
     };
     const added = new MutationObserver(watchTurns);
     watchTurns();

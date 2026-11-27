@@ -89,7 +89,7 @@ export function createEngine(mount: HTMLElement, machineId: string, paneId: stri
     const m = props().modifier;
     const out = applyModifier(m, seq);
     sendInput(out);
-    if (m && out !== seq) props().onModifierUsed();
+    if (m) props().onModifierUsed(); // one shot, whatever the key was: Enter and Esc take it too
   };
   const apply = () => {
     if (props().flavor !== flavorNow) {

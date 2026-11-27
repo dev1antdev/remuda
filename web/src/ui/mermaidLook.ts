@@ -107,5 +107,6 @@ export function mermaidConfig(flavor: Flavor, accent: Accent, fontFamily: string
     pieLegendTextColor: c.text,
     ...pies,
   };
-  return { startOnLoad: false, securityLevel: "strict" as const, theme: "base" as const, htmlLabels: false, flowchart: { htmlLabels: false }, fontFamily, themeVariables };
+  // suppressErrorRendering: a broken diagram is our own notice, not mermaid's error SVG appended to the page body
+  return { startOnLoad: false, securityLevel: "strict" as const, suppressErrorRendering: true, theme: "base" as const, htmlLabels: false, flowchart: { htmlLabels: false }, fontFamily, themeVariables };
 }
