@@ -5,6 +5,7 @@ package health
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"log"
 	"net/http"
 	"regexp"
@@ -400,8 +401,9 @@ func fetchJSON(ctx context.Context, url, field string) (string, error) {
 	if res.StatusCode != http.StatusOK {
 		return "", &httpError{url, res.StatusCode}
 	}
+	// a version check's answer is a word: a body past a megabyte is not one, and is not read into memory
 	var m map[string]any
-	if err := json.NewDecoder(res.Body).Decode(&m); err != nil {
+	if err := json.NewDecoder(io.LimitReader(res.Body, 1<<20)).Decode(&m); err != nil {
 		return "", err
 	}
 	s, _ := m[field].(string)

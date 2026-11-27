@@ -99,3 +99,16 @@ func TestWatchdogRemindsEveryHalfHourAndForgetsAnEndedEpisode(t *testing.T) {
 		t.Fatalf("a new episode is pushed at once: %d pushes", len(h.pushed))
 	}
 }
+
+func TestAWaitingPaneIsRemindedOnlyAFewTimes(t *testing.T) {
+	h, w := newHarness()
+	since := h.now.Add(-16 * time.Minute)
+	h.episodes = []radar.Episode{{Machine: "m", Pane: "p1", State: coreapi.StatusBlocked, Since: since}}
+	for i := 0; i < 6; i++ {
+		w.Sweep()
+		h.now = h.now.Add(30 * time.Minute)
+	}
+	if len(h.pushed) != w.MaxReminders {
+		t.Fatalf("an unchanged wait pushed %d times, want the first and its reminders, %d in all", len(h.pushed), w.MaxReminders)
+	}
+}

@@ -34,17 +34,19 @@ type Watchdog struct {
 	QuietAfter time.Duration // working this long with no transcript write
 	WaitAfter  time.Duration // blocked this long
 	Remind     time.Duration // between pushes for one unchanged condition
-	LoopN      int           // identical tool calls in a row that count as a loop
+	// MaxReminders is how many pushes one unchanged condition gets before the sidebar alone carries it.
+	MaxReminders int
+	LoopN        int // identical tool calls in a row that count as a loop
 
 	mu    sync.Mutex
-	fired map[string]time.Time // machine|pane|kind|since → last push
+	fired map[string]reminder // machine|pane|kind|since → its pushes
 }
 
 func New(in Inputs) *Watchdog {
 	if in.Now == nil {
 		in.Now = time.Now
 	}
-	return &Watchdog{in: in, QuietAfter: 20 * time.Minute, WaitAfter: 15 * time.Minute, Remind: 30 * time.Minute, LoopN: 6, fired: map[string]time.Time{}}
+	return &Watchdog{in: in, QuietAfter: 20 * time.Minute, WaitAfter: 15 * time.Minute, Remind: 30 * time.Minute, LoopN: 6, MaxReminders: 3, fired: map[string]reminder{}}
 }
 
 // Run sweeps forever, `every` apart.
@@ -53,6 +55,13 @@ func (w *Watchdog) Run(every time.Duration) {
 		w.Sweep()
 		time.Sleep(every)
 	}
+}
+
+// reminder is how often and how many times one condition has been pushed: an unchanged episode gets a few, then the
+// sidebar's note alone, so a pane left waiting overnight does not push every half hour.
+type reminder struct {
+	at time.Time
+	n  int
 }
 
 // Sweep applies the rules to every episode once.
@@ -97,9 +106,9 @@ func (w *Watchdog) Sweep() {
 		live[key] = true
 		w.mu.Lock()
 		last, seen := w.fired[key]
-		due := !seen || now.Sub(last) >= w.Remind
+		due := !seen || (last.n < w.MaxReminders && now.Sub(last.at) >= w.Remind)
 		if due {
-			w.fired[key] = now
+			w.fired[key] = reminder{at: now, n: last.n + 1}
 		}
 		w.mu.Unlock()
 		if !due {
