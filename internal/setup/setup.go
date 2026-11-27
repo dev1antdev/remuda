@@ -49,7 +49,7 @@ func CoreInstaller() string { return coreScript }
 const CodeVersion = "4.140.0"
 
 // CoreVersion is the remuda-core release install-core.sh installs and the Updates row offers; the script's default must match.
-const CoreVersion = "0.2.5"
+const CoreVersion = "0.2.6"
 
 // Options is what the scripts are told.
 type Options struct {
