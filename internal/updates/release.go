@@ -38,15 +38,10 @@ func ReleaseUpdate(have, os, arch string, rel health.Release, local bool) (Updat
 	}
 	asset := AssetName(os, arch)
 	url := rel.Assets[asset]
-	if asset == "" || url == "" || !releaseURLOK(url, rel.Tag) || (rel.Checksums != "" && !releaseURLOK(rel.Checksums, rel.Tag)) {
-		return Update{}, false
+	if asset == "" || url == "" || rel.Checksums == "" || !releaseURLOK(url, rel.Tag) || !releaseURLOK(rel.Checksums, rel.Tag) {
+		return Update{}, false // no checksums: nothing to verify the download against, as install.sh refuses it too
 	}
-	note := have + " → " + rel.Tag + ", the release on github.com/" + health.ReleasesRepo + ". The machine downloads the binary itself"
-	if rel.Checksums != "" {
-		note += ", checks it against the release's checksums"
-	} else {
-		note += " (this release carries no checksums.txt, so the download is not verified)"
-	}
+	note := have + " → " + rel.Tag + ", the release on github.com/" + health.ReleasesRepo + ". The machine downloads the binary itself and checks it against the release's checksums"
 	if windowsAsset(asset) {
 		note += ", and puts it in place as ~/.local/bin/remuda.exe; there is no service on Windows, the next connection runs it."
 	} else {

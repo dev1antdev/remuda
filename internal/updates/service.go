@@ -25,6 +25,7 @@ type Service struct {
 	Restart  *restart.Restarter
 	Watch    *watch.Watcher
 	Machines *machines.Manager // every machine, for Update everywhere
+	Scratch  bool              // a second instance beside the real one: its release would replace the real remuda, so none is offered
 
 	runs batches // Update everywhere's recent runs
 }
@@ -326,6 +327,9 @@ func (s *Service) deployPlan(mc *machines.Machine, rep *health.Report) (Update, 
 	if me == "" || me == "dev" || rep.Remuda == me {
 		return Update{}, false
 	}
+	if health.Newer(me, rep.Remuda) {
+		return Update{}, false // that machine runs a newer remuda: this one would be a downgrade
+	}
 	have := rep.Remuda
 	if have == "" {
 		have = "not deployed"
@@ -339,6 +343,9 @@ const deployScript = InstallScript + " && " + RestartScript
 
 // releasePlan offers a newer GitHub release of remuda than the machine runs, the one serving this page included.
 func (s *Service) releasePlan(mc *machines.Machine, rep *health.Report) (Update, bool) {
+	if s.Scratch { // ~/.local/bin/remuda is the real instance's, and its service is the one a restart would take
+		return Update{}, false
+	}
 	rel := s.Health.Release()
 	if mc.Local() {
 		return ReleaseUpdate(s.Health.Version, runtime.GOOS, runtime.GOARCH, rel, true)

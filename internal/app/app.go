@@ -93,6 +93,7 @@ type Options struct {
 	Server        bool // serve the page only: the host is no machine of the fleet, its remuda-core neither needed nor kept
 	Record        bool // record the agents' timelapses (off for a scratch instance: the real one records)
 	HerdrStops    bool // stop herdr's server on a machine moved to remuda-core at the person's press (never a scratch instance: herdr there is the real one's)
+	Scratch       bool // a second instance beside the real one (REMUDA_STATE_DIR set): it never offers the release
 }
 
 // Run builds remuda and serves until ctx ends.
@@ -398,7 +399,7 @@ func Run(ctx context.Context, o Options) error {
 	}
 	// the sleep record and the restart memory's word of it are set before anything observes a snapshot: a pane's sleep
 	// state read while it is still nil would be taken for awake
-	updater := &updates.Service{Health: vitals, Jobs: runner, Restart: restarter, Watch: watcher, Machines: fleet}
+	updater := &updates.Service{Health: vitals, Jobs: runner, Restart: restarter, Watch: watcher, Machines: fleet, Scratch: o.Scratch}
 	sleeps := sleeper(o.Dir, bus, fleet, watcher, runner, input, restarter, updater, activity, hub.RosterChanged)
 	// the agents' subscription windows: read off every machine, warned of at 80 % and the limit, the agents stopped on
 	// one noted, and the person's bookings to continue them said when due
@@ -488,6 +489,11 @@ func Run(ctx context.Context, o Options) error {
 				return schedule.Started{}, err
 			}
 			place, err := scouts.StartInFolder(s.Machine, s.Dir, s.Label, s.Agent, start, s.Prompt)
+			if err != nil && place.Tab != "" {
+				// the tab made for an agent that did not start is taken down with it: a schedule every ten minutes
+				// would leave a tab each time
+				_ = scouts.Close(s.Machine, place)
+			}
 			return schedule.Started{Pane: place.Pane, Tab: place.Tab, Workspace: place.Workspace, MadeWorkspace: place.MadeWorkspace}, err
 		},
 		Close: func(run schedule.Started) error {

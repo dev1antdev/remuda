@@ -82,6 +82,7 @@ func main() {
 		Record:     recordsHere(*withRecord, os.Getenv("REMUDA_STATE_DIR") != ""),
 		Server:     *serverOnly,
 		HerdrStops: herdrStops(os.Getenv("REMUDA_STATE_DIR") != ""),
+		Scratch:    os.Getenv("REMUDA_STATE_DIR") != "",
 	})
 	if err != nil {
 		log.Print(err)

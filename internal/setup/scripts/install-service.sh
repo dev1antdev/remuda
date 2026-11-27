@@ -7,6 +7,11 @@
 # `remuda uninstall` is the way back: this and everything else remuda put here.
 set -e
 
+# xml is a value inside a plist <string>: a HOME with & made the whole file invalid, and the old service was already gone
+xml() { printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' -e 's/"/\&quot;/g' -e "s/'/\&apos;/g"; }
+# sd is a value inside a systemd unit: % doubled (it is a specifier there), and quotes and backslashes escaped where quoted
+sd() { printf '%s' "$1" | sed -e 's/%/%%/g' -e 's/\\/\\\\/g' -e 's/"/\\"/g'; }
+
 ACTION="${1:-install}"
 BIN="$HOME/.local/bin/remuda"
 ADDR="${REMUDA_ADDR:-127.0.0.1:7317}"
@@ -19,7 +24,10 @@ ADDR="${REMUDA_ADDR:-127.0.0.1:7317}"
 umask 077
 TS_ARGS=""
 if [ "${REMUDA_TAILSCALE:-0}" = "1" ]; then
-    TS_ARGS="-tailscale -tailscale-hostname ${REMUDA_TAILSCALE_HOSTNAME:-remuda}"
+    # the name goes into a plist and a unit file both: a DNS label is all either takes safely
+    TS_HOST="${REMUDA_TAILSCALE_HOSTNAME:-remuda}"
+    case "$TS_HOST" in *[!A-Za-z0-9.-]*|"") echo "REMUDA_TAILSCALE_HOSTNAME must be a DNS name (letters, digits, dots, hyphens)"; exit 1 ;; esac
+    TS_ARGS="-tailscale -tailscale-hostname $TS_HOST"
 fi
 # REMUDA_SERVER=1 makes the service serve the page only (remuda -server):
 # this machine is none of the cockpit's, no remuda-core is installed there.
@@ -49,25 +57,29 @@ Darwin)
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>Label</key><string>$LABEL</string>
+  <key>Label</key><string>$(xml "$LABEL")</string>
   <key>ProgramArguments</key>
   <array>
-    <string>$BIN</string>
-    <string>-addr</string><string>$ADDR</string>$(for a in $TS_ARGS; do printf '\n    <string>%s</string>' "$a"; done)
+    <string>$(xml "$BIN")</string>
+    <string>-addr</string><string>$(xml "$ADDR")</string>$(for a in $TS_ARGS; do printf '\n    <string>%s</string>' "$(xml "$a")"; done)
   </array>
   <key>EnvironmentVariables</key>
   <dict>
-    <key>PATH</key><string>$PATH_FOR_SERVICE</string>
-    <key>HOME</key><string>$HOME</string>$([ -n "$TS_AUTHKEY" ] && printf '\n    <key>TS_AUTHKEY</key><string>%s</string>' "$TS_AUTHKEY")
+    <key>PATH</key><string>$(xml "$PATH_FOR_SERVICE")</string>
+    <key>HOME</key><string>$(xml "$HOME")</string>$([ -n "$TS_AUTHKEY" ] && printf '\n    <key>TS_AUTHKEY</key><string>%s</string>' "$(xml "$TS_AUTHKEY")")
   </dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
   <key>ThrottleInterval</key><integer>5</integer>
-  <key>StandardOutPath</key><string>$LOG</string>
-  <key>StandardErrorPath</key><string>$LOG</string>
+  <key>StandardOutPath</key><string>$(xml "$LOG")</string>
+  <key>StandardErrorPath</key><string>$(xml "$LOG")</string>
 </dict>
 </plist>
 EOF
+        # the new file is checked before the old service is taken down: an invalid plist left nothing running at all
+        if command -v plutil >/dev/null 2>&1 && ! plutil -lint "$PLIST" >/dev/null 2>&1; then
+            echo "the service file $PLIST does not parse; the running service is left as it is"; exit 1
+        fi
         # replace a running instance of the agent; a stray remuda on the port is yours to stop
         # the previous name (herdr-ui): its service stopped and removed, its binary gone
         launchctl bootout "gui/$UID_NUM/dev.mardeus.herdr-ui" 2>/dev/null || true
@@ -108,9 +120,9 @@ Description=remuda — the cockpit for the agents remuda-core runs
 After=default.target
 
 [Service]
-ExecStart="$BIN" -addr "$ADDR" $TS_ARGS
+ExecStart="$(sd "$BIN")" -addr "$(sd "$ADDR")" $TS_ARGS
 KillMode=process
-Environment="PATH=$PATH_FOR_SERVICE"$([ -n "$TS_AUTHKEY" ] && printf '\nEnvironment=TS_AUTHKEY=%s' "$TS_AUTHKEY")
+Environment="PATH=$(sd "$PATH_FOR_SERVICE")"$([ -n "$TS_AUTHKEY" ] && printf '\nEnvironment=TS_AUTHKEY=%s' "$(sd "$TS_AUTHKEY")")
 Restart=always
 RestartSec=3
 

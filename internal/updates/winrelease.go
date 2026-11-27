@@ -46,7 +46,8 @@ func downloadScript(url, sums, asset, into string) string {
 	b.WriteString(`echo downloading ` + script.Quote(url) + "\n")
 	b.WriteString(`curl -fsSL --retry 3 -o ` + file + ` ` + script.Quote(url) + "\n")
 	if sums == "" {
-		b.WriteString(`echo "(this release carries no checksums.txt; the download is not verified)"` + "\n")
+		// install.sh refuses such a release, and so does this: an unverified binary is not installed over a working one
+		b.WriteString(`echo "!! this release carries no checksums.txt: nothing checks the download against, so it is not installed"; rm -f ` + file + `; exit 1` + "\n")
 		return b.String()
 	}
 	b.WriteString(`if curl -fsSL --retry 3 -o "$HOME/.local/bin/remuda.sums.$$" ` + script.Quote(sums) + `; then` + "\n")
