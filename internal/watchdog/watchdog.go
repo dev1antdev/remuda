@@ -90,6 +90,11 @@ func (w *Watchdog) Sweep() {
 				actions = []push.Action{{Action: "open", Title: "Open"}, {Action: "esc", Title: "Send Esc"}}
 			}
 		case coreapi.StatusBlocked:
+			// the conversation moved since the question came up — Esc, No, a word typed: it is not still waiting, and a
+			// note every half hour until morning says otherwise
+			if last, ok := w.in.LastWrite(ep.Machine, ep.Pane); ok && last.After(ep.Since) {
+				break
+			}
 			if age >= w.WaitAfter {
 				kind = "waiting"
 				note = "waiting for your answer for " + minutes(age)

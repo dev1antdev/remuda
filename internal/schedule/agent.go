@@ -35,6 +35,9 @@ type Agents struct {
 	Close  func(run Started) error
 	Answer func(machine, pane string) string // the agent's last answer, "" for none
 	Status func(machine, pane string) string // herdr's agent status of the pane, events.Gone when no agent runs there now, "" when the machine has not said
+	// Exists says whether the machine is still in the fleet: one taken out of it leaves no status to read, and a
+	// schedule waiting on it would be skipped forever
+	Exists func(machine string) bool
 	// Denied is the calls its conversation was denied without asking, and whether its latest turn stopped on them
 	Denied func(machine, pane string) transcript.Denials
 	// Hold is why the schedule's agent kind should not start on its machine now — its plan window at 95 % or forecast
@@ -101,6 +104,7 @@ func (st *Store) fireAgent(s *Schedule, swap *Swap) {
 		}
 	}
 	now := st.now()
+	ranOn := cp.Machine // where the agent really starts: an edit made during the start must not file it elsewhere
 	var started Started
 	err := errors.New("no way to start an agent")
 	if st.Agents.Start != nil {
@@ -120,8 +124,10 @@ func (st *Store) fireAgent(s *Schedule, swap *Swap) {
 		if swap != nil {
 			cur.LastResult += " with " + agentLabel(swap.Agent) + ", for the plan limit"
 		}
-		started.Machine, started.At = cur.Machine, now
-		cur.LastPane = &started
+		started.Machine, started.At = ranOn, now
+		if cur.Machine == ranOn {
+			cur.LastPane = &started // not for a schedule the person has just pointed at another machine
+		}
 	}
 	if serr := st.saveLocked(); serr != nil {
 		log.Printf("schedules: %v", serr)
@@ -160,6 +166,10 @@ func (st *Store) previousRun(s Schedule, run Started) (why, words string) {
 		status = st.Agents.Status(run.Machine, run.Pane)
 	}
 	agent := "its previous agent (" + run.Pane + ")"
+	if st.Agents.Exists != nil && !st.Agents.Exists(run.Machine) {
+		st.forget(s.ID, run) // the machine left the fleet: nothing runs there to wait for
+		return "", ""
+	}
 	switch status {
 	case "":
 		return SkipUnsure, "no word yet on how " + agent + " stands"
