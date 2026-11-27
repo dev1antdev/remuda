@@ -323,7 +323,11 @@ func Dial(host string) (*Conn, error) {
 		close(exited)
 	}()
 
-	deadline := time.Now().Add(15 * time.Second)
+	// a login may be slow — a jump host, a second factor, a key agent asked for a passphrase — so the wait is long
+	// enough for one, and its end says what ssh was doing rather than only that it stopped
+	const signIn = 90 * time.Second
+	deadline := time.Now().Add(signIn)
+	timedOut := true
 wait:
 	for time.Now().Before(deadline) {
 		if c.listening() {
@@ -331,13 +335,16 @@ wait:
 		}
 		select {
 		case <-exited: // master already died (auth failure etc.)
+			timedOut = false
 			break wait
 		case <-time.After(200 * time.Millisecond):
 		}
 	}
 	cmd.Process.Kill()
 	msg := strings.TrimSpace(stderr.String())
-	if msg == "" {
+	if msg == "" && timedOut {
+		msg = fmt.Sprintf("no sign-in within %s: ssh may be waiting for an answer a batch session cannot give (a passphrase, a second factor); try ssh %s by hand", signIn, host)
+	} else if msg == "" {
 		msg = "ssh master did not come up"
 	}
 	return nil, fmt.Errorf("ssh %s: %s", host, msg)

@@ -478,7 +478,7 @@ func byHand(t *testing.T, home string) <-chan struct{} {
 		t.Fatal(err)
 	}
 	pid := strconv.Itoa(cmd.Process.Pid)
-	write(t, filepath.Join(home, ".local", "bin", "pgrep"), "#!/bin/sh\nkill -0 "+pid+" 2>/dev/null && echo "+pid+"\n", 0o755)
+	write(t, filepath.Join(home, ".local", "bin", "pgrep"), "#!/bin/sh\ncase \"$*\" in *\"-f \"*) exit 1 ;; esac\nkill -0 "+pid+" 2>/dev/null && echo "+pid+"\n", 0o755)
 	ended := make(chan struct{})
 	go func() {
 		cmd.Wait() // reaped at once: a zombie would still answer kill -0

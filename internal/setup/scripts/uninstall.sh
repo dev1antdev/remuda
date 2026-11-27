@@ -124,9 +124,19 @@ svc_pid() {
 }
 
 # by_hand lists the remuda processes that are neither this command nor the
-# service's own: one started in a terminal, a `make server`.
+# service's own: one started in a terminal, a `make server`. The `remuda mcp`,
+# `remuda statusline` and `remuda bridge` helpers are the page's and the
+# agent's, not a shop instance the person runs: they are never listed, so
+# `-herdr` cannot take them for one.
 by_hand() {
-    pgrep -u "$UID_NUM" -x remuda 2>/dev/null | grep -v -e "^$PPID\$" ${SVC_PID:+-e "^$SVC_PID\$"} | tr '\n' ' ' | sed 's/ *$//'
+    out=
+    for pid in $(pgrep -u "$UID_NUM" -x remuda 2>/dev/null); do
+        [ "$pid" = "$PPID" ] && continue
+        if [ -n "${SVC_PID:-}" ] && [ "$pid" = "$SVC_PID" ]; then continue; fi
+        if pgrep -u "$UID_NUM" -f "remuda (mcp|statusline|bridge)( |\$)" 2>/dev/null | grep -qx "$pid"; then continue; fi
+        out="$out $pid"
+    done
+    printf %s "${out# }"
 }
 
 # Such a remuda is the person's and stays — except when herdr goes: it
