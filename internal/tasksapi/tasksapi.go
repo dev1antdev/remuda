@@ -222,6 +222,9 @@ func (c *Client) AddLabel(taskID, labelID int64) (Task, error) {
 	return out, c.do(http.MethodPut, "/api/tasks/"+strconv.FormatInt(taskID, 10)+"/labels", map[string]int64{"label_id": labelID}, &out)
 }
 
+// maxAnswer is the most of one answer the client takes: a whole project's board can be megabytes, a cut JSON is no use.
+const maxAnswer = 8 << 20
+
 // do is one request with the key; the list's JSON refusal becomes an *Error.
 func (c *Client) do(method, path string, body, out any) error {
 	var reader io.Reader
@@ -249,9 +252,12 @@ func (c *Client) do(method, path string, body, out any) error {
 		return fmt.Errorf("remuda at %s: %w", door.URL, err)
 	}
 	defer res.Body.Close()
-	data, err := io.ReadAll(io.LimitReader(res.Body, 8<<20))
+	data, err := io.ReadAll(io.LimitReader(res.Body, maxAnswer+1))
 	if err != nil {
 		return err
+	}
+	if len(data) > maxAnswer {
+		return fmt.Errorf("remuda's answer at %s is longer than %d MB reads: ask for a page, or one task", door.URL, maxAnswer>>20)
 	}
 	if res.StatusCode >= 300 {
 		return &Error{Status: res.StatusCode, Message: refusal(res.StatusCode, data)}

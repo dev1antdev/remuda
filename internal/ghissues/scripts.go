@@ -47,12 +47,16 @@ func probe(path, etag string, whole bool) string {
 	return b.String()
 }
 
+// maxAnswer is the most of one GitHub answer remuda takes into memory: an issue with thousands of events must not cost
+// the cockpit hundreds of megabytes. An answer cut there is errCut's, read as "its answer was cut short".
+const maxAnswer = 8 << 20
+
 // listScript reads the issues a search finds, after asking whether anything in the repository moved since etag.
 func listScript(repo, query, etag string, login bool) string {
 	newest := "repos/" + repo + "/issues?state=all&sort=updated&direction=desc&per_page=1"
 	return prelude() + loginSection(login) + probe(newest, etag, false) +
 		"gh issue list -R " + script.Quote(repo) + " --state all --search " + script.Quote(query) +
-		" --limit " + strconv.Itoa(Limit) + " --json " + listFields + " 2>&1\n"
+		" --limit " + strconv.Itoa(Limit) + " --json " + listFields + " 2>&1 | head -c " + strconv.Itoa(maxAnswer) + "\n"
 }
 
 const closedByQuery = `query($owner: String!, $name: String!, $number: Int!) { repository(owner: $owner, name: $name) { issue(number: $number) { closedByPullRequestsReferences(first: 10, includeClosedPrs: true) { nodes { number title url state isDraft repository { nameWithOwner } } } } } }`
@@ -62,7 +66,7 @@ func detailScript(repo string, number int, etag string, login bool) string {
 	owner, name, _ := strings.Cut(repo, "/")
 	issue := fmt.Sprintf("repos/%s/issues/%d", repo, number)
 	return prelude() + loginSection(login) + probe(issue, etag, true) +
-		"gh api --paginate " + script.Quote(issue+"/timeline?per_page=100") + " 2>&1\n" +
+		"gh api --paginate " + script.Quote(issue+"/timeline?per_page=100") + " 2>&1 | head -c " + strconv.Itoa(maxAnswer) + "\n" +
 		"printf '\\036\\n'\n" +
 		"gh api graphql -f owner=" + script.Quote(owner) + " -f name=" + script.Quote(name) + " -F number=" + strconv.Itoa(number) +
 		" -f query=" + script.Quote(closedByQuery) + " 2>&1\n"

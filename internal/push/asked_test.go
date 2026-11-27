@@ -1,6 +1,7 @@
 package push
 
 import (
+	"encoding/json"
 	"strings"
 	"sync"
 	"testing"
@@ -114,5 +115,20 @@ func TestQuestionBodyAndCut(t *testing.T) {
 	}
 	if got := cutRunes("short", 24); got != "short" {
 		t.Errorf("uncut %q", got)
+	}
+}
+
+func TestAQuestionWithLongChoicesStillFitsAPush(t *testing.T) {
+	long := strings.Repeat("Yes, and don't ask again for this command in this folder ", 40)
+	p := askedPayload(Payload{Title: "Claude asks"}, Asked{Text: strings.Repeat("a dialog line ", 100), Choices: []string{long, long, long}, Key: "k"}, true)
+	body, err := json.Marshal(fit(p))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(body) > maxPayload {
+		t.Fatalf("still %d bytes", len(body))
+	}
+	if p.Title == "" || len(p.Actions) != 2 {
+		t.Fatalf("the buttons went with the words: %+v", p)
 	}
 }

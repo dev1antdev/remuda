@@ -1578,46 +1578,73 @@ func (st *Store) List(q Query) ([]Task, int, error) {
 	if q.View == "board" {
 		cols = "tasks." + strings.ReplaceAll(taskCols, ", ", ", tasks.")
 	}
-	rows, err := st.db.Query(`SELECT `+cols+` FROM `+from+` WHERE `+strings.Join(where, " AND ")+order, args...)
-	if err != nil {
-		return nil, 0, err
-	}
-	defer rows.Close()
-	var all []Task
 	needle := strings.ToLower(strings.TrimSpace(q.Search))
-	for rows.Next() {
-		t, err := scanTask(rows)
+	var out []Task
+	pages := 1
+	if needle == "" && q.View != "board" {
+		// a page is read by SQL: counting the rows and taking PageSize of them, rather than the whole project into memory
+		var total int
+		if err := st.db.QueryRow(`SELECT COUNT(*) FROM `+from+` WHERE `+strings.Join(where, " AND "), args...).Scan(&total); err != nil {
+			return nil, 0, err
+		}
+		pages = max(1, (total+PageSize-1)/PageSize)
+		page := min(max(q.Page, 1), pages)
+		paged := append(append([]any(nil), args...), PageSize, (page-1)*PageSize)
+		rows, err := st.db.Query(`SELECT `+cols+` FROM `+from+` WHERE `+strings.Join(where, " AND ")+order+` LIMIT ? OFFSET ?`, paged...)
 		if err != nil {
 			return nil, 0, err
 		}
-		if needle != "" && !strings.Contains(strings.ToLower(t.Title), needle) && !strings.Contains(strings.ToLower(stripTags(t.Description)), needle) {
-			continue
-		}
-		all = append(all, t)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, 0, err
-	}
-	rows.Close()
-	var out []Task
-	pages := 1
-	if q.View == "board" {
-		seen := map[int64]int{}
-		for _, t := range all {
-			if t.Done {
-				seen[t.StatusID]++
-				if seen[t.StatusID] > BoardDone {
-					continue
-				}
+		defer rows.Close()
+		for rows.Next() {
+			t, err := scanTask(rows)
+			if err != nil {
+				return nil, 0, err
 			}
 			out = append(out, t)
 		}
+		if err := rows.Err(); err != nil {
+			return nil, 0, err
+		}
+		rows.Close()
 	} else {
-		pages = max(1, (len(all)+PageSize-1)/PageSize)
-		page := min(max(q.Page, 1), pages)
-		from := (page - 1) * PageSize
-		to := min(from+PageSize, len(all))
-		out = all[from:to]
+		rows, err := st.db.Query(`SELECT `+cols+` FROM `+from+` WHERE `+strings.Join(where, " AND ")+order, args...)
+		if err != nil {
+			return nil, 0, err
+		}
+		defer rows.Close()
+		var all []Task
+		for rows.Next() {
+			t, err := scanTask(rows)
+			if err != nil {
+				return nil, 0, err
+			}
+			if needle != "" && !strings.Contains(strings.ToLower(t.Title), needle) && !strings.Contains(strings.ToLower(stripTags(t.Description)), needle) {
+				continue
+			}
+			all = append(all, t)
+		}
+		if err := rows.Err(); err != nil {
+			return nil, 0, err
+		}
+		rows.Close()
+		if q.View == "board" {
+			seen := map[int64]int{}
+			for _, t := range all {
+				if t.Done {
+					seen[t.StatusID]++
+					if seen[t.StatusID] > BoardDone {
+						continue
+					}
+				}
+				out = append(out, t)
+			}
+		} else {
+			pages = max(1, (len(all)+PageSize-1)/PageSize)
+			page := min(max(q.Page, 1), pages)
+			start := (page - 1) * PageSize
+			to := min(start+PageSize, len(all))
+			out = all[start:to]
+		}
 	}
 	ptrs := make([]*Task, len(out))
 	for i := range out {
