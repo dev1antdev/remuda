@@ -300,3 +300,17 @@ func TestTickFiresOnceInTheHourAFallBackRepeats(t *testing.T) {
 		t.Fatalf("next %v, want the next night's 01:30", next.In(newYork))
 	}
 }
+
+func TestACronStepPastTheFieldDoesNotOverflow(t *testing.T) {
+	c, err := Parse("1/9223372036854775807 * * * *")
+	if err != nil {
+		t.Fatal(err)
+	}
+	at := time.Date(2026, 11, 27, 10, 1, 0, 0, time.UTC)
+	if !c.Matches(at) || c.Matches(at.Add(time.Minute)) {
+		t.Fatal("a step past the field matched more than its first value")
+	}
+	if next, ok := c.Next(at.Add(-time.Hour)); !ok || next.Minute() != 1 {
+		t.Fatalf("Next = %v %v", next, ok)
+	}
+}

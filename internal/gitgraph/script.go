@@ -14,7 +14,7 @@ const Read = `g() { git --no-pager --no-optional-locks --literal-pathspecs -c co
 
 // StatusLines is git status as one entry a line: a line break inside a path becomes \001 and every NUL a line, so awk
 // reads one entry a line.
-const StatusLines = `g status --porcelain=v1 -z --no-renames --untracked-files=all 2>/dev/null | tr '\n\000' '\001\n'`
+const StatusLines = `g status --porcelain=v1 -z --no-renames --untracked-files=normal 2>/dev/null | tr '\n\000' '\001\n'`
 
 // TreeSum is the shell function that prints a checksum of the tracked entries of git status: what a hard reset discards.
 // A reset's dialog carries the checksum it was shown, and the write refuses a tree that moved since.
