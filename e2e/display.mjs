@@ -3180,7 +3180,7 @@ async function terminalWrapFind() {
   const rowsCame = async () => {
     for (let attempt = 0; attempt < 2; attempt++) {
       await submit("seq 1 2600; echo $((1234+1))");
-      if (await until(async () => /(^|\s)1235(\s|$)/m.test(await screenOf(pane)), 20)) return true;
+      if (await until(async () => /(?<!\d)1235(?!\d)/.test(await screenOf(pane)), 20)) return true;
     }
     return false;
   };
