@@ -6,7 +6,7 @@
 import { memo, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { errMsg } from "@/lib/text";
 import { t } from "@/lib/i18n";
-import { lookOf, mermaidConfig, unsafeAttribute } from "./mermaidLook";
+import { lookOf, mermaidConfig, unsafeAttribute, unsafeHref, unsafeStyle } from "./mermaidLook";
 
 type MermaidAPI = (typeof import("mermaid"))["default"];
 
@@ -65,9 +65,18 @@ function adopt(svg: string, box: HTMLElement): boolean {
   const doc = new DOMParser().parseFromString(svg, "image/svg+xml");
   const root = doc.documentElement;
   if (root.namespaceURI !== SVG_NS || doc.getElementsByTagName("parsererror").length > 0) return false;
-  for (const script of Array.from(root.getElementsByTagName("script"))) script.remove();
+  const banned = new Set(["script", "foreignobject", "base", "iframe", "object", "embed", "audio", "video"]);
   for (const el of [root, ...Array.from(root.getElementsByTagName("*"))]) {
-    for (const attr of Array.from(el.attributes)) if (unsafeAttribute(attr.name, attr.value)) el.removeAttribute(attr.name);
+    if (el !== root && banned.has(el.tagName.toLowerCase())) {
+      el.remove();
+      continue;
+    }
+    for (const attr of Array.from(el.attributes)) {
+      const name = attr.name.toLowerCase();
+      if (unsafeAttribute(name, attr.value) || ((name === "style") && unsafeStyle(attr.value)) || ((name === "href" || name === "xlink:href") && unsafeHref(attr.value))) {
+        el.removeAttribute(attr.name);
+      }
+    }
   }
   const view = (root.getAttribute("viewBox") ?? "").split(/[\s,]+/).map(Number);
   if (view.length === 4 && view[2]! > 0 && view[3]! > 0) {

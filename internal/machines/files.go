@@ -432,7 +432,8 @@ func (mc *Machine) SaveUpload(cwd, name string, data []byte) (Upload, error) {
 		if err := conn.Put(abs, data, 2*time.Minute); err != nil {
 			return Upload{}, err
 		}
-		mc.text("[ -e "+script.Quote(ignore)+" ] || printf '*\\n' > "+script.Quote(ignore), 10*time.Second)
+		// a .gitignore that is a symlink (even a dangling one) is left alone: the redirect would write where it points
+		mc.text("[ -e "+script.Quote(ignore)+" ] || [ -L "+script.Quote(ignore)+" ] || printf '*\\n' > "+script.Quote(ignore), 10*time.Second)
 	}
 	kind, _ := classify(abs, func() bool { return bytes.IndexByte(data[:min(len(data), 8192)], 0) >= 0 })
 	return Upload{Name: stored, Path: abs, Rel: rel, Size: len(data), Kind: kind}, nil

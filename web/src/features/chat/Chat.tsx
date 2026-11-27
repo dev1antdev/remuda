@@ -245,7 +245,7 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
             onChange={setSessionId}
             options={sessions.map((s) => ({ value: s.id, label: s.title || s.id.slice(0, 8), hint: whenShort(s.mod_time) }))}
           />
-          {older && workspaceId && agent && (
+          {older && workspaceId && agent && !viewOnly && (
             <button type="button" className="btn sm" title={t("A new tab in this workspace, the agent started on this conversation")} onClick={resume}>
               <Icon name="corner-down-left" size={12} /> {t("Resume in a new tab")}
             </button>
