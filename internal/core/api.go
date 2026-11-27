@@ -119,7 +119,7 @@ func (s *eventStream) end(err error) {
 
 // read reads a terminal the mirror holds, on a connection whose core passed the check (`checked`) itself: one
 // dialled since, to a core rolled back, is refused before anything is sent.
-func (a *Adapter) read(paneID string, lines int, format string) (ReadResult, error) {
+func (a *Adapter) read(paneID string, lines int, format string, join bool) (ReadResult, error) {
 	if _, err := a.terminal(paneID); err != nil {
 		return ReadResult{}, err
 	}
@@ -133,6 +133,9 @@ func (a *Adapter) read(paneID string, lines int, format string) (ReadResult, err
 	if format != "" {
 		params["format"] = format
 	}
+	if join {
+		params["join"] = true
+	}
 	var read ReadResult
 	err = cn.call(ctx, "terminal.read", params, &read, nil)
 	return read, a.refusal(err, "pane_not_found")
@@ -140,13 +143,13 @@ func (a *Adapter) read(paneID string, lines int, format string) (ReadResult, err
 
 // PaneRead is the terminal's screen as text.
 func (a *Adapter) PaneRead(paneID string) (string, error) {
-	read, err := a.read(paneID, 0, "")
+	read, err := a.read(paneID, 0, "", false)
 	return read.Text, err
 }
 
 // PaneScreen is the terminal's screen with its colours, as SGR.
 func (a *Adapter) PaneScreen(paneID string) (coreapi.Screen, error) {
-	read, err := a.read(paneID, 0, "vt")
+	read, err := a.read(paneID, 0, "vt", false)
 	return coreapi.Screen{Text: ScreenText(read.Text)}, err
 }
 
@@ -154,7 +157,7 @@ func (a *Adapter) PaneScreen(paneID string) (coreapi.Screen, error) {
 // whether rows before them are gone. It reads as the colours do, which never scrolls a full-screen program for its
 // history (a plain read does, with the wheel, under the person's hands) and gives such a program's screen alone.
 func (a *Adapter) PaneRecent(paneID string, n int) (string, bool, error) {
-	read, err := a.read(paneID, n, "vt")
+	read, err := a.read(paneID, n, "vt", true)
 	if err != nil {
 		return "", false, err
 	}
