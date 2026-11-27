@@ -50,6 +50,7 @@ export type Detail = {
   mergeable: string;
   merge_state: string;
   auto_merge: boolean;
+  delete_branch_on_merge?: boolean;
   merge_methods: string[];
   auto_allowed: boolean;
   repository: string;
