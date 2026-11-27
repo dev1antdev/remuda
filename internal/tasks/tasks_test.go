@@ -625,3 +625,30 @@ func TestColoursAreHexOrNothing(t *testing.T) {
 		t.Fatalf("a column colour with CSS: %v", err)
 	}
 }
+
+func TestAFirstStageStartsOnce(t *testing.T) {
+	st := open(t)
+	p, _ := st.CreateProject("Work", 0)
+	task, _ := st.Create(p.ID, Patch{Title: str("Fix it")})
+	run := Run{TaskID: task.ID, Machine: "m", Workspace: "w", Pane: "p", Agent: "claude"}
+	first, err := st.StartRun(run)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.StartRun(run); !errors.Is(err, ErrAlreadyStarted) {
+		t.Fatalf("a second start: %v", err)
+	}
+	if !st.OpenRootRun(task.ID) {
+		t.Fatal("the open run is not seen")
+	}
+	_ = st.SetRun(first.ID, RunFinished, "")
+	if _, err := st.StartRun(run); err != nil {
+		t.Fatalf("a start after the first ended: %v", err)
+	}
+	// a pipeline stage is another run of the same task, not another first one
+	stage := run
+	stage.Stage = 1
+	if _, err := st.StartRun(stage); err != nil {
+		t.Fatalf("a stage: %v", err)
+	}
+}

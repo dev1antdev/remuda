@@ -440,7 +440,10 @@ func (s *Service) say(b Booking) {
 	case place.Agent == "":
 		s.notify(push.Payload{Machine: b.Machine, Pane: b.Pane, Kind: "limits", Title: "Nothing continued in " + place.Workspace, Body: "The agent left the pane; the booking's word would be typed into a shell."})
 		return
-	case b.Session != "" && place.Session != b.Session:
+	case b.Session == "":
+		s.notify(push.Payload{Machine: b.Machine, Pane: b.Pane, Kind: "limits", Title: "Nothing continued in " + place.Workspace, Body: "The conversation was not known when the booking was made; its word could land in another one."})
+		return
+	case place.Session != b.Session:
 		s.notify(push.Payload{Machine: b.Machine, Pane: b.Pane, Kind: "limits", Title: "Nothing continued in " + place.Workspace, Body: "Another conversation runs there now than the one the booking was for."})
 		return
 	case place.Status == coreapi.StatusWorking:

@@ -338,3 +338,24 @@ func TestAReadingLeavesOutTheWindowsResetSince(t *testing.T) {
 		t.Fatalf("a machine away still shows a window that reset: %+v", r.Windows)
 	}
 }
+
+func TestABookingWithNoConversationIsNotTypedIntoWhicheverOneRuns(t *testing.T) {
+	now := time.Date(2026, 11, 4, 10, 0, 0, 0, time.UTC)
+	var got pushes
+	submitted := false
+	s := New(t.TempDir())
+	s.now = func() time.Time { return now }
+	s.Notify = got.notify
+	s.Submit = func(string, string, string) error { submitted = true; return nil }
+	s.Pane = func(string, string) (Place, bool) {
+		return Place{Agent: "claude", Session: "s9", Status: coreapi.StatusIdle, Workspace: "api"}, true
+	}
+	s.kept.Bookings["gog|p1"] = Booking{Machine: "gog", Pane: "p1", At: now, Text: "continue"}
+	s.Tick()
+	if submitted {
+		t.Fatal("a booking with no conversation went into another")
+	}
+	if titles := got.titles(); len(titles) != 1 || !strings.Contains(got.sent[0].Body, "not known") {
+		t.Fatalf("pushes: %+v", got.sent)
+	}
+}
