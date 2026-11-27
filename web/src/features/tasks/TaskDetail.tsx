@@ -68,6 +68,20 @@ export function TaskDetail({ task: t, projects, statuses, fields, labels, onChan
       onError(errMsg(e));
     }
   };
+  // the editor closes when the text is saved, and only then: a failed save keeps the draft it holds, and an unedited
+  // description is not written at all (htmlToText would flatten its links and markup)
+  const saveDescription = async () => {
+    if (desc === htmlToText(t.description)) {
+      setEditingDesc(false);
+      return;
+    }
+    try {
+      onChange(await patchTask(t.id, { description: textToHtml(desc) }));
+      setEditingDesc(false);
+    } catch (e) {
+      onError(errMsg(e));
+    }
+  };
   const saveTitle = () => {
     const v = title.trim();
     if (v && v !== t.title) void patch({ title: v });
@@ -260,14 +274,7 @@ export function TaskDetail({ task: t, projects, statuses, fields, labels, onChan
               <button type="button" className="btn" onClick={() => setEditingDesc(false)}>
                 {tr("Cancel")}
               </button>
-              <button
-                type="button"
-                className="btn primary"
-                onClick={() => {
-                  setEditingDesc(false);
-                  void patch({ description: textToHtml(desc) });
-                }}
-              >
+              <button type="button" className="btn primary" onClick={() => void saveDescription()}>
                 {tr("Save")}
               </button>
             </div>
