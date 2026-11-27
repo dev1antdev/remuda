@@ -7,6 +7,9 @@ import type { SizeMode } from "./types";
 
 export const MIN_FONT = 8;
 const PAD = 8; // the mount's padding, both sides
+// the grid a pane may ask for: narrower than 20 or taller than 300 is no terminal anyone reads
+export const colsIn = (n: number) => Math.min(500, Math.max(20, n));
+export const rowsIn = (n: number) => Math.min(300, Math.max(5, n));
 
 export type Geometry = {
   mode: SizeMode;
@@ -42,9 +45,10 @@ export function applyGeometry(term: Terminal, fit: FitAddon, mount: HTMLElement,
   if (mount.clientWidth === 0) return false; // hidden: nothing to measure
   mount.classList.remove("keep", "wide");
   if (g.mode === "keep" && g.cols > 0 && g.rows > 0) {
-    const size = keepFont(mount.clientWidth - PAD, g.fontSize, g.cols, cellSize(term).w, term.options.fontSize!);
+    const cols = colsIn(g.cols), rows = rowsIn(g.rows);
+    const size = keepFont(mount.clientWidth - PAD, g.fontSize, cols, cellSize(term).w, term.options.fontSize!);
     if (term.options.fontSize !== size) term.options.fontSize = size;
-    if (term.cols !== g.cols || term.rows !== g.rows) term.resize(g.cols, g.rows);
+    if (term.cols !== cols || term.rows !== rows) term.resize(cols, rows);
     mount.classList.add("keep");
   } else {
     if (term.options.fontSize !== g.fontSize) term.options.fontSize = g.fontSize;
@@ -52,10 +56,12 @@ export function applyGeometry(term: Terminal, fit: FitAddon, mount: HTMLElement,
     if (g.minCols > 0 && fits && fits.cols < g.minCols) {
       // the class brings the scrollbar first, so clientHeight already excludes it when the rows are measured
       mount.classList.add("wide");
-      const rows = Math.max(5, Math.floor((mount.clientHeight - PAD) / cellSize(term).h));
-      if (term.cols !== g.minCols || term.rows !== rows) term.resize(g.minCols, rows);
+      const cols = colsIn(g.minCols), rows = rowsIn(Math.floor((mount.clientHeight - PAD) / cellSize(term).h));
+      if (term.cols !== cols || term.rows !== rows) term.resize(cols, rows);
     } else {
       fit.fit();
+      const cols = colsIn(term.cols), rows = rowsIn(term.rows);
+      if (term.cols !== cols || term.rows !== rows) term.resize(cols, rows);
     }
   }
   return true;
