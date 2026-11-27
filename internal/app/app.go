@@ -394,6 +394,10 @@ func Run(ctx context.Context, o Options) error {
 		}
 		activity.Add(sent.Entry(sent.Remuda, text, false, machineID, paneID, workspace))
 	}
+	// the sleep record and the restart memory's word of it are set before anything observes a snapshot: a pane's sleep
+	// state read while it is still nil would be taken for awake
+	updater := &updates.Service{Health: vitals, Jobs: runner, Restart: restarter, Watch: watcher, Machines: fleet}
+	sleeps := sleeper(o.Dir, bus, fleet, watcher, runner, input, restarter, updater, activity, hub.RosterChanged)
 	// the agents' subscription windows: read off every machine, warned of at 80 % and the limit, the agents stopped on
 	// one noted, and the person's bookings to continue them said when due
 	planLimits := limits.New(o.Dir)
@@ -693,8 +697,6 @@ func Run(ctx context.Context, o Options) error {
 	events.Subscribe(bus, func(e events.MachineRemoved) { radarOfCollisions.Forget(e.Machine) })
 	go turns.Tracker.Loop(ctx.Done())
 
-	updater := &updates.Service{Health: vitals, Jobs: runner, Restart: restarter, Watch: watcher, Machines: fleet}
-	sleeps := sleeper(o.Dir, bus, fleet, watcher, runner, input, restarter, updater, activity, hub.RosterChanged)
 	fleetSetup := &drift.Service{Fleet: fleet, Health: vitals, Updates: updater, Dirs: func(machineID string) []string {
 		if snap, _ := watcher.Snapshot(machineID); snap != nil {
 			return snap.WorkspaceDirs()
