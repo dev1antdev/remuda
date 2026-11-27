@@ -87,14 +87,14 @@ type Detail struct {
 
 const pageInfo = `pageInfo{hasNextPage endCursor}`
 
-const detailQuery = `query($owner:String!,$name:String!,$number:Int!,$comments:String,$reviews:String,$threads:String){
+const detailQuery = `query($owner:String!,$name:String!,$number:Int!,$comments:String,$reviews:String,$threads:String,$checks:String){
 viewer{login}
 repository(owner:$owner,name:$name){nameWithOwner mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed autoMergeAllowed
 pullRequest(number:$number){id number title url body state isDraft headRefName baseRefName headRefOid changedFiles additions deletions author{login} reviewDecision mergeable mergeStateStatus autoMergeRequest{enabledAt}
 comments(first:100,after:$comments){` + pageInfo + ` nodes{id body url createdAt author{login}}}
 reviews(first:100,after:$reviews){` + pageInfo + ` nodes{id body url submittedAt state author{login}}}
 reviewThreads(first:100,after:$threads){` + pageInfo + ` nodes{id path line originalLine isResolved isOutdated viewerCanResolve viewerCanUnresolve viewerCanReply comments(first:100){totalCount nodes{id body url createdAt diffHunk author{login}}}}}
-commits(last:1){nodes{commit{statusCheckRollup{contexts(first:100){nodes{__typename ... on CheckRun{databaseId name status conclusion startedAt completedAt detailsUrl checkSuite{workflowRun{databaseId workflow{name}}}} ... on StatusContext{context state targetUrl createdAt}}}}}}}
+commits(last:1){nodes{commit{statusCheckRollup{contexts(first:100,after:$checks){` + pageInfo + ` nodes{__typename ... on CheckRun{databaseId name status conclusion startedAt completedAt detailsUrl checkSuite{workflowRun{databaseId workflow{name}}}} ... on StatusContext{context state targetUrl createdAt}}}}}}}
 }}}`
 
 type detailData struct {
@@ -143,7 +143,8 @@ type detailData struct {
 					Commit struct {
 						Rollup *struct {
 							Contexts struct {
-								Nodes []checkNode `json:"nodes"`
+								PageInfo page        `json:"pageInfo"`
+								Nodes    []checkNode `json:"nodes"`
 							} `json:"contexts"`
 						} `json:"statusCheckRollup"`
 					} `json:"commit"`
@@ -187,10 +188,11 @@ func ReadDetail(host shell.Shell, repo Repo, number int) (Detail, error) {
 					d.MergeMethods = append(d.MergeMethods, m.name)
 				}
 			}
-			if len(pr.Commits.Nodes) > 0 && pr.Commits.Nodes[0].Commit.Rollup != nil {
-				for _, c := range pr.Commits.Nodes[0].Commit.Rollup.Contexts.Nodes {
-					d.Checks = append(d.Checks, c.check())
-				}
+		}
+		// the head commit's checks page too: a request with more than a hundred is read to MaxPages of them
+		if len(pr.Commits.Nodes) > 0 && pr.Commits.Nodes[0].Commit.Rollup != nil && (round == 0 || vars["checks"] != nil) {
+			for _, c := range pr.Commits.Nodes[0].Commit.Rollup.Contexts.Nodes {
+				d.Checks = append(d.Checks, c.check())
 			}
 		}
 		if round == 0 || vars["comments"] != nil {
@@ -211,7 +213,11 @@ func ReadDetail(host shell.Shell, repo Repo, number int) (Detail, error) {
 			}
 		}
 		more := false
-		for key, p := range map[string]page{"comments": pr.Comments.PageInfo, "reviews": pr.Reviews.PageInfo, "threads": pr.ReviewThreads.PageInfo} {
+		checksPage := page{}
+		if len(pr.Commits.Nodes) > 0 && pr.Commits.Nodes[0].Commit.Rollup != nil {
+			checksPage = pr.Commits.Nodes[0].Commit.Rollup.Contexts.PageInfo
+		}
+		for key, p := range map[string]page{"comments": pr.Comments.PageInfo, "reviews": pr.Reviews.PageInfo, "threads": pr.ReviewThreads.PageInfo, "checks": checksPage} {
 			if (round == 0 || vars[key] != nil) && p.HasNextPage {
 				vars[key] = p.EndCursor
 				more = true
