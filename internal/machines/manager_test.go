@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -257,5 +258,35 @@ func TestARemovalOfOneAlreadyRemovedLocksNothing(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("the fleet's next write waits behind the removal of a machine already gone")
+	}
+}
+
+func TestTwoAddsAtOnceMakeOneMachine(t *testing.T) {
+	m := NewManager(t.TempDir(), nil, false)
+	t.Cleanup(m.Close)
+	var wg sync.WaitGroup
+	made := make(chan int, 8)
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if _, err := m.addIfNew(Config{ID: "box", Label: "box", Host: "box.example"}); err == nil {
+				made <- 1
+			}
+		}()
+	}
+	wg.Wait()
+	close(made)
+	if n := len(made); n != 1 {
+		t.Fatalf("%d adds made a machine of one id", n)
+	}
+	list := m.List()
+	if len(list) != 2 { // the local one and box
+		t.Fatalf("the fleet: %d machines", len(list))
+	}
+	for _, mc := range list {
+		if mc == nil {
+			t.Fatal("a nil row in the fleet")
+		}
 	}
 }

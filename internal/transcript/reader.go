@@ -504,19 +504,25 @@ func (r *Reader) remoteTailIn(tails map[string]*cachedTail, path string, v Versi
 	// every read is cut at the size the stat saw: what the agent wrote since belongs to the next version
 	quoted := script.Quote(path)
 	var data []byte
-	if cached != nil && v.Size > cached.version.Size {
-		// grew: fetch the delta only (tail -c +N is 1-indexed)
+	// grew, and the file only ever appends: the delta alone. A .json session is rewritten whole (Gemini's legacy form),
+	// and appending to what was read of the old one showed nothing after two turns.
+	grew := int64(0)
+	if cached != nil {
+		grew = v.Size - cached.version.Size
+	}
+	if cached != nil && grew > 0 && grew <= int64(remoteTailCap) && len(cached.data)+int(grew) <= remoteTailCap && strings.HasSuffix(path, ".jsonl") {
 		delta, err := r.host.Run(fmt.Sprintf("if %s; then tail -c +%d %s | head -c %d; else exit 1; fi",
-			remoteSessionFile(path), cached.version.Size+1, quoted, v.Size-cached.version.Size), 30*time.Second)
+			remoteSessionFile(path), cached.version.Size+1, quoted, grew), 30*time.Second)
 		if err == nil {
 			data = append(cached.data[:len(cached.data):len(cached.data)], delta...) // the cached slice is shared: copy
 		}
 	}
 	if data == nil {
-		fetch := min(v.Size, remoteTailCap)
+		// only the tail is read on the machine: a 300 MB session must not be piped through for its last 8 MB
+		start := max(int64(1), v.Size-int64(remoteTailCap)+1)
 		var err error
-		if data, err = r.host.Run(fmt.Sprintf("if %s; then head -c %d %s | tail -c %d; else exit 1; fi",
-			remoteSessionFile(path), v.Size, quoted, fetch), 60*time.Second); err != nil {
+		if data, err = r.host.Run(fmt.Sprintf("if %s; then tail -c +%d %s | head -c %d; else exit 1; fi",
+			remoteSessionFile(path), start, quoted, v.Size-start+1), 60*time.Second); err != nil {
 			return nil, err
 		}
 	}

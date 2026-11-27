@@ -32,6 +32,7 @@ export type Listed = {
   label: string;
   away?: string; // not connected: why ("connecting" before its first answer)
   error?: string; // the read failed
+  cut?: string; // the read stopped early: what is here is what came
   scan?: Scan;
   scan_where?: string; // the scan's folder with the home said as ~
   scan_missing?: boolean;

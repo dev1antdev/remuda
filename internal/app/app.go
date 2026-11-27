@@ -596,6 +596,7 @@ func Run(ctx context.Context, o Options) error {
 		}
 	})
 	events.Subscribe(bus, func(e events.MachineRemoved) { absent.Forget(e.Machine) })
+	events.Subscribe(bus, func(e events.MachineRemoved) { meter.ForgetMachine(e.Machine) })
 	absentDone := make(chan struct{})
 	defer close(absentDone)
 	go absent.Run(30*time.Second, absentDone)
