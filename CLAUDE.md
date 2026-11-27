@@ -259,7 +259,7 @@ components and icons as rules for whoever changes it: @docs/design.md
   and an output watch, a severed connection — and on a fake over a pipe
   (events before the reply, a cut line, missed, a core that stops reading, a
   hello nobody answers, a cancel racing its reply, a slow encoder). CI's check job installs
-  release remuda-v0.2.5 against its `checksums.txt`. Never start a core for a
+  release remuda-v0.2.6 against its `checksums.txt`. Never start a core for a
   test any other way: one without its own `RC_SOCKET` and XDG folders reaches
   the person's. **A screen with its colours** (`screen.go`, tested on a
   recorded pair in `testdata/` and on a throwaway core): `Read` with format
