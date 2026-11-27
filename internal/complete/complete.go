@@ -124,11 +124,13 @@ commands() { [ -d "$2" ] || return 0; find "$2" -type f -name '*.md' 2>/dev/null
 skills() { for f in "$2"/*/SKILL.md; do [ -f "$f" ] && dump "$1" "$f"; done; }
 commands user "$HOME/.claude/commands"
 skills user "$HOME/.claude/skills"
-dir=` + script.Quote(dir) + `
+here=$(cd ` + script.Quote(dir) + ` 2>/dev/null && pwd -P)
+dir=${here:-` + script.Quote(dir) + `}
 root=$(cd "$dir" 2>/dev/null && git rev-parse --show-toplevel 2>/dev/null)
+rootp=$(cd "$root" 2>/dev/null && pwd -P)
 commands project "$dir/.claude/commands"
 skills project "$dir/.claude/skills"
-if [ -n "$root" ] && [ "$root" != "$dir" ]; then commands project "$root/.claude/commands"; skills project "$root/.claude/skills"; fi
+if [ -n "$rootp" ] && [ "$rootp" != "$dir" ]; then commands project "$rootp/.claude/commands"; skills project "$rootp/.claude/skills"; fi
 exit 0
 `
 }

@@ -27,7 +27,8 @@ const maxSettings = 65536
 // settingsScript prints, for each of .claude/settings.local.json and .claude/settings.json in the folder and in the
 // repository's root when that is another folder, its path, whether git tracks it and whether it ignores it, then the
 // file itself and a line holding GS alone.
-var settingsScript = `for d in . "$root"; do if [ "$d" = "$root" ] && [ "$(pwd -P)" = "$root" ]; then continue; fi; ` +
+var settingsScript = `rootp=$(cd "$root" 2>/dev/null && pwd -P); [ -n "$rootp" ] || rootp="$root"; if [ "$(pwd -P)" = "$rootp" ]; then rs=""; else rs="$root"; fi; ` +
+	`for d in . $rs; do ` +
 	`for n in ` + settingsLocal + ` settings.json; do p="$d/.claude/$n"; [ -f "$p" ] || continue; ` +
 	`t=no; ` + readGit + ` ls-files --error-unmatch -- "$p" >/dev/null 2>&1 && t=yes; ` +
 	`i=no; ` + readGit + ` check-ignore -q -- "$p" 2>/dev/null && i=yes; ` +

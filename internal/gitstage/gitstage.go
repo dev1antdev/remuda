@@ -16,8 +16,12 @@ import (
 	"github.com/dev1antdev/remuda/internal/shell"
 )
 
-// chunk is how many paths one git command takes, well under any system's argument limit.
-const chunk = 200
+// chunk is how many paths one git command takes, and maxArgs how long their quoted list may grow: a Windows command
+// line caps at 32 KB whatever the count.
+const (
+	chunk   = 200
+	maxArgs = 20000
+)
 
 // writeGit is how a write calls git: names read literally, so a file called "[a].txt" or "*.go" is that file.
 const writeGit = `git --literal-pathspecs -c core.quotepath=off`
@@ -141,12 +145,21 @@ func quoted(paths []string) string {
 	return strings.Join(words, " ")
 }
 
-// inChunks is one command per chunk of paths, each stopping the script at its first failure.
+// inChunks is one command per chunk of paths, each stopping the script at its first failure. A chunk ends at chunk
+// paths or at maxArgs of them, whichever comes first.
 func inChunks(command string, paths []string) string {
 	var out strings.Builder
-	for start := 0; start < len(paths); start += chunk {
-		end := min(start+chunk, len(paths))
+	for start := 0; start < len(paths); {
+		end, size := start, 0
+		for end < len(paths) && end-start < chunk {
+			if end > start && size+len(paths[end])+3 > maxArgs {
+				break
+			}
+			size += len(paths[end]) + 3
+			end++
+		}
 		fmt.Fprintf(&out, "%s -- %s || exit 1; ", command, quoted(paths[start:end]))
+		start = end
 	}
 	return out.String()
 }

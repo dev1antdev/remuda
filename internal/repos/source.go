@@ -65,7 +65,9 @@ const Git = script.ReadGit
 func SourceScript(folder string) string {
 	var b strings.Builder
 	b.WriteString(script.PATH + "\ncd " + script.Quote(folder) + " 2>/dev/null || { echo 'the folder is not there'; exit 3; }\n")
-	b.WriteString("common=$(" + Git + " rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || { echo 'not a git repository'; exit 3; }\n")
+	// --path-format came in git 2.31: the common dir is read as git prints it and made absolute here
+	b.WriteString("common=$(" + Git + " rev-parse --git-common-dir 2>/dev/null) || { echo 'not a git repository'; exit 3; }\n")
+	b.WriteString("case \"$common\" in /*|[A-Za-z]:[\\/]*) ;; *) common=$(cd \"$common\" 2>/dev/null && pwd -P) ;; esac\n")
 	b.WriteString("case \"$common\" in */.git) root=${common%/.git} ;; *) root=$(" + Git + " rev-parse --show-toplevel) ;; esac\n")
 	b.WriteString("cd \"$root\" || exit 3\nprintf '%s\\n' \"$root\"\nprintf '\\036\\n'\n")
 	b.WriteString(Git + " for-each-ref --sort=-committerdate --format='%(refname)%09%(committerdate:unix)' refs/heads refs/remotes/origin\nprintf '\\036\\n'\n")
