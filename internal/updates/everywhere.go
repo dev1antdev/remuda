@@ -258,6 +258,9 @@ func (s *Service) runBatch(batch *Batch) {
 // stillPending says why a step shown at Run is not to run now — an earlier step of the run already saw to it, or its
 // command moved: a skip, not a failure; nil when it stands as it was shown
 func (s *Service) stillPending(mc *machines.Machine, step Step) error {
+	// the step before this one changed what the machine has: ask it again, or the next step is decided on the probe
+	// the batch started with
+	s.Health.Refresh(mc)
 	for _, now := range s.machineSteps(mc) {
 		if now.What != step.What {
 			continue
