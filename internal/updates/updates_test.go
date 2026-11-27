@@ -123,10 +123,10 @@ func TestReleaseUpdate(t *testing.T) {
 			t.Errorf("a release with asset URL %q was offered", bad)
 		}
 	}
+	// a release without checksums.txt is not offered at all: nothing would check the download, as install.sh refuses it
 	old := release("v0.6.0", map[string]string{"remuda-darwin-arm64": "https://github.com/dev1antdev/remuda/releases/download/v0.6.0/remuda-darwin-arm64"}, "")
-	n, ok := ReleaseUpdate("v0.4.0", "darwin", "arm64", old, false)
-	if !ok || !strings.Contains(n.Command, "not verified") || strings.Contains(n.Command, "awk") || !strings.Contains(n.Note, "no checksums.txt") {
-		t.Fatalf("no checksums: %+v", n)
+	if n, ok := ReleaseUpdate("v0.4.0", "darwin", "arm64", old, false); ok {
+		t.Fatalf("a release with no checksums was offered: %+v", n)
 	}
 }
 

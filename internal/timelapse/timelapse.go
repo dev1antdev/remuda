@@ -118,6 +118,8 @@ type Recorder struct {
 	searchBudget int64       // SearchBudget and SearchFor, smaller in a test
 	searchFor    time.Duration
 
+	deleting sync.Mutex // DeleteAll waits here, so two of them (a double press, two tabs) never interleave
+
 	mu      sync.Mutex
 	off     bool
 	scratch bool // a scratch instance: it plays and deletes what the folder holds, and records nothing

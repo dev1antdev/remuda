@@ -281,12 +281,14 @@ func (r *Recorder) Delete(id string) error {
 // DeleteAll removes every recording, the turns being recorded too (a turn still going starts afresh) and the ones that
 // ended and wait to be written, and answers how many finished ones went.
 func (r *Recorder) DeleteAll() (int, error) {
+	r.deleting.Lock() // one at a time: the second press waits for the first, and then finds nothing to do
+	defer r.deleting.Unlock()
 	r.mu.Lock()
 	dropped := r.dropLocked()
 	r.mu.Unlock()
 	for _, tk := range dropped {
 		tk.writing.Lock() // a checkpoint being written lands first, then goes with the rest
-		defer tk.writing.Unlock()
+		tk.writing.Unlock()
 	}
 	r.mu.Lock()
 	count := len(r.index)
