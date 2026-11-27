@@ -110,6 +110,8 @@ func (w *RunWatch) Sweep() {
 		if answer == "" && !denied.EndsTurn {
 			continue
 		}
+		// the comment the person reads keeps the end, the answer; the next stage's {previous} gets it whole
+		full := answer
 		if rs := []rune(answer); len(rs) > 6000 {
 			answer = "…" + string(rs[len(rs)-6000:]) // the end is the answer
 		}
@@ -133,7 +135,7 @@ func (w *RunWatch) Sweep() {
 				stage = "the pipeline stops: " + why
 			}
 		case r.Pipeline == PipelineOn:
-			stage, moved, handled = w.onStageAnswer(r, answer)
+			stage, moved, handled = w.onStageAnswer(r, full)
 		}
 		_ = w.Store.SetRun(r.ID, RunFinished, id)
 		r.State, r.Finished = RunFinished, now().UTC().Format(time.RFC3339)
