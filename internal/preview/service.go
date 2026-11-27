@@ -53,6 +53,7 @@ type entry struct {
 	srv   *http.Server
 	last  atomic.Int64 // when it was last asked, in Unix nanoseconds
 	holds atomic.Int64 // requests being answered now, an upgraded one for as long as its connection lasts
+	socks hijacked     // the upgrades, which net/http no longer closes for us
 }
 
 func key(machine string, port int) string { return machine + "|" + strconv.Itoa(port) }
@@ -83,7 +84,7 @@ func (s *Service) Open(machine string, port int, dial func() (string, error), ho
 	e := &entry{Preview: Preview{Machine: machine, Port: port, Local: local, URL: url, Opened: time.Now()}}
 	e.last.Store(time.Now().UnixNano())
 	seen := func() { e.last.Store(time.Now().UnixNano()) }
-	e.srv = &http.Server{Handler: Guarded(s.Allow, signIn, Proxy(dial, port, url, seen, &e.holds)), ReadHeaderTimeout: 10 * time.Second}
+	e.srv = &http.Server{Handler: keepHijacked(Guarded(s.Allow, signIn, Proxy(dial, port, url, seen, &e.holds)), &e.socks), ReadHeaderTimeout: 10 * time.Second}
 	go func() { _ = e.srv.Serve(ln) }()
 	s.open[key(machine, port)] = e
 	s.sweep.Do(func() { go s.closeIdle(s.stop) })
@@ -150,6 +151,7 @@ func (s *Service) Close(machine string, port int) bool {
 		return false
 	}
 	_ = e.srv.Close()
+	e.socks.closeAll()
 	return true
 }
 
@@ -166,6 +168,7 @@ func (s *Service) CloseMachine(machine string) {
 	s.mu.Unlock()
 	for _, e := range gone {
 		_ = e.srv.Close()
+		e.socks.closeAll()
 	}
 }
 
@@ -182,6 +185,7 @@ func (s *Service) Shutdown() {
 	s.mu.Unlock()
 	for _, e := range open {
 		_ = e.srv.Close()
+		e.socks.closeAll()
 	}
 }
 
@@ -212,5 +216,6 @@ func (s *Service) closeIdleAt(now time.Time) {
 	s.mu.Unlock()
 	for _, e := range gone {
 		_ = e.srv.Close()
+		e.socks.closeAll()
 	}
 }

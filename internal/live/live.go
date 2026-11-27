@@ -191,25 +191,48 @@ func (h *Hub) Tick(now time.Time) {
 		}
 	}
 	h.mu.Unlock()
-	keys := make([]string, 0, len(due))
+	// one machine's reads go together, and the machines go at once: a wall of panes on one hung machine must not hold
+	// every page's events behind it
+	byMachine := map[string][]string{}
 	for key := range due {
+		machine, pane, _ := strings.Cut(key, "|")
+		byMachine[machine] = append(byMachine[machine], pane)
+	}
+	versions := make(map[string]string, len(due))
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	for machine, panes := range byMachine {
+		wg.Add(1)
+		go func(machine string, panes []string) {
+			defer wg.Done()
+			for _, pane := range panes {
+				version, ok := h.in.Version(machine, pane)
+				if !ok {
+					version = ""
+				}
+				mu.Lock()
+				versions[Key(machine, pane)] = version
+				mu.Unlock()
+			}
+		}(machine, panes)
+	}
+	wg.Wait()
+	keys := make([]string, 0, len(versions))
+	for key := range versions {
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
+	h.mu.Lock()
 	for _, key := range keys {
 		machine, pane, _ := strings.Cut(key, "|")
-		version, ok := h.in.Version(machine, pane)
-		if !ok {
-			version = ""
-		}
-		h.mu.Lock()
+		version := versions[key]
 		last, seen := h.checks[key]
 		h.checks[key] = paneCheck{version: version, at: now}
 		if seen && version != last.version {
 			h.broadcastLocked(Event{Topic: "chat", Machine: machine, Pane: pane, Version: version}, func(s *Subscription) bool { return s.panes[key] })
 		}
-		h.mu.Unlock()
 	}
+	h.mu.Unlock()
 	h.forgetUnwatchedLocked()
 }
 
