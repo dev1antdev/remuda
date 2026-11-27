@@ -188,8 +188,8 @@ func summaryScript(dir, baselineHead string) string {
 		`printf '%s\n' "$root"; git rev-parse --abbrev-ref HEAD 2>/dev/null; git rev-parse HEAD 2>/dev/null; printf '\036\n'; ` +
 		`base=` + script.Quote(baselineHead) + `; if [ -n "$base" ] && git cat-file -e "$base^{commit}" 2>/dev/null; then :; else base=HEAD; fi; ` +
 		`if [ "$base" != HEAD ]; then git log --first-parent -n ` + strconv.Itoa(maxCommits) + ` --format='%h%x1f%s%x1f%ct' "$base"..HEAD 2>/dev/null; fi; printf '\036\n'; ` +
-		readGit + ` diff --no-renames --relative --numstat HEAD 2>/dev/null; printf '\036\n'; ` +
-		readGit + ` ls-files --others --exclude-standard 2>/dev/null; printf '\036\n'; ` +
+		readGit + ` -c core.quotepath=off diff --no-renames --relative --numstat -z HEAD 2>/dev/null | tr '\0' '\n'; printf '\036\n'; ` +
+		readGit + ` -c core.quotepath=off ls-files --others --exclude-standard -z 2>/dev/null | tr '\0' '\n'; printf '\036\n'; ` +
 		blobsScript() + `; printf '\036\n'; ` +
 		`if [ "$base" != HEAD ]; then git -c core.quotepath=off log --first-parent -n ` + strconv.Itoa(maxCommits) + ` --raw --no-renames --no-abbrev --relative --format='%H' "$base"..HEAD 2>/dev/null; fi; printf '\036\n'; ` +
 		`if [ "$base" != HEAD ]; then git rev-list --count --first-parent "$base"..HEAD 2>/dev/null; fi; printf '\036\n'; ` +
@@ -201,7 +201,7 @@ func summaryScript(dir, baselineHead string) string {
 // Paths are relative to the folder; a rename is a deletion plus an addition. The tracked files are numstat's: unlike
 // --name-only, it leaves out a file only touched without git refreshing its stat in the index (readGit).
 func blobsScript() string {
-	return `{ ` + readGit + ` diff --no-renames --relative --numstat HEAD 2>/dev/null | cut -f3-; ` + readGit + ` ls-files --others --exclude-standard 2>/dev/null; } | ` +
+	return `{ ` + readGit + ` -c core.quotepath=off diff --no-renames --relative --numstat -z HEAD 2>/dev/null | tr '\0' '\n' | cut -f3-; ` + readGit + ` -c core.quotepath=off ls-files --others --exclude-standard -z 2>/dev/null | tr '\0' '\n'; } | ` +
 		`{ t=$(mktemp 2>/dev/null) || t=/tmp/remuda-blobs.$$; : > "$t"; while IFS= read -r f; do if [ -f "$f" ]; then printf '%s\n' "$f" >> "$t"; else printf '%s\037gone\n' "$f"; fi; done; ` +
 		`while IFS= read -r f; do h=$(git -c core.quotepath=off hash-object -- "$f" 2>/dev/null) && printf '%s\037%s\n' "$f" "$h"; done < "$t"; rm -f "$t"; }`
 }
@@ -306,7 +306,7 @@ func (store *Store) Summary(host shell.Host, dir string) Summary {
 		}
 	}
 	for _, line := range strings.Split(strings.TrimRight(sections[2], "\n"), "\n") {
-		fields := strings.Split(line, "\t")
+		fields := strings.SplitN(line, "\t", 3)
 		if len(fields) != 3 {
 			continue
 		}

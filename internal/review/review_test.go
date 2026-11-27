@@ -235,3 +235,51 @@ func realPath(t *testing.T, p string) string {
 	}
 	return real
 }
+<<<<<<< Updated upstream
+||||||| Stash base
+
+func TestADiffPastTheReadSaysItWasCut(t *testing.T) {
+	if text, truncated := cut(strings.Repeat("x", maxDiff)); truncated || len(text) != maxDiff {
+		t.Fatalf("a diff at the bound: %d %v", len(text), truncated)
+	}
+	if text, truncated := cut(strings.Repeat("x", maxDiff+1)); !truncated || len(text) != maxDiff {
+		t.Fatalf("a diff past it: %d %v", len(text), truncated)
+	}
+}
+=======
+
+func TestADiffPastTheReadSaysItWasCut(t *testing.T) {
+	if text, truncated := cut(strings.Repeat("x", maxDiff)); truncated || len(text) != maxDiff {
+		t.Fatalf("a diff at the bound: %d %v", len(text), truncated)
+	}
+	if text, truncated := cut(strings.Repeat("x", maxDiff+1)); !truncated || len(text) != maxDiff {
+		t.Fatalf("a diff past it: %d %v", len(text), truncated)
+	}
+}
+
+func TestAnUntrackedNameWithAQuoteIsOneFileAndItsBlob(t *testing.T) {
+	dir, git, write := scratchCheckout(t)
+	write("plain.txt", "one\n")
+	git("add", "plain.txt")
+	git("commit", "-qm", "one")
+	write(`q"uote.txt`, "two\n")
+	summary := New(t.TempDir()).Summary(shell.Local{Name: "local"}, dir)
+	paths := []string{}
+	for _, file := range summary.Files {
+		paths = append(paths, file.Path)
+	}
+	if len(paths) != 1 || paths[0] != `q"uote.txt` || !summary.Files[0].Untracked {
+		t.Fatalf("the untracked file: %q %+v", paths, summary.Files)
+	}
+	if _, err := os.Stat(filepath.Join(dir, `q"uote.txt`)); err != nil {
+		t.Fatal(err)
+	}
+	_, blobs, err := Snapshot(shell.Local{Name: "local"}, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hash := blobs[`q"uote.txt`]; hash == "" || hash == "gone" {
+		t.Fatalf("its blob: %q in %v", hash, blobs)
+	}
+}
+>>>>>>> Stashed changes
