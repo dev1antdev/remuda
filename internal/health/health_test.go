@@ -3,6 +3,9 @@ package health
 import (
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/dev1antdev/remuda/internal/state"
 )
 
 func TestParse(t *testing.T) {
@@ -125,5 +128,32 @@ func TestParseReadsCodeServer(t *testing.T) {
 	r = Parse("os=macOS 26\n")
 	if r.CodeServer != "" {
 		t.Fatalf("code_server without the link = %q", r.CodeServer)
+	}
+}
+
+func TestForgettingAMachineDropsItsVitalsAndItsDay(t *testing.T) {
+	dir := t.TempDir()
+	c := New(dir, nil, "", false)
+	c.mu.Lock()
+	c.reports["box"] = &Report{At: time.Now()}
+	c.history["box"] = []Sample{{At: time.Now(), Load: 1, DiskFree: 50}}
+	c.history["roof"] = []Sample{{At: time.Now(), Load: 2, DiskFree: 40}}
+	c.mu.Unlock()
+	c.Forget("box")
+	if c.Report("box") != nil {
+		t.Fatal("the removed machine's report stayed")
+	}
+	if _, ok := c.history["box"]; ok {
+		t.Fatal("the removed machine's samples stayed")
+	}
+	if _, ok := c.history["roof"]; !ok {
+		t.Fatal("another machine's samples went with it")
+	}
+	kept := history{}
+	if err := state.LoadJSON(dir, HistoryFile, &kept); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := kept["box"]; ok {
+		t.Fatal("the removed machine is still on disk")
 	}
 }
