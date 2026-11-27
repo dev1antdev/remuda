@@ -107,9 +107,9 @@ export default function Overlays() {
       {panel === "release" && host && <UpdatesDialog machine={host} what="remuda-release" onClose={actions.closePanel} />}
       {dialog?.kind === "update-everywhere" && <EverywhereDialog onClose={actions.closeDialog} />}
       {dialog?.kind === "fleet-setup" && <FleetDialog onClose={actions.closeDialog} />}
-      {panel === "alerts" && <AlertsPanel onClose={actions.closePanel} />}
+      {panel === "alerts" && !viewOnly && <AlertsPanel onClose={actions.closePanel} />}
       {panel === "activity" && <Activity onClose={actions.closePanel} />}
-      {panel === "search" && <Search machines={machines} initial={search} onClose={actions.closePanel} onOpen={openHit} onOpenScreen={openScreenHit} />}
+      {panel === "search" && !viewOnly && <Search machines={machines} initial={search} onClose={actions.closePanel} onOpen={openHit} onOpenScreen={openScreenHit} />}
       {panel === "arena" && <ArenaPanel onClose={actions.closePanel} />}
       {panel === "pr" && !viewOnly && <PRPanel onClose={actions.closePanel} />}
       {panel === "issues" && !viewOnly && <IssuesPanel onClose={actions.closePanel} />}

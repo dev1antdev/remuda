@@ -32,6 +32,19 @@ export function unsafeAttribute(name: string, value: string): boolean {
   return SCRIPT_URL.test(value.replace(URL_NOISE, "").toLowerCase());
 }
 
+// unsafeStyle says whether a drawn element's style could fetch something or run: a url() to anywhere but an id in
+// the same drawing, an expression, an @import or a behavior
+export function unsafeStyle(value: string): boolean {
+  const style = value.replace(URL_NOISE, "").toLowerCase();
+  return /url\((?!['"]?#)/.test(style) || style.includes("expression(") || style.includes("@import") || style.includes("behavior:");
+}
+
+// unsafeHref says whether a link names anything but an id in the drawing or an inline image
+export function unsafeHref(value: string): boolean {
+  const href = value.replace(URL_NOISE, "").trim().toLowerCase();
+  return href !== "" && !href.startsWith("#") && !href.startsWith("data:image/");
+}
+
 // flavorOf reads the root's data-flavor, Frappé when it names none of the twenty
 export function flavorOf(value: string | undefined): Flavor {
   return isFlavor(value) ? value : DEFAULT_DARK;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { FLAVORS } from "@/lib/theme";
-import { flavorOf, isMarkdownFile, isMermaid, isMermaidFile, lookOf, mermaidConfig, opensDrawn, previewOf, unsafeAttribute } from "./mermaidLook";
+import { unsafeHref, unsafeStyle, flavorOf, isMarkdownFile, isMermaid, isMermaidFile, lookOf, mermaidConfig, opensDrawn, previewOf, unsafeAttribute } from "./mermaidLook";
 
 describe("which fences and files are diagrams", () => {
   it("reads a fence's first word, any case", () => {
@@ -76,5 +76,22 @@ describe("unsafeAttribute", () => {
     expect(unsafeAttribute("class", "node default flowchart-label")).toBe(false);
     expect(unsafeAttribute("d", "M0,0 L10,10")).toBe(false);
     expect(unsafeAttribute("style", "max-width: 640px;")).toBe(false);
+  });
+});
+
+describe("the diagram sanitiser's own rules", () => {
+  it("lets a style that names an id in the drawing and refuses one that fetches", () => {
+    expect(unsafeStyle("fill: url(#grad); stroke: red")).toBe(false);
+    expect(unsafeStyle("fill: url(https://evil.example/x.svg#a)")).toBe(true);
+    expect(unsafeStyle("background: url('http://evil.example')")).toBe(true);
+    expect(unsafeStyle("behavior: url(#default#time2)")).toBe(true);
+    expect(unsafeStyle("width: expression(alert(1))")).toBe(true);
+  });
+  it("lets a link inside the drawing or an inline image, and no other", () => {
+    expect(unsafeHref("#node")).toBe(false);
+    expect(unsafeHref("data:image/png;base64,AAAA")).toBe(false);
+    expect(unsafeHref("https://evil.example/x")).toBe(true);
+    expect(unsafeHref("java\tscript:alert(1)")).toBe(true);
+    expect(unsafeHref("")).toBe(false);
   });
 });
