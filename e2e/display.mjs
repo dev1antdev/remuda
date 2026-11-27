@@ -3172,9 +3172,10 @@ async function terminalWrapFind() {
   if (!(await until(async () => /(^|\D)1(\D|$)/.test(await counted()), 8))) failed(`the find does not cross the wrap on the screen: ${JSON.stringify(await counted())}`);
   await key("Escape", "Escape");
 
-  // past the 2000 rows xterm keeps, so the word is only in the core's own history and the find must read it there
-  await submit("seq 1 2600; echo WRAPFIND-DONE");
-  if (!(await until(async () => /WRAPFIND-DONE/.test(await screenOf(pane)), 20))) failed("the rows that push the word out of the page's scrollback never came");
+  // past the 2000 rows xterm keeps, so the word is only in the core's own history and the find must read it there;
+  // the marker is computed, so the command's own echo does not stand for its output
+  await submit("seq 1 2600; echo $((1234+1))");
+  if (!(await until(async () => /(^|\s)1235(\s|$)/m.test(await screenOf(pane)), 30))) failed("the rows that push the word out of the page's scrollback never came");
   await find();
   const older = await until(() => evaluate(`[...document.querySelectorAll(".toast")].some((toast) => /older rows|старых строках/.test(toast.textContent || ""))`), 10);
   if (!older) {
