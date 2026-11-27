@@ -16,3 +16,10 @@ export const plural = (count: number, word: string) => tn(count, `{n} ${word}`, 
 export function shellQuote(p: string): string {
   return /^[\w./-]+$/.test(p) ? p : "'" + p.replace(/'/g, "'\\''") + "'";
 }
+
+// leftAfterSend is a draft once the text sent went through: nothing when it did not change meanwhile, what was typed
+// after it when the person kept writing while the request was out, the draft whole when they rewrote it
+export function leftAfterSend(draft: string, sent: string): string {
+  if (draft === sent) return "";
+  return draft.startsWith(sent) ? draft.slice(sent.length).replace(/^\s+/, "") : draft;
+}
