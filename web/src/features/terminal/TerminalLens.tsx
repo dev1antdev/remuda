@@ -87,11 +87,11 @@ export function useTerminalViewItems(pane: Pane): MenuItem[] {
   return [
     { heading: t("Size") },
     { label: t("Resize the pane to this screen"), hint: t("the pane takes the size of the viewer that last acted"), checked: sizeMode === "fit", onSelect: () => setSizeMode("fit") },
-    { label: `Keep the pane's own size (${pane.cols}×${pane.rows})`, hint: t("a smaller font to fit the width, scrolling when it cannot"), checked: sizeMode === "keep", onSelect: () => setSizeMode("keep") },
+    { label: t("Keep the pane's own size ({cols}×{rows})", { cols: pane.cols, rows: pane.rows }), hint: t("a smaller font to fit the width, scrolling when it cannot"), checked: sizeMode === "keep", onSelect: () => setSizeMode("keep") },
     { heading: t("Minimum width") },
     ...MIN_WIDTHS.map((n) => ({ label: n ? t("At least {n} columns", { n }) : t("Fit the screen"), hint: n ? (n === minCols ? t("a narrower screen scrolls sideways") : undefined) : undefined, checked: n === minCols, disabled: sizeMode !== "fit", onSelect: () => setMinCols(n) })),
     { sep: true },
-    { label: t("Selection mode"), icon: "text-select", hint: selectMode ? t("drag selects and copies; off gives the mouse back to the agent") : "drag selects and copies text (or hold Option/Alt while dragging)", checked: selectMode, onSelect: () => terminal.set({ selectMode: !selectMode }) },
+    { label: t("Selection mode"), icon: "text-select", hint: selectMode ? t("drag selects and copies; off gives the mouse back to the agent")  : t("drag selects and copies text (or hold Option/Alt while dragging)"), checked: selectMode, onSelect: () => terminal.set({ selectMode: !selectMode }) },
     { sep: true },
     ...textSize,
     { sep: true },

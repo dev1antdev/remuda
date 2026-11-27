@@ -30,6 +30,8 @@ export const terminal: Dictionary = {
   "Resize the pane to this screen": "Подогнать панель под этот экран",
   Right: "Вправо",
   "Search history": "История поиска",
+  "Keep the pane's own size ({cols}×{rows})": "Держать размер панели ({cols}×{rows})",
+  "drag selects and copies text (or hold Option/Alt while dragging)": "перетаскивание выделяет и копирует текст (или удерживайте Option/Alt при перетаскивании)",
   "Selection mode": "Режим выделения",
   Size: "Размер",
   "Smaller text": "Мельче текст",

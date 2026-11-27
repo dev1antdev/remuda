@@ -5,7 +5,7 @@
 
 import { memo, useMemo, useRef, useState } from "react";
 import { langOf, splitTokens, type Token } from "@/lib/highlight";
-import { plural } from "@/lib/text";
+import { t, tn } from "@/lib/i18n";
 import { Icon, Tip } from "@/ui";
 import { tokenNodes } from "@/ui/Tokens";
 import { gapAbove, gapBelow, gapLength, surround, UNFOLD_STEP, type Unfold } from "./context";
@@ -15,7 +15,6 @@ import { changedSpan, pairRows, partners, rowsOf, rowTokens, type DiffHunk, type
 import { onRow } from "./opinion";
 import { OpinionNote } from "./OpinionNote";
 import { onSecretRow, type SecretFinding } from "./secrets";
-import { t } from "@/lib/i18n";
 
 export type NewComment = Omit<DraftComment, "id" | "file">;
 
@@ -138,7 +137,7 @@ export const Hunk = memo(function Hunk({ hunk, prev, next, index, split, canComm
       {leftBelow !== 0 && (
         <div className="fv-line hunk hunk-foot">
           <UnfoldStep side="below" left={leftBelow} blocked={blocked} onClick={() => onUnfold(index, "below", UNFOLD_STEP)} />
-          <span className="fv-src">{leftBelow === null ? t("the rest of the file") : t("{lines} to the end of the file", { lines: plural(leftBelow, "line") })}</span>
+          <span className="fv-src">{leftBelow === null ? t("the rest of the file") : tn(leftBelow, "1 line to the end of the file", "{n} lines to the end of the file")}</span>
           <UnfoldAll left={leftBelow} blocked={blocked} onClick={() => onUnfold(index, "below", Infinity)} />
         </div>
       )}
@@ -149,7 +148,7 @@ export const Hunk = memo(function Hunk({ hunk, prev, next, index, split, canComm
 // UnfoldStep is the button at a hunk's edge for ten more lines of the gap there; it stays, disabled, when the file's lines cannot be had
 function UnfoldStep({ side, left, blocked, onClick }: { side: "above" | "below"; left: number | null; blocked: string | null; onClick: () => void }) {
   if (left === 0) return <span className="hunk-unfold" />;
-  const what = `${plural(Math.min(UNFOLD_STEP, left ?? UNFOLD_STEP), "more line")} ${side}`;
+  const what = tn(Math.min(UNFOLD_STEP, left ?? UNFOLD_STEP), `1 more line ${side}`, `{n} more lines ${side}`);
   return (
     <span className="hunk-unfold">
       <Tip text={blocked ?? what}>
@@ -166,7 +165,7 @@ function UnfoldAll({ left, blocked, onClick }: { left: number | null; blocked: s
   if (left === 0) return null;
   return (
     <button type="button" className="linkish hunk-unfold-all" aria-disabled={blocked ? true : undefined} title={blocked ?? undefined} onClick={blocked ? undefined : onClick}>
-      {left === null ? t("all") : t("all {lines}", { lines: plural(left, "line") })}
+      {left === null ? t("all") : tn(left, "all {n} line", "all {n} lines")}
     </button>
   );
 }
