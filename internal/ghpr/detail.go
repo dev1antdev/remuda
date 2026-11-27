@@ -72,7 +72,8 @@ type Detail struct {
 	Mergeable      string     `json:"mergeable"`
 	MergeState     string     `json:"merge_state"` // CLEAN, BLOCKED, BEHIND, DIRTY, UNSTABLE, HAS_HOOKS, DRAFT, UNKNOWN
 	AutoMerge      bool       `json:"auto_merge"`
-	MergeMethods   []string   `json:"merge_methods"` // what the repository allows: merge, squash, rebase
+	DeleteBranch   bool       `json:"delete_branch_on_merge"` // the repository deletes a branch when its pull request merges
+	MergeMethods   []string   `json:"merge_methods"`          // what the repository allows: merge, squash, rebase
 	AutoAllowed    bool       `json:"auto_allowed"`
 	Repository     string     `json:"repository"`
 	Viewer         string     `json:"viewer"`
@@ -89,7 +90,7 @@ const pageInfo = `pageInfo{hasNextPage endCursor}`
 
 const detailQuery = `query($owner:String!,$name:String!,$number:Int!,$comments:String,$reviews:String,$threads:String,$checks:String){
 viewer{login}
-repository(owner:$owner,name:$name){nameWithOwner mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed autoMergeAllowed
+repository(owner:$owner,name:$name){nameWithOwner mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed autoMergeAllowed deleteBranchOnMerge
 pullRequest(number:$number){id number title url body state isDraft headRefName baseRefName headRefOid changedFiles additions deletions author{login} reviewDecision mergeable mergeStateStatus autoMergeRequest{enabledAt}
 comments(first:100,after:$comments){` + pageInfo + ` nodes{id body url createdAt author{login}}}
 reviews(first:100,after:$reviews){` + pageInfo + ` nodes{id body url submittedAt state author{login}}}
@@ -100,12 +101,13 @@ commits(last:1){nodes{commit{statusCheckRollup{contexts(first:100,after:$checks)
 type detailData struct {
 	Viewer     login `json:"viewer"`
 	Repository *struct {
-		NameWithOwner      string `json:"nameWithOwner"`
-		MergeCommitAllowed bool   `json:"mergeCommitAllowed"`
-		SquashMergeAllowed bool   `json:"squashMergeAllowed"`
-		RebaseMergeAllowed bool   `json:"rebaseMergeAllowed"`
-		AutoMergeAllowed   bool   `json:"autoMergeAllowed"`
-		PullRequest        *struct {
+		NameWithOwner       string `json:"nameWithOwner"`
+		DeleteBranchOnMerge bool   `json:"deleteBranchOnMerge"`
+		MergeCommitAllowed  bool   `json:"mergeCommitAllowed"`
+		SquashMergeAllowed  bool   `json:"squashMergeAllowed"`
+		RebaseMergeAllowed  bool   `json:"rebaseMergeAllowed"`
+		AutoMergeAllowed    bool   `json:"autoMergeAllowed"`
+		PullRequest         *struct {
 			ID               string `json:"id"`
 			Number           int    `json:"number"`
 			Title            string `json:"title"`
@@ -178,7 +180,7 @@ func ReadDetail(host shell.Shell, repo Repo, number int) (Detail, error) {
 		if round == 0 {
 			d = Detail{ID: pr.ID, Number: pr.Number, Title: pr.Title, URL: pr.URL, Body: pr.Body, State: pr.State, Draft: pr.IsDraft, Author: who(pr.Author), Head: pr.HeadRefName, Base: pr.BaseRefName, HeadOid: pr.HeadRefOid,
 				ChangedFiles: pr.ChangedFiles, Additions: pr.Additions, Deletions: pr.Deletions, ReviewDecision: pr.ReviewDecision, Mergeable: pr.Mergeable, MergeState: pr.MergeStateStatus, AutoMerge: pr.AutoMergeRequest != nil,
-				AutoAllowed: data.Repository.AutoMergeAllowed, Repository: data.Repository.NameWithOwner, Viewer: data.Viewer.Login,
+				AutoAllowed: data.Repository.AutoMergeAllowed, DeleteBranch: data.Repository.DeleteBranchOnMerge, Repository: data.Repository.NameWithOwner, Viewer: data.Viewer.Login,
 				Comments: []Comment{}, Reviews: []Comment{}, Threads: []Thread{}, Checks: []Check{}, Reviewers: []Reviewer{}, MergeMethods: []string{}}
 			for _, m := range []struct {
 				allowed bool

@@ -45,6 +45,7 @@ export default function ConfirmCard({ machineId, pr, action, onDone, onCancel }:
           <textarea rows={5} value={message} onChange={(e) => setMessage(e.target.value)} />
         </label>
       )}
+      {merges(action) && pr.delete_branch_on_merge && <p className="pr-delete-branch">{t("GitHub deletes this branch when the pull request merges.")}</p>}
       {moved && <Notice tone="warn">{t("A newer push came in since you opened this: cancel, look at it, then choose again.")}</Notice>}
       {error && <Notice tone="error">{error}</Notice>}
       <div className="modal-actions">
