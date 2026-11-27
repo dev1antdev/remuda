@@ -73,7 +73,7 @@ const git = script.ReadGit
 // its D line alone.
 func originsScript(dirs []string) string {
 	var b strings.Builder
-	b.WriteString(script.PATH + "\n")
+	b.WriteString(script.PATH + "\nexport GH_HOST=github.com\n")
 	b.WriteString("for d in")
 	for _, d := range dirs {
 		b.WriteString(" " + script.Quote(d))

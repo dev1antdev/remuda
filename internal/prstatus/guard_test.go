@@ -27,7 +27,7 @@ func TestEveryMessageEndsWithTheGuard(t *testing.T) {
 
 func TestAFailedCheckGoesOverAsItsCommandAndAShortTail(t *testing.T) {
 	checks, _ := ParseChecks(checksJSON)
-	if got := checks[1].ReadCommand(); got != "gh run view 40693613487 --job 1229 --log-failed -R github.com/o/r" {
+	if got := checks[1].ReadCommand(); got != "gh run view 40693613487 --job 1229 --log-failed -R 'github.com/o/r'" {
 		t.Fatalf("command = %q", got)
 	}
 	if checks[4].ReadCommand() != "" {

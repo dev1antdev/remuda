@@ -40,7 +40,7 @@ func ProbeScript(url, etag string) string {
 		call += " -H " + script.Quote("If-None-Match: "+etag)
 	}
 	path := fmt.Sprintf("repos/%s/%s/pulls/%d", owner, repo, number)
-	return script.PATH + "\n" + call + " " + script.Quote(path) + ` 2>&1 | awk '{ sub(/\r$/, "") } $0 == "" { exit } { print }'`
+	return script.PATH + "\nexport GH_HOST=github.com\n" + call + " " + script.Quote(path) + ` 2>&1 | awk '{ sub(/\r$/, "") } $0 == "" { exit } { print }'`
 }
 
 var statusLine = regexp.MustCompile(`^HTTP/\S+ (\d{3})`)

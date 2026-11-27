@@ -78,7 +78,7 @@ func ghScript(args []string, input, inputFile, keep string) string {
 	if input != "" && inputFile == "" {
 		call += " <<'REMUDA_INPUT'\n" + input + "\nREMUDA_INPUT"
 	}
-	return script.PATH + "\n" + head + `command -v gh >/dev/null 2>&1 || { printf '\036nogh\n'; exit 0; }
+	return script.PATH + "\nexport GH_HOST=github.com\n" + head + `command -v gh >/dev/null 2>&1 || { printf '\036nogh\n'; exit 0; }
 err=$(mktemp 2>/dev/null || echo "${TMPDIR:-/tmp}/remuda-gh.$$")
 ` + call + `
 code=$?

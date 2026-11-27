@@ -59,7 +59,7 @@ func ReviewScript(url string) string {
 		return ""
 	}
 	comments := fmt.Sprintf("repos/%s/%s/pulls/%d/comments?per_page=100", owner, repo, number)
-	return script.PATH + "\ngh pr view " + script.Quote(url) + " --json reviews 2>&1; printf '\\036\\n'; gh api " + script.Quote(comments) + " 2>&1"
+	return script.PATH + "\nexport GH_HOST=github.com\ngh pr view " + script.Quote(url) + " --json reviews 2>&1; printf '\\036\\n'; gh api " + script.Quote(comments) + " 2>&1"
 }
 
 type ghReview struct {

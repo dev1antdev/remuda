@@ -70,7 +70,7 @@ func (c Check) ReadCommand() string {
 	}
 	cmd += " --log-failed"
 	if repo := c.RunRepo(); repo != "" {
-		cmd += " -R " + repo
+		cmd += " -R " + script.Quote(repo)
 	}
 	return cmd
 }
@@ -95,7 +95,7 @@ func (c Check) RunRepo() string {
 
 // ChecksScript lists a request's checks on the pane's machine.
 func ChecksScript(url string) string {
-	return script.PATH + "\ngh pr checks " + script.Quote(url) + " --json name,state,link,bucket,workflow 2>&1"
+	return script.PATH + "\nexport GH_HOST=github.com\ngh pr checks " + script.Quote(url) + " --json name,state,link,bucket,workflow 2>&1"
 }
 
 // ParseChecks reads gh pr checks' JSON; anything else is the error's text.
@@ -137,7 +137,7 @@ func LogScript(repo, runID string) string {
 	if repo != "" {
 		where = "-R " + script.Quote(repo) + " "
 	}
-	return script.PATH + "\ngh run view " + where + script.Quote(runID) + " --log-failed 2>&1" + lastOfLog
+	return script.PATH + "\nexport GH_HOST=github.com\ngh run view " + where + script.Quote(runID) + " --log-failed 2>&1" + lastOfLog
 }
 
 var ansi = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]`)

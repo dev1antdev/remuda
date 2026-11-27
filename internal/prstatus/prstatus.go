@@ -349,7 +349,7 @@ const (
 // answers that a field is unknown.
 func Script(url string) string {
 	view := "gh pr view " + script.Quote(url) + " --json "
-	return script.PATH + "\nout=$(" + view + viewMore + " 2>&1)\ncase $out in *'Unknown JSON field'*) out=$(" + view + viewFields + " 2>&1) ;; esac\nprintf '%s\\n' \"$out\""
+	return script.PATH + "\nexport GH_HOST=github.com\nout=$(" + view + viewMore + " 2>&1)\ncase $out in *'Unknown JSON field'*) out=$(" + view + viewFields + " 2>&1) ;; esac\nprintf '%s\\n' \"$out\""
 }
 
 type rollupItem struct {
