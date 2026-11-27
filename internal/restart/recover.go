@@ -219,6 +219,8 @@ func (m *Memory) observe(e events.Snapshot) bool {
 			stopped = append(stopped, herdrStopped(paneID, c))
 			continue
 		case onCore && !c.Core: // an agent of the core is on its session again
+		case e.First:
+			continue // a machine's first snapshot back may not list its panes yet: nothing is closed on it
 		default:
 			m.noteClosedLocked(e.Machine, key, paneID, c, e.At)
 			closed = true
