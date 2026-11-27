@@ -3186,7 +3186,14 @@ async function terminalWrapFind() {
   const older = await until(() => evaluate(`[...document.querySelectorAll(".toast")].some((toast) => /older rows|старых строках/.test(toast.textContent || ""))`), 10);
   if (!older) {
     const toasts = await evaluate(`[...document.querySelectorAll(".toast")].map((toast) => toast.textContent || "")`);
-    failed(`the find does not say the wrapped word is in the rows above the screen: ${JSON.stringify(await counted())} toasts ${JSON.stringify(toasts)}`);
+    // what the core's rows hold: the marker far above the screen, and each half of the word, say whether the rows are
+    // missing from the read or the wrap between them was lost
+    const found = {};
+    for (const q of ["1235", "SPLI", "TWORD", word]) {
+      const answer = await api("GET", `/api/scrollback?pane=${encodeURIComponent(pane)}&lines=5000&q=${encodeURIComponent(q)}`).catch(() => null);
+      found[q] = answer ? { matches: answer.matches?.length ?? 0, rows: answer.rows, truncated: answer.truncated } : null;
+    }
+    failed(`the find does not say the wrapped word is in the rows above the screen: ${JSON.stringify(await counted())} toasts ${JSON.stringify(toasts)} read ${JSON.stringify(found)}`);
   }
   await key("Escape", "Escape");
 }
