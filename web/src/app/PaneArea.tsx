@@ -187,7 +187,7 @@ export default function PaneArea({ current }: { current: Located | null }) {
             {lens === "terminal" && !viewOnly && <FindTool what={tr("in the scrollback")} shortcut={isMac ? "⌘F" : "Ctrl+Shift+F"} note={tr("A full-screen program keeps its own history: only its screen is found.")} />}
             {lens === "terminal" && !viewOnly && <TerminalTools />}
             {lens === "chat" && <ChatTools />}
-            {!viewOnly && (session.worktree || session.branch) && session.folder && <RunButton machineId={machine.id} workspace={session.id} pane={pane.id} root={session.folder} masked={share.sessionHidden(machine.id, session)} />}
+            {!viewOnly && (session.worktree || session.branch) && session.folder && <RunButton key={machine.id + "|" + session.folder} machineId={machine.id} workspace={session.id} pane={pane.id} root={session.folder} masked={share.sessionHidden(machine.id, session)} />}
             <ViewMenu items={lens === "terminal" && !viewOnly ? terminalItems : lens === "chat" ? chatItems : []} shell={!pane.agent} />
           </>
         }

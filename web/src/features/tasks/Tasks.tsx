@@ -45,6 +45,14 @@ const SMART: { id: Smart; label: string; icon: IconName }[] = [
 
 const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
+// validSel keeps a stored choice this build can show: a smart list it knows, or a project's id
+function validSel(sel: Sel | null | undefined): Sel {
+  if (!sel || typeof sel !== "object") return { kind: "smart", id: "today" };
+  if (sel.kind === "smart") return SMART.some((s) => s.id === sel.id) ? sel : { kind: "smart", id: "today" };
+  if (sel.kind === "project" && Number.isFinite(sel.id) && sel.id > 0) return sel;
+  return { kind: "smart", id: "today" };
+}
+
 export default function Tasks() {
   const drawer = app.use((s) => s.drawer);
   const { machines, budgets, agents: rosterAgents, jiraSite } = useRoster();
@@ -52,7 +60,9 @@ export default function Tasks() {
   const agents = useAgentTargets();
   const located = useCurrent();
   const currentPane = located ? { machineId: located.machine.id, paneId: located.pane.id } : null;
-  const [sel, setSel] = usePref<Sel>("tasks.sel", { kind: "smart", id: "today" });
+  // a pref saved by another build (a smart list this one no longer has) must not take the page down: it reads as today
+  const [storedSel, setSel] = usePref<Sel>("tasks.sel", { kind: "smart", id: "today" });
+  const sel = validSel(storedSel);
   const [showDone, setShowDone] = usePref("tasks.showDone", false);
   const [view, setView] = usePref<"list" | "board">("tasks.view", "board");
   const [settings, setSettings] = useState(false);
