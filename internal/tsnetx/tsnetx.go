@@ -38,9 +38,10 @@ func quietLogf(format string, args ...any) {
 
 // Node is the running tsnet server.
 type Node struct {
-	srv *tsnet.Server
-	mu  sync.Mutex
-	st  Status
+	srv  *tsnet.Server
+	mu   sync.Mutex
+	st   Status
+	done chan struct{}
 }
 
 // Start joins the tailnet in the background and serves h over HTTPS on :443 (:80 redirects) once the node is up; it returns at once.
@@ -53,7 +54,8 @@ func Start(stateDir, hostname, authKey string, h http.Handler) *Node {
 			Logf:     quietLogf,
 			UserLogf: func(string, ...any) {},
 		},
-		st: Status{State: "starting", Hostname: hostname},
+		st:   Status{State: "starting", Hostname: hostname},
+		done: make(chan struct{}),
 	}
 	go n.run(h)
 	return n
@@ -73,7 +75,14 @@ func (n *Node) Status() Status {
 }
 
 // Close leaves the tailnet.
-func (n *Node) Close() error { return n.srv.Close() }
+func (n *Node) Close() error {
+	select {
+	case <-n.done:
+	default:
+		close(n.done)
+	}
+	return n.srv.Close()
+}
 
 // ErrNotRunning is a listener asked for before the node is on the tailnet.
 var ErrNotRunning = errors.New("the tailnet is not up yet")
@@ -121,7 +130,11 @@ func (n *Node) run(h http.Handler) {
 				log.Printf("tailscale: not logged in yet — visit %s", st.AuthURL)
 			}
 		}
-		time.Sleep(2 * time.Second)
+		select {
+		case <-n.done:
+			return
+		case <-time.After(2 * time.Second):
+		}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	st, err := n.srv.Up(ctx)

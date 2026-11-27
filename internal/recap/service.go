@@ -32,7 +32,8 @@ func (s *Service) recapOf(open opener, mc *machines.Machine, paneID, sessionID, 
 	if conv.Path == "" {
 		return Of(nil, since), nil
 	}
-	turns, err := conv.Turns()
+	// every file the conversation lived in: a compaction moved it on, and the period may begin before that
+	turns, err := conv.TurnsThroughCompactions()
 	if err != nil {
 		return Recap{}, err
 	}

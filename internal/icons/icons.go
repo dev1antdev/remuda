@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"path/filepath"
 	"strings"
 	"sync"
 	"unicode"
@@ -68,7 +67,7 @@ func New(dir string) *Store {
 	return store
 }
 
-func key(machine, folder string) string { return machine + "|" + filepath.Clean(folder) }
+func key(machine, folder string) string { return machine + "|" + rpath.For(folder).Clean(folder) }
 
 // Of is the folder's icon, false when it has none.
 func (store *Store) Of(machine, folder string) (Icon, bool) {

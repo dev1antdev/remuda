@@ -329,6 +329,24 @@ func (conv Conversation) Turns() ([]transcript.Turn, error) {
 	return usage.PriceTurns(turns), nil
 }
 
+// TurnsThroughCompactions is Turns over every file the conversation lived in, oldest first: a compaction moves it to a
+// new file, and a recap of the period wants what came before it too.
+func (conv Conversation) TurnsThroughCompactions() ([]transcript.Turn, error) {
+	var all []transcript.Turn
+	for _, path := range conv.reader.Lineage(conv.Path) {
+		version, err := conv.reader.Version(path)
+		if err != nil {
+			continue
+		}
+		turns, err := conv.reader.Turns(path, version)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, turns...)
+	}
+	return usage.PriceTurns(all), nil
+}
+
 // Tail is what a tile asks for at a file version: the last turns, and the agent's plan over the whole conversation, which
 // a plan set thirty turns ago would otherwise leave out.
 type Tail struct {
@@ -442,10 +460,11 @@ func (c *Service) open(mc *machines.Machine, paneID, sessionID, dir string, tail
 				conv.Path = path
 			}
 		}
-		if conv.Path == "" && pane.AgentSession != nil {
+		// a session asked for by id is never swapped for the pane's current one: an empty chat says it is gone
+		if conv.Path == "" && sessionID == "" && pane.AgentSession != nil {
 			conv.Path, _ = mc.Transcripts.ResolveSession(pane.AgentSession.Agent, conv.Dir, pane.AgentSession.Kind, pane.AgentSession.Value)
 		}
-		if conv.Path == "" && (mc.Local() || format == transcript.Opencode) && newest {
+		if conv.Path == "" && sessionID == "" && (mc.Local() || format == transcript.Opencode) && newest {
 			if conv.Sessions == nil {
 				conv.Sessions, _ = mc.Transcripts.Sessions(format, conv.Dir)
 			}

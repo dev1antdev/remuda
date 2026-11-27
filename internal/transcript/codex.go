@@ -565,15 +565,15 @@ func codexSessions(roots []string, cwd string) []SessionInfo {
 		}
 		return all[i].Path > all[j].Path
 	})
-	if len(all) > codexSessionsLookAt {
-		all = all[:codexSessionsLookAt]
-	}
 	names := map[string]map[string]string{}
 	seen := map[string]bool{}
 	var out []SessionInfo
 	for _, s := range all {
 		if s.ID == "" || CodexCwd(s.Path) != cwd || seen[s.ID] {
 			continue // one card a thread, its newest file
+		}
+		if len(out) >= codexSessionsLookAt {
+			break // the folder's own newest, not the newest anywhere read out of its share
 		}
 		seen[s.ID] = true
 		if names[s.root] == nil {

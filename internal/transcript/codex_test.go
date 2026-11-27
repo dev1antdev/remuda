@@ -2,6 +2,7 @@ package transcript
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -429,5 +430,45 @@ func TestACodexRevertReadsTheThreadWhole(t *testing.T) {
 	sessions, err := sessionsIn(RootsOf(home), home, Codex, "/home/u/proj")
 	if err != nil || len(sessions) != 1 || sessions[0].Path != revert {
 		t.Fatalf("the thread is listed %d times: %+v, %v", len(sessions), sessions, err)
+	}
+}
+
+func TestAWindowsPathNamesItsFormat(t *testing.T) {
+	for path, want := range map[string]Format{
+		`C:\Users\u\.codex\sessions\2026\11\rollout-2026-11-01T10-00-00-01a187d8-720d-7860-9918-8fc3e6cd3a1f.jsonl`: Codex,
+		`C:\Users\u\.gemini\tmp\abc\chats\session-01a187d8.json`:                                                    Gemini,
+	} {
+		if got := FormatOf(path); got != want {
+			t.Fatalf("%s: %q, want %q", path, got, want)
+		}
+	}
+}
+
+func TestAFoldersOwnSessionsAreNotPushedOutByNewerOnesElsewhere(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	root := filepath.Join(home, ".codex", "sessions")
+	day := filepath.Join(root, "2026", "11", "01")
+	if err := os.MkdirAll(day, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write := func(name, cwd string, mod time.Time) {
+		path := filepath.Join(day, name)
+		line := `{"type":"session_meta","payload":{"id":"` + name + `","cwd":"` + cwd + `"}}`
+		if err := os.WriteFile(path, []byte(line+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chtimes(path, mod, mod); err != nil {
+			t.Fatal(err)
+		}
+	}
+	now := time.Now()
+	write("rollout-2026-11-01T10-00-00-01a187d8-720d-7860-9918-8fc3e6cd3a1f.jsonl", "/home/u/proj", now.Add(-time.Hour))
+	for i := 0; i < 305; i++ {
+		write(fmt.Sprintf("rollout-2026-11-01T11-%02d-%02d-other%d.jsonl", i/60, i%60, i), "/elsewhere", now.Add(-time.Minute))
+	}
+	sessions, err := sessionsIn(RootsOf(home), home, Codex, "/home/u/proj")
+	if err != nil || len(sessions) != 1 || sessions[0].Path != filepath.Join(day, "rollout-2026-11-01T10-00-00-01a187d8-720d-7860-9918-8fc3e6cd3a1f.jsonl") {
+		t.Fatalf("the folder's own session: %+v %v", sessions, err)
 	}
 }
