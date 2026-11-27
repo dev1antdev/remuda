@@ -143,7 +143,7 @@ func TestReviewParsesBothSectionsAndTheMessageReadsLikeTheLens(t *testing.T) {
 		t.Fatal("a GitLab address has no parts")
 	}
 	s := ReviewScript("https://github.com/o/r/pull/15")
-	if !strings.Contains(s, "gh pr view 'https://github.com/o/r/pull/15' --json reviews") || !strings.Contains(s, "gh api 'repos/o/r/pulls/15/comments?per_page=100'") || !strings.Contains(s, `printf '\036\n'`) {
+	if !strings.Contains(s, "gh pr view 'https://github.com/o/r/pull/15' --json reviews") || !strings.Contains(s, "gh api --paginate 'repos/o/r/pulls/15/comments?per_page=100' --jq '.[]'") || !strings.Contains(s, `printf '\036\n'`) {
 		t.Fatalf("script = %q", s)
 	}
 	review, err := ParseReview(reviewsJSON + "\n\x1e\n" + commentsJSON)

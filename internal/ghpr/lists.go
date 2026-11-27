@@ -80,15 +80,23 @@ func (n cardNode) card() Card {
 // BranchPRs is every pull request from the branch, across the checkout's GitHub remotes in one query; only those whose
 // head lives in one of those remotes count (a fork's branch of the same name is someone else's), open ones first.
 func BranchPRs(host shell.Shell, c Checkout) ([]Card, error) {
+	// the branch's own remote when it tracks one: a fork checkout with a develop of its own must not show the upstream's
+	// develop → main as its pull request, merge button and all
 	repos := map[string]bool{}
 	var order []Repo
 	for _, r := range c.Remotes {
+		if c.Tracking != "" && c.Tracking != "." && r.Name != c.Tracking {
+			continue
+		}
 		repo, err := ParseRepo(r.Repo)
 		if err != nil || repos[strings.ToLower(r.Repo)] {
 			continue
 		}
 		repos[strings.ToLower(r.Repo)] = true
 		order = append(order, repo)
+	}
+	if c.Tracking == "." { // a branch over a local branch: nothing of it is on GitHub
+		return []Card{}, nil
 	}
 	if c.Branch == "" || len(order) == 0 {
 		return []Card{}, nil

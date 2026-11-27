@@ -196,3 +196,24 @@ func TestAJobsStepsTheLogsEndAndTheFiles(t *testing.T) {
 		t.Fatalf("a list cut on the machine: %+v", cut)
 	}
 }
+
+func TestAForkCheckoutAsksOnlyTheRemotesTheBranchTracks(t *testing.T) {
+	host := fakeGH([2]string{"graphql", answered(`{"data":{"r0":{"pullRequests":{"nodes":[]}}}}`, "", 0)})
+	c := Checkout{
+		Branch:   "develop",
+		Tracking: "mine",
+		Remotes:  []Remote{{Name: "mine", Repo: "sam/trips"}, {Name: "upstream", Repo: "octo/trips"}},
+	}
+	if _, err := BranchPRs(host, c); err != nil {
+		t.Fatal(err)
+	}
+	query := inputOf(t, host.Scripts()[0])["query"].(string)
+	if strings.Contains(query, `repository(owner:"octo"`) || !strings.Contains(query, `repository(owner:"sam"`) {
+		t.Fatalf("a fork's checkout asked the upstream's develop too: %s", query)
+	}
+	// a branch over a local branch is on no GitHub at all
+	c.Tracking = "."
+	if cards, err := BranchPRs(host, c); err != nil || len(cards) != 0 || len(host.Scripts()) != 1 {
+		t.Fatal("a local-only branch asked GitHub")
+	}
+}

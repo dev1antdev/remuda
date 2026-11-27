@@ -19,9 +19,10 @@ type Remote struct {
 // Checkout is what the panel needs of a folder: its branch, its remotes, and the repository its Repo list reads —
 // upstream, else the branch's tracking remote, else origin, else the first GitHub remote.
 type Checkout struct {
-	Branch  string   `json:"branch"`
-	Remotes []Remote `json:"remotes"`
-	Repo    string   `json:"repo"`
+	Branch   string   `json:"branch"`
+	Tracking string   `json:"tracking,omitempty"` // the remote the branch is pushed to, "." for a local branch
+	Remotes  []Remote `json:"remotes"`
+	Repo     string   `json:"repo"`
 }
 
 // gitRead is how every git read here starts: no optional lock, no file-system monitor, so a read never touches the index.
@@ -65,6 +66,7 @@ func ParseCheckout(out string) Checkout {
 		}
 	}
 	sort.Slice(c.Remotes, func(i, j int) bool { return c.Remotes[i].Name < c.Remotes[j].Name })
+	c.Tracking = tracking
 	c.Repo = preferred(c.Remotes, tracking)
 	return c
 }

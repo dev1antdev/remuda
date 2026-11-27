@@ -139,7 +139,7 @@ func (s *Service) List(machineID, repo, query string, fresh bool) (List, error) 
 	out, runErr := shell.Text(host, listScript(repo, query, etag, !known), Timeout)
 	sections := script.Sections(out)
 	if len(sections) < 2 {
-		return List{}, troubleOf(host.Label(), repo, firstText(out, runErr))
+		return List{}, troubleOf(host.Label(), repo, firstText(out, runErr), runErr)
 	}
 	if !known {
 		me = s.noteLogin(machineID, sections[0])
@@ -155,11 +155,11 @@ func (s *Service) List(machineID, repo, query string, fresh bool) (List, error) 
 		return answer, nil
 	}
 	if len(sections) < 3 {
-		return List{}, troubleOf(host.Label(), repo, firstText(probed.text, runErr))
+		return List{}, troubleOf(host.Label(), repo, firstText(probed.text, runErr), runErr)
 	}
 	items, err := parseList(sections[2], query)
 	if err != nil {
-		return List{}, troubleOf(host.Label(), repo, cutWords(err, runErr))
+		return List{}, troubleOf(host.Label(), repo, cutWords(err, runErr), runErr)
 	}
 	list := List{Items: ownItems(items, repo, query), More: len(items) >= Limit, Me: me, At: now, Source: FromGitHub}
 	s.mu.Lock()
@@ -197,7 +197,7 @@ func (s *Service) Issue(machineID, repo string, number int, fresh bool) (Detail,
 	out, runErr := shell.Text(host, detailScript(repo, number, etag, !known), Timeout)
 	sections := script.Sections(out)
 	if len(sections) < 2 {
-		return Detail{}, troubleOf(host.Label(), repo, firstText(out, runErr))
+		return Detail{}, troubleOf(host.Label(), repo, firstText(out, runErr), runErr)
 	}
 	if !known {
 		me = s.noteLogin(machineID, sections[0])
@@ -213,14 +213,14 @@ func (s *Service) Issue(machineID, repo string, number int, fresh bool) (Detail,
 		return answer, nil
 	}
 	if issue.status == 200 && len(sections) < 4 { // the issue came whole, what was to follow it did not
-		return Detail{}, troubleOf(host.Label(), repo, cutWords(errCut, runErr))
+		return Detail{}, troubleOf(host.Label(), repo, cutWords(errCut, runErr), runErr)
 	}
 	if issue.status != 200 {
-		return Detail{}, troubleOf(host.Label(), repo, firstText(issue.text, runErr))
+		return Detail{}, troubleOf(host.Label(), repo, firstText(issue.text, runErr), runErr)
 	}
 	detail, err := detailOf(issue.body, sections[2], sections[3])
 	if err != nil {
-		return Detail{}, troubleOf(host.Label(), repo, cutWords(err, runErr))
+		return Detail{}, troubleOf(host.Label(), repo, cutWords(err, runErr), runErr)
 	}
 	detail.Me, detail.At, detail.Source = me, now, FromGitHub
 	s.mu.Lock()

@@ -269,3 +269,28 @@ func TestADiffPastTheReadSaysItWasCut(t *testing.T) {
 		t.Fatalf("a diff past it: %d %v", len(text), truncated)
 	}
 }
+
+func TestABigFileIsFingerprintedBySizeAndTimeNotHashed(t *testing.T) {
+	dir, git, write := scratchCheckout(t)
+	write("plain.txt", "one\n")
+	git("add", "plain.txt")
+	git("commit", "-qm", "one")
+	big := make([]byte, maxHash+1024)
+	for i := range big {
+		big[i] = 'x'
+	}
+	if err := os.WriteFile(filepath.Join(dir, "data.bin"), big, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, blobs, err := Snapshot(shell.Local{Name: "local"}, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fingerprint := blobs["data.bin"]
+	if !strings.HasPrefix(fingerprint, "size:") || len(fingerprint) < len("size:")+3 {
+		t.Fatalf("a big file's fingerprint %q", fingerprint)
+	}
+	if len(fingerprint) > 80 {
+		t.Fatalf("a fingerprint that is a hash-sized read: %q", fingerprint)
+	}
+}

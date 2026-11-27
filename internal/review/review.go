@@ -82,6 +82,9 @@ type Summary struct {
 	Busy         string          `json:"busy,omitempty"`     // the agent at work in the checkout, under whose feet a write would land: the route's to say
 	Error        string          `json:"error,omitempty"`
 	At           time.Time       `json:"at"`
+	// Blobs is what this look showed, by path: a "seen" the page sends back with them records what the person read, not
+	// what the disk holds at the press — an agent's edit while they read stays fresh.
+	Blobs map[string]string `json:"blobs,omitempty"`
 }
 
 // Badge is the roster's count for one workspace.
@@ -197,13 +200,19 @@ func summaryScript(dir, baselineHead string) string {
 		settingsScript
 }
 
+// maxHash is the size past which a file is not hashed: a data set of gigabytes read every minute for its blob made the
+// lens miss its own timeout. Its fingerprint is the size and mtime instead — enough to tell a look from the next.
+const maxHash = 2 << 20
+
 // blobsScript prints "<path>\x1f<blob hash>" per uncommitted file, one per line, "gone" for a deleted one.
 // Paths are relative to the folder; a rename is a deletion plus an addition. The tracked files are numstat's: unlike
 // --name-only, it leaves out a file only touched without git refreshing its stat in the index (readGit).
 func blobsScript() string {
 	return `{ ` + readGit + ` -c core.quotepath=off diff --no-renames --relative --numstat -z HEAD 2>/dev/null | tr '\0' '\n' | cut -f3-; ` + readGit + ` -c core.quotepath=off ls-files --others --exclude-standard -z 2>/dev/null | tr '\0' '\n'; } | ` +
 		`{ t=$(mktemp 2>/dev/null) || t=/tmp/remuda-blobs.$$; : > "$t"; while IFS= read -r f; do if [ -f "$f" ]; then printf '%s\n' "$f" >> "$t"; else printf '%s\037gone\n' "$f"; fi; done; ` +
-		`while IFS= read -r f; do h=$(git -c core.quotepath=off hash-object -- "$f" 2>/dev/null) && printf '%s\037%s\n' "$f" "$h"; done < "$t"; rm -f "$t"; }`
+		`while IFS= read -r f; do if [ -f "$f" ] && [ "$(wc -c < "$f" 2>/dev/null | tr -d ' ')" -gt ` + strconv.Itoa(maxHash) + ` ] 2>/dev/null; then ` +
+		`printf '%s\037size:%s:%s\n' "$f" "$(wc -c < "$f" | tr -d ' ')" "$(` + script.Stat(`"$f"`, "%Y", "%m") + `)"; ` +
+		`else h=$(git -c core.quotepath=off hash-object -- "$f" 2>/dev/null) && printf '%s\037%s\n' "$f" "$h"; fi; done < "$t"; rm -f "$t"; }`
 }
 
 // Summary reviews one folder against its baseline.
@@ -244,6 +253,7 @@ func (store *Store) Summary(host shell.Host, dir string) Summary {
 		}
 	}
 	blobs := map[string]string{}
+	summary.Blobs = blobs
 	for _, line := range strings.Split(strings.TrimRight(sections[4], "\n"), "\n") {
 		if path, blob, ok := strings.Cut(line, "\x1f"); ok {
 			blobs[path] = blob
@@ -420,11 +430,20 @@ func (store *Store) MarkSeen(host shell.Host, dir, verdict string) (Baseline, er
 	if err != nil {
 		return Baseline{}, err
 	}
+	return store.MarkSeenShown(host, dir, verdict, head, blobs)
+}
+
+// MarkSeenShown is MarkSeen for a page that says what it showed: the head and blobs of that look are the baseline, so an
+// edit made while the person read stays fresh — the disk at the press is not what they saw.
+func (store *Store) MarkSeenShown(host shell.Host, dir, verdict, head string, blobs map[string]string) (Baseline, error) {
+	if !VerdictOK(verdict) {
+		return Baseline{}, fmt.Errorf("no such verdict: %q", verdict)
+	}
 	baseline := Baseline{Head: head, Blobs: blobs, Verdict: verdict, At: time.Now()}
 	store.mu.Lock()
 	store.baselines[key(host.ID(), dir)] = baseline
 	store.badges[key(host.ID(), dir)] = Badge{}
-	err = store.save()
+	err := store.save()
 	noted := store.noteVerdict(Verdict{Machine: host.ID(), Dir: dir, Verdict: verdict, At: baseline.At})
 	store.mu.Unlock()
 	if err != nil {

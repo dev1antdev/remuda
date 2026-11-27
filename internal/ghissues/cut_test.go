@@ -19,7 +19,7 @@ func TestAnIssueCutShortIsSaidAsCutShortNotAsItsOwnWords(t *testing.T) {
 	s, _ := serviceOn(host)
 	_, err := s.Issue("gog", "acme/widgets", 41, false)
 	var trouble *Trouble
-	if !errors.As(err, &trouble) || trouble.Kind != "failed" || !strings.Contains(trouble.Text, "timed out after 45s") {
+	if !errors.As(err, &trouble) || trouble.Kind != "timeout" || !strings.Contains(trouble.Text, "did not answer in time") {
 		t.Fatalf("an issue whose read ran out of time: %+v", err)
 	}
 }
@@ -31,7 +31,7 @@ func TestAListCutShortIsSaidAsCutShortNotAsItsTitles(t *testing.T) {
 	s, _ := serviceOn(host)
 	_, err := s.List("gog", "acme/widgets", DefaultList, false)
 	var trouble *Trouble
-	if !errors.As(err, &trouble) || trouble.Kind != "failed" || !strings.Contains(trouble.Text, "timed out after 45s") {
+	if !errors.As(err, &trouble) || trouble.Kind != "timeout" || !strings.Contains(trouble.Text, "did not answer in time") {
 		t.Fatalf("a list whose read ran out of time: %+v", err)
 	}
 }
