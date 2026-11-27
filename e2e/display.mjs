@@ -3142,8 +3142,10 @@ async function terminalWrapFind() {
   };
   // the find's field took the focus and its close leaves none: put it back on the terminal before every line, the
   // line cleared of what it answered to the page's queries meanwhile
+  const focused = () => evaluate(`document.activeElement?.classList?.contains("xterm-helper-textarea") === true`);
   const focus = async () => {
-    await tap(".lens-pane:not([hidden]) .xterm .xterm-screen");
+    await evaluate(`document.querySelector('.lens-pane:not([hidden]) .xterm-helper-textarea')?.focus()`);
+    if (!(await focused())) await tap(".lens-pane:not([hidden]) .xterm .xterm-screen");
     await evaluate(`document.querySelector('.lens-pane:not([hidden]) .xterm-helper-textarea')?.focus()`);
     await key("u", "KeyU", 2);
   };
@@ -3173,9 +3175,19 @@ async function terminalWrapFind() {
   await key("Escape", "Escape");
 
   // past the 2000 rows xterm keeps, so the word is only in the core's own history and the find must read it there;
-  // the marker is computed, so the command's own echo does not stand for its output
-  await submit("seq 1 2600; echo $((1234+1))");
-  if (!(await until(async () => /(^|\s)1235(\s|$)/m.test(await screenOf(pane)), 30))) failed("the rows that push the word out of the page's scrollback never came");
+  // the marker is computed, so the command's own echo does not stand for its output. A line lost to a focus race is
+  // typed again once, and a failure says where the focus was and what the screen ended with.
+  const rowsCame = async () => {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await submit("seq 1 2600; echo $((1234+1))");
+      if (await until(async () => /(^|\s)1235(\s|$)/m.test(await screenOf(pane)), 20)) return true;
+    }
+    return false;
+  };
+  if (!(await rowsCame())) {
+    const tail = (await screenOf(pane)).slice(-200);
+    failed(`the rows that push the word out of the page's scrollback never came: focus ${await evaluate("document.activeElement?.className")} screen ${JSON.stringify(tail)}`);
+  }
   await find();
   const older = await until(() => evaluate(`[...document.querySelectorAll(".toast")].some((toast) => /older rows|старых строках/.test(toast.textContent || ""))`), 10);
   if (!older) {
