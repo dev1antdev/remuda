@@ -38,11 +38,15 @@ type teleportTarget struct {
 // teleported is a move as the page reads it once its job ended: where the agent now is.
 type teleported struct {
 	mu      sync.Mutex
-	Machine string `json:"machine"`
-	Pane    string `json:"pane,omitempty"`
-	Dir     string `json:"dir,omitempty"`
-	Branch  string `json:"branch,omitempty"`
+	Machine string    `json:"machine"`
+	Pane    string    `json:"pane,omitempty"`
+	Dir     string    `json:"dir,omitempty"`
+	Branch  string    `json:"branch,omitempty"`
+	ended   time.Time // when the move finished; a result is kept a while for the page, never forever
 }
+
+// TeleportKeep is how long a finished move's result answers the page.
+const TeleportKeep = 10 * time.Minute
 
 // teleportSource is the pane asked for and the folder its workspace works in.
 func (s *Server) teleportSource(mc *machines.Machine, paneID string) (*coreapi.PaneInfo, string, error) {
@@ -242,7 +246,22 @@ func (s *Server) handleTeleport(w http.ResponseWriter, r *http.Request) {
 		if s.Feed != nil {
 			s.Feed.Add(feed.Entry{Kind: "teleport", Machine: target.ID(), Pane: result.Pane, Title: "Moved " + path.Base(dir) + " to " + target.Label(), Body: landed.Branch + " · " + to})
 		}
+		result.mu.Lock()
+		result.ended = time.Now()
+		result.mu.Unlock()
 		return nil
+	})
+	// a finished move's answer goes with the next one: the page has it long before, and the map would only grow
+	s.teleports.Range(func(key, value any) bool {
+		if done, ok := value.(*teleported); ok {
+			done.mu.Lock()
+			old := !done.ended.IsZero() && time.Since(done.ended) > TeleportKeep
+			done.mu.Unlock()
+			if old {
+				s.teleports.Delete(key)
+			}
+		}
+		return true
 	})
 	s.teleports.Store(job.ID, result)
 	writeJSON(w, map[string]any{"job": job.ID})
@@ -274,5 +293,10 @@ func (s *Server) handleTeleportResult(w http.ResponseWriter, r *http.Request) {
 	result := value.(*teleported)
 	result.mu.Lock()
 	defer result.mu.Unlock()
+	if !result.ended.IsZero() && time.Since(result.ended) > TeleportKeep {
+		s.teleports.Delete(r.PathValue("job"))
+		httpErr(w, 404, errors.New("no such move"))
+		return
+	}
 	writeJSON(w, result)
 }
