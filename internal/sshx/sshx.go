@@ -190,6 +190,10 @@ func (c *Conn) cmd(args ...string) *exec.Cmd {
 		"-o", "ServerAliveInterval=15",
 		"-o", "ServerAliveCountMax=4",
 		"-o", "StreamLocalBindUnlink=yes",
+		// the person's ssh_config may force a command or a tty: ours are what must run, and a tty would hold a
+		// script's stdin open
+		"-o", "RemoteCommand=none",
+		"-o", "RequestTTY=no",
 	}
 	return exec.Command("ssh", append(base, args...)...)
 }
@@ -445,7 +449,15 @@ func (c *Conn) run(command string, timeout time.Duration, stdin io.Reader) ([]by
 	case <-time.After(timeout):
 		cmd.Process.Kill()
 		<-done
-		return nil, fmt.Errorf("ssh %s: %q timed out", c.Host, command)
+		// the whole script is not the message: its first line, cut, and the time it was given
+		head := command
+		if i := strings.IndexByte(head, '\n'); i >= 0 {
+			head = head[:i]
+		}
+		if r := []rune(head); len(r) > 80 {
+			head = string(r[:80]) + "…"
+		}
+		return nil, fmt.Errorf("ssh %s: no answer within %s for %q (it may still run there)", c.Host, timeout, head)
 	}
 }
 
