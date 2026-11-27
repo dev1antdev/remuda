@@ -144,6 +144,17 @@ const (
 	RunFailed   = "failed"
 )
 
+// ErrAlreadyStarted says an agent is already starting or running this task's first stage: one start at a time, however
+// many buttons or queue ticks ask.
+var ErrAlreadyStarted = errors.New("an agent is already starting on this task")
+
+// OpenRootRun says whether the task's first stage has an agent starting or running.
+func (st *Store) OpenRootRun(taskID int64) bool {
+	var n int
+	_ = st.db.QueryRow(`SELECT COUNT(*) FROM task_runs WHERE task_id = ? AND stage = 0 AND state IN (?, ?)`, taskID, RunStarting, RunRunning).Scan(&n)
+	return n > 0
+}
+
 // legacyInProgress is the label older versions put on a task while an agent was on it.
 // seedWorkflows reads it once to place such tasks in the on_start column; it is never written again.
 const legacyInProgress = "in progress"
@@ -1672,10 +1683,21 @@ func (st *Store) StartRun(r Run) (Run, error) {
 	if s := flagged(ss, func(x Status) bool { return x.OnStart }); s != nil {
 		r.Expect = s.ID
 	}
-	res, err := tx.Exec(`INSERT INTO task_runs (task_id, machine, workspace, pane, dir, branch, agent, state, started, prompt, by_queue, stage, pipeline, expect_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		r.TaskID, r.Machine, r.Workspace, r.Pane, r.Dir, r.Branch, r.Agent, r.State, r.Started, r.Prompt, r.ByQueue, r.Stage, r.Pipeline, r.Expect)
+	// one first stage at a time: the insert itself refuses a second, however close the two clicks were. A pipeline's
+	// later stage is another run of the same task and is let through.
+	where, args := "1", []any{}
+	if r.Stage == 0 {
+		where = `NOT EXISTS (SELECT 1 FROM task_runs WHERE task_id = ? AND stage = 0 AND state IN (?, ?))`
+		args = append(args, r.TaskID, RunStarting, RunRunning)
+	}
+	res, err := tx.Exec(`INSERT INTO task_runs (task_id, machine, workspace, pane, dir, branch, agent, state, started, prompt, by_queue, stage, pipeline, expect_status)
+SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE `+where,
+		append([]any{r.TaskID, r.Machine, r.Workspace, r.Pane, r.Dir, r.Branch, r.Agent, r.State, r.Started, r.Prompt, r.ByQueue, r.Stage, r.Pipeline, r.Expect}, args...)...)
 	if err != nil {
 		return r, err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return r, ErrAlreadyStarted
 	}
 	r.ID, _ = res.LastInsertId()
 	if s := flagged(ss, func(x Status) bool { return x.OnStart }); s != nil && s.ID != t.StatusID {

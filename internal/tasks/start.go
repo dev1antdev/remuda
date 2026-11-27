@@ -70,6 +70,9 @@ func (l *Launcher) Start(mc *machines.Machine, client coreapi.API, task Task, re
 	if err := req.Normalize(); err != nil {
 		return Task{}, err
 	}
+	if l.Store.OpenRootRun(task.ID) {
+		return Task{}, ErrAlreadyStarted
+	}
 	res, err := client.WorktreeCreate(req.Workspace, req.Branch, req.Base, "")
 	if err != nil {
 		return Task{}, err
