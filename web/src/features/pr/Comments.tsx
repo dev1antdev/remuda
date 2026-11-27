@@ -10,7 +10,7 @@ import { submitPrompt } from "@/features/roster/api";
 import { useRoster } from "@/features/roster/useRoster";
 import { copyText } from "@/lib/host";
 import { usePref } from "@/lib/prefs";
-import { errMsg } from "@/lib/text";
+import { errMsg, leftAfterSend } from "@/lib/text";
 import { ago } from "@/lib/time";
 import { t, tn } from "@/lib/i18n";
 import { Icon, Notice, Select, Tip } from "@/ui";
@@ -197,9 +197,10 @@ function NewComment({ at, pr, onChanged }: { at: PRAt; pr: Detail; onChanged: ()
   const send = async () => {
     setBusy(true);
     setError("");
+    const sent = draft;
     try {
-      await postComment({ machine: at.machineId, repo: pr.repository, number: pr.number }, draft);
-      setDraft("");
+      await postComment({ machine: at.machineId, repo: pr.repository, number: pr.number }, sent);
+      setDraft((current) => leftAfterSend(current, sent)); // what was typed while it went is kept
       actions.notify(t("Saved to GitHub"), { brief: true });
       onChanged();
     } catch (e) {

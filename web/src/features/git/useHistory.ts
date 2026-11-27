@@ -43,12 +43,21 @@ export function useHistory(machineId: string, dir: string, scope: Scope, active:
 
   const history = useMemo(() => (log.data && state.data?.repo ? withUncommitted(log.data, state.data.dirty > 0) : log.data), [log.data, state.data]);
 
+  // the history as it stands now: a page read from an older one must not be drawn over a newer
+  const latest = useRef(log.data);
+  latest.current = log.data;
   const loadMore = useCallback(async () => {
     const shown = log.data;
     if (!shown || more.busy || !shown.log.more) return;
     setMore({ busy: true, error: "" });
     try {
       const page = await readLog(machineId, dir, scope, shown.commits.length, PAGE);
+      const now = latest.current;
+      if (!now || now.log.fingerprint !== shown.log.fingerprint || now.commits.length !== shown.commits.length) {
+        reload(); // the history moved while the page was read: it is read again, not spliced
+        setMore({ busy: false, error: "" });
+        return;
+      }
       pages.current = Math.ceil((shown.commits.length + page.commits.length) / PAGE);
       const next = withPage(shown, page);
       if (next) mutate(() => next);

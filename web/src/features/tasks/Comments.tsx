@@ -1,9 +1,9 @@
 // A task's comments: the agent's answers, the person's notes, remuda's own; and a box for a new one.
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { actions } from "@/app/store";
 import type { FileTarget } from "@/features/files/target";
-import { errMsg } from "@/lib/text";
+import { errMsg, leftAfterSend } from "@/lib/text";
 import { whenShort } from "@/lib/time";
 import { Icon, Logo, Tip } from "@/ui";
 import { Markdown } from "@/ui/Markdown";
@@ -22,14 +22,19 @@ export function CommentsField({ task: t, run, onChange, onError, onMarkDone }: {
   const comments = t.comments ?? [];
   // a path in a comment opens where the run worked: its machine, its pane while it lives, its worktree
   const openFile = (target: FileTarget) => actions.openFile(run?.machine ?? "local", run?.pane ?? "", target, run?.dir ?? "");
+  // the task as it stands now: a field edited while the comment went must not be rolled back by the answer
+  const latest = useRef(t);
+  latest.current = t;
   const post = async () => {
     const body = comment.trim();
     if (!body || posting) return;
     setPosting(true);
+    const sent = comment;
     try {
       const c = await addComment(t.id, body);
-      onChange({ ...t, comments: [...comments, c] });
-      setComment("");
+      const now = latest.current;
+      onChange({ ...now, comments: [...(now.comments ?? []), c] });
+      setComment((current) => leftAfterSend(current, sent));
     } catch (e) {
       onError(errMsg(e));
     } finally {
