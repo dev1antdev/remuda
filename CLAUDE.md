@@ -1684,7 +1684,11 @@ components and icons as rules for whoever changes it: @docs/design.md
   workspace, the two imports, arena, teleport, reopen, resume after restart, the sleep's confirm, recipes, budget,
   broadcast, the triggers with a rule's form, Fleet setup with every fact
   and its Run… into Updates) — the palette by its rows' `data-entry` ids, so either
-  language finds them; every screen checked for a sideways scroll, a
+  language finds them; a shell pane's line as wide as the terminal splits a
+  word at its edge, and the terminal's find takes the whole word on the
+  screen and, after the rows above it were pushed off and the page
+  reattached, in those rows too (`terminalWrapFind`, the core's paint
+  keeping the wrap, Core 15); every screen checked for a sideways scroll, a
   menu, popover, dialog, toast or drawer past the screen's edge, text
   squeezed to nothing, content under the rail or the header, its
   landmarks and no console error, screenshotted, a line each with its
