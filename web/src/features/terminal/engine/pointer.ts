@@ -113,6 +113,9 @@ export function installPointer(term: Terminal, mount: HTMLElement, { modes, repo
   mount.addEventListener("touchcancel", onTouchEnd, { capture: true, passive: true });
   mount.addEventListener("mousedown", onMouseDown, true);
   mount.addEventListener("mouseup", onMouseUp, true);
+  // a button let go outside the terminal is still let go: the drag ends, and the press is not held for the next move
+  const onWindowUp = (e: MouseEvent) => onMouseUp(e);
+  window.addEventListener("mouseup", onWindowUp, true);
   return () => {
     mount.removeEventListener("wheel", onWheel, { capture: true });
     mount.removeEventListener("touchstart", onTouchStart, { capture: true });
@@ -121,5 +124,6 @@ export function installPointer(term: Terminal, mount: HTMLElement, { modes, repo
     mount.removeEventListener("touchcancel", onTouchEnd, { capture: true });
     mount.removeEventListener("mousedown", onMouseDown, true);
     mount.removeEventListener("mouseup", onMouseUp, true);
+    window.removeEventListener("mouseup", onWindowUp, true);
   };
 }
