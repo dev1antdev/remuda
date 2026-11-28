@@ -29,6 +29,10 @@ import type { Modifier, TermApi } from "./types";
 import { XTERM_SCROLLBACK } from "../scrollback";
 import { terminalTheme, type Flavor } from "@/lib/theme";
 
+// PAINT_QUEUE_MAX is how many bytes may wait for xterm's parser: past it a flood is no longer queued, and the screen
+// says some output was dropped.
+const PAINT_QUEUE_MAX = 8 << 20;
+
 export type EngineProps = Geometry & {
   flavor: Flavor; // the page's flavour: the terminal's colours follow it
   fontFamily: string; // the page's monospace stack (Settings › Code & terminal font)
@@ -131,15 +135,32 @@ export function createEngine(mount: HTMLElement, machineId: string, paneId: stri
   const follow = keepFollower(mount);
 
   // paint writes a chunk from either transport; one streaming decoder, so a character cut by a chunk boundary joins.
+  // The parser is slower than a build log's flood: past PAINT_QUEUE_MAX bytes still waiting, a chunk is dropped with a
+  // word — a queue that grows without bound is what broke the screen, and nothing here can pause the socket.
   const decoder = new TextDecoder();
+  let queued = 0;
+  let warned = false;
   const paint = (buf: Uint8Array) => {
     const text = decoder.decode(buf, { stream: true });
+    if (queued > PAINT_QUEUE_MAX) {
+      if (!warned) {
+        warned = true;
+        note("the screen fell behind: some output was dropped");
+      }
+      return;
+    }
+    queued += text.length;
     term.write(splitTracking(text), () => {
+      queued -= text.length;
       follow();
       layer.schedule();
       selection.onPainted();
       search.onPainted();
     });
+  };
+  // a screen that caught up says so again should it fall behind once more
+  const settled = () => {
+    if (queued === 0) warned = false;
   };
   // onOpen resets the screen for a fresh stream: there is no replay, the server nudges the app into a
   // repaint, so the modes xterm knew are re-applied by hand since nobody will set them again.
