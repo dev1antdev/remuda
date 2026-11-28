@@ -127,7 +127,7 @@ var untrackedScript = `list=$(` + readGit + ` ls-files -z --others --exclude-sta
 // unpushedLog is git's log of the commits a push would send, in the form given.
 func unpushedLog(form string) string {
 	return readGit + ` ` + noAttrs + ` -c diff.relative=false -c log.showRoot=true -c log.showSignature=false log -n ` + strconv.Itoa(scanCommits) + ` ` + form +
-		` HEAD --not --remotes 2>/dev/null`
+		` "$base" --not --remotes 2>/dev/null`
 }
 
 // mergeLines turns git's combined diff of the merges into the plain diff the rest of the stream reads. A line marked
@@ -145,12 +145,21 @@ n == 0 || length($0) < n || /^\\/ { if (n == 0) print; next }
 { mark = substr($0, 1, n); if (index(mark, "-")) next
   text = substr($0, n + 1); gsub(/\+/, "", mark); print (mark == "" ? "+" : " ") text }'`
 
+// baseOf is the commit the check reads against: the one a push sends when it names it, else HEAD (or the empty tree
+// before a first commit).
+func baseOf(head string) string {
+	if head != "" {
+		return script.Quote(head) + `; git cat-file -e "$base^{commit}" 2>/dev/null || base=HEAD; git rev-parse -q --verify HEAD >/dev/null 2>&1 || base=$(git hash-object -t tree /dev/null)`
+	}
+	return `HEAD; git rev-parse -q --verify HEAD >/dev/null 2>&1 || base=$(git hash-object -t tree /dev/null)`
+}
+
 // unpushedScript prints the commits a push would send, those with one parent as patches and the merges by what they
 // brought themselves (mergeLines): a merge that only merged shows nothing. A combined diff merges nothing again, so no
 // driver runs. It reads the parents' files, which a partial clone may lack and a git before 2.45 would fetch whatever it
 // is told: there the merges are left unread, counted with the commits past the limit.
 var unpushedScript = `o=0; m=0; for kind in --no-merges --merges; do ` +
-	`c=$(git rev-list --count "$kind" --max-count=` + strconv.Itoa(countCommits) + ` HEAD --not --remotes 2>/dev/null) || printf '\036failed commits\n'; ` +
+	`c=$(git rev-list --count "$kind" --max-count=` + strconv.Itoa(countCommits) + ` "$base" --not --remotes 2>/dev/null) || printf '\036failed commits\n'; ` +
 	`if [ "$kind" = --merges ]; then m=${c:-0}; fi; ` +
 	`if [ "${c:-0}" -gt ` + strconv.Itoa(scanCommits) + ` ]; then o=$((o + c - ` + strconv.Itoa(scanCommits) + `)); fi; done; ` +
 	`skip=; if [ "$m" -gt 0 ] && [ -n "$(git config --get-regexp '^(remote\..*\.(promisor|partialclonefilter)|extensions\.partialclone)$' 2>/dev/null)" ] && ! git --no-lazy-fetch version >/dev/null 2>&1; then ` +
@@ -167,7 +176,7 @@ var unpushedScript = `o=0; m=0; for kind in --no-merges --merges; do ` +
 // scanCommits counted ("\036older N").
 // A line "\036failed <what>" says git could not read the folder, the work or the commits, and "\036end" closes a
 // stream that ran to its end: without it nothing is known, and the check is no clean one.
-func secretScript(dir string, push bool) string {
+func secretScript(dir string, push bool, head string) string {
 	commits := ""
 	if push {
 		commits = `if [ "$base" = HEAD ]; then ` + unpushedScript + `fi; `
@@ -176,7 +185,7 @@ func secretScript(dir string, push bool) string {
 	// nor are the machine's own attributes read (GIT_ATTR_NOSYSTEM), which nothing here could set aside
 	return `GIT_NO_LAZY_FETCH=1; GIT_ATTR_NOSYSTEM=1; export GIT_NO_LAZY_FETCH GIT_ATTR_NOSYSTEM; cd ` + script.Quote(dir) + ` 2>/dev/null || { printf '\036failed folder\n'; exit 0; }; ` +
 		`git rev-parse --show-toplevel >/dev/null 2>&1 || { printf '\036failed repository\n'; exit 0; }; ` +
-		`base=HEAD; git rev-parse -q --verify HEAD >/dev/null 2>&1 || base=$(git hash-object -t tree /dev/null); ` +
+		`base=` + baseOf(head) + `; ` +
 		attrsScript +
 		`{ if [ -n "$attrs" ]; then printf '\036attrs\n'; fi; ` + workDiff +
 		untrackedScript +

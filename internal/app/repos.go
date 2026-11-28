@@ -64,8 +64,8 @@ func repositories(dir string, fleet *machines.Manager, watcher *watch.Watcher, r
 			}
 			return gitsync.AgentIn(snap, style, checkout, func(folder string) bool { return turns.Going(machineID, folder) })
 		},
-		Check: func(host shell.Host, folder string) (review.SecretScan, error) {
-			return review.ScanWork(host, folder, true)
+		Check: func(host shell.Host, folder, head string) (review.SecretScan, error) {
+			return review.ScanWorkAt(host, folder, head) // the commit the probe read: a reset since is not what goes
 		},
 		Scans: gitsync.OpenScans(dir),
 	}

@@ -66,7 +66,18 @@ const (
 
 // ScanWork runs the secret check on a folder of the machine, in one round trip; push reads the unpushed commits too.
 func ScanWork(host shell.Host, dir string, push bool) (SecretScan, error) {
-	output, err := shell.Text(host, secretScript(dir, push), scanTimeout)
+	return scanWork(host, dir, push, "")
+}
+
+// ScanWorkAt is ScanWork for a push that names the commit it sends: the commits and the work are read against that one,
+// not against whatever HEAD is when the check runs — an agent's reset between the probe and the scan sent commits the
+// check never read.
+func ScanWorkAt(host shell.Host, dir, head string) (SecretScan, error) {
+	return scanWork(host, dir, true, head)
+}
+
+func scanWork(host shell.Host, dir string, push bool, head string) (SecretScan, error) {
+	output, err := shell.Text(host, secretScript(dir, push, head), scanTimeout)
 	if err != nil && strings.Contains(err.Error(), "timed out") { // ssh's own words quote the whole script
 		return SecretScan{}, fmt.Errorf("it took longer than %s", scanTimeout)
 	}

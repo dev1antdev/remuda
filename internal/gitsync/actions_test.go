@@ -134,7 +134,7 @@ func TestPushSendsTheBranchAndSetsAnUpstreamForANewOne(t *testing.T) {
 	bare, clones := remoteAndClones(t, home, 1)
 	mine := clones[0]
 	commit(t, mine, "one.txt", "one\n")
-	place := service(t, idle, func(shell.Host, string) (review.SecretScan, error) { return review.SecretScan{}, nil })
+	place := service(t, idle, func(shell.Host, string, string) (review.SecretScan, error) { return review.SecretScan{}, nil })
 
 	pushed := place.Push("local", mine, PushAsk{})
 	if pushed.State != Done || pushed.Count != 1 || pushed.Reason != "" || pushed.Repo == nil || pushed.Repo.Ahead != 0 {
@@ -193,7 +193,7 @@ func TestTheSecretCheckHoldsAPushUntilTheyPushAnyway(t *testing.T) {
 	before := gitIn(t, bare, "rev-parse", "main")
 	found := review.SecretScan{Findings: []secrets.Finding{{File: "config.go", Line: 3, Rule: secrets.RuleAWS, Excerpt: "AKIA••••••••", Commit: "abc1234"}}, Commits: 1, Push: true}
 	var checked string
-	place := service(t, idle, func(_ shell.Host, dir string) (review.SecretScan, error) { checked = dir; return found, nil })
+	place := service(t, idle, func(_ shell.Host, dir, head string) (review.SecretScan, error) { checked = dir; return found, nil })
 
 	held := place.Push("local", mine, PushAsk{})
 	if held.State != Held || held.Reason != ReasonSecretsFound || held.Scan == nil || len(held.Scan.Findings) != 1 || checked != mine {
@@ -202,14 +202,14 @@ func TestTheSecretCheckHoldsAPushUntilTheyPushAnyway(t *testing.T) {
 	if gitIn(t, bare, "rev-parse", "main") != before {
 		t.Fatal("a held push reached the remote")
 	}
-	failing := service(t, idle, func(shell.Host, string) (review.SecretScan, error) {
+	failing := service(t, idle, func(shell.Host, string, string) (review.SecretScan, error) {
 		return review.SecretScan{}, errors.New("it took longer than 45s")
 	})
 	if outcome := failing.Push("local", mine, PushAsk{}); outcome.State != Held || outcome.Reason != ReasonCheckFailed || outcome.Output == "" {
 		t.Fatalf("a push whose check failed: %+v", outcome)
 	}
 	partial := review.SecretScan{Incomplete: true, Skipped: []review.Skipped{{Why: review.SkipOlder, Count: 150, InCommit: true}}}
-	unread := service(t, idle, func(shell.Host, string) (review.SecretScan, error) { return partial, nil })
+	unread := service(t, idle, func(shell.Host, string, string) (review.SecretScan, error) { return partial, nil })
 	if outcome := unread.Push("local", mine, PushAsk{}); outcome.State != Held || outcome.Reason != ReasonCheckIncomplete || outcome.Scan == nil || len(outcome.Scan.Skipped) != 1 {
 		t.Fatalf("a push the check could not read all of: %+v", outcome)
 	}
@@ -217,7 +217,7 @@ func TestTheSecretCheckHoldsAPushUntilTheyPushAnyway(t *testing.T) {
 		t.Fatal("a push read only in part reached the remote")
 	}
 	beside := review.SecretScan{Incomplete: true, Skipped: []review.Skipped{{Path: "dump.sql", Why: review.SkipLarge}}}
-	work := service(t, idle, func(shell.Host, string) (review.SecretScan, error) { return beside, nil })
+	work := service(t, idle, func(shell.Host, string, string) (review.SecretScan, error) { return beside, nil })
 	if outcome := work.Push("local", mine, PushAsk{}); outcome.State != Done {
 		t.Fatalf("a big file the push does not carry held it: %+v", outcome)
 	}
@@ -241,14 +241,14 @@ func TestNoVerifySkipsThePrePushHookButNotTheSecretCheck(t *testing.T) {
 	commit(t, mine, "one.txt", "one\n")
 	before := gitIn(t, bare, "rev-parse", "main")
 	found := review.SecretScan{Findings: []secrets.Finding{{File: "one.txt", Line: 1, Rule: secrets.RuleAWS, Excerpt: "AKIA••••••••"}}, Commits: 1, Push: true}
-	clean := func(shell.Host, string) (review.SecretScan, error) { return review.SecretScan{Push: true}, nil }
+	clean := func(shell.Host, string, string) (review.SecretScan, error) { return review.SecretScan{Push: true}, nil }
 	place := service(t, idle, clean)
 
 	stopped := place.Push("local", mine, PushAsk{})
 	if stopped.State != Failed || !strings.Contains(stopped.Output, "tests failed: 3 of 120") || stopped.NoVerify {
 		t.Fatalf("a push the hook refuses: %+v", stopped)
 	}
-	place.Check = func(shell.Host, string) (review.SecretScan, error) { return found, nil }
+	place.Check = func(shell.Host, string, string) (review.SecretScan, error) { return found, nil }
 	held := place.Push("local", mine, PushAsk{NoVerify: true})
 	if held.State != Held || !held.NoVerify {
 		t.Fatalf("a push past the hook is still held by the secret check, and says it skips the hook: %+v", held)
@@ -273,7 +273,7 @@ func TestAPushSendsOnlyWhatTheSecretCheckRead(t *testing.T) {
 	commit(t, mine, "one.txt", "one\n")
 	checked := gitIn(t, mine, "rev-parse", "HEAD")
 	agentCommits := true
-	place := service(t, idle, func(shell.Host, string) (review.SecretScan, error) {
+	place := service(t, idle, func(shell.Host, string, string) (review.SecretScan, error) {
 		if agentCommits { // an agent at work in the checkout commits while the check reads
 			commit(t, mine, "agent.txt", "made while the check read\n")
 		}
@@ -292,7 +292,7 @@ func TestAPushSendsOnlyWhatTheSecretCheckRead(t *testing.T) {
 
 	agentCommits = false
 	found := review.SecretScan{Findings: []secrets.Finding{{File: "agent.txt", Line: 1, Rule: secrets.RuleAWS, Excerpt: "AKIA••••••••"}}, Commits: 1, Push: true}
-	place.Check = func(shell.Host, string) (review.SecretScan, error) { return found, nil }
+	place.Check = func(shell.Host, string, string) (review.SecretScan, error) { return found, nil }
 	held := place.Push("local", mine, PushAsk{})
 	if held.State != Held || held.Head != gitIn(t, mine, "rev-parse", "HEAD") {
 		t.Fatalf("a held push names the commit its check read: %+v", held)

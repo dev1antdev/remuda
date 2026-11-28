@@ -102,6 +102,9 @@ type Overlap struct {
 	Lines bool   `json:"lines"`
 	From  int    `json:"from,omitempty"`
 	To    int    `json:"to,omitempty"`
+	// Bases says the two works were read against different merge bases of the main branch: a line number in one is not a
+	// line number in the other, so the file alone is said rather than a wrong "the same lines"
+	Bases bool `json:"bases,omitempty"`
 }
 
 // Peer is the workspace a collision is with.
@@ -151,12 +154,17 @@ func (h Hunk) last() int  { return max(1, h.Start+max(h.Count, 1)-1) }
 // overlap compares one file's change in two works: nothing when both left it as the same blob (a merge of the same
 // change is clean), the same lines when their hunks touch — the same lines, or lines side by side — or when either
 // changed it whole, else the file alone.
-func overlap(path string, a, b Change) (Overlap, bool) {
+func overlap(path string, a, b Change, sameBase bool) (Overlap, bool) {
 	if a.Blob != "" && a.Blob == b.Blob {
 		return Overlap{}, false
 	}
 	if a.Whole || b.Whole {
 		return Overlap{Path: path, Lines: true}, true
+	}
+	if !sameBase {
+		// their hunks are numbered from different bases — main moved between the two branch points — so the file is
+		// reported whole, and the reason said
+		return Overlap{Path: path, Bases: true}, true
 	}
 	for _, ha := range a.Hunks {
 		aFrom, aTo := ha.halves()
@@ -173,9 +181,10 @@ func overlap(path string, a, b Change) (Overlap, bool) {
 // Compare is what two works of one repository both change, the files whose lines touch first, then by path.
 func Compare(a, b Work) []Overlap {
 	var out []Overlap
+	sameBase := a.Base != "" && a.Base == b.Base
 	for path, change := range a.Files {
 		if other, ok := b.Files[path]; ok {
-			if o, ok := overlap(path, change, other); ok {
+			if o, ok := overlap(path, change, other, sameBase); ok {
 				out = append(out, o)
 			}
 		}

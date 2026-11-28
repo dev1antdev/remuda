@@ -61,30 +61,30 @@ func TestHunksTouchOnTheSameLinesOrTheLinesBesideThem(t *testing.T) {
 		{"one of several", change(Hunk{Start: 1, Count: 3}, Hunk{Start: 99, Count: 2}), other(Hunk{Start: 100, Count: 5}), true, 99, 104},
 	}
 	for _, c := range cases {
-		got, ok := overlap("a.go", c.a, c.b)
+		got, ok := overlap("a.go", c.a, c.b, true)
 		if !ok || got.Lines != c.lines || got.From != c.from || got.To != c.to {
 			t.Errorf("%s: %+v %v", c.name, got, ok)
 		}
 	}
-	if _, ok := overlap("a.go", Change{Blob: "same", Hunks: []Hunk{{Start: 1, Count: 1}}}, Change{Blob: "same", Hunks: []Hunk{{Start: 1, Count: 1}}}); ok {
+	if _, ok := overlap("a.go", Change{Blob: "same", Hunks: []Hunk{{Start: 1, Count: 1}}}, Change{Blob: "same", Hunks: []Hunk{{Start: 1, Count: 1}}}, true); ok {
 		t.Fatal("two works leaving a file the same blob merge cleanly")
 	}
-	if _, ok := overlap("a.go", Change{Blob: Gone, Hunks: []Hunk{{Start: 1, Count: 9}}}, Change{Blob: Gone, Hunks: []Hunk{{Start: 1, Count: 9}}}); ok {
+	if _, ok := overlap("a.go", Change{Blob: Gone, Hunks: []Hunk{{Start: 1, Count: 9}}}, Change{Blob: Gone, Hunks: []Hunk{{Start: 1, Count: 9}}}, true); ok {
 		t.Fatal("two deletions of one file merge cleanly")
 	}
-	if got, ok := overlap("logo.png", Change{Whole: true}, change(Hunk{Start: 1, Count: 1})); !ok || !got.Lines || got.From != 0 {
+	if got, ok := overlap("logo.png", Change{Whole: true}, change(Hunk{Start: 1, Count: 1}), true); !ok || !got.Lines || got.From != 0 {
 		t.Fatalf("a file changed whole touches every line: %+v", got)
 	}
 }
 
 func TestCompareListsTheSharedLinesFirst(t *testing.T) {
-	a := Work{Files: map[string]Change{
+	a := Work{Base: "base", Files: map[string]Change{
 		"b.go":    {Blob: "1", Hunks: []Hunk{{Start: 10, Count: 2}}},
 		"a.go":    {Blob: "1", Hunks: []Hunk{{Start: 1, Count: 1}}},
 		"z.go":    {Blob: "1", Hunks: []Hunk{{Start: 50, Count: 1}}},
 		"only.go": {Blob: "1", Hunks: []Hunk{{Start: 1, Count: 1}}},
 	}}
-	b := Work{Files: map[string]Change{
+	b := Work{Base: "base", Files: map[string]Change{
 		"b.go": {Blob: "2", Hunks: []Hunk{{Start: 300, Count: 2}}},
 		"a.go": {Blob: "2", Hunks: []Hunk{{Start: 90, Count: 1}}},
 		"z.go": {Blob: "2", Hunks: []Hunk{{Start: 50, Count: 3}}},
@@ -126,5 +126,14 @@ func TestWordsSayWhereAndWhoGoesFirst(t *testing.T) {
 	}
 	if _, body := Words("a", "b", Collision{Files: []Overlap{{Path: "x.png", Lines: true}}, Why: WhyName}); body != "x.png (the whole file). Land a first; b rebases on it." {
 		t.Fatalf("%q", body)
+	}
+}
+
+func TestTwoBasesAreSaidSoRatherThanALineNumberThatMoved(t *testing.T) {
+	a := Work{Base: "one", Files: map[string]Change{"a.go": {Blob: "1", Hunks: []Hunk{{Start: 10, Count: 2}}}}}
+	b := Work{Base: "two", Files: map[string]Change{"a.go": {Blob: "2", Hunks: []Hunk{{Start: 10, Count: 2}}}}}
+	got := Compare(a, b)
+	if len(got) != 1 || got[0].Lines || !got[0].Bases {
+		t.Fatalf("two bases read as %+v: a main branch that moved between the branch points", got)
 	}
 }

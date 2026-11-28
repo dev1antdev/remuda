@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { fileUrl, fsDiff, fsStat, fsText, type FileDiff, type FileInfo } from "@/features/files/api";
 import { langOf } from "@/lib/highlight";
 import { basename, errMsg } from "@/lib/text";
@@ -61,8 +62,12 @@ export default function FileViewer({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // the viewer lives outside #root, as a dialog does: a dialog open behind it makes #root inert, and a viewer drawn in
+  // there took no click at all. The focus comes here, and goes back where it was.
   useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
     box.current?.focus();
+    return () => opener?.focus?.();
   }, []);
 
   const close = () => {
@@ -133,7 +138,7 @@ export default function FileViewer({
   const shown: Tab = gone ? "changes" : tab === "drawn" && !drawnAs ? "file" : tab;
   const lineChanges = useMemo(() => (!text || !diff ? [] : diff.untracked ? wholeFile(lineCountOf(text.text)) : changesOf(diff.diff)), [text, diff]);
 
-  return (
+  return createPortal(
     <div className="fv-scrim" onMouseDown={(e) => e.target === e.currentTarget && close()}>
       <div
         ref={box}
@@ -255,7 +260,8 @@ export default function FileViewer({
           {(info?.kind === "text" || gone) && shown === "changes" && <DiffView diff={diff} lines={changes} />}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

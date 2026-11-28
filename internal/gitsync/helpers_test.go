@@ -78,7 +78,7 @@ func remoteAndClones(t *testing.T, home string, n int) (bare string, clones []st
 }
 
 // service is the place over this machine alone, with the busy answer and the secret check given.
-func service(t *testing.T, busy func(string, string) (string, string), check func(shell.Host, string) (review.SecretScan, error)) *Service {
+func service(t *testing.T, busy func(string, string) (string, string), check func(shell.Host, string, string) (review.SecretScan, error)) *Service {
 	t.Helper()
 	host := shell.Local{Name: "local"}
 	return &Service{
