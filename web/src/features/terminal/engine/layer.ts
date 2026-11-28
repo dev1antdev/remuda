@@ -17,11 +17,25 @@ export function createLayer(term: Terminal): Layer {
   el.hidden = true;
   term.element!.appendChild(el);
   let timer: ReturnType<typeof setTimeout> | null = null;
+  let held = false; // a selection in the copy stalled its repaint: see paint
 
-  // paint mirrors the visible rows into the layer as text, one row per line.
+  // selecting says a selection of the person's lies in the copy (a phone's long-press does it in the layer).
+  const selecting = () => {
+    const sel = window.getSelection();
+    return !!sel && sel.rangeCount > 0 && !sel.isCollapsed && el.contains(sel.getRangeAt(0).commonAncestorContainer);
+  };
+
+  // paint mirrors the visible rows into the layer as text, one row per line. Replacing the text replaces the nodes the
+  // browser's selection points at, so a repaint while the person selects (the spinner redraws every second) rubs the
+  // selection out: it waits, and the next paint after the selection goes comes from selectionchange.
   const paint = () => {
     timer = null;
     if (el.hidden) return;
+    if (selecting()) {
+      held = true;
+      return;
+    }
+    held = false;
     const screen = term.element!.querySelector(".xterm-screen") as HTMLElement | null;
     if (screen) {
       el.style.width = `${screen.offsetWidth}px`;
@@ -41,6 +55,10 @@ export function createLayer(term: Terminal): Layer {
     if (!el.hidden && !timer) timer = setTimeout(paint, 80);
   };
   const onScroll = term.onScroll(schedule);
+  const onSelectionChange = () => {
+    if (held && !selecting()) schedule();
+  };
+  document.addEventListener("selectionchange", onSelectionChange);
   return {
     el,
     show: () => {
@@ -54,6 +72,7 @@ export function createLayer(term: Terminal): Layer {
     schedule,
     dispose: () => {
       onScroll.dispose();
+      document.removeEventListener("selectionchange", onSelectionChange);
       if (timer) clearTimeout(timer);
     },
   };

@@ -108,7 +108,8 @@ export function trackSelection(term: Terminal, reporter: Reporter, modes: Modes)
     const buf = term.buffer.active;
     const out: string[][] = [];
     for (let y = 0; y < term.rows; y++) {
-      const line = buf.getLine(buf.baseY + y);
+      // the rows on screen, not the last screen of the buffer: a terminal scrolled back must select what it shows
+      const line = buf.getLine(buf.viewportY + y);
       out.push(line ? lineCells(line) : []);
     }
     return out;
@@ -150,7 +151,7 @@ export function trackSelection(term: Terminal, reporter: Reporter, modes: Modes)
       const s = s0.row < top ? { row: top, col: 0 } : s0;
       const e = e0.row > bottom ? { row: bottom, col: term.cols } : e0;
       const length = (e.row - s.row) * term.cols + (e.col - s.col);
-      if (length > 0) term.select(s.col, term.buffer.active.baseY + s.row - offset, length);
+      if (length > 0) term.select(s.col, term.buffer.active.viewportY + s.row - offset, length);
       else if (term.hasSelection()) term.clearSelection();
     } finally {
       applying = false;
@@ -184,9 +185,11 @@ export function trackSelection(term: Terminal, reporter: Reporter, modes: Modes)
     const pos = term.getSelectionPosition();
     // xterm drops its own selection on any input and on a buffer switch; ours stays until a new mousedown or typing
     if (!pos) return;
-    const baseY = term.buffer.active.baseY;
-    const start: Pos = { row: pos.start.y - baseY + offset, col: pos.start.x };
-    const end: Pos = { row: pos.end.y - baseY + offset, col: pos.end.x };
+    // xterm's rows are the buffer's, and the screen's top is where the viewport stands: parked at the bottom (baseY) it
+    // read a selection as the bottom screen's, whatever was scrolled into view
+    const top = term.buffer.active.viewportY;
+    const start: Pos = { row: pos.start.y - top + offset, col: pos.start.x };
+    const end: Pos = { row: pos.end.y - top + offset, col: pos.end.x };
     if (!anchor) remember(screenRows());
     // an end clipped at the screen's edge keeps the rows beyond it
     const o = ordered();
