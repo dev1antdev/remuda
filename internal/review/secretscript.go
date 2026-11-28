@@ -126,7 +126,9 @@ var untrackedScript = `list=$(` + readGit + ` ls-files -z --others --exclude-sta
 
 // unpushedLog is git's log of the commits a push would send, in the form given.
 func unpushedLog(form string) string {
-	return readGit + ` ` + noAttrs + ` -c diff.relative=false -c log.showRoot=true -c log.showSignature=false log -n ` + strconv.Itoa(scanCommits) + ` ` + form +
+	// from the repository's top: a log run in a subfolder shows that folder's patches alone, and a secret a commit holds
+	// outside it went unread, though the push carries it
+	return `top=$(git rev-parse --show-toplevel 2>/dev/null); [ -n "$top" ] || top=.; ` + readGit + ` -C "$top"` + ` ` + noAttrs + ` -c diff.relative=false -c log.showRoot=true -c log.showSignature=false log -n ` + strconv.Itoa(scanCommits) + ` ` + form +
 		` "$base" --not --remotes 2>/dev/null`
 }
 
