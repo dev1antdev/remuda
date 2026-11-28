@@ -1299,3 +1299,31 @@ func TestAnOlderGitHeedsTheIndexedAttributes(t *testing.T) {
 		t.Errorf("%+v", scan)
 	}
 }
+
+func TestAPushFromASubfolderReadsTheCommitsOutsideIt(t *testing.T) {
+	ownGitConfig(t)
+	dir, git, write := scratchCheckout(t)
+	write("top.env", "NAME=top\n")
+	if err := os.MkdirAll(filepath.Join(dir, "sub"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write("sub/app.txt", "hi\n")
+	git("add", "-A")
+	git("commit", "-qm", "init")
+	git("checkout", "-qb", "feature")
+	write("top.env", "NAME=top\nNPM_TOKEN="+"npm_"+fakeKey(77, 36)+"\n")
+	git("commit", "-qam", "a token outside the folder")
+	scan, err := ScanWork(shell.Local{Name: "local"}, filepath.Join(dir, "sub"), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, finding := range scan.Findings {
+		if finding.Rule == secrets.RuleNPM && finding.Commit != "" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("a push from sub/ did not read the commit outside it: %+v", scan.Findings)
+	}
+}
